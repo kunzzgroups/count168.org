@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
+import { ModuleSidebarLayout } from '@/components/ModuleSidebarLayout'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -68,8 +69,8 @@ export default function DashboardPage() {
   }, [t])
 
   return (
-    <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden bg-zinc-50 px-4 py-8">
-      <div className="mx-auto w-full max-w-5xl space-y-6">
+    <ModuleSidebarLayout>
+      <div className="mx-auto w-full max-w-5xl space-y-6 py-4">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-[clamp(2.0rem,0.625vw+1.2rem,2.4rem)] font-semibold text-zinc-900">
@@ -80,9 +81,6 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
-            <Button type="button" variant="outline" onClick={() => navigate('/modules')}>
-              {t('dashboard.modules')}
-            </Button>
             <div className="flex rounded-md border border-zinc-200 bg-white p-0.5 text-xs">
               <Button
                 type="button"
@@ -175,6 +173,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </ModuleSidebarLayout>
   )
 }

@@ -32,7 +32,7 @@ export default function App() {
       <Route
         path="/modules/transaction"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
             <TransactionPage />
           </ProtectedRoute>
         }
@@ -40,7 +40,7 @@ export default function App() {
       <Route
         path="/modules/account-list"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
             <AccountListPage />
           </ProtectedRoute>
         }
@@ -48,7 +48,7 @@ export default function App() {
       <Route
         path="/modules/member"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
             <MemberPage />
           </ProtectedRoute>
         }
@@ -56,7 +56,7 @@ export default function App() {
       <Route
         path="/modules/process-list"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
             <ProcessListPage />
           </ProtectedRoute>
         }

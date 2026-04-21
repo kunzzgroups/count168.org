@@ -7,6 +7,18 @@
       "en": "English"
     }
   },
+  "nav": {
+    "title": "Navigation",
+    "logout": "Sign out",
+    "items": {
+      "dashboard": "Dashboard",
+      "modules": "System Modules",
+      "transaction": "Transaction",
+      "accountList": "Account List",
+      "member": "Member",
+      "processList": "Process List"
+    }
+  },
   "auth": {
     "loginTitle": "Sign in",
     "loginSubtitle": "Accounting System · Sign in with your company account",

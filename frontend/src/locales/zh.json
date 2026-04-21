@@ -7,6 +7,18 @@
       "en": "English"
     }
   },
+  "nav": {
+    "title": "系统导航",
+    "logout": "退出登录",
+    "items": {
+      "dashboard": "仪表盘",
+      "modules": "系统模块",
+      "transaction": "交易管理",
+      "accountList": "账户列表",
+      "member": "成员管理",
+      "processList": "流程列表"
+    }
+  },
   "auth": {
     "loginTitle": "登录",
     "loginSubtitle": "Accounting System · 使用公司账号登录",

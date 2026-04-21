@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
+import { ModuleSidebarLayout } from '@/components/ModuleSidebarLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -82,8 +83,8 @@ export default function ProcessListPage() {
   }
 
   return (
-    <div className="min-h-dvh w-full max-w-[100vw] overflow-x-hidden bg-zinc-50 px-4 py-8">
-      <div className="mx-auto w-full max-w-6xl space-y-6">
+    <ModuleSidebarLayout>
+      <div className="mx-auto w-full max-w-6xl space-y-6 py-4">
         <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-[clamp(2.0rem,0.625vw+1.2rem,2.4rem)] font-semibold text-zinc-900">
@@ -210,6 +211,6 @@ export default function ProcessListPage() {
           </Card>
         ) : null}
       </div>
-    </div>
+    </ModuleSidebarLayout>
   )
 }
