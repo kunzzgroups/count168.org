@@ -80,6 +80,9 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
+            <Button type="button" variant="outline" onClick={() => navigate('/modules')}>
+              {t('dashboard.modules')}
+            </Button>
             <div className="flex rounded-md border border-zinc-200 bg-white p-0.5 text-xs">
               <Button
                 type="button"

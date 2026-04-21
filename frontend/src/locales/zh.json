@@ -18,6 +18,7 @@
   "dashboard": {
     "title": "仪表盘",
     "subtitle": "欢迎回来，以下是账务总览",
+    "modules": "系统模块",
     "logout": "退出登录",
     "currentUserTitle": "当前用户",
     "currentUserDesc": "来自登录接口的会话信息",
@@ -35,6 +36,58 @@
       "expenseDesc": "统计周期：当月"
     }
   },
+  "modules": {
+    "title": "系统模块迁移",
+    "subtitle": "将旧 PHP 页面逐步替换为 React 页面（前后端分离）",
+    "backToDashboard": "返回仪表盘",
+    "tableTitle": "迁移清单",
+    "columns": {
+      "module": "模块",
+      "legacy": "旧页面（PHP）",
+      "react": "新路由（React）",
+      "status": "状态"
+    },
+    "items": {
+      "dashboard": "仪表盘",
+      "transaction": "交易管理",
+      "accountList": "账务列表",
+      "member": "会员管理",
+      "processList": "流程列表"
+    },
+    "status": {
+      "ready": "已迁移",
+      "pending": "待迁移"
+    }
+  },
+  "transaction": {
+    "title": "交易管理",
+    "subtitle": "React 版本交易录入（前后端分离）",
+    "back": "返回模块页",
+    "formTitle": "新增交易",
+    "listTitle": "交易列表",
+    "submit": "保存",
+    "submitting": "保存中...",
+    "delete": "软删除",
+    "loading": "加载中...",
+    "empty": "暂无数据",
+    "balance": "当前结余",
+    "fields": {
+      "date": "日期",
+      "type": "类型",
+      "category": "分类",
+      "amount": "金额",
+      "remark": "备注",
+      "action": "操作"
+    },
+    "type": {
+      "income": "收入",
+      "expense": "支出"
+    },
+    "validation": {
+      "amount": "金额必须大于 0",
+      "category": "请输入分类"
+    }
+  },
   "validation": {
     "loginRequired": "请输入用户名和密码"
   },
@@ -50,6 +103,18 @@
     "SERVER_DB_CONNECT_FAILED": "数据库连接失败",
     "AUTH_TOKEN_INVALID": "登录状态已失效，请重新登录",
     "DASHBOARD_COMPANY_INVALID": "公司参数无效",
-    "DASHBOARD_DB_PREPARE_FAILED": "仪表盘统计查询失败"
+    "DASHBOARD_DB_PREPARE_FAILED": "仪表盘统计查询失败",
+    "TRANSACTION_COMPANY_INVALID": "公司参数无效",
+    "TRANSACTION_LIST_PREPARE_FAILED": "交易列表查询失败",
+    "TRANSACTION_ID_INVALID": "记录 ID 无效",
+    "TRANSACTION_SOFT_DELETE_NOT_SUPPORTED": "当前数据表未配置软删除字段",
+    "TRANSACTION_DELETE_PREPARE_FAILED": "交易删除准备失败",
+    "TRANSACTION_NOT_FOUND": "记录不存在或无权限",
+    "TRANSACTION_DATE_INVALID": "日期格式无效",
+    "TRANSACTION_TYPE_INVALID": "类型仅允许 income 或 expense",
+    "TRANSACTION_CATEGORY_INVALID": "分类不能为空且长度不能超过 100",
+    "TRANSACTION_AMOUNT_INVALID": "金额必须大于 0",
+    "TRANSACTION_REMARK_TOO_LONG": "备注长度不能超过 500",
+    "TRANSACTION_CREATE_PREPARE_FAILED": "交易新增准备失败"
   }
 }

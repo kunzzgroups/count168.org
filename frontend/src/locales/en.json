@@ -18,6 +18,7 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Welcome back. Here is your accounting overview.",
+    "modules": "System Modules",
     "logout": "Sign out",
     "currentUserTitle": "Current User",
     "currentUserDesc": "Session data from login API",
@@ -35,6 +36,58 @@
       "expenseDesc": "Period: current month"
     }
   },
+  "modules": {
+    "title": "System Module Migration",
+    "subtitle": "Replace legacy PHP pages with React pages step by step",
+    "backToDashboard": "Back to Dashboard",
+    "tableTitle": "Migration Checklist",
+    "columns": {
+      "module": "Module",
+      "legacy": "Legacy Page (PHP)",
+      "react": "New Route (React)",
+      "status": "Status"
+    },
+    "items": {
+      "dashboard": "Dashboard",
+      "transaction": "Transaction",
+      "accountList": "Account List",
+      "member": "Member",
+      "processList": "Process List"
+    },
+    "status": {
+      "ready": "Migrated",
+      "pending": "Pending"
+    }
+  },
+  "transaction": {
+    "title": "Transaction Management",
+    "subtitle": "React transaction entry with API separation",
+    "back": "Back to Modules",
+    "formTitle": "Create Transaction",
+    "listTitle": "Transaction List",
+    "submit": "Save",
+    "submitting": "Saving...",
+    "delete": "Soft Delete",
+    "loading": "Loading...",
+    "empty": "No data",
+    "balance": "Current Balance",
+    "fields": {
+      "date": "Date",
+      "type": "Type",
+      "category": "Category",
+      "amount": "Amount",
+      "remark": "Remark",
+      "action": "Action"
+    },
+    "type": {
+      "income": "Income",
+      "expense": "Expense"
+    },
+    "validation": {
+      "amount": "Amount must be greater than 0",
+      "category": "Please enter category"
+    }
+  },
   "validation": {
     "loginRequired": "Please enter username and password"
   },
@@ -50,6 +103,18 @@
     "SERVER_DB_CONNECT_FAILED": "Could not connect to the database",
     "AUTH_TOKEN_INVALID": "Session is invalid. Please sign in again",
     "DASHBOARD_COMPANY_INVALID": "Invalid company parameter",
-    "DASHBOARD_DB_PREPARE_FAILED": "Failed to prepare dashboard summary query"
+    "DASHBOARD_DB_PREPARE_FAILED": "Failed to prepare dashboard summary query",
+    "TRANSACTION_COMPANY_INVALID": "Invalid company parameter",
+    "TRANSACTION_LIST_PREPARE_FAILED": "Failed to prepare transaction list query",
+    "TRANSACTION_ID_INVALID": "Invalid record ID",
+    "TRANSACTION_SOFT_DELETE_NOT_SUPPORTED": "Soft delete columns are not configured",
+    "TRANSACTION_DELETE_PREPARE_FAILED": "Failed to prepare transaction delete query",
+    "TRANSACTION_NOT_FOUND": "Record not found or no permission",
+    "TRANSACTION_DATE_INVALID": "Invalid date format",
+    "TRANSACTION_TYPE_INVALID": "Type must be income or expense",
+    "TRANSACTION_CATEGORY_INVALID": "Category is required and must be <= 100 chars",
+    "TRANSACTION_AMOUNT_INVALID": "Amount must be greater than 0",
+    "TRANSACTION_REMARK_TOO_LONG": "Remark must be <= 500 chars",
+    "TRANSACTION_CREATE_PREPARE_FAILED": "Failed to prepare transaction create query"
   }
 }
