@@ -1,5 +1,10 @@
 RewriteEngine On
 RewriteRule ^index\.php$ / [R=302,L]
+RewriteRule ^dashboard\.php$ /dashboard [R=301,L]
+RewriteRule ^transaction\.php$ /modules/transaction [R=301,L]
+RewriteRule ^account-list\.php$ /modules/account-list [R=301,L]
+RewriteRule ^member\.php$ /modules/member [R=301,L]
+RewriteRule ^processlist\.php$ /modules/process-list [R=301,L]
 RewriteRule ^$ /app/index.html [L]
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
