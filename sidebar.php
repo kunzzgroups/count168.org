@@ -6,11 +6,20 @@ if (session_status() == PHP_SESSION_NONE) {
 
 // 检查用户是否已登录
 if (!isset($_SESSION['user_id'])) {
+    $redirectLang = isset($_GET['lang']) && in_array(strtolower((string) $_GET['lang']), ['zh', 'en'], true)
+        ? strtolower((string) $_GET['lang'])
+        : (isset($_SESSION['ui_lang']) && in_array($_SESSION['ui_lang'], ['zh', 'en'], true) ? $_SESSION['ui_lang'] : 'en');
     // 如果未登录，输出 JavaScript 重定向到登录页
     // 这样可以确保整个页面都停止工作，而不仅仅是 sidebar 消失
-    echo '<script>window.location.href = "index.php";</script>';
+    echo '<script>window.location.href = "index.php?lang=' . htmlspecialchars($redirectLang, ENT_QUOTES, 'UTF-8') . '";</script>';
     exit();
 }
+
+$ui_lang = isset($_GET['lang']) ? strtolower((string) $_GET['lang']) : ($_SESSION['ui_lang'] ?? 'en');
+if (!in_array($ui_lang, ['zh', 'en'], true)) {
+    $ui_lang = 'en';
+}
+$_SESSION['ui_lang'] = $ui_lang;
 
 $isMember = isset($_SESSION['user_type']) && strtolower($_SESSION['user_type']) === 'member';
 
@@ -561,6 +570,7 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
 <!-- Sidebar JavaScript: PHP 变量注入，调用外部 js/sidebar.js 中的 updateExpirationCountdown / updateSidebarDataCaptureVisibility -->
 <script>
     window.SIDEBAR_IS_MEMBER = <?php echo $isMember ? 'true' : 'false'; ?>;
+    window.SIDEBAR_LANG = <?php echo json_encode($ui_lang); ?>;
     window.SIDEBAR_EXPIRATION_DATE = '<?php echo $company_expiration_date ? addslashes($company_expiration_date) : ''; ?>';
     window.SIDEBAR_COMPANY_HAS_GAMBLING = <?php echo $companyHasGambling ? 'true' : 'false'; ?>;
     window.SIDEBAR_COMPANY_HAS_BANK = <?php echo $companyHasBank ? 'true' : 'false'; ?>;
@@ -585,15 +595,16 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
         document.addEventListener('DOMContentLoaded', () => {
             console.log("External Partner Mode Active: Read-Only");
 
-            // Hide non-view categories
-            const hideCategories = ['Admin', 'Account', 'Process', 'Data Capture', 'Transaction Payment', 'Maintenance'];
-
-            document.querySelectorAll('.informationmenu-menu a.informationmenu-btn, .informationmenu-menu div.informationmenu-btn').forEach(btn => {
-                const textSpan = btn.querySelector('.btn-text');
-                if (textSpan) {
-                    const text = textSpan.textContent.trim();
-                    if (hideCategories.includes(text)) {
-                        btn.style.display = 'none';
+            // Hide non-view categories (language-independent)
+            const blockedPages = ['userlist.php', 'account-list.php', 'ownership.php', 'processlist.php', 'datacapture.php', 'transaction.php'];
+            const blockedSections = ['maintenance'];
+            document.querySelectorAll('.informationmenu-section-title').forEach((btn) => {
+                const page = (btn.getAttribute('data-page') || '').split('?')[0];
+                const section = btn.getAttribute('data-section') || '';
+                if (blockedPages.includes(page) || blockedSections.includes(section)) {
+                    const sectionWrap = btn.closest('.informationmenu-section');
+                    if (sectionWrap) {
+                        sectionWrap.style.display = 'none';
                     }
                 }
             });
@@ -605,7 +616,7 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
                     if (t.includes('add') || t.includes('save') || t.includes('delete') || t.includes('update') || t.includes('confirm') || t.includes('upload') || b.querySelector('svg:not(.view-icon)')) {
                         b.style.pointerEvents = 'none';
                         b.style.opacity = '0.4';
-                        b.title = 'Read-Only Partner Mode';
+                        b.title = (window.SIDEBAR_LANG === 'zh') ? '合作伙伴只读模式' : 'Read-Only Partner Mode';
                         b.setAttribute('data-readonly-processed', 'true');
                     }
                 });
