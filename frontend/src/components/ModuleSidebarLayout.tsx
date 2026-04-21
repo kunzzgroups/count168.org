@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY } from '@/constants/authStorage'
+import type { AuthUser } from '@/services/authService'
 
 type ModuleSidebarLayoutProps = {
   children: ReactNode
@@ -17,17 +18,30 @@ type NavItem = {
 export function ModuleSidebarLayout({ children }: ModuleSidebarLayoutProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const rawUser = localStorage.getItem(AUTH_USER_KEY)
+  let role = ''
+  if (rawUser) {
+    try {
+      role = ((JSON.parse(rawUser) as AuthUser).role || '').toLowerCase()
+    } catch {
+      role = ''
+    }
+  }
+  const canAccessAdminModules = ['owner', 'admin', 'manager'].includes(role)
 
   const navItems = useMemo<NavItem[]>(
-    () => [
-      { key: 'dashboard', to: '/dashboard' },
-      { key: 'modules', to: '/modules' },
-      { key: 'transaction', to: '/modules/transaction' },
-      { key: 'accountList', to: '/modules/account-list' },
-      { key: 'member', to: '/modules/member' },
-      { key: 'processList', to: '/modules/process-list' },
-    ],
-    [],
+    () =>
+      canAccessAdminModules
+        ? [
+            { key: 'dashboard', to: '/dashboard' },
+            { key: 'modules', to: '/modules' },
+            { key: 'transaction', to: '/modules/transaction' },
+            { key: 'accountList', to: '/modules/account-list' },
+            { key: 'member', to: '/modules/member' },
+            { key: 'processList', to: '/modules/process-list' },
+          ]
+        : [{ key: 'dashboard', to: '/dashboard' }],
+    [canAccessAdminModules],
   )
 
   const onLogout = () => {

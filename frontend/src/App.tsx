@@ -24,7 +24,7 @@ export default function App() {
       <Route
         path="/modules"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
             <SystemModulesPage />
           </ProtectedRoute>
         }
