@@ -43,17 +43,19 @@ Use this as default and adjust paths only when required by hosting structure:
 ```apache
 RewriteEngine On
 
-# Keep existing files/directories accessible
+# 避免仅访问域名根路径时出现 403（根目录无 index 且禁止列目录）
+RewriteRule ^$ /app/index.html [L]
+
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Do not rewrite API requests
 RewriteCond %{REQUEST_URI} ^/api/v1/ [NC]
 RewriteRule ^ - [L]
 
-# SPA fallback to React entry
 RewriteRule ^ /app/index.html [L]
+
+DirectoryIndex app/index.html index.html
 ```
 
 ## Shared hosting compatibility checks
@@ -65,6 +67,7 @@ Always ensure these conditions are met:
 - `.htaccess` is enabled and `mod_rewrite` works
 - Direct API requests (for example `/api/v1/health.php`) are not routed to React
 - Refreshing deep links in React does not return 404
+- 访问站点根 `https://example.com/` 不应出现 **403**（需在 `.htaccess` 将空路径指到 `/app/index.html`，并设置 `DirectoryIndex` 兜底）
 
 ## Response format for deployment tasks
 
