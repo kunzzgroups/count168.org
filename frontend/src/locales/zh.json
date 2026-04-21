@@ -15,6 +15,26 @@
     "submit": "登录",
     "submitting": "登录中…"
   },
+  "dashboard": {
+    "title": "仪表盘",
+    "subtitle": "欢迎回来，以下是账务总览",
+    "logout": "退出登录",
+    "currentUserTitle": "当前用户",
+    "currentUserDesc": "来自登录接口的会话信息",
+    "fields": {
+      "username": "用户名：",
+      "role": "角色：",
+      "id": "ID："
+    },
+    "kpi": {
+      "balanceTitle": "当前余额",
+      "balanceDesc": "将接入实时统计",
+      "incomeTitle": "本月收入",
+      "incomeDesc": "统计周期：当月",
+      "expenseTitle": "本月支出",
+      "expenseDesc": "统计周期：当月"
+    }
+  },
   "validation": {
     "loginRequired": "请输入用户名和密码"
   },
@@ -27,6 +47,9 @@
     "LOGIN_INVALID_CREDENTIALS": "用户名或密码错误",
     "SERVER_DB_CONFIG_MISSING": "服务器未配置数据库",
     "SERVER_DB_SETTINGS_INCOMPLETE": "数据库配置不完整",
-    "SERVER_DB_CONNECT_FAILED": "数据库连接失败"
+    "SERVER_DB_CONNECT_FAILED": "数据库连接失败",
+    "AUTH_TOKEN_INVALID": "登录状态已失效，请重新登录",
+    "DASHBOARD_COMPANY_INVALID": "公司参数无效",
+    "DASHBOARD_DB_PREPARE_FAILED": "仪表盘统计查询失败"
   }
 }

@@ -15,6 +15,26 @@
     "submit": "Sign in",
     "submitting": "Signing in…"
   },
+  "dashboard": {
+    "title": "Dashboard",
+    "subtitle": "Welcome back. Here is your accounting overview.",
+    "logout": "Sign out",
+    "currentUserTitle": "Current User",
+    "currentUserDesc": "Session data from login API",
+    "fields": {
+      "username": "Username: ",
+      "role": "Role: ",
+      "id": "ID: "
+    },
+    "kpi": {
+      "balanceTitle": "Current Balance",
+      "balanceDesc": "Realtime stats will be connected next",
+      "incomeTitle": "Monthly Income",
+      "incomeDesc": "Period: current month",
+      "expenseTitle": "Monthly Expense",
+      "expenseDesc": "Period: current month"
+    }
+  },
   "validation": {
     "loginRequired": "Please enter username and password"
   },
@@ -27,6 +47,9 @@
     "LOGIN_INVALID_CREDENTIALS": "Invalid username or password",
     "SERVER_DB_CONFIG_MISSING": "Database is not configured on the server",
     "SERVER_DB_SETTINGS_INCOMPLETE": "Database configuration is incomplete",
-    "SERVER_DB_CONNECT_FAILED": "Could not connect to the database"
+    "SERVER_DB_CONNECT_FAILED": "Could not connect to the database",
+    "AUTH_TOKEN_INVALID": "Session is invalid. Please sign in again",
+    "DASHBOARD_COMPANY_INVALID": "Invalid company parameter",
+    "DASHBOARD_DB_PREPARE_FAILED": "Failed to prepare dashboard summary query"
   }
 }
