@@ -1,0 +1,32 @@
+{
+  "common": {
+    "requestFailed": "Something went wrong. Please try again.",
+    "language": "Language",
+    "locale": {
+      "zh": "中文",
+      "en": "English"
+    }
+  },
+  "auth": {
+    "loginTitle": "Sign in",
+    "loginSubtitle": "Accounting System · Sign in with your company account",
+    "username": "Username",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…"
+  },
+  "validation": {
+    "loginRequired": "Please enter username and password"
+  },
+  "apiErrors": {
+    "HTTP_METHOD_NOT_ALLOWED": "Only POST is allowed",
+    "LOGIN_MISSING_FIELDS": "Please enter username and password",
+    "LOGIN_PARAM_LENGTH": "Invalid parameter length",
+    "LOGIN_DB_PREPARE": "Server could not prepare the query",
+    "LOGIN_COMPANY_EXPIRED": "Company subscription is expired or not set; sign-in is blocked",
+    "LOGIN_INVALID_CREDENTIALS": "Invalid username or password",
+    "SERVER_DB_CONFIG_MISSING": "Database is not configured on the server",
+    "SERVER_DB_SETTINGS_INCOMPLETE": "Database configuration is incomplete",
+    "SERVER_DB_CONNECT_FAILED": "Could not connect to the database"
+  }
+}

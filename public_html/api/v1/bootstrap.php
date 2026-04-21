@@ -114,6 +114,7 @@ function mysqli_bootstrap(): mysqli
         respond_json(500, [
             'success' => false,
             'error' => '服务器未配置数据库',
+            'error_code' => 'SERVER_DB_CONFIG_MISSING',
         ]);
     }
     require_once $configPath;
@@ -123,6 +124,7 @@ function mysqli_bootstrap(): mysqli
         respond_json(500, [
             'success' => false,
             'error' => '数据库配置不完整',
+            'error_code' => 'SERVER_DB_SETTINGS_INCOMPLETE',
         ]);
     }
 
@@ -134,6 +136,7 @@ function mysqli_bootstrap(): mysqli
         respond_json(500, [
             'success' => false,
             'error' => '数据库连接失败',
+            'error_code' => 'SERVER_DB_CONNECT_FAILED',
         ]);
     }
 

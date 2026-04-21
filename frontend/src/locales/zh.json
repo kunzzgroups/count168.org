@@ -1,0 +1,32 @@
+{
+  "common": {
+    "requestFailed": "请求失败，请稍后重试",
+    "language": "语言",
+    "locale": {
+      "zh": "中文",
+      "en": "English"
+    }
+  },
+  "auth": {
+    "loginTitle": "登录",
+    "loginSubtitle": "Accounting System · 使用公司账号登录",
+    "username": "用户名",
+    "password": "密码",
+    "submit": "登录",
+    "submitting": "登录中…"
+  },
+  "validation": {
+    "loginRequired": "请输入用户名和密码"
+  },
+  "apiErrors": {
+    "HTTP_METHOD_NOT_ALLOWED": "仅支持 POST 请求",
+    "LOGIN_MISSING_FIELDS": "请输入用户名和密码",
+    "LOGIN_PARAM_LENGTH": "参数长度无效",
+    "LOGIN_DB_PREPARE": "服务器查询准备失败",
+    "LOGIN_COMPANY_EXPIRED": "公司已到期或未设置到期日，无法登录",
+    "LOGIN_INVALID_CREDENTIALS": "用户名或密码错误",
+    "SERVER_DB_CONFIG_MISSING": "服务器未配置数据库",
+    "SERVER_DB_SETTINGS_INCOMPLETE": "数据库配置不完整",
+    "SERVER_DB_CONNECT_FAILED": "数据库连接失败"
+  }
+}

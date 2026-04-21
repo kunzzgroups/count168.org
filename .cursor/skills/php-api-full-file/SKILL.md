@@ -32,12 +32,13 @@ Required response shape:
 }
 ```
 
-On failure, return:
+On failure, return（`error` 保留可读信息；`error_code` 供前端 i18n 映射，建议同时返回）:
 
 ```json
 {
   "success": false,
-  "error": "message"
+  "error": "message",
+  "error_code": "STABLE_MACHINE_CODE"
 }
 ```
 

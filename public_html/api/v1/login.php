@@ -10,6 +10,7 @@ if ($method !== 'POST') {
     respond_json(405, [
         'success' => false,
         'error' => '仅支持 POST',
+        'error_code' => 'HTTP_METHOD_NOT_ALLOWED',
     ]);
 }
 
@@ -21,6 +22,7 @@ if ($username === '' || $password === '') {
     respond_json(400, [
         'success' => false,
         'error' => '请输入用户名和密码',
+        'error_code' => 'LOGIN_MISSING_FIELDS',
     ]);
 }
 
@@ -28,6 +30,7 @@ if (strlen($username) > 191 || strlen($password) > 500) {
     respond_json(400, [
         'success' => false,
         'error' => '参数长度无效',
+        'error_code' => 'LOGIN_PARAM_LENGTH',
     ]);
 }
 
@@ -51,7 +54,11 @@ SQL;
 
 $stmtUser = $mysqli->prepare($sqlUser);
 if ($stmtUser === false) {
-    respond_json(500, ['success' => false, 'error' => '查询准备失败']);
+    respond_json(500, [
+        'success' => false,
+        'error' => '查询准备失败',
+        'error_code' => 'LOGIN_DB_PREPARE',
+    ]);
 }
 $stmtUser->bind_param('s', $username);
 $stmtUser->execute();
@@ -115,6 +122,7 @@ if ($userPasswordMatch && $userHasExpired) {
     respond_json(403, [
         'success' => false,
         'error' => '公司已到期或未设置到期日，无法登录',
+        'error_code' => 'LOGIN_COMPANY_EXPIRED',
     ]);
 }
 
@@ -135,7 +143,11 @@ SQL;
 
 $stmtOwner = $mysqli->prepare($sqlOwner);
 if ($stmtOwner === false) {
-    respond_json(500, ['success' => false, 'error' => '查询准备失败']);
+    respond_json(500, [
+        'success' => false,
+        'error' => '查询准备失败',
+        'error_code' => 'LOGIN_DB_PREPARE',
+    ]);
 }
 $stmtOwner->bind_param('s', $username);
 $stmtOwner->execute();
@@ -212,10 +224,12 @@ if ($ownerPasswordMatch && $ownerHasExpired) {
     respond_json(403, [
         'success' => false,
         'error' => '公司已到期或未设置到期日，无法登录',
+        'error_code' => 'LOGIN_COMPANY_EXPIRED',
     ]);
 }
 
 respond_json(401, [
     'success' => false,
     'error' => '用户名或密码错误',
+    'error_code' => 'LOGIN_INVALID_CREDENTIALS',
 ]);
