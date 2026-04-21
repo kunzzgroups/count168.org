@@ -588,6 +588,100 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
     })();
 </script>
 <script>
+    (function () {
+        var lang = (window.SIDEBAR_LANG === 'zh') ? 'zh' : 'en';
+        window.APP_UI_LANG = lang;
+        if (lang !== 'zh') {
+            return;
+        }
+
+        // 统一登录后页面常见文案（覆盖 transaction/datacapture/maintenance/report 等页面中的静态英文）
+        var textMap = {
+            'Search': '搜索',
+            'Reset': '重置',
+            'Save': '保存',
+            'Delete': '删除',
+            'Update': '更新',
+            'Edit': '编辑',
+            'Add': '新增',
+            'Submit': '提交',
+            'Cancel': '取消',
+            'Confirm': '确认',
+            'Close': '关闭',
+            'Export': '导出',
+            'Import': '导入',
+            'Total': '总计',
+            'Amount': '金额',
+            'Date': '日期',
+            'Type': '类型',
+            'Category': '分类',
+            'Remark': '备注',
+            'Status': '状态',
+            'Success': '成功',
+            'Failed': '失败',
+            'Please select': '请选择',
+            'No data': '暂无数据',
+            'No Data': '暂无数据',
+            'Loading...': '加载中...',
+            'Today': '今天',
+            'Start Date': '开始日期',
+            'End Date': '结束日期',
+            'Transaction': '交易',
+            'Data Capture': '数据录入',
+            'Report': '报表',
+            'Maintenance': '维护',
+            'Customer Report': '客户报表',
+            'Domain Report': '域名报表',
+            'Payment': '付款',
+            'Process': '流程',
+            'Formula': '公式',
+            'Win/Loss': '输赢'
+        };
+
+        function translateNodeText(root) {
+            var selector = 'button, a, label, th, td, h1, h2, h3, h4, h5, h6, span, p, option';
+            root.querySelectorAll(selector).forEach(function (el) {
+                if (el.children.length > 0) return;
+                var raw = (el.textContent || '').trim();
+                if (!raw) return;
+                if (textMap[raw]) {
+                    el.textContent = textMap[raw];
+                }
+            });
+        }
+
+        function translatePlaceholders(root) {
+            root.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(function (el) {
+                var raw = (el.getAttribute('placeholder') || '').trim();
+                if (textMap[raw]) {
+                    el.setAttribute('placeholder', textMap[raw]);
+                }
+            });
+        }
+
+        function appendLangForLinks(root) {
+            root.querySelectorAll('a[href]').forEach(function (a) {
+                var href = a.getAttribute('href') || '';
+                if (!href || href.indexOf('javascript:') === 0 || href.indexOf('#') === 0) return;
+                if (href.indexOf('lang=') !== -1) return;
+                a.setAttribute('href', href + (href.indexOf('?') === -1 ? '?' : '&') + 'lang=zh');
+            });
+        }
+
+        function runTranslate() {
+            translateNodeText(document);
+            translatePlaceholders(document);
+            appendLangForLinks(document);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', runTranslate);
+        } else {
+            runTranslate();
+        }
+    })();
+</script>
+<script>
     // B2B Cross-Account Sharing & Partnership: Partner Read-Only Mode
     window.isExternalView = <?php echo (isset($_SESSION['is_external_view']) && $_SESSION['is_external_view']) || (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'partnership' && (!isset($_SESSION['read_only']) || $_SESSION['read_only'] == 1)) ? 'true' : 'false'; ?>;
 
