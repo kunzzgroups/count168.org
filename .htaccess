@@ -1,0 +1,27 @@
+# PHP Configuration for Large Data Submission
+# 这些配置允许提交大量数据，解决 post_max_size 限制问题
+
+# 设置 POST 数据最大大小（必须足够大以容纳所有数据）
+php_value post_max_size 64M
+
+# 设置文件上传最大大小（应该小于或等于 post_max_size）
+php_value upload_max_filesize 64M
+
+# 设置最大输入变量数量（避免大量表单字段被截断）
+php_value max_input_vars 5000
+
+# 设置最大输入时间（秒）- 允许服务器有足够时间处理大量数据
+php_value max_input_time 300
+
+# 设置最大执行时间（秒）- 允许脚本有足够时间处理数据
+php_value max_execution_time 300
+
+# 设置内存限制（确保有足够内存处理大量数据）
+php_value memory_limit 256M
+
+# 注意：
+# 1. 这些配置需要服务器支持在 .htaccess 中设置 PHP 配置
+# 2. 某些共享主机可能不允许这些设置，需要联系主机提供商
+# 3. 如果这些设置不生效，可能需要通过 php.ini 或服务器配置来设置
+# 4. 修改后可能需要等待几分钟让配置生效
+

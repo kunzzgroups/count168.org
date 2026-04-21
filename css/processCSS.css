@@ -1,0 +1,3297 @@
+/* Base Styles */
+body.process-page {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    height: 100vh;
+    background-color: #e9f1ff;
+    background-image:
+        radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 48%),
+        radial-gradient(circle at 70% 15%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 45%),
+        radial-gradient(circle at 40% 70%, rgba(206, 232, 255, 0.55) 0%, rgba(255, 255, 255, 0) 60%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%),
+        linear-gradient(145deg, #97BFFC 0%, #AECFFA 40%, #f9fbff 100%);
+    background-blend-mode: screen, screen, multiply, screen, normal;
+    color: #334155;
+    overflow-x: hidden;
+    overflow-y: hidden;
+    font-size: clamp(0.875rem, 2.5vw, 1rem);
+}
+
+.process-page .container {
+    max-width: none;
+    margin: 0;
+    padding: 0px 40px 20px clamp(180px, 14.06vw, 270px);
+    width: 100%;
+    height: 100vh;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.process-page .page-header {
+    display: none;
+}
+
+.process-page .page-title {
+    color: #002C49;
+    text-align: left;
+    margin-top: clamp(12px, 1.04vw, 20px);
+    margin-bottom: clamp(16px, 1.35vw, 26px);
+    font-size: clamp(26px, 2.08vw, 40px);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    font-family: 'Amaranth', sans-serif;
+}
+
+/* Search Section */
+.process-page .search-container {
+    position: relative;
+}
+
+.process-page .process-list-date-filter {
+    display: inline-flex;
+    align-items: center;
+    min-width: clamp(180px, 15vw, 250px);
+}
+
+.process-page .process-list-date-filter .date-range-picker {
+    min-width: clamp(180px, 15vw, 250px);
+    width: clamp(180px, 15vw, 250px);
+    justify-content: flex-start;
+    padding-right: clamp(30px, 2vw, 38px);
+}
+
+.process-page .process-list-date-filter .date-range-picker span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 4px;
+}
+
+.process-page .process-list-date-filter .date-range-picker {
+    position: relative;
+}
+
+.process-page .process-list-date-clear {
+    position: absolute;
+    right: clamp(8px, 0.83vw, 12px);
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: clamp(14px, 1vw, 18px);
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.process-page .process-list-date-clear:hover {
+    color: #475569;
+}
+
+.process-page .search-icon {
+    position: absolute;
+    left: 10px;
+    top: 25%;
+    z-index: 2;
+    width: clamp(10px, 0.83vw, 16px);
+    height: clamp(14px, 0.83vw, 16px);
+    pointer-events: none;
+    object-fit: contain;
+}
+
+.process-page .search-input {
+    width: clamp(165px, 13vw, 250px);
+    padding: 7px 2px clamp(6px, 0.42vw, 8px) clamp(20px, 2.08vw, 32px) !important;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 6px;
+    font-size: clamp(10px, 0.8vw, 15px);
+    background: rgba(255, 255, 255, 1);
+    color: #000000ff;
+    backdrop-filter: blur(8px) saturate(1.2);
+    -webkit-backdrop-filter: blur(8px) saturate(1.2);
+    box-shadow: 0 3px 4px rgba(15, 23, 42, 0.1);
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.process-page .search-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), 0 3px 4px rgba(15, 23, 42, 0.1);
+    background: rgba(255, 255, 255, 1);
+}
+
+/* Controls Section - copied from accountCSS.css */
+.process-page .action-buttons-container {
+    margin-top: 20px;
+    background-color: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.process-page .action-buttons {
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.process-page .process-company-filter {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 0.83vw, 16px);
+    flex-wrap: wrap;
+}
+
+/* Filter container in header row (no padding) - same as datacapture */
+.process-page .process-permission-filter-header {
+    padding: 0 !important;
+}
+
+/* Filter container in action buttons area (with padding) */
+.process-page .action-buttons-container .process-company-filter {
+    padding: 0 20px 10px 20px;
+}
+
+.process-page .process-company-label {
+    font-weight: bold;
+    color: #374151;
+    font-size: clamp(10px, 0.73vw, 14px);
+    font-family: 'Amaranth', sans-serif;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    align-self: center;
+    transform: translateY(1px);
+    /* optical alignment with buttons */
+}
+
+.process-page .process-company-buttons {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.process-page .process-company-btn {
+    padding: clamp(3px, 0.31vw, 6px) clamp(10px, 0.83vw, 16px);
+    background: #f1f5f9;
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: clamp(9px, 0.63vw, 12px);
+    transition: all 0.2s ease;
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.process-page .process-company-btn:hover {
+    background: #e2e8f0;
+    border-color: #a5b4fc;
+}
+
+.process-page .process-company-btn.active {
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+/* Buttons - mirror user list styles */
+.process-page .content .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.process-page .content .btn:active {
+    transform: translateY(0);
+}
+
+.process-page .content .btn:hover::after {
+    transform: translateX(120%);
+}
+
+.process-page .content .btn-add {
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(90px, 7vw, 130px);
+    padding: clamp(6px, 0.42vw, 8px) 20px;
+    font-size: clamp(10px, 0.83vw, 16px);
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    --sweep-color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.process-page .content .btn-add:hover {
+    background: linear-gradient(180deg, #0D60FF 0%, #63C4FF 100%);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.process-page .content .btn.btn-delete,
+.process-page .content .btn-delete {
+    background: linear-gradient(180deg, #F30E12 0%, #A91215 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(80px, 6.25vw, 120px);
+    padding: clamp(6px, 0.42vw, 8px) 20px;
+    font-size: clamp(10px, 0.83vw, 16px);
+    margin-left: 10px;
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+    --sweep-color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+}
+
+.process-page .content .btn.btn-delete:hover,
+.process-page .content .btn-delete:hover {
+    background: linear-gradient(180deg, #A91215 0%, #F30E12 100%);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+    transform: translateY(-1px);
+}
+
+.process-page .checkbox-section {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    background: transparent;
+}
+
+.process-page .checkbox-section input[type="checkbox"] {
+    width: 0.9375rem;
+    height: 0.9375rem;
+    accent-color: #1a237e;
+    appearance: none;
+    -webkit-appearance: none;
+    border: 2px solid #000000ff;
+    border-radius: 3px;
+    background-color: white;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.process-page .checkbox-section input[type="checkbox"]:checked {
+    background-color: #1a237e;
+    border-color: #1a237e;
+}
+
+.process-page .checkbox-section input[type="checkbox"]:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 10px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.process-page .checkbox-section label {
+    font-size: clamp(10px, 0.8vw, 15px);
+    color: #495057;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+@media (max-width: 1200px) {
+    .process-page .process-list-date-filter {
+        min-width: 180px;
+    }
+
+    .process-page .process-list-date-filter .date-range-picker {
+        width: min(250px, 48vw);
+        min-width: min(250px, 48vw);
+    }
+}
+
+/* Separator line */
+.process-page .separator-line {
+    width: 100vw;
+    height: 1px;
+    background-color: #939393;
+    margin: 5px 0 -10px 0;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+}
+
+/* Table Container - copied from accountCSS.css */
+.process-page .table-container {
+    overflow-x: visible;
+    margin-top: 20px;
+    border: none;
+    border-radius: 0;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+}
+
+/* 包装器：表头与数据区同宽，Bank 数据区可横向滚动 */
+.process-page .process-table-wrapper {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+}
+
+.process-page .process-table-wrapper .process-cards.bank-mode {
+    overflow-x: auto;
+    overflow-y: auto;
+}
+
+/* Bank 真实 table：与 Gambling 同设计；高度随行数增长，不在表格外壳内纵向滚动（整页由 Bank 的 .container 滚动） */
+.process-page .bank-table-wrapper {
+    margin-top: 20px;
+    width: 100%;
+    padding: 0px;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    box-sizing: border-box;
+}
+
+.process-page .bank-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: clamp(12px, 0.82vw, 15px);
+    table-layout: fixed;
+    font-weight: bold;
+    color: #374151;
+    border-radius: 8px 8px 0 0;
+    overflow: hidden;
+}
+
+.process-page .bank-data-table thead {
+    background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%);
+    color: white;
+    font-size: clamp(10px, 0.89vw, 17px);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.process-page .bank-data-table th {
+    padding: 1px 4px;
+    text-align: left;
+    white-space: nowrap;
+    border: none;
+}
+
+.process-page .bank-data-table th:first-child {
+    border-radius: 8px 0 0 0;
+}
+
+.process-page .bank-data-table th:last-child {
+    border-radius: 0 8px 0 0;
+}
+
+.process-page .bank-data-table td {
+    padding: 1px 4px;
+    line-height: 1.25;
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+}
+
+.process-page .bank-data-table tbody tr:nth-child(even) {
+    background: #cceeff99;
+}
+
+.process-page .bank-data-table tbody tr:nth-child(odd) {
+    background: #ffffff;
+}
+
+.process-page .bank-data-table tbody tr:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    background: #e8f4fc;
+}
+
+/* No、Action 列窄；No 列左间距与 Gambling 表头一致（20px+4px=24px） */
+.process-page .bank-data-table th.bank-th-no,
+.process-page .bank-data-table td.bank-td-no {
+    width: 2%;
+    min-width: 32px;
+    max-width: 48px;
+    padding-left: 24px;
+}
+
+.process-page .bank-data-table .bank-th-country,
+.process-page .bank-data-table .bank-td-country {
+    width: 5%;
+    min-width: 50px;
+    max-width: 85px;
+}
+
+.process-page .bank-data-table .bank-th-types,
+.process-page .bank-data-table .bank-td-types {
+    width: 6%;
+    min-width: 50px;
+    max-width: 95px;
+}
+
+.process-page .bank-data-table .bank-th-card-owner,
+.process-page .bank-data-table .bank-td-card-owner {
+    width: 12%;
+    min-width: 100px;
+}
+
+.process-page .bank-data-table .bank-th-action,
+.process-page .bank-data-table .bank-td-action {
+    width: 5%;
+    min-width: 104px;
+    max-width: 132px;
+    white-space: nowrap;
+}
+
+.process-page .bank-data-table .bank-th-status,
+.process-page .bank-data-table .bank-td-status {
+    width: 8%;
+    min-width: 98px;
+    max-width: 132px;
+}
+
+.process-page .bank-data-table th:not(.bank-th-no):not(.bank-th-country):not(.bank-th-types):not(.bank-th-card-owner):not(.bank-th-status):not(.bank-th-action),
+.process-page .bank-data-table td:not(.bank-td-no):not(.bank-td-country):not(.bank-td-types):not(.bank-td-card-owner):not(.bank-td-status):not(.bank-td-action) {
+    min-width: 0;
+}
+
+.process-page .bank-status-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.process-page .bank-status-button {
+    width: 72%;
+    min-height: 24px;
+    padding: 4px 10px 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    font-size: clamp(7px, 0.63vw, 12px);
+    font-weight: bolder;
+    line-height: 1.1;
+    text-align: center;
+    cursor: pointer;
+    outline: none;
+    box-sizing: border-box;
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 14px 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Cpath d='M5.25 7.5L10 12.25L14.75 7.5' stroke='%2364758b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.process-page .bank-status-button:hover:not(:disabled) {
+    border-color: #94a3b8;
+    box-shadow: 0 3px 10px rgba(15, 23, 42, 0.08);
+}
+
+.process-page .bank-status-button.open,
+.process-page .bank-status-button:focus {
+    border-color: #94a3b8;
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.14);
+}
+
+.process-page .bank-status-button:disabled {
+    cursor: wait;
+    opacity: 0.8;
+}
+
+.process-page .bank-status-button.is-active {
+    background: linear-gradient(180deg, #d9ffe5 0%, #beffd4 100%);
+    color: #0f5132;
+    border-color: #8ed7a6;
+}
+
+.process-page .bank-status-button.is-inactive {
+    background: linear-gradient(180deg, #ffd9d9 0%, #ffc3c3 100%);
+    color: #7f1d1d;
+    border-color: #e7a4a4;
+}
+
+.process-page .bank-status-button.is-official {
+    background: linear-gradient(180deg, #fff8dc 0%, #fef3c7 100%);
+    color: #854d0e;
+    border-color: #facc15;
+}
+
+.process-page .bank-status-button.is-e-invoice {
+    background: linear-gradient(180deg, #fff3e3 0%, #ffedd5 100%);
+    color: #c2410c;
+    border-color: #fb923c;
+}
+
+.process-page .bank-status-button.is-block {
+    background: linear-gradient(180deg, #f3f4f6 0%, #e5e7eb 100%);
+    color: #111827;
+    border-color: #9ca3af;
+    /* BLOCK acts like a badge (no dropdown chevron) */
+    background-image: none;
+}
+
+.process-page .bank-status-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    display: none;
+    padding: 6px;
+    border: 1px solid #dbe3ee;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 250, 252, 0.98) 100%);
+    box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18);
+    backdrop-filter: blur(10px);
+    z-index: 30;
+    box-sizing: border-box;
+}
+
+.process-page .bank-status-menu.bank-status-menu-floating {
+    position: fixed;
+    z-index: 10020;
+}
+
+.process-page .bank-status-dropdown.open .bank-status-menu {
+    display: block;
+}
+
+.process-page .bank-status-option {
+    width: 100%;
+    border: none;
+    background: transparent;
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: clamp(9px, 0.72vw, 13px);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-align: center;
+    cursor: pointer;
+    transition: background-color 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.process-page .bank-status-option+.bank-status-option {
+    margin-top: 4px;
+}
+
+.process-page .bank-status-option:hover {
+    background: rgba(59, 130, 246, 0.1);
+    transform: translateY(-1px);
+}
+
+.process-page .bank-status-option.selected {
+    box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
+}
+
+.process-page .bank-status-option[data-value="active"] {
+    color: #0f5132;
+}
+
+.process-page .bank-status-option[data-value="inactive"] {
+    color: #7f1d1d;
+}
+
+.process-page .bank-status-option[data-value="official"] {
+    color: #a16207;
+}
+
+.process-page .bank-status-option[data-value="e_invoice"] {
+    color: #c2410c;
+}
+
+.process-page .bank-status-option[data-value="block"] {
+    color: #111827;
+}
+
+/* Action 列表头：文字与勾选格垂直居中 */
+.process-page .bank-data-table .bank-th-action {
+    display: flex;
+    align-items: center;
+}
+
+.process-page .bank-data-table .bank-th-action .header-action-checkbox {
+    margin-left: 10px;
+    cursor: pointer;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+/* Bank 空数据行：与 Gambling “No process data found” 同位置（左 40px = 20+20） */
+.process-page .bank-data-table .bank-empty-cell {
+    text-align: left;
+    padding: 20px 20px 20px 40px;
+}
+
+/* Bank Contract 列：椭圆徽章围着字（与 Status ACTIVE 一致） */
+.contract-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
+    border-radius: 20px;
+    font-size: clamp(7px, 0.63vw, 12px);
+    font-weight: bold;
+}
+
+.contract-badge.contract-active {
+    background-color: #beffd4;
+    color: #000;
+    border: 0.0625rem solid #beffd4;
+}
+
+.contract-badge.contract-pending {
+    background-color: #fff9c4;
+    color: #000;
+    border: 0.0625rem solid #fff9c4;
+}
+
+.contract-badge.contract-expired {
+    background-color: #e8e8e8;
+    color: #000000;
+    border: 0.0625rem solid #e8e8e8;
+}
+
+/* Special rule: 1 MONTH contract while active uses gray badge */
+.contract-badge.contract-1month-active {
+    background-color: #e0e0e0;
+    color: #000000;
+    border: 0.0625rem solid #e0e0e0;
+}
+
+/* Bank Process List 专页：无纵滚；表格容器勿 flex:1 撑高，否则表下大块空白；表随内容增高，分页紧跟其下 */
+.process-page.process-page--bank .container {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    max-height: 100vh;
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+}
+
+.process-page.process-page--bank .content {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Bank 标题行字号与间距与 Games 完全统一（由 processlist.php 标题行的 inline margin-top/bottom: 20px 控制，此处不再 override） */
+
+/* separator-line 不再 override，与 Games 完全一致（margin: 5px 0 -10px 0） */
+
+.process-page.process-page--bank .bank-table-wrapper {
+    flex: 1 1 auto;
+    /* 填满剩余垂直空间，分页条始终在 flex 末尾不遮挡数据 */
+    min-height: 0;
+    align-self: stretch;
+    margin-top: 6px;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: auto;
+    /* 20 条以上在 wrapper 内滚动，而非溢出到分页条后面 */
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Show All 模式：与普通模式相同（wrapper 已 flex:1，overflow-y:auto，无需额外规则） */
+
+/* 勿设 height:100%：否则行数少时浏览器会把行高均分撑满 flex 区，出现「两行占满一屏」 */
+.process-page.process-page--bank .bank-data-table {
+    height: auto;
+    width: 100%;
+    font-size: clamp(12px, 0.86vw, 15px);
+}
+
+.process-page.process-page--bank .bank-data-table thead {
+    font-size: clamp(11px, 0.78vw, 16px);
+}
+
+.process-page.process-page--bank .bank-data-table td {
+    line-height: 1.13;
+    padding: 2px 4px;
+}
+
+.process-page.process-page--bank .bank-data-table th {
+    padding: 1px 4px;
+}
+
+.process-page.process-page--bank .bank-status-button {
+    min-height: 21px;
+    padding: 2px 8px;
+    line-height: 1.05;
+    font-size: clamp(9px, 0.72vw, 13px);
+    background-size: 13px 13px;
+    background-position: right 6px center;
+}
+
+.process-page.process-page--bank .contract-badge {
+    padding: 0 clamp(3px, 0.38vw, 7px);
+    font-size: clamp(8px, 0.64vw, 12px);
+}
+
+/* 标题行外层 div 的 margin 不再缩减，保持与 processlist.php 一致（inline margin: 20px 生效） */
+
+/* action-buttons-container 和 action-buttons 不再 override，与 Games 完全统一（margin-top: 20px, padding: 10px 20px）使 separator line 正确显示 */
+
+.process-page.process-page--bank .action-buttons-container .process-company-filter {
+    padding: 0 16px 8px 16px;
+}
+
+.process-page.process-page--bank .pagination-container {
+    flex-shrink: 0;
+    margin-top: 3px;
+    margin-bottom: max(5px, env(safe-area-inset-bottom, 0px));
+}
+
+/* Bank 操作栏：5 个 checkbox（比 Games 多 3 个）+ 日期选择器 + Search，laptop 下防止换行 */
+/* !important 必须：inline style="flex-wrap:wrap" 优先级高于 CSS，需强制覆盖 */
+.process-page.process-page--bank .action-controls-row {
+    flex-wrap: nowrap !important;
+    gap: clamp(4px, 0.5vw, 10px) !important;
+}
+
+.process-page.process-page--bank .checkbox-section {
+    gap: 3px;
+    flex-shrink: 0;
+}
+
+.process-page.process-page--bank .checkbox-section label {
+    font-size: clamp(9px, 0.6vw, 11px);
+    white-space: nowrap;
+}
+
+.process-page.process-page--bank .checkbox-section input[type="checkbox"] {
+    width: clamp(11px, 0.75vw, 14px);
+    height: clamp(11px, 0.75vw, 14px);
+    flex-shrink: 0;
+}
+
+/* Bank 搜索框宽度稍窄，给 checkbox 留空间 */
+.process-page.process-page--bank .search-input {
+    width: clamp(110px, 8.5vw, 200px);
+}
+
+/* Bank 日期选择器宽度稍窄 */
+.process-page.process-page--bank .process-list-date-filter,
+.process-page.process-page--bank .process-list-date-filter .date-range-picker {
+    min-width: clamp(140px, 11vw, 200px);
+    width: clamp(140px, 11vw, 200px);
+}
+
+@media (max-height: 820px) {
+
+    .process-page.process-page--bank .bank-data-table {
+        font-size: clamp(11px, 0.8vw, 14px);
+    }
+
+    .process-page.process-page--bank .bank-data-table thead {
+        font-size: clamp(10px, 0.74vw, 15px);
+    }
+
+    .process-page.process-page--bank .bank-data-table td {
+        line-height: 1.09;
+        padding: 1px 4px;
+    }
+
+    .process-page.process-page--bank .bank-data-table th {
+        padding: 1px 4px;
+    }
+
+    .process-page.process-page--bank .content>div:first-child {
+        margin-top: 6px !important;
+    }
+
+    .process-page.process-page--bank .action-buttons {
+        padding: 6px 14px;
+    }
+
+    .process-page.process-page--bank .action-buttons-container {
+        margin-top: 8px;
+    }
+
+    .process-page.process-page--bank .action-buttons-container .process-company-filter {
+        padding: 0 14px 6px 14px;
+    }
+
+    .process-page.process-page--bank .bank-table-wrapper {
+        margin-top: 8px;
+    }
+
+    .process-page.process-page--bank .page-title {
+        font-size: clamp(18px, 1.6vw, 28px);
+        margin-top: 4px;
+        margin-bottom: 2px;
+    }
+
+    .process-page.process-page--bank .separator-line {
+        margin-bottom: 0px;
+    }
+
+    .process-page.process-page--bank .pagination-container {
+        margin-top: 3px;
+        margin-bottom: max(5px, env(safe-area-inset-bottom, 0px));
+    }
+}
+
+@media (max-height: 720px) {
+
+    .process-page.process-page--bank .bank-data-table {
+        font-size: clamp(10px, 0.72vw, 13px);
+    }
+
+    .process-page.process-page--bank .bank-status-button {
+        min-height: 19px;
+        padding: 1px 7px;
+        font-size: clamp(8px, 0.65vw, 12px);
+    }
+}
+
+/* Table Header - copied from accountCSS.css */
+.process-page .table-header {
+    display: grid;
+    grid-template-columns: 0.3fr 0.8fr 0.95fr 0.35fr 0.3fr 1.1fr 0.2fr;
+    gap: 15px;
+    padding: 0px 20px;
+    background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%);
+    border-radius: 8px 8px 0 0;
+    margin-top: 20px;
+    font-weight: bold;
+    color: white;
+    font-size: clamp(10px, 0.89vw, 17px);
+    min-width: 0;
+}
+
+.process-page .table-header .header-item {
+    padding: 2px 4px;
+    /* Default CSS padding, overridden by global-13inch on small screens */
+    white-space: nowrap;
+    min-width: 0;
+}
+
+/* Bank Action 列固定宽度，避免 inactive 时多出 checkbox 导致表头与数据错位 */
+.process-page .table-header .bank-action-header {
+    min-width: 90px;
+    display: flex;
+    align-items: center;
+}
+
+.process-page .table-header .bank-action-header .header-action-checkbox {
+    flex-shrink: 0;
+}
+
+/* Games Show All 模式：允许页面纵向滚动，一页展示所有数据 */
+body.process-page.process-page--show-all {
+    overflow-y: auto !important;
+    height: auto;
+    min-height: 100vh;
+}
+
+body.process-page.process-page--show-all .container {
+    overflow-y: visible;
+    height: auto;
+    min-height: 100vh;
+}
+
+body.process-page.process-page--show-all .process-cards {
+    max-height: none;
+    overflow-y: visible;
+}
+
+/* Process Cards - copied from accountCSS.css */
+.process-page .process-cards {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+}
+
+.process-page .process-card {
+    display: grid;
+    grid-template-columns: 0.3fr 0.8fr 0.95fr 0.35fr 0.3fr 1.1fr 0.2fr;
+    gap: 15px;
+    padding: 0 20px;
+    background: #f0e5fb;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.35);
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+/* Bank：数据列宽度与 th 一致，仅调整数据行 */
+.process-page .process-cards.bank-mode .process-card {
+    width: var(--table-header-width, 100%);
+    min-width: var(--table-header-width, 100%);
+    box-sizing: border-box;
+}
+
+/* Bank：数据格与 th 同 padding，从 Country 起内容对齐 */
+.process-page .process-cards.bank-mode .process-card .card-item {
+    padding: 2px 4px;
+    box-sizing: border-box;
+}
+
+.process-page .process-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.process-page .card-item {
+    font-size: clamp(10px, 0.7vw, 13px);
+    font-weight: bold;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.1;
+}
+
+/* Currency column center alignment */
+.process-page .process-card .card-item:nth-child(5),
+.process-page .table-header .header-item:nth-child(5) {
+    justify-content: flex-start;
+    text-align: center;
+}
+
+/* Zebra striping for cards */
+.process-page .process-card:nth-child(even) {
+    background: #cceeff99;
+}
+
+.process-page .process-card:nth-child(odd) {
+    background: #ffffff;
+}
+
+.process-page .edit-btn {
+    background-color: transparent;
+    color: black;
+    padding: clamp(2px, 0.31vw, 6px) 0;
+    margin: 0px;
+    border: transparent;
+    cursor: pointer;
+}
+
+.process-page .edit-btn:hover {
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.process-page .edit-btn img {
+    width: clamp(10px, 0.83vw, 16px);
+    height: clamp(10px, 0.83vw, 16px);
+    display: block;
+    object-fit: contain;
+    filter: drop-shadow(clamp(0.02px, 0.01vw, 0.1px) 0 0 currentColor) drop-shadow(clamp(-0.05px, -0.01vw, -0.1px) 0 0 currentColor);
+}
+
+.process-page .bank-action-tools {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    vertical-align: middle;
+}
+
+.process-page .bank-action-tools .remark-action-btn {
+    margin-left: 0;
+}
+
+.process-page .remark-action-btn {
+    margin-left: 6px;
+}
+
+.process-page .remark-action-btn svg {
+    width: clamp(10px, 0.83vw, 16px);
+    height: clamp(10px, 0.83vw, 16px);
+    display: block;
+    color: currentColor;
+    filter: drop-shadow(clamp(0.02px, 0.01vw, 0.1px) 0 0 currentColor) drop-shadow(clamp(-0.05px, -0.01vw, -0.1px) 0 0 currentColor);
+}
+
+/* Inline with .edit-btn / .remark-action-btn — same footprint, no filled chip */
+.process-page .bank-resend-btn,
+.process-page .bank-resent-btn {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(2px, 0.31vw, 6px) 0;
+    margin: 0;
+    border: none;
+    background-color: transparent;
+    color: black;
+    cursor: pointer;
+    vertical-align: middle;
+    flex-shrink: 0;
+}
+
+.process-page .bank-resend-btn:hover:not(:disabled),
+.process-page .bank-resent-btn:hover:not(:disabled) {
+    background-color: transparent;
+    box-shadow: none;
+}
+
+.process-page .bank-resend-btn:focus-visible,
+.process-page .bank-resent-btn:focus-visible {
+    outline: 2px solid rgba(0, 0, 0, 0.35);
+    outline-offset: 2px;
+}
+
+.process-page .bank-resend-btn:active:not(:disabled),
+.process-page .bank-resent-btn:active:not(:disabled) {
+    box-shadow: none;
+}
+
+.process-page .bank-resend-btn:disabled,
+.process-page .bank-resent-btn:disabled {
+    opacity: 0.55;
+    cursor: wait;
+}
+
+.process-page .bank-resend-btn svg,
+.process-page .bank-resent-btn svg {
+    width: clamp(10px, 0.83vw, 16px);
+    height: clamp(10px, 0.83vw, 16px);
+    display: block;
+    color: currentColor;
+    filter: drop-shadow(clamp(0.02px, 0.01vw, 0.1px) 0 0 currentColor) drop-shadow(clamp(-0.05px, -0.01vw, -0.1px) 0 0 currentColor);
+}
+
+.process-page .bank-resend-btn.is-loading svg,
+.process-page .bank-resent-btn.is-loading svg {
+    animation: bank-resend-spin 0.65s linear infinite;
+}
+
+@keyframes bank-resend-spin {
+    to {
+        transform: rotate(-360deg);
+    }
+}
+
+.process-page .row-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-block;
+    margin-left: clamp(10px, 0.73vw, 14px);
+    margin-bottom: 0px;
+    width: clamp(10px, 0.83vw, 16px);
+    height: clamp(10px, 0.83vw, 16px);
+    border: 2px solid #000000ff;
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.process-page .row-checkbox:checked {
+    background-color: #6366f1;
+    border-color: #6366f1;
+}
+
+.process-page .row-checkbox:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: clamp(8px, 0.6vw, 12px);
+    font-weight: bold;
+    line-height: 1;
+}
+
+/* Form Styles */
+.process-page .process-form {
+    max-width: 56.25rem;
+    margin: 0 auto;
+    background: white;
+    padding: 0;
+    border-radius: 1rem;
+    box-shadow: 0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1), 0 0.625rem 0.625rem -0.3125rem rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+}
+
+.process-page .form-row {
+    display: flex;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+}
+
+/* Utility: two equal columns in a row for paired inputs */
+.process-page .row-two-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem 1rem;
+    align-items: start;
+}
+
+.process-page .row-two-cols .form-group {
+    min-width: 0;
+}
+
+.process-page .form-group {
+    flex: 1;
+    margin-bottom: 1rem;
+    min-width: 15rem;
+}
+
+.process-page .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #374151;
+    font-size: 0.875rem;
+    letter-spacing: 0.025em;
+    font-family: 'Amaranth', sans-serif;
+}
+
+.process-page .form-group input,
+.process-page .form-group select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 0.125rem solid #e5e7eb;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    background: #ffffff;
+    color: #374151;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.process-page .form-group input:focus,
+.process-page .form-group select:focus {
+    outline: none;
+    border-color: #007AFF;
+    box-shadow: 0 0 0 0.1875rem rgba(0, 122, 255, 0.1);
+    transform: translateY(-0.0625rem);
+}
+
+.process-page .form-actions {
+    text-align: right;
+    margin-top: 0;
+    padding: clamp(0.75rem, 1.5vw, 1rem) clamp(1.5rem, 3vw, 2.5rem);
+    border-top: 0.0625rem solid #e2e8f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: clamp(0.625rem, 1.2vw, 0.875rem);
+    flex-wrap: wrap;
+}
+
+.process-page .btn-save {
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(90px, 7vw, 130px);
+    padding: clamp(6px, 0.42vw, 8px) 20px;
+    font-size: clamp(10px, 0.83vw, 16px);
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    --sweep-color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.process-page .btn-save:hover {
+    background: linear-gradient(180deg, #0D60FF 0%, #63C4FF 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+}
+
+.process-page .btn-save:active {
+    transform: translateY(0);
+}
+
+.process-page .btn-cancel {
+    background: linear-gradient(180deg, #bcbcbc 0%, #585858 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(5rem, 6.25vw, 7.5rem);
+    padding: clamp(0.375rem, 0.42vw, 0.5rem) 1.25rem;
+    font-size: clamp(0.625rem, 0.83vw, 1rem);
+    border: none;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(88, 88, 88, 0.3);
+    --sweep-color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.process-page .btn-cancel:hover {
+    background: linear-gradient(180deg, #585858 0%, #bcbcbc 100%);
+    box-shadow: 0 0.25rem 0.5rem rgba(84, 84, 84, 0.4);
+    transform: translateY(-0.0625rem);
+}
+
+/* Status Badges */
+/* Badges - match accountlist style */
+.role-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
+    border-radius: 20px;
+    font-size: clamp(7px, 0.63vw, 12px);
+    font-weight: bold;
+    text-transform: capitalize;
+    letter-spacing: 0.025em;
+}
+
+.status-active {
+    background-color: #beffd4;
+    color: #000000ff;
+    border: 0.0625rem solid #beffd4;
+}
+
+.status-inactive {
+    background-color: #ffc3c3;
+    color: #000000ff;
+    border: 0.0625rem solid #ffc3c3;
+}
+
+.status-waiting {
+    background-color: #fff3c3;
+    color: #000000ff;
+    border: 0.0625rem solid #fff3c3;
+}
+
+.status-clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.status-clickable:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.status-clickable:active {
+    transform: scale(0.95);
+}
+
+/* Responsive Design - Fluid Units */
+.process-page .process-cards {
+    font-size: clamp(0.75rem, 1.5vw, 0.9375rem);
+}
+
+/* Loading states */
+.process-page .loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Pagination Button Styles */
+.process-page .pagination-container {
+    margin-top: 5px;
+    margin-left: auto;
+    width: max-content;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    background: rgba(255, 255, 255, 0.95);
+    padding: 0px;
+    border-radius: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    z-index: 100;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Games list: pagination fixed to viewport bottom-right (does not move with row count / list scroll) */
+.process-page:not(.process-page--bank) .pagination-container {
+    position: relative;
+    margin-top: 6px;
+    margin-left: auto;
+    margin-right: 0;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    top: auto;
+    z-index: 1;
+}
+
+/* Reserve space inside the scrollable list so the last row is not hidden under fixed pagination */
+.process-page:not(.process-page--bank) #processTableBody.process-cards {
+    padding-bottom: 0;
+}
+
+/* Non-bank Process List: fixed viewport layout, 20 rows visible without scrolling */
+.process-page:not(.process-page--bank) .content {
+    height: calc(100vh - 22px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.process-page:not(.process-page--bank) .content>div:first-child {
+    margin-top: 8px !important;
+}
+
+.process-page:not(.process-page--bank) .page-title {
+    margin-bottom: clamp(8px, 0.83vw, 14px);
+}
+
+.process-page:not(.process-page--bank) .action-buttons-container {
+    margin-top: 20px;
+}
+
+.process-page:not(.process-page--bank) .table-header {
+    margin-top: 24px;
+}
+
+.process-page:not(.process-page--bank) .process-table-wrapper {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.process-page:not(.process-page--bank) .process-cards {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+
+.process-page:not(.process-page--bank) .process-card {
+    flex: 0 1 auto;
+    height: auto;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+/* No. column: fixed compact width and center alignment */
+.process-page:not(.process-page--bank) .table-header,
+.process-page:not(.process-page--bank) .process-card {
+    grid-template-columns: 38px 0.88fr 1fr 0.4fr 0.35fr 1.15fr 0.28fr !important;
+}
+
+.process-page:not(.process-page--bank) .table-header .header-item:first-child,
+.process-page:not(.process-page--bank) .process-card .card-item:first-child {
+    justify-content: center;
+    text-align: center;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    font-variant-numeric: tabular-nums;
+    min-height: 0;
+}
+
+.process-page .pagination-btn {
+    background: transparent;
+    border: none;
+    color: #007AFF;
+    font-size: clamp(12px, 0.83vw, 16px);
+    font-weight: 500;
+    width: clamp(24px, 1.46vw, 28px);
+    height: clamp(24px, 1.46vw, 28px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border-radius: 14px;
+    transition: all 0.2s ease;
+    margin: 0;
+}
+
+.process-page .pagination-btn:hover:not(:disabled) {
+    background-color: rgba(0, 122, 255, 0.1);
+    color: #0056b3;
+}
+
+.process-page .pagination-btn:disabled {
+    color: #C7C7CC;
+    cursor: not-allowed;
+}
+
+.process-page .pagination-info {
+    font-size: clamp(10px, 0.78vw, 15px);
+    font-weight: 500;
+    color: #000000;
+    margin: 0 clamp(0px, 0.63vw, 12px);
+    white-space: nowrap;
+    width: clamp(30px, 3.13vw, 60px);
+    text-align: center;
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Modal Styles (align with userlist) */
+.process-page .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow-y: auto;
+    /* allow modal backdrop to scroll if screen is too small */
+    overflow-x: hidden;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(0.25rem);
+}
+
+.process-page .modal-content {
+    background-color: #ffffff;
+    margin: 4vh auto;
+    padding: 0;
+    border: none;
+    border-radius: 1rem;
+    width: 88%;
+    max-width: 68rem;
+    /* slightly narrower to center better */
+    box-shadow: 0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1), 0 0.625rem 0.625rem -0.3125rem rgba(0, 0, 0, 0.04);
+    overflow: auto;
+    max-height: 90vh;
+    /* guarantee it fits inside safe viewport bounds */
+}
+
+.process-page .modal-header h2 {
+    margin: 0;
+    padding: clamp(0.75rem, 1.5vw, 1.25rem) 0 0 clamp(1rem, 2vw, 2rem);
+}
+
+.process-page .close {
+    position: absolute;
+    right: 1.25rem;
+    top: 1.25rem;
+    color: #64748b;
+    font-size: 1.5rem;
+    font-weight: 300;
+    cursor: pointer;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.process-page .close:hover,
+.process-page .close:focus {
+    background-color: #f1f5f9;
+    color: #334155;
+}
+
+.process-page .modal-body {
+    padding: 1.5rem 1.75rem 1.5rem 1.75rem;
+    /* symmetric padding */
+    max-height: none;
+    overflow: visible;
+    /* show all content without scroll */
+}
+
+/* Form adjustments for modal */
+.process-page .modal .process-form {
+    margin: 0;
+    box-shadow: none;
+}
+
+/* Add Process modal grid layout (two columns, no internal scroll) */
+.process-page .process-form.add-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0 1.75rem 1.25rem 1.75rem;
+    /* match header left */
+}
+
+.process-page .process-form.add-grid .add-col {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    padding: 1rem 1.25rem;
+    /* normal panel padding */
+}
+
+.process-page .process-form.add-grid .form-row {
+    margin-bottom: 0.5rem;
+}
+
+.process-page .process-form.add-grid .add-actions {
+    grid-column: 1 / -1;
+    /* actions span both columns */
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+}
+
+/* Make selected lists compact to fit one page */
+.process-page #selected_descriptions_display .selected-descriptions,
+.process-page #selected_accounts_display .selected-accounts {
+    max-height: 8rem;
+    overflow-y: auto;
+}
+
+/* Inputs and labels tweaks for modal aesthetics */
+.process-page .process-form .form-group label {
+    color: #0f172a;
+}
+
+.process-page .process-form .form-group input,
+.process-page .process-form .form-group select,
+.process-page .process-form .form-group textarea {
+    border-color: #dbe1ea;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.875rem;
+    /* 10px 14px */
+    font-size: 0.875rem;
+    /* 14px */
+}
+
+.process-page .process-form .form-group input:focus,
+.process-page .process-form .form-group select:focus,
+.process-page .process-form .form-group textarea:focus {
+    border-color: #0D60FF;
+    box-shadow: 0 0 0 4px rgba(13, 96, 255, 0.08);
+}
+
+/* Selected chip style refinement */
+.process-page .selected-description-item {
+    background-color: #e7f0ff;
+    border-color: #0D60FF;
+    color: #0D60FF;
+}
+
+.process-page .selected-account-item {
+    background-color: #eaf7ea;
+    border-color: #2e7d32;
+}
+
+/* Day checkboxes layout refinement */
+.process-page .day-checkboxes {
+    gap: 0.5rem 1rem;
+}
+
+/* Plus button visual touch */
+.process-page .add-icon {
+    background: linear-gradient(180deg, #22c55e 0%, #169c46 100%);
+}
+
+.process-page .add-icon:hover {
+    background: linear-gradient(180deg, #169c46 0%, #22c55e 100%);
+}
+
+/* Responsive collapse for narrower screens */
+@media (max-width: 1200px) {
+    .process-page .process-form.add-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .process-page .process-form.add-grid .add-actions {
+        margin-top: -0.9rem;
+    }
+}
+
+/* Force Add Modal sizing and spacing (higher specificity) */
+.process-page #addModal .modal-content {
+    width: 86% !important;
+    max-width: 66rem !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+.process-page #addModal .modal-body {
+    padding: 1.5rem 2rem 1.5rem 2rem !important;
+}
+
+.process-page #addModal .process-form.add-grid {
+    grid-template-columns: 1fr 1fr !important;
+}
+
+.process-page #addModal .process-form.add-grid .add-col {
+    padding: 1rem 1.25rem !important;
+}
+
+.process-page #addModal .process-form .form-group label {
+    font-weight: 700 !important;
+    font-size: 0.875rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.process-page #addModal .process-form .form-row {
+    gap: 1.125rem !important;
+    margin-bottom: 0.875rem !important;
+}
+
+/* Day Use: one single row filled */
+.process-page #addModal #day_checkboxes.day-checkboxes,
+.process-page #addModal #edit_day_checkboxes.day-checkboxes {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    overflow-x: auto;
+    /* just in case of small screens */
+}
+
+/* Edit Modal - 与Add Modal保持一致的响应式设置 */
+.process-page #editModal .modal-content {
+    width: 86% !important;
+    max-width: 66rem !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+.process-page #editModal .modal-body {
+    padding: 1.5rem 2rem 1.5rem 2rem !important;
+}
+
+.process-page #editModal .process-form.add-grid {
+    grid-template-columns: 1fr 1fr !important;
+}
+
+.process-page #editModal .process-form.add-grid .add-col {
+    padding: 1rem 1.25rem !important;
+}
+
+.process-page #editModal .process-form .form-group label {
+    font-weight: 700 !important;
+    font-size: 0.875rem !important;
+    margin-bottom: 0.5rem !important;
+}
+
+.process-page #editModal .process-form .form-row {
+    gap: 1.125rem !important;
+    margin-bottom: 0.875rem !important;
+}
+
+/* Apply same one-row day layout to edit modal explicitly */
+.process-page #editModal #edit_day_checkboxes.day-checkboxes {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    overflow-x: auto;
+}
+
+.process-page #editModal .day-checkboxes .checkbox-item {
+    white-space: nowrap !important;
+    gap: 0.4rem !important;
+}
+
+.process-page #editModal .day-checkboxes .checkbox-item label {
+    text-transform: uppercase !important;
+    font-size: 0.8125rem !important;
+    letter-spacing: 0.02em !important;
+}
+
+.process-page #editModal .day-checkboxes .checkbox-item input[type="checkbox"] {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+.process-page #addModal .day-checkboxes .checkbox-item {
+    white-space: nowrap !important;
+    gap: 0.4rem !important;
+}
+
+.process-page #addModal .day-checkboxes .checkbox-item label {
+    text-transform: uppercase !important;
+    font-size: 0.8125rem !important;
+    letter-spacing: 0.02em !important;
+}
+
+.process-page #addModal .day-checkboxes .checkbox-item input[type="checkbox"] {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+.process-page .modal .form-actions {
+    text-align: right;
+}
+
+/* Read-only field styling */
+.process-page input[readonly] {
+    background-color: #f8f9fa !important;
+    cursor: not-allowed !important;
+    color: #6c757d;
+}
+
+.process-page input[readonly]:focus {
+    border-color: #ced4da;
+    box-shadow: none;
+}
+
+/* Notification popup positioning */
+.process-page .notification-popup {
+    position: fixed;
+    top: clamp(1.25rem, 3vw, 1.25rem);
+    right: clamp(1.25rem, 3vw, 1.25rem);
+    z-index: 1100;
+    background: #ffffff;
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1), 0 0.625rem 0.625rem -0.3125rem rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    transform: translateX(100%) scale(0.9);
+    opacity: 0;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    min-width: 20rem;
+    max-width: 25rem;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.process-page .notification-popup.show {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+}
+
+/* 仅作用于页面内操作结果弹窗，不影响侧栏公告 */
+.process-page .notification-popup .notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem 0.75rem 1.25rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+    border-bottom: 0.0625rem solid #e2e8f0;
+}
+
+.process-page .notification-popup .notification-title {
+    font-family: 'Amaranth', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.process-page .notification-popup .notification-title span {
+    font-size: 1.125rem;
+    font-weight: bold;
+    margin-right: 0.5rem;
+    display: inline-block;
+    width: 1.25rem;
+    text-align: center;
+}
+
+.process-page .notification-popup.success .notification-title span {
+    color: #10b981;
+}
+
+.process-page .notification-popup.error .notification-title span {
+    color: #ef4444;
+}
+
+.process-page .notification-popup.warning .notification-title span {
+    color: #f59e0b;
+}
+
+.process-page .notification-popup .notification-close {
+    background: none;
+    border: none;
+    color: #64748b;
+    font-size: 1.25rem;
+    font-weight: 300;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 50%;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.process-page .notification-popup .notification-close:hover {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.process-page .notification-popup .notification-message {
+    padding: 0.75rem 1.25rem 1.25rem 1.25rem;
+    font-family: 'Amaranth', sans-serif;
+    font-size: 0.875rem;
+    color: #475569;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Notification type styles */
+.process-page .notification-popup.success {
+    border-left: 0.25rem solid #10b981;
+}
+
+.process-page .notification-popup.error {
+    border-left: 0.25rem solid #ef4444;
+}
+
+.process-page .notification-popup.warning {
+    border-left: 0.25rem solid #f59e0b;
+}
+
+.process-page .notification-popup.success .notification-header {
+    background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+}
+
+.process-page .notification-popup.error .notification-header {
+    background: linear-gradient(135deg, #fef2f2 0%, #fecaca 100%);
+}
+
+.process-page .notification-popup.warning .notification-header {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+}
+
+.process-page .notification-popup .notification-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 0.1875rem;
+    background: rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.process-page .notification-popup .notification-progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #059669);
+    width: 100%;
+    transform: translateX(-100%);
+    transition: transform 4s linear;
+}
+
+.process-page .notification-popup.error .notification-progress-bar {
+    background: linear-gradient(90deg, #ef4444, #dc2626);
+}
+
+.process-page .notification-popup.warning .notification-progress-bar {
+    background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+/* Disabled checkbox styling */
+.process-page .row-checkbox:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #f8f9fa;
+}
+
+.process-page .row-checkbox:disabled:hover {
+    background-color: #f8f9fa;
+}
+
+
+/* Process Form Specific Styles */
+.process-page .input-with-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.9375rem;
+    flex-wrap: wrap;
+}
+
+.process-page .input-with-checkbox input[type="text"] {
+    flex: 1;
+    min-width: 12rem;
+}
+
+.process-page .checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+}
+
+.process-page .checkbox-container input[type="checkbox"] {
+    margin: 0;
+}
+
+.process-page .checkbox-container label {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: normal;
+}
+
+.process-page .input-with-icon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.process-page .input-with-icon input {
+    flex: 1;
+    padding-right: 2.5rem;
+}
+
+.process-page .add-icon {
+    position: absolute;
+    right: 0.625rem;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: background-color 0.3s ease;
+}
+
+.process-page .add-icon:hover {
+    background: #218838;
+}
+
+.process-page .field-help {
+    display: block;
+    font-size: 0.75rem;
+    color: #666;
+    margin-top: 0.25rem;
+    font-style: italic;
+}
+
+.process-page .day-use-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 0.5rem;
+}
+
+.process-page .day-use-header>label {
+    margin-bottom: 0;
+}
+
+.process-page .all-day-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.process-page .all-day-checkbox input[type="checkbox"] {
+    margin: 0;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+.process-page .all-day-checkbox label {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: normal;
+    cursor: pointer;
+    color: #374151;
+    font-family: inherit;
+}
+
+.process-page .day-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.9375rem;
+    margin-top: 0.5rem;
+}
+
+.process-page .checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.process-page .checkbox-item input[type="checkbox"] {
+    margin: 0;
+}
+
+.process-page .checkbox-item label {
+    margin: 0;
+    font-size: 0.875rem;
+    font-weight: normal;
+    cursor: pointer;
+}
+
+.process-page textarea {
+    width: 94%;
+    padding: 0.625rem;
+    border: 0.0625rem solid #ddd;
+    border-radius: 0.25rem;
+    font-family: inherit;
+    font-size: 0.875rem;
+    resize: vertical;
+    min-height: 5rem;
+}
+
+.process-page textarea:focus {
+    outline: none;
+    border-color: #1a237e;
+    box-shadow: 0 0 0 0.125rem rgba(26, 35, 126, 0.1);
+}
+
+/* Account checkboxes for multi-use */
+.process-page .account-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    /* neat equal columns */
+    grid-auto-rows: minmax(34px, auto);
+    /* consistent row height */
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.5rem;
+    max-height: 12.5rem;
+    overflow-y: auto;
+    border: 0.0625rem solid #e6e9ef;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    background-color: #f8fafc;
+}
+
+.process-page .account-checkboxes .checkbox-item {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    /* checkbox then text */
+    align-items: center;
+    column-gap: 0.5rem;
+    min-width: 0;
+}
+
+.process-page .account-checkboxes .checkbox-item input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.process-page .account-checkboxes .checkbox-item label {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* keep text tidy */
+}
+
+/* Multi-use actions under checkbox grid */
+.process-page .multi-use-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 0.5rem;
+}
+
+/* Multi-use Processes Checkbox Grid - left aligned */
+.process-page .process-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-auto-rows: minmax(34px, auto);
+    gap: 0.5rem 0.75rem;
+    margin-top: 0.5rem;
+    max-height: 12.5rem;
+    overflow-y: auto;
+    border: 0.0625rem solid #e6e9ef;
+    border-radius: 0.5rem;
+    padding: 0.625rem 0.75rem;
+    background-color: #f8fafc;
+    justify-items: start;
+    /* ensure items align left */
+    text-align: left;
+}
+
+.process-page .process-checkboxes .checkbox-item {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    align-items: center;
+    column-gap: 0.5rem;
+    min-width: 0;
+    justify-items: start;
+    /* left align contents */
+}
+
+.process-page .process-checkboxes .checkbox-item input[type="checkbox"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.process-page .process-checkboxes .checkbox-item label {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #0f172a;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.process-page .btn.btn-small,
+.process-page .btn-small {
+    padding: 0.4rem 0.8rem;
+    min-width: 5.5rem;
+    font-size: 0.85rem;
+}
+
+/* Process dropdown styling */
+.process-page select {
+    width: 100%;
+    padding: 0.625rem;
+    border: 0.0625rem solid #ddd;
+    border-radius: 0.25rem;
+    font-family: inherit;
+    font-size: 0.875rem;
+    background-color: white;
+}
+
+.process-page select:focus {
+    outline: none;
+    border-color: #1a237e;
+    box-shadow: 0 0 0 0.125rem rgba(26, 35, 126, 0.1);
+}
+
+/* Multi-use section styling */
+.process-page #multi_use_accounts {
+    background-color: #f8f9fa;
+    border: 0.0625rem solid #e9ecef;
+    border-radius: 0.25rem;
+    padding: 0.9375rem;
+    margin-top: 0.625rem;
+}
+
+.process-page #multi_use_accounts label {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.625rem;
+    display: block;
+}
+
+/* Description Selection Modal Styles */
+.process-page .description-selection-modal .modal-content {
+    max-width: 56.25rem;
+    width: 90%;
+}
+
+.process-page .description-selection-container {
+    display: flex;
+    gap: 1.25rem;
+    min-height: 25rem;
+    flex-wrap: wrap;
+}
+
+.process-page .selected-descriptions-section {
+    flex: 1;
+    border-right: 0.0625rem solid #e9ecef;
+    padding-right: 1.25rem;
+    min-width: 20rem;
+}
+
+.process-page .available-descriptions-section {
+    flex: 1;
+    padding-left: 1.25rem;
+    min-width: 20rem;
+}
+
+.process-page .selected-descriptions-section h3,
+.process-page .available-descriptions-section h3 {
+    margin-top: 0;
+    margin-bottom: 0.9375rem;
+    color: #495057;
+    font-size: 1rem;
+}
+
+.process-page .add-description-bar {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 0.0625rem solid #e9ecef;
+}
+
+.process-page .add-description-bar h3 {
+    margin: 0 0 0.75rem 0;
+    color: #495057;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.process-page .add-description-form {
+    margin: 0;
+}
+
+.process-page .add-description-input-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.process-page .add-description-input-group input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 0.0625rem solid #ddd;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.process-page .add-description-input-group .btn {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    min-width: auto;
+    margin: 0;
+}
+
+.process-page .description-search {
+    margin-bottom: 0.9375rem;
+}
+
+.process-page .description-search input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    border: 0.0625rem solid #ddd;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.process-page .description-list {
+    max-height: 18.75rem;
+    overflow-y: auto;
+    border: 0.0625rem solid #e9ecef;
+    border-radius: 0.25rem;
+    padding: 0.625rem;
+    background-color: #f8f9fa;
+}
+
+.process-page .selected-descriptions-list {
+    max-height: 18.75rem;
+    overflow-y: auto;
+    border: 0.0625rem solid #e9ecef;
+    border-radius: 0.25rem;
+    padding: 0.625rem;
+    background-color: #f8f9fa;
+    min-height: 8rem;
+}
+
+.process-page .description-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 0.0625rem solid #e9ecef;
+}
+
+.process-page .description-item:last-child {
+    border-bottom: none;
+}
+
+.process-page .description-item input[type="radio"] {
+    margin: 0;
+}
+
+.process-page .description-item label {
+    margin: 0;
+    font-size: 0.875rem;
+    cursor: pointer;
+    flex: 1;
+    color: #333;
+}
+
+.process-page .description-item:hover {
+    background-color: #e9ecef;
+    border-radius: 0.25rem;
+    padding: 0.5rem;
+    margin: 0 -0.5rem;
+}
+
+.process-page .selected-description-modal-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+    border-bottom: 0.0625rem solid #e9ecef;
+    background-color: #e3f2fd;
+    border-radius: 0.25rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+}
+
+.process-page .selected-description-modal-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.process-page .selected-description-modal-item span {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #1976d2;
+    font-weight: 500;
+}
+
+.process-page .remove-description-modal {
+    background: none;
+    border: none;
+    color: #1976d2;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.process-page .remove-description-modal:hover {
+    background-color: #1976d2;
+    color: white;
+}
+
+.process-page .modal-footer {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 0.0625rem solid #e9ecef;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.625rem;
+    flex-wrap: wrap;
+}
+
+.process-page .modal-footer .btn {
+    min-width: 7.5rem;
+}
+
+.process-page .no-descriptions {
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    padding: 1.25rem;
+}
+
+/* Selected Descriptions Display */
+.process-page .selected-descriptions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.625rem;
+    border: 0.0625rem solid #e9ecef;
+    border-radius: 0.25rem;
+    background-color: #f8f9fa;
+    min-height: 2.5rem;
+}
+
+/* Selected Processes Display */
+.process-page .selected-processes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.625rem;
+    border: 0.0625rem solid #e9ecef;
+    border-radius: 0.25rem;
+    background-color: #f8f9fa;
+    min-height: 2.5rem;
+}
+
+/* Selected Accounts Display */
+.process-page .selected-accounts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding: 0.625rem;
+    border: 0.0625rem solid #e9ecef;
+    border-radius: 0.25rem;
+    background-color: #f8f9fa;
+    min-height: 2.5rem;
+}
+
+.process-page .selected-description-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    background-color: #e3f2fd;
+    border: 0.0625rem solid #2196f3;
+    border-radius: 1rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: #1976d2;
+}
+
+.process-page .selected-process-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    background-color: #e3f2fd;
+    border: 0.0625rem solid #2196f3;
+    border-radius: 1rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: #1976d2;
+}
+
+.process-page .selected-account-item {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    background-color: #e8f5e8;
+    border: 0.0625rem solid #4caf50;
+    border-radius: 1rem;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    color: #2e7d32;
+}
+
+.process-page .selected-description-item span {
+    font-weight: 500;
+}
+
+.process-page .remove-description {
+    background: none;
+    border: none;
+    color: #1976d2;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    width: 1rem;
+    height: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.process-page .remove-description:hover {
+    background-color: #1976d2;
+    color: white;
+}
+
+.process-page .selected-account-item span {
+    font-weight: 500;
+}
+
+.process-page .remove-process {
+    background: none;
+    border: none;
+    color: #1976d2;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    width: 1rem;
+    height: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.process-page .remove-process:hover {
+    background-color: #1976d2;
+    color: white;
+}
+
+.process-page .remove-account {
+    background: none;
+    border: none;
+    color: #2e7d32;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    width: 1rem;
+    height: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.process-page .remove-account:hover {
+    background-color: #2e7d32;
+    color: white;
+}
+
+/* Description input readonly styling */
+.process-page input[readonly] {
+    background-color: #f8f9fa !important;
+    cursor: pointer !important;
+    color: #495057;
+}
+
+.process-page input[readonly]:focus {
+    border-color: #1a237e;
+    box-shadow: 0 0 0 0.125rem rgba(26, 35, 126, 0.1);
+}
+
+/* Disabled select styling */
+.process-page select:disabled {
+    background-color: #f8f9fa !important;
+    cursor: not-allowed !important;
+    color: #6c757d;
+    opacity: 0.6;
+}
+
+.process-page select:disabled:focus {
+    border-color: #ced4da;
+    box-shadow: none;
+}
+
+/* Confirm Delete Modal - 从 account 复制 */
+.process-modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(0.25rem);
+}
+
+.process-confirm-modal-content {
+    background: linear-gradient(to bottom, #ffffff 0%, #f8fafc 100%);
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 24px;
+    width: clamp(400px, 35vw, 550px);
+    max-width: 90%;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: processSlideDown 0.3s ease-out;
+    overflow: hidden;
+    position: relative;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+@keyframes processSlideDown {
+    from {
+        transform: translateY(calc(-50% - 80px)) scale(0.95);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(-50%) scale(1);
+        opacity: 1;
+    }
+}
+
+.process-confirm-icon-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-top: clamp(30px, 2.6vw, 50px);
+    padding-bottom: clamp(15px, 1.3vw, 25px);
+}
+
+.process-confirm-icon {
+    width: clamp(50px, 4.17vw, 80px);
+    height: clamp(50px, 4.17vw, 80px);
+    color: #dc2626;
+    background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+    border-radius: 50%;
+    padding: clamp(10px, 0.83vw, 16px);
+    animation: processIconPulse 2s ease-in-out infinite;
+}
+
+@keyframes processIconPulse {
+
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+    }
+
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+    }
+}
+
+.process-confirm-title {
+    text-align: center;
+    color: #1e293b;
+    font-size: clamp(20px, 1.67vw, 32px);
+    font-weight: 700;
+    margin: 0 0 clamp(15px, 1.3vw, 25px) 0;
+    font-family: 'Amaranth', -apple-system, sans-serif;
+    letter-spacing: -0.02em;
+}
+
+.process-confirm-message {
+    text-align: center;
+    font-size: clamp(13px, 0.94vw, 18px);
+    color: #475569;
+    line-height: 1.7;
+    margin: 0;
+    padding: 0 clamp(25px, 2.08vw, 40px);
+    white-space: pre-line;
+    font-weight: 500;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.process-confirm-actions {
+    display: flex;
+    gap: 12px;
+    padding: clamp(25px, 2.08vw, 40px);
+    justify-content: center;
+    background: rgba(248, 250, 252, 0.8);
+    margin-top: clamp(18px, 1.67vw, 32px);
+}
+
+.process-confirm-cancel,
+.process-confirm-delete,
+.confirm-cancel,
+.confirm-inactive {
+    flex: 1;
+    max-width: 150px;
+}
+
+/* Confirm modal button styles - 与account保持一致 */
+.process-btn {
+    padding: clamp(6px, 0.42vw, 8px) 20px;
+    border: none;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: clamp(10px, 0.83vw, 16px);
+    text-decoration: none;
+    display: inline-block;
+    transition: all 0.3s;
+}
+
+.process-btn-cancel {
+    background: linear-gradient(180deg, #bcbcbc 0%, #585858 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(5rem, 6.25vw, 7.5rem);
+    padding: clamp(0.375rem, 0.42vw, 0.5rem) 1.25rem;
+    font-size: clamp(0.625rem, 0.83vw, 1rem);
+    border: none;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(88, 88, 88, 0.3);
+    --sweep-color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.process-btn-cancel::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    left: -30%;
+    right: -30%;
+    background: linear-gradient(120deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(100, 116, 139, 0.24) 20%,
+            rgba(255, 255, 255, 0.35) 50%,
+            rgba(100, 116, 139, 0.24) 80%,
+            rgba(255, 255, 255, 0) 100%);
+    transform: translateX(-120%);
+    transition: transform 600ms ease;
+    pointer-events: none;
+}
+
+.process-btn-cancel:hover::after {
+    transform: translateX(120%);
+}
+
+.process-btn-cancel:hover {
+    background: linear-gradient(180deg, #585858 0%, #bcbcbc 100%);
+    box-shadow: 0 0.25rem 0.5rem rgba(84, 84, 84, 0.4);
+    transform: translateY(-0.0625rem);
+}
+
+.process-btn-delete {
+    background: linear-gradient(180deg, #F30E12 0%, #A91215 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(5rem, 6.25vw, 7.5rem);
+    padding: clamp(0.375rem, 0.42vw, 0.5rem) 1.25rem;
+    font-size: clamp(0.625rem, 0.83vw, 1rem);
+    border: none;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(220, 53, 69, 0.3);
+    --sweep-color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.process-btn-delete::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    left: -30%;
+    right: -30%;
+    background: linear-gradient(120deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(220, 53, 69, 0.24) 20%,
+            rgba(255, 255, 255, 0.35) 50%,
+            rgba(220, 53, 69, 0.24) 80%,
+            rgba(255, 255, 255, 0) 100%);
+    transform: translateX(-120%);
+    transition: transform 600ms ease;
+    pointer-events: none;
+}
+
+.process-btn-delete:hover::after {
+    transform: translateX(120%);
+}
+
+.process-btn-delete:hover {
+    background: linear-gradient(180deg, #A91215 0%, #F30E12 100%);
+    box-shadow: 0 0.25rem 0.5rem rgba(220, 53, 69, 0.4);
+    transform: translateY(-0.0625rem);
+}
+
+/* Confirm Inactive (Switch to Inactive) button - 与 delete 风格一致，橙色/琥珀色 */
+.process-btn-inactive {
+    background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(5rem, 6.25vw, 7.5rem);
+    padding: clamp(0.375rem, 0.42vw, 0.5rem) 1.25rem;
+    font-size: clamp(0.625rem, 0.83vw, 1rem);
+    border: none;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(245, 158, 11, 0.3);
+    --sweep-color: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.process-btn-inactive::after {
+    content: "";
+    position: absolute;
+    top: -20%;
+    bottom: -20%;
+    left: -30%;
+    right: -30%;
+    background: linear-gradient(120deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(245, 158, 11, 0.24) 20%,
+            rgba(255, 255, 255, 0.35) 50%,
+            rgba(245, 158, 11, 0.24) 80%,
+            rgba(255, 255, 255, 0) 100%);
+    transform: translateX(-120%);
+    transition: transform 600ms ease;
+    pointer-events: none;
+}
+
+.process-btn-inactive:hover::after {
+    transform: translateX(120%);
+}
+
+.process-btn-inactive:hover {
+    background: linear-gradient(180deg, #b45309 0%, #f59e0b 100%);
+    box-shadow: 0 0.25rem 0.5rem rgba(245, 158, 11, 0.4);
+    transform: translateY(-0.0625rem);
+}
+
+/* Confirm Inactive modal icon - 与 Inactive 按钮同色 */
+#confirmInactiveModal .process-confirm-icon {
+    color: #b45309;
+}
+
+/* Resend to Accounting Due — emerald accent */
+#confirmBankResendModal .process-confirm-icon--resend {
+    color: #047857;
+    background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+    animation: processIconPulseResend 2s ease-in-out infinite;
+}
+
+@keyframes processIconPulseResend {
+
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.35);
+    }
+
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(5, 150, 105, 0);
+    }
+}
+
+.process-btn-resend {
+    background: linear-gradient(180deg, #10b981 0%, #047857 100%);
+    color: white;
+    font-family: 'Amaranth', -apple-system, sans-serif;
+    width: clamp(5rem, 6.25vw, 7.5rem);
+    padding: clamp(0.375rem, 0.42vw, 0.5rem) 1.25rem;
+    font-size: clamp(0.625rem, 0.83vw, 1rem);
+    border: none;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(16, 185, 129, 0.35);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.process-btn-resend:hover:not(:disabled) {
+    background: linear-gradient(180deg, #059669 0%, #065f46 100%);
+    box-shadow: 0 0.25rem 0.5rem rgba(5, 150, 105, 0.45);
+    transform: translateY(-0.0625rem);
+}
+
+.process-btn-resend:disabled {
+    opacity: 0.75;
+    cursor: wait;
+    transform: none;
+}
+
+/* Resend to Accounting Due — layout & form panel */
+#confirmBankResendModal .bank-resend-modal-content {
+    width: clamp(400px, 94vw, 520px);
+    max-width: 96%;
+    display: flex;
+    flex-direction: column;
+}
+
+#confirmBankResendModal .bank-resend-modal-hero {
+    text-align: center;
+    padding: 0 clamp(8px, 2vw, 12px);
+}
+
+#confirmBankResendModal .bank-resend-modal-icon-wrap {
+    padding-top: clamp(22px, 2.2vw, 36px);
+    padding-bottom: clamp(10px, 1vw, 16px);
+}
+
+#confirmBankResendModal .bank-resend-modal-title {
+    margin-bottom: clamp(10px, 1vw, 16px);
+    font-size: clamp(1.15rem, 2.8vw, 1.5rem);
+}
+
+#confirmBankResendModal .bank-resend-modal-message {
+    text-align: center;
+    font-size: clamp(14px, 1.05vw, 16px);
+    line-height: 1.65;
+    color: #64748b;
+    font-weight: 500;
+    padding: 0 clamp(12px, 3vw, 28px);
+    margin: 0 auto;
+    max-width: 38rem;
+    max-height: none;
+    white-space: pre-line;
+}
+
+#confirmBankResendModal .bank-resend-modal-message::first-line {
+    color: #334155;
+    font-weight: 600;
+}
+
+#confirmBankResendModal .bank-resend-schedule-card {
+    margin: clamp(18px, 2.2vw, 26px) clamp(18px, 3.5vw, 32px) 0;
+    padding: clamp(16px, 1.8vw, 20px) clamp(16px, 2vw, 22px);
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85);
+    border-top: 3px solid #10b981;
+    text-align: left;
+}
+
+#confirmBankResendModal .bank-resend-schedule-card__head {
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+#confirmBankResendModal .bank-resend-schedule-card__label {
+    display: block;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #0f766e;
+    margin-bottom: 6px;
+}
+
+#confirmBankResendModal .bank-resend-schedule-card__hint {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: #64748b;
+}
+
+#confirmBankResendModal .bank-resend-schedule-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 14px;
+}
+
+@media (min-width: 440px) {
+    #confirmBankResendModal .bank-resend-schedule-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 14px 16px;
+    }
+
+    #confirmBankResendModal .bank-resend-field--full {
+        grid-column: 1 / -1;
+    }
+}
+
+#confirmBankResendModal .bank-resend-field__label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 6px;
+    letter-spacing: 0.01em;
+}
+
+#confirmBankResendModal .bank-resend-field__note {
+    margin: 6px 0 0;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #64748b;
+}
+
+#confirmBankResendModal .bank-resend-inline-alert {
+    margin-top: 12px;
+    padding: 14px 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.45;
+    color: #450a0a;
+    background: linear-gradient(135deg, #fff1f2 0%, #fecdd3 100%);
+    border: 2px solid #e11d48;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(190, 18, 60, 0.35);
+}
+
+#confirmBankResendModal .bank-resend-inline-alert[hidden] {
+    display: none !important;
+}
+
+#confirmBankResendModal .bank-resend-control.bank-resend-control--error {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.35) !important;
+}
+
+#confirmBankResendModal .bank-resend-control {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 42px;
+    padding: 8px 12px;
+    font-size: 0.9375rem;
+    font-family: inherit;
+    color: #1e293b;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#confirmBankResendModal .bank-resend-control:hover {
+    border-color: #94a3b8;
+}
+
+#confirmBankResendModal .bank-resend-control:focus {
+    outline: none;
+    border-color: #10b981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+}
+
+#confirmBankResendModal .bank-resend-control--select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 40px;
+}
+
+#confirmBankResendModal .process-confirm-actions.bank-resend-modal-actions {
+    margin-top: 0;
+    padding: clamp(18px, 2vw, 26px) clamp(22px, 3vw, 36px) clamp(22px, 2.5vw, 32px);
+    border-top: 1px solid #e2e8f0;
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.5) 0%, rgba(241, 245, 249, 0.9) 100%);
+}
+
+/* Scrollbar for long messages */
+.process-confirm-message::-webkit-scrollbar {
+    width: 6px;
+}
+
+.process-confirm-message::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 10px;
+}
+
+.process-confirm-message::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+/* Notification styles - 与accountlist保持一致但使用process前缀 */
+.process-notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10050;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 400px;
+}
+
+.process-notification {
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateX(100%);
+    transition: all 0.3s ease-in-out;
+    font-weight: 500;
+    position: relative;
+    word-wrap: break-word;
+    border-left: 4px solid;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.process-notification.show {
+    transform: translateX(0);
+}
+
+.process-notification-success {
+    background-color: #f0fdf4;
+    color: #166534;
+    border-left-color: #22c55e;
+}
+
+.process-notification-danger {
+    background-color: #fef2f2;
+    color: #991b1b;
+    border-left-color: #ef4444;
+}
+
+/* Resend：Day start 与合约同日 — 仅此场景使用 showNotification(..., { prominent: true }) */
+.process-notification.process-notification--bank-resend-day-start {
+    max-width: min(100vw - 32px, 480px);
+    min-width: min(100vw - 32px, 320px);
+    padding: 20px 22px;
+    font-size: 1.0625rem;
+    font-weight: 700;
+    line-height: 1.45;
+    color: #450a0a;
+    background: linear-gradient(180deg, #fff1f2 0%, #fecdd3 100%);
+    border: 3px solid #be123c;
+    border-left: 8px solid #9f1239;
+    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28);
+}
+
+@media (max-width: 1024px) {
+    .process-page .card-item {
+        font-size: clamp(9px, 0.85vw, 14px);
+    }
+
+    .process-page .process-cards {
+        min-height: calc(100vh - 250px);
+    }
+
+    /* Edit Process 弹窗在 1024px：与红框同尺寸，仅占侧栏右侧整块 */
+    .process-page #editModal {
+        left: 180px !important;
+        /* 遮罩从侧栏右侧开始 */
+        width: calc(100vw - 210px) !important;
+        top: 80px;
+        border-radius: 16px;
+        height: 500px;
+    }
+
+    .process-page .modal-content {
+        overflow-y: hidden;
+    }
+
+    .process-page #editModal .modal-content {
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        border-radius: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
+    }
+
+    .process-page #editModal .modal-body {
+        padding: 0.75rem 1rem 1rem !important;
+        overflow-x: hidden !important;
+        min-height: 0 !important;
+    }
+
+    .process-page #editModal .process-form.add-grid {
+        grid-template-columns: 1fr 1fr !important;
+        padding: 0 0.5rem 0.5rem !important;
+        gap: 0.6rem !important;
+        min-width: 0 !important;
+    }
+
+    .process-page #editModal .process-form.add-grid .add-col {
+        padding: 0.4rem 0.5rem !important;
+        min-width: 0 !important;
+    }
+
+    .process-page #editModal .process-form .form-group label {
+        font-size: clamp(10px, 0.85vw, 15px) !important;
+    }
+
+    .process-page #editModal .process-form .form-group input,
+    .process-page #editModal .process-form .form-group select,
+    .process-page #editModal .process-form .form-group textarea {
+        font-size: clamp(9px, 0.85vw, 14px) !important;
+        padding: 0.4rem 0.5rem !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    .process-page #editModal .process-form .form-row {
+        gap: 0.4rem !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    .process-page #editModal .process-form .form-row small,
+    .process-page #editModal .process-form .form-group .form-hint {
+        font-size: 0.7rem !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+    }
+
+    .process-page #editModal #edit_day_checkboxes.day-checkboxes {
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }
+
+    /* DTS Modified / DTS Created 在 1024px 下字体 */
+    .process-page #editModal label[for="edit_dts_modified"],
+    .process-page #editModal label[for="edit_dts_created"],
+    .process-page #editModal #edit_dts_modified,
+    .process-page #editModal #edit_dts_created,
+    .process-page #editModal #edit_dts_modified span,
+    .process-page #editModal #edit_dts_created span {
+        font-size: clamp(9px, 0.85vw, 14px) !important;
+    }
+
+    .process-page .form-group input,
+    .process-page .form-group select,
+    .process-page .form-group textarea {
+        font-size: clamp(9px, 0.85vw, 14px);
+    }
+
+    .process-page .form-group input,
+    .process-page .form-group select {
+        padding: 8px 16px;
+    }
+
+    .process-page #addModal .day-checkboxes .checkbox-item label {
+        font-size: clamp(9px, 0.85vw, 14px) !important;
+    }
+}
+
+
+/* ========================================================
+   Compact Mode for Small Screens (Laptops, Tablets, etc.)
+   ======================================================== */
+@media (max-height: 800px),
+(max-width: 1200px) {
+
+    .process-page .process-form .form-group input,
+    .process-page .process-form .form-group select,
+    .process-page .process-form .form-group textarea {
+        padding: 0.4rem 0.75rem !important;
+        font-size: 0.8125rem !important;
+    }
+
+    .process-page #addModal .process-form .form-group label,
+    .process-page #editModal .process-form .form-group label {
+        font-size: 0.8125rem !important;
+        margin-bottom: 0.25rem !important;
+    }
+
+    .process-page #addModal .process-form .form-row,
+    .process-page #editModal .process-form .form-row {
+        margin-bottom: 0.625rem !important;
+        gap: 0.875rem !important;
+    }
+
+    .process-page #addModal .modal-body,
+    .process-page #editModal .modal-body {
+        padding: 1rem 1.25rem 1rem 1.25rem !important;
+    }
+
+    .process-page #addModal .process-form.add-grid .add-col,
+    .process-page #editModal .process-form.add-grid .add-col {
+        padding: 0.75rem 0.9rem !important;
+    }
+
+    .process-page .process-form.add-grid .add-actions {
+        padding-top: 0.75rem !important;
+        padding-bottom: 0.75rem !important;
+    }
+}
+
+/* Bank list: same fixed pagination as Games (viewport bottom-right) */
+.process-page.process-page--bank .pagination-container {
+    position: fixed;
+    right: max(40px, env(safe-area-inset-right, 0px));
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    margin: 0 !important;
+    left: auto;
+    top: auto;
+    z-index: 120;
+}
+
+.process-page.process-page--bank .bank-table-wrapper {
+    padding-bottom: 48px;
+}
+
+.process-page.process-page--bank.process-page--bank-show-all .bank-table-wrapper {
+    padding-bottom: 0;
+}

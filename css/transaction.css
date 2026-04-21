@@ -1,0 +1,1742 @@
+body.transaction-page {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background-color: #e9f1ff;
+    background-image:
+        radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 48%),
+        radial-gradient(circle at 70% 15%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 45%),
+        radial-gradient(circle at 40% 70%, rgba(206, 232, 255, 0.55) 0%, rgba(255, 255, 255, 0) 60%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%),
+        linear-gradient(145deg, #97BFFC 0%, #AECFFA 40%, #f9fbff 100%);
+    background-blend-mode: screen, screen, multiply, screen, normal;
+    color: #334155;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+
+.transaction-page .transaction-container {
+    max-width: none;
+    margin: 0;
+    padding: 1px clamp(20px, 2.08vw, 40px) 20px clamp(180px, 14.06vw, 270px);
+    width: 100%;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
+.transaction-page .transaction-title {
+    color: #002C49;
+    text-align: left;
+    margin-top: clamp(12px, 1.04vw, 20px);
+    margin-bottom: clamp(16px, 1.35vw, 26px);
+    font-size: clamp(26px, 2.08vw, 40px);
+    font-family: 'Amaranth';
+    font-weight: 500;
+    letter-spacing: -0.025em;
+}
+
+.transaction-page .transaction-main-content {
+    display: flex;
+    gap: 24px;
+}
+
+.transaction-page .transaction-search-section,
+.transaction-page .transaction-add-section {
+    flex: 1;
+    min-width: 0;
+    padding: clamp(12px, 1.04vw, 20px);
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background-color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.transaction-page .transaction-search-section {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(6px, 0.52vw, 12px);
+}
+
+/* 让右侧表单内部按列布局，底部按钮区域贴着卡片底边 */
+.transaction-page .transaction-add-section {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(6px, 0.52vw, 12px);
+}
+
+.transaction-page .transaction-bottom-filters {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.transaction-page .transaction-form-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    min-width: 0;
+    max-width: 100%;
+    margin-bottom: 5px;
+}
+
+.transaction-page .transaction-inline-row {
+    flex-wrap: nowrap;
+}
+
+.transaction-page .transaction-inline-row .transaction-label {
+    white-space: nowrap;
+}
+
+.transaction-page .transaction-two-col {
+    display: flex;
+    gap: 12px;
+}
+
+.transaction-page .transaction-two-col .transaction-form-group {
+    flex: 1;
+}
+
+.transaction-page .transaction-label {
+    display: block;
+    margin-bottom: 0;
+    font-weight: bold;
+    color: #374151;
+    font-size: clamp(9px, 0.73vw, 14px);
+    font-family: 'Amaranth', sans-serif;
+    width: clamp(60px, 5.5vw, 105px);
+    flex-shrink: 0;
+}
+
+.transaction-page .transaction-input,
+.transaction-page .transaction-select {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    padding: clamp(3px, 0.31vw, 6px) clamp(6px, 0.52vw, 10px);
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: clamp(9px, 0.73vw, 14px);
+    box-sizing: border-box;
+    transition: all 0.2s;
+    background-color: #f3f3f3;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    display: block;
+}
+
+.transaction-page .transaction-input:focus,
+.transaction-page .transaction-select:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.transaction-page .transaction-select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%23333' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 35px;
+}
+
+.transaction-page .transaction-date-inputs {
+    display: flex;
+    flex: 1;
+}
+
+.transaction-page .transaction-date-input {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Capture Date：标签在左，select bar 与上方 Category 下拉左对齐 */
+.transaction-page .transaction-date-quick-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+.transaction-page .transaction-date-quick-row .transaction-capture-date-label {
+    flex-shrink: 0;
+    width: clamp(60px, 5.5vw, 105px);
+    margin: 0;
+}
+
+.transaction-page .transaction-date-quick-row .transaction-date-range-group {
+    margin-right: clamp(8px, 1vw, 16px);
+}
+
+.transaction-page .transaction-date-range-group {
+    min-width: clamp(150px, 12.5vw, 240px);
+    flex: 0 0 auto;
+}
+
+.transaction-page .transaction-date-quick-row .quick-select-dropdown {
+    flex: 0 0 auto;
+}
+
+.transaction-page .transaction-account-inputs {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+}
+
+.transaction-page .transaction-account-select {
+    /* 默认在大屏上尽量占满可用空间 */
+    flex: 1 1 0;
+    min-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 自定义下拉选单样式 */
+.transaction-page .custom-select-wrapper {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 140px;
+}
+
+/* 在较窄屏幕下限制 Account 两个下拉的最大宽度，避免与 Reverse 按钮冲突 */
+@media (max-width: 1280px) {
+
+    .transaction-page .transaction-account-select,
+    .transaction-page .custom-select-wrapper {
+        flex: 1 1 calc(50% - 8px);
+        min-width: 120px;
+        max-width: 230px;
+    }
+}
+
+.transaction-page .custom-select-button {
+    width: 100%;
+    padding: 6px 30px 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f3f3f3;
+    cursor: pointer;
+    text-align: left;
+    font-size: clamp(9px, 0.73vw, 14px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    position: relative;
+}
+
+/* Account 这两个下拉（To / From）允许文字换行，避免 PROFIT 之类账号名称被截断 */
+.transaction-page .transaction-account-inputs .custom-select-button {
+    white-space: normal;
+    text-overflow: clip;
+    line-height: 1.2;
+}
+
+.transaction-page .custom-select-button::after {
+    content: '▼';
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 10px;
+    color: #666;
+    pointer-events: none;
+}
+
+.transaction-page .custom-select-button.open::after {
+    content: '▲';
+}
+
+.transaction-page .custom-select-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #f3f3f3;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    display: none;
+    max-height: 300px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.transaction-page .custom-select-dropdown.show {
+    display: block;
+}
+
+.transaction-page .custom-select-search {
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    background: #f3f3f3;
+    z-index: 1;
+}
+
+.transaction-page .custom-select-search input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: clamp(9px, 0.73vw, 14px);
+    box-sizing: border-box;
+}
+
+.transaction-page .custom-select-options {
+    max-height: 250px;
+    overflow-y: auto;
+}
+
+.transaction-page .custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: clamp(9px, 0.73vw, 14px);
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.transaction-page .custom-select-option:hover {
+    background-color: #f0f0f0;
+}
+
+.transaction-page .custom-select-option.selected {
+    background-color: #e3f2fd;
+    font-weight: bold;
+}
+
+.transaction-page .custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.transaction-page .custom-select-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #999;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+
+.transaction-page .transaction-account-reverse-btn {
+    background: linear-gradient(180deg, #bcbcbc 0%, #585858 100%);
+    color: white;
+    font-family: 'Amaranth';
+    flex: 0 0 auto;
+    align-self: stretch;
+    min-width: fit-content;
+    padding: 2px clamp(6px, 0.62vw, 10px);
+    font-size: clamp(9px, 0.73vw, 14px);
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(88, 88, 88, 0.3);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.transaction-page .transaction-account-reverse-btn:hover {
+    background: linear-gradient(180deg, #585858 0%, #bcbcbc 100%);
+    box-shadow: 0 4px 8px rgba(84, 84, 84, 0.4);
+    transform: translateY(-1px);
+}
+
+.transaction-page .transaction-checkboxes {
+    margin: clamp(8px, 0.83vw, 16px) 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: clamp(12px, 1vw, 20px);
+}
+
+.transaction-page .transaction-checkbox-label {
+    display: flex;
+    align-items: center;
+    font-size: clamp(9px, 0.73vw, 14px);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.transaction-page .transaction-checkbox {
+    appearance: none;
+    -webkit-appearance: none;
+    margin-right: 8px;
+    width: clamp(10px, 0.83vw, 16px);
+    height: clamp(10px, 0.83vw, 16px);
+    border: 2px solid #000000ff;
+    border-radius: 3px;
+    background-color: white;
+    cursor: pointer;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.transaction-page .transaction-checkbox:checked {
+    background-color: #1a237e;
+    border-color: #1a237e;
+}
+
+.transaction-page .transaction-checkbox:checked::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: clamp(9px, 0.73vw, 14px);
+    font-weight: bold;
+    line-height: 1;
+}
+
+.transaction-page .transaction-confirm-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: auto;
+    /* 将整个确认区域推到底部 */
+}
+
+.transaction-page .transaction-confirm-label {
+    margin: 0;
+}
+
+.transaction-page .transaction-search-btn {
+    background: linear-gradient(180deg, #bcbcbc 0%, #585858 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(80px, 6.25vw, 120px);
+    padding: clamp(6px, 0.42vw, 8px) 20px;
+    font-size: clamp(9px, 0.73vw, 14px);
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(88, 88, 88, 0.3);
+    cursor: pointer;
+}
+
+.transaction-page .transaction-search-btn:hover {
+    background: linear-gradient(180deg, #585858 0%, #bcbcbc 100%);
+    box-shadow: 0 4px 8px rgba(84, 84, 84, 0.4);
+    transform: translateY(-1px);
+}
+
+.transaction-page .transaction-submit-btn {
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
+    color: white;
+    font-family: 'Amaranth';
+    width: clamp(80px, 6.25vw, 120px);
+    padding: clamp(6px, 0.42vw, 8px) 20px;
+    font-size: clamp(9px, 0.73vw, 14px);
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    cursor: pointer;
+}
+
+.transaction-page .transaction-submit-btn:hover {
+    background: linear-gradient(180deg, #0D60FF 0%, #63C4FF 100%);
+    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    transform: translateY(-1px);
+}
+
+.transaction-page .transaction-submit-btn:disabled {
+    background: linear-gradient(180deg, #cccccc 0%, #e0e0e0 100%);
+    color: #999999;
+    cursor: not-allowed;
+    box-shadow: none;
+    opacity: 0.6;
+}
+
+.transaction-page .transaction-submit-btn:disabled:hover {
+    background: linear-gradient(180deg, #cccccc 0%, #e0e0e0 100%);
+    box-shadow: none;
+    transform: none;
+}
+
+.transaction-page .transaction-action-btns {
+    display: flex;
+    gap: 10px;
+    margin: 0;
+}
+
+.transaction-page .transaction-filter-row {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 15px;
+}
+
+.transaction-page .transaction-filter-left,
+.transaction-page .transaction-filter-right {
+    flex: 1;
+    display: flex;
+    align-items: center;
+}
+
+.transaction-page .transaction-filter-left .transaction-label,
+.transaction-page .transaction-filter-right .transaction-label {
+    margin-bottom: 0;
+    width: clamp(70px, 5.5vw, 105px);
+    flex-shrink: 0;
+}
+
+.transaction-page .transaction-company-select,
+.transaction-page .transaction-currency-select {
+    flex: 1;
+}
+
+.transaction-page .transaction-tables-section {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 0;
+}
+
+.transaction-page .transaction-tables-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    width: 100%;
+    color: #6b7280;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-page .transaction-tables-loading::before {
+    content: '';
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #002C49;
+    border-radius: 50%;
+    animation: transaction-loading-spin 0.7s linear infinite;
+}
+
+@keyframes transaction-loading-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.transaction-page .transaction-table-wrapper {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-x: auto;
+}
+
+.transaction-page .transaction-table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 2px solid #d0d7de;
+    background-color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.transaction-page .transaction-table-header th {
+    background-color: #002C49;
+    color: white;
+    padding: clamp(4px, 0.42vw, 5px) clamp(6px, 0.52vw, 10px);
+    text-align: left;
+    border: 1px solid #d0d7de;
+    font-weight: bold;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-page .transaction-table-row td {
+    border: 1px solid #d0d7de;
+    min-height: 28px;
+    background-color: transparent;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-page .transaction-table-row:hover td {
+    background-color: #bfc9ff;
+}
+
+
+.transaction-page .transaction-table-footer td {
+    background-color: #f6f8fa;
+    padding: clamp(4px, 0.42vw, 5px) clamp(6px, 0.52vw, 10px);
+    border: 1px solid #d0d7de;
+    font-weight: 800;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+/* B/F, Win/Loss, Cr/Dr, Balance 列右对齐（主表头 + 主表行 + 主表合计行） */
+.transaction-page .transaction-table thead th:nth-child(3),
+.transaction-page .transaction-table thead th:nth-child(4),
+.transaction-page .transaction-table thead th:nth-child(5),
+.transaction-page .transaction-table thead th:nth-child(6),
+.transaction-page .transaction-table tbody td:nth-child(3),
+.transaction-page .transaction-table tbody td:nth-child(4),
+.transaction-page .transaction-table tbody td:nth-child(5),
+.transaction-page .transaction-table tbody td:nth-child(6),
+.transaction-page .transaction-table tfoot td:nth-child(3),
+.transaction-page .transaction-table tfoot td:nth-child(4),
+.transaction-page .transaction-table tfoot td:nth-child(5),
+.transaction-page .transaction-table tfoot td:nth-child(6) {
+    text-align: right;
+}
+
+.transaction-page .transaction-summary-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-top: 20px;
+    width: 100%;
+}
+
+.transaction-page .transaction-summary-table {
+    width: clamp(300px, 25vw, 400px);
+    border-collapse: collapse;
+    border: 2px solid #d0d7de;
+    background-color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.transaction-page .transaction-summary-table .transaction-table-header th {
+    background-color: #002C49;
+    color: white;
+    padding: clamp(4px, 0.42vw, 5px) clamp(6px, 0.52vw, 10px);
+    text-align: center;
+    border: 1px solid #d0d7de;
+    font-weight: bold;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-page .transaction-summary-table .transaction-table-row td {
+    padding: clamp(3px, 0.31vw, 6px) clamp(6px, 0.52vw, 10px);
+    border: 1px solid #d0d7de;
+    background-color: transparent;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+/* Summary 表中数值列右对齐 */
+.transaction-page .transaction-summary-table .transaction-table-row td:nth-child(2) {
+    text-align: right;
+}
+
+.transaction-page .transaction-summary-label {
+    font-weight: bold;
+    background-color: #f6f8fa;
+}
+
+/* Notification styles - matching other pages */
+.transaction-page .transaction-notification-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 400px;
+}
+
+.transaction-page .transaction-notification {
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    transform: translateX(100%);
+    transition: all 0.3s ease-in-out;
+    font-weight: 500;
+    position: relative;
+    word-wrap: break-word;
+    border-left: 4px solid;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: clamp(9px, 0.73vw, 14px);
+    line-height: 1.5;
+}
+
+.transaction-page .transaction-notification.show {
+    transform: translateX(0);
+}
+
+.transaction-page .transaction-notification-success {
+    background-color: #f0fdf4;
+    color: #166534;
+    border-left-color: #22c55e;
+}
+
+.transaction-page .transaction-notification-error {
+    background-color: #fef2f2;
+    color: #991b1b;
+    border-left-color: #ef4444;
+}
+
+.transaction-page .transaction-notification-warning {
+    background-color: #fffbeb;
+    color: #92400e;
+    border-left-color: #f59e0b;
+}
+
+.transaction-page .transaction-notification-info {
+    background-color: #eff6ff;
+    color: #1e40af;
+    border-left-color: #3b82f6;
+}
+
+/* Separator line - matching other pages */
+.transaction-page .transaction-separator-line {
+    width: 100vw;
+    height: 2px;
+    background-color: #939393;
+    margin: 5px 0 20px 0;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+}
+
+/* Modal 弹窗样式（与 userlist/account-list 一致）*/
+.transaction-modal {
+    display: none;
+    position: fixed;
+    z-index: 9999;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    overflow: auto;
+}
+
+.transaction-modal-content {
+    background-color: #ffffff;
+    /* 稍微往上移，并限制整体高度 */
+    margin: 2% auto;
+    padding: 0;
+    border: none;
+    border-radius: 16px;
+    /* 调整最小宽度，让小一点的屏幕也不会被撑满 */
+    width: clamp(860px, 80vw, 1400px);
+    max-height: 92vh;
+    max-width: 100%;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    overflow: hidden;
+    animation: slideDown 0.3s ease-out;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-80px) scale(0.95);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.transaction-modal-header {
+    background-color: #f8fafc;
+    margin: 0;
+    padding: clamp(10px, 1.04vw, 20px) 32px;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.transaction-modal-header h3 {
+    margin: 0;
+    font-size: clamp(14px, 1.25vw, 24px);
+    font-weight: bold;
+    color: #1e293b;
+}
+
+.transaction-modal-close {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    font-size: 1.5rem;
+    font-weight: 300;
+    cursor: pointer;
+    width: 2rem;
+    height: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+    line-height: 1;
+    padding: 0;
+}
+
+.transaction-modal-close:hover {
+    background-color: #f1f5f9;
+    color: #334155;
+}
+
+.transaction-modal-body {
+    padding: clamp(10px, 1.04vw, 20px) 32px;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Scroll + border frame so long history lists stay inside the card (no clipped rows) */
+.transaction-history-table-frame {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(76vh, calc(92vh - 140px));
+    overflow: auto;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.transaction-modal-body .transaction-table {
+    margin-top: 0;
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.transaction-modal-body .transaction-table th {
+    position: sticky;
+    top: 0;
+    background-color: #002C49;
+    color: white;
+    padding: clamp(4px, 0.42vw, 8px) clamp(6px, 0.52vw, 10px);
+    text-align: left;
+    border: 1px solid #d0d7de;
+    font-weight: 600;
+    z-index: 1;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-modal-body .transaction-table td {
+    padding: clamp(4px, 0.42vw, 8px) clamp(6px, 0.52vw, 10px);
+    border: 1px solid #e2e8f0;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-date {
+    width: 4%;
+    min-width: 120px;
+    white-space: nowrap;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-product {
+    width: 15%;
+    min-width: 150px;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-currency {
+    width: 3%;
+    min-width: 70px;
+    text-align: center !important;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-rate {
+    width: 2%;
+    min-width: 60px;
+    text-align: center;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-percent {
+    width: 2%;
+    min-width: 60px;
+    text-align: center;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-winloss {
+    width: 4%;
+    min-width: 140px;
+    text-align: right;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-crdr {
+    width: 4%;
+    min-width: 140px;
+    text-align: right;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-balance {
+    width: 4%;
+    min-width: 140px;
+    text-align: right;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-description {
+    width: 20%;
+    min-width: 180px;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-remark {
+    width: 5%;
+    min-width: 120px;
+}
+
+.transaction-modal-body .transaction-table .transaction-history-col-created {
+    width: 3%;
+    min-width: 120px;
+}
+
+.transaction-modal-body .transaction-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+/* Alert 账号标记（整行红色，白色文字）- 必须比普通行样式更具体 */
+.transaction-page .transaction-table tbody .transaction-table-row.transaction-alert-row {
+    background-color: #dc2626 !important;
+}
+
+.transaction-page .transaction-table tbody .transaction-table-row.transaction-alert-row:hover {
+    background-color: #b91c1c !important;
+}
+
+.transaction-page .transaction-table tbody .transaction-table-row.transaction-alert-row td {
+    background-color: #dc2626 !important;
+    color: white !important;
+    font-weight: bold !important;
+    border-color: #b91c1c !important;
+}
+
+.transaction-page .transaction-table tbody .transaction-table-row.transaction-alert-row:hover td {
+    background-color: #b91c1c !important;
+}
+
+/* Account Role Colors - matching account list styles */
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-capital {
+    background-color: #ffe0e0 !important;
+    color: #a30b0b !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-bank {
+    background-color: #dfe3ff !important;
+    color: #14228a !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-cash {
+    background-color: #dff4e7 !important;
+    color: #0f6d38 !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-profit {
+    background-color: #fff2c7 !important;
+    color: #7a5b00 !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-expenses {
+    background-color: #f0e1ff !important;
+    color: #4f148f !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-company {
+    background-color: #ecfccb !important;
+    color: #3f6212 !important;
+    border: 1px solid #bef264 !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-partner {
+    background-color: #e0f2fe !important;
+    color: #0369a1 !important;
+    border: 1px solid #bae6fd !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-staff {
+    background-color: #ffe5cc !important;
+    color: #a24700 !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-upline {
+    background-color: #d6f9ff !important;
+    color: #0a6b78 !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-agent {
+    background-color: #ffe0f3 !important;
+    color: #a02578 !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-member {
+    background-color: #f2dfd2 !important;
+    color: #5f2e0f !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-debtor {
+    background-color: #f1f5f9 !important;
+    color: #475569 !important;
+    border: 1px solid #cbd5e1 !important;
+    /* font-weight: 600 !important; */
+}
+
+.transaction-page .transaction-table tbody .transaction-account-cell.transaction-role-none {
+    background-color: #eceef2 !important;
+    color: #3e434f !important;
+    /* font-weight: 600 !important; */
+}
+
+/* Account 列在 hover 时也要改变颜色 - 放在 role 规则之后以覆盖它们 */
+/* 使用更高的特异性确保覆盖所有 role 颜色 */
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-capital,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-bank,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-cash,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-profit,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-expenses,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-company,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-partner,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-staff,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-upline,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-agent,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-member,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-debtor,
+.transaction-page .transaction-table tbody .transaction-table-row:hover .transaction-account-cell.transaction-role-none {
+    background-color: #bfc9ff !important;
+    color: #000000 !important;
+}
+
+/* ========== transaction.php 椤甸潰涓撶敤 ========== */
+
+/**
+ * transaction.css - 原根目录 transaction.css 已移入此文件夹，并包含 transaction.php 页面专用样式
+ */
+/* 全局字体加粗 */
+body.transaction-page,
+body.transaction-page * {
+    font-weight: 700;
+}
+
+/* 恢复 sidebar 中关键元素的原始 font-weight（与 sidebar.php 保持一致） */
+body.transaction-page .informationmenu .user-name,
+body.transaction-page .informationmenu .informationmenu-section-title,
+body.transaction-page .informationmenu .language-text,
+body.transaction-page .informationmenu .language-option span {
+    font-weight: 600;
+}
+
+body.transaction-page .informationmenu .user-role,
+body.transaction-page .informationmenu .informationmenu-item {
+    font-weight: 500;
+}
+
+body.transaction-page .informationmenu .user-avatar,
+body.transaction-page .informationmenu .informationmenu-logo,
+body.transaction-page .informationmenu .submenu-item,
+body.transaction-page .informationmenu .submenu-item::after {
+    font-weight: bold;
+}
+
+body.transaction-page .informationmenu .options-title,
+body.transaction-page .informationmenu .gender-btn {
+    font-weight: 600;
+}
+
+/* 恢复 logout 和 expiration date 的原始 font-weight */
+body.transaction-page .logout-btn {
+    font-weight: normal;
+}
+
+body.transaction-page .expiration-countdown-text {
+    font-weight: 500;
+}
+
+/* ==================== Contra Approval Inbox ==================== */
+.transaction-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+}
+
+.transaction-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+
+.contra-inbox-wrap {
+    position: relative;
+}
+
+.contra-inbox-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 20px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: clamp(9px, 0.73vw, 14px);
+    font-weight: 800;
+}
+
+.contra-inbox-btn {
+    padding: 6px 10px;
+    border: 1px solid #d0d7de;
+    border-radius: 10px;
+    background: #f8fafc;
+    cursor: pointer;
+    font-size: clamp(9px, 0.73vw, 14px);
+    font-weight: 700;
+    color: #111827;
+    transition: all 0.15s ease;
+}
+
+.contra-inbox-btn:hover {
+    background: #eef2ff;
+    border-color: #a5b4fc;
+}
+
+.contra-inbox-btn.contra-inbox-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: #ffffff;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.contra-inbox-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-block;
+}
+
+.contra-inbox-popover {
+    position: absolute;
+    left: 0;
+    top: calc(100% + 8px);
+    /* JS 会给元素写死宽度，这里用 !important 强制限制最大宽度，避免在较小屏幕溢出 */
+    width: auto !important;
+    max-width: min(760px, calc(100vw - 40px)) !important;
+    max-height: 420px;
+    overflow: hidden;
+    border: 1px solid #d0d7de;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(16, 24, 40, 0.18);
+    z-index: 1200;
+    display: none;
+}
+
+.contra-inbox-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: clamp(6px, 0.52vw, 10px) 12px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #f8fafc;
+}
+
+.contra-inbox-popover-title {
+    font-weight: 900;
+    color: #0f172a;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: clamp(11px, 0.94vw, 18px);
+    /* 与其他标题保持一致比例 */
+}
+
+.contra-inbox-popover-body {
+    max-height: 360px;
+    overflow: auto;
+}
+
+.contra-inbox-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.contra-inbox-table th,
+.contra-inbox-table td {
+    padding: 6px 8px;
+    border-top: 1px solid #e5e7eb;
+    font-size: clamp(9px, 0.73vw, 14px);
+    font-weight: 700;
+    text-align: left;
+    vertical-align: top;
+}
+
+.contra-inbox-approve {
+    background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+    border-color: transparent;
+    color: #fff;
+}
+
+.contra-inbox-approve:hover {
+    background: linear-gradient(180deg, #16a34a 0%, #15803d 100%);
+    border-color: transparent;
+}
+
+.contra-inbox-reject {
+    background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+    border-color: transparent;
+    color: #fff;
+    margin-left: 6px;
+}
+
+.contra-inbox-reject:hover {
+    background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%);
+    border-color: transparent;
+}
+
+/* 表格自然展开，页面整体滚动 */
+.transaction-table-wrapper {
+    position: relative !important;
+    overflow-x: auto !important;
+}
+
+.transaction-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.transaction-table thead th {
+    position: relative !important;
+    z-index: 10 !important;
+}
+
+.transaction-table tfoot tr {
+    position: relative !important;
+    z-index: 10 !important;
+}
+
+.transaction-table tfoot td {
+    background-color: #f6f8fa !important;
+}
+
+.transaction-table th,
+.transaction-table td {
+    padding: clamp(2px, 0.21vw, 4px) 8px;
+    line-height: 1.1;
+    font-weight: 600;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-table td {
+    font-weight: 800;
+}
+
+/* Account 列宽度 - 更宽 */
+.transaction-table th:first-child,
+.transaction-table td:first-child {
+    width: 20%;
+    min-width: 150px;
+}
+
+/* Name 列宽度 - 与 Account 列一样宽 */
+.transaction-table th.transaction-name-column,
+.transaction-table td.transaction-name-column {
+    width: 18%;
+    min-width: 150px;
+}
+
+/* 其他列（B/F, Win/Loss, Cr/Dr, Balance）保持较小宽度，平均分配剩余空间 */
+.transaction-table th:nth-child(3),
+.transaction-table td:nth-child(3),
+.transaction-table th:nth-child(4),
+.transaction-table td:nth-child(4),
+.transaction-table th:nth-child(5),
+.transaction-table td:nth-child(5),
+.transaction-table th:nth-child(6),
+.transaction-table td:nth-child(6),
+.transaction-table th:nth-child(7),
+.transaction-table td:nth-child(7) {
+    width: auto;
+}
+
+.transaction-table tbody tr {
+    height: auto;
+}
+
+.transaction-table tbody tr:nth-child(odd),
+.transaction-table tbody tr:nth-child(odd) td {
+    background-color: #f9fbff;
+}
+
+.transaction-table tbody tr:nth-child(even),
+.transaction-table tbody tr:nth-child(even) td {
+    background-color: rgb(228, 235, 255);
+}
+
+.transaction-summary-table tbody tr:nth-child(odd),
+.transaction-summary-table tbody tr:nth-child(odd) td {
+    background-color: #f9fbff;
+    font-weight: 800;
+}
+
+.transaction-summary-table tbody tr:nth-child(even),
+.transaction-summary-table tbody tr:nth-child(even) td {
+    background-color: rgb(228, 235, 255);
+    font-weight: 800;
+}
+
+/* 日期范围选择器样式 */
+.transaction-date-inputs {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+}
+
+.transaction-date-inputs input {
+    flex: 1;
+    min-width: 0;
+}
+
+.transaction-date-inputs span {
+    color: #666;
+    font-size: clamp(9px, 0.73vw, 14px);
+    flex-shrink: 0;
+}
+
+/* Flatpickr 自定义样式 */
+.flatpickr-calendar {
+    font-family: 'Amaranth', sans-serif;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.flatpickr-day.selected {
+    background: #4a90e2;
+    border-color: #4a90e2;
+}
+
+.flatpickr-day.today {
+    border-color: #4a90e2;
+}
+
+.flatpickr-day.today:hover,
+.flatpickr-day.today:focus {
+    background: #e6f2ff;
+    border-color: #4a90e2;
+}
+
+/* User Avatar Button */
+#user-avatar {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 100;
+    cursor: pointer;
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: all 0.3s ease;
+}
+
+#user-avatar:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+}
+
+/* Company & Currency Buttons */
+.transaction-company-filter {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 0.83vw, 16px);
+    flex-wrap: wrap;
+    margin-top: clamp(0px, 0.52vw, 10px);
+    padding: 0 20px 10px 0px;
+}
+
+.transaction-company-label {
+    font-weight: bold;
+    color: #374151;
+    font-size: clamp(9px, 0.73vw, 14px);
+    font-family: 'Amaranth', sans-serif;
+    white-space: nowrap;
+    min-width: 0px;
+    display: inline-block;
+    text-align: right;
+}
+
+.transaction-company-buttons {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.transaction-company-btn {
+    padding: clamp(3px, 0.31vw, 6px) clamp(10px, 0.83vw, 16px);
+    background: #f1f5f9;
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: clamp(9px, 0.73vw, 14px);
+    transition: all 0.2s ease;
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.transaction-company-btn:hover {
+    background: #e2e8f0;
+    border-color: #a5b4fc;
+}
+
+.transaction-company-btn.active {
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+/* Currency 拖动（与 Member Win/Loss 一致） */
+#currency-buttons-container .transaction-company-btn.transaction-currency-dragging {
+    opacity: 0.6;
+}
+
+#currency-buttons-container .transaction-company-btn.transaction-currency-drag-over {
+    outline: 2px dashed #3b82f6;
+    outline-offset: 2px;
+}
+
+.text-uppercase {
+    text-transform: uppercase;
+}
+
+/* Balance Cell Clickable Style */
+.transaction-balance-cell {
+    position: relative;
+}
+
+.transaction-add-section .transaction-form-group {
+    flex-wrap: nowrap;
+}
+
+.transaction-add-section .transaction-form-group .transaction-label {
+    width: clamp(80px, 6vw, 110px);
+    flex: 0 0 clamp(60px, 6vw, 105px);
+}
+
+.transaction-add-section .transaction-form-group>*:not(.transaction-label) {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 5px;
+}
+
+.transaction-account-inputs {
+    width: 100%;
+}
+
+.transaction-select {
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.transaction-win-lose-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.transaction-radio-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+/* Rate workflow layout */
+.rate-fields {
+    display: flex;
+    flex-direction: column;
+}
+
+.rate-section {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    margin-bottom: 5px;
+}
+
+.rate-section>.transaction-label {
+    white-space: nowrap;
+}
+
+.rate-section>.transaction-input,
+.rate-section>.transaction-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.rate-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    width: 100%;
+    gap: 5px;
+}
+
+.rate-row-two-cols>.transaction-select,
+.rate-row-two-cols>.transaction-input {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 140px;
+}
+
+.rate-row-five-cols {
+    display: grid;
+    grid-template-columns: minmax(70px, 0.9fr) minmax(70px, 1fr) minmax(60px, 0.8fr) minmax(70px, 0.9fr) minmax(70px, 1fr);
+    width: 100%;
+}
+
+.rate-row-three-cols {
+    display: grid;
+    grid-template-columns: minmax(90px, 1fr) minmax(80px, 0.8fr) minmax(90px, 1fr);
+    width: 100%;
+}
+
+.rate-row-three-cols {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(70px, 1fr));
+    width: 100%;
+}
+
+.rate-row-five-cols select,
+.rate-row-five-cols input {
+    width: 100%;
+    min-width: 0;
+}
+
+.rate-reverse-btn {
+    flex: 0 0 auto;
+    align-self: stretch;
+}
+
+/* Category Multi-Select Dropdown Styles */
+.transaction-category-multiselect {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 250px;
+    max-width: 100%;
+}
+
+.transaction-two-col .transaction-category-multiselect {
+    flex: 1 1 auto;
+    min-width: 250px;
+}
+
+.category-dropdown-button {
+    min-width: 200px;
+    max-width: 100%;
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    color: #374151;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.category-selected-tags {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+    min-height: 20px;
+}
+
+.category-placeholder {
+    color: #9ca3af;
+    font-size: 14px;
+}
+
+.category-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #e5e7eb;
+    color: #374151;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* Category Tag Colors - matching Role colors */
+.category-tag[data-category-value="CAPITAL"] {
+    background-color: #ffe0e0 !important;
+    color: #a30b0b !important;
+}
+
+.category-tag[data-category-value="BANK"] {
+    background-color: #dfe3ff !important;
+    color: #14228a !important;
+}
+
+.category-tag[data-category-value="CASH"] {
+    background-color: #dff4e7 !important;
+    color: #0f6d38 !important;
+}
+
+.category-tag[data-category-value="PROFIT"] {
+    background-color: #fff2c7 !important;
+    color: #7a5b00 !important;
+}
+
+.category-tag[data-category-value="EXPENSES"] {
+    background-color: #f0e1ff !important;
+    color: #4f148f !important;
+}
+
+.category-tag[data-category-value="COMPANY"] {
+    background-color: #ecfccb !important;
+    color: #3f6212 !important;
+    border: 1px solid #bef264 !important;
+}
+
+.category-tag[data-category-value="PARTNER"] {
+    background-color: #e0f2fe !important;
+    color: #0369a1 !important;
+    border: 1px solid #bae6fd !important;
+}
+
+.category-tag[data-category-value="STAFF"] {
+    background-color: #ffe5cc !important;
+    color: #a24700 !important;
+}
+
+.category-tag[data-category-value="UPLINE"] {
+    background-color: #d6f9ff !important;
+    color: #0a6b78 !important;
+}
+
+.category-tag[data-category-value="SUPPLIER"] {
+    background-color: #d6f9ff !important;
+    color: #0a6b78 !important;
+}
+
+.category-tag[data-category-value="AGENT"] {
+    background-color: #ffe0f3 !important;
+    color: #a02578 !important;
+}
+
+.category-tag[data-category-value="MEMBER"] {
+    background-color: #f2dfd2 !important;
+    color: #5f2e0f !important;
+}
+
+.category-tag[data-category-value="NONE"] {
+    background-color: #eceef2 !important;
+    color: #3e434f !important;
+}
+
+.category-tag-remove {
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 12px;
+    line-height: 1;
+    padding: 1px;
+    border-radius: 2px;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.category-tag-remove:hover {
+    color: #ef4444;
+    background-color: #fca5a5;
+}
+
+.category-dropdown-button:hover {
+    border-color: #9ca3af;
+}
+
+.category-dropdown-button:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.category-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    min-width: 100%;
+    width: auto;
+    background: white;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    z-index: 1000;
+    max-height: 200px;
+    overflow-y: auto;
+    display: none;
+}
+
+.category-dropdown-menu.show {
+    display: block;
+}
+
+.category-option {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.category-option:last-child {
+    border-bottom: none;
+}
+
+.category-checkbox-label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    margin: 0;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.category-checkbox {
+    margin-right: 8px;
+    cursor: pointer;
+}
+
+.category-checkbox-label:hover {
+    background-color: #f9fafb;
+}
+
+.category-option:hover .category-checkbox-label {
+    background-color: #f9fafb;
+}
