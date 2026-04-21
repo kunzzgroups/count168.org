@@ -5,23 +5,44 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/bootstrap.php';
 
+function detect_lang(array $body): string
+{
+    $lang = strtolower(trim((string) ($body['lang'] ?? '')));
+    if ($lang === 'zh' || $lang === 'en') {
+        return $lang;
+    }
+
+    $header = (string) ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '');
+    if ($header !== '' && stripos($header, 'en') === 0) {
+        return 'en';
+    }
+    return 'zh';
+}
+
+function tr(string $lang, string $zh, string $en): string
+{
+    return $lang === 'en' ? $en : $zh;
+}
+
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$body = read_json_body();
+$lang = detect_lang($body);
+
 if ($method !== 'POST') {
     respond_json(405, [
         'success' => false,
-        'error' => '仅支持 POST',
+        'error' => tr($lang, '仅支持 POST', 'Only POST is allowed'),
         'error_code' => 'HTTP_METHOD_NOT_ALLOWED',
     ]);
 }
 
-$body = read_json_body();
 $username = isset($body['username']) ? trim((string) $body['username']) : '';
 $password = isset($body['password']) ? (string) $body['password'] : '';
 
 if ($username === '' || $password === '') {
     respond_json(400, [
         'success' => false,
-        'error' => '请输入用户名和密码',
+        'error' => tr($lang, '请输入用户名和密码', 'Please enter username and password'),
         'error_code' => 'LOGIN_MISSING_FIELDS',
     ]);
 }
@@ -29,7 +50,7 @@ if ($username === '' || $password === '') {
 if (strlen($username) > 191 || strlen($password) > 500) {
     respond_json(400, [
         'success' => false,
-        'error' => '参数长度无效',
+        'error' => tr($lang, '参数长度无效', 'Invalid parameter length'),
         'error_code' => 'LOGIN_PARAM_LENGTH',
     ]);
 }
@@ -56,7 +77,7 @@ $stmtUser = $mysqli->prepare($sqlUser);
 if ($stmtUser === false) {
     respond_json(500, [
         'success' => false,
-        'error' => '查询准备失败',
+        'error' => tr($lang, '查询准备失败', 'Server could not prepare the query'),
         'error_code' => 'LOGIN_DB_PREPARE',
     ]);
 }
@@ -121,7 +142,7 @@ if ($matchedUser !== null) {
 if ($userPasswordMatch && $userHasExpired) {
     respond_json(403, [
         'success' => false,
-        'error' => '公司已到期或未设置到期日，无法登录',
+        'error' => tr($lang, '公司已到期或未设置到期日，无法登录', 'Company subscription is expired or not set; sign-in is blocked'),
         'error_code' => 'LOGIN_COMPANY_EXPIRED',
     ]);
 }
@@ -145,7 +166,7 @@ $stmtOwner = $mysqli->prepare($sqlOwner);
 if ($stmtOwner === false) {
     respond_json(500, [
         'success' => false,
-        'error' => '查询准备失败',
+        'error' => tr($lang, '查询准备失败', 'Server could not prepare the query'),
         'error_code' => 'LOGIN_DB_PREPARE',
     ]);
 }
@@ -223,13 +244,13 @@ if ($matchedOwner !== null) {
 if ($ownerPasswordMatch && $ownerHasExpired) {
     respond_json(403, [
         'success' => false,
-        'error' => '公司已到期或未设置到期日，无法登录',
+        'error' => tr($lang, '公司已到期或未设置到期日，无法登录', 'Company subscription is expired or not set; sign-in is blocked'),
         'error_code' => 'LOGIN_COMPANY_EXPIRED',
     ]);
 }
 
 respond_json(401, [
     'success' => false,
-    'error' => '用户名或密码错误',
+    'error' => tr($lang, '用户名或密码错误', 'Invalid username or password'),
     'error_code' => 'LOGIN_INVALID_CREDENTIALS',
 ]);
