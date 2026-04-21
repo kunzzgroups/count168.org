@@ -65,6 +65,8 @@ function isCompanyExpiredOrUnset($expirationDate, $companyCode = null): bool
 
 try {
     if ($_POST) {
+        $lang = isset($_POST['lang']) && strtolower((string)$_POST['lang']) === 'zh' ? 'zh' : 'en';
+        $_SESSION['ui_lang'] = $lang;
         $password = trim($_POST['password']);
         $company_id = strtoupper(trim($_POST['company_id'])); // 转换为大写，不区分大小写
         $login_role = isset($_POST['login_role']) ? trim($_POST['login_role']) : 'admin'; // 获取登录角色
@@ -221,7 +223,7 @@ try {
 
         if ($needs_secondary_password) {
             // 需要二级密码验证，跳转到二级密码验证页面
-            echo json_encode(['status' => 'success', 'redirect' => 'api/users/user_secondary_password.php']);
+            echo json_encode(['status' => 'success', 'redirect' => 'api/users/user_secondary_password.php?lang=' . $lang]);
         } else {
             // 不需要二级密码验证，直接跳转到dashboard
             $_SESSION['secondary_password_verified'] = true; // 标记为已验证（对于不需要二级密码的用户）

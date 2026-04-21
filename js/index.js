@@ -1,4 +1,74 @@
 (function() {
+    const currentLang = (window.__LOGIN_LANG__ === 'zh') ? 'zh' : 'en';
+    const i18n = {
+        en: {
+            roleAdmin: 'Admin',
+            roleMember: 'Member',
+            companyPlaceholder: 'Company / Group ID',
+            usernamePlaceholder: 'Username',
+            accountPlaceholder: 'Account ID',
+            passwordPlaceholder: 'Password',
+            rememberMe: 'Remember me',
+            forgotPassword: 'Forget Password?',
+            loginBtn: 'Login',
+            noticeTitle: 'Notice',
+            confirmBtn: 'Confirm',
+            loginErrorFallback: 'An error occurred during login',
+            maintenanceLabel: 'System maintenance:'
+        },
+        zh: {
+            roleAdmin: '管理员',
+            roleMember: '会员',
+            companyPlaceholder: '公司 / 群组 ID',
+            usernamePlaceholder: '用户名',
+            accountPlaceholder: '账号 ID',
+            passwordPlaceholder: '密码',
+            rememberMe: '记住我',
+            forgotPassword: '忘记密码？',
+            loginBtn: '登录',
+            noticeTitle: '提示',
+            confirmBtn: '确认',
+            loginErrorFallback: '登录时发生错误',
+            maintenanceLabel: '系统维护中：'
+        }
+    };
+
+    function t(key) {
+        return (i18n[currentLang] && i18n[currentLang][key]) || (i18n.en[key] || key);
+    }
+
+    function applyTranslations() {
+        document.querySelectorAll('[data-i18n]').forEach((el) => {
+            const key = el.getAttribute('data-i18n');
+            el.textContent = t(key);
+        });
+
+        document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+            const key = el.getAttribute('data-i18n-placeholder');
+            el.placeholder = t(key);
+        });
+    }
+
+    function localizeBackendMessage(message) {
+        if (currentLang !== 'zh' || !message) {
+            return message;
+        }
+
+        const messageMap = {
+            'Please enter account ID': '请输入账号 ID',
+            'Please enter username': '请输入用户名',
+            'Company or Group has expired.': '公司或群组已过期。',
+            'Account ID, Company ID or password is incorrect': '账号 ID、公司 ID 或密码错误',
+            'Username or password is incorrect': '用户名或密码错误',
+            'Invalid request': '无效请求',
+            'Database error, please try again later': '数据库错误，请稍后重试'
+        };
+
+        return messageMap[message] || message;
+    }
+
+    applyTranslations();
+
     // 自定义弹窗（与重置密码页风格一致，替代原生 alert）
     function showAlertModal(title, message) {
         return new Promise(function(resolve) {
@@ -11,7 +81,7 @@
                 resolve();
                 return;
             }
-            titleEl.textContent = title || 'Notice';
+            titleEl.textContent = title || t('noticeTitle');
             messageEl.textContent = message || '';
             overlay.classList.add('is-open');
             overlay.setAttribute('aria-hidden', 'false');
@@ -49,7 +119,7 @@
         memberTab.classList.remove("active");
         forgotLink.style.display = "block";
         const userInput = document.getElementById("user-id");
-        userInput.placeholder = "Username";
+        userInput.placeholder = t('usernamePlaceholder');
         userInput.name = "login_id";
     });
 
@@ -58,7 +128,7 @@
         adminTab.classList.remove("active");
         forgotLink.style.display = "none";
         const userInput = document.getElementById("user-id");
-        userInput.placeholder = "Account Id";
+        userInput.placeholder = t('accountPlaceholder');
         userInput.name = "account_id";
     });
 
@@ -117,12 +187,12 @@
         adminTab.classList.remove("active");
         forgotLink.style.display = "none";
         const userInput = document.getElementById("user-id");
-        userInput.placeholder = "Account Id";
+        userInput.placeholder = t('accountPlaceholder');
         userInput.name = "account_id";
     } else {
         forgotLink.style.display = "block";
         const userInput = document.getElementById("user-id");
-        userInput.placeholder = "Username";
+        userInput.placeholder = t('usernamePlaceholder');
         userInput.name = "login_id";
     }
 
@@ -131,6 +201,7 @@
 
         const formData = new FormData(this);
         formData.append('action', 'login');
+        formData.append('lang', currentLang);
 
         const currentRole = memberTab.classList.contains('active') ? 'member' : 'admin';
         formData.append('login_role', currentRole);
@@ -144,12 +215,12 @@
             if (data.status === 'success') {
                 window.location.href = data.redirect;
             } else {
-                showAlertModal('Notice', data.message);
+                showAlertModal(t('noticeTitle'), localizeBackendMessage(data.message));
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            showAlertModal('Notice', 'An error occurred during login');
+            showAlertModal(t('noticeTitle'), t('loginErrorFallback'));
         });
     });
 
@@ -200,7 +271,7 @@
                     item1.className = 'maintenance-marquee-item';
                     item1.innerHTML = `
                         <span class="maintenance-marquee-dot"></span>
-                        <span class="maintenance-marquee-label">系统维护中:</span>
+                        <span class="maintenance-marquee-label">${escapeHtml(t('maintenanceLabel'))}</span>
                         <span>${escapeHtml(maintenance.content)}</span>
                     `;
                     track.appendChild(item1);
@@ -209,7 +280,7 @@
                     item2.className = 'maintenance-marquee-item';
                     item2.innerHTML = `
                         <span class="maintenance-marquee-dot"></span>
-                        <span class="maintenance-marquee-label">系统维护中:</span>
+                        <span class="maintenance-marquee-label">${escapeHtml(t('maintenanceLabel'))}</span>
                         <span>${escapeHtml(maintenance.content)}</span>
                     `;
                     track.appendChild(item2);

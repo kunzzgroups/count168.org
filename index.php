@@ -2,6 +2,12 @@
 session_start();
 require_once 'config.php';
 
+$lang = isset($_GET['lang']) ? strtolower(trim((string) $_GET['lang'])) : 'en';
+if (!in_array($lang, ['en', 'zh'], true)) {
+    $lang = 'en';
+}
+$_SESSION['ui_lang'] = $lang;
+
 // 如果已经登录，直接跳转到dashboard
 if (isset($_SESSION['user_id'])) {
     header("Location: dashboard.php");
@@ -65,7 +71,7 @@ if (isset($_COOKIE['remember_token'])) {
 ?>
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>">
 
 <head>
     <meta charset="UTF-8">
@@ -92,8 +98,8 @@ if (isset($_COOKIE['remember_token'])) {
         </div>
     
         <div class="role-tabs">
-                <button class="role-tab <?php echo (!isset($_GET['role']) || $_GET['role'] === 'admin') ? 'active' : ''; ?>" id="admin-tab">Admin</button>
-                <button class="role-tab <?php echo (isset($_GET['role']) && $_GET['role'] === 'member') ? 'active' : ''; ?>" id="member-tab">Member</button>
+                <button class="role-tab <?php echo (!isset($_GET['role']) || $_GET['role'] === 'admin') ? 'active' : ''; ?>" id="admin-tab" data-i18n="roleAdmin">Admin</button>
+                <button class="role-tab <?php echo (isset($_GET['role']) && $_GET['role'] === 'member') ? 'active' : ''; ?>" id="member-tab" data-i18n="roleMember">Member</button>
         </div>
 
         <div class="login-card">
@@ -102,38 +108,43 @@ if (isset($_COOKIE['remember_token'])) {
                 <form class="login-form" id="loginForm" method="POST">
                     <div class="input-group">
                         <i class="fas fa-building input-icon"></i>
-                        <input type="text" placeholder="Company / Group ID" id="company-id" name="company_id" required />
+                        <input type="text" placeholder="Company / Group ID" id="company-id" name="company_id" data-i18n-placeholder="companyPlaceholder" required />
                     </div>
                     
                     <div class="input-group">
                         <i class="fas fa-user input-icon"></i>
-                        <input type="text" placeholder="Username" id="user-id" name="login_id" data-account-field="account_id" required />
+                        <input type="text" placeholder="Username" id="user-id" name="login_id" data-account-field="account_id" data-i18n-placeholder="usernamePlaceholder" required />
                     </div>
                     
                     <div class="input-group">
                         <i class="fas fa-lock input-icon"></i>
-                        <input type="password" placeholder="Password" id="password" name="password" required />
+                        <input type="password" placeholder="Password" id="password" name="password" data-i18n-placeholder="passwordPlaceholder" required />
                     </div>
 
                     <div class="form-options">
                         <label class="remember-switch">
                             <input type="checkbox" name="remember_me" value="1" />
                             <span class="slider"></span>
-                            <span class="remember-text">Remember me</span>
+                            <span class="remember-text" data-i18n="rememberMe">Remember me</span>
                         </label>
-                        <a href="reset-password.php" class="forgot-link" style="display: <?php echo (isset($_GET['role']) && $_GET['role'] === 'member') ? 'none' : 'block'; ?>">Forget Password?</a>
+                        <a href="reset-password.php?lang=<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>" class="forgot-link" data-i18n="forgotPassword" style="display: <?php echo (isset($_GET['role']) && $_GET['role'] === 'member') ? 'none' : 'block'; ?>">Forget Password?</a>
                     </div>
 
                     <button type="submit" class="login-btn">
-                        <span>Login</span>
+                        <span data-i18n="loginBtn">Login</span>
                     </button>
 
-                    <!-- <div class="language-switch-container">
-                        <a href="/cn/index.php" class="lang-switch" id="lang-switch" title="Switch Language">
-                            <span class="lang-option">中文</span>
-                            <span class="lang-option active">English</span>
-                        </a>
-                    </div> -->
+                    <div class="language-switch-container">
+                        <?php
+                        $currentRole = (isset($_GET['role']) && $_GET['role'] === 'member') ? 'member' : 'admin';
+                        $zhUrl = 'index.php?lang=zh&role=' . urlencode($currentRole);
+                        $enUrl = 'index.php?lang=en&role=' . urlencode($currentRole);
+                        ?>
+                        <div class="lang-switch" title="Switch Language">
+                            <a href="<?php echo htmlspecialchars($zhUrl, ENT_QUOTES, 'UTF-8'); ?>" class="lang-option <?php echo $lang === 'zh' ? 'active' : ''; ?>">中文</a>
+                            <a href="<?php echo htmlspecialchars($enUrl, ENT_QUOTES, 'UTF-8'); ?>" class="lang-option <?php echo $lang === 'en' ? 'active' : ''; ?>">English</a>
+                        </div>
+                    </div>
                 </form>
             </div>
         </div>
@@ -148,14 +159,17 @@ if (isset($_COOKIE['remember_token'])) {
             <div class="modal-icon-wrap">
                 <i class="fas fa-exclamation-triangle modal-icon" aria-hidden="true"></i>
             </div>
-            <h3 id="modalTitle" class="modal-title">Notice</h3>
+            <h3 id="modalTitle" class="modal-title" data-i18n="noticeTitle">Notice</h3>
             <p id="modalMessage" class="modal-message"></p>
             <div class="modal-actions">
-                <button type="button" id="modalConfirmBtn" class="modal-btn modal-btn-primary">Confirm</button>
+                <button type="button" id="modalConfirmBtn" class="modal-btn modal-btn-primary" data-i18n="confirmBtn">Confirm</button>
             </div>
         </div>
     </div>
 
+    <script>
+        window.__LOGIN_LANG__ = "<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>";
+    </script>
     <script src="js/index.js?v=<?php echo time(); ?>"></script>
 </body>
 

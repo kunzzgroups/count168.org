@@ -2,6 +2,11 @@
 session_start();
 require_once 'config.php'; // 使用统一的数据库配置
 
+$ui_lang = $_SESSION['ui_lang'] ?? 'en';
+if ($ui_lang !== 'zh' && $ui_lang !== 'en') {
+    $ui_lang = 'en';
+}
+
 // 不缓存 HTML，commit 后刷新即可拿到带最新 ?v= 的页面
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -45,7 +50,7 @@ if (isset($_SESSION['user_id'])) {
         session_destroy();
 
         // 重定向到登录页
-        header("Location: index.php");
+        header("Location: index.php?lang=" . urlencode($ui_lang));
         exit();
     }
 
@@ -53,7 +58,7 @@ if (isset($_SESSION['user_id'])) {
     if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner') {
         if (!isset($_SESSION['secondary_password_verified']) || $_SESSION['secondary_password_verified'] !== true) {
             // Owner未通过二级密码验证，重定向到二级密码验证页面
-            header("Location: owner_secondary_password.php");
+            header("Location: owner_secondary_password.php?lang=" . urlencode($ui_lang));
             exit();
         }
     }
@@ -72,13 +77,13 @@ if (isset($_SESSION['user_id'])) {
         if (isset($_COOKIE['remember_token'])) {
             setcookie('remember_token', '', time() - 3600, "/", "", false, true);
         }
-        header("Location: index.php");
+        header("Location: index.php?lang=" . urlencode($ui_lang));
         exit();
     }
 
     // member 不显示 Home 页，只显示 Win/Loss：访问 dashboard 时重定向到 member.php
     if (isset($_SESSION['user_type']) && strtolower($_SESSION['user_type']) === 'member') {
-        header("Location: member.php");
+        header("Location: member.php?lang=" . urlencode($ui_lang));
         exit();
     }
 
@@ -87,7 +92,7 @@ if (isset($_SESSION['user_id'])) {
 
 } else {
     // 未登录，重定向到登录页
-    header("Location: index.php");
+    header("Location: index.php?lang=" . urlencode($ui_lang));
     exit();
 }
 
