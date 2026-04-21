@@ -43,6 +43,12 @@ On failure, return:
 
 Always return JSON. Never output HTML.
 
+## 双语与数据（后端职责边界）
+
+- **PHP API 不承载页面 UI 文案体系**：按钮、菜单、表单标签等由前端 **i18next**（`zh.json` / `en.json`）维护；接口只返回 **数据结构与校验结果**。
+- **库表双语内容**：对用户可见且随语言变化的字段，使用成对列（例如 `title_zh` / `title_en`），查询时用 **prepared statement** 原样 `SELECT`；`data` 中可同时返回两个字段，由前端按当前语言选择展示。
+- **`error` 字段**：优先保持简短、可读；若团队约定统一错误码（如 `error_code`）供前端 `t()` 映射，可在具体接口中增加，但须保持 JSON 契约清晰、仍以 `success` / `data` / `error` 为主。
+
 ## Required path
 
 Create endpoint files at:
