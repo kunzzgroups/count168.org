@@ -3,7 +3,10 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import DashboardPage from '@/pages/DashboardPage'
 import LoginPage from '@/pages/LoginPage'
+import AccountListPage from '@/pages/AccountListPage'
 import SystemModulesPage from '@/pages/SystemModulesPage'
+import MemberPage from '@/pages/MemberPage'
+import ProcessListPage from '@/pages/ProcessListPage'
 import TransactionPage from '@/pages/TransactionPage'
 
 export default function App() {
@@ -31,6 +34,30 @@ export default function App() {
         element={
           <ProtectedRoute>
             <TransactionPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/account-list"
+        element={
+          <ProtectedRoute>
+            <AccountListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/member"
+        element={
+          <ProtectedRoute>
+            <MemberPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/process-list"
+        element={
+          <ProtectedRoute>
+            <ProcessListPage />
           </ProtectedRoute>
         }
       />

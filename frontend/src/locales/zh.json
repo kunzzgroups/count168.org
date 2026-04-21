@@ -88,6 +88,80 @@
       "category": "请输入分类"
     }
   },
+  "accountList": {
+    "title": "账户列表",
+    "subtitle": "React 版本账户管理（前后端分离）",
+    "back": "返回模块页",
+    "createTitle": "新增账户",
+    "listTitle": "账户列表",
+    "submit": "保存",
+    "submitting": "保存中...",
+    "delete": "软删除",
+    "search": "查询",
+    "searchPlaceholder": "输入账号/名称/角色",
+    "showInactive": "显示 inactive",
+    "loading": "加载中...",
+    "empty": "暂无数据",
+    "fields": {
+      "accountId": "账号",
+      "name": "名称",
+      "role": "角色",
+      "status": "状态",
+      "action": "操作"
+    },
+    "validation": {
+      "required": "账号和名称不能为空"
+    }
+  },
+  "member": {
+    "title": "成员管理",
+    "subtitle": "React 版本 member 管理（先迁移管理功能）",
+    "back": "返回模块页",
+    "createTitle": "新增成员",
+    "listTitle": "成员列表",
+    "submit": "保存",
+    "submitting": "保存中...",
+    "delete": "软删除",
+    "search": "查询",
+    "searchPlaceholder": "输入账号或名称",
+    "loading": "加载中...",
+    "empty": "暂无数据",
+    "fields": {
+      "accountId": "账号",
+      "name": "名称",
+      "password": "密码",
+      "status": "状态",
+      "action": "操作"
+    },
+    "validation": {
+      "required": "账号、名称、密码不能为空"
+    }
+  },
+  "processList": {
+    "title": "流程列表",
+    "subtitle": "React 版本流程管理（增查软删）",
+    "back": "返回模块页",
+    "createTitle": "新增流程",
+    "listTitle": "流程列表",
+    "submit": "保存",
+    "submitting": "保存中...",
+    "delete": "软删除",
+    "search": "查询",
+    "searchPlaceholder": "输入流程编号/描述/备注",
+    "showInactive": "显示 inactive",
+    "loading": "加载中...",
+    "empty": "暂无数据",
+    "fields": {
+      "processId": "流程编号",
+      "descriptionId": "描述编号",
+      "remark": "备注",
+      "status": "状态",
+      "action": "操作"
+    },
+    "validation": {
+      "required": "流程编号和描述编号不能为空"
+    }
+  },
   "validation": {
     "loginRequired": "请输入用户名和密码"
   },
@@ -115,6 +189,46 @@
     "TRANSACTION_CATEGORY_INVALID": "分类不能为空且长度不能超过 100",
     "TRANSACTION_AMOUNT_INVALID": "金额必须大于 0",
     "TRANSACTION_REMARK_TOO_LONG": "备注长度不能超过 500",
-    "TRANSACTION_CREATE_PREPARE_FAILED": "交易新增准备失败"
+    "TRANSACTION_CREATE_PREPARE_FAILED": "交易新增准备失败",
+    "ACCOUNT_COMPANY_INVALID": "公司参数无效",
+    "ACCOUNT_LIST_PREPARE_FAILED": "账户列表查询失败",
+    "ACCOUNT_ID_INVALID": "账户 ID 无效",
+    "ACCOUNT_SOFT_DELETE_NOT_SUPPORTED": "当前数据表未配置软删除字段",
+    "ACCOUNT_SOFT_DELETE_PREPARE_FAILED": "账户软删除准备失败",
+    "ACCOUNT_NOT_FOUND": "记录不存在或无权限",
+    "ACCOUNT_CODE_INVALID": "账号不能为空且长度不能超过 50",
+    "ACCOUNT_NAME_INVALID": "名称不能为空且长度不能超过 120",
+    "ACCOUNT_ROLE_INVALID": "角色无效",
+    "ACCOUNT_DUPLICATE_PREPARE_FAILED": "账户重复检查准备失败",
+    "ACCOUNT_DUPLICATE": "账号已存在",
+    "ACCOUNT_CREATE_PREPARE_FAILED": "新增账户准备失败",
+    "ACCOUNT_COMPANY_LINK_PREPARE_FAILED": "账户公司关联准备失败"
+    ,
+    "MEMBER_COMPANY_INVALID": "公司参数无效",
+    "MEMBER_LIST_PREPARE_FAILED": "成员列表查询失败",
+    "MEMBER_ID_INVALID": "成员 ID 无效",
+    "MEMBER_SOFT_DELETE_NOT_SUPPORTED": "当前数据表未配置软删除字段",
+    "MEMBER_SOFT_DELETE_PREPARE_FAILED": "成员软删除准备失败",
+    "MEMBER_NOT_FOUND": "记录不存在或无权限",
+    "MEMBER_ACCOUNT_INVALID": "账号不能为空且长度不能超过 50",
+    "MEMBER_NAME_INVALID": "名称不能为空且长度不能超过 120",
+    "MEMBER_PASSWORD_REQUIRED": "密码不能为空",
+    "MEMBER_DUPLICATE_PREPARE_FAILED": "成员重复检查准备失败",
+    "MEMBER_DUPLICATE": "账号已存在",
+    "MEMBER_CREATE_PREPARE_FAILED": "新增成员准备失败",
+    "MEMBER_COMPANY_LINK_PREPARE_FAILED": "成员公司关联准备失败"
+    ,
+    "PROCESS_COMPANY_INVALID": "公司参数无效",
+    "PROCESS_LIST_PREPARE_FAILED": "流程列表查询失败",
+    "PROCESS_ID_INVALID": "流程 ID 无效",
+    "PROCESS_SOFT_DELETE_NOT_SUPPORTED": "当前数据表未配置软删除字段",
+    "PROCESS_SOFT_DELETE_PREPARE_FAILED": "流程软删除准备失败",
+    "PROCESS_NOT_FOUND": "记录不存在或无权限",
+    "PROCESS_CODE_INVALID": "流程编号不能为空且长度不能超过 80",
+    "PROCESS_DESC_INVALID": "描述编号不能为空且长度不能超过 50",
+    "PROCESS_REMARK_TOO_LONG": "备注长度不能超过 500",
+    "PROCESS_DUPLICATE_PREPARE_FAILED": "流程重复检查准备失败",
+    "PROCESS_DUPLICATE": "流程编号已存在",
+    "PROCESS_CREATE_PREPARE_FAILED": "新增流程准备失败"
   }
 }
