@@ -245,6 +245,9 @@
         if (dropdown) dropdown.classList.remove('show');
         if (button) button.classList.remove('active');
         try { localStorage.setItem('selectedLanguage', lang); } catch (e) { }
+        var currentUrl = new URL(window.location.href);
+        currentUrl.searchParams.set('lang', lang);
+        window.location.href = currentUrl.toString();
     }
 
     function toggleNotificationPanel(event) {

@@ -285,11 +285,11 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
             </div>
         </div>
         <!-- 语言切换按钮 -->
-        <!-- <div class="language-switcher">
+        <div class="language-switcher">
             <div class="language-dropdown">
-                <button class="language-btn" onclick="toggleLanguageDropdown()">
-                    <img src="images/uk.png" alt="English" class="flag-icon" id="current-flag">
-                    <span class="language-text" id="current-lang">English</span>
+                <button type="button" class="language-btn" onclick="toggleLanguageDropdown()">
+                    <img src="<?php echo $ui_lang === 'zh' ? 'images/china.png' : 'images/uk.png'; ?>" alt="<?php echo $ui_lang === 'zh' ? '中文' : 'English'; ?>" class="flag-icon" id="current-flag">
+                    <span class="language-text" id="current-lang"><?php echo $ui_lang === 'zh' ? '中文' : 'English'; ?></span>
                     <span class="dropdown-arrow">&#9658;</span>
                 </button>
                 <div class="language-dropdown-list" id="languageDropdown">
@@ -298,12 +298,12 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
                         <span>English</span>
                     </div>
                     <div class="language-option" onclick="selectLanguage('zh')">
-                        <img src="images/china.png" alt="涓枃" class="flag-icon">
-                        <span>涓枃</span>
+                        <img src="images/china.png" alt="中文" class="flag-icon">
+                        <span>中文</span>
                     </div>
                 </div>
             </div>
-        </div> -->
+        </div>
     </div>
 
     <div class="informationmenu-content">
