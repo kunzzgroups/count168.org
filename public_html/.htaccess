@@ -1,4 +1,12 @@
+# count168.org — SPA 与 API
+# 若站点在子目录，请把下一行改为对应前缀，例如：RewriteBase /subfolder/
 RewriteEngine On
+RewriteBase /
+
+# 避免 /app/… 下 MultiViews 误匹配「login」为脚本名导致 404
+<IfModule mod_negotiation.c>
+  Options -MultiViews
+</IfModule>
 
 # 旧版 PHP 入口 -> React SPA（/app/…）
 RewriteRule ^index\.php$ /app/login [R=301,L]
@@ -28,11 +36,22 @@ RewriteRule ^useraccess\.php$ /app/modules/user-access [R=301,L]
 RewriteRule ^auto_monthly_accounting\.php$ /app/modules/auto-monthly-accounting [R=301,L]
 RewriteRule ^owner_secondary_password\.php$ /app/modules/owner-secondary-password [R=301,L]
 
+# 根路径直接给 SPA
 RewriteRule ^$ /app/index.html [L]
+
+# 已存在的真实文件、目录，直接交给 Apache（含 /app/assets/*.js 等）
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
+
+# /api/v1/ 不交给 React
 RewriteCond %{REQUEST_URI} ^/api/v1/ [NC]
 RewriteRule ^ - [L]
-RewriteRule ^ /app/index.html [L]
+
+# 其余全部交给 Vite 构建的 index，供 React Router 处理 /app/login 等深链
+# 用 ^.*$ 匹配整段相对路径；单独写 ^ 无法匹配 /app/login 这类深链
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^.*$ /app/index.html [L]
+
 DirectoryIndex app/index.html index.html
