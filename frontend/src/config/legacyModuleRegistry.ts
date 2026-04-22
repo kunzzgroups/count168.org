@@ -20,10 +20,11 @@ const ready: LegacyModuleDef[] = [
   { key: 'member', legacyFile: 'member.php', reactPath: '/modules/member', status: 'ready' },
   { key: 'processList', legacyFile: 'processlist.php', reactPath: '/modules/process-list', status: 'ready' },
   { key: 'userList', legacyFile: 'userlist.php', reactPath: '/modules/user-list', status: 'ready' },
+  { key: 'announcement', legacyFile: 'announcement.php', reactPath: '/modules/announcement', status: 'ready' },
+  { key: 'userAccess', legacyFile: 'useraccess.php', reactPath: '/modules/user-access', status: 'ready' },
 ]
 
 const pending: LegacyModuleDef[] = [
-  { key: 'announcement', legacyFile: 'announcement.php', reactPath: '/modules/announcement', status: 'pending' },
   { key: 'bankProcessList', legacyFile: 'bank_process_list.php', reactPath: '/modules/bank-process-list', status: 'pending' },
   { key: 'bankprocessMaintenance', legacyFile: 'bankprocess_maintenance.php', reactPath: '/modules/bankprocess-maintenance', status: 'pending' },
   { key: 'captureMaintenance', legacyFile: 'capture_maintenance.php', reactPath: '/modules/capture-maintenance', status: 'pending' },
@@ -37,7 +38,6 @@ const pending: LegacyModuleDef[] = [
   { key: 'ownership', legacyFile: 'ownership.php', reactPath: '/modules/ownership', status: 'pending' },
   { key: 'paymentMaintenance', legacyFile: 'payment_maintenance.php', reactPath: '/modules/payment-maintenance', status: 'pending' },
   { key: 'transactionMaintenance', legacyFile: 'transaction_maintenance.php', reactPath: '/modules/transaction-maintenance', status: 'pending' },
-  { key: 'userAccess', legacyFile: 'useraccess.php', reactPath: '/modules/user-access', status: 'pending' },
   { key: 'autoMonthlyAccounting', legacyFile: 'auto_monthly_accounting.php', reactPath: '/modules/auto-monthly-accounting', status: 'pending' },
   { key: 'ownerSecondaryPassword', legacyFile: 'owner_secondary_password.php', reactPath: '/modules/owner-secondary-password', status: 'pending' },
 ]

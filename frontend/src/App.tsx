@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 import { protectedPlaceholderRoutes } from '@/config/legacyModuleRegistry'
 import AccountListPage from '@/pages/AccountListPage'
+import AnnouncementPage from '@/pages/AnnouncementPage'
 import DashboardPage from '@/pages/DashboardPage'
 import LoginPage from '@/pages/LoginPage'
 import MemberPage from '@/pages/MemberPage'
@@ -11,6 +12,7 @@ import ProcessListPage from '@/pages/ProcessListPage'
 import ResetPasswordPlaceholderPage from '@/pages/ResetPasswordPlaceholderPage'
 import SystemModulesPage from '@/pages/SystemModulesPage'
 import TransactionPage from '@/pages/TransactionPage'
+import UserAccessPage from '@/pages/UserAccessPage'
 import UserListPage from '@/pages/UserListPage'
 
 const adminRoles = ['owner', 'admin', 'manager'] as const
@@ -53,6 +55,14 @@ export default function App() {
         }
       />
       <Route
+        path="/modules/announcement"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <AnnouncementPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/modules/member"
         element={
           <ProtectedRoute allowedRoles={[...adminRoles]}>
@@ -73,6 +83,14 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={[...adminRoles]}>
             <UserListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/user-access"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <UserAccessPage />
           </ProtectedRoute>
         }
       />
