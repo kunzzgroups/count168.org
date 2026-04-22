@@ -1,18 +1,24 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '@/components/ProtectedRoute'
+import { protectedPlaceholderRoutes } from '@/config/legacyModuleRegistry'
+import AccountListPage from '@/pages/AccountListPage'
 import DashboardPage from '@/pages/DashboardPage'
 import LoginPage from '@/pages/LoginPage'
-import AccountListPage from '@/pages/AccountListPage'
-import SystemModulesPage from '@/pages/SystemModulesPage'
 import MemberPage from '@/pages/MemberPage'
+import ModuleMigrationPlaceholderPage from '@/pages/ModuleMigrationPlaceholderPage'
 import ProcessListPage from '@/pages/ProcessListPage'
+import ResetPasswordPlaceholderPage from '@/pages/ResetPasswordPlaceholderPage'
+import SystemModulesPage from '@/pages/SystemModulesPage'
 import TransactionPage from '@/pages/TransactionPage'
+
+const adminRoles = ['owner', 'admin', 'manager'] as const
 
 export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPlaceholderPage />} />
       <Route
         path="/dashboard"
         element={
@@ -24,7 +30,7 @@ export default function App() {
       <Route
         path="/modules"
         element={
-          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
             <SystemModulesPage />
           </ProtectedRoute>
         }
@@ -32,7 +38,7 @@ export default function App() {
       <Route
         path="/modules/transaction"
         element={
-          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
             <TransactionPage />
           </ProtectedRoute>
         }
@@ -40,7 +46,7 @@ export default function App() {
       <Route
         path="/modules/account-list"
         element={
-          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
             <AccountListPage />
           </ProtectedRoute>
         }
@@ -48,7 +54,7 @@ export default function App() {
       <Route
         path="/modules/member"
         element={
-          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
             <MemberPage />
           </ProtectedRoute>
         }
@@ -56,11 +62,22 @@ export default function App() {
       <Route
         path="/modules/process-list"
         element={
-          <ProtectedRoute allowedRoles={['owner', 'admin', 'manager']}>
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
             <ProcessListPage />
           </ProtectedRoute>
         }
       />
+      {protectedPlaceholderRoutes.map(({ path, i18nKey }) => (
+        <Route
+          key={path}
+          path={path}
+          element={
+            <ProtectedRoute allowedRoles={[...adminRoles]}>
+              <ModuleMigrationPlaceholderPage i18nKey={i18nKey} />
+            </ProtectedRoute>
+          }
+        />
+      ))}
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

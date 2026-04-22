@@ -64,7 +64,27 @@
       "transaction": "交易管理",
       "accountList": "账务列表",
       "member": "会员管理",
-      "processList": "流程列表"
+      "processList": "流程列表",
+      "addAccount": "新增账户",
+      "announcement": "公告",
+      "bankProcessList": "银行流程列表",
+      "bankprocessMaintenance": "银行流程维护",
+      "captureMaintenance": "数据抓取维护",
+      "customerReport": "客户报表",
+      "datacapture": "数据录入",
+      "datacaptureSummary": "数据录入汇总",
+      "domain": "域名",
+      "domainReport": "域名报表",
+      "formulaMaintenance": "公式维护",
+      "gamesProcessList": "游戏流程列表",
+      "ownership": "股权 / 归属",
+      "paymentMaintenance": "付款维护",
+      "transactionMaintenance": "交易维护",
+      "userList": "用户列表",
+      "userAccess": "用户访问",
+      "autoMonthlyAccounting": "自动月结",
+      "ownerSecondaryPassword": "业主第二密码",
+      "resetPassword": "重置密码"
     },
     "status": {
       "ready": "已迁移",
@@ -173,6 +193,17 @@
     "validation": {
       "required": "流程编号和描述编号不能为空"
     }
+  },
+  "placeholder": {
+    "subtitle": "界面已切到 React；数据接口仍为 PHP（/api/… 或 /api/v1/…）",
+    "backToModules": "返回系统模块",
+    "cardTitle": "说明",
+    "body": "该模块 UI 已接入单页应用，功能表单与接口对接可在此页基础上继续完善。",
+    "unknownModule": "模块"
+  },
+  "resetPassword": {
+    "hint": "若需 TAC/邮件等流程，请通过既有 PHP API 对接后再接入此页。",
+    "backToLogin": "返回登录"
   },
   "validation": {
     "loginRequired": "请输入用户名和密码"

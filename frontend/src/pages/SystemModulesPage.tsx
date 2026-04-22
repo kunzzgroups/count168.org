@@ -5,43 +5,13 @@ import { useNavigate } from 'react-router-dom'
 import { ModuleSidebarLayout } from '@/components/ModuleSidebarLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-
-type ModuleRow = {
-  key: string
-  legacyPath: string
-  reactPath: string
-  status: 'ready' | 'pending'
-}
+import { type LegacyModuleDef, legacyModuleRows } from '@/config/legacyModuleRegistry'
 
 export default function SystemModulesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
-  const modules = useMemo<ModuleRow[]>(
-    () => [
-      { key: 'dashboard', legacyPath: 'dashboard.php', reactPath: '/dashboard', status: 'ready' },
-      {
-        key: 'transaction',
-        legacyPath: 'transaction.php',
-        reactPath: '/modules/transaction',
-        status: 'ready',
-      },
-      {
-        key: 'accountList',
-        legacyPath: 'account-list.php',
-        reactPath: '/modules/account-list',
-        status: 'ready',
-      },
-      { key: 'member', legacyPath: 'member.php', reactPath: '/modules/member', status: 'ready' },
-      {
-        key: 'processList',
-        legacyPath: 'processlist.php',
-        reactPath: '/modules/process-list',
-        status: 'ready',
-      },
-    ],
-    [],
-  )
+  const rows = useMemo<LegacyModuleDef[]>(() => legacyModuleRows, [])
 
   return (
     <ModuleSidebarLayout>
@@ -76,22 +46,18 @@ export default function SystemModulesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {modules.map((item) => (
+                  {rows.map((item) => (
                     <tr key={item.key} className="border-b border-zinc-100 text-zinc-800">
                       <td className="py-3 pr-3">{t(`modules.items.${item.key}`)}</td>
-                      <td className="py-3 pr-3 font-mono text-xs">{item.legacyPath}</td>
+                      <td className="py-3 pr-3 font-mono text-xs">{item.legacyFile}</td>
                       <td className="py-3 pr-3">
-                        {item.status === 'ready' ? (
-                          <button
-                            type="button"
-                            className="font-mono text-xs text-blue-600 underline"
-                            onClick={() => navigate(item.reactPath)}
-                          >
-                            {item.reactPath}
-                          </button>
-                        ) : (
-                          <span className="font-mono text-xs">{item.reactPath}</span>
-                        )}
+                        <button
+                          type="button"
+                          className="font-mono text-xs text-blue-600 underline"
+                          onClick={() => navigate(item.reactPath)}
+                        >
+                          {item.reactPath}
+                        </button>
                       </td>
                       <td className="py-3 pr-3">
                         <span

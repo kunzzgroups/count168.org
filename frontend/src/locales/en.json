@@ -64,7 +64,27 @@
       "transaction": "Transaction",
       "accountList": "Account List",
       "member": "Member",
-      "processList": "Process List"
+      "processList": "Process List",
+      "addAccount": "Add account",
+      "announcement": "Announcements",
+      "bankProcessList": "Bank process list",
+      "bankprocessMaintenance": "Bank process maintenance",
+      "captureMaintenance": "Capture maintenance",
+      "customerReport": "Customer report",
+      "datacapture": "Data capture",
+      "datacaptureSummary": "Data capture summary",
+      "domain": "Domain",
+      "domainReport": "Domain report",
+      "formulaMaintenance": "Formula maintenance",
+      "gamesProcessList": "Games process list",
+      "ownership": "Ownership",
+      "paymentMaintenance": "Payment maintenance",
+      "transactionMaintenance": "Transaction maintenance",
+      "userList": "User list",
+      "userAccess": "User access",
+      "autoMonthlyAccounting": "Auto monthly accounting",
+      "ownerSecondaryPassword": "Owner secondary password",
+      "resetPassword": "Reset password"
     },
     "status": {
       "ready": "Migrated",
@@ -173,6 +193,17 @@
     "validation": {
       "required": "Process ID and Description ID are required"
     }
+  },
+  "placeholder": {
+    "subtitle": "UI runs in React; data APIs remain PHP (/api/… or /api/v1/…)",
+    "backToModules": "Back to system modules",
+    "cardTitle": "Note",
+    "body": "This screen is part of the SPA. Wire forms to the existing PHP APIs when you implement the full flow.",
+    "unknownModule": "Module"
+  },
+  "resetPassword": {
+    "hint": "For TAC/email flows, connect the existing PHP API endpoints, then complete this page.",
+    "backToLogin": "Back to sign in"
   },
   "validation": {
     "loginRequired": "Please enter username and password"
