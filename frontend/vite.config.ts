@@ -23,7 +23,7 @@ export default defineConfig(({ command, mode }) => {
         closeBundle() {
           if (command !== 'build') return
           const src = path.join(rootDir, 'deployment', 'app.htaccess')
-          const dest = path.join(rootDir, '..', 'public_html', 'app', '.htaccess')
+          const dest = path.join(rootDir, '..', 'app', '.htaccess')
           if (existsSync(src)) {
             copyFileSync(src, dest)
           }
@@ -36,7 +36,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     build: {
-      outDir: '../public_html/app',
+      outDir: '../app',
       emptyOutDir: true,
     },
     server: {

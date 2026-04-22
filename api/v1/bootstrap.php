@@ -109,7 +109,7 @@ function api_token_verify(?string $token): ?array
 
 function mysqli_bootstrap(): mysqli
 {
-    $configPath = __DIR__ . '/../../../config.php';
+    $configPath = __DIR__ . '/../../config.php';
     if (!is_file($configPath)) {
         respond_json(500, [
             'success' => false,
