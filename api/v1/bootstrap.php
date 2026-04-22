@@ -6,6 +6,12 @@ declare(strict_types=1);
  * 勿输出 HTML。
  */
 
+// Load config at top level so variables are global
+$count168ConfigPath = __DIR__ . '/../../config.php';
+if (is_file($count168ConfigPath)) {
+    require_once $count168ConfigPath;
+}
+
 function respond_json(int $statusCode, array $payload): void
 {
     http_response_code($statusCode);
@@ -109,21 +115,11 @@ function api_token_verify(?string $token): ?array
 
 function mysqli_bootstrap(): mysqli
 {
-    $configPath = __DIR__ . '/../../config.php';
-    if (!is_file($configPath)) {
-        respond_json(500, [
-            'success' => false,
-            'error' => '服务器未配置数据库',
-            'error_code' => 'SERVER_DB_CONFIG_MISSING',
-        ]);
-    }
-    require_once $configPath;
-
     global $host, $dbname, $dbuser, $dbpass;
     if (!isset($host, $dbname, $dbuser, $dbpass)) {
         respond_json(500, [
             'success' => false,
-            'error' => '数据库配置不完整',
+            'error' => '数据库配置不完整（需在根目录配置 config.php）',
             'error_code' => 'SERVER_DB_SETTINGS_INCOMPLETE',
         ]);
     }
