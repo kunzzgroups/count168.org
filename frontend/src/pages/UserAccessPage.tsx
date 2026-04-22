@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { ModuleSidebarLayout } from '@/components/ModuleSidebarLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { formatApiError } from '@/lib/formatApiError'
 import {
   copyPermissions,
@@ -173,9 +173,11 @@ export default function UserAccessPage() {
                       users.map((user) => (
                         <tr key={user.id} className="border-b border-zinc-100 hover:bg-zinc-50">
                           <td className="py-2 pr-3">
-                            <Checkbox 
+                            <input
+                              type="checkbox"
                               checked={selectedUsers.includes(user.id)}
-                              onCheckedChange={() => toggleUser(user.id)}
+                              onChange={() => toggleUser(user.id)}
+                              className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                             />
                           </td>
                           <td className="py-2 pr-3 font-medium">
@@ -220,10 +222,12 @@ export default function UserAccessPage() {
                 <div className="space-y-3">
                   {AVAILABLE_PERMISSIONS.map(perm => (
                     <div key={perm.id} className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`perm-${perm.id}`} 
+                      <input
+                        type="checkbox"
+                        id={`perm-${perm.id}`}
                         checked={selectedPermissions.includes(perm.id)}
-                        onCheckedChange={() => togglePermission(perm.id)}
+                        onChange={() => togglePermission(perm.id)}
+                        className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                       />
                       <Label htmlFor={`perm-${perm.id}`} className="font-normal cursor-pointer">
                         {perm.label}

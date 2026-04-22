@@ -1,13 +1,28 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 
 import { ProtectedRoute } from '@/components/ProtectedRoute'
-import { protectedPlaceholderRoutes } from '@/config/legacyModuleRegistry'
 import AccountListPage from '@/pages/AccountListPage'
 import AnnouncementPage from '@/pages/AnnouncementPage'
+import AutoMonthlyAccountingPage from '@/pages/AutoMonthlyAccountingPage'
+import BankProcessListPage from '@/pages/BankProcessListPage'
+import CustomerReportPage from '@/pages/CustomerReportPage'
 import DashboardPage from '@/pages/DashboardPage'
+import DataCapturePage from '@/pages/DataCapturePage'
+import DataCaptureSummaryPage from '@/pages/DataCaptureSummaryPage'
+import DomainPage from '@/pages/DomainPage'
+import DomainReportPage from '@/pages/DomainReportPage'
+import FormulaMaintenancePage from '@/pages/FormulaMaintenancePage'
+import GamesProcessListPage from '@/pages/GamesProcessListPage'
 import LoginPage from '@/pages/LoginPage'
+import {
+  BankprocessMaintenancePage,
+  CaptureMaintenancePage,
+  PaymentMaintenancePage,
+  TransactionMaintenancePage,
+} from '@/pages/MaintenancePages'
 import MemberPage from '@/pages/MemberPage'
-import ModuleMigrationPlaceholderPage from '@/pages/ModuleMigrationPlaceholderPage'
+import OwnerSecondaryPasswordPage from '@/pages/OwnerSecondaryPasswordPage'
+import OwnershipPage from '@/pages/OwnershipPage'
 import ProcessListPage from '@/pages/ProcessListPage'
 import ResetPasswordPlaceholderPage from '@/pages/ResetPasswordPlaceholderPage'
 import SystemModulesPage from '@/pages/SystemModulesPage'
@@ -94,17 +109,126 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      {protectedPlaceholderRoutes.map(({ path, i18nKey }) => (
-        <Route
-          key={path}
-          path={path}
-          element={
-            <ProtectedRoute allowedRoles={[...adminRoles]}>
-              <ModuleMigrationPlaceholderPage i18nKey={i18nKey} />
-            </ProtectedRoute>
-          }
-        />
-      ))}
+      <Route
+        path="/modules/customer-report"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <CustomerReportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/domain-report"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <DomainReportPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/bank-process-list"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <BankProcessListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/bankprocess-maintenance"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <BankprocessMaintenancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/capture-maintenance"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <CaptureMaintenancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/datacapture"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <DataCapturePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/datacapture-summary"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <DataCaptureSummaryPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/domain"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <DomainPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/formula-maintenance"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <FormulaMaintenancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/games-process-list"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <GamesProcessListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/ownership"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <OwnershipPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/payment-maintenance"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <PaymentMaintenancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/transaction-maintenance"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <TransactionMaintenancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/auto-monthly-accounting"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <AutoMonthlyAccountingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/owner-secondary-password"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <OwnerSecondaryPasswordPage />
+          </ProtectedRoute>
+        }
+      />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

@@ -22,25 +22,24 @@ const ready: LegacyModuleDef[] = [
   { key: 'userList', legacyFile: 'userlist.php', reactPath: '/modules/user-list', status: 'ready' },
   { key: 'announcement', legacyFile: 'announcement.php', reactPath: '/modules/announcement', status: 'ready' },
   { key: 'userAccess', legacyFile: 'useraccess.php', reactPath: '/modules/user-access', status: 'ready' },
+  { key: 'customerReport', legacyFile: 'customer_report.php', reactPath: '/modules/customer-report', status: 'ready' },
+  { key: 'domainReport', legacyFile: 'domain_report.php', reactPath: '/modules/domain-report', status: 'ready' },
+  { key: 'bankProcessList', legacyFile: 'bank_process_list.php', reactPath: '/modules/bank-process-list', status: 'ready' },
+  { key: 'bankprocessMaintenance', legacyFile: 'bankprocess_maintenance.php', reactPath: '/modules/bankprocess-maintenance', status: 'ready' },
+  { key: 'captureMaintenance', legacyFile: 'capture_maintenance.php', reactPath: '/modules/capture-maintenance', status: 'ready' },
+  { key: 'datacapture', legacyFile: 'datacapture.php', reactPath: '/modules/datacapture', status: 'ready' },
+  { key: 'datacaptureSummary', legacyFile: 'datacapturesummary.php', reactPath: '/modules/datacapture-summary', status: 'ready' },
+  { key: 'domain', legacyFile: 'domain.php', reactPath: '/modules/domain', status: 'ready' },
+  { key: 'formulaMaintenance', legacyFile: 'formula_maintenance.php', reactPath: '/modules/formula-maintenance', status: 'ready' },
+  { key: 'gamesProcessList', legacyFile: 'games_process_list.php', reactPath: '/modules/games-process-list', status: 'ready' },
+  { key: 'ownership', legacyFile: 'ownership.php', reactPath: '/modules/ownership', status: 'ready' },
+  { key: 'paymentMaintenance', legacyFile: 'payment_maintenance.php', reactPath: '/modules/payment-maintenance', status: 'ready' },
+  { key: 'transactionMaintenance', legacyFile: 'transaction_maintenance.php', reactPath: '/modules/transaction-maintenance', status: 'ready' },
+  { key: 'autoMonthlyAccounting', legacyFile: 'auto_monthly_accounting.php', reactPath: '/modules/auto-monthly-accounting', status: 'ready' },
+  { key: 'ownerSecondaryPassword', legacyFile: 'owner_secondary_password.php', reactPath: '/modules/owner-secondary-password', status: 'ready' },
 ]
 
-const pending: LegacyModuleDef[] = [
-  { key: 'bankProcessList', legacyFile: 'bank_process_list.php', reactPath: '/modules/bank-process-list', status: 'pending' },
-  { key: 'bankprocessMaintenance', legacyFile: 'bankprocess_maintenance.php', reactPath: '/modules/bankprocess-maintenance', status: 'pending' },
-  { key: 'captureMaintenance', legacyFile: 'capture_maintenance.php', reactPath: '/modules/capture-maintenance', status: 'pending' },
-  { key: 'customerReport', legacyFile: 'customer_report.php', reactPath: '/modules/customer-report', status: 'pending' },
-  { key: 'datacapture', legacyFile: 'datacapture.php', reactPath: '/modules/datacapture', status: 'pending' },
-  { key: 'datacaptureSummary', legacyFile: 'datacapturesummary.php', reactPath: '/modules/datacapture-summary', status: 'pending' },
-  { key: 'domain', legacyFile: 'domain.php', reactPath: '/modules/domain', status: 'pending' },
-  { key: 'domainReport', legacyFile: 'domain_report.php', reactPath: '/modules/domain-report', status: 'pending' },
-  { key: 'formulaMaintenance', legacyFile: 'formula_maintenance.php', reactPath: '/modules/formula-maintenance', status: 'pending' },
-  { key: 'gamesProcessList', legacyFile: 'games_process_list.php', reactPath: '/modules/games-process-list', status: 'pending' },
-  { key: 'ownership', legacyFile: 'ownership.php', reactPath: '/modules/ownership', status: 'pending' },
-  { key: 'paymentMaintenance', legacyFile: 'payment_maintenance.php', reactPath: '/modules/payment-maintenance', status: 'pending' },
-  { key: 'transactionMaintenance', legacyFile: 'transaction_maintenance.php', reactPath: '/modules/transaction-maintenance', status: 'pending' },
-  { key: 'autoMonthlyAccounting', legacyFile: 'auto_monthly_accounting.php', reactPath: '/modules/auto-monthly-accounting', status: 'pending' },
-  { key: 'ownerSecondaryPassword', legacyFile: 'owner_secondary_password.php', reactPath: '/modules/owner-secondary-password', status: 'pending' },
-]
+const pending: LegacyModuleDef[] = []
 
 /** 公开页：仅路由键与路径，不写入 legacyModuleRows 时单独处理 */
 export const resetPasswordModule: LegacyModuleDef = {
