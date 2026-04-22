@@ -6,9 +6,13 @@ import App from '@/App.tsx'
 import '@/i18n'
 import '@/index.css'
 
-// 在仅 Nginx/未启用 .htaccess 的虚拟主机上，可设 VITE_SPA_HASH_ROUTER=1 后重新 build，地址形如
-// https://example.com/app/#/login，无需服务器为深链做 rewrite
-const useHashRouter = import.meta.env.VITE_SPA_HASH_ROUTER === '1'
+// 生产环境默认 Hash：能打开 /app/index.html 即可，无需为 /app/login 配置 rewrite
+// 要路径式 /app/login 时：build 时设 VITE_SPA_USE_BROWSER=1 且将 includes/spa_redirect 里 C168_SPA_USE_HASH 改为 false
+const useHashRouter = import.meta.env.DEV
+  ? false
+  : import.meta.env.VITE_SPA_USE_BROWSER === '1'
+    ? false
+    : true
 
 const appTree = useHashRouter ? (
   <HashRouter>
@@ -19,5 +23,6 @@ const appTree = useHashRouter ? (
     <App />
   </BrowserRouter>
 )
+// Dev 用 Browser+basename 便于用 /app/ 子路径与代理联调
 
 createRoot(document.getElementById('root')!).render(<StrictMode>{appTree}</StrictMode>)

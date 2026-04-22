@@ -1,57 +1,26 @@
-# count168.org — SPA 与 API
-# 深链 404 时：请同时上传 public_html/app/.htaccess（仅处理 /app/ 下回退到 index.html）
-# 若主机为 Nginx 且不能改 try_files，可在 frontend 设 VITE_SPA_HASH_ROUTER=1 后重新 npm run build
-# 若站点在子目录，请把下一行改为对应前缀，例如：RewriteBase /subfolder/
+# count168.org — React SPA + api/v1
+# 已去掉「对 *.php 的强制外跳」：让网站根下各 .php 自己执行，避免拦截 index.php 与带 ?lang= 的跳转
+# 默认前端为 Hash 路由，只需能访问到 /app/index.html
 RewriteEngine On
 RewriteBase /
 
-# 避免 /app/… 下 MultiViews 误匹配「login」为脚本名导致 404
 <IfModule mod_negotiation.c>
   Options -MultiViews
 </IfModule>
 
-# 旧版 PHP 入口 -> React SPA（/app/…）
-RewriteRule ^index\.php$ /app/login [R=301,L]
-RewriteRule ^dashboard\.php$ /app/dashboard [R=301,L]
-RewriteRule ^transaction\.php$ /app/modules/transaction [R=301,L]
-RewriteRule ^account-list\.php$ /app/modules/account-list [R=301,L]
-RewriteRule ^member\.php$ /app/modules/member [R=301,L]
-RewriteRule ^processlist\.php$ /app/modules/process-list [R=301,L]
-RewriteRule ^add-account\.php$ /app/modules/add-account [R=301,L]
-RewriteRule ^reset-password\.php$ /app/reset-password [R=301,L]
-RewriteRule ^announcement\.php$ /app/modules/announcement [R=301,L]
-RewriteRule ^bank_process_list\.php$ /app/modules/bank-process-list [R=301,L]
-RewriteRule ^bankprocess_maintenance\.php$ /app/modules/bankprocess-maintenance [R=301,L]
-RewriteRule ^capture_maintenance\.php$ /app/modules/capture-maintenance [R=301,L]
-RewriteRule ^customer_report\.php$ /app/modules/customer-report [R=301,L]
-RewriteRule ^datacapture\.php$ /app/modules/datacapture [R=301,L]
-RewriteRule ^datacapturesummary\.php$ /app/modules/datacapture-summary [R=301,L]
-RewriteRule ^domain\.php$ /app/modules/domain [R=301,L]
-RewriteRule ^domain_report\.php$ /app/modules/domain-report [R=301,L]
-RewriteRule ^formula_maintenance\.php$ /app/modules/formula-maintenance [R=301,L]
-RewriteRule ^games_process_list\.php$ /app/modules/games-process-list [R=301,L]
-RewriteRule ^ownership\.php$ /app/modules/ownership [R=301,L]
-RewriteRule ^payment_maintenance\.php$ /app/modules/payment-maintenance [R=301,L]
-RewriteRule ^transaction_maintenance\.php$ /app/modules/transaction-maintenance [R=301,L]
-RewriteRule ^userlist\.php$ /app/modules/user-list [R=301,L]
-RewriteRule ^useraccess\.php$ /app/modules/user-access [R=301,L]
-RewriteRule ^auto_monthly_accounting\.php$ /app/modules/auto-monthly-accounting [R=301,L]
-RewriteRule ^owner_secondary_password\.php$ /app/modules/owner-secondary-password [R=301,L]
-
-# 根路径直接给 SPA
+# 空域名 → 直接打开 SPA
 RewriteRule ^$ /app/index.html [L]
 
-# 已存在的真实文件、目录，直接交给 Apache（含 /app/assets/*.js 等）
+# 真实文件/目录
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# /api/v1/ 不交给 React
+# API 不交给 index.html
 RewriteCond %{REQUEST_URI} ^/api/v1/ [NC]
 RewriteRule ^ - [L]
 
-# 其余全部交给 Vite 构建的 index，供 React Router 处理 /app/login 等深链
-# 用 ^.*$ 匹配整段相对路径；单独写 ^ 无法匹配 /app/login 这类深链
+# 其它（如 /app/login 的 History 模式书签）：回退到 SPA；Hash 模式主要用 /app/index.html#/…
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^.*$ /app/index.html [L]
