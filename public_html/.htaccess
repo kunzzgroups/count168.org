@@ -1,4 +1,6 @@
 # count168.org — SPA 与 API
+# 深链 404 时：请同时上传 public_html/app/.htaccess（仅处理 /app/ 下回退到 index.html）
+# 若主机为 Nginx 且不能改 try_files，可在 frontend 设 VITE_SPA_HASH_ROUTER=1 后重新 npm run build
 # 若站点在子目录，请把下一行改为对应前缀，例如：RewriteBase /subfolder/
 RewriteEngine On
 RewriteBase /
