@@ -11,6 +11,7 @@ import ProcessListPage from '@/pages/ProcessListPage'
 import ResetPasswordPlaceholderPage from '@/pages/ResetPasswordPlaceholderPage'
 import SystemModulesPage from '@/pages/SystemModulesPage'
 import TransactionPage from '@/pages/TransactionPage'
+import UserListPage from '@/pages/UserListPage'
 
 const adminRoles = ['owner', 'admin', 'manager'] as const
 
@@ -64,6 +65,14 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={[...adminRoles]}>
             <ProcessListPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/modules/user-list"
+        element={
+          <ProtectedRoute allowedRoles={[...adminRoles]}>
+            <UserListPage />
           </ProtectedRoute>
         }
       />
