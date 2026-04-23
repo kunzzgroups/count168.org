@@ -58,11 +58,14 @@ if (isset($_SESSION['user_id'])) {
         exit();
     }
 
-    // 检查owner是否已通过二级密码验证
+    // 检查owner是否已通过二级密码验证（React 路由，保留 api_token 供 Bearer 快照合并）
     if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner') {
         if (!isset($_SESSION['secondary_password_verified']) || $_SESSION['secondary_password_verified'] !== true) {
-            // Owner未通过二级密码验证，重定向到二级密码验证页面
-            header("Location: owner_secondary_password.php");
+            $t = isset($_GET['api_token']) ? trim((string) $_GET['api_token']) : '';
+            $qs = ($t !== '' && strlen($t) === 64 && ctype_xdigit($t))
+                ? ('?api_token=' . rawurlencode($t))
+                : '';
+            header('Location: /owner-secondary-password' . $qs);
             exit();
         }
     }

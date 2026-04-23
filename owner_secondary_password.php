@@ -71,6 +71,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
+
+// 浏览器 GET 访问旧 URL 时进入 React 页（POST 仍走上方逻辑 / 下方 HTML 兼容）
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $error_message === '') {
+    $t = $api_token;
+    $qs = ($t !== '' && strlen($t) === 64 && ctype_xdigit($t))
+        ? ('?api_token=' . rawurlencode($t))
+        : '';
+    header('Location: /owner-secondary-password' . $qs, true, 302);
+    exit;
+}
 ?>
 
 <!DOCTYPE html>

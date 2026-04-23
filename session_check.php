@@ -130,9 +130,10 @@ if (isset($_SESSION['user_id'])) {
         exit();
     }
     
-    // 检查owner是否已通过二级密码验证（排除二级密码验证页面本身）
-    $currentFile = basename($_SERVER['PHP_SELF']);
-    if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner' && $currentFile !== 'owner_secondary_password.php') {
+    // 检查owner是否已通过二级密码验证（排除二级密码验证页面与提交 API）
+    $ownerSecondaryExempt = $currentFile === 'owner_secondary_password.php'
+        || $currentFile === 'owner_secondary_password_submit_api.php';
+    if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner' && !$ownerSecondaryExempt) {
         if (!isset($_SESSION['secondary_password_verified']) || $_SESSION['secondary_password_verified'] !== true) {
             // Owner未通过二级密码验证，重定向到二级密码验证页面
             if ($isApiRequest) {

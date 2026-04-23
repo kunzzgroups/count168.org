@@ -7,11 +7,16 @@ import { NotFoundPage } from '@/pages/NotFoundPage'
 import { CaptureMaintenancePage } from '@/pages/CaptureMaintenancePage'
 import { DataCaptureSummaryPage } from '@/pages/DataCaptureSummaryPage'
 import { StockPage } from '@/pages/StockPage'
+import { OwnerSecondaryPasswordPage } from '@/pages/OwnerSecondaryPasswordPage'
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
+      <Route
+        path="/owner-secondary-password"
+        element={<OwnerSecondaryPasswordPage />}
+      />
       <Route element={<RequireAuth />}>
         <Route element={<RootLayout />}>
           <Route path="/home" element={<HomePage />} />
