@@ -34,3 +34,86 @@
 .tShell__notice code {
   font-size: 0.85em;
 }
+
+.tShell__toast {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  z-index: 10050;
+  max-width: min(420px, 92vw);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.12);
+}
+
+.tShell__toastOk {
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+}
+
+.tShell__toastErr {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.tShell__toastInfo {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a5f;
+}
+
+.tShell__miniBtn {
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  margin: 0 2px 2px 0;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.tShell__miniBtnDanger {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.tShell__muted {
+  color: #64748b;
+  font-size: 0.85rem;
+  margin: 8px 0;
+}
+
+.tShell__rateHint {
+  font-size: 0.88rem;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 0 0 10px;
+}
+
+.tShell__searchErr {
+  color: #b91c1c;
+  margin: 12px 0;
+  font-size: 0.9rem;
+}
+
+.custom-select-options .custom-select-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.custom-select-options .custom-select-option:hover {
+  background: #f1f5f9;
+}
