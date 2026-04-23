@@ -1,23 +1,23 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Building2, Lock, User } from 'lucide-react'
-import { apiFetch, apiUrl } from '../lib/api'
+import { AlertModal } from '../components/login/AlertModal'
+import { LoginForm } from '../components/login/LoginForm'
+import { MaintenanceMarquee } from '../components/login/MaintenanceMarquee'
+import { RoleTabs } from '../components/login/RoleTabs'
+import { TelegramAnchor } from '../components/login/TelegramAnchor'
+import type { Role } from '../components/login/types'
+import { apiFetch } from '../lib/api'
 import { publicAsset } from '../lib/publicAsset'
 import { resolvePostLoginRedirect } from '../lib/resolvePostLoginRedirect'
 import type { LoginProcessJson } from '../types/login'
 import './LoginPage.css'
 
-type Role = 'admin' | 'member'
-
 type MaintenanceItem = { id: number; content: string }
 
+/**
+ * 对应 `index.php` 整页：根节点用 `className="bg"`（等同原站 body.bg 下 login-container 一段）。
+ * 子组件 DOM 与 `view-source:count168.org` 的 id/class 对齐。
+ */
 export function LoginPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const role: Role =
@@ -32,8 +32,6 @@ export function LoginPage() {
     null,
   )
   const verifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const modalTitleId = useId()
-  const modalDescId = useId()
 
   useEffect(() => {
     if (!modal) return
@@ -108,7 +106,7 @@ export function LoginPage() {
     setModal({ title, message })
   }
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (submitting) return
     setSubmitting(true)
@@ -140,9 +138,6 @@ export function LoginPage() {
     }
   }
 
-  const userPlaceholder = role === 'member' ? 'Account Id' : 'Username'
-  const showForgot = role === 'admin'
-
   const supportHref =
     import.meta.env.VITE_SUPPORT_TELEGRAM_URL || 'https://t.me'
 
@@ -150,193 +145,42 @@ export function LoginPage() {
 
   return (
     <div
-      className="login-page bg"
+      className="bg"
       style={{ '--c168-page-bg': pageBg } as CSSProperties}
     >
       <div className="login-container">
-        {maintenance.length > 0 && (
-          <div className="maintenance-zone" aria-live="polite">
-            <div className="maintenance-wrap">
-              <div className="maintenance-track" role="list">
-                {[...maintenance, ...maintenance].map((m, i) => (
-                  <div
-                    className="maintenance-item"
-                    key={`${m.id}-${i}`}
-                    role="listitem"
-                  >
-                    <span className="maintenance-dot" />
-                    <span className="maintenance-lbl">系统维护中:</span>
-                    <span>{m.content}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        <MaintenanceMarquee items={maintenance} />
 
-        <div className="role-tabs" role="tablist" aria-label="Login role">
-          <button
-            type="button"
-            className={`role-tab ${role === 'admin' ? 'active' : ''}`}
-            role="tab"
-            aria-selected={role === 'admin'}
-            onClick={() => setActiveRole('admin')}
-          >
-            Admin
-          </button>
-          <button
-            type="button"
-            className={`role-tab ${role === 'member' ? 'active' : ''}`}
-            role="tab"
-            aria-selected={role === 'member'}
-            onClick={() => setActiveRole('member')}
-          >
-            Member
-          </button>
-        </div>
+        <RoleTabs role={role} onSelect={setActiveRole} />
 
         <div className="login-card">
           <div className="form-content">
-            <form className="login-form" onSubmit={onSubmit}>
-              <div className="input-group">
-                <Building2
-                  className="input-icon"
-                  size={18}
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                <input
-                  name="company_id"
-                  autoComplete="organization"
-                  placeholder="Company / Group ID"
-                  value={companyId}
-                  onChange={(e) =>
-                    setCompanyId(e.target.value.toUpperCase())
-                  }
-                  required
-                />
-              </div>
-              <div className="input-group">
-                <User
-                  className="input-icon"
-                  size={18}
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                <input
-                  name={role === 'member' ? 'account_id' : 'login_id'}
-                  autoComplete="username"
-                  placeholder={userPlaceholder}
-                  value={userField}
-                  onChange={(e) =>
-                    setUserField(e.target.value.toUpperCase())
-                  }
-                  required
-                />
-              </div>
-              <div className="input-group">
-                <Lock
-                  className="input-icon"
-                  size={18}
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                <input
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="form-options">
-                <label className="remember-switch">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                  />
-                  <span className="slider" />
-                  <span className="remember-text">Remember me</span>
-                </label>
-                {showForgot && (
-                  <a
-                    className="forgot-link"
-                    href={apiUrl('/reset-password.php')}
-                  >
-                    Forget Password?
-                  </a>
-                )}
-              </div>
-
-              <button
-                className="login-btn"
-                type="submit"
-                disabled={submitting}
-              >
-                <span>{submitting ? '…' : 'Login'}</span>
-              </button>
-            </form>
+            <LoginForm
+              role={role}
+              companyId={companyId}
+              userField={userField}
+              password={password}
+              remember={remember}
+              submitting={submitting}
+              onCompanyIdChange={setCompanyId}
+              onUserFieldChange={setUserField}
+              onPasswordChange={setPassword}
+              onRememberChange={setRemember}
+              onSubmit={onSubmit}
+            />
           </div>
         </div>
       </div>
 
-      <a
-        href={supportHref}
-        target="_blank"
-        rel="noopener noreferrer"
-        title="Telegram"
-        className="telegram-fab"
-      >
-        <img
-          src={publicAsset('images/telegram.png')}
-          alt="Telegram"
-          className="telegram-icon"
-          width={60}
-          height={60}
-        />
-      </a>
+      <TelegramAnchor href={supportHref} />
 
-      {modal && (
-        <div
-          className="modal-overlay is-open"
-          role="presentation"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setModal(null)
-          }}
-        >
-          <div
-            className="modal-box"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby={modalTitleId}
-            aria-describedby={modalDescId}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-icon-wrap" aria-hidden>
-              <AlertTriangle className="modal-icon" strokeWidth={2} size={42} />
-            </div>
-            <h3 id={modalTitleId} className="modal-title">
-              {modal.title}
-            </h3>
-            <p id={modalDescId} className="modal-message">
-              {modal.message}
-            </p>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="modal-btn modal-btn-primary"
-                onClick={() => setModal(null)}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AlertModal
+        open={!!modal}
+        title={modal?.title ?? 'Notice'}
+        message={modal?.message ?? ''}
+        onConfirm={() => setModal(null)}
+        onRequestClose={() => setModal(null)}
+      />
     </div>
   )
 }

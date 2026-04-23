@@ -1,6 +1,6 @@
-/* 与根目录 index.php + css/style.css + css/index.css 对齐；背景由 --c168-page-bg 注入（见 LoginPage.tsx） */
+/* 与根目录 `index.php` 的 `body.bg` + css/style.css + css/index.css 同名字段；背景由 --c168-page-bg 注入（根层 `div.bg`） */
 
-.login-page.bg {
+.bg {
   font-family:
     'Inter',
     'Segoe UI',
@@ -17,7 +17,7 @@
   position: relative;
 }
 
-.login-page.bg::before {
+.bg::before {
   content: '';
   position: absolute;
   top: 0;
@@ -35,38 +35,27 @@
   z-index: 2;
 }
 
-.maintenance-zone {
-  margin-bottom: 12px;
-}
-
-.maintenance-wrap {
+/* css/index.css: .maintenance-marquee-* 与 #maintenanceMarqueeWrapper */
+.maintenance-marquee-wrapper {
   width: 100%;
   overflow: hidden;
   border-radius: 30px;
   background: linear-gradient(135deg, #004ff9, #56ccf2);
   position: relative;
+  margin-bottom: 20px;
 }
 
-.maintenance-track {
+.maintenance-marquee-track {
   display: flex;
   width: max-content;
-  animation: maint-scroll 18s linear infinite;
+  animation: maintenance-scroll 18s linear infinite;
 }
 
-.maintenance-track:hover {
+.maintenance-marquee-track:hover {
   animation-play-state: paused;
 }
 
-@keyframes maint-scroll {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.maintenance-item {
+.maintenance-marquee-item {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -77,7 +66,7 @@
   font-weight: 700;
 }
 
-.maintenance-dot {
+.maintenance-marquee-dot {
   width: 8px;
   height: 8px;
   border-radius: 999px;
@@ -86,13 +75,22 @@
   flex-shrink: 0;
 }
 
-.maintenance-lbl {
+.maintenance-marquee-label {
   opacity: 0.9;
   margin-right: 8px;
 }
 
+@keyframes maintenance-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 @media (max-width: 768px) {
-  .maintenance-item {
+  .maintenance-marquee-item {
     font-size: 12px;
     padding: 6px 10px;
   }
@@ -155,12 +153,13 @@
   transform: scale(1.02);
 }
 
-.login-page .input-icon {
+.bg .input-icon {
   position: absolute;
   left: clamp(15px, 4vw, 20px);
   top: 50%;
   transform: translateY(-50%);
   color: #56ccf2;
+  font-size: clamp(14px, 3vw, 16px);
   z-index: 2;
   pointer-events: none;
 }
@@ -296,6 +295,7 @@
 }
 
 /* index.css: Telegram 浮动图 */
+/* index.php 在 `a.telegram-fab` 内放 `img.telegram-icon`，等效于原页单独 `img.telegram-icon` 固定定位 */
 .telegram-fab {
   position: fixed;
   bottom: 20px;
@@ -307,8 +307,9 @@
   box-shadow: 0 4px 16px rgba(0, 79, 249, 0.25);
 }
 
-.telegram-icon {
+.telegram-fab .telegram-icon {
   display: block;
+  position: static;
   width: 60px;
   height: 60px;
   object-fit: cover;
@@ -321,7 +322,7 @@
 }
 
 @media (max-width: 480px) {
-  .telegram-icon {
+  .telegram-fab .telegram-icon {
     width: 50px;
     height: 50px;
   }
@@ -351,6 +352,11 @@
 .modal-overlay.is-open {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
+}
+
+.modal-overlay:not(.is-open) {
+  pointer-events: none;
 }
 
 .modal-box {
@@ -381,7 +387,9 @@
 }
 
 .modal-icon-wrap .modal-icon {
+  font-size: 42px;
   color: #dc3545;
+  line-height: 1;
 }
 
 .modal-title {
