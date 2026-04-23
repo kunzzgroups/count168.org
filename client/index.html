@@ -24,5 +24,20 @@
     <div id="root"></div>
     <noscript>此应用需要开启 JavaScript。请启用后刷新页面。</noscript>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      window.addEventListener('load', function () {
+        requestAnimationFrame(function () {
+          var r = document.getElementById('root')
+          if (r && !r.hasChildNodes()) {
+            r.innerHTML =
+              '<p style="padding:1.5rem;font-family:system-ui,sans-serif;max-width:40rem;font-size:14px;line-height:1.5;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px">' +
+              '<strong>主脚本可能未成功运行。</strong> 请 F12 打开「网络(Network)」刷新本页，检查 <code>/assets/index-*.js</code> 与 <code>/assets/index-*.css</code> 是否为 <strong>200</strong>。' +
+              ' 若为 404，请在项目内执行 <code>npm run build:site</code>，将网站根目录的 <code>index.html</code> 与 <code>assets/</code> 整包上传。' +
+              ' 若服务器使用 <strong>Nginx</strong>，需在 location / 中配置 <code>try_files $uri $uri/ /index.html;</code>（仅 Apache 的 .htaccess 不会生效）。' +
+              '</p>'
+          }
+        })
+      })
+    </script>
   </body>
 </html>

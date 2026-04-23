@@ -43,6 +43,13 @@ function normalizeData(raw: unknown): DashboardBootstrapData | null {
  */
 export async function fetchDashboardBootstrap(): Promise<FetchDashboardBootstrapResult> {
   const res = await apiFetch('/api/dashboard/bootstrap_api.php')
+  if (!res.ok) {
+    return { kind: 'fail' }
+  }
+  const ct = (res.headers.get('content-type') || '').toLowerCase()
+  if (ct.includes('text/html')) {
+    return { kind: 'fail' }
+  }
   let json: ApiResult<BootstrapResponsePayload>
   try {
     json = await res.json()
