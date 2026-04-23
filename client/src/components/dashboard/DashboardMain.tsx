@@ -1,11 +1,16 @@
 import { useDashboardWorkspace } from '../../hooks/useDashboardWorkspace'
 import { registerDashboardCharts } from '../../lib/dashboardChartRegister'
+import {
+  shouldAggregateByMonth,
+} from '../../lib/buildTrendChartDatasets'
 import { QUICK_RANGE_LABEL, type QuickRangeId } from '../../lib/quickDateRange'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import { formatKpiNumber } from '../../lib/kpiFromDashboardData'
 import { Line } from 'react-chartjs-2'
+import type { ChartOptions, ScriptableContext } from 'chart.js'
 import type { CSSProperties } from 'react'
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DashboardCalendarPopup } from './DashboardCalendarPopup'
 import '../../../../css/dashboard.css'
 import './DashboardMain.css'
 
@@ -31,6 +36,33 @@ const CHART_DATASET: { label: string; index: number; color: string }[] = [
   { label: 'Earnings', index: 3, color: '#f59e0b' },
 ]
 
+const GRADIENT_STOPS: [number, string][][] = [
+  [
+    [0, 'rgba(59, 130, 246, 0.4)'],
+    [0.3, 'rgba(59, 130, 246, 0.2)'],
+    [0.7, 'rgba(59, 130, 246, 0.1)'],
+    [1, 'rgba(59, 130, 246, 0.02)'],
+  ],
+  [
+    [0, 'rgba(239, 68, 68, 0.4)'],
+    [0.3, 'rgba(239, 68, 68, 0.2)'],
+    [0.7, 'rgba(239, 68, 68, 0.1)'],
+    [1, 'rgba(239, 68, 68, 0.02)'],
+  ],
+  [
+    [0, 'rgba(16, 185, 129, 0.4)'],
+    [0.3, 'rgba(16, 185, 129, 0.2)'],
+    [0.7, 'rgba(16, 185, 129, 0.1)'],
+    [1, 'rgba(16, 185, 129, 0.02)'],
+  ],
+  [
+    [0, 'rgba(245, 158, 11, 0.4)'],
+    [0.3, 'rgba(245, 158, 11, 0.2)'],
+    [0.7, 'rgba(245, 158, 11, 0.1)'],
+    [1, 'rgba(245, 158, 11, 0.02)'],
+  ],
+]
+
 function formatDmY(ymd: string): string {
   const p = ymd.split('-')
   if (p.length < 3) return ymd
@@ -38,36 +70,76 @@ function formatDmY(ymd: string): string {
   return `${d}/${m}/${y}`
 }
 
-const MONTHS = [
+function formatChartTick(n: number): string {
+  return parseFloat(String(n || 0)).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
+const MONTH_NAMES_LONG = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
 export function DashboardMain(_props: Props) {
-  const id = useId()
   const w = useDashboardWorkspace(_props.bootstrap)
+  const { currencyList, reorderCurrencies } = w
   const [quickOpen, setQuickOpen] = useState(false)
   const quickRef = useRef<HTMLDivElement>(null)
+  const dateRangeRef = useRef<HTMLDivElement>(null)
+  const monthPickerRef = useRef<HTMLDivElement>(null)
+  const [calendarOpen, setCalendarOpen] = useState(false)
+  const [monthDdOpen, setMonthDdOpen] = useState<'year' | 'month' | null>(null)
 
-  const ymFrom = useMemo(() => {
+  const monthYearDisplay = useMemo(() => {
+    if (w.currentRangeType === 'year') {
+      const y = parseInt(w.dateFrom.slice(0, 4), 10)
+      return { y: Number.isFinite(y) ? String(y) : '--', m: '--' }
+    }
     const p = w.dateFrom.split('-').map(Number)
-    if (p.length < 2 || Number.isNaN(p[0]!)) return { y: '--', m: '--' as string }
-    return { y: String(p[0]), m: MONTHS[(p[1]! || 1) - 1] || '--' }
-  }, [w.dateFrom])
+    const q = w.dateTo.split('-').map(Number)
+    if (p.length >= 3 && q.length >= 3) {
+      const [fy, fm, fd] = p
+      const [ty, tm, td] = q
+      const lastOf = new Date(fy!, fm!, 0).getDate()
+      if (fy === ty && fm === tm && fd === 1 && td === lastOf) {
+        return { y: String(fy), m: String(fm).padStart(2, '0') }
+      }
+    }
+    if (p.length >= 2 && !Number.isNaN(p[0])) {
+      return { y: String(p[0]), m: p[1] ? String(p[1]).padStart(2, '0') : '--' }
+    }
+    return { y: '--', m: '--' }
+  }, [w.dateFrom, w.dateTo, w.currentRangeType])
 
   useEffect(() => {
     registerDashboardCharts()
   }, [])
 
   useEffect(() => {
-    if (!quickOpen) return
+    if (!quickOpen && !monthDdOpen) return
     const onDoc = (e: MouseEvent) => {
-      const el = quickRef.current
-      if (el && !el.contains(e.target as Node)) setQuickOpen(false)
+      const t = e.target as Node
+      if (quickOpen && quickRef.current && !quickRef.current.contains(t)) {
+        setQuickOpen(false)
+      }
+      if (
+        monthDdOpen &&
+        monthPickerRef.current &&
+        !monthPickerRef.current.contains(t)
+      ) {
+        setMonthDdOpen(null)
+      }
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
-  }, [quickOpen])
+  }, [quickOpen, monthDdOpen])
 
   const chartSub = useMemo(() => {
     if (w.loading && w.scopeValid) return 'Loading data...'
@@ -78,6 +150,192 @@ export function DashboardMain(_props: Props) {
   }, [w.loading, w.scopeValid, w.payload, w.dateFrom, w.dateTo])
 
   const hasEarnings = !!(w.kpi && w.kpi.showEarnings)
+
+  const axisFontSize = useMemo(
+    () =>
+      Math.round(
+        Math.min(15, Math.max(9, (0.82 / 100) * window.innerWidth)),
+      ),
+    [],
+  )
+
+  const lineChartData = useMemo(() => {
+    if (!w.chartData) return null
+    const grad = (
+      c: ScriptableContext<'line'>,
+      stops: [number, string][],
+    ) => {
+      const chart = c.chart
+      const { ctx, chartArea } = chart
+      if (!chartArea) return stops[stops.length - 1]![1]
+      const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom)
+      for (const [p, col] of stops) g.addColorStop(p, col)
+      return g
+    }
+    return {
+      ...w.chartData,
+      datasets: w.chartData.datasets.map((ds, i) => ({
+        ...ds,
+        pointHoverRadius: 8,
+        backgroundColor: (context: ScriptableContext<'line'>) =>
+          grad(context, GRADIENT_STOPS[i]!),
+      })),
+    }
+  }, [w.chartData])
+
+  const chartOptions: ChartOptions<'line'> = useMemo(() => {
+    const agg = shouldAggregateByMonth(
+      w.dateFrom,
+      w.dateTo,
+      w.currentRangeType,
+    )
+    const keys = w.chartSortedKeys
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 0 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          padding: 12,
+          titleFont: { size: 13, weight: 'bold' },
+          bodyFont: { size: 12 },
+          callbacks: {
+            title(items) {
+              if (!items.length) return ''
+              const i = items[0]!.dataIndex
+              const date = keys[i]
+              if (!date) return ''
+              if (agg && /^\d{4}-\d{2}$/.test(date)) {
+                const [y, m] = date.split('-')
+                return `${MONTH_NAMES_LONG[parseInt(m!, 10) - 1] || ''} ${y}`
+              }
+              const dateObj = new Date(date + 'T00:00:00')
+              if (!Number.isNaN(dateObj.getTime())) {
+                return `${dateObj.getDate()}/${dateObj.getMonth() + 1}/${dateObj.getFullYear()}`
+              }
+              return date
+            },
+            label(ctx) {
+              const label = ctx.dataset.label || ''
+              const value = ctx.parsed.y
+              return `${label}: RM ${formatChartTick(value as number)}`
+            },
+            afterBody(items) {
+              if (!items.length || !lineChartData) return []
+              const i = items[0]!.dataIndex
+              const ds = lineChartData.datasets
+              const p = (ds[0]!.data as number[])[i] ?? 0
+              const e = (ds[1]!.data as number[])[i] ?? 0
+              const np = (ds[2]!.data as number[])[i] ?? 0
+              const er = (ds[3]!.data as number[])[i] ?? 0
+              return [
+                '',
+                '--- Summary ---',
+                `Profit: RM ${formatChartTick(p)}`,
+                `Expenses: RM ${formatChartTick(e)}`,
+                `NET PROFIT: RM ${formatChartTick(np)}`,
+                `Earnings: RM ${formatChartTick(er)}`,
+              ]
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: false,
+          ticks: {
+            maxTicksLimit: 8,
+            callback: (value) => formatChartTick(value as number),
+            font: { size: axisFontSize },
+          },
+          grid: { color: 'rgba(0, 0, 0, 0.05)' },
+        },
+        x: {
+          grid: { display: false },
+          ticks: {
+            font: { size: axisFontSize },
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: false,
+            callback: (_value, index) => {
+              const raw = keys[index]
+              if (!raw) return ''
+              if (agg && /^\d{4}-\d{2}$/.test(raw)) {
+                const [yearStr, monthStr] = raw.split('-')
+                const y = parseInt(yearStr!, 10)
+                const m = parseInt(monthStr!, 10)
+                if (!y || !m) return ''
+                return `${MONTH_NAMES[m - 1] || ''} ${y}`
+              }
+              if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+                const parts = raw.split('-')
+                return String(parseInt(parts[2]!, 10) || '')
+              }
+              return ''
+            },
+          },
+        },
+      },
+    }
+  }, [
+    w.chartSortedKeys,
+    w.dateFrom,
+    w.dateTo,
+    w.currentRangeType,
+    axisFontSize,
+    lineChartData,
+  ])
+
+  const yearChoices = useMemo(() => {
+    const y = new Date().getFullYear()
+    const out: number[] = []
+    for (let i = 2022; i <= y + 1; i++) out.push(i)
+    return out
+  }, [])
+
+  const onCurrencyDragStart = useCallback(
+    (e: React.DragEvent, code: string) => {
+      e.dataTransfer.setData('text/plain', code)
+      e.dataTransfer.effectAllowed = 'move'
+      ;(e.target as HTMLElement).classList.add('transaction-currency-dragging')
+    },
+    [],
+  )
+
+  const onCurrencyDragEnd = useCallback((e: React.DragEvent) => {
+    ;(e.target as HTMLElement).classList.remove('transaction-currency-dragging')
+    document
+      .querySelectorAll('.transaction-currency-drag-over')
+      .forEach((el) => el.classList.remove('transaction-currency-drag-over'))
+  }, [])
+
+  const onCurrencyDrop = useCallback(
+    (e: React.DragEvent, targetCode: string) => {
+      e.preventDefault()
+      const from = String(e.dataTransfer.getData('text/plain') || '')
+        .trim()
+        .toUpperCase()
+      const to = targetCode.trim().toUpperCase()
+      document
+        .querySelectorAll('.transaction-currency-drag-over')
+        .forEach((el) => el.classList.remove('transaction-currency-drag-over'))
+      if (!from || from === to) return
+      const order = currencyList.map((c) =>
+        String(c.code || '').toUpperCase(),
+      )
+      const fi = order.indexOf(from)
+      const ti = order.indexOf(to)
+      if (fi === -1 || ti === -1) return
+      const next = [...order]
+      next.splice(fi, 1)
+      next.splice(ti, 0, from)
+      reorderCurrencies(next)
+    },
+    [currencyList, reorderCurrencies],
+  )
 
   if (w.loadCompaniesError || !w.companiesReady) {
     if (w.loadCompaniesError) {
@@ -123,24 +381,37 @@ export function DashboardMain(_props: Props) {
                   <label className="form-label" style={{ margin: 0 }}>
                     Date Range
                   </label>
-                  <div className="date-range-picker dMain__dateRange" id="date-range-picker">
+                  <div
+                    ref={dateRangeRef}
+                    className="date-range-picker"
+                    id="date-range-picker"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setCalendarOpen((o) => !o)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setCalendarOpen((o) => !o)
+                      }
+                    }}
+                  >
                     <i className="fas fa-calendar-alt" />
-                    <input
-                      id={id + 'df'}
-                      type="date"
-                      value={w.dateFrom}
-                      onChange={(e) => w.setDateFrom(e.target.value)}
-                      aria-label="From"
-                    />
-                    <span> — </span>
-                    <input
-                      id={id + 'dt'}
-                      type="date"
-                      value={w.dateTo}
-                      onChange={(e) => w.setDateTo(e.target.value)}
-                      aria-label="To"
-                    />
+                    <span id="date-range-display">
+                      {formatDmY(w.dateFrom)} - {formatDmY(w.dateTo)}
+                    </span>
                   </div>
+                  <DashboardCalendarPopup
+                    key={calendarOpen ? `${w.dateFrom}|${w.dateTo}` : 'closed'}
+                    open={calendarOpen}
+                    anchorRef={dateRangeRef}
+                    dateFrom={w.dateFrom}
+                    dateTo={w.dateTo}
+                    onClose={() => setCalendarOpen(false)}
+                    onCommit={(from, to) => {
+                      w.setDateFrom(from)
+                      w.setDateTo(to)
+                    }}
+                  />
                 </div>
 
                 <div className="divider" />
@@ -155,15 +426,110 @@ export function DashboardMain(_props: Props) {
                     <i className="fas fa-calendar" style={{ color: '#3b82f6' }} />
                     Select Year & Month
                   </label>
-                  <div className="enhanced-date-picker month-only" id="month-date-picker">
-                    <div className="date-part" data-type="year">
-                      <span id="month-year-display">{ymFrom.y}</span>
+                  <div
+                    ref={monthPickerRef}
+                    className="enhanced-date-picker month-only"
+                    id="month-date-picker"
+                  >
+                    <div
+                      className={
+                        monthDdOpen === 'year' ? 'date-part active' : 'date-part'
+                      }
+                      data-type="year"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        setMonthDdOpen((d) => (d === 'year' ? null : 'year'))
+                      }
+                    >
+                      <span id="month-year-display">{monthYearDisplay.y}</span>
                     </div>
                     <span className="date-separator">Year</span>
-                    <div className="date-part" data-type="month">
-                      <span id="month-month-display">{ymFrom.m}</span>
+                    <div
+                      className={
+                        monthDdOpen === 'month' ? 'date-part active' : 'date-part'
+                      }
+                      data-type="month"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() =>
+                        setMonthDdOpen((d) => (d === 'month' ? null : 'month'))
+                      }
+                    >
+                      <span id="month-month-display">{monthYearDisplay.m}</span>
                     </div>
                     <span className="date-separator">Month</span>
+
+                    <div
+                      className={
+                        monthDdOpen ? 'date-dropdown show' : 'date-dropdown'
+                      }
+                      id="month-dropdown"
+                    >
+                      {monthDdOpen === 'year' && (
+                        <div className="year-grid">
+                          {yearChoices.map((y) => (
+                            <div
+                              key={y}
+                              className="date-option"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                const curM =
+                                  monthYearDisplay.m !== '--'
+                                    ? parseInt(monthYearDisplay.m, 10)
+                                    : null
+                                const m =
+                                  curM && !Number.isNaN(curM) ? curM : null
+                                w.applyMonthYearSelection(y, m)
+                                setMonthDdOpen(null)
+                              }}
+                            >
+                              {y}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {monthDdOpen === 'month' && (
+                        <div className="month-grid">
+                          <div
+                            className="date-option"
+                            style={{ gridColumn: '1 / -1' }}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => {
+                              const y = parseInt(monthYearDisplay.y, 10)
+                              if (Number.isFinite(y)) {
+                                w.applyMonthYearSelection(y, null)
+                              }
+                              setMonthDdOpen(null)
+                            }}
+                          >
+                            None
+                          </div>
+                          {MONTH_NAMES.map((name, idx) => {
+                            const mv = idx + 1
+                            return (
+                              <div
+                                key={name}
+                                className="date-option"
+                                role="button"
+                                tabIndex={0}
+                                onClick={() => {
+                                  const y = parseInt(monthYearDisplay.y, 10)
+                                  if (Number.isFinite(y)) {
+                                    w.applyMonthYearSelection(y, mv)
+                                  }
+                                  setMonthDdOpen(null)
+                                }}
+                              >
+                                {name}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -274,21 +640,50 @@ export function DashboardMain(_props: Props) {
                 </div>
               )}
 
-              {w.currencyList.length > 0 && (
+              {currencyList.length > 0 && (
                 <div className="transaction-company-filter dShow">
                   <span className="transaction-company-label">Currency:</span>
-                  <div className="transaction-company-buttons" role="group" aria-label="Currency">
-                    {w.currencyList.map((c) => {
+                  <div
+                    className="transaction-company-buttons"
+                    role="group"
+                    aria-label="Currency"
+                    onDragOver={(e) => {
+                      if (e.dataTransfer.types.includes('text/plain')) {
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                      }
+                    }}
+                  >
+                    {currencyList.map((c) => {
                       const code = String(c.code || '').toUpperCase()
                       return (
                         <button
                           key={code}
                           type="button"
+                          draggable
+                          data-currency={code}
                           className={
                             w.currency === code
                               ? 'transaction-company-btn active'
                               : 'transaction-company-btn'
                           }
+                          onDragStart={(e) => onCurrencyDragStart(e, code)}
+                          onDragEnd={onCurrencyDragEnd}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                            ;(e.currentTarget as HTMLElement).classList.add(
+                              'transaction-currency-drag-over',
+                            )
+                          }}
+                          onDragLeave={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                              ;(e.currentTarget as HTMLElement).classList.remove(
+                                'transaction-currency-drag-over',
+                              )
+                            }
+                          }}
+                          onDrop={(e) => onCurrencyDrop(e, code)}
                           onClick={() => w.setCurrency(code)}
                         >
                           {code}
@@ -372,7 +767,7 @@ export function DashboardMain(_props: Props) {
           </div>
         )}
 
-        {w.chartData && w.scopeValid && (
+        {lineChartData && w.scopeValid && (
           <div className="dashboard-chart-section">
             <div className="dashboard-chart-header">
               <div>
@@ -411,19 +806,7 @@ export function DashboardMain(_props: Props) {
               </div>
             </div>
             <div className="dashboard-chart-container">
-              <Line
-                data={w.chartData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  interaction: { mode: 'index', intersect: false },
-                  plugins: { legend: { display: false } },
-                  scales: {
-                    y: { ticks: { maxTicksLimit: 8 } },
-                    x: { ticks: { maxRotation: 45, minRotation: 0 } },
-                  },
-                }}
-              />
+              <Line data={lineChartData} options={chartOptions} />
             </div>
           </div>
         )}

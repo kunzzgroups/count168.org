@@ -25,6 +25,7 @@ import {
   QUICK_RANGE_LABEL,
   computeQuickDateRange,
 } from '../lib/quickDateRange'
+import { apiFetch, apiUrl } from '../lib/api'
 import {
   fetchOwnerCompaniesList,
   updateSessionCompany,
@@ -212,12 +213,6 @@ export function useDashboardWorkspace(bootstrap: DashboardBootstrapData) {
         if (useCurrency && useCurrency !== currency) {
           setCurrency(useCurrency)
         }
-        if (!useCurrency) {
-          setDataError('当前公司下没有可用币别。')
-          setPayload(null)
-          return
-        }
-
         if (isGroupAllMode && selectedGroup) {
           const groupCompanies = companies.filter(
             (c) =>
@@ -307,6 +302,24 @@ export function useDashboardWorkspace(bootstrap: DashboardBootstrapData) {
     } catch {
       return null
     }
+  }, [payload, dateFrom, dateTo, currentRangeType])
+
+  const chartSortedKeys = useMemo(() => {
+    if (!payload) return [] as string[]
+    if (shouldAggregateByMonth(dateFrom, dateTo, currentRangeType)) {
+      const keys: string[] = []
+      const start = new Date(dateFrom + 'T00:00:00')
+      const end = new Date(dateTo + 'T00:00:00')
+      const cur = new Date(start.getFullYear(), start.getMonth(), 1)
+      while (cur <= end) {
+        const y = cur.getFullYear()
+        const m = cur.getMonth() + 1
+        keys.push(`${y}-${String(m).padStart(2, '0')}`)
+        cur.setMonth(cur.getMonth() + 1)
+      }
+      return keys
+    }
+    return listYmdInClosedRange(dateFrom, dateTo)
   }, [payload, dateFrom, dateTo, currentRangeType])
 
   useEffect(() => {
@@ -405,11 +418,98 @@ export function useDashboardWorkspace(bootstrap: DashboardBootstrapData) {
     [payload, selectedGroup],
   )
 
-  const setGroup = (g: string | null) => {
-    writeStoredGroupFilter(g)
-    setSelectedGroup(g)
-    setIsGroupAllMode(false)
-  }
+  const setGroup = useCallback(
+    (g: string | null) => {
+      setIsGroupAllMode(false)
+      if (g === null) {
+        writeStoredGroupFilter(null)
+        setSelectedGroup(null)
+        const independent = companies.filter(
+          (c) => !c.group_id || String(c.group_id).trim() === '',
+        )
+        if (independent.length > 0) {
+          setActiveCompanyId(independent[0]!.id)
+        }
+        return
+      }
+      writeStoredGroupFilter(g)
+      setSelectedGroup(g)
+      const u = g.toUpperCase()
+      const groupCompanies = companies.filter(
+        (c) =>
+          c.group_id &&
+          String(c.group_id).toUpperCase() === u &&
+          c.company_id &&
+          String(c.company_id).trim() !== '',
+      )
+      if (groupCompanies.length > 0) {
+        setActiveCompanyId(groupCompanies[0]!.id)
+      }
+    },
+    [companies],
+  )
+
+  const applyMonthYearSelection = useCallback(
+    (year: number, month: number | null) => {
+      if (month != null && month >= 1 && month <= 12) {
+        const lastDay = new Date(year, month, 0).getDate()
+        setDateFromState(
+          `${year}-${String(month).padStart(2, '0')}-01`,
+        )
+        setDateToState(
+          `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`,
+        )
+        setCurrentRangeType(null)
+      } else {
+        setDateFromState(`${year}-01-01`)
+        setDateToState(`${year}-12-31`)
+        setCurrentRangeType('year')
+      }
+      setQuickSelectLabel(null)
+    },
+    [],
+  )
+
+  const reorderCurrencies = useCallback(
+    (newOrder: string[]) => {
+      const normalized = newOrder
+        .map((c) => String(c || '').trim().toUpperCase())
+        .filter(Boolean)
+      const uniq = normalized.filter((c, i, a) => a.indexOf(c) === i)
+      setCurrencyList((prev) => {
+        const by = new Map(
+          prev.map((x) => [String(x.code || '').toUpperCase(), x]),
+        )
+        const out: CompanyCurrency[] = []
+        for (const code of uniq) {
+          const row = by.get(code)
+          if (row) out.push(row)
+        }
+        by.forEach((row, code) => {
+          if (!uniq.includes(code)) out.push(row)
+        })
+        return out
+      })
+      const first = uniq[0] ?? ''
+      if (first) setCurrency(first)
+      try {
+        const cid = activeCompanyId ?? 0
+        const serialized = JSON.stringify(uniq)
+        localStorage.setItem('dashboard_currency_order_' + cid, serialized)
+        localStorage.setItem('dashboard_currency_order_global', serialized)
+        localStorage.setItem('transaction_currency_order_' + cid, serialized)
+        localStorage.setItem('transaction_currency_order_global', serialized)
+      } catch {
+        /* ignore */
+      }
+      void apiFetch(apiUrl('/api/transactions/user_currency_order_api.php'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: uniq }),
+      }).catch(() => {})
+    },
+    [activeCompanyId],
+  )
 
   const onPickCompany = (id: number) => {
     setIsGroupAllMode(false)
@@ -474,9 +574,12 @@ export function useDashboardWorkspace(bootstrap: DashboardBootstrapData) {
     payload,
     kpi,
     chartData,
+    chartSortedKeys,
     chartLineVisible,
     toggleChartLine,
     refreshData,
     retryLoadCompanies,
+    applyMonthYearSelection,
+    reorderCurrencies,
   }
 }

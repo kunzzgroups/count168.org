@@ -3,9 +3,7 @@ import { apiUrl } from '../lib/api'
 import { DashboardShell } from '../components/dashboard/DashboardShell'
 import './DashboardPage.css'
 
-/**
- * 阶段 1：无 iframe，纯 React 壳 + `useDashboardBootstrap`；图表/侧栏在后续阶段接入。
- */
+/** React Transaction Dashboard：与 `dashboard_classic.php` + `js/dashboard.js` 主区行为与展示对齐。 */
 export function DashboardPage() {
   const { gate, data, refetch } = useDashboardBootstrap()
 
