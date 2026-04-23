@@ -60,6 +60,36 @@ export type ContraInboxRow = {
   description: string
 }
 
+/** `history_api.php` → `data.account` / `data.history` */
+export type TxPaymentHistoryAccount = {
+  id?: number
+  account_id?: string
+  name?: string
+  currency?: string
+}
+
+export type TxPaymentHistoryRow = {
+  row_type: string
+  date: string
+  product?: string
+  card_owner?: string
+  is_bank_process_transaction?: boolean
+  currency?: string
+  rate?: string | number
+  win_loss: string | number
+  cr_dr: string | number
+  balance: string | number
+  description?: string
+  sms?: string | null
+  remark?: string | null
+  created_by?: string | null
+}
+
+export type TxPaymentHistoryPayload = {
+  account: TxPaymentHistoryAccount
+  history: TxPaymentHistoryRow[]
+}
+
 export function ymdToDmY(ymd: string): string {
   const p = ymd.split('-')
   if (p.length < 3) return ymd
@@ -272,6 +302,63 @@ export async function fetchTxSearch(params: {
     return {
       ok: false,
       error: String(json.error || json.message || 'Search failed'),
+    }
+  } catch (e) {
+    if (e instanceof Error && e.name === 'AbortError') {
+      return { ok: false, error: 'AbortError' }
+    }
+    throw e
+  }
+}
+
+export async function fetchTxPaymentHistory(params: {
+  accountId: number
+  virtualCompanyCode?: string
+  dateFromDmY: string
+  dateToDmY: string
+  rowCurrency?: string | null
+  selectedCurrenciesCsv?: string | null
+  companyId: number
+  signal?: AbortSignal
+}): Promise<
+  | { ok: true; data: TxPaymentHistoryPayload }
+  | { ok: false; error: string }
+> {
+  const q = new URLSearchParams()
+  q.set('account_id', String(params.accountId))
+  if (
+    params.virtualCompanyCode &&
+    params.virtualCompanyCode.trim() !== '' &&
+    params.accountId <= 0
+  ) {
+    q.set('virtual_company_code', params.virtualCompanyCode.trim().toUpperCase())
+  }
+  q.set('date_from', params.dateFromDmY)
+  q.set('date_to', params.dateToDmY)
+  const rowCur = (params.rowCurrency || '').trim()
+  if (rowCur) {
+    q.set('currency', rowCur)
+  } else if (params.selectedCurrenciesCsv) {
+    q.set('currency', params.selectedCurrenciesCsv)
+  }
+  q.set('company_id', String(params.companyId))
+  q.set('_t', String(Date.now()))
+  try {
+    const res = await apiFetch(
+      apiUrl(`/api/transactions/history_api.php?${q.toString()}`),
+      {
+        signal: params.signal,
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      },
+    )
+    const json = await res.json()
+    if (json.success && json.data) {
+      return { ok: true, data: json.data as TxPaymentHistoryPayload }
+    }
+    return {
+      ok: false,
+      error: String(json.error || json.message || 'Failed to load history'),
     }
   } catch (e) {
     if (e instanceof Error && e.name === 'AbortError') {

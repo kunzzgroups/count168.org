@@ -1,11 +1,18 @@
 import type { DashboardBootstrapData } from '../../types/dashboard'
-import type { TxAccountOption, TxSearchRow, TxTotals } from '../../lib/transactionLib'
+import type {
+  TxAccountOption,
+  TxPaymentHistoryPayload,
+  TxPaymentHistoryRow,
+  TxSearchRow,
+  TxTotals,
+} from '../../lib/transactionLib'
 import {
   applyTxDisplayFilters,
   calculateTxTotals,
   fetchContraInbox,
   fetchTxAccounts,
   fetchTxCategories,
+  fetchTxPaymentHistory,
   fetchTxSearch,
   formatTxNumber,
   getRoleClass,
@@ -54,6 +61,12 @@ type AccountSlot = { id: number; label: string; code: string } | null
 
 function toUpperDisplay(s: string | undefined): string {
   return (s || '-').toUpperCase()
+}
+
+function getHistoryRemark(row: TxPaymentHistoryRow): string {
+  const r = row.remark
+  if (r != null && String(r).trim() !== '') return toUpperDisplay(String(r))
+  return toUpperDisplay(row.sms || '-')
 }
 
 function todayDmY(): string {
@@ -167,6 +180,8 @@ export function TransactionMain({ bootstrap }: Props) {
   const w = useTransactionWorkspace(bootstrap)
   const viewerRole = String(bootstrap.userData?.role || '').toLowerCase()
   const canApproveContra = ['manager', 'admin', 'owner'].includes(viewerRole)
+  /** 与 `transaction_classic.php` 一致：全角色显示 Description 列 */
+  const showDescriptionColumn = true
 
   const [categories, setCategories] = useState<string[]>([])
   const [catOpen, setCatOpen] = useState(false)
@@ -212,6 +227,12 @@ export function TransactionMain({ bootstrap }: Props) {
   const [remark, setRemark] = useState('')
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyData, setHistoryData] = useState<TxPaymentHistoryPayload | null>(null)
+  const [historyTitle, setHistoryTitle] = useState('Payment History')
+  const historyAbortRef = useRef<AbortController | null>(null)
 
   const txDateInputRef = useRef<HTMLInputElement>(null)
   const fpTxRef = useRef<SingleFlatpickr | null>(null)
@@ -264,6 +285,23 @@ export function TransactionMain({ bootstrap }: Props) {
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
   }, [contraOpen])
+
+  const closePaymentHistory = useCallback(() => {
+    historyAbortRef.current?.abort()
+    historyAbortRef.current = null
+    setHistoryOpen(false)
+    setHistoryData(null)
+    setHistoryLoading(false)
+  }, [])
+
+  useEffect(() => {
+    if (!historyOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closePaymentHistory()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [historyOpen, closePaymentHistory])
 
   useEffect(() => {
     let alive = true
@@ -417,7 +455,7 @@ export function TransactionMain({ bootstrap }: Props) {
       signal: ac.signal,
     })
     setSearchLoading(false)
-    if (!r.ok) {
+    if (r.ok === false) {
       if (r.error === 'AbortError') return
       setSearchError(r.error)
       setRawSearch(null)
@@ -504,6 +542,120 @@ export function TransactionMain({ bootstrap }: Props) {
       setToast({ type: 'ok', text: `Search completed, found ${displayed} record(s)` })
     }
   }
+
+  const runSearchRef = useRef(runSearch)
+  runSearchRef.current = runSearch
+
+  /** 与 `transaction.js` 一致：币别/公司/日期/分类 变化时自动 search_api；复选框仍由各自 onChange 显式触发，避免重复请求 */
+  const lastStructuralSearchKeyRef = useRef<string>('')
+
+  useEffect(() => {
+    if (!w.companiesReady) return
+    if (w.activeCompanyId == null) return
+    if (w.currencyList.length === 0) return
+    if (!w.showAllCurrencies && w.selectedCurrencies.length === 0) return
+
+    const categoryKey =
+      selectedCategories.length > 0 && !categoryAllSelected
+        ? [...selectedCategories].map((x) => x.toUpperCase()).sort().join(',')
+        : 'ALL'
+
+    const structuralKey = [
+      w.activeCompanyId,
+      w.dateFrom,
+      w.dateTo,
+      w.showAllCurrencies ? 'A' : 'S',
+      [...w.selectedCurrencies].map((x) => x.toUpperCase()).sort().join(','),
+      categoryKey,
+    ].join('|')
+
+    if (lastStructuralSearchKeyRef.current === structuralKey) return
+    lastStructuralSearchKeyRef.current = structuralKey
+
+    void runSearchRef.current({ quiet: true })
+  }, [
+    w.companiesReady,
+    w.activeCompanyId,
+    w.dateFrom,
+    w.dateTo,
+    w.showAllCurrencies,
+    w.selectedCurrencies,
+    w.currencyList.length,
+    selectedCategories,
+    categoryAllSelected,
+  ])
+
+  const openPaymentHistory = useCallback(
+    (row: TxSearchRow) => {
+      const idRaw = row.account_db_id
+      const parsed =
+        typeof idRaw === 'number'
+          ? idRaw
+          : parseInt(String(idRaw ?? '').trim(), 10)
+      const aid = Number.isFinite(parsed) ? parsed : 0
+      const accountCode = String(row.account_id || '').trim()
+      const virtualCompanyCode = accountCode.toUpperCase()
+      const isVirtualCompanyRow =
+        (!aid || aid <= 0) && virtualCompanyCode !== ''
+
+      if ((!aid || aid <= 0) && !isVirtualCompanyRow) {
+        setToast({ type: 'err', text: 'Invalid account for history' })
+        return
+      }
+      if (!w.dateFrom || !w.dateTo) {
+        setToast({ type: 'err', text: 'Please search first to set date range' })
+        return
+      }
+      if (w.activeCompanyId == null) {
+        setToast({ type: 'err', text: 'No company selected' })
+        return
+      }
+
+      historyAbortRef.current?.abort()
+      const ac = new AbortController()
+      historyAbortRef.current = ac
+
+      const dateFromDmY = ymdToDmY(w.dateFrom)
+      const dateToDmY = ymdToDmY(w.dateTo)
+      const rowCur = String(row.currency || '').trim()
+      const selectedCsv =
+        w.selectedCurrencies.length > 0 ? w.selectedCurrencies.join(',') : ''
+
+      setHistoryOpen(true)
+      setHistoryLoading(true)
+      setHistoryData(null)
+      setHistoryTitle(
+        `Payment History - ${row.account_id} (${toUpperDisplay(row.account_name)})`,
+      )
+
+      void (async () => {
+        const r = await fetchTxPaymentHistory({
+          accountId: aid,
+          virtualCompanyCode: isVirtualCompanyRow ? virtualCompanyCode : undefined,
+          dateFromDmY,
+          dateToDmY,
+          rowCurrency: rowCur || null,
+          selectedCurrenciesCsv: rowCur ? null : selectedCsv || null,
+          companyId: w.activeCompanyId!,
+          signal: ac.signal,
+        })
+        if (ac.signal.aborted) return
+        setHistoryLoading(false)
+        if (r.ok === false) {
+          if (r.error === 'AbortError') return
+          setHistoryOpen(false)
+          setToast({ type: 'err', text: r.error })
+          return
+        }
+        setHistoryData(r.data)
+        const acc = r.data.account
+        const titleCode = acc?.account_id ?? row.account_id
+        const titleName = acc?.name ?? row.account_name ?? ''
+        setHistoryTitle(`Payment History - ${titleCode} (${titleName})`)
+      })()
+    },
+    [w.activeCompanyId, w.dateFrom, w.dateTo, w.selectedCurrencies],
+  )
 
   const onBalanceCellClick = (row: TxSearchRow, isLeftTable: boolean) => {
     if (txType === 'RATE') return
@@ -654,7 +806,7 @@ export function TransactionMain({ bootstrap }: Props) {
       currency: formCurrency,
     })
     setSubmitting(false)
-    if (!res.ok) {
+    if (res.ok === false) {
       setToast({ type: 'err', text: res.error })
       return
     }
@@ -1335,6 +1487,7 @@ export function TransactionMain({ bootstrap }: Props) {
                           <td
                             className={rc ? `transaction-account-cell ${rc}` : 'transaction-account-cell'}
                             style={{ cursor: 'pointer' }}
+                            onClick={() => openPaymentHistory(row)}
                           >
                             {row.account_id}
                           </td>
@@ -1402,6 +1555,7 @@ export function TransactionMain({ bootstrap }: Props) {
                           <td
                             className={rc ? `transaction-account-cell ${rc}` : 'transaction-account-cell'}
                             style={{ cursor: 'pointer' }}
+                            onClick={() => openPaymentHistory(row)}
                           >
                             {row.account_id}
                           </td>
@@ -1470,7 +1624,13 @@ export function TransactionMain({ bootstrap }: Props) {
                       <tbody>
                         {g.left.map((row) => (
                           <tr key={`${row.account_db_id}_${g.currency}`} className="transaction-table-row">
-                            <td className="transaction-account-cell">{row.account_id}</td>
+                            <td
+                              className="transaction-account-cell"
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => openPaymentHistory(row)}
+                            >
+                              {row.account_id}
+                            </td>
                             <td
                               className="transaction-name-column"
                               style={{ display: showName ? '' : 'none' }}
@@ -1525,7 +1685,13 @@ export function TransactionMain({ bootstrap }: Props) {
                       <tbody>
                         {g.right.map((row) => (
                           <tr key={`${row.account_db_id}_${g.currency}`} className="transaction-table-row">
-                            <td className="transaction-account-cell">{row.account_id}</td>
+                            <td
+                              className="transaction-account-cell"
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => openPaymentHistory(row)}
+                            >
+                              {row.account_id}
+                            </td>
                             <td
                               className="transaction-name-column"
                               style={{ display: showName ? '' : 'none' }}
@@ -1630,6 +1796,135 @@ export function TransactionMain({ bootstrap }: Props) {
           {searchError}
         </p>
       )}
+    </div>
+
+    <div
+      id="historyModal"
+      className="transaction-modal"
+      style={{ display: historyOpen ? 'flex' : 'none' }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal_title"
+    >
+      <div className="transaction-modal-content">
+        <div className="transaction-modal-header">
+          <h3 id="modal_title">{historyTitle}</h3>
+          <button
+            type="button"
+            id="modal_close"
+            className="transaction-modal-close"
+            onClick={closePaymentHistory}
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+        <div className="transaction-modal-body">
+          <div className="transaction-history-table-frame">
+            <table className="transaction-table">
+              <thead>
+                <tr className="transaction-table-header">
+                  <th className="transaction-history-col-date">Date</th>
+                  <th className="transaction-history-col-product">Id Product</th>
+                  <th className="transaction-history-col-currency">Currency</th>
+                  <th className="transaction-history-col-rate">Rate</th>
+                  <th className="transaction-history-col-winloss">Win/Loss</th>
+                  <th className="transaction-history-col-crdr">Cr/Dr</th>
+                  <th className="transaction-history-col-balance">Balance</th>
+                  {showDescriptionColumn ? (
+                    <>
+                      <th className="transaction-history-col-description">Description</th>
+                      <th className="transaction-history-col-remark">Remark</th>
+                    </>
+                  ) : (
+                    <th className="transaction-history-col-remark">Remark</th>
+                  )}
+                  <th className="transaction-history-col-created">Created by</th>
+                </tr>
+              </thead>
+              <tbody id="modal_tbody">
+                {historyLoading && (
+                  <tr className="transaction-table-row">
+                    <td
+                      colSpan={showDescriptionColumn ? 10 : 9}
+                      style={{ padding: '16px', color: '#6b7280' }}
+                    >
+                      Loading…
+                    </td>
+                  </tr>
+                )}
+                {!historyLoading &&
+                  historyData?.history.map((hRow, hi) => {
+                    const isBf = hRow.row_type === 'bf'
+                    const winLoss =
+                      hRow.win_loss === '-' ? '-' : formatTxNumber(hRow.win_loss)
+                    const crDr = hRow.cr_dr === '-' ? '-' : formatTxNumber(hRow.cr_dr)
+                    const balance =
+                      hRow.balance === '-' ? '-' : formatTxNumber(hRow.balance)
+                    const remarkValue = getHistoryRemark(hRow)
+                    const descriptionDisplay = toUpperDisplay(hRow.description)
+                    const idProductDisplay = hRow.is_bank_process_transaction
+                      ? hRow.card_owner || '-'
+                      : hRow.product || '-'
+                    const createdRaw = hRow.created_by
+                    const createdByDisplay =
+                      createdRaw == null ||
+                      String(createdRaw).trim() === '' ||
+                      String(createdRaw).toLowerCase() === 'null'
+                        ? '-'
+                        : String(createdRaw)
+                    return (
+                      <tr
+                        key={`${hRow.row_type}_${hRow.date}_${hi}`}
+                        className={
+                          isBf
+                            ? 'transaction-bf-row transaction-table-row'
+                            : 'transaction-table-row'
+                        }
+                        style={
+                          isBf
+                            ? { fontWeight: 'bold', backgroundColor: '#f0f0f0' }
+                            : undefined
+                        }
+                      >
+                        <td className="transaction-history-col-date">{hRow.date}</td>
+                        <td className="transaction-history-col-product">
+                          {idProductDisplay}
+                        </td>
+                        <td className="transaction-history-col-currency">
+                          {hRow.currency || '-'}
+                        </td>
+                        <td className="transaction-history-col-rate">
+                          {hRow.rate ?? '-'}
+                        </td>
+                        <td className="transaction-history-col-winloss">{winLoss}</td>
+                        <td className="transaction-history-col-crdr">{crDr}</td>
+                        <td className="transaction-history-col-balance">{balance}</td>
+                        {showDescriptionColumn ? (
+                          <>
+                            <td className="transaction-history-col-description text-uppercase">
+                              {descriptionDisplay}
+                            </td>
+                            <td className="transaction-history-col-remark text-uppercase">
+                              {remarkValue}
+                            </td>
+                          </>
+                        ) : (
+                          <td className="transaction-history-col-remark text-uppercase">
+                            {remarkValue}
+                          </td>
+                        )}
+                        <td className="transaction-history-col-created">
+                          {createdByDisplay}
+                        </td>
+                      </tr>
+                    )
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
     </div>
   )
