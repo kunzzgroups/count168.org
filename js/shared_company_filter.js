@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', function () {
+function initSharedCompanyFilter() {
     // 确保这段逻辑哪怕文件被多次引入也能正常运行且不重复绑定
     if (window._sharedCompanyFilterInitialized) return;
     window._sharedCompanyFilterInitialized = true;
@@ -102,4 +102,9 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
     }
-});
+}
+
+document.addEventListener('DOMContentLoaded', initSharedCompanyFilter);
+if (document.readyState !== 'loading') {
+    initSharedCompanyFilter();
+}

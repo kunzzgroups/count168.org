@@ -12,3 +12,12 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+interface Window {
+  /** 与 `client/src/lib/api.ts` 的 `VITE_API_BASE` 一致，供 `datacapture.js` 的 `buildApiUrl` 使用 */
+  __C168_API_BASE__?: string
+  DATACAPTURE_COMPANY_ID?: number | null
+  DATACAPTURE_COMPANY_CODE?: string
+  runDataCapturePageInit?: () => void | Promise<void>
+  refreshDataCapturePageData?: () => void | Promise<void>
+}

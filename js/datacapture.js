@@ -3,12 +3,17 @@ let startCell = null;
 let selectedCells = new Set();
 let mouseUpBound = false;
 
-// 构造 API 绝对 URL（与 processlist.js 一致，避免 404）
+// 构造 API URL（与 React `apiUrl` 对齐；可注入 `window.__C168_API_BASE__`，空字符串表示站点根下的 `/api/...`）
 function buildApiUrl(pathAndQuery) {
+    const p = pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery;
+    if (typeof window.__C168_API_BASE__ !== 'undefined') {
+        const b = String(window.__C168_API_BASE__ || '').replace(/\/$/, '');
+        return b + p;
+    }
     const pathname = window.location.pathname || '/';
     const basePath = pathname.replace(/[^/]*$/, '') || '/';
     const base = window.location.origin + basePath;
-    return new URL(pathAndQuery, base).href;
+    return new URL(p.replace(/^\//, ''), base).href;
 }
 
 function redirectToDashboardIfUnauthorizedCategory(errorMessage) {
@@ -2455,7 +2460,7 @@ async function loadProcessData(processId) {
         if (!currencySelect || currencySelect.options.length <= 1) {
             // If dropdown is not loaded yet, only load currency data, do not reload processes
             try {
-                const formDataResponse = await fetch('api/processes/addprocess_api.php');
+                const formDataResponse = await fetch(buildApiUrl('api/processes/addprocess_api.php'));
                 const formDataResult = await formDataResponse.json();
                 if (formDataResult.success && formDataResult.currencies) {
                     currencySelect.innerHTML = '<option value="">Select Currency</option>';
@@ -2473,8 +2478,8 @@ async function loadProcessData(processId) {
 
         // Add currently selected company_id
         const currentCompanyId = (typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' ? window.DATACAPTURE_COMPANY_ID : null);
-        const url = `api/processes/processlist_api.php?action=get_process&id=${processId}`;
-        const finalUrl = currentCompanyId ? `${url}&company_id=${currentCompanyId}` : url;
+        const url = buildApiUrl(`api/processes/processlist_api.php?action=get_process&id=${processId}`);
+        const finalUrl = currentCompanyId ? `${url}${url.includes('?') ? '&' : '?'}company_id=${currentCompanyId}` : url;
 
         const response = await fetch(finalUrl);
         console.log('API Response status:', response.status);
@@ -2682,7 +2687,7 @@ async function loadFormData() {
 
         // Add currently selected company_id
         const currentCompanyId = (typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' ? window.DATACAPTURE_COMPANY_ID : null);
-        const url = 'api/processes/addprocess_api.php';
+        const url = buildApiUrl('api/processes/addprocess_api.php');
         const finalUrl = currentCompanyId ? `${url}?company_id=${currentCompanyId}` : url;
 
         const response = await fetch(finalUrl);
@@ -2841,7 +2846,7 @@ async function loadExistingDescriptions() {
     try {
         // Add currently selected company_id
         const currentCompanyId = (typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' ? window.DATACAPTURE_COMPANY_ID : null);
-        const url = 'api/processes/addprocess_api.php';
+        const url = buildApiUrl('api/processes/addprocess_api.php');
         const finalUrl = currentCompanyId ? `${url}?company_id=${currentCompanyId}` : url;
 
         const response = await fetch(finalUrl);
@@ -3077,7 +3082,7 @@ async function deleteDescription(descriptionId, descriptionName, itemElement) {
         formData.append('action', 'delete_description');
         formData.append('description_id', descriptionId);
 
-        const response = await fetch('api/processes/addprocess_api.php', {
+        const response = await fetch(buildApiUrl('api/processes/addprocess_api.php'), {
             method: 'POST',
             body: formData
         });
@@ -22050,8 +22055,8 @@ function removeDescription(index) {
     }
 }
 
-// Handle add description form submission
-document.getElementById('addDescriptionForm').addEventListener('submit', async function (e) {
+// Handle add description form submission（在 runDataCapturePageInit 内绑定，便于 React 路由重挂载）
+async function handleAddDescriptionFormSubmit(e) {
     e.preventDefault();
 
     const descriptionName = document.getElementById('new_description_name').value.trim();
@@ -22071,7 +22076,7 @@ document.getElementById('addDescriptionForm').addEventListener('submit', async f
             formData.append('company_id', currentCompanyId);
         }
 
-        const response = await fetch('api/processes/addprocess_api.php', {
+        const response = await fetch(buildApiUrl('api/processes/addprocess_api.php'), {
             method: 'POST',
             body: formData
         });
@@ -22113,7 +22118,7 @@ document.getElementById('addDescriptionForm').addEventListener('submit', async f
         console.error('Error adding description:', error);
         showNotification('Failed to add description', 'danger');
     }
-});
+}
 
 // 2.Format：是否已经成功解析并填充到网格表
 let isFormatGridReady = false;
@@ -24477,8 +24482,17 @@ async function restoreFromLocalStorage() {
     }
 }
 
-// Initialize page
-document.addEventListener('DOMContentLoaded', async function () {
+// Initialize page（支持 React 晚载入脚本；同一表单仅初始化一次）
+async function runDataCapturePageInit() {
+    const form = document.getElementById('dataCaptureForm');
+    if (!form || form.dataset.dcInitialized === '1') {
+        return;
+    }
+    const addDescForm = document.getElementById('addDescriptionForm');
+    if (addDescForm && addDescForm.dataset.dcSubmitBound !== '1') {
+        addDescForm.dataset.dcSubmitBound = '1';
+        addDescForm.addEventListener('submit', handleAddDescriptionFormSubmit);
+    }
     // 加载权限按钮
     await loadPermissionButtons();
     // Mark page as ready after a brief delay to ensure CSS is loaded
@@ -24590,7 +24604,13 @@ document.addEventListener('DOMContentLoaded', async function () {
         // Restore data from localStorage
         await restoreFromLocalStorage();
     }
-});
+    form.dataset.dcInitialized = '1';
+}
+document.addEventListener('DOMContentLoaded', function () { void runDataCapturePageInit(); });
+if (document.readyState !== 'loading') {
+    void runDataCapturePageInit();
+}
+window.runDataCapturePageInit = runDataCapturePageInit;
 
 // 切换 data capture 的 company
 // 当前选择的权限
@@ -24607,7 +24627,7 @@ async function loadPermissionButtons() {
     }
 
     try {
-        const response = await fetch('api/domain/domain_api.php', {
+        const response = await fetch(buildApiUrl('api/domain/domain_api.php'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -24682,10 +24702,39 @@ function switchPermission(permission) {
     }
 }
 
+async function refreshDataCapturePageData() {
+    await loadPermissionButtons();
+    await loadFormData();
+    await loadSubmittedProcesses();
+    if (typeof initializeTable === 'function') {
+        initializeTable(26, 20);
+    }
+    const processInput = document.getElementById('capture_process');
+    if (processInput) {
+        processInput.textContent = processInput.getAttribute('data-placeholder') || 'Select Process';
+        processInput.removeAttribute('data-value');
+        processInput.removeAttribute('data-process-code');
+        processInput.removeAttribute('data-description-name');
+    }
+    if (typeof clearProcessData === 'function') {
+        clearProcessData();
+    }
+    setTimeout(function () {
+        if (typeof updateSubmitButtonState === 'function') {
+            updateSubmitButtonState();
+        }
+    }, 500);
+}
+window.refreshDataCapturePageData = refreshDataCapturePageData;
+
 async function switchDataCaptureCompany(companyId) {
+    if (companyId == null || companyId === '') {
+        return;
+    }
+    const idStr = String(companyId);
     // 先更新 session
     try {
-        const response = await fetch(`api/session/update_company_session_api.php?company_id=${companyId}`);
+        const response = await fetch(buildApiUrl(`api/session/update_company_session_api.php?company_id=${encodeURIComponent(idStr)}`));
         const result = await response.json();
         if (!result.success) {
             console.error('更新 session 失败:', result.error);
@@ -24696,8 +24745,21 @@ async function switchDataCaptureCompany(companyId) {
         // 即使 API 失败，也继续刷新页面（PHP 端会处理）
     }
 
+    const spaEmbed = document.body.classList.contains('datacapture-spa-embed');
+    if (spaEmbed) {
+        const btn = document.querySelector('.shared-company-btn[data-company-id="' + idStr.replace(/"/g, '\\"') + '"]');
+        const code = btn ? (btn.getAttribute('data-company-code') || '') : (window.DATACAPTURE_COMPANY_CODE || '');
+        window.DATACAPTURE_COMPANY_ID = parseInt(idStr, 10);
+        window.DATACAPTURE_COMPANY_CODE = code;
+        if (typeof refreshDataCapturePageData === 'function') {
+            await refreshDataCapturePageData();
+        }
+        window.dispatchEvent(new Event('c168:company-session-updated'));
+        return;
+    }
+
     const url = new URL(window.location.href);
-    url.searchParams.set('company_id', companyId);
+    url.searchParams.set('company_id', idStr);
     window.location.href = url.toString();
 }
 

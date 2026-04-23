@@ -126,9 +126,15 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
       )}
 
       {canNavItem(permissions, 'datacapture', ext) && companyHasGambling && (
-        <a className="dNav__item" href={phref('datacapture.php')} onClick={go}>
+        <NavLink
+          to="/datacapture"
+          className={({ isActive }) =>
+            isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
+          }
+          onClick={go}
+        >
           <span>Data Capture</span>
-        </a>
+        </NavLink>
       )}
 
       {canNavItem(permissions, 'payment', ext) && (
