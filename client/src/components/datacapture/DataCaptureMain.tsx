@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import { apiUrl } from '../../lib/api'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
+import { DataCaptureDateProcessFields } from './DataCaptureDateProcessFields'
 import '../../../../css/datacapture.css'
 import '../../../../css/global-13inch.css'
 import './DataCaptureMain.css'
@@ -40,6 +41,12 @@ function ensureDatacaptureScript(): Promise<void> {
  */
 export function DataCaptureMain({ bootstrap }: Props) {
   const w = useTransactionWorkspace(bootstrap)
+  const [dcPageReady, setDcPageReady] = useState(false)
+  /** `restore=1` 时由 legacy 写日期/工序，避免与受控组件冲突 */
+  const useReactDateProcessFields = useMemo(
+    () => new URLSearchParams(window.location.search).get('restore') !== '1',
+    [],
+  )
 
   const activeRef = useRef(w.activeCompanyId)
   const companiesRef = useRef(w.companies)
@@ -48,6 +55,19 @@ export function DataCaptureMain({ bootstrap }: Props) {
     activeRef.current = w.activeCompanyId
     companiesRef.current = w.companies
   })
+
+  useLayoutEffect(() => {
+    if (useReactDateProcessFields) {
+      window.__DC_REACT_DATE_PROCESS__ = true
+    } else {
+      delete window.__DC_REACT_DATE_PROCESS__
+    }
+    return () => {
+      if (useReactDateProcessFields) {
+        delete window.__DC_REACT_DATE_PROCESS__
+      }
+    }
+  }, [useReactDateProcessFields])
 
   useLayoutEffect(() => {
     document.body.classList.add('datacapture-spa-embed')
@@ -90,11 +110,16 @@ export function DataCaptureMain({ bootstrap }: Props) {
     if (!w.companiesReady || w.loadCompaniesError) return
     if (w.activeCompanyId == null) return
 
+    setDcPageReady(false)
     let alive = true
     void ensureDatacaptureScript()
       .then(() => {
         if (!alive) return
         return window.runDataCapturePageInit?.()
+      })
+      .then(() => {
+        if (!alive) return
+        setDcPageReady(true)
       })
       .catch((err) => {
         console.error(err)
@@ -222,33 +247,41 @@ export function DataCaptureMain({ bootstrap }: Props) {
                   </div>
                 )}
 
-                <div className="form-group">
-                  <label htmlFor="capture_date">Date</label>
-                  <select id="capture_date" name="capture_date" required defaultValue="">
-                    <option value="">Select Date</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label htmlFor="capture_process">Process</label>
-                  <div className="custom-select-wrapper">
-                    <button
-                      type="button"
-                      className="custom-select-button"
-                      id="capture_process"
-                      data-placeholder="Select Process"
-                      name="process"
-                    >
-                      Select Process
-                    </button>
-                    <div className="custom-select-dropdown" id="capture_process_dropdown">
-                      <div className="custom-select-search">
-                        <input type="text" placeholder="Search process..." autoComplete="off" />
-                      </div>
-                      <div className="custom-select-options" />
+                {useReactDateProcessFields ? (
+                  <DataCaptureDateProcessFields
+                    companyId={w.activeCompanyId}
+                    legacyPageReady={dcPageReady}
+                  />
+                ) : (
+                  <>
+                    <div className="form-group">
+                      <label htmlFor="capture_date">Date</label>
+                      <select id="capture_date" name="capture_date" required defaultValue="">
+                        <option value="">Select Date</option>
+                      </select>
                     </div>
-                  </div>
-                </div>
+                    <div className="form-group">
+                      <label htmlFor="capture_process">Process</label>
+                      <div className="custom-select-wrapper">
+                        <button
+                          type="button"
+                          className="custom-select-button"
+                          id="capture_process"
+                          data-placeholder="Select Process"
+                          name="process"
+                        >
+                          Select Process
+                        </button>
+                        <div className="custom-select-dropdown" id="capture_process_dropdown">
+                          <div className="custom-select-search">
+                            <input type="text" placeholder="Search process..." autoComplete="off" />
+                          </div>
+                          <div className="custom-select-options" />
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div className="form-group">
                   <label htmlFor="capture_description">Description</label>

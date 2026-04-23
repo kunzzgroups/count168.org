@@ -158,6 +158,12 @@ $__eazyPrefix = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), 
 $eazycountSpaDashboard = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
     ? '/dashboard'
     : $__eazyPrefix . '/dashboard';
+$eazycountSpaTransaction = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
+    ? '/transaction'
+    : $__eazyPrefix . '/transaction';
+$eazycountSpaDatacapture = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
+    ? '/datacapture'
+    : $__eazyPrefix . '/datacapture';
 ?>
 <!--
 ================================================================================
@@ -170,7 +176,7 @@ $eazycountSpaDashboard = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__ea
     <link rel="preload" href="(当前用户头像 URL)" as="image">
 ================================================================================
 -->
-<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;</script>
+<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;</script>
 <!-- Sidebar HTML (CSS 已移至 css/sidebar.css，JS 逻辑已移至 js/sidebar.js) -->
 <!-- Overlay -->
 <div class="informationmenu-overlay"></div>
@@ -427,7 +433,7 @@ $eazycountSpaDashboard = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__ea
             <?php if (empty($permissions) || in_array('datacapture', $permissions)): ?>
                 <div class="informationmenu-section" id="sidebar-datacapture-section" <?php echo $companyHasGambling ? '' : ' style="display:none;"'; ?>>
                     <div class="informationmenu-section-title" data-page="datacapture.php"
-                        onclick="window.location.href='datacapture.php'">
+                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_DATACAPTURE==='string'&&w.EAZYCOUNT_SPA_DATACAPTURE)?w.EAZYCOUNT_SPA_DATACAPTURE:'datacapture.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path
                                 d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
@@ -441,7 +447,7 @@ $eazycountSpaDashboard = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__ea
             <?php if (empty($permissions) || in_array('payment', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title" data-page="transaction.php"
-                        onclick="window.location.href='transaction.php'">
+                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_TRANSACTION==='string'&&w.EAZYCOUNT_SPA_TRANSACTION)?w.EAZYCOUNT_SPA_TRANSACTION:'transaction.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path
                                 d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />

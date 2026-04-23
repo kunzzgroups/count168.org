@@ -55,8 +55,13 @@ $company_id = $_SESSION['company_id'] ?? null;
                 localStorage.removeItem('capturedTableFormulaSourceForRefresh');
                 localStorage.removeItem('capturedCaptureId');
             } catch (e) {}
-            // 不带 restore 参数，Data Capture 不会尝试恢复旧数据
-            window.location.href = 'datacapture.php';
+            // 不带 restore 参数，Data Capture 不会尝试恢复旧数据（与 sidebar Home 一致：优先 SPA 路径，iframe 内跳 top）
+            var dcSpa = (typeof window.EAZYCOUNT_SPA_DATACAPTURE === 'string' && window.EAZYCOUNT_SPA_DATACAPTURE) ? window.EAZYCOUNT_SPA_DATACAPTURE : 'datacapture.php';
+            if (window.top !== window.self) {
+                window.top.location.assign(dcSpa);
+            } else {
+                window.location.href = dcSpa;
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function () {
