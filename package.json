@@ -1,0 +1,8 @@
+{
+  "name": "count168.org",
+  "private": true,
+  "description": "在仓库根执行 npm run build:web，会把 React 构建同步到与 index.php 同级的根目录。",
+  "scripts": {
+    "build:web": "npm --prefix client run build:site"
+  }
+}
