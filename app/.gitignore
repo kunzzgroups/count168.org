@@ -1,0 +1,4 @@
+# Legacy: SPA 发布改为根目录 `npm run build:site`。此目录可删。
+*
+!.gitignore
+!.htaccess

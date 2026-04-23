@@ -17,6 +17,8 @@ if (isset($_SESSION['secondary_password_verified']) && $_SESSION['secondary_pass
 
 $error_message = '';
 
+$api_token = trim((string) ($_GET['api_token'] ?? $_POST['api_token'] ?? ''));
+
 // 处理表单提交
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $secondary_password = trim($_POST['secondary_password'] ?? '');
@@ -38,6 +40,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (password_verify($secondary_password, $owner['secondary_password'])) {
                     // 二级密码验证成功
                     $_SESSION['secondary_password_verified'] = true;
+                    $posted_token = trim((string) ($_POST['api_token'] ?? ''));
+                    if ($posted_token !== '' && strlen($posted_token) === 64 && ctype_xdigit($posted_token)) {
+                        require_once __DIR__ . '/includes/api_auth_token.php';
+                        api_auth_merge_token_session($pdo, $posted_token, [
+                            'secondary_password_verified' => true,
+                        ]);
+                    }
                     header("Location: dashboard.php");
                     exit();
                 } else {
@@ -46,6 +55,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 // owner没有设置二级密码（不应该发生，但如果发生，允许通过）
                 $_SESSION['secondary_password_verified'] = true;
+                $posted_token = trim((string) ($_POST['api_token'] ?? ''));
+                if ($posted_token !== '' && strlen($posted_token) === 64 && ctype_xdigit($posted_token)) {
+                    require_once __DIR__ . '/includes/api_auth_token.php';
+                    api_auth_merge_token_session($pdo, $posted_token, [
+                        'secondary_password_verified' => true,
+                    ]);
+                }
                 header("Location: dashboard.php");
                 exit();
             }
@@ -54,6 +70,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error_message = 'An error occurred. Please try again.';
         }
     }
+}
+
+// 浏览器 GET 访问旧 URL 时进入 React 页（POST 仍走上方逻辑 / 下方 HTML 兼容）
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && $error_message === '') {
+    $t = $api_token;
+    $qs = ($t !== '' && strlen($t) === 64 && ctype_xdigit($t))
+        ? ('?api_token=' . rawurlencode($t))
+        : '';
+    header('Location: /owner-secondary-password' . $qs, true, 302);
+    exit;
 }
 ?>
 
@@ -76,6 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <p style="text-align: center; margin-bottom: 30px; color: #64748b; font-size: 14px;">Please enter your 6-digit secondary password to continue</p>
                 
                 <form class="login-form" id="secondaryPasswordForm" method="POST">
+                    <?php if ($api_token !== '' && strlen($api_token) === 64 && ctype_xdigit($api_token)): ?>
+                        <input type="hidden" name="api_token" value="<?php echo htmlspecialchars($api_token, ENT_QUOTES, 'UTF-8'); ?>" />
+                    <?php endif; ?>
                     <div class="input-group">
                         <i class="fas fa-lock input-icon"></i>
                         <input type="password" 

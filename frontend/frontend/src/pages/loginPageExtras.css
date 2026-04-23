@@ -1,0 +1,8 @@
+/* Matches js/index.js focus scale without querying the DOM */
+.input-group {
+  transition: transform 0.2s ease;
+}
+
+.input-group:focus-within {
+  transform: scale(1.02);
+}

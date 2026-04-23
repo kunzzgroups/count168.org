@@ -8,6 +8,8 @@ session_start();
 // session_write_close() 将在每个 session 写入点之后单独调用
 require_once __DIR__ . '/../../config.php';
 
+$api_token = trim((string) ($_GET['api_token'] ?? $_POST['api_token'] ?? ''));
+
 // 根路径（用于重定向，适配子目录部署）
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'], 2), '/');
 
@@ -65,6 +67,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($user && !empty($user['secondary_password'])) {
                 if (password_verify($secondary_password, $user['secondary_password'])) {
                     $_SESSION['secondary_password_verified'] = true;
+                    $posted_token = trim((string) ($_POST['api_token'] ?? ''));
+                    if ($posted_token !== '' && strlen($posted_token) === 64 && ctype_xdigit($posted_token)) {
+                        require_once __DIR__ . '/../../includes/api_auth_token.php';
+                        api_auth_merge_token_session($pdo, $posted_token, [
+                            'secondary_password_verified' => true,
+                        ]);
+                    }
                     session_write_close(); // 写入完成即释放 session 锁
                     header("Location: {$basePath}/dashboard.php");
                     exit();
@@ -72,6 +81,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error_message = 'Secondary password is incorrect';
             } else {
                 $_SESSION['secondary_password_verified'] = true;
+                $posted_token = trim((string) ($_POST['api_token'] ?? ''));
+                if ($posted_token !== '' && strlen($posted_token) === 64 && ctype_xdigit($posted_token)) {
+                    require_once __DIR__ . '/../../includes/api_auth_token.php';
+                    api_auth_merge_token_session($pdo, $posted_token, [
+                        'secondary_password_verified' => true,
+                    ]);
+                }
                 session_write_close(); // 写入完成即释放 session 锁
                 header("Location: {$basePath}/dashboard.php");
                 exit();
@@ -108,6 +124,9 @@ function dbGetUserSecondaryPassword($pdo, $user_id) {
                 <p style="text-align: center; margin-bottom: 30px; color: #64748b; font-size: 14px;">Please enter your 6-digit secondary password to continue</p>
                 
                 <form class="login-form" id="secondaryPasswordForm" method="POST">
+                    <?php if ($api_token !== '' && strlen($api_token) === 64 && ctype_xdigit($api_token)): ?>
+                        <input type="hidden" name="api_token" value="<?php echo htmlspecialchars($api_token, ENT_QUOTES, 'UTF-8'); ?>" />
+                    <?php endif; ?>
                     <div class="input-group">
                         <i class="fas fa-lock input-icon"></i>
                         <input type="password" 
