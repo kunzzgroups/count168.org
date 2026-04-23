@@ -9,3 +9,16 @@ export const http = axios.create({
   },
   withCredentials: true,
 })
+
+http.interceptors.request.use((config) => {
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type']
+  }
+  return config
+})
+
+/** Same-origin PHP scripts at site root (e.g. login). Sends cookies for session. */
+export const siteHttp = axios.create({
+  withCredentials: true,
+  headers: { Accept: 'application/json' },
+})
