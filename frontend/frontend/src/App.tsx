@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import { RequireAuth } from '@/components/RequireAuth'
 import { RootLayout } from '@/layouts/RootLayout'
 import { HomePage } from '@/pages/HomePage'
 import { LoginPage } from '@/pages/LoginPage'
@@ -11,15 +12,17 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
-      <Route element={<RootLayout />}>
-        <Route path="/home" element={<HomePage />} />
-        <Route path="/stock" element={<StockPage />} />
-        <Route path="/capture-maintenance" element={<CaptureMaintenancePage />} />
-        <Route
-          path="/datacapture-summary"
-          element={<DataCaptureSummaryPage />}
-        />
-        <Route path="*" element={<NotFoundPage />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<RootLayout />}>
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/stock" element={<StockPage />} />
+          <Route path="/capture-maintenance" element={<CaptureMaintenancePage />} />
+          <Route
+            path="/datacapture-summary"
+            element={<DataCaptureSummaryPage />}
+          />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
       </Route>
     </Routes>
   )

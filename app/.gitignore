@@ -1,0 +1,4 @@
+# Populated by: cd frontend/frontend && npm run build:app
+*
+!.gitignore
+!.htaccess

@@ -32,6 +32,22 @@ require_once 'config.php';
 // 统一的超时时间（秒）- 1小时
 define('SESSION_TIMEOUT', 3600);
 
+require_once __DIR__ . '/includes/api_auth_token.php';
+api_auth_inject_query_token_as_bearer_if_needed();
+$bearerStatus = api_auth_try_load_bearer($pdo);
+if ($bearerStatus === 'invalid' && api_auth_bearer_header_present()) {
+    if (!headers_sent()) {
+        header('Content-Type: application/json');
+    }
+    http_response_code(401);
+    echo json_encode([
+        'status' => 'error',
+        'message' => 'Invalid or expired token.',
+        'redirect' => 'index.php',
+    ]);
+    exit();
+}
+
 // 检查remember me cookie自动登录
 if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
     $remember_token = $_COOKIE['remember_token'];
@@ -246,6 +262,10 @@ if (isset($_SESSION['user_id'])) {
 //       则在 require session_check.php 之前定义常量 SESSION_KEEP_OPEN，
 //       然后在该文件内写完 session 后自己负责调用 session_write_close()。
 // ─────────────────────────────────────────────────────────────────────────────
+if (!empty($GLOBALS['__api_auth_token_plain'])) {
+    api_auth_persist_current_session($pdo);
+}
+
 if (!defined('SESSION_KEEP_OPEN')) {
     session_write_close();
 }

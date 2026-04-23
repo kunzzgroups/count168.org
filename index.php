@@ -140,6 +140,10 @@ if (isset($_COOKIE['remember_token'])) {
                 </form>
             </div>
         </div>
+
+        <p class="spa-login-hint" style="text-align:center;margin-top:1.25rem;font-size:0.9rem;opacity:0.85;">
+            <a href="/app/">New login (React)</a>
+        </p>
     </div>
 
     <!-- Telegram 图片 - 固定在右下角 -->

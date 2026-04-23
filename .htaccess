@@ -1,3 +1,10 @@
+# Pass Authorization header to PHP (Bearer tokens for API auth)
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+</IfModule>
+
 # PHP Configuration for Large Data Submission
 # 这些配置允许提交大量数据，解决 post_max_size 限制问题
 

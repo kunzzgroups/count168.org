@@ -5,9 +5,13 @@ import './index.css'
 import './styles/globals.css'
 import App from './App.tsx'
 
+const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '')
+const basenameProp =
+  routerBasename === '' || routerBasename === '/' ? undefined : routerBasename
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={basenameProp}>
       <App />
     </BrowserRouter>
   </StrictMode>,

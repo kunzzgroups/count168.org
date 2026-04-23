@@ -1,5 +1,7 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { AUTH_TOKEN_STORAGE_KEY } from '@/config/auth'
+import { phpPagePath } from '@/lib/phpOrigin'
 import { http, siteHttp } from '@/services/http'
 import '../../../../css/style.css'
 import '../../../../css/index.css'
@@ -18,10 +20,36 @@ type MaintenanceApiResponse = {
   data: MaintenanceRow[] | null
 }
 
-type LoginProcessResponse = {
-  status: 'success' | 'error'
-  message?: string
-  redirect?: string
+type LoginUserPayload = {
+  userId: number
+  userType: string
+  loginId: string
+  name: string
+  role: string
+  companyId: number | null
+  companyCode: string | null
+  accountId: string | null
+  readOnly: number | null
+}
+
+type LoginProcessResponse =
+  | {
+      status: 'success'
+      token: string
+      user: LoginUserPayload
+      redirect?: string
+    }
+  | {
+      status: 'error'
+      message?: string
+      redirect?: string
+    }
+
+function loginRedirectWithApiToken(redirectPath: string, token: string): string {
+  const path = redirectPath.startsWith('/') ? redirectPath : `/${redirectPath}`
+  const url = phpPagePath(path)
+  const sep = url.includes('?') ? '&' : '?'
+  return `${url}${sep}api_token=${encodeURIComponent(token)}`
 }
 
 type VerifyCompanyResponse = {
@@ -30,6 +58,7 @@ type VerifyCompanyResponse = {
 }
 
 export function LoginPage() {
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const roleFromUrl = searchParams.get('role') === 'member' ? 'member' : 'admin'
 
@@ -52,6 +81,13 @@ export function LoginPage() {
     document.body.classList.add('bg')
     return () => document.body.classList.remove('bg')
   }, [])
+
+  /** Already logged in (token from earlier session in this browser). */
+  useEffect(() => {
+    if (localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)) {
+      navigate('/home', { replace: true })
+    }
+  }, [navigate])
 
   useEffect(() => {
     setLoginRole(roleFromUrl)
@@ -145,11 +181,27 @@ export function LoginPage() {
     }
 
     try {
-      const { data } = await siteHttp.post<LoginProcessResponse>('/login_process.php', fd)
-      if (data.status === 'success' && data.redirect) {
-        window.location.href = data.redirect
+      const { data } = await siteHttp.post<LoginProcessResponse>(phpPagePath('/login.php'), fd)
+      if (data.status === 'success' && 'token' in data && data.token) {
+        localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, data.token)
+        const redir = data.redirect ?? ''
+        if (redir.includes('secondary_password')) {
+          window.location.href = loginRedirectWithApiToken(redir, data.token)
+        } else if (data.user.userType === 'member') {
+          window.location.href = loginRedirectWithApiToken('/member.php', data.token)
+        } else if (data.user.userType === 'owner') {
+          window.location.href = loginRedirectWithApiToken('/dashboard.php', data.token)
+        } else {
+          navigate('/home')
+        }
+      } else if (data.status === 'success' && data.redirect) {
+        window.location.href = phpPagePath(
+          data.redirect.startsWith('/') ? data.redirect : `/${data.redirect}`,
+        )
       } else {
-        await alertModal('Notice', data.message || 'Login failed')
+        const msg =
+          data.status === 'error' ? (data.message ?? 'Login failed') : 'Login failed'
+        await alertModal('Notice', msg)
       }
     } catch {
       await alertModal('Notice', 'An error occurred during login')

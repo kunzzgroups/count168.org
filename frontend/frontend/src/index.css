@@ -141,6 +141,22 @@ code {
   font-weight: 500;
 }
 
+.app-header__logout {
+  margin-left: 0.5rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  color: var(--text-muted, var(--text));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-header__logout:hover {
+  color: var(--accent);
+}
+
 .app-root main {
   flex: 1;
   text-align: left;
