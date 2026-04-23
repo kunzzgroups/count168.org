@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch, apiUrl } from '../../lib/api'
 import { publicAsset } from '../../lib/publicAsset'
@@ -136,78 +136,50 @@ function useBankCategoryFlag(companyCode: string) {
   return isBankCategory
 }
 
-function useClassicSubmenus(rootRef: React.RefObject<HTMLElement | null>, deps: string) {
-  useEffect(() => {
-    const rootEl = rootRef.current
-    if (!rootEl) return
-
-    function positionSubmenu(wrapper: Element, host: HTMLElement) {
-      const title = wrapper.querySelector('.informationmenu-section-title')
-      const submenu = wrapper.querySelector('.submenu')
-      if (!title || !submenu) return
-      const titleRect = title.getBoundingClientRect()
-      const sidebarEl = host.closest('.informationmenu')
-      const sidebarRect = sidebarEl?.getBoundingClientRect()
-      const right = sidebarRect ? sidebarRect.right : 0
-      ;(submenu as HTMLElement).style.left = `${right}px`
-      ;(submenu as HTMLElement).style.top = `${titleRect.top}px`
-    }
-
-    const cleanups: (() => void)[] = []
-    rootEl.querySelectorAll('.menu-item-wrapper').forEach((wrapper) => {
-      const submenu = wrapper.querySelector('.submenu')
-      if (!submenu) return
-      let hideTimeout: number | null = null
-      const clearHide = () => {
-        if (hideTimeout != null) {
-          window.clearTimeout(hideTimeout)
-          hideTimeout = null
-        }
-      }
-      const show = () => {
-        clearHide()
-        positionSubmenu(wrapper, rootEl)
-        const el = submenu as HTMLElement
-        el.style.opacity = '1'
-        el.style.visibility = 'visible'
-        el.style.transform = 'translateX(0)'
-        el.style.pointerEvents = 'auto'
-      }
-      const hide = () => {
-        clearHide()
-        hideTimeout = window.setTimeout(() => {
-          const el = submenu as HTMLElement
-          el.style.opacity = '0'
-          el.style.visibility = 'hidden'
-          el.style.transform = 'translateX(-10px)'
-          el.style.pointerEvents = 'none'
-        }, 100)
-      }
-      wrapper.addEventListener('mouseenter', show)
-      wrapper.addEventListener('mouseleave', hide)
-      submenu.addEventListener('mouseenter', show)
-      submenu.addEventListener('mouseleave', hide)
-      const onMove = () => positionSubmenu(wrapper, rootEl)
-      wrapper.addEventListener('mousemove', onMove)
-      cleanups.push(() => {
-        clearHide()
-        wrapper.removeEventListener('mouseenter', show)
-        wrapper.removeEventListener('mouseleave', hide)
-        submenu.removeEventListener('mouseenter', show)
-        submenu.removeEventListener('mouseleave', hide)
-        wrapper.removeEventListener('mousemove', onMove)
-      })
-    })
-    return () => cleanups.forEach((f) => f())
-  }, [deps])
-}
-
 /**
  * 与 `sidebar.php` 结构一致：白 logo、通知铃、头像选择、informationmenu-content、footer、通知浮层。
  */
 export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile }: Props) {
   const { pathname } = useLocation()
   const rootRef = useRef<HTMLDivElement>(null)
+  const reportWrapRef = useRef<HTMLDivElement>(null)
+  const maintWrapRef = useRef<HTMLDivElement>(null)
+  const [sidebarFlyout, setSidebarFlyout] = useState<
+    null | { kind: 'report' | 'maintenance'; left: number; top: number }
+  >(null)
+  const flyoutHideTimerRef = useRef<number | null>(null)
+
+  const clearFlyoutHide = useCallback(() => {
+    if (flyoutHideTimerRef.current != null) {
+      window.clearTimeout(flyoutHideTimerRef.current)
+      flyoutHideTimerRef.current = null
+    }
+  }, [])
+
+  const scheduleFlyoutHide = useCallback(() => {
+    clearFlyoutHide()
+    flyoutHideTimerRef.current = window.setTimeout(() => setSidebarFlyout(null), 100)
+  }, [clearFlyoutHide])
+
+  const positionFlyout = useCallback(
+    (kind: 'report' | 'maintenance', wrap: HTMLElement | null) => {
+      if (!wrap) return
+      const title = wrap.querySelector('.informationmenu-section-title')
+      const sidebarEl = wrap.closest('.informationmenu')
+      if (!title || !sidebarEl) return
+      const titleRect = title.getBoundingClientRect()
+      const sidebarRect = sidebarEl.getBoundingClientRect()
+      clearFlyoutHide()
+      setSidebarFlyout({ kind, left: sidebarRect.right, top: titleRect.top })
+    },
+    [clearFlyoutHide],
+  )
+
+  useEffect(() => () => clearFlyoutHide(), [clearFlyoutHide])
+
+  useEffect(() => {
+    setSidebarFlyout(null)
+  }, [pathname])
   const { permissions, isMember, isExternalView: ext, hasC168DomainPageAccess, companyHasGambling, companyHasBank } =
     ctx
   const companyCode = ctx.companyCode ?? ''
@@ -241,21 +213,6 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
   }, [expDate])
 
   const showHome = permissions.length === 0 || permissions.includes('home')
-
-  const submenuKey = useMemo(
-    () =>
-      [
-        companyHasGambling,
-        companyHasBank,
-        isBankCategory,
-        ext,
-        permissions.join(','),
-        pathname,
-      ].join('|'),
-    [companyHasGambling, companyHasBank, isBankCategory, ext, permissions, pathname],
-  )
-
-  useClassicSubmenus(rootRef, submenuKey)
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
@@ -616,7 +573,13 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
                 id="sidebar-report-section"
                 style={{ display: companyHasGambling ? undefined : 'none' }}
               >
-                <div className="menu-item-wrapper">
+                <div
+                  ref={reportWrapRef}
+                  className="menu-item-wrapper"
+                  onMouseEnter={() => positionFlyout('report', reportWrapRef.current)}
+                  onMouseLeave={scheduleFlyoutHide}
+                  onMouseMove={() => positionFlyout('report', reportWrapRef.current)}
+                >
                   <div className="informationmenu-section-title" data-section="report">
                     <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 2 2h8c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
@@ -624,78 +587,25 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
                     Report
                     <span className="section-arrow">▶</span>
                   </div>
-                  <div className="submenu" id="report-submenu">
-                    <div className="submenu-content">
-                      <a href={phref('customer_report.php')} className="submenu-item" onClick={go}>
-                        <span>Customer Report</span>
-                      </a>
-                      <a href={phref('domain_report.php')} className="submenu-item" onClick={go}>
-                        <span>Domain Report</span>
-                      </a>
-                    </div>
-                  </div>
                 </div>
               </div>
             )}
 
             {!ext && (
               <div className="informationmenu-section">
-                <div className="menu-item-wrapper">
+                <div
+                  ref={maintWrapRef}
+                  className="menu-item-wrapper"
+                  onMouseEnter={() => positionFlyout('maintenance', maintWrapRef.current)}
+                  onMouseLeave={scheduleFlyoutHide}
+                  onMouseMove={() => positionFlyout('maintenance', maintWrapRef.current)}
+                >
                   <div className="informationmenu-section-title" data-section="maintenance">
                     <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z" />
                     </svg>
                     Maintenance
                     <span className="section-arrow">▶</span>
-                  </div>
-                  <div className="submenu" id="maintenance-submenu">
-                    <div className="submenu-content">
-                      {showMaintCapture && (
-                        <a
-                          href={phref('capture_maintenance.php')}
-                          className="submenu-item"
-                          id="maintenance-capture-link"
-                          onClick={go}
-                        >
-                          <span>Data Capture</span>
-                        </a>
-                      )}
-                      {showMaintTransaction && (
-                        <a
-                          href={phref('transaction_maintenance.php')}
-                          className="submenu-item"
-                          id="maintenance-transaction-link"
-                          onClick={go}
-                        >
-                          <span>Transaction</span>
-                        </a>
-                      )}
-                      {showMaintPayment && (
-                        <a href={phref('payment_maintenance.php')} className="submenu-item" onClick={go}>
-                          <span>Payment</span>
-                        </a>
-                      )}
-                      {showMaintFormula && (
-                        <a
-                          href={phref('formula_maintenance.php')}
-                          className="submenu-item"
-                          id="maintenance-formula-link"
-                          onClick={go}
-                        >
-                          <span>Formula</span>
-                        </a>
-                      )}
-                      {showMaintProcess && (
-                        <a
-                          href={phref('bankprocess_maintenance.php')}
-                          className="submenu-item"
-                          id="maintenance-process-link"
-                          onClick={go}
-                        >
-                          <span>Process</span>
-                        </a>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -788,6 +698,89 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
             </div>
           </div>
         </>,
+        document.body,
+      )}
+
+      {createPortal(
+        sidebarFlyout && (
+          <div
+            className="submenu classic-informationmenu-submenu-portal"
+            id={sidebarFlyout.kind === 'report' ? 'report-submenu' : 'maintenance-submenu'}
+            style={{
+              position: 'fixed',
+              left: sidebarFlyout.left,
+              top: sidebarFlyout.top,
+              opacity: 1,
+              visibility: 'visible',
+              transform: 'translateX(0)',
+              pointerEvents: 'auto',
+              zIndex: 3000,
+            }}
+            onMouseEnter={clearFlyoutHide}
+            onMouseLeave={scheduleFlyoutHide}
+          >
+            <div className="submenu-content">
+              {sidebarFlyout.kind === 'report' ? (
+                <>
+                  <a href={phref('customer_report.php')} className="submenu-item" onClick={go}>
+                    <span>Customer Report</span>
+                  </a>
+                  <a href={phref('domain_report.php')} className="submenu-item" onClick={go}>
+                    <span>Domain Report</span>
+                  </a>
+                </>
+              ) : (
+                <>
+                  {showMaintCapture && (
+                    <a
+                      href={phref('capture_maintenance.php')}
+                      className="submenu-item"
+                      id="maintenance-capture-link"
+                      onClick={go}
+                    >
+                      <span>Data Capture</span>
+                    </a>
+                  )}
+                  {showMaintTransaction && (
+                    <a
+                      href={phref('transaction_maintenance.php')}
+                      className="submenu-item"
+                      id="maintenance-transaction-link"
+                      onClick={go}
+                    >
+                      <span>Transaction</span>
+                    </a>
+                  )}
+                  {showMaintPayment && (
+                    <a href={phref('payment_maintenance.php')} className="submenu-item" onClick={go}>
+                      <span>Payment</span>
+                    </a>
+                  )}
+                  {showMaintFormula && (
+                    <a
+                      href={phref('formula_maintenance.php')}
+                      className="submenu-item"
+                      id="maintenance-formula-link"
+                      onClick={go}
+                    >
+                      <span>Formula</span>
+                    </a>
+                  )}
+                  {showMaintProcess && (
+                    <a
+                      href={phref('bankprocess_maintenance.php')}
+                      className="submenu-item"
+                      id="maintenance-process-link"
+                      onClick={go}
+                    >
+                      <span>Process</span>
+                    </a>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        ),
         document.body,
       )}
     </div>

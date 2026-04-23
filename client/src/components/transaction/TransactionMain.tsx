@@ -111,11 +111,16 @@ function AccountSearchField({
   onChange,
   options,
   placeholder,
+  selectButtonId,
+  selectDropdownId,
 }: {
   value: AccountSlot
   onChange: (v: AccountSlot) => void
   options: TxAccountOption[]
   placeholder: string
+  /** 与 `transaction_classic.php` 自定义下拉的 `id` 一致，便于与 `transaction.js` DOM 约定对齐 */
+  selectButtonId?: string
+  selectDropdownId?: string
 }) {
   const instanceId = useId()
   const [open, setOpen] = useState(false)
@@ -186,6 +191,7 @@ function AccountSearchField({
     <div className="custom-select-wrapper" ref={rootRef}>
       <button
         type="button"
+        id={selectButtonId}
         className={`custom-select-button${open ? ' open' : ''}`}
         onClick={(e) => {
           e.stopPropagation()
@@ -194,7 +200,10 @@ function AccountSearchField({
       >
         {value ? value.label : placeholder}
       </button>
-      <div className={`custom-select-dropdown${open ? ' show' : ''}`}>
+      <div
+        className={`custom-select-dropdown${open ? ' show' : ''}`}
+        id={selectDropdownId}
+      >
         <div className="custom-select-search">
           <input
             ref={searchInputRef}
@@ -1089,6 +1098,17 @@ export function TransactionMain({ bootstrap }: Props) {
       void runSearch()
       return
     }
+    if (txType === 'PROFIT') {
+      const pt = toAccount?.id
+      const pf = fromAccount?.id
+      if (pt != null && pf != null && String(pt) === String(pf)) {
+        showTxNotification(
+          'PROFIT: Select To Account and Select From Account cannot be the same',
+          'err',
+        )
+        return
+      }
+    }
     const { effectiveType, accountId, fromAccountId } = resolveSubmitAccountIds(
       txType,
       profitSide,
@@ -1666,6 +1686,8 @@ export function TransactionMain({ bootstrap }: Props) {
                     onChange={setToAccount}
                     options={accounts}
                     placeholder="--Select To Account--"
+                    selectButtonId="action_account_from"
+                    selectDropdownId="action_account_from_dropdown"
                   />
                   {showFromAndReverse && (
                     <>
@@ -1674,6 +1696,8 @@ export function TransactionMain({ bootstrap }: Props) {
                         onChange={setFromAccount}
                         options={accounts}
                         placeholder="--Select From Account--"
+                        selectButtonId="action_account_id"
+                        selectDropdownId="action_account_id_dropdown"
                       />
                       <button
                         type="button"
@@ -1746,12 +1770,16 @@ export function TransactionMain({ bootstrap }: Props) {
                     onChange={setRateAcctTo}
                     options={accounts}
                     placeholder="--Select To Account--"
+                    selectButtonId="rate_account_from"
+                    selectDropdownId="rate_account_from_dropdown"
                   />
                   <AccountSearchField
                     value={rateAcctFrom}
                     onChange={setRateAcctFrom}
                     options={accounts}
                     placeholder="--Select From Account--"
+                    selectButtonId="rate_account_to"
+                    selectDropdownId="rate_account_to_dropdown"
                   />
                   <button
                     type="button"
@@ -1833,12 +1861,16 @@ export function TransactionMain({ bootstrap }: Props) {
                     onChange={setRateXferTo}
                     options={accounts}
                     placeholder="--Select To Account--"
+                    selectButtonId="rate_transfer_from_account"
+                    selectDropdownId="rate_transfer_from_account_dropdown"
                   />
                   <AccountSearchField
                     value={rateXferFrom}
                     onChange={setRateXferFrom}
                     options={accounts}
                     placeholder="--Select From Account--"
+                    selectButtonId="rate_transfer_to_account"
+                    selectDropdownId="rate_transfer_to_account_dropdown"
                   />
                   <button
                     type="button"
@@ -1861,6 +1893,8 @@ export function TransactionMain({ bootstrap }: Props) {
                     onChange={setRateMiddleAcct}
                     options={accounts}
                     placeholder="--Select Account--"
+                    selectButtonId="rate_middleman_account"
+                    selectDropdownId="rate_middleman_account_dropdown"
                   />
                   <input
                     type="number"

@@ -7,7 +7,7 @@
   overflow: auto;
   box-sizing: border-box;
   width: 100%;
-  /* 与 `body.transaction-page`（transaction.css）同套背景与正文字色，视觉对齐经典全页 */
+  /* 与 `body.transaction-page`（transaction.css）同套背景与正文字色；标题/标签用 Amaranth 与经典一致 */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
     Cantarell, sans-serif;
   color: #334155;
@@ -19,6 +19,15 @@
     radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%),
     linear-gradient(145deg, #97bffc 0%, #aecffa 40%, #f9fbff 100%);
   background-blend-mode: screen, screen, multiply, screen, normal;
+}
+
+.dShell__main .transaction-page.tShell__transactionPage .transaction-title {
+  font-family: 'Amaranth', sans-serif;
+  font-weight: 500;
+}
+
+.dShell__main .transaction-page.tShell__transactionPage .transaction-label {
+  font-family: 'Amaranth', sans-serif;
 }
 
 /* 经典侧栏布局：背景由 `.dShell` 统一提供，避免与主区叠两层渐变 */

@@ -175,10 +175,14 @@ export function parseRateExpression(rawValue: unknown): {
   return { valid: true, value: result }
 }
 
+/** 与 `js/transaction.js` `formatNumber` 一致：千分位 + 截断到 2 位小数（非四舍五入） */
 export function formatTxNumber(n: number | string | undefined): string {
-  const v = parseFloat(String(n ?? '').replace(/,/g, ''))
-  if (Number.isNaN(v)) return '0.00'
-  return v.toLocaleString('en-US', {
+  const cleaned =
+    typeof n === 'string' ? n.replace(/,/g, '').trim() : String(n ?? '')
+  const number = parseFloat(cleaned)
+  if (Number.isNaN(number)) return '0.00'
+  const truncated = Math.trunc(number * 100) / 100
+  return truncated.toLocaleString('en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })
@@ -307,16 +311,10 @@ export function applyTxDisplayFilters(
       const byValue = !Number.isNaN(crdr) && Math.abs(crdr) > eps
       return byFlag || byValue
     }
+    /** 与 `js/transaction.js` `filterPaymentOnlyInRange` 一致：仅按 win_loss 数值判断 */
     const hasWinLoss = (row: TxSearchRow) => {
-      const byFlag =
-        typeof row.has_win_loss_transactions === 'boolean'
-          ? row.has_win_loss_transactions
-          : typeof row.has_win_loss_transactions === 'number'
-            ? row.has_win_loss_transactions !== 0
-            : parseInt(String(row.has_win_loss_transactions || '0'), 10) !== 0
       const wl = parseFloat(String(row.win_loss))
-      const byValue = !Number.isNaN(wl) && Math.abs(wl) > 0.00001
-      return byFlag || byValue
+      return !Number.isNaN(wl) && Math.abs(wl) > 0.00001
     }
     const shouldShow = opts.showWinLossOnly
       ? (row: TxSearchRow) => hasCrdr(row) || hasWinLoss(row)
@@ -654,9 +652,8 @@ export async function postContraReject(
 }
 
 /**
- * Map UI slots to PHP `submit_api.php` fields (parity with `transaction.js` submitAction):
- * - `action_account_from` = To Account → `account_id`
- * - `action_account_id` = From Account → `from_account_id`
+ * Map UI slots to PHP `submit_api.php` fields (parity with `transaction.js` submitAction).
+ * Classic DOM：`action_account_from` = 第一个下拉（UI 「Select To」），`action_account_id` = 第二个（「Select From」）。
  */
 export function resolveSubmitAccountIds(
   transactionType: string,
