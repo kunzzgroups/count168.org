@@ -20,6 +20,8 @@ import {
   postContraReject,
   resolveSubmitAccountIds,
   sortTxRowsByRole,
+  parseRateExpression,
+  submitRateTransaction,
   submitStandardTransaction,
   ymdToDmY,
   type ContraInboxRow,
@@ -228,6 +230,19 @@ export function TransactionMain({ bootstrap }: Props) {
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  const [rateDateDmY, setRateDateDmY] = useState(todayDmY)
+  const [rateAcctTo, setRateAcctTo] = useState<AccountSlot>(null)
+  const [rateAcctFrom, setRateAcctFrom] = useState<AccountSlot>(null)
+  const [rateXferTo, setRateXferTo] = useState<AccountSlot>(null)
+  const [rateXferFrom, setRateXferFrom] = useState<AccountSlot>(null)
+  const [rateMiddleAcct, setRateMiddleAcct] = useState<AccountSlot>(null)
+  const [rateCurFrom, setRateCurFrom] = useState('')
+  const [rateCurTo, setRateCurTo] = useState('')
+  const [rateFromAmt, setRateFromAmt] = useState('')
+  const [rateExchRaw, setRateExchRaw] = useState('')
+  const [rateMMRate, setRateMMRate] = useState('')
+  const [rateToAmtOverride, setRateToAmtOverride] = useState<string | null>(null)
+
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyData, setHistoryData] = useState<TxPaymentHistoryPayload | null>(null)
@@ -235,26 +250,52 @@ export function TransactionMain({ bootstrap }: Props) {
   const historyAbortRef = useRef<AbortController | null>(null)
 
   const txDateInputRef = useRef<HTMLInputElement>(null)
+  const rateDateInputRef = useRef<HTMLInputElement>(null)
   const fpTxRef = useRef<SingleFlatpickr | null>(null)
+  const fpRateRef = useRef<SingleFlatpickr | null>(null)
+  const prevTxTypeRef = useRef(txType)
 
   const isRate = txType === 'RATE'
   const showFromAndReverse = !isRate && TYPES_NEED_FROM.has(txType)
 
   useLayoutEffect(() => {
+    const prev = prevTxTypeRef.current
+    if (txType !== prev) {
+      if (txType === 'RATE') setRateDateDmY(txDateDmY)
+      else if (prev === 'RATE') setTxDateDmY(rateDateDmY)
+      prevTxTypeRef.current = txType
+    }
+  }, [txType, txDateDmY, rateDateDmY])
+
+  useLayoutEffect(() => {
+    fpTxRef.current?.destroy()
+    fpTxRef.current = null
+    fpRateRef.current?.destroy()
+    fpRateRef.current = null
     if (isRate) {
-      fpTxRef.current?.destroy()
-      fpTxRef.current = null
-      return
+      const el = rateDateInputRef.current
+      if (el) {
+        fpRateRef.current = singleFlatpickr(el, {
+          dateFormat: 'd/m/Y',
+          allowInput: false,
+          defaultDate: rateDateDmY,
+          onChange: (_d: Date[], str: string) => setRateDateDmY(str),
+        })
+      }
+      return () => {
+        fpRateRef.current?.destroy()
+        fpRateRef.current = null
+      }
     }
     const el = txDateInputRef.current
-    if (!el) return
-    fpTxRef.current?.destroy()
-    fpTxRef.current = singleFlatpickr(el, {
-      dateFormat: 'd/m/Y',
-      allowInput: false,
-      defaultDate: txDateDmY,
-      onChange: (_d: Date[], str: string) => setTxDateDmY(str),
-    })
+    if (el) {
+      fpTxRef.current = singleFlatpickr(el, {
+        dateFormat: 'd/m/Y',
+        allowInput: false,
+        defaultDate: txDateDmY,
+        onChange: (_d: Date[], str: string) => setTxDateDmY(str),
+      })
+    }
     return () => {
       fpTxRef.current?.destroy()
       fpTxRef.current = null
@@ -268,6 +309,27 @@ export function TransactionMain({ bootstrap }: Props) {
     if (!fp || isRate) return
     fp.setDate(txDateDmY, false, 'd/m/Y')
   }, [txDateDmY, isRate])
+
+  useEffect(() => {
+    const fp = fpRateRef.current
+    if (!fp || !isRate) return
+    fp.setDate(rateDateDmY, false, 'd/m/Y')
+  }, [rateDateDmY, isRate])
+
+  useEffect(() => {
+    if (w.currencyList.length === 0) return
+    const codes = w.currencyList.map((c) => String(c.code || '').toUpperCase())
+    setRateCurTo((prev) => {
+      if (prev && codes.includes(prev)) return prev
+      if (codes.includes('MYR')) return 'MYR'
+      return codes[0] || ''
+    })
+    setRateCurFrom((prev) => (prev && codes.includes(prev) ? prev : ''))
+  }, [w.currencyList])
+
+  useEffect(() => {
+    setRateToAmtOverride(null)
+  }, [rateFromAmt, rateExchRaw, rateMMRate])
 
   useEffect(() => {
     if (txType === 'RATE') {
@@ -658,7 +720,32 @@ export function TransactionMain({ bootstrap }: Props) {
   )
 
   const onBalanceCellClick = (row: TxSearchRow, isLeftTable: boolean) => {
-    if (txType === 'RATE') return
+    if (txType === 'RATE') {
+      const idRaw = row.account_db_id
+      const id = typeof idRaw === 'number' ? idRaw : parseInt(String(idRaw), 10)
+      if (!Number.isFinite(id) || id <= 0) return
+      const code = String(row.account_id || '')
+      const acc = accounts.find((a) => a.id === id)
+      const label = acc?.display_text || code
+      const slot: AccountSlot = { id, label, code }
+      const cur = String(row.currency || '').trim().toUpperCase()
+      const rawBal = parseFloat(String(row.balance).replace(/,/g, ''))
+      const absBal = Number.isFinite(rawBal) ? Math.abs(rawBal).toFixed(2) : ''
+      if (isLeftTable) {
+        setRateAcctTo(slot)
+        setRateXferFrom(slot)
+        if (absBal) setRateToAmtOverride(absBal)
+      } else {
+        setRateAcctFrom(slot)
+        setRateXferTo(slot)
+        if (absBal) {
+          setRateFromAmt(absBal)
+          setRateToAmtOverride(null)
+        }
+      }
+      if (cur) setRateCurFrom(cur)
+      return
+    }
     const idRaw = row.account_db_id
     const id = typeof idRaw === 'number' ? idRaw : parseInt(String(idRaw), 10)
     const code = String(row.account_id || '')
@@ -689,6 +776,47 @@ export function TransactionMain({ bootstrap }: Props) {
     win_loss: leftTotals.win_loss + rightTotals.win_loss,
     cr_dr: leftTotals.cr_dr + rightTotals.cr_dr,
     balance: leftTotals.balance + rightTotals.balance,
+  }
+
+  const rateParsed = useMemo(() => parseRateExpression(rateExchRaw), [rateExchRaw])
+  const rateMmAmtNum = useMemo(() => {
+    const a = parseFloat(String(rateFromAmt).replace(/,/g, '')) || 0
+    const m = parseFloat(String(rateMMRate).replace(/,/g, '')) || 0
+    if (a > 0 && m > 0) return a * m
+    return 0
+  }, [rateFromAmt, rateMMRate])
+  const rateToComputedNum = useMemo(() => {
+    const a = parseFloat(String(rateFromAmt).replace(/,/g, '')) || 0
+    const er = rateParsed.valid ? rateParsed.value : 0
+    if (a > 0 && er > 0) return a * er - rateMmAmtNum
+    return NaN
+  }, [rateFromAmt, rateParsed, rateMmAmtNum])
+  const rateToDisplayStr =
+    rateToAmtOverride !== null && rateToAmtOverride !== ''
+      ? rateToAmtOverride
+      : Number.isFinite(rateToComputedNum) && rateToComputedNum > 0
+        ? rateToComputedNum.toFixed(2)
+        : ''
+  const rateMmDisplayStr = rateMmAmtNum > 0 ? rateMmAmtNum.toFixed(2) : ''
+
+  const reverseRatePrimary = () => {
+    const a = rateAcctTo
+    setRateAcctTo(rateAcctFrom)
+    setRateAcctFrom(a)
+    const tv =
+      rateToAmtOverride !== null && rateToAmtOverride !== ''
+        ? rateToAmtOverride
+        : Number.isFinite(rateToComputedNum) && rateToComputedNum > 0
+          ? rateToComputedNum.toFixed(2)
+          : ''
+    setRateToAmtOverride(rateFromAmt || null)
+    setRateFromAmt(tv)
+  }
+
+  const reverseRateTransferRow = () => {
+    const a = rateXferTo
+    setRateXferTo(rateXferFrom)
+    setRateXferFrom(a)
   }
 
   const groupedSections = useMemo(() => {
@@ -758,7 +886,155 @@ export function TransactionMain({ bootstrap }: Props) {
       return
     }
     if (txType === 'RATE') {
-      setToast({ type: 'info', text: 'RATE entry: use 经典版 for the full rate form.' })
+      const rateToId = rateAcctTo?.id
+      const rateFromId = rateAcctFrom?.id
+      if (!rateToId) {
+        setToast({ type: 'err', text: 'Please select To Account' })
+        return
+      }
+      if (!rateFromId) {
+        setToast({ type: 'err', text: 'Rate transaction requires From Account' })
+        return
+      }
+      const rdf = rateCurFrom.trim().toUpperCase()
+      const rdt = rateCurTo.trim().toUpperCase()
+      if (!rdf || !rdt) {
+        setToast({ type: 'err', text: 'Please select both currencies' })
+        return
+      }
+      const fromNum = parseFloat(String(rateFromAmt).replace(/,/g, '')) || 0
+      const toNum = parseFloat(String(rateToDisplayStr).replace(/,/g, '')) || 0
+      if (fromNum <= 0 || toNum <= 0) {
+        setToast({ type: 'err', text: 'Please enter valid currency amounts' })
+        return
+      }
+      if (!rateParsed.valid) {
+        setToast({
+          type: 'err',
+          text: 'Please enter a valid rate value (supports * and /)',
+        })
+        return
+      }
+      if (!rateDateDmY.trim()) {
+        setToast({ type: 'err', text: 'Please select transaction date' })
+        return
+      }
+
+      const rawRate = rateExchRaw.trim()
+      const fromDesc = `Transaction to ${rateAcctTo?.code || ''} (Rate: ${rawRate})`
+      const toDesc = `Transaction from ${rateAcctFrom?.code || ''} (Rate: ${rawRate})`
+
+      const xferT = rateXferTo?.id
+      const xferF = rateXferFrom?.id
+      const hasSecond = !!(xferT && xferF)
+
+      let secondLeg: {
+        rate_transfer_from_amount: string
+        rate_transfer_from_description: string
+        rate_transfer_to_amount: string
+        rate_transfer_to_description: string
+        rate_transfer_from_currency: string
+        rate_transfer_to_currency: string
+        middleman: {
+          rate_middleman_currency: string
+          rate_middleman_amount: string
+          rate_middleman_description: string
+        } | null
+      } | null = null
+
+      if (hasSecond) {
+        const transferAmountValue = toNum
+        if (transferAmountValue <= 0) {
+          setToast({
+            type: 'err',
+            text: 'Please enter currency amounts or transfer amount',
+          })
+          return
+        }
+        const mmId = rateMiddleAcct?.id
+        const mmRateN = parseFloat(String(rateMMRate).replace(/,/g, '')) || 0
+        let middlemanAmount = rateMmAmtNum
+        if (mmId || rateMMRate.trim()) {
+          if (!mmId) {
+            setToast({ type: 'err', text: 'Please select Middle-Man account' })
+            return
+          }
+          if (mmRateN <= 0) {
+            setToast({
+              type: 'err',
+              text: 'Please enter Middle-Man rate multiplier',
+            })
+            return
+          }
+        } else {
+          middlemanAmount = 0
+        }
+        const xferFromDesc = `Transaction to ${rateXferFrom?.code || ''} (Rate: ${rawRate})`
+        const xferToDesc = `Transaction from ${rateXferTo?.code || ''} (Rate: ${rawRate})`
+        const originalTransferFromAmount = fromNum * rateParsed.value
+        let middlemanDescription = ''
+        if (middlemanAmount > 0) {
+          middlemanDescription = `Rate charge (x${rateMMRate}) from ${rdf} ${fromNum.toFixed(2)}`
+        }
+        secondLeg = {
+          rate_transfer_from_amount: originalTransferFromAmount.toFixed(2),
+          rate_transfer_from_description: xferFromDesc,
+          rate_transfer_to_amount: transferAmountValue.toFixed(2),
+          rate_transfer_to_description: xferToDesc,
+          rate_transfer_from_currency: rdt,
+          rate_transfer_to_currency: rdt,
+          middleman:
+            mmId && middlemanAmount > 0
+              ? {
+                  rate_middleman_currency: rdt,
+                  rate_middleman_amount: middlemanAmount.toFixed(2),
+                  rate_middleman_description: middlemanDescription,
+                }
+              : null,
+        }
+      }
+
+      setSubmitting(true)
+      const rfa = String(rateFromAmt).trim().replace(/,/g, '') || String(fromNum)
+      const res = await submitRateTransaction({
+        companyId: w.activeCompanyId,
+        transactionDateDmY: rateDateDmY.trim(),
+        description: '',
+        sms: '',
+        rateToAccountId: rateToId,
+        rateFromAccountId: rateFromId,
+        rateFromCurrency: rdf,
+        rateToCurrency: rdt,
+        rateFromAmount: rfa,
+        rateToAmount: rateToDisplayStr,
+        rateFromDescription: fromDesc,
+        rateToDescription: toDesc,
+        rateExchangeRateRaw: rawRate,
+        rateExchangeRateNumeric: rateParsed.value,
+        rateTransferFromAccountId: rateXferTo?.id ?? '',
+        rateTransferToAccountId: rateXferFrom?.id ?? '',
+        rateTransferAmount: '',
+        rateMiddlemanAccountId: rateMiddleAcct?.id ?? '',
+        rateMiddlemanRate: rateMMRate,
+        rateMiddlemanAmount: rateMmDisplayStr || '',
+        secondLeg,
+      })
+      setSubmitting(false)
+      if (res.ok === false) {
+        setToast({ type: 'err', text: res.error })
+        return
+      }
+      setToast({ type: 'ok', text: res.message || 'Submitted' })
+      setRateFromAmt('')
+      setRateExchRaw('')
+      setRateMMRate('')
+      setRateToAmtOverride(null)
+      setRateXferTo(null)
+      setRateXferFrom(null)
+      setRateMiddleAcct(null)
+      setConfirmSubmit(false)
+      void refreshContra()
+      void runSearch()
       return
     }
     const { effectiveType, accountId, fromAccountId } = resolveSubmitAccountIds(
@@ -825,11 +1101,7 @@ export function TransactionMain({ bootstrap }: Props) {
     void runSearch()
   }
 
-  const submitEnabled =
-    confirmSubmit &&
-    !submitting &&
-    txType !== 'RATE' &&
-    w.activeCompanyId != null
+  const submitEnabled = confirmSubmit && !submitting && w.activeCompanyId != null
 
   return (
     <div className="transaction-page tShell__transactionPage">
@@ -1285,10 +1557,165 @@ export function TransactionMain({ bootstrap }: Props) {
           )}
 
           {isRate && (
-            <p className="tShell__rateHint">
-              RATE uses multiple account and currency rows in the classic page. Please use{' '}
-              <strong>经典版</strong> for RATE until this form is fully migrated.
-            </p>
+            <div id="rate-transaction-fields" className="rate-fields">
+              <div className="rate-section">
+                <label className="transaction-label">Date</label>
+                <input
+                  ref={rateDateInputRef}
+                  type="text"
+                  id="rate_transaction_date"
+                  className="transaction-input"
+                  readOnly
+                  style={{ cursor: 'pointer' }}
+                  placeholder="dd/mm/yyyy"
+                />
+              </div>
+
+              <div className="rate-section">
+                <label className="transaction-label">Account</label>
+                <div className="rate-row rate-row-two-cols">
+                  <AccountSearchField
+                    value={rateAcctTo}
+                    onChange={setRateAcctTo}
+                    options={accounts}
+                    placeholder="--Select To Account--"
+                  />
+                  <AccountSearchField
+                    value={rateAcctFrom}
+                    onChange={setRateAcctFrom}
+                    options={accounts}
+                    placeholder="--Select From Account--"
+                  />
+                  <button
+                    type="button"
+                    id="rate_account_reverse_btn"
+                    className="transaction-account-reverse-btn rate-reverse-btn"
+                    title="Reverse accounts"
+                    aria-label="Reverse accounts"
+                    onClick={reverseRatePrimary}
+                  >
+                    Reverse
+                  </button>
+                </div>
+              </div>
+
+              <div className="rate-section">
+                <label className="transaction-label">Currency</label>
+                <div className="rate-row rate-row-five-cols">
+                  <select
+                    id="rate_currency_from"
+                    className="transaction-select"
+                    value={rateCurFrom}
+                    onChange={(e) => setRateCurFrom(e.target.value.toUpperCase())}
+                  >
+                    <option value="">Currency</option>
+                    {w.currencyList.map((c) => (
+                      <option key={c.code} value={String(c.code).toUpperCase()}>
+                        {String(c.code).toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="rate_currency_from_amount"
+                    className="transaction-input"
+                    placeholder="Amount"
+                    value={rateFromAmt}
+                    onChange={(e) => setRateFromAmt(e.target.value)}
+                  />
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    id="rate_exchange_rate"
+                    className="transaction-input"
+                    placeholder="Rate"
+                    value={rateExchRaw}
+                    onChange={(e) => setRateExchRaw(e.target.value)}
+                  />
+                  <select
+                    id="rate_currency_to"
+                    className="transaction-select"
+                    value={rateCurTo}
+                    onChange={(e) => setRateCurTo(e.target.value.toUpperCase())}
+                  >
+                    <option value="">Currency</option>
+                    {w.currencyList.map((c) => (
+                      <option key={c.code} value={String(c.code).toUpperCase()}>
+                        {String(c.code).toUpperCase()}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="rate_currency_to_amount"
+                    className="transaction-input"
+                    placeholder="Amount"
+                    readOnly
+                    value={rateToDisplayStr}
+                  />
+                </div>
+              </div>
+
+              <div className="rate-section">
+                <label className="transaction-label">Account</label>
+                <div className="rate-row rate-row-two-cols">
+                  <AccountSearchField
+                    value={rateXferTo}
+                    onChange={setRateXferTo}
+                    options={accounts}
+                    placeholder="--Select To Account--"
+                  />
+                  <AccountSearchField
+                    value={rateXferFrom}
+                    onChange={setRateXferFrom}
+                    options={accounts}
+                    placeholder="--Select From Account--"
+                  />
+                  <button
+                    type="button"
+                    id="rate_transfer_reverse_btn"
+                    className="transaction-account-reverse-btn rate-reverse-btn"
+                    title="Reverse accounts"
+                    aria-label="Reverse accounts"
+                    onClick={reverseRateTransferRow}
+                  >
+                    Reverse
+                  </button>
+                </div>
+              </div>
+
+              <div className="rate-section">
+                <label className="transaction-label">Middle-Man</label>
+                <div className="rate-row rate-row-three-cols">
+                  <AccountSearchField
+                    value={rateMiddleAcct}
+                    onChange={setRateMiddleAcct}
+                    options={accounts}
+                    placeholder="--Select Account--"
+                  />
+                  <input
+                    type="number"
+                    step="0.0001"
+                    id="rate_middleman_rate"
+                    className="transaction-input"
+                    placeholder="Rate multiplier"
+                    value={rateMMRate}
+                    onChange={(e) => setRateMMRate(e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="rate_middleman_amount"
+                    className="transaction-input"
+                    placeholder="Amount"
+                    readOnly
+                    value={rateMmDisplayStr}
+                  />
+                </div>
+              </div>
+            </div>
           )}
 
           {!isRate && (

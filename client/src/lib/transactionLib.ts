@@ -104,6 +104,77 @@ export function dmyToYmd(dmy: string): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
+/** 与 `js/transaction.js` `parseRateExpression` 一致（支持 `*`、`/`、`/3` 除法语义） */
+export function parseRateExpression(rawValue: unknown): {
+  valid: boolean
+  value: number
+} {
+  const raw = String(rawValue ?? '').trim()
+  if (!raw) {
+    return { valid: false, value: 0 }
+  }
+
+  const normalized = raw.replace(/÷/g, '/').replace(/\s+/g, '')
+  if (!normalized) {
+    return { valid: false, value: 0 }
+  }
+
+  if (/^\/\d*\.?\d+$/.test(normalized)) {
+    const divisor = parseFloat(normalized.slice(1))
+    if (!Number.isFinite(divisor) || divisor <= 0) {
+      return { valid: false, value: 0 }
+    }
+    return { valid: true, value: 1 / divisor }
+  }
+
+  if (!/^[0-9.*/]+$/.test(normalized)) {
+    return { valid: false, value: 0 }
+  }
+  if (/^[*/]|[*/]$|[*/]{2,}/.test(normalized)) {
+    return { valid: false, value: 0 }
+  }
+
+  const tokens = normalized.split(/([*/])/).filter(Boolean)
+  if (tokens.length === 0) {
+    return { valid: false, value: 0 }
+  }
+  if (!/^\d*\.?\d+$/.test(tokens[0]!)) {
+    return { valid: false, value: 0 }
+  }
+
+  let result = parseFloat(tokens[0]!)
+  if (!Number.isFinite(result) || result <= 0) {
+    return { valid: false, value: 0 }
+  }
+
+  for (let i = 1; i < tokens.length; i += 2) {
+    const op = tokens[i]
+    const numToken = tokens[i + 1]
+    if (!numToken || !/^\d*\.?\d+$/.test(numToken)) {
+      return { valid: false, value: 0 }
+    }
+    const value = parseFloat(numToken)
+    if (!Number.isFinite(value)) {
+      return { valid: false, value: 0 }
+    }
+    if (op === '*') {
+      result *= value
+    } else if (op === '/') {
+      if (value === 0) {
+        return { valid: false, value: 0 }
+      }
+      result /= value
+    } else {
+      return { valid: false, value: 0 }
+    }
+  }
+
+  if (!Number.isFinite(result) || result <= 0) {
+    return { valid: false, value: 0 }
+  }
+  return { valid: true, value: result }
+}
+
 export function formatTxNumber(n: number | string | undefined): string {
   const v = parseFloat(String(n ?? '').replace(/,/g, ''))
   if (Number.isNaN(v)) return '0.00'
@@ -407,6 +478,127 @@ export async function submitStandardTransaction(body: {
       ? crypto.randomUUID()
       : `tx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   fd.append('client_request_id', rid)
+  const res = await apiFetch(apiUrl('/api/transactions/submit_api.php'), {
+    method: 'POST',
+    body: fd,
+  })
+  const json = await res.json()
+  if (json.success) {
+    return { ok: true, message: String(json.message || 'OK'), data: json.data }
+  }
+  return { ok: false, error: String(json.error || json.message || 'Submit failed') }
+}
+
+/**
+ * RATE 提交：FormData 字段顺序与 `js/transaction.js` `submitAction` 中 `isRate` 分支一致。
+ */
+export async function submitRateTransaction(body: {
+  companyId: number
+  transactionDateDmY: string
+  description: string
+  sms: string
+  /** `account_id` / `rate_to_account_id`：UI `rate_account_from`（Select To） */
+  rateToAccountId: number
+  /** `from_account_id` / `rate_from_account_id`：UI `rate_account_to`（Select From） */
+  rateFromAccountId: number
+  rateFromCurrency: string
+  rateToCurrency: string
+  rateFromAmount: string
+  rateToAmount: string
+  rateFromDescription: string
+  rateToDescription: string
+  rateExchangeRateRaw: string
+  rateExchangeRateNumeric: number
+  rateTransferFromAccountId: number | ''
+  rateTransferToAccountId: number | ''
+  rateTransferAmount: string
+  rateMiddlemanAccountId: number | ''
+  rateMiddlemanRate: string
+  rateMiddlemanAmount: string
+  secondLeg: null | {
+    rate_transfer_from_amount: string
+    rate_transfer_from_description: string
+    rate_transfer_to_amount: string
+    rate_transfer_to_description: string
+    rate_transfer_from_currency: string
+    rate_transfer_to_currency: string
+    middleman: null | {
+      rate_middleman_currency: string
+      rate_middleman_amount: string
+      rate_middleman_description: string
+    }
+  }
+}): Promise<
+  { ok: true; message: string; data?: unknown } | { ok: false; error: string }
+> {
+  const fd = new FormData()
+  fd.append('transaction_type', 'RATE')
+  fd.append('account_id', String(body.rateToAccountId))
+  fd.append('from_account_id', String(body.rateFromAccountId))
+  fd.append('amount', body.rateFromAmount)
+  fd.append('transaction_date', body.transactionDateDmY)
+  fd.append('description', body.description)
+  fd.append('sms', body.sms)
+  fd.append('currency', body.rateFromCurrency)
+
+  fd.append('rate_from_account_id', String(body.rateFromAccountId))
+  fd.append('rate_from_currency', body.rateFromCurrency)
+  fd.append('rate_from_amount', body.rateFromAmount)
+  fd.append('rate_from_description', body.rateFromDescription)
+
+  fd.append('rate_to_account_id', String(body.rateToAccountId))
+  fd.append('rate_to_currency', body.rateToCurrency)
+  fd.append('rate_to_amount', body.rateToAmount)
+  fd.append('rate_to_description', body.rateToDescription)
+
+  const xferFrom =
+    body.rateTransferFromAccountId === '' ? '' : String(body.rateTransferFromAccountId)
+  const xferTo =
+    body.rateTransferToAccountId === '' ? '' : String(body.rateTransferToAccountId)
+  const mmId =
+    body.rateMiddlemanAccountId === '' ? '' : String(body.rateMiddlemanAccountId)
+
+  if (body.secondLeg) {
+    const s = body.secondLeg
+    fd.append('rate_transfer_from_account_id', xferFrom)
+    fd.append('rate_transfer_from_currency', s.rate_transfer_from_currency)
+    fd.append('rate_transfer_from_amount', s.rate_transfer_from_amount)
+    fd.append('rate_transfer_from_description', s.rate_transfer_from_description)
+
+    fd.append('rate_transfer_to_account_id', xferTo)
+    fd.append('rate_transfer_to_currency', s.rate_transfer_to_currency)
+    fd.append('rate_transfer_to_amount', s.rate_transfer_to_amount)
+    fd.append('rate_transfer_to_description', s.rate_transfer_to_description)
+
+    if (s.middleman) {
+      fd.append('rate_middleman_account_id', mmId)
+      fd.append('rate_middleman_currency', s.middleman.rate_middleman_currency)
+      fd.append('rate_middleman_amount', s.middleman.rate_middleman_amount)
+      fd.append('rate_middleman_description', s.middleman.rate_middleman_description)
+    }
+  }
+
+  fd.append('rate_currency_from', body.rateFromCurrency)
+  fd.append('rate_currency_from_amount', body.rateFromAmount)
+  fd.append('rate_currency_to', body.rateToCurrency)
+  fd.append('rate_currency_to_amount', body.rateToAmount)
+  fd.append('rate_exchange_rate', String(body.rateExchangeRateNumeric))
+  fd.append('rate_transfer_from_account', xferFrom)
+  fd.append('rate_transfer_to_account', xferTo)
+  fd.append('rate_transfer_amount', body.rateTransferAmount)
+  fd.append('rate_account_from_amount', body.rateTransferAmount)
+  fd.append('rate_account_to_amount', body.rateTransferAmount)
+  fd.append('rate_middleman_account', mmId)
+  fd.append('rate_middleman_rate', body.rateMiddlemanRate)
+  fd.append('rate_middleman_amount', body.rateMiddlemanAmount)
+
+  fd.append('company_id', String(body.companyId))
+  const rid =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `tx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  fd.append('client_request_id', rid)
+
   const res = await apiFetch(apiUrl('/api/transactions/submit_api.php'), {
     method: 'POST',
     body: fd,
