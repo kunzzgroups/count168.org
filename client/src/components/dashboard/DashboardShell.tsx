@@ -16,6 +16,7 @@ type Props = {
   /**
    * 与 `transaction_classic.php` 一致：仅深色侧栏 + 主区，不显示 EazyCount 顶栏。
    * 小屏保留一条深色顶条 + 汉堡键打开侧栏。
+   * 新经典路由请优先用 `ClassicDashboardShell`（已含 sidebar.css 与 title）。
    */
   classicSidebarLayout?: boolean
   children?: ReactNode

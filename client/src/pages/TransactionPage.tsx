@@ -1,21 +1,11 @@
-import { useEffect } from 'react'
 import { useDashboardBootstrap } from '../hooks/useDashboardBootstrap'
 import { apiUrl } from '../lib/api'
-import { DashboardShell } from '../components/dashboard/DashboardShell'
+import { ClassicDashboardShell } from '../components/dashboard/ClassicDashboardShell'
 import { TransactionMain } from '../components/transaction/TransactionMain'
 import './DashboardPage.css'
-import '../../../css/sidebar.css'
 
 export function TransactionPage() {
   const { gate, data, refetch } = useDashboardBootstrap()
-
-  useEffect(() => {
-    const prev = document.title
-    document.title = 'Transaction Payment'
-    return () => {
-      document.title = prev
-    }
-  }, [])
 
   if (gate === 'loading') {
     return (
@@ -45,12 +35,12 @@ export function TransactionPage() {
   }
 
   return (
-    <DashboardShell
+    <ClassicDashboardShell
       data={data}
       classicPage="transaction_classic.php"
-      classicSidebarLayout
+      documentTitle="Transaction Payment"
     >
       <TransactionMain bootstrap={data} />
-    </DashboardShell>
+    </ClassicDashboardShell>
   )
 }

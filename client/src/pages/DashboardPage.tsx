@@ -1,21 +1,11 @@
-import { useEffect } from 'react'
 import { useDashboardBootstrap } from '../hooks/useDashboardBootstrap'
 import { apiUrl } from '../lib/api'
-import { DashboardShell } from '../components/dashboard/DashboardShell'
+import { ClassicDashboardShell } from '../components/dashboard/ClassicDashboardShell'
 import './DashboardPage.css'
-import '../../../css/sidebar.css'
 
 /** React Transaction Dashboard：与 `dashboard_classic.php` + `js/dashboard.js` 主区行为与展示对齐。 */
 export function DashboardPage() {
   const { gate, data, refetch } = useDashboardBootstrap()
-
-  useEffect(() => {
-    const prev = document.title
-    document.title = 'Transaction Dashboard - EazyCount'
-    return () => {
-      document.title = prev
-    }
-  }, [])
 
   if (gate === 'loading') {
     return (
@@ -45,6 +35,10 @@ export function DashboardPage() {
   }
 
   return (
-    <DashboardShell data={data} classicPage="dashboard_classic.php" classicSidebarLayout />
+    <ClassicDashboardShell
+      data={data}
+      classicPage="dashboard_classic.php"
+      documentTitle="Transaction Dashboard - EazyCount"
+    />
   )
 }
