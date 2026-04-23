@@ -73,8 +73,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dashboardSpa__skeletonLine,
-  .dashboardSpa__spinner {
+  .dashboardSpa__skeletonLine {
     animation: none;
   }
   .dashboardSpa__skeletonLine {
@@ -153,61 +152,11 @@
   color: #e2e8f0;
 }
 
-/* —— iframe 与内层首屏 —— */
-.dashboardSpa__iframeBlock {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  text-align: center;
-  background: #f0f4f8;
-  color: #334155;
-  font-size: 0.9rem;
-  box-sizing: border-box;
-}
-
-.dashboardSpa__openFull {
-  margin-top: 0.25rem;
-  font-size: 0.8rem;
-  color: #2563eb;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.dashboardSpa__openFull:hover {
-  color: #1d4ed8;
-}
-
-.dashboardSpa__spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(51, 65, 85, 0.2);
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: dashboardSpin 0.75s linear infinite;
-}
-
-@keyframes dashboardSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
+/* —— 内层 classic 全屏，无第二块加载遮罩 —— */
 .dashboardSpa__frame {
   flex: 1;
   width: 100%;
   min-height: 0;
   border: 0;
   background: #fff;
-  opacity: 0;
-  transition: opacity 0.2s ease-out;
-}
-
-.dashboardSpa__frame--visible {
-  opacity: 1;
 }
