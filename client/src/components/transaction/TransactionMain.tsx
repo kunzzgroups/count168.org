@@ -62,6 +62,10 @@ const QUICK_ORDER: QuickRangeId[] = [
   'lastYear',
 ]
 
+/** 与 `js/transaction.js` 一致：维护/其他页写入后触发表格静默刷新 */
+const TX_LIST_INVALIDATE_LS_KEY = 'count168_tx_invalidate_ts'
+const TX_DATA_CHANGED_EVENT = 'tx-data-changed'
+
 type AccountSlot = { id: number; label: string; code: string } | null
 
 function toUpperDisplay(s: string | undefined): string {
@@ -277,6 +281,9 @@ export function TransactionMain({ bootstrap }: Props) {
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
+  const lastSearchCommitMsRef = useRef(0)
+  const externalRefreshRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const refreshFromInvalidateRef = useRef<() => void>(() => {})
 
   const [calendarOpen, setCalendarOpen] = useState(false)
   const dateAnchorRef = useRef<HTMLDivElement>(null)
@@ -653,6 +660,7 @@ export function TransactionMain({ bootstrap }: Props) {
     }
 
     setRawSearch(data)
+    lastSearchCommitMsRef.current = Date.now()
     const disp = applyTxDisplayFilters(data.left_table || [], data.right_table || [], {
       showZeroBalance: sz,
       showPaymentOnly: si,
@@ -678,6 +686,84 @@ export function TransactionMain({ bootstrap }: Props) {
 
   const runSearchRef = useRef(runSearch)
   runSearchRef.current = runSearch
+
+  const refreshTransactionDataFromExternalChange = useCallback(() => {
+    let invalidateTs = 0
+    try {
+      invalidateTs =
+        parseInt(localStorage.getItem(TX_LIST_INVALIDATE_LS_KEY) || '0', 10) || 0
+    } catch {
+      /* ignore */
+    }
+    if (!invalidateTs || invalidateTs <= lastSearchCommitMsRef.current) return
+
+    if (!w.dateFrom || !w.dateTo) {
+      if (externalRefreshRetryTimerRef.current == null) {
+        externalRefreshRetryTimerRef.current = setTimeout(() => {
+          externalRefreshRetryTimerRef.current = null
+          refreshFromInvalidateRef.current()
+        }, 650)
+      }
+      return
+    }
+    if (!w.showAllCurrencies && w.selectedCurrencies.length === 0) {
+      if (externalRefreshRetryTimerRef.current == null) {
+        externalRefreshRetryTimerRef.current = setTimeout(() => {
+          externalRefreshRetryTimerRef.current = null
+          refreshFromInvalidateRef.current()
+        }, 650)
+      }
+      return
+    }
+
+    setHistoryOpen(false)
+    void runSearchRef.current({ quiet: true })
+  }, [w.dateFrom, w.dateTo, w.showAllCurrencies, w.selectedCurrencies])
+
+  useEffect(() => {
+    refreshFromInvalidateRef.current = refreshTransactionDataFromExternalChange
+  }, [refreshTransactionDataFromExternalChange])
+
+  useEffect(() => {
+    return () => {
+      if (externalRefreshRetryTimerRef.current != null) {
+        clearTimeout(externalRefreshRetryTimerRef.current)
+        externalRefreshRetryTimerRef.current = null
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return
+      refreshFromInvalidateRef.current()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (!e || e.key !== TX_LIST_INVALIDATE_LS_KEY) return
+      refreshFromInvalidateRef.current()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
+
+  useEffect(() => {
+    const onTxData = () => refreshFromInvalidateRef.current()
+    window.addEventListener(TX_DATA_CHANGED_EVENT, onTxData)
+    return () => window.removeEventListener(TX_DATA_CHANGED_EVENT, onTxData)
+  }, [])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      refreshFromInvalidateRef.current()
+    }, 5000)
+    return () => window.clearInterval(id)
+  }, [])
 
   /** 与 `transaction.js` 一致：币别/公司/日期/分类 变化时自动 search_api；复选框仍由各自 onChange 显式触发，避免重复请求 */
   const lastStructuralSearchKeyRef = useRef<string>('')
@@ -1332,7 +1418,11 @@ export function TransactionMain({ bootstrap }: Props) {
                       <span className="category-placeholder">--Select All--</span>
                     ) : (
                       selectedCategories.map((c) => (
-                        <span key={c} className="category-tag">
+                        <span
+                          key={c}
+                          className="category-tag"
+                          data-category-value={c.toUpperCase()}
+                        >
                           {c}
                         </span>
                       ))
