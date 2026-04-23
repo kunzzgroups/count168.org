@@ -1,0 +1,354 @@
+/* 对齐 count168.org 登录页主视觉，背景图可后续放到 public/ */
+.login-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  position: relative;
+  background: linear-gradient(160deg, #e0f2fe 0%, #f0f9ff 45%, #bfdbfe 100%);
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+}
+
+.login-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.35;
+  background-image: repeating-linear-gradient(
+    -12deg,
+    rgba(86, 204, 242, 0.12) 0,
+    rgba(86, 204, 242, 0.12) 1px,
+    transparent 1px,
+    transparent 20px
+  );
+  pointer-events: none;
+}
+
+.login-page-inner {
+  width: 100%;
+  max-width: clamp(320px, 90vw, 420px);
+  position: relative;
+  z-index: 2;
+}
+
+.maintenance-zone {
+  margin-bottom: 12px;
+}
+
+.maintenance-wrap {
+  width: 100%;
+  overflow: hidden;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #004ff9, #56ccf2);
+  position: relative;
+}
+
+.maintenance-track {
+  display: flex;
+  width: max-content;
+  animation: maint-scroll 18s linear infinite;
+}
+
+.maintenance-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  white-space: nowrap;
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.maintenance-track:hover {
+  animation-play-state: paused;
+}
+
+@keyframes maint-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.maintenance-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+.maintenance-lbl {
+  opacity: 0.9;
+  margin-right: 4px;
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 0 0 30px 30px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+}
+
+.role-tabs {
+  display: flex;
+  background: linear-gradient(135deg, #004ff9, #56ccf2);
+  border-radius: 30px 30px 0 0;
+  overflow: hidden;
+}
+
+.role-tab {
+  flex: 1;
+  padding: clamp(12px, 3vw, 15px);
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: clamp(18px, 4vw, 24px);
+  text-align: center;
+  transition: background 0.2s ease;
+}
+
+.role-tab.active {
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.form-content {
+  padding: clamp(20px, 5vw, 30px) clamp(15px, 4vw, 20px);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(15px, 4vw, 20px);
+}
+
+.input-group {
+  position: relative;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s ease;
+}
+
+.input-group:focus-within {
+  transform: scale(1.01);
+}
+
+.input-ico {
+  position: absolute;
+  left: clamp(16px, 4vw, 20px);
+  top: 50%;
+  transform: translateY(-50%);
+  color: #56ccf2;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 10px 20px 10px 46px;
+  border: 2px solid #56ccf2;
+  border-radius: 50px;
+  font-size: 1rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: rgba(255, 255, 255, 0.95);
+  color: #333;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #004ff9;
+  box-shadow: 0 0 0 3px rgba(0, 79, 249, 0.12);
+}
+
+.input-group input::placeholder {
+  color: #56ccf2;
+  font-weight: 400;
+}
+
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remember-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  background: #ddd;
+  border-radius: 20px;
+  transition: background 0.2s ease;
+  flex-shrink: 0;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.remember-switch input:checked + .slider {
+  background: linear-gradient(135deg, #004ff9, #56ccf2);
+}
+
+.remember-switch input:checked + .slider::before {
+  transform: translateX(20px);
+}
+
+.remember-text {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.forgot-link {
+  color: #56ccf2;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.forgot-link:hover {
+  color: #004ff9;
+  text-decoration: underline;
+}
+
+.login-btn {
+  display: block;
+  width: 100%;
+  background: linear-gradient(135deg, #004ff9, #56ccf2);
+  color: #fff;
+  border: none;
+  padding: 12px 16px;
+  border-radius: 50px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.1s ease;
+}
+
+.login-btn:hover:not(:disabled) {
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+}
+
+.login-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tg-fab {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 60px;
+  height: 60px;
+  z-index: 10;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #004ff9, #56ccf2);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 24px rgba(0, 79, 249, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.tg-fab:hover {
+  transform: scale(1.06);
+}
+
+@media (max-width: 480px) {
+  .tg-fab {
+    width: 50px;
+    height: 50px;
+    bottom: 15px;
+    right: 15px;
+  }
+}
+
+/* Modal */
+.login-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.login-modal {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  max-width: 420px;
+  width: 100%;
+  padding: 28px 24px;
+  text-align: center;
+}
+
+.login-modal h3 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+  color: #0f172a;
+}
+
+.login-modal p {
+  margin: 0 0 20px;
+  color: #475569;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
+.login-modal-ok {
+  min-width: 100px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 50px;
+  background: linear-gradient(135deg, #004ff9, #56ccf2);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}

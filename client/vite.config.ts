@@ -5,14 +5,14 @@ import react from '@vitejs/plugin-react'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const target = env.DEV_PHP_ORIGIN || 'http://127.0.0.1'
+  const toPhp = { target, changeOrigin: true, secure: false }
   return {
     plugins: [react()],
     server: {
       proxy: {
-        '^/api': {
-          target,
-          changeOrigin: true,
-        },
+        '^/api': toPhp,
+        '^/login_process\\.php$': toPhp,
+        '^/reset-password\\.php$': toPhp,
       },
     },
   }
