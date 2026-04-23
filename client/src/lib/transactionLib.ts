@@ -686,3 +686,41 @@ export function resolveSubmitAccountIds(
     fromAccountId: '',
   }
 }
+
+/** 与 `js/transaction.js` showNotification 一致：#notificationContainer + transaction-notification-* */
+export type TxNotificationUiKind = 'ok' | 'err' | 'info'
+
+export function showTxNotification(message: string, kind: TxNotificationUiKind): void {
+  const container = document.getElementById('notificationContainer')
+  if (!container) {
+    console.error('Notification container not found!')
+    console.log('Message:', message, 'Kind:', kind)
+    return
+  }
+  if (!message || message.trim() === '') {
+    console.error('Empty notification message!')
+    return
+  }
+
+  const existing = container.querySelectorAll('.transaction-notification')
+  if (existing.length >= 2) {
+    existing[0]?.remove()
+  }
+
+  const classicType = kind === 'ok' ? 'success' : kind === 'err' ? 'error' : 'info'
+  const el = document.createElement('div')
+  el.className = `transaction-notification transaction-notification-${classicType}`
+  el.textContent = message
+
+  container.appendChild(el)
+  setTimeout(() => {
+    el.classList.add('show')
+  }, 10)
+
+  setTimeout(() => {
+    el.classList.remove('show')
+    setTimeout(() => {
+      el.remove()
+    }, 300)
+  }, 2000)
+}

@@ -22,6 +22,7 @@ import {
   sortTxRowsByRole,
   parseRateExpression,
   submitRateTransaction,
+  showTxNotification,
   submitStandardTransaction,
   ymdToDmY,
   type ContraInboxRow,
@@ -201,10 +202,6 @@ export function TransactionMain({ bootstrap }: Props) {
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const searchAbortRef = useRef<AbortController | null>(null)
-
-  const [toast, setToast] = useState<{ type: 'ok' | 'err' | 'info'; text: string } | null>(
-    null,
-  )
 
   const [calendarOpen, setCalendarOpen] = useState(false)
   const dateAnchorRef = useRef<HTMLDivElement>(null)
@@ -478,13 +475,12 @@ export function TransactionMain({ bootstrap }: Props) {
     const sz = overrides?.showZeroBalance ?? showZeroBalance
     const quiet = overrides?.quiet === true
 
-    if (!quiet) setToast(null)
     if (w.activeCompanyId == null) {
-      if (!quiet) setToast({ type: 'err', text: 'Please select a company' })
+      if (!quiet) showTxNotification('Please select a company', 'err')
       return
     }
     if (!w.showAllCurrencies && w.selectedCurrencies.length === 0) {
-      if (!quiet) setToast({ type: 'info', text: 'Please select at least one Currency or All' })
+      if (!quiet) showTxNotification('Please select at least one Currency or All', 'info')
       return
     }
 
@@ -591,18 +587,17 @@ export function TransactionMain({ bootstrap }: Props) {
     const totalRows = (data.left_table?.length ?? 0) + (data.right_table?.length ?? 0)
     if (quiet) return
     if (totalRows === 0) {
-      setToast({
-        type: 'info',
-        text: 'Search completed but no data found. Please check date range, Currency filter, or confirm data has been submitted',
-      })
+      showTxNotification(
+        'Search completed but no data found. Please check date range, Currency filter, or confirm data has been submitted',
+        'info',
+      )
     } else if (displayed === 0) {
-      setToast({
-        type: 'info',
-        text:
-          `Search returned ${totalRows} row(s), but none match current display filters (e.g. zero balance hidden when "Show 0 balance" is off, or "Show Payment Only" / "Show Win/Loss Only"). Enable "Show 0 balance" or adjust filters.`,
-      })
+      showTxNotification(
+        `Search returned ${totalRows} row(s), but none match current display filters (e.g. zero balance hidden when "Show 0 balance" is off, or "Show Payment Only" / "Show Win/Loss Only"). Enable "Show 0 balance" or adjust filters.`,
+        'info',
+      )
     } else {
-      setToast({ type: 'ok', text: `Search completed, found ${displayed} record(s)` })
+      showTxNotification(`Search completed, found ${displayed} record(s)`, 'ok')
     }
   }
 
@@ -662,15 +657,15 @@ export function TransactionMain({ bootstrap }: Props) {
         (!aid || aid <= 0) && virtualCompanyCode !== ''
 
       if ((!aid || aid <= 0) && !isVirtualCompanyRow) {
-        setToast({ type: 'err', text: 'Invalid account for history' })
+        showTxNotification('Invalid account for history', 'err')
         return
       }
       if (!w.dateFrom || !w.dateTo) {
-        setToast({ type: 'err', text: 'Please search first to set date range' })
+        showTxNotification('Please search first to set date range', 'err')
         return
       }
       if (w.activeCompanyId == null) {
-        setToast({ type: 'err', text: 'No company selected' })
+        showTxNotification('No company selected', 'err')
         return
       }
 
@@ -707,7 +702,7 @@ export function TransactionMain({ bootstrap }: Props) {
         if (r.ok === false) {
           if (r.error === 'AbortError') return
           setHistoryOpen(false)
-          setToast({ type: 'err', text: r.error })
+          showTxNotification(r.error, 'err')
           return
         }
         setHistoryData(r.data)
@@ -877,47 +872,43 @@ export function TransactionMain({ bootstrap }: Props) {
   }
 
   const onSubmit = async () => {
-    setToast(null)
     if (!confirmSubmit) {
-      setToast({ type: 'err', text: 'Please confirm submit' })
+      showTxNotification('Please confirm submit', 'err')
       return
     }
     if (w.activeCompanyId == null) {
-      setToast({ type: 'err', text: 'No company selected' })
+      showTxNotification('No company selected', 'err')
       return
     }
     if (txType === 'RATE') {
       const rateToId = rateAcctTo?.id
       const rateFromId = rateAcctFrom?.id
       if (!rateToId) {
-        setToast({ type: 'err', text: 'Please select To Account' })
+        showTxNotification('Please select To Account', 'err')
         return
       }
       if (!rateFromId) {
-        setToast({ type: 'err', text: 'Rate transaction requires From Account' })
+        showTxNotification('Rate transaction requires From Account', 'err')
         return
       }
       const rdf = rateCurFrom.trim().toUpperCase()
       const rdt = rateCurTo.trim().toUpperCase()
       if (!rdf || !rdt) {
-        setToast({ type: 'err', text: 'Please select both currencies' })
+        showTxNotification('Please select both currencies', 'err')
         return
       }
       const fromNum = parseFloat(String(rateFromAmt).replace(/,/g, '')) || 0
       const toNum = parseFloat(String(rateToDisplayStr).replace(/,/g, '')) || 0
       if (fromNum <= 0 || toNum <= 0) {
-        setToast({ type: 'err', text: 'Please enter valid currency amounts' })
+        showTxNotification('Please enter valid currency amounts', 'err')
         return
       }
       if (!rateParsed.valid) {
-        setToast({
-          type: 'err',
-          text: 'Please enter a valid rate value (supports * and /)',
-        })
+        showTxNotification('Please enter a valid rate value (supports * and /)', 'err')
         return
       }
       if (!rateDateDmY.trim()) {
-        setToast({ type: 'err', text: 'Please select transaction date' })
+        showTxNotification('Please select transaction date', 'err')
         return
       }
 
@@ -946,10 +937,7 @@ export function TransactionMain({ bootstrap }: Props) {
       if (hasSecond) {
         const transferAmountValue = toNum
         if (transferAmountValue <= 0) {
-          setToast({
-            type: 'err',
-            text: 'Please enter currency amounts or transfer amount',
-          })
+          showTxNotification('Please enter currency amounts or transfer amount', 'err')
           return
         }
         const mmId = rateMiddleAcct?.id
@@ -957,14 +945,11 @@ export function TransactionMain({ bootstrap }: Props) {
         let middlemanAmount = rateMmAmtNum
         if (mmId || rateMMRate.trim()) {
           if (!mmId) {
-            setToast({ type: 'err', text: 'Please select Middle-Man account' })
+            showTxNotification('Please select Middle-Man account', 'err')
             return
           }
           if (mmRateN <= 0) {
-            setToast({
-              type: 'err',
-              text: 'Please enter Middle-Man rate multiplier',
-            })
+            showTxNotification('Please enter Middle-Man rate multiplier', 'err')
             return
           }
         } else {
@@ -1022,10 +1007,10 @@ export function TransactionMain({ bootstrap }: Props) {
       })
       setSubmitting(false)
       if (res.ok === false) {
-        setToast({ type: 'err', text: res.error })
+        showTxNotification(res.error, 'err')
         return
       }
-      setToast({ type: 'ok', text: res.message || 'Submitted' })
+      showTxNotification(res.message || 'Submitted', 'ok')
       setRateFromAmt('')
       setRateExchRaw('')
       setRateMMRate('')
@@ -1045,28 +1030,28 @@ export function TransactionMain({ bootstrap }: Props) {
       fromAccount?.id ?? null,
     )
     if (!accountId) {
-      setToast({ type: 'err', text: 'Please select To Account' })
+      showTxNotification('Please select To Account', 'err')
       return
     }
     if (!txDateDmY.trim()) {
-      setToast({ type: 'err', text: 'Please select transaction date' })
+      showTxNotification('Please select transaction date', 'err')
       return
     }
     const amtNorm = amount.trim().replace(/,/g, '')
     const amtNum = parseFloat(amtNorm)
     if (!Number.isFinite(amtNum) || amtNum < 0) {
-      setToast({ type: 'err', text: 'Please enter a valid amount (>= 0)' })
+      showTxNotification('Please enter a valid amount (>= 0)', 'err')
       return
     }
     if (!formCurrency) {
-      setToast({ type: 'err', text: 'Please select Currency' })
+      showTxNotification('Please select Currency', 'err')
       return
     }
     if (
       ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM', 'CLEAR'].includes(effectiveType) &&
       !fromAccountId
     ) {
-      setToast({ type: 'err', text: 'This transaction type requires From Account' })
+      showTxNotification('This transaction type requires From Account', 'err')
       return
     }
 
@@ -1084,17 +1069,14 @@ export function TransactionMain({ bootstrap }: Props) {
     })
     setSubmitting(false)
     if (res.ok === false) {
-      setToast({ type: 'err', text: res.error })
+      showTxNotification(res.error, 'err')
       return
     }
     const approval = (res.data as { approval_status?: string } | undefined)?.approval_status
     if (String(approval || '').toUpperCase() === 'PENDING') {
-      setToast({
-        type: 'info',
-        text: 'Submitted. Waiting for Manager+ approval to take effect.',
-      })
+      showTxNotification('Submitted. Waiting for Manager+ approval to take effect.', 'info')
     } else {
-      setToast({ type: 'ok', text: res.message || 'Submitted' })
+      showTxNotification(res.message || 'Submitted', 'ok')
     }
     setAmount('')
     setConfirmSubmit(false)
@@ -1107,20 +1089,11 @@ export function TransactionMain({ bootstrap }: Props) {
   return (
     <div className="transaction-page tShell__transactionPage">
     <div className="transaction-container tShell__transactionRoot">
-      {toast && (
-        <div
-          className={
-            toast.type === 'err'
-              ? 'tShell__toast tShell__toastErr'
-              : toast.type === 'ok'
-                ? 'tShell__toast tShell__toastOk'
-                : 'tShell__toast tShell__toastInfo'
-          }
-          role="status"
-        >
-          {toast.text}
-        </div>
-      )}
+      <div
+        id="notificationContainer"
+        className="transaction-notification-container"
+        aria-live="polite"
+      />
 
       <div className="transaction-header-bar">
         <div className="transaction-header-left">
@@ -1152,7 +1125,9 @@ export function TransactionMain({ bootstrap }: Props) {
                 <div className="contra-inbox-popover-header">
                   <div className="contra-inbox-popover-title">
                     Contra Inbox
-                    <span className="contra-inbox-badge">{contraRows.length}</span>
+                    <span className="contra-inbox-badge" id="contraInboxCount2">
+                      {contraRows.length}
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -1210,9 +1185,10 @@ export function TransactionMain({ bootstrap }: Props) {
                                   onClick={async () => {
                                     if (!w.activeCompanyId) return
                                     const x = await postContraApprove(w.activeCompanyId, r.id)
-                                    if (!x.ok) setToast({ type: 'err', text: x.error || 'Approve failed' })
+                                    if (!x.ok)
+                                      showTxNotification(x.error || 'Approve failed', 'err')
                                     else {
-                                      setToast({ type: 'ok', text: 'Approved' })
+                                      showTxNotification('Approved', 'ok')
                                       void refreshContra()
                                       void runSearch()
                                     }
@@ -1226,9 +1202,10 @@ export function TransactionMain({ bootstrap }: Props) {
                                   onClick={async () => {
                                     if (!w.activeCompanyId) return
                                     const x = await postContraReject(w.activeCompanyId, r.id)
-                                    if (!x.ok) setToast({ type: 'err', text: x.error || 'Reject failed' })
+                                    if (!x.ok)
+                                      showTxNotification(x.error || 'Reject failed', 'err')
                                     else {
-                                      setToast({ type: 'ok', text: 'Rejected' })
+                                      showTxNotification('Rejected', 'ok')
                                       void refreshContra()
                                       void runSearch()
                                     }
