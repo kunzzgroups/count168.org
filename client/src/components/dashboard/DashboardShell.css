@@ -1,3 +1,36 @@
+.dShell--classicSidebar {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Transaction 等「经典整页」路由：小屏用深色条 + 汉堡，大屏无 SPA 顶栏 */
+.dShell__classicMobileHeader {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #0f172a;
+  border-bottom: 1px solid #1e293b;
+}
+
+.dShell__burger--classicBar {
+  display: none;
+}
+
+@media (max-width: 899px) {
+  .dShell--classicSidebar .dShell__classicMobileHeader {
+    display: flex;
+  }
+  .dShell--classicSidebar .dShell__burger--classicBar {
+    display: flex;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: #334155;
+  }
+  .dShell--classicSidebar .dShell__burger--classicBar::before {
+    color: #f1f5f9;
+  }
+}
+
 .dShell {
   min-height: 100vh;
   display: flex;

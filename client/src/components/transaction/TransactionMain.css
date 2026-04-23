@@ -21,6 +21,11 @@
   background-blend-mode: screen, screen, multiply, screen, normal;
 }
 
+/* 经典侧栏布局：背景由 `.dShell` 统一提供，避免与主区叠两层渐变 */
+.dShell--classicSidebar .dShell__main .transaction-page.tShell__transactionPage {
+  background: transparent;
+}
+
 .dShell__main .transaction-page .transaction-container.tShell__transactionRoot {
   flex: 1;
   min-height: 0;

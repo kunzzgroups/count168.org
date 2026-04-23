@@ -44,7 +44,11 @@ export function TransactionPage() {
   }
 
   return (
-    <DashboardShell data={data} classicPage="transaction_classic.php">
+    <DashboardShell
+      data={data}
+      classicPage="transaction_classic.php"
+      classicSidebarLayout
+    >
       <TransactionMain bootstrap={data} />
     </DashboardShell>
   )
