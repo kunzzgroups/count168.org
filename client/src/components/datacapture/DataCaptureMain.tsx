@@ -78,8 +78,10 @@ export function DataCaptureMain({ bootstrap }: Props) {
 
   useEffect(() => {
     window.__C168_API_BASE__ = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+    window.__C168_SPA_LINK_BASE__ = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
     return () => {
       delete window.__C168_API_BASE__
+      delete window.__C168_SPA_LINK_BASE__
     }
   }, [])
 

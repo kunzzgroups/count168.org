@@ -77,58 +77,126 @@ function hideNotification() {
     }, 300);
 }
 
+/** SPA（React `/datacapturesummary`）与经典 `.php` 共用：返回 Data Capture */
+function navigateToDataCaptureFromSummary(queryWithoutQuestion) {
+    var q = '';
+    if (queryWithoutQuestion != null && String(queryWithoutQuestion).length > 0) {
+        q = '?' + String(queryWithoutQuestion).replace(/^\?/, '');
+    }
+    if (document.body && document.body.classList.contains('datacapture-summary-spa-embed')) {
+        var base =
+            typeof window.__C168_SPA_LINK_BASE__ === 'string'
+                ? String(window.__C168_SPA_LINK_BASE__).replace(/\/$/, '')
+                : '';
+        window.location.href = (base || '') + '/datacapture' + q;
+    } else {
+        window.location.href = 'datacapture.php' + q;
+    }
+}
 
-// Initialize page
-document.addEventListener('DOMContentLoaded', function () {
+function wireSummaryRateInputOnce() {
+    const rateInput = document.getElementById('rateInput');
+    if (!rateInput || rateInput.dataset.summaryWired === '1') return;
+    rateInput.dataset.summaryWired = '1';
+    rateInput.addEventListener('input', function () {
+        recalculateAllRowsWithRate();
+    });
+}
+
+function wireSummaryAddAccountFormOnce() {
+    if (document.body && document.body.dataset.summaryAddFormWired === '1') return;
+    if (document.body) document.body.dataset.summaryAddFormWired = '1';
+    document.querySelectorAll('input[name="add_payment_alert"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            toggleAlertFields('add');
+        });
+    });
+    var uppercaseInputs = ['add_account_id', 'add_name', 'add_remark', 'addCurrencyInput'];
+    uppercaseInputs.forEach(function (inputId) {
+        var input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('input', function () {
+                forceUppercase(this);
+            });
+            input.addEventListener('paste', function () {
+                var el = this;
+                setTimeout(function () {
+                    forceUppercase(el);
+                }, 0);
+            });
+        }
+    });
+    var addCurrencyInput = document.getElementById('addCurrencyInput');
+    if (addCurrencyInput) {
+        addCurrencyInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCurrencyFromInput('add');
+            }
+        });
+    }
+}
+
+// Initialize page（支持 React 晚载入脚本；同一表格仅初始化一次）
+function runDataCaptureSummaryPageInit() {
+    const root = document.getElementById('summaryTable');
+    if (!root || root.dataset.summarySpaInit === '1') {
+        return;
+    }
+    root.dataset.summarySpaInit = '1';
     try {
-        // 确保页面可以滚动（覆盖 accountCSS.css 中的 overflow: hidden）
         document.body.style.overflowY = 'auto';
         document.body.style.height = 'auto';
 
-        // 确保隐藏任何可能存在的 company 按钮（此页面不需要 company 按钮）
-        // 因为 company 是根据 process 自动计算的
         const companyFilter = document.getElementById('data-capture-summary-company-filter');
         if (companyFilter) {
             companyFilter.style.display = 'none';
         }
 
-        // Pre-load account list so Account column shows [name] only for upline/member/agent when table is built
         if (typeof fetchSummaryAccountList === 'function') {
-            fetchSummaryAccountList().then(function (accounts) {
-                if (accounts && accounts.length) {
-                    window.__accountListWithRoles = accounts;
-                    if (typeof applyAccountDisplayByRoleToAllRows === 'function') applyAccountDisplayByRoleToAllRows();
-                }
-            }).catch(function () { });
+            fetchSummaryAccountList()
+                .then(function (accounts) {
+                    if (accounts && accounts.length) {
+                        window.__accountListWithRoles = accounts;
+                        if (typeof applyAccountDisplayByRoleToAllRows === 'function')
+                            applyAccountDisplayByRoleToAllRows();
+                    }
+                })
+                .catch(function () {});
         }
 
-        // Check for URL parameters and show notifications
         const urlParams = new URLSearchParams(window.location.search);
         window.__summaryFreshFromCapture = urlParams.get('success') === '1';
         if (urlParams.get('success') === '1') {
             showNotification('Success', 'Data captured and summary generated successfully!', 'success');
-            // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
         } else if (urlParams.get('error') === '1') {
             showNotification('Error', 'Failed to generate summary. Please try again.', 'error');
-            // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        // Load captured table data and render it（async：会先拉取服务端 Summary 状态再渲染）
-        // IMPORTANT: 必须在 __summaryFreshFromCapture 设置后执行，避免首屏误走旧缓存恢复分支。
+        wireSummaryRateInputOnce();
+        wireSummaryAddAccountFormOnce();
+
         loadAndRenderCapturedTable().catch(function (e) {
             console.warn('loadAndRenderCapturedTable error:', e);
             hideLoadingState();
             showEmptyState();
         });
     } catch (error) {
-        console.error('Error in DOMContentLoaded:', error);
-        // Ensure loading state is hidden even if there's an error
+        console.error('Error in runDataCaptureSummaryPageInit:', error);
         hideLoadingState();
         showEmptyState();
     }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    void runDataCaptureSummaryPageInit();
 });
+if (document.readyState !== 'loading') {
+    void runDataCaptureSummaryPageInit();
+}
+window.runDataCaptureSummaryPageInit = runDataCaptureSummaryPageInit;
 
 // 从 bfcache 返回（浏览器后退等）时 DOM 不会重新跑 DOMContentLoaded，页脚合计可能仍为旧值；此处按当前表格强制对齐
 window.addEventListener('pageshow', function (ev) {
@@ -1153,7 +1221,7 @@ function goBackToDataCapture() {
     if (typeof saveRateValuesForRefresh === 'function') saveRateValuesForRefresh();
     if (typeof saveFormulaSourceForRefresh === 'function') saveFormulaSourceForRefresh();
     window.isNavigatingAwayByBackOrSubmit = true;
-    window.location.href = 'datacapture.php?restore=1';
+    navigateToDataCaptureFromSummary('restore=1');
 }
 
 // Refresh page function: save rate values and formula/source so they are restored after reload
@@ -2896,17 +2964,6 @@ function submitRateValues() {
         showNotification('Info', 'No rows with Rate checkbox checked', 'info');
     }
 }
-
-// Add event listener for rateInput changes
-document.addEventListener('DOMContentLoaded', function () {
-    // Add event listener for rateInput changes
-    const rateInput = document.getElementById('rateInput');
-    if (rateInput) {
-        rateInput.addEventListener('input', function () {
-            recalculateAllRowsWithRate();
-        });
-    }
-});
 
 // ==================== Helper Functions for Account Custom Select ====================
 function getAccountId(buttonElement) {
@@ -4991,49 +5048,6 @@ if (addAccountForm) {
         }
     });
 }
-
-// Add event listeners for payment alert radio buttons and uppercase conversion
-document.addEventListener('DOMContentLoaded', function () {
-    // Add event listeners for payment alert radio buttons
-    document.querySelectorAll('input[name="add_payment_alert"]').forEach(radio => {
-        radio.addEventListener('change', function () {
-            toggleAlertFields('add');
-        });
-    });
-
-    // Add uppercase conversion for account fields
-    const uppercaseInputs = [
-        'add_account_id',
-        'add_name',
-        'add_remark',
-        'addCurrencyInput'
-    ];
-
-    uppercaseInputs.forEach(inputId => {
-        const input = document.getElementById(inputId);
-        if (input) {
-            input.addEventListener('input', function () {
-                forceUppercase(this);
-            });
-
-            input.addEventListener('paste', function () {
-                setTimeout(() => forceUppercase(this), 0);
-            });
-        }
-    });
-
-    // Handle Enter key in currency input
-    const addCurrencyInput = document.getElementById('addCurrencyInput');
-    if (addCurrencyInput) {
-        addCurrencyInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addCurrencyFromInput('add');
-            }
-        });
-    }
-});
-
 
 // Add input validation for Source Percent
 function addSourcePercentValidation() {
@@ -18937,7 +18951,7 @@ function showEmptyState() {
             </div>
             <div class="empty-state">
                 <p>No captured data found. Please go back to the Data Capture page and submit some data first.</p>
-                <button onclick="window.location.href='datacapture.php'" class="btn btn-save">Go to Data Capture</button>
+                <button onclick="navigateToDataCaptureFromSummary('')" class="btn btn-save">Go to Data Capture</button>
             </div>
         </div>
     `;
@@ -20053,7 +20067,7 @@ async function submitSummaryData() {
                     try { localStorage.removeItem('capturedCaptureId'); } catch (e) { }
                     localStorage.removeItem('capturedTableData');
                     localStorage.removeItem('capturedProcessData');
-                    window.location.href = 'datacapture.php?submitted=1';
+                    navigateToDataCaptureFromSummary('submitted=1');
                 }, 600);
                 return;
             }
@@ -20240,7 +20254,7 @@ async function submitSummaryData() {
                 localStorage.removeItem('capturedProcessData');
 
                 // Redirect to data capture page
-                window.location.href = 'datacapture.php?submitted=1';
+                navigateToDataCaptureFromSummary('submitted=1');
             }, 2000);
         }
 

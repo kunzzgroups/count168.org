@@ -16,6 +16,19 @@ function buildApiUrl(pathAndQuery) {
     return new URL(p.replace(/^\//, ''), base).href;
 }
 
+/** 提交表格后进入 Summary：SPA 用 `/datacapturesummary`，经典页用 `datacapturesummary.php` */
+function navigateToDataCaptureSummarySuccess() {
+    if (document.body && document.body.classList.contains('datacapture-spa-embed')) {
+        var base =
+            typeof window.__C168_SPA_LINK_BASE__ === 'string'
+                ? String(window.__C168_SPA_LINK_BASE__).replace(/\/$/, '')
+                : '';
+        window.location.href = (base || '') + '/datacapturesummary?success=1';
+    } else {
+        window.location.href = buildApiUrl('datacapturesummary.php?success=1');
+    }
+}
+
 function redirectToDashboardIfUnauthorizedCategory(errorMessage) {
     if (typeof errorMessage !== 'string') return false;
     const normalized = errorMessage.toLowerCase();
@@ -23322,7 +23335,7 @@ async function submitDataCaptureForm() {
 
         // Redirect to summary page after a short delay
         setTimeout(() => {
-            window.location.href = 'datacapturesummary.php?success=1';
+            navigateToDataCaptureSummarySuccess();
         }, 1500);
 
     } catch (error) {
