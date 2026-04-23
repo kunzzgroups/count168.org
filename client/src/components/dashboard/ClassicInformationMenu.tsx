@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { apiFetch, apiUrl } from '../../lib/api'
 import { publicAsset } from '../../lib/publicAsset'
 import type { SidebarContext } from '../../types/sidebarContext'
@@ -731,53 +732,64 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
         </button>
       </div>
 
-      <div
-        className={`notification-overlay${notifOpen ? ' show' : ''}`}
-        id="notificationOverlay"
-        onClick={() => setNotifOpen(false)}
-        role="presentation"
-        aria-hidden={!notifOpen}
-      />
-
-      <div className={`notification-panel${notifOpen ? ' show' : ''}`} id="notificationPanel" role="dialog" aria-label="Announcements">
-        <div className="notification-header">
-          <h2>Announcements</h2>
-          <button type="button" className="notification-close" onClick={() => setNotifOpen(false)} title="关闭">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        </div>
-        <div className="notification-content" id="notificationContent">
-          {notifLoading && (
-            <div className="notification-empty">
-              <p>Loading…</p>
+      {createPortal(
+        <>
+          <div
+            className={`notification-overlay${notifOpen ? ' show' : ''}`}
+            id="notificationOverlay"
+            onClick={() => setNotifOpen(false)}
+            role="presentation"
+            aria-hidden={!notifOpen}
+          />
+          <div
+            className={`notification-panel${notifOpen ? ' show' : ''}`}
+            id="notificationPanel"
+            role="dialog"
+            aria-label="Announcements"
+          >
+            <div className="notification-header">
+              <h2>Announcements</h2>
+              <button type="button" className="notification-close" onClick={() => setNotifOpen(false)} title="关闭">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
             </div>
-          )}
-          {!notifLoading && notifError && (
-            <div className="notification-empty">
-              <p>Failed to load announcements</p>
+            <div className="notification-content" id="notificationContent">
+              {notifLoading && (
+                <div className="notification-empty">
+                  <p>Loading…</p>
+                </div>
+              )}
+              {!notifLoading && notifError && (
+                <div className="notification-empty">
+                  <p>Failed to load announcements</p>
+                </div>
+              )}
+              {!notifLoading &&
+                !notifError &&
+                notifRows.length > 0 &&
+                notifRows.map((a, i) => (
+                  <div key={i} className="notification-item unread" role="presentation">
+                    <div className="notification-title">{a.title}</div>
+                    <div className="notification-message">{a.content}</div>
+                    <div className="notification-time">{a.created_at}</div>
+                  </div>
+                ))}
+              {!notifLoading && !notifError && notifRows.length === 0 && (
+                <div className="notification-empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" />
+                  </svg>
+                  <p>No announcements</p>
+                </div>
+              )}
             </div>
-          )}
-          {!notifLoading && !notifError && notifRows.length > 0 &&
-            notifRows.map((a, i) => (
-              <div key={i} className="notification-item unread" role="presentation">
-                <div className="notification-title">{a.title}</div>
-                <div className="notification-message">{a.content}</div>
-                <div className="notification-time">{a.created_at}</div>
-              </div>
-            ))}
-          {!notifLoading && !notifError && notifRows.length === 0 && (
-            <div className="notification-empty">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z" />
-              </svg>
-              <p>No announcements</p>
-            </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>,
+        document.body,
+      )}
     </div>
   )
 }
