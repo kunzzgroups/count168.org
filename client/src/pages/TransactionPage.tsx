@@ -1,12 +1,13 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useDashboardBootstrap } from '../hooks/useDashboardBootstrap'
 import { apiUrl } from '../lib/api'
-import { DashboardShell } from '../components/dashboard/DashboardShell'
-import { TransactionMain } from '../components/transaction/TransactionMain'
 import './DashboardPage.css'
+import './TransactionPage.css'
 
 export function TransactionPage() {
   const { gate, data, refetch } = useDashboardBootstrap()
+
+  const classicSrc = useMemo(() => apiUrl('/transaction_classic.php'), [])
 
   useEffect(() => {
     const prev = document.title
@@ -44,8 +45,13 @@ export function TransactionPage() {
   }
 
   return (
-    <DashboardShell data={data} classicPage="transaction_classic.php">
-      <TransactionMain bootstrap={data} />
-    </DashboardShell>
+    <div className="transactionClassicFrame">
+      <iframe
+        className="transactionClassicFrame__iframe"
+        title="Transaction Payment"
+        src={classicSrc}
+        referrerPolicy="same-origin"
+      />
+    </div>
   )
 }
