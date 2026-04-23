@@ -43,7 +43,7 @@ const ALERT_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => {
 })
 
 /**
- * React `/datacapturesummary`：DOM 与 `datacapturesummary.php` 对齐，由 `js/datacapturesummary.js` 驱动。
+ * React `/datacapturesummary`：DOM 与 `datacapturesummary_classic.php` 对齐，由 `js/datacapturesummary.js` 驱动。
  */
 export function DataCaptureSummaryMain({ bootstrap }: Props) {
   useLayoutEffect(() => {

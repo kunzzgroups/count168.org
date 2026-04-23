@@ -16,7 +16,7 @@ function buildApiUrl(pathAndQuery) {
     return new URL(p.replace(/^\//, ''), base).href;
 }
 
-/** 提交表格后进入 Summary：SPA 用 `/datacapturesummary`，经典页用 `datacapturesummary.php` */
+/** 提交表格后进入 Summary：SPA 用 `/datacapturesummary`；`datacapturesummary.php` 会 302 到该路由；经典全页为 `datacapturesummary_classic.php` */
 function navigateToDataCaptureSummarySuccess() {
     if (document.body && document.body.classList.contains('datacapture-spa-embed')) {
         var base =
@@ -23328,7 +23328,7 @@ async function submitDataCaptureForm() {
         localStorage.setItem('capturedDataCaptureType', selectedDataCaptureType);
 
         // Note: Do NOT record submitted process here. It will be recorded
-        // after final submission on datacapturesummary.php
+        // after final submission on datacapturesummary (SPA or classic page)
 
         // Show success notification
         showNotification('Data captured successfully! Redirecting to summary...', 'success');

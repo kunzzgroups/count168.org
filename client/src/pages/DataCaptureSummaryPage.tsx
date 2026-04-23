@@ -4,7 +4,7 @@ import { ClassicDashboardShell } from '../components/dashboard/ClassicDashboardS
 import { DataCaptureSummaryMain } from '../components/datacapture/DataCaptureSummaryMain'
 import './DashboardPage.css'
 
-/** React Data Capture Summary：与 `datacapturesummary.php` 同逻辑，由 `js/datacapturesummary.js` 驱动。 */
+/** React Data Capture Summary：与 `datacapturesummary_classic.php` 同逻辑，由 `js/datacapturesummary.js` 驱动。 */
 export function DataCaptureSummaryPage() {
   const { gate, data, refetch } = useDashboardBootstrap()
 
@@ -38,7 +38,7 @@ export function DataCaptureSummaryPage() {
   return (
     <ClassicDashboardShell
       data={data}
-      classicPage="datacapturesummary.php"
+      classicPage="datacapturesummary_classic.php"
       documentTitle="Data Capture Summary - EazyCount"
     >
       <DataCaptureSummaryMain bootstrap={data} />
