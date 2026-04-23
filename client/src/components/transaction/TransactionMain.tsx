@@ -42,6 +42,7 @@ import {
 import 'flatpickr/dist/flatpickr.min.css'
 import '../../../../css/date-range-picker.css'
 import '../../../../css/transaction.css'
+import '../../../../css/global-13inch.css'
 import './TransactionMain.css'
 
 type Props = {
@@ -1286,6 +1287,7 @@ export function TransactionMain({ bootstrap }: Props) {
                         type="checkbox"
                         className="category-checkbox"
                         id="category_all"
+                        value=""
                         checked={categoryAllSelected}
                         onChange={setCategorySelectAll}
                       />
@@ -1329,6 +1331,8 @@ export function TransactionMain({ bootstrap }: Props) {
                 <i className="fas fa-calendar-alt" />
                 <span id="date-range-display">{displayDmYRange}</span>
               </div>
+              <input type="hidden" id="date_from" value={ymdToDmY(w.dateFrom)} readOnly />
+              <input type="hidden" id="date_to" value={ymdToDmY(w.dateTo)} readOnly />
             </div>
             <div className="quick-select-dropdown quick-select-dropdown-toggle" ref={quickRef}>
               <button
@@ -1343,23 +1347,24 @@ export function TransactionMain({ bootstrap }: Props) {
                 <span id="quick-select-text">{w.quickSelectLabel || 'Period'}</span>
                 <i className="fas fa-chevron-down" />
               </button>
-              {quickOpen && (
-                <div className="dropdown-menu show" id="quick-select-dropdown">
-                  {QUICK_ORDER.map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      className="dropdown-item"
-                      onClick={() => {
-                        w.selectQuickRange(k)
-                        setQuickOpen(false)
-                      }}
-                    >
-                      {QUICK_RANGE_LABEL[k]}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div
+                className={`dropdown-menu${quickOpen ? ' show' : ''}`}
+                id="quick-select-dropdown"
+              >
+                {QUICK_ORDER.map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className="dropdown-item"
+                    onClick={() => {
+                      w.selectQuickRange(k)
+                      setQuickOpen(false)
+                    }}
+                  >
+                    {QUICK_RANGE_LABEL[k]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -1434,43 +1439,79 @@ export function TransactionMain({ bootstrap }: Props) {
 
           <div className="transaction-bottom-filters">
             {w.groupIds.length > 0 && (
-              <div className="transaction-company-filter dShow">
+              <div
+                id="group-buttons-wrapper"
+                className="transaction-company-filter shared-group-wrapper"
+              >
                 <span className="transaction-company-label">GroupID:</span>
-                <div className="transaction-company-buttons" role="group" aria-label="Group">
-                  {w.groupIds.map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      className={
-                        w.selectedGroup === g
-                          ? 'transaction-company-btn active'
-                          : 'transaction-company-btn'
-                      }
-                      onClick={() => w.setGroup(w.selectedGroup === g ? null : g)}
-                    >
-                      {g}
-                    </button>
-                  ))}
+                <div
+                  id="group-buttons-container"
+                  className="transaction-company-buttons"
+                  role="group"
+                  aria-label="Group"
+                >
+                  {w.groupIds.map((g) => {
+                    const active =
+                      w.selectedGroup != null &&
+                      String(w.selectedGroup).toUpperCase() === g
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        className={
+                          active
+                            ? 'transaction-company-btn shared-group-btn active'
+                            : 'transaction-company-btn shared-group-btn'
+                        }
+                        data-group-id={g}
+                        onClick={() => w.setGroup(w.selectedGroup === g ? null : g)}
+                      >
+                        {g}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             )}
 
-            {w.scopeCompanies.length > 0 && (
-              <div className="transaction-company-filter dShow">
+            {w.companies.length > 0 && (
+              <div
+                id="company-buttons-wrapper"
+                className="transaction-company-filter shared-company-wrapper"
+              >
                 <span className="transaction-company-label">Company:</span>
-                <div className="transaction-company-buttons" role="group" aria-label="Company">
-                  {w.scopeCompanies.map((c) => {
+                <div
+                  id="company-buttons-container"
+                  className="transaction-company-buttons"
+                  role="group"
+                  aria-label="Company"
+                >
+                  {w.companies.map((c) => {
+                    const code = String(c.company_id || '').trim()
+                    if (!code) return null
+                    const cGid = String(c.group_id || '').trim().toUpperCase()
+                    const selG =
+                      w.selectedGroup != null
+                        ? String(w.selectedGroup).toUpperCase()
+                        : null
+                    const visible = selG ? cGid === selG : !cGid
                     const isActive = Number(c.id) === Number(w.activeCompanyId)
                     return (
                       <button
                         key={c.id}
                         type="button"
+                        style={{ display: visible ? undefined : 'none' }}
                         className={
-                          isActive ? 'transaction-company-btn active' : 'transaction-company-btn'
+                          isActive
+                            ? 'transaction-company-btn shared-company-btn active'
+                            : 'transaction-company-btn shared-company-btn'
                         }
+                        data-company-id={c.id}
+                        data-group-id={cGid}
+                        data-company-code={code}
                         onClick={() => w.onPickCompany(c.id)}
                       >
-                        {String(c.company_id || '')}
+                        {code}
                       </button>
                     )
                   })}
@@ -1556,8 +1597,90 @@ export function TransactionMain({ bootstrap }: Props) {
             </div>
           )}
 
-          {isRate && (
-            <div id="rate-transaction-fields" className="rate-fields">
+          <div
+            id="standard-transaction-fields"
+            style={{ display: isRate ? 'none' : 'block' }}
+          >
+              <div className="transaction-form-group">
+                <label className="transaction-label">Date</label>
+                <input
+                  ref={txDateInputRef}
+                  type="text"
+                  id="transaction_date"
+                  className="transaction-input"
+                  readOnly
+                  style={{ cursor: 'pointer' }}
+                  placeholder="dd/mm/yyyy"
+                />
+              </div>
+
+              <div className="transaction-form-group transaction-inline-row">
+                <label className="transaction-label">Account</label>
+                <div className="transaction-account-inputs">
+                  <AccountSearchField
+                    value={toAccount}
+                    onChange={setToAccount}
+                    options={accounts}
+                    placeholder="--Select To Account--"
+                  />
+                  {showFromAndReverse && (
+                    <>
+                      <AccountSearchField
+                        value={fromAccount}
+                        onChange={setFromAccount}
+                        options={accounts}
+                        placeholder="--Select From Account--"
+                      />
+                      <button
+                        type="button"
+                        id="account_reverse_btn"
+                        className="transaction-account-reverse-btn"
+                        title="Reverse accounts"
+                        aria-label="Reverse accounts"
+                        onClick={reverseAccounts}
+                      >
+                        Reverse
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="transaction-form-group transaction-inline-row">
+                <label className="transaction-label">Currency</label>
+                <select
+                  id="transaction_currency"
+                  className="transaction-select"
+                  value={formCurrency}
+                  onChange={(e) => setFormCurrency(e.target.value)}
+                >
+                  <option value="">--Select Currency--</option>
+                  {w.currencyList.map((c) => (
+                    <option key={c.code} value={String(c.code).toUpperCase()}>
+                      {String(c.code).toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="transaction-form-group">
+                <label className="transaction-label">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  id="action_amount"
+                  className="transaction-input"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+            </div>
+
+          <div
+            id="rate-transaction-fields"
+            className="rate-fields"
+            style={{ display: isRate ? 'flex' : 'none' }}
+          >
               <div className="rate-section">
                 <label className="transaction-label">Date</label>
                 <input
@@ -1716,85 +1839,6 @@ export function TransactionMain({ bootstrap }: Props) {
                 </div>
               </div>
             </div>
-          )}
-
-          {!isRate && (
-            <div id="standard-transaction-fields">
-              <div className="transaction-form-group">
-                <label className="transaction-label">Date</label>
-                <input
-                  ref={txDateInputRef}
-                  type="text"
-                  id="transaction_date"
-                  className="transaction-input"
-                  readOnly
-                  style={{ cursor: 'pointer' }}
-                  placeholder="dd/mm/yyyy"
-                />
-              </div>
-
-              <div className="transaction-form-group transaction-inline-row">
-                <label className="transaction-label">Account</label>
-                <div className="transaction-account-inputs">
-                  <AccountSearchField
-                    value={toAccount}
-                    onChange={setToAccount}
-                    options={accounts}
-                    placeholder="--Select To Account--"
-                  />
-                  {showFromAndReverse && (
-                    <>
-                      <AccountSearchField
-                        value={fromAccount}
-                        onChange={setFromAccount}
-                        options={accounts}
-                        placeholder="--Select From Account--"
-                      />
-                      <button
-                        type="button"
-                        id="account_reverse_btn"
-                        className="transaction-account-reverse-btn"
-                        title="Reverse accounts"
-                        aria-label="Reverse accounts"
-                        onClick={reverseAccounts}
-                      >
-                        Reverse
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="transaction-form-group transaction-inline-row">
-                <label className="transaction-label">Currency</label>
-                <select
-                  id="transaction_currency"
-                  className="transaction-select"
-                  value={formCurrency}
-                  onChange={(e) => setFormCurrency(e.target.value)}
-                >
-                  <option value="">--Select Currency--</option>
-                  {w.currencyList.map((c) => (
-                    <option key={c.code} value={String(c.code).toUpperCase()}>
-                      {String(c.code).toUpperCase()}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="transaction-form-group">
-                <label className="transaction-label">Amount</label>
-                <input
-                  type="number"
-                  step="0.01"
-                  id="action_amount"
-                  className="transaction-input"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
 
           <div className="transaction-form-group" style={{ display: 'none' }}>
             <label className="transaction-label">Description</label>
@@ -1808,20 +1852,21 @@ export function TransactionMain({ bootstrap }: Props) {
             />
           </div>
 
-          {!isRate && (
-            <div className="transaction-two-col">
-              <div className="transaction-form-group" id="remark_form_group">
-                <label className="transaction-label">Remark</label>
-                <input
-                  type="text"
-                  id="action_sms"
-                  className="transaction-input text-uppercase"
-                  value={remark}
-                  onChange={(e) => setRemark(e.target.value.toUpperCase())}
-                />
-              </div>
+          <div
+            className="transaction-two-col"
+            style={{ display: isRate ? 'none' : undefined }}
+          >
+            <div className="transaction-form-group" id="remark_form_group">
+              <label className="transaction-label">Remark</label>
+              <input
+                type="text"
+                id="action_sms"
+                className="transaction-input text-uppercase"
+                value={remark}
+                onChange={(e) => setRemark(e.target.value.toUpperCase())}
+              />
             </div>
-          )}
+          </div>
 
           <div className="transaction-confirm-actions">
             <label className="transaction-checkbox-label transaction-confirm-label">
@@ -1855,9 +1900,6 @@ export function TransactionMain({ bootstrap }: Props) {
               </button>
             </div>
           </div>
-          <p className="tShell__sessionMeta">
-            Session company #{bootstrap.companyId ?? '—'}
-          </p>
         </div>
       </div>
 
@@ -1874,7 +1916,7 @@ export function TransactionMain({ bootstrap }: Props) {
           style={{ display: searchLoading ? 'flex' : 'none' }}
           aria-live="polite"
         >
-          Loading data
+          Loading...
         </div>
 
         {!multiCurrencyView && rawSearch && (
