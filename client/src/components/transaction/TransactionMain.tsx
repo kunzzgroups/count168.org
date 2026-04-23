@@ -8,6 +8,7 @@ import type {
 } from '../../lib/transactionLib'
 import {
   applyTxDisplayFilters,
+  buildTxListSessionStorageKey,
   calculateTxTotals,
   fetchContraInbox,
   fetchTxAccounts,
@@ -19,11 +20,13 @@ import {
   postContraApprove,
   postContraReject,
   resolveSubmitAccountIds,
+  saveTxListSessionStorage,
   sortTxRowsByRole,
   parseRateExpression,
   submitRateTransaction,
   showTxNotification,
   submitStandardTransaction,
+  tryReadTxListSessionStorage,
   ymdToDmY,
   type ContraInboxRow,
   type TxSearchPayload,
@@ -660,7 +663,23 @@ export function TransactionMain({ bootstrap }: Props) {
     }
 
     setRawSearch(data)
-    lastSearchCommitMsRef.current = Date.now()
+    const sessionKey = buildTxListSessionStorageKey({
+      companyId: w.activeCompanyId,
+      dateFromDmY,
+      dateToDmY,
+      categoryAllSelected,
+      selectedCategories,
+      showInactive: si,
+      showCaptureOnly: sc,
+      showZeroBalance: sz,
+      showAllCurrencies: w.showAllCurrencies,
+      selectedCurrencies: w.selectedCurrencies,
+    })
+    if (sessionKey) {
+      lastSearchCommitMsRef.current = saveTxListSessionStorage(sessionKey, data)
+    } else {
+      lastSearchCommitMsRef.current = Date.now()
+    }
     const disp = applyTxDisplayFilters(data.left_table || [], data.right_table || [], {
       showZeroBalance: sz,
       showPaymentOnly: si,
@@ -716,9 +735,40 @@ export function TransactionMain({ bootstrap }: Props) {
       return
     }
 
+    const rmKey = buildTxListSessionStorageKey({
+      companyId: w.activeCompanyId,
+      dateFromDmY: ymdToDmY(w.dateFrom),
+      dateToDmY: ymdToDmY(w.dateTo),
+      categoryAllSelected,
+      selectedCategories,
+      showInactive,
+      showCaptureOnly,
+      showZeroBalance,
+      showAllCurrencies: w.showAllCurrencies,
+      selectedCurrencies: w.selectedCurrencies,
+    })
+    if (rmKey) {
+      try {
+        sessionStorage.removeItem(rmKey)
+      } catch {
+        /* ignore */
+      }
+    }
+
     setHistoryOpen(false)
     void runSearchRef.current({ quiet: true })
-  }, [w.dateFrom, w.dateTo, w.showAllCurrencies, w.selectedCurrencies])
+  }, [
+    w.activeCompanyId,
+    w.dateFrom,
+    w.dateTo,
+    w.showAllCurrencies,
+    w.selectedCurrencies,
+    categoryAllSelected,
+    selectedCategories,
+    showInactive,
+    showCaptureOnly,
+    showZeroBalance,
+  ])
 
   useEffect(() => {
     refreshFromInvalidateRef.current = refreshTransactionDataFromExternalChange
@@ -791,7 +841,31 @@ export function TransactionMain({ bootstrap }: Props) {
     if (lastStructuralSearchKeyRef.current === structuralKey) return
     lastStructuralSearchKeyRef.current = structuralKey
 
-    void runSearchRef.current({ quiet: true })
+    const dateFromDmY = ymdToDmY(w.dateFrom)
+    const dateToDmY = ymdToDmY(w.dateTo)
+    const storageKey = buildTxListSessionStorageKey({
+      companyId: w.activeCompanyId,
+      dateFromDmY,
+      dateToDmY,
+      categoryAllSelected,
+      selectedCategories,
+      showInactive,
+      showCaptureOnly,
+      showZeroBalance,
+      showAllCurrencies: w.showAllCurrencies,
+      selectedCurrencies: w.selectedCurrencies,
+    })
+    let replayed = false
+    if (storageKey) {
+      const snap = tryReadTxListSessionStorage(storageKey, TX_LIST_INVALIDATE_LS_KEY)
+      if (snap) {
+        setRawSearch(snap.data)
+        lastSearchCommitMsRef.current = snap.savedAt
+        replayed = true
+      }
+    }
+
+    void runSearchRef.current({ quiet: replayed })
   }, [
     w.companiesReady,
     w.activeCompanyId,

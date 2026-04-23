@@ -104,6 +104,106 @@ export function dmyToYmd(dmy: string): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
+/** 与 `js/transaction.js` `TX_LIST_SESSION_PREFIX` / `buildTxListSessionKey` 一致（日期为 dd/mm/yyyy） */
+export const TX_LIST_SESSION_STORAGE_PREFIX = 'count168_txlist_v1_'
+
+export function buildTxListSessionStorageKey(params: {
+  companyId: number | null
+  dateFromDmY: string
+  dateToDmY: string
+  categoryAllSelected: boolean
+  selectedCategories: string[]
+  showInactive: boolean
+  showCaptureOnly: boolean
+  showZeroBalance: boolean
+  showAllCurrencies: boolean
+  selectedCurrencies: string[]
+}): string | null {
+  const df = String(params.dateFromDmY || '').trim()
+  const dt = String(params.dateToDmY || '').trim()
+  if (!df || !dt) return null
+
+  let cat = ''
+  if (!params.categoryAllSelected && params.selectedCategories.length > 0) {
+    cat = [...params.selectedCategories].map((x) => String(x)).sort().join(',')
+  }
+
+  let cur = ''
+  if (!params.showAllCurrencies && params.selectedCurrencies.length > 0) {
+    cur = [...params.selectedCurrencies]
+      .map((x) => String(x || '').trim().toUpperCase())
+      .filter(Boolean)
+      .sort()
+      .join(',')
+  }
+
+  const cid = params.companyId != null ? String(params.companyId) : ''
+  const showInactive = params.showInactive ? '1' : '0'
+  const showCaptureOnly = params.showCaptureOnly ? '1' : '0'
+  const hideZero = params.showZeroBalance ? '0' : '1'
+  const showAll = params.showAllCurrencies ? '1' : '0'
+
+  return (
+    TX_LIST_SESSION_STORAGE_PREFIX +
+    [cid, df, dt, cat, showInactive, showCaptureOnly, hideZero, cur, showAll].join('|')
+  )
+}
+
+export function tryReadTxListSessionStorage(
+  key: string,
+  invalidateLsKey: string,
+): { savedAt: number; data: TxSearchPayload } | null {
+  try {
+    const raw = sessionStorage.getItem(key)
+    if (!raw) return null
+    const o = JSON.parse(raw) as {
+      v?: number
+      savedAt?: number
+      data?: TxSearchPayload
+    }
+    if (!o?.data) return null
+    if (o.v !== 1 && o.v !== 2) return null
+
+    const left = o.data.left_table
+    const right = o.data.right_table
+    if (!Array.isArray(left) && !Array.isArray(right)) return null
+
+    let invalidateTs = 0
+    try {
+      invalidateTs =
+        parseInt(localStorage.getItem(invalidateLsKey) || '0', 10) || 0
+    } catch {
+      /* ignore */
+    }
+    const savedAt = o.v === 2 && typeof o.savedAt === 'number' ? o.savedAt : 0
+    if (invalidateTs > savedAt) {
+      try {
+        sessionStorage.removeItem(key)
+      } catch {
+        /* ignore */
+      }
+      return null
+    }
+
+    return { savedAt: savedAt || Date.now(), data: o.data }
+  } catch {
+    return null
+  }
+}
+
+/** @returns 写入的 `savedAt`（与 `saveTxListSearchToSession` / `lastSearchCommitMs` 对齐） */
+export function saveTxListSessionStorage(key: string, data: TxSearchPayload): number {
+  const ts = Date.now()
+  try {
+    const wrap = JSON.stringify({ v: 2, savedAt: ts, data })
+    if (wrap.length > 1_800_000) return ts
+    sessionStorage.setItem(key, wrap)
+  } catch {
+    /* quota / private mode */
+  }
+  return ts
+}
+
 /** 与 `js/transaction.js` `parseRateExpression` 一致（支持 `*`、`/`、`/3` 除法语义） */
 export function parseRateExpression(rawValue: unknown): {
   valid: boolean
