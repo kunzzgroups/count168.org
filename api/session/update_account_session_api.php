@@ -120,9 +120,6 @@ try {
     $_SESSION['name'] = $target_account['name'];
     $_SESSION['account_id'] = $target_account['account_id'];
 
-    require_once __DIR__ . '/../../includes/api_auth_token.php';
-    api_auth_persist_current_session($pdo);
-
     // 写入完成，立即释放 session 锁
     session_write_close();
 

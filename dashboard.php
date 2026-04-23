@@ -32,15 +32,6 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
     }
 }
 
-// SPA 登录手递手：无 PHP session 时可用 ?api_token= 恢复（与 session_check / Bearer 同一套逻辑）
-if (!isset($_SESSION['user_id'])) {
-    require_once __DIR__ . '/includes/api_auth_token.php';
-    api_auth_inject_query_token_as_bearer_if_needed();
-    if (api_auth_try_load_bearer($pdo) === 'ok' && !empty($GLOBALS['__api_auth_token_plain'])) {
-        api_auth_persist_current_session($pdo);
-    }
-}
-
 // 检查用户是否已登录
 if (isset($_SESSION['user_id'])) {
     // 检查session超时（如果没有remember me的话）
@@ -58,14 +49,11 @@ if (isset($_SESSION['user_id'])) {
         exit();
     }
 
-    // 检查owner是否已通过二级密码验证（React 路由，保留 api_token 供 Bearer 快照合并）
+    // 检查owner是否已通过二级密码验证
     if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner') {
         if (!isset($_SESSION['secondary_password_verified']) || $_SESSION['secondary_password_verified'] !== true) {
-            $t = isset($_GET['api_token']) ? trim((string) $_GET['api_token']) : '';
-            $qs = ($t !== '' && strlen($t) === 64 && ctype_xdigit($t))
-                ? ('?api_token=' . rawurlencode($t))
-                : '';
-            header('Location: /owner-secondary-password' . $qs);
+            // Owner未通过二级密码验证，重定向到二级密码验证页面
+            header("Location: owner_secondary_password.php");
             exit();
         }
     }

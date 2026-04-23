@@ -34,38 +34,6 @@ if (!file_exists('config.php')) {
 
 require_once 'config.php';
 
-require_once __DIR__ . '/includes/api_auth_token.php';
-
-function login_build_public_user_payload(): array
-{
-    return [
-        'userId' => isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : 0,
-        'userType' => (string) ($_SESSION['user_type'] ?? ''),
-        'loginId' => (string) ($_SESSION['login_id'] ?? ''),
-        'name' => (string) ($_SESSION['name'] ?? ''),
-        'role' => (string) ($_SESSION['role'] ?? ''),
-        'companyId' => isset($_SESSION['company_id']) ? (int) $_SESSION['company_id'] : null,
-        'companyCode' => isset($_SESSION['company_code']) ? (string) $_SESSION['company_code'] : null,
-        'accountId' => isset($_SESSION['account_id']) ? (string) $_SESSION['account_id'] : null,
-        'readOnly' => isset($_SESSION['read_only']) ? (int) $_SESSION['read_only'] : null,
-    ];
-}
-
-function login_json_success(PDO $pdo, ?string $redirect = null): void
-{
-    $token = api_auth_create_token($pdo);
-    $payload = [
-        'status' => 'success',
-        'token' => $token,
-        'user' => login_build_public_user_payload(),
-    ];
-    if ($redirect !== null && $redirect !== '') {
-        $payload['redirect'] = $redirect;
-    }
-    echo json_encode($payload);
-    exit;
-}
-
 // 检查 $pdo 是否已定义
 if (!isset($pdo) || !$pdo) {
     echo json_encode(['status' => 'error', 'message' => 'Database connection failed']);
@@ -159,7 +127,8 @@ try {
             $stmt = $pdo->prepare("UPDATE account SET last_login = NOW() WHERE id = ?");
             $stmt->execute([$account['id']]);
 
-            login_json_success($pdo, 'dashboard.php');
+            echo json_encode(['status' => 'success', 'redirect' => 'dashboard.php']);
+            exit;
         } else {
             if ($password_match && $has_expired) {
                 echo json_encode(['status' => 'error', 'message' => 'Company or Group has expired.']);
@@ -251,11 +220,14 @@ try {
         }
 
         if ($needs_secondary_password) {
-            login_json_success($pdo, 'api/users/user_secondary_password.php');
+            // 需要二级密码验证，跳转到二级密码验证页面
+            echo json_encode(['status' => 'success', 'redirect' => 'api/users/user_secondary_password.php']);
         } else {
+            // 不需要二级密码验证，直接跳转到dashboard
             $_SESSION['secondary_password_verified'] = true; // 标记为已验证（对于不需要二级密码的用户）
-            login_json_success($pdo, 'dashboard.php');
+            echo json_encode(['status' => 'success', 'redirect' => 'dashboard.php']);
         }
+        exit;
         
     } else {
         if ($user_password_match && $user_has_expired) {
@@ -326,8 +298,8 @@ try {
             if ($remember_me) {
                 // Owner 的 remember me 可以存在 session 或另外处理
             }
-
-            login_json_success($pdo, 'dashboard.php');
+            
+            echo json_encode(['status' => 'success', 'redirect' => 'dashboard.php']);
         } else {
             if ($owner_password_match && $owner_has_expired) {
                 echo json_encode(['status' => 'error', 'message' => 'Company or Group has expired.']);
