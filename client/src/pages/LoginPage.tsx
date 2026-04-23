@@ -37,7 +37,6 @@ export function LoginPage() {
   }, [modal])
 
   const setActiveRole = (next: Role) => {
-    setRole(next)
     setSearchParams(
       (prev) => {
         const p = new URLSearchParams(prev)

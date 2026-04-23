@@ -1,0 +1,12 @@
+# 将本文件重命名为 .htaccess，放在网站中放 React 构建产物的目录（如 /app/），
+# 使 /app/、/app/任意路径 回退到 index.html（SPA）。
+# 与根目录 index.php、/api/、各 *.php 并存；仅作用于该子目录。
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /app/
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /app/index.html [L]
+</IfModule>
