@@ -1,0 +1,31 @@
+/* Design tokens: 1rem = 10px (html 62.5%). Typography scales for ~1280px → 1920px. */
+
+html {
+  /* 10px / 16px = 62.5% */
+  font-size: 62.5%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:root {
+  /* --- 字体响应式变量 (1280px -> 1920px) --- */
+  --text-display: clamp(4.8rem, 2.5vw + 1.6rem, 6.4rem);
+  --text-h1: clamp(2.4rem, 1.25vw + 0.8rem, 3.2rem);
+  --text-h2: clamp(2rem, 0.625vw + 1.2rem, 2.4rem);
+  --text-h3: clamp(1.6rem, 0.3125vw + 1.2rem, 1.8rem);
+  --text-base: clamp(1.4rem, 0.3125vw + 1rem, 1.6rem);
+  --text-small: clamp(1.2rem, 0.15vw + 1rem, 1.3rem);
+  --text-tiny: clamp(1rem, 0.15vw + 0.8rem, 1.1rem);
+  --text-label: 1.1rem;
+
+  /* --- 间距响应式变量 --- */
+  --space-page: clamp(1.6rem, 2vw, 4rem);
+  --space-card: clamp(1.6rem, 1.5vw + 0.5rem, 2.4rem);
+  --space-gap: clamp(1.2rem, 1vw + 0.2rem, 2rem);
+}
+
+body {
+  font-size: var(--text-base);
+  line-height: 1.5;
+  /* 针对财务数字的对齐优化 */
+  font-variant-numeric: tabular-nums;
+}
