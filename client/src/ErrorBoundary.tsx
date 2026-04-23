@@ -43,10 +43,9 @@ export class ErrorBoundary extends Component<Props, State> {
             {this.state.message}
           </pre>
           <p style={{ fontSize: '0.9rem', margin: '1rem 0 0' }}>
-            请强制刷新 (Ctrl+F5)。若使用子路径部署，请检查 Vite{' '}
-            <code>VITE_BASE_PATH</code> 与「构建/上传」是否一致；若用 Nginx，需配置
-            <code> try_files $uri $uri/ /index.html; </code>（.htaccess 在 Nginx
-            上无效）。
+            请强制刷新 (Ctrl+F5)。若使用子路径部署，请确认 Vite{' '}
+            <code>VITE_BASE_PATH</code> 与构建/上传路径一致；Nginx 站点需配置 SPA
+            回退到 <code>index.html</code>。
           </p>
         </div>
       )
