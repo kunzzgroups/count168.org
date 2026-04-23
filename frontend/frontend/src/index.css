@@ -109,3 +109,49 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.app-header__brand {
+  font-weight: 600;
+  color: var(--text-h);
+  text-decoration: none;
+}
+
+.app-header__brand:hover {
+  color: var(--accent);
+}
+
+.app-header__nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.app-header__nav a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.app-header__nav a.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.app-root main {
+  flex: 1;
+  text-align: left;
+  padding: 1.25rem;
+}
+
+.page h1 {
+  font-size: 36px;
+  margin: 0 0 1rem;
+}
