@@ -32,8 +32,15 @@ php_value memory_limit 256M
 <IfModule mod_rewrite.c>
   RewriteEngine On
   RewriteBase /
-  RewriteCond %{REQUEST_FILENAME} -f [OR]
-  RewriteCond %{REQUEST_FILENAME} -d
-  RewriteRule ^ - [L]
+
+  # 主要 SPA 路径必须落到 index.html，否则在以下情况会白屏：
+  # - 网站根下误建了同名**目录**（如 dashboard/）时，原「是目录则不再 rewrite」会交给目录
+  #   列表/403，而加载不到带 <div id="root"> 的 HTML。
+  RewriteRule ^(dashboard|owner-secondary-password)(/.*)?$ /index.html [L]
+
+  # 其余「非实际文件/非实际目录」交给 React（/api/ 不强行改成 SPA，避免非预期 HTML）
+  RewriteCond %{REQUEST_URI} !^/api/
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule . /index.html [L]
 </IfModule>
