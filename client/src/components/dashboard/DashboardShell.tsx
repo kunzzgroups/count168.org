@@ -67,7 +67,6 @@ export function DashboardShell({ data }: Props) {
             />
             <div className="dShell__brandText">
               <span className="dShell__product">EazyCount</span>
-              <span className="dShell__sub">Transaction Dashboard</span>
             </div>
           </div>
         </div>
