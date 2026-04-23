@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, apiUrl } from '../lib/api'
 import { resolvePostLoginRedirect } from '../lib/resolvePostLoginRedirect'
-import { publicAsset } from '../lib/publicAsset'
 import type { ApiResult } from '../types/api'
 import './DashboardPage.css'
 
@@ -12,8 +11,9 @@ type DashboardBootstrap = {
   redirect?: string
 }
 
-type ViewState = 'loading' | 'error' | 'ready'
-
+/**
+ * 背景请求用于：未登录 / member / owner 二级密码 等在顶层整页跳转，不挡首屏（iframe 立即加载经典页）。
+ */
 async function readBootstrap(
   onRedirect: (url: string) => void,
 ): Promise<'ok' | 'needRedirect' | 'fail'> {
@@ -42,101 +42,26 @@ async function readBootstrap(
 }
 
 /**
- * 对应 `dashboard.php`：校验会话后全屏内嵌 `dashboard_classic.php`（不再叠第二层「数据面板」加载层）。
+ * 全屏内嵌 `dashboard_classic.php`；与 `api/dashboard/bootstrap_api.php` 并行，避免「正在验证登录」整屏等待。
  */
 export function DashboardPage() {
-  const [view, setView] = useState<ViewState>('loading')
-  const [errorHint, setErrorHint] = useState('')
-  const [classicSrc, setClassicSrc] = useState('')
+  const [classicSrc] = useState(() =>
+    resolvePostLoginRedirect('dashboard_classic.php'),
+  )
 
   const goRedirect = useCallback((url: string) => {
     window.location.assign(url)
   }, [])
 
-  const runBootstrap = useCallback(
-    async (opts?: { isAlive?: () => boolean }) => {
-      const isAlive = opts?.isAlive ?? (() => true)
-      setView('loading')
-      setErrorHint('')
-      const redirect = (url: string) => {
-        if (isAlive()) goRedirect(url)
-      }
-      try {
-        const r = await readBootstrap(redirect)
-        if (!isAlive()) return
-        if (r === 'needRedirect' || r === 'fail') {
-          if (r === 'fail') {
-            setErrorHint('无法连接服务器，请检查网络后重试。')
-            setView('error')
-          }
-          return
-        }
-        setClassicSrc(resolvePostLoginRedirect('dashboard_classic.php'))
-        setView('ready')
-      } catch {
-        if (!isAlive()) return
-        setErrorHint('网络异常，请重试。')
-        setView('error')
-      }
-    },
-    [goRedirect],
-  )
-
   useEffect(() => {
     let alive = true
-    void runBootstrap({ isAlive: () => alive })
+    void readBootstrap((url) => {
+      if (alive) goRedirect(url)
+    })
     return () => {
       alive = false
     }
-  }, [runBootstrap])
-
-  if (view === 'error') {
-    return (
-      <div className="dashboardSpa dashboardSpa--center">
-        <div className="dashboardSpa__card" role="alert">
-          <p className="dashboardSpa__errTitle">Dashboard 未就绪</p>
-          <p className="dashboardSpa__errText">{errorHint || '请重试'}</p>
-          <div className="dashboardSpa__errActions">
-            <button
-              type="button"
-              className="dashboardSpa__btn"
-              onClick={() => {
-                void runBootstrap()
-              }}
-            >
-              重试
-            </button>
-            <a className="dashboardSpa__link" href={apiUrl('/index.php')}>
-              回到登录
-            </a>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (view === 'loading') {
-    return (
-      <div className="dashboardSpa" aria-busy="true" aria-label="正在加载">
-        <div className="dashboardSpa__loading">
-          <img
-            className="dashboardSpa__logo"
-            src={publicAsset('images/count_logo.png')}
-            alt=""
-            width={56}
-            height={56}
-            decoding="async"
-          />
-          <div className="dashboardSpa__skeleton" aria-hidden>
-            <div className="dashboardSpa__skeletonLine dashboardSpa__skeletonLine--l" />
-            <div className="dashboardSpa__skeletonLine" />
-            <div className="dashboardSpa__skeletonLine dashboardSpa__skeletonLine--s" />
-          </div>
-          <p className="dashboardSpa__loadText">正在验证登录…</p>
-        </div>
-      </div>
-    )
-  }
+  }, [goRedirect])
 
   return (
     <div className="dashboardSpa">
