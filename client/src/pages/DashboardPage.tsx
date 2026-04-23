@@ -1,75 +1,40 @@
-import { useCallback, useEffect, useState } from 'react'
-import { apiFetch, apiUrl } from '../lib/api'
-import { resolvePostLoginRedirect } from '../lib/resolvePostLoginRedirect'
-import type { ApiResult } from '../types/api'
+import { useDashboardBootstrap } from '../hooks/useDashboardBootstrap'
+import { apiUrl } from '../lib/api'
+import { DashboardShell } from '../components/dashboard/DashboardShell'
 import './DashboardPage.css'
 
-type DashboardBootstrap = {
-  userData?: unknown
-  companyId?: number | null
-  canViewAnalytics?: boolean
-  redirect?: string
-}
-
 /**
- * 背景请求用于：未登录 / member / owner 二级密码 等在顶层整页跳转，不挡首屏（iframe 立即加载经典页）。
- */
-async function readBootstrap(
-  onRedirect: (url: string) => void,
-): Promise<'ok' | 'needRedirect' | 'fail'> {
-  const res = await apiFetch('/api/dashboard/bootstrap_api.php')
-  let json: ApiResult<DashboardBootstrap>
-  try {
-    json = await res.json()
-  } catch {
-    return 'fail'
-  }
-  if (!json.success) {
-    const d = json.data as { redirect?: string } | null | undefined
-    if (d && typeof d.redirect === 'string' && d.redirect) {
-      onRedirect(resolvePostLoginRedirect(d.redirect))
-      return 'needRedirect'
-    }
-    onRedirect(apiUrl('/index.php'))
-    return 'needRedirect'
-  }
-  const d = json.data
-  if (d && typeof d === 'object' && 'redirect' in d && d.redirect) {
-    onRedirect(resolvePostLoginRedirect(d.redirect as string))
-    return 'needRedirect'
-  }
-  return 'ok'
-}
-
-/**
- * 全屏内嵌 `dashboard_classic.php`；与 `api/dashboard/bootstrap_api.php` 并行，避免「正在验证登录」整屏等待。
+ * 阶段 1：无 iframe，纯 React 壳 + `useDashboardBootstrap`；图表/侧栏在后续阶段接入。
  */
 export function DashboardPage() {
-  const [classicSrc] = useState(() =>
-    resolvePostLoginRedirect('dashboard_classic.php'),
-  )
+  const { gate, data, refetch } = useDashboardBootstrap()
 
-  const goRedirect = useCallback((url: string) => {
-    window.location.assign(url)
-  }, [])
+  if (gate === 'loading') {
+    return (
+      <div className="dashboardPage__boot" role="status" aria-live="polite">
+        <div className="dashboardPage__bootInner" />
+      </div>
+    )
+  }
 
-  useEffect(() => {
-    let alive = true
-    void readBootstrap((url) => {
-      if (alive) goRedirect(url)
-    })
-    return () => {
-      alive = false
-    }
-  }, [goRedirect])
+  if (gate === 'error' || !data) {
+    return (
+      <div className="dashboardPage__errWrap">
+        <div className="dashboardPage__errCard" role="alert">
+          <p className="dashboardPage__errTitle">无法加载 Dashboard</p>
+          <p className="dashboardPage__errText">请检查网络后重试，或回到登录页。</p>
+          <div className="dashboardPage__errActions">
+            <button type="button" className="dashboardPage__btn" onClick={() => refetch()}>
+              重试
+            </button>
+            <a className="dashboardPage__link" href={apiUrl('/index.php')}>
+              回到登录
+            </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
-  return (
-    <div className="dashboardSpa">
-      <iframe
-        className="dashboardSpa__frame"
-        title="EazyCount Dashboard"
-        src={classicSrc}
-      />
-    </div>
-  )
+  return <DashboardShell data={data} />
 }

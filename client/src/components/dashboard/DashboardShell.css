@@ -1,0 +1,169 @@
+.dShell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #e8eef5;
+  font-family: Inter, 'Segoe UI', system-ui, sans-serif;
+  color: #0f172a;
+}
+
+.dShell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+}
+
+.dShell__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.dShell__logo {
+  object-fit: contain;
+}
+
+.dShell__brandText {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.dShell__product {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.dShell__sub {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.dShell__user {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dShell__avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.dShell__userMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+}
+
+.dShell__name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.dShell__role {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.dShell__cid {
+  color: #94a3b8;
+}
+
+.dShell__main {
+  flex: 1;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1.75rem 1.25rem 2.5rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dShell__title {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.dShell__lede {
+  margin: 0 0 1.25rem;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: #475569;
+}
+
+.dShell__meta {
+  margin: 0 0 1.5rem;
+  padding: 0.9rem 1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  list-style: none;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #334155;
+}
+
+.dShell__meta li + li {
+  margin-top: 0.4rem;
+}
+
+.dShell__label {
+  display: inline-block;
+  min-width: 5.5rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.dShell__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.dShell__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.dShell__btn--primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.dShell__btn--primary:hover {
+  background: #1d4ed8;
+}
+
+.dShell__btn--primary:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
