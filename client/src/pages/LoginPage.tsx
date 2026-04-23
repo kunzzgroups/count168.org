@@ -1,7 +1,15 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Building2, Lock, Send, User } from 'lucide-react'
+import { AlertTriangle, Building2, Lock, User } from 'lucide-react'
 import { apiFetch, apiUrl } from '../lib/api'
+import { publicAsset } from '../lib/publicAsset'
 import { resolvePostLoginRedirect } from '../lib/resolvePostLoginRedirect'
 import type { LoginProcessJson } from '../types/login'
 import './LoginPage.css'
@@ -138,9 +146,14 @@ export function LoginPage() {
   const supportHref =
     import.meta.env.VITE_SUPPORT_TELEGRAM_URL || 'https://t.me'
 
+  const pageBg = `url('${publicAsset('images/count_bg.png')}')`
+
   return (
-    <div className="login-page">
-      <div className="login-page-inner">
+    <div
+      className="login-page bg"
+      style={{ '--c168-page-bg': pageBg } as CSSProperties}
+    >
+      <div className="login-container">
         {maintenance.length > 0 && (
           <div className="maintenance-zone" aria-live="polite">
             <div className="maintenance-wrap">
@@ -187,7 +200,7 @@ export function LoginPage() {
             <form className="login-form" onSubmit={onSubmit}>
               <div className="input-group">
                 <Building2
-                  className="input-ico"
+                  className="input-icon"
                   size={18}
                   strokeWidth={2}
                   aria-hidden
@@ -205,7 +218,7 @@ export function LoginPage() {
               </div>
               <div className="input-group">
                 <User
-                  className="input-ico"
+                  className="input-icon"
                   size={18}
                   strokeWidth={2}
                   aria-hidden
@@ -223,7 +236,7 @@ export function LoginPage() {
               </div>
               <div className="input-group">
                 <Lock
-                  className="input-ico"
+                  className="input-icon"
                   size={18}
                   strokeWidth={2}
                   aria-hidden
@@ -264,7 +277,7 @@ export function LoginPage() {
                 type="submit"
                 disabled={submitting}
               >
-                {submitting ? '…' : 'Login'}
+                <span>{submitting ? '…' : 'Login'}</span>
               </button>
             </form>
           </div>
@@ -272,40 +285,55 @@ export function LoginPage() {
       </div>
 
       <a
-        className="tg-fab"
         href={supportHref}
         target="_blank"
         rel="noopener noreferrer"
         title="Telegram"
-        aria-label="Telegram"
+        className="telegram-fab"
       >
-        <Send size={26} />
+        <img
+          src={publicAsset('images/telegram.png')}
+          alt="Telegram"
+          className="telegram-icon"
+          width={60}
+          height={60}
+        />
       </a>
 
       {modal && (
         <div
-          className="login-modal-backdrop"
+          className="modal-overlay is-open"
           role="presentation"
           onClick={(e) => {
             if (e.target === e.currentTarget) setModal(null)
           }}
         >
           <div
-            className="login-modal"
+            className="modal-box"
             role="alertdialog"
             aria-modal="true"
             aria-labelledby={modalTitleId}
             aria-describedby={modalDescId}
+            onClick={(e) => e.stopPropagation()}
           >
-            <h3 id={modalTitleId}>{modal.title}</h3>
-            <p id={modalDescId}>{modal.message}</p>
-            <button
-              type="button"
-              className="login-modal-ok"
-              onClick={() => setModal(null)}
-            >
-              Confirm
-            </button>
+            <div className="modal-icon-wrap" aria-hidden>
+              <AlertTriangle className="modal-icon" strokeWidth={2} size={42} />
+            </div>
+            <h3 id={modalTitleId} className="modal-title">
+              {modal.title}
+            </h3>
+            <p id={modalDescId} className="modal-message">
+              {modal.message}
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="modal-btn modal-btn-primary"
+                onClick={() => setModal(null)}
+              >
+                Confirm
+              </button>
+            </div>
           </div>
         </div>
       )}
