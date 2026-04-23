@@ -113,6 +113,7 @@ api_success([
     'hasC168DomainPageAccess' => $hasC168DomainPageAccess,
     'companyHasGambling' => $companyHasGambling,
     'companyHasBank' => $companyHasBank,
+    'companyCode' => $currentCompanyCode,
     'expiration' => $expiration,
     'isExternalView' => (bool) $isExternalView,
 ], 'ok');

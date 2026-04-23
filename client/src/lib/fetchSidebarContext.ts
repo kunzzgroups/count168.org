@@ -11,7 +11,8 @@ export async function fetchSidebarContext(): Promise<SidebarContext | null> {
   }
   const json: ApiResult<SidebarContext> = await res.json()
   if (json.success && json.data) {
-    return json.data
+    const d = json.data
+    return { ...d, companyCode: d.companyCode ?? '' }
   }
   if (!json.success) {
     const d = json.data as { redirect?: string } | undefined

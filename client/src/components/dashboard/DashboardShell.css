@@ -337,3 +337,17 @@
     transform: translateX(0) !important;
   }
 }
+
+/* ClassicInformationMenu：锚点与 sidebar.php 一致 */
+.dShell--classicSidebar a.informationmenu-section-title {
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.dShell--classicSidebar .classic-informationmenu-root .informationmenu-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}

@@ -4,6 +4,7 @@ import { resolvePostLoginRedirect } from '../../lib/resolvePostLoginRedirect'
 import { fetchSidebarContext } from '../../lib/fetchSidebarContext'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import type { SidebarContext } from '../../types/sidebarContext'
+import { ClassicInformationMenu } from './ClassicInformationMenu'
 import { DashboardMain } from './DashboardMain'
 import { DashboardNav } from './DashboardNav'
 import './DashboardShell.css'
@@ -196,10 +197,15 @@ export function DashboardShell({
             </p>
           )}
           {ctx ? (
-            <DashboardNav
-              context={ctx}
-              onCloseMobile={() => setNavOpen(false)}
-            />
+            classicSidebarLayout ? (
+              <ClassicInformationMenu
+                context={ctx}
+                bootstrap={data}
+                onCloseMobile={() => setNavOpen(false)}
+              />
+            ) : (
+              <DashboardNav context={ctx} onCloseMobile={() => setNavOpen(false)} />
+            )
           ) : (
             !ctxError && <div className="dShell__ctxLoad" role="status" />
           )}
