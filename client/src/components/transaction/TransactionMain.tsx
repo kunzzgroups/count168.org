@@ -21,7 +21,17 @@ import {
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import { DashboardCalendarPopup } from '../dashboard/DashboardCalendarPopup'
 import { QUICK_RANGE_LABEL, type QuickRangeId } from '../../lib/quickDateRange'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import flatpickr from 'flatpickr'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import 'flatpickr/dist/flatpickr.min.css'
+import '../../../../css/date-range-picker.css'
 import '../../../../css/transaction.css'
 import './TransactionMain.css'
 
@@ -44,6 +54,36 @@ type AccountSlot = { id: number; label: string; code: string } | null
 
 function toUpperDisplay(s: string | undefined): string {
   return (s || '-').toUpperCase()
+}
+
+function todayDmY(): string {
+  const t = new Date()
+  const d = String(t.getDate()).padStart(2, '0')
+  const m = String(t.getMonth() + 1).padStart(2, '0')
+  const y = t.getFullYear()
+  return `${d}/${m}/${y}`
+}
+
+const TYPES_NEED_FROM = new Set([
+  'CONTRA',
+  'PAYMENT',
+  'RECEIVE',
+  'CLAIM',
+  'PROFIT',
+  'CLEAR',
+])
+
+type SingleFlatpickr = {
+  destroy: () => void
+  setDate: (date: string | Date, triggerChange?: boolean, format?: string) => void
+}
+
+function singleFlatpickr(
+  el: HTMLInputElement,
+  opts: Record<string, unknown>,
+): SingleFlatpickr {
+  const r = flatpickr(el, opts as Parameters<typeof flatpickr>[1])
+  return (Array.isArray(r) ? r[0] : r) as SingleFlatpickr
 }
 
 function AccountSearchField({
@@ -83,44 +123,42 @@ function AccountSearchField({
     <div className="custom-select-wrapper" ref={rootRef}>
       <button
         type="button"
-        className="custom-select-button"
+        className={`custom-select-button${open ? ' open' : ''}`}
         onClick={() => setOpen((o) => !o)}
       >
         {value ? value.label : placeholder}
       </button>
-      {open && (
-        <div className="custom-select-dropdown" style={{ display: 'block' }}>
-          <div className="custom-select-search">
-            <input
-              type="text"
-              placeholder="Search account..."
-              autoComplete="off"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </div>
-          <div className="custom-select-options">
-            {filtered.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                className="custom-select-option"
-                onClick={() => {
-                  onChange({
-                    id: o.id,
-                    label: o.display_text,
-                    code: o.account_id,
-                  })
-                  setOpen(false)
-                  setQ('')
-                }}
-              >
-                {o.display_text}
-              </button>
-            ))}
-          </div>
+      <div className={`custom-select-dropdown${open ? ' show' : ''}`}>
+        <div className="custom-select-search">
+          <input
+            type="text"
+            placeholder="Search account..."
+            autoComplete="off"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
         </div>
-      )}
+        <div className="custom-select-options">
+          {filtered.map((o) => (
+            <button
+              key={o.id}
+              type="button"
+              className="custom-select-option"
+              onClick={() => {
+                onChange({
+                  id: o.id,
+                  label: o.display_text,
+                  code: o.account_id,
+                })
+                setOpen(false)
+                setQ('')
+              }}
+            >
+              {o.display_text}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -166,7 +204,7 @@ export function TransactionMain({ bootstrap }: Props) {
 
   const [txType, setTxType] = useState('CONTRA')
   const [profitSide, setProfitSide] = useState<'WIN' | 'LOSE'>('WIN')
-  const [txDateDmY, setTxDateDmY] = useState(() => ymdToDmY(w.dateFrom))
+  const [txDateDmY, setTxDateDmY] = useState(todayDmY)
   const [toAccount, setToAccount] = useState<AccountSlot>(null)
   const [fromAccount, setFromAccount] = useState<AccountSlot>(null)
   const [formCurrency, setFormCurrency] = useState('')
@@ -174,6 +212,58 @@ export function TransactionMain({ bootstrap }: Props) {
   const [remark, setRemark] = useState('')
   const [confirmSubmit, setConfirmSubmit] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  const txDateInputRef = useRef<HTMLInputElement>(null)
+  const fpTxRef = useRef<SingleFlatpickr | null>(null)
+
+  const isRate = txType === 'RATE'
+  const showFromAndReverse = !isRate && TYPES_NEED_FROM.has(txType)
+
+  useLayoutEffect(() => {
+    if (isRate) {
+      fpTxRef.current?.destroy()
+      fpTxRef.current = null
+      return
+    }
+    const el = txDateInputRef.current
+    if (!el) return
+    fpTxRef.current?.destroy()
+    fpTxRef.current = singleFlatpickr(el, {
+      dateFormat: 'd/m/Y',
+      allowInput: false,
+      defaultDate: txDateDmY,
+      onChange: (_d: Date[], str: string) => setTxDateDmY(str),
+    })
+    return () => {
+      fpTxRef.current?.destroy()
+      fpTxRef.current = null
+    }
+    // 仅随 RATE / 非 RATE 切换重建；日期由下方 effect 同步到 flatpickr
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [isRate])
+
+  useEffect(() => {
+    const fp = fpTxRef.current
+    if (!fp || isRate) return
+    fp.setDate(txDateDmY, false, 'd/m/Y')
+  }, [txDateDmY, isRate])
+
+  useEffect(() => {
+    if (txType === 'RATE') {
+      setFromAccount(null)
+    }
+  }, [txType])
+
+  useEffect(() => {
+    if (!contraOpen) return
+    const onDoc = (e: MouseEvent) => {
+      const wrap = document.getElementById('contraInboxWrap')
+      if (wrap?.contains(e.target as Node)) return
+      setContraOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [contraOpen])
 
   useEffect(() => {
     let alive = true
@@ -590,6 +680,7 @@ export function TransactionMain({ bootstrap }: Props) {
     w.activeCompanyId != null
 
   return (
+    <div className="transaction-page tShell__transactionPage">
     <div className="transaction-container tShell__transactionRoot">
       {toast && (
         <div
@@ -628,45 +719,61 @@ export function TransactionMain({ bootstrap }: Props) {
                   {contraRows.length}
                 </span>
               </button>
-              {contraOpen && (
-                <div className="contra-inbox-popover" id="contraInboxPopover">
-                  <div className="contra-inbox-popover-header">
-                    <div className="contra-inbox-popover-title">
-                      Contra Inbox
-                      <span className="contra-inbox-badge">{contraRows.length}</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="contra-inbox-btn"
-                      id="contraInboxRefreshBtn"
-                      onClick={() => void refreshContra()}
-                    >
-                      Refresh
-                    </button>
+              <div
+                className="contra-inbox-popover"
+                id="contraInboxPopover"
+                style={{ display: contraOpen ? 'block' : 'none' }}
+              >
+                <div className="contra-inbox-popover-header">
+                  <div className="contra-inbox-popover-title">
+                    Contra Inbox
+                    <span className="contra-inbox-badge">{contraRows.length}</span>
                   </div>
-                  <div className="contra-inbox-popover-body">
-                    {contraLoading ? (
-                      <p className="tShell__muted">Loading…</p>
-                    ) : (
-                      <table className="contra-inbox-table">
-                        <thead>
+                  <button
+                    type="button"
+                    className="contra-inbox-btn"
+                    id="contraInboxRefreshBtn"
+                    onClick={() => void refreshContra()}
+                  >
+                    Refresh
+                  </button>
+                </div>
+                <div className="contra-inbox-popover-body">
+                  {contraLoading ? (
+                    <p className="tShell__muted">Loading…</p>
+                  ) : (
+                    <table className="contra-inbox-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>From</th>
+                          <th>To</th>
+                          <th>Currency</th>
+                          <th>Amount</th>
+                          <th>Submitted By</th>
+                          <th>Description</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody id="contraInboxTbody">
+                        {contraRows.length === 0 ? (
                           <tr>
-                            <th>Date</th>
-                            <th>From</th>
-                            <th>To</th>
-                            <th>Currency</th>
-                            <th>Amount</th>
-                            <th>Submitted By</th>
-                            <th>Description</th>
-                            <th>Action</th>
+                            <td colSpan={8} style={{ padding: '10px 8px', color: '#6b7280' }}>
+                              No pending contra.
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody id="contraInboxTbody">
-                          {contraRows.map((r) => (
+                        ) : (
+                          contraRows.map((r) => (
                             <tr key={r.id}>
                               <td>{r.transaction_date}</td>
-                              <td>{r.from_account_code}</td>
-                              <td>{r.to_account_code}</td>
+                              <td>
+                                {(r.from_account_code || '-') +
+                                  (r.from_account_name ? ` - ${r.from_account_name}` : '')}
+                              </td>
+                              <td>
+                                {(r.to_account_code || '-') +
+                                  (r.to_account_name ? ` - ${r.to_account_name}` : '')}
+                              </td>
                               <td>{r.currency}</td>
                               <td>{formatTxNumber(r.amount)}</td>
                               <td>{r.submitted_by}</td>
@@ -674,7 +781,7 @@ export function TransactionMain({ bootstrap }: Props) {
                               <td>
                                 <button
                                   type="button"
-                                  className="tShell__miniBtn"
+                                  className="contra-inbox-btn contra-inbox-approve"
                                   onClick={async () => {
                                     if (!w.activeCompanyId) return
                                     const x = await postContraApprove(w.activeCompanyId, r.id)
@@ -690,7 +797,7 @@ export function TransactionMain({ bootstrap }: Props) {
                                 </button>{' '}
                                 <button
                                   type="button"
-                                  className="tShell__miniBtn tShell__miniBtnDanger"
+                                  className="contra-inbox-btn contra-inbox-reject"
                                   onClick={async () => {
                                     if (!w.activeCompanyId) return
                                     const x = await postContraReject(w.activeCompanyId, r.id)
@@ -706,13 +813,13 @@ export function TransactionMain({ bootstrap }: Props) {
                                 </button>
                               </td>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>
@@ -745,37 +852,38 @@ export function TransactionMain({ bootstrap }: Props) {
                   </div>
                   <i className="fas fa-chevron-down" />
                 </button>
-                {catOpen && (
-                  <div className="category-dropdown-menu" id="category_dropdown_menu">
-                    <div className="category-option">
-                      <label className="category-checkbox-label">
-                        <input
-                          type="checkbox"
-                          className="category-checkbox"
-                          id="category_all"
-                          checked={categoryAllSelected}
-                          onChange={setCategorySelectAll}
-                        />
-                        <span>--Select All--</span>
-                      </label>
-                    </div>
-                    <div id="category_options_container">
-                      {categories.map((role) => (
-                        <div key={role} className="category-option">
-                          <label className="category-checkbox-label">
-                            <input
-                              type="checkbox"
-                              className="category-checkbox"
-                              checked={selectedCategories.map((x) => x.toUpperCase()).includes(role.toUpperCase())}
-                              onChange={() => toggleCategory(role)}
-                            />
-                            <span>{role}</span>
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+                <div
+                  className={`category-dropdown-menu${catOpen ? ' show' : ''}`}
+                  id="category_dropdown_menu"
+                >
+                  <div className="category-option">
+                    <label className="category-checkbox-label">
+                      <input
+                        type="checkbox"
+                        className="category-checkbox"
+                        id="category_all"
+                        checked={categoryAllSelected}
+                        onChange={setCategorySelectAll}
+                      />
+                      <span>--Select All--</span>
+                    </label>
                   </div>
-                )}
+                  <div id="category_options_container">
+                    {categories.map((role) => (
+                      <div key={role} className="category-option">
+                        <label className="category-checkbox-label">
+                          <input
+                            type="checkbox"
+                            className="category-checkbox"
+                            checked={selectedCategories.map((x) => x.toUpperCase()).includes(role.toUpperCase())}
+                            onChange={() => toggleCategory(role)}
+                          />
+                          <span>{role}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1024,96 +1132,117 @@ export function TransactionMain({ bootstrap }: Props) {
             </div>
           )}
 
-          {txType === 'RATE' && (
+          {isRate && (
             <p className="tShell__rateHint">
               RATE uses multiple account and currency rows in the classic page. Please use{' '}
               <strong>经典版</strong> for RATE until this form is fully migrated.
             </p>
           )}
 
-          <div id="standard-transaction-fields">
-            <div className="transaction-form-group">
-              <label className="transaction-label">Date</label>
-              <input
-                type="text"
-                id="transaction_date"
-                className="transaction-input"
-                value={txDateDmY}
-                onChange={(e) => setTxDateDmY(e.target.value)}
-                placeholder="dd/mm/yyyy"
-              />
-            </div>
+          {!isRate && (
+            <div id="standard-transaction-fields">
+              <div className="transaction-form-group">
+                <label className="transaction-label">Date</label>
+                <input
+                  ref={txDateInputRef}
+                  type="text"
+                  id="transaction_date"
+                  className="transaction-input"
+                  readOnly
+                  style={{ cursor: 'pointer' }}
+                  placeholder="dd/mm/yyyy"
+                />
+              </div>
 
-            <div className="transaction-form-group transaction-inline-row">
-              <label className="transaction-label">Account</label>
-              <div className="transaction-account-inputs">
-                <AccountSearchField
-                  value={toAccount}
-                  onChange={setToAccount}
-                  options={accounts}
-                  placeholder="--Select To Account--"
-                />
-                <AccountSearchField
-                  value={fromAccount}
-                  onChange={setFromAccount}
-                  options={accounts}
-                  placeholder="--Select From Account--"
-                />
-                <button
-                  type="button"
-                  id="account_reverse_btn"
-                  className="transaction-account-reverse-btn"
-                  title="Reverse accounts"
-                  aria-label="Reverse accounts"
-                  onClick={reverseAccounts}
+              <div className="transaction-form-group transaction-inline-row">
+                <label className="transaction-label">Account</label>
+                <div className="transaction-account-inputs">
+                  <AccountSearchField
+                    value={toAccount}
+                    onChange={setToAccount}
+                    options={accounts}
+                    placeholder="--Select To Account--"
+                  />
+                  {showFromAndReverse && (
+                    <>
+                      <AccountSearchField
+                        value={fromAccount}
+                        onChange={setFromAccount}
+                        options={accounts}
+                        placeholder="--Select From Account--"
+                      />
+                      <button
+                        type="button"
+                        id="account_reverse_btn"
+                        className="transaction-account-reverse-btn"
+                        title="Reverse accounts"
+                        aria-label="Reverse accounts"
+                        onClick={reverseAccounts}
+                      >
+                        Reverse
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="transaction-form-group transaction-inline-row">
+                <label className="transaction-label">Currency</label>
+                <select
+                  id="transaction_currency"
+                  className="transaction-select"
+                  value={formCurrency}
+                  onChange={(e) => setFormCurrency(e.target.value)}
                 >
-                  Reverse
-                </button>
+                  <option value="">--Select Currency--</option>
+                  {w.currencyList.map((c) => (
+                    <option key={c.code} value={String(c.code).toUpperCase()}>
+                      {String(c.code).toUpperCase()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="transaction-form-group">
+                <label className="transaction-label">Amount</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  id="action_amount"
+                  className="transaction-input"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
               </div>
             </div>
+          )}
 
-            <div className="transaction-form-group transaction-inline-row">
-              <label className="transaction-label">Currency</label>
-              <select
-                id="transaction_currency"
-                className="transaction-select"
-                value={formCurrency}
-                onChange={(e) => setFormCurrency(e.target.value)}
-              >
-                <option value="">--Select Currency--</option>
-                {w.currencyList.map((c) => (
-                  <option key={c.code} value={String(c.code).toUpperCase()}>
-                    {String(c.code).toUpperCase()}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="transaction-form-group">
-              <label className="transaction-label">Amount</label>
-              <input
-                type="number"
-                step="0.01"
-                id="action_amount"
-                className="transaction-input"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-              />
-            </div>
+          <div className="transaction-form-group" style={{ display: 'none' }}>
+            <label className="transaction-label">Description</label>
+            <input
+              type="text"
+              id="action_description"
+              className="transaction-input text-uppercase"
+              readOnly
+              defaultValue=""
+              aria-hidden
+            />
           </div>
 
-          <div className="transaction-two-col">
-            <div className="transaction-form-group" id="remark_form_group">
-              <label className="transaction-label">Remark</label>
-              <input
-                type="text"
-                id="action_sms"
-                className="transaction-input text-uppercase"
-                value={remark}
-                onChange={(e) => setRemark(e.target.value.toUpperCase())}
-              />
+          {!isRate && (
+            <div className="transaction-two-col">
+              <div className="transaction-form-group" id="remark_form_group">
+                <label className="transaction-label">Remark</label>
+                <input
+                  type="text"
+                  id="action_sms"
+                  className="transaction-input text-uppercase"
+                  value={remark}
+                  onChange={(e) => setRemark(e.target.value.toUpperCase())}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="transaction-confirm-actions">
             <label className="transaction-checkbox-label transaction-confirm-label">
@@ -1147,6 +1276,9 @@ export function TransactionMain({ bootstrap }: Props) {
               </button>
             </div>
           </div>
+          <p className="tShell__sessionMeta">
+            Session company #{bootstrap.companyId ?? '—'}
+          </p>
         </div>
       </div>
 
@@ -1498,10 +1630,7 @@ export function TransactionMain({ bootstrap }: Props) {
           {searchError}
         </p>
       )}
-
-      <p className="tShell__sessionMeta">
-        Session company #{bootstrap.companyId ?? '—'}
-      </p>
+    </div>
     </div>
   )
 }

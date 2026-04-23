@@ -1,17 +1,32 @@
-/* React Transaction：与 `transaction.css` 同壳，主区在侧栏 flex 内滚动 */
-.tShell__transactionRoot {
+/* React Transaction：根节点带 `.transaction-page` 以套用 `transaction.css`；侧栏已在 flex 内，勿再加经典整页左留白 */
+.dShell__main .transaction-page.tShell__transactionPage {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: auto;
   box-sizing: border-box;
+  width: 100%;
 }
 
-.dShell__main .tShell__transactionRoot {
-  padding: clamp(8px, 1vw, 12px) clamp(12px, 1.5vw, 40px);
+.dShell__main .transaction-page .transaction-container.tShell__transactionRoot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  box-sizing: border-box;
   max-width: none;
   width: 100%;
+  /* 覆盖经典 `.transaction-container` 为全页侧栏预留的大左 padding */
+  padding: 1px clamp(12px, 1.5vw, 40px) 20px clamp(8px, 1vw, 16px);
+}
+
+.dShell__main .transaction-page .transaction-separator-line {
+  width: 100%;
+  left: auto;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .tShell__sessionMeta {
