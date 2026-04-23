@@ -1,7 +1,6 @@
 <?php
 /**
- * Quick entry to the React SPA (deploy output lives under /app/).
- * Legacy HTML login remains at index.php.
+ * @deprecated 主站入口已为根路径 React；保留短链接兼容。
  */
-header('Location: /app/', true, 302);
+header('Location: /', true, 302);
 exit;

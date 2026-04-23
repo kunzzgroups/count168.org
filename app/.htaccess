@@ -1,11 +1,2 @@
-# Deploy Vite output (contents of frontend/frontend/dist/) into this directory as /app/ on the host.
-# Keeps legacy PHP at site root (index.php, dashboard.php, /api/, etc.).
-
-<IfModule mod_rewrite.c>
-  RewriteEngine On
-  RewriteBase /app/
-  RewriteRule ^index\.html$ - [L]
-  RewriteCond %{REQUEST_FILENAME} !-f
-  RewriteCond %{REQUEST_FILENAME} !-d
-  RewriteRule . index.html [L]
-</IfModule>
+# SPA 已迁到网站根目录。若仍保留此目录，可将整个 /app 删除；或保留本文件仅作说明。
+# 根 .htaccess 已将 /app/* 302 到 /*
