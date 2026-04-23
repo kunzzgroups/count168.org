@@ -2743,9 +2743,9 @@ document.addEventListener('visibilitychange', function () {
     }
 })();
 
-// 初始化 - 使用防抖避免多次调用
+// 初始化 - 使用防抖避免多次调用；兼容 DOM 已就绪后再执行（如脚本晚于 body 注入时）
 let isInitializing = false;
-document.addEventListener('DOMContentLoaded', async function () {
+async function runDashboardInit() {
     if (isInitializing) return;
     isInitializing = true;
 
@@ -2796,4 +2796,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     } finally {
         isInitializing = false;
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+        runDashboardInit();
+    });
+} else {
+    runDashboardInit();
+}

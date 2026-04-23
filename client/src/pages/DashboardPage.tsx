@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiFetch, apiUrl } from '../lib/api'
 import { resolvePostLoginRedirect } from '../lib/resolvePostLoginRedirect'
+import { publicAsset } from '../lib/publicAsset'
 import type { ApiResult } from '../types/api'
 import './DashboardPage.css'
 
@@ -11,63 +12,151 @@ type DashboardBootstrap = {
   redirect?: string
 }
 
-type Gate = 'loading' | 'ready'
+type ViewState = 'loading' | 'error' | 'ready'
+
+async function readBootstrap(
+  onRedirect: (url: string) => void,
+): Promise<'ok' | 'needRedirect' | 'fail'> {
+  const res = await apiFetch('/api/dashboard/bootstrap_api.php')
+  let json: ApiResult<DashboardBootstrap>
+  try {
+    json = await res.json()
+  } catch {
+    return 'fail'
+  }
+  if (!json.success) {
+    const d = json.data as { redirect?: string } | null | undefined
+    if (d && typeof d.redirect === 'string' && d.redirect) {
+      onRedirect(resolvePostLoginRedirect(d.redirect))
+      return 'needRedirect'
+    }
+    onRedirect(apiUrl('/index.php'))
+    return 'needRedirect'
+  }
+  const d = json.data
+  if (d && typeof d === 'object' && 'redirect' in d && d.redirect) {
+    onRedirect(resolvePostLoginRedirect(d.redirect as string))
+    return 'needRedirect'
+  }
+  return 'ok'
+}
 
 /**
  * 对应 `dashboard.php`：校验会话后内嵌全页 `dashboard_classic.php`（PHP 与既有脚本不改业务）。
  */
 export function DashboardPage() {
-  const [gate, setGate] = useState<Gate>('loading')
+  const [view, setView] = useState<ViewState>('loading')
+  const [iframeReady, setIframeReady] = useState(false)
+  const [errorHint, setErrorHint] = useState('')
   const [classicSrc, setClassicSrc] = useState('')
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
+  const goRedirect = useCallback((url: string) => {
+    window.location.assign(url)
+  }, [])
+
+  const runBootstrap = useCallback(
+    async (opts?: { isAlive?: () => boolean }) => {
+      const isAlive = opts?.isAlive ?? (() => true)
+      setView('loading')
+      setErrorHint('')
+      setIframeReady(false)
+      const redirect = (url: string) => {
+        if (isAlive()) goRedirect(url)
+      }
       try {
-        const res = await apiFetch('/api/dashboard/bootstrap_api.php')
-        const json: ApiResult<DashboardBootstrap> = await res.json()
-        if (cancelled) return
-        if (!json.success) {
-          const d = json.data as { redirect?: string } | null | undefined
-          if (d && typeof d.redirect === 'string' && d.redirect) {
-            window.location.assign(resolvePostLoginRedirect(d.redirect))
-            return
+        const r = await readBootstrap(redirect)
+        if (!isAlive()) return
+        if (r === 'needRedirect' || r === 'fail') {
+          if (r === 'fail') {
+            setErrorHint('无法连接服务器，请检查网络后重试。')
+            setView('error')
           }
-          window.location.assign(apiUrl('/index.php'))
-          return
-        }
-        const d = json.data
-        if (d && typeof d === 'object' && 'redirect' in d && d.redirect) {
-          window.location.assign(
-            resolvePostLoginRedirect(d.redirect as string),
-          )
           return
         }
         setClassicSrc(resolvePostLoginRedirect('dashboard_classic.php'))
-        setGate('ready')
+        setView('ready')
       } catch {
-        if (!cancelled) window.location.assign(apiUrl('/index.php'))
+        if (!isAlive()) return
+        setErrorHint('网络异常，请重试。')
+        setView('error')
       }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    },
+    [goRedirect],
+  )
 
-  if (gate === 'loading') {
+  useEffect(() => {
+    let alive = true
+    void runBootstrap({ isAlive: () => alive })
+    return () => {
+      alive = false
+    }
+  }, [runBootstrap])
+
+  if (view === 'error') {
     return (
-      <div className="dashboardSpa__loading" role="status" aria-live="polite">
-        Loading…
+      <div className="dashboardSpa dashboardSpa--center">
+        <div className="dashboardSpa__card" role="alert">
+          <p className="dashboardSpa__errTitle">Dashboard 未就绪</p>
+          <p className="dashboardSpa__errText">{errorHint || '请重试'}</p>
+          <div className="dashboardSpa__errActions">
+            <button
+              type="button"
+              className="dashboardSpa__btn"
+              onClick={() => {
+                void runBootstrap()
+              }}
+            >
+              重试
+            </button>
+            <a className="dashboardSpa__link" href={apiUrl('/index.php')}>
+              回到登录
+            </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (view === 'loading') {
+    return (
+      <div className="dashboardSpa" aria-busy="true" aria-label="正在加载">
+        <div className="dashboardSpa__loading">
+          <img
+            className="dashboardSpa__logo"
+            src={publicAsset('images/count_logo.png')}
+            alt=""
+            width={56}
+            height={56}
+            decoding="async"
+          />
+          <div className="dashboardSpa__skeleton" aria-hidden>
+            <div className="dashboardSpa__skeletonLine dashboardSpa__skeletonLine--l" />
+            <div className="dashboardSpa__skeletonLine" />
+            <div className="dashboardSpa__skeletonLine dashboardSpa__skeletonLine--s" />
+          </div>
+          <p className="dashboardSpa__loadText">正在验证登录…</p>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="dashboardSpa">
+      {!iframeReady && (
+        <div
+          className="dashboardSpa__iframeBlock"
+          aria-live="polite"
+          role="status"
+        >
+          <div className="dashboardSpa__spinner" aria-hidden />
+          <span>正在加载数据面板…</span>
+        </div>
+      )}
       <iframe
-        className="dashboardSpa__frame"
+        className={`dashboardSpa__frame${iframeReady ? ' dashboardSpa__frame--visible' : ''}`}
         title="EazyCount Dashboard"
         src={classicSrc}
+        onLoad={() => setIframeReady(true)}
       />
     </div>
   )
