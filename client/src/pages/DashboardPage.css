@@ -1,0 +1,24 @@
+.dashboardSpa {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #0b1220;
+}
+
+.dashboardSpa__loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #e2e8f0;
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+.dashboardSpa__frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #fff;
+}

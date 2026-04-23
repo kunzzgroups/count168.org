@@ -153,6 +153,11 @@ if ($companyId) {
     }
 }
 $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategories);
+
+$__eazyPrefix = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+$eazycountSpaDashboard = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
+    ? '/dashboard'
+    : $__eazyPrefix . '/dashboard';
 ?>
 <!--
 ================================================================================
@@ -165,6 +170,7 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
     <link rel="preload" href="(当前用户头像 URL)" as="image">
 ================================================================================
 -->
+<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;</script>
 <!-- Sidebar HTML (CSS 已移至 css/sidebar.css，JS 逻辑已移至 js/sidebar.js) -->
 <!-- Overlay -->
 <div class="informationmenu-overlay"></div>
@@ -317,7 +323,7 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
             <?php if (empty($permissions) || in_array('home', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title" data-page="dashboard.php"
-                        onclick="window.location.href='dashboard.php'">
+                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_DASHBOARD==='string'&&w.EAZYCOUNT_SPA_DASHBOARD)?w.EAZYCOUNT_SPA_DASHBOARD:'dashboard.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                         </svg>
