@@ -13,11 +13,17 @@ function formatYmd(d: Date): string {
   return `${y}-${m}-${day}`
 }
 
-/** 与 `dashboard.js` shouldAggregateByMonth 一致 */
+/**
+ * 与 `js/dashboard.js` `shouldAggregateByMonth` 一致：
+ * - `currentRangeType === 'year'`（本年至今日 / 去年整年 等）→ 按月份
+ * - 或跨越月份数 ≥ 3
+ */
 export function shouldAggregateByMonth(
   startYmd: string,
   endYmd: string,
+  currentRangeType: 'year' | null = null,
 ): boolean {
+  if (currentRangeType === 'year') return true
   try {
     const start = parseYmd(startYmd)
     const end = parseYmd(endYmd)
@@ -34,6 +40,25 @@ export function shouldAggregateByMonth(
   } catch {
     return false
   }
+}
+
+/** 与图表「按日」X 轴顺序一致，供 card point 细调对齐。 */
+export function listYmdInClosedRange(
+  startYmd: string,
+  endYmd: string,
+): string[] {
+  const start = parseYmd(startYmd)
+  const end = parseYmd(endYmd)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return []
+  start.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+  const all: string[] = []
+  const c = new Date(start)
+  while (c <= end) {
+    all.push(formatYmd(c))
+    c.setDate(c.getDate() + 1)
+  }
+  return all
 }
 
 function earningsMultiplierForChart(data: DashboardApiPayload): number {
@@ -60,12 +85,13 @@ const LINE = {
 } as const
 
 /**
- * 与 `js/dashboard.js` `updateChart` 主线路一致（不实现 fetchCardPointByDate 的二次覆盖）。
+ * 与 `js/dashboard.js` `updateChart` 主线路一致；按日细调在 `refineChartDataWithCardPoints` 中补全。
  */
 export function buildTrendChartData(
   data: DashboardApiPayload,
   startYmd: string,
   endYmd: string,
+  currentRangeType: 'year' | null = null,
 ): ChartData<'line'> {
   const emul = earningsMultiplierForChart(data)
   const daily = data.daily_data || {}
@@ -85,8 +111,9 @@ export function buildTrendChartData(
   const end = parseYmd(endYmd)
   start.setHours(0, 0, 0, 0)
   end.setHours(0, 0, 0, 0)
+  const aggregate = shouldAggregateByMonth(startYmd, endYmd, currentRangeType)
 
-  if (shouldAggregateByMonth(startYmd, endYmd)) {
+  if (aggregate) {
     const months: { year: number; month: number; key: string }[] = []
     const cur = new Date(start)
     while (cur <= end) {
@@ -126,12 +153,7 @@ export function buildTrendChartData(
       earn.push(np * emul)
     }
   } else {
-    const all: string[] = []
-    const c = new Date(start)
-    while (c <= end) {
-      all.push(formatYmd(c))
-      c.setDate(c.getDate() + 1)
-    }
+    const all = listYmdInClosedRange(startYmd, endYmd)
     for (const dateStr of all) {
       const pD = parseFloat(String(prof[dateStr] ?? 0)) || 0
       const eD = parseFloat(String(exp[dateStr] ?? 0)) || 0

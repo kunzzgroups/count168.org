@@ -27,18 +27,29 @@ function ownerHasGroupFilterUi(list: OwnerCompany[] | null): boolean {
 }
 
 /**
- * 与 `js/dashboard.js` 的 isDashboardDataScopeValid 一致（未实现 Group-All 汇总模式）。
+ * 与 `js/dashboard.js` `isDashboardDataScopeValid` 一致（含 Group-All 模式）。
  */
 export function isDashboardDataScopeValid(
   companies: OwnerCompany[] | null,
   activeCompanyId: number | null,
   selectedGroup: string | null,
+  isGroupAllMode = false,
 ): boolean {
   if (activeCompanyId == null) return false
   if (!ownerHasGroupFilterUi(companies)) return true
 
   if (selectedGroup) {
-    return companies!.some(
+    if (isGroupAllMode) {
+      const groupCompanies = (companies || []).filter(
+        (c) =>
+          c.group_id &&
+          String(c.group_id).toUpperCase() === selectedGroup &&
+          c.company_id &&
+          String(c.company_id).trim() !== '',
+      )
+      return groupCompanies.length > 0
+    }
+    return (companies || []).some(
       (c) =>
         Number(c.id) === Number(activeCompanyId) &&
         c.group_id &&
@@ -49,6 +60,25 @@ export function isDashboardDataScopeValid(
   const cur = companies!.find((c) => Number(c.id) === Number(activeCompanyId))
   if (!cur) return false
   return !cur.group_id || String(cur.group_id).trim() === ''
+}
+
+/** 与 `js/dashboard.js` `renderCompanyButtons` 的 filtered 公司列表一致。 */
+export function filterCompaniesForDashboardRow(
+  companies: OwnerCompany[],
+  selectedGroup: string | null,
+): OwnerCompany[] {
+  if (selectedGroup) {
+    return companies.filter(
+      (c) =>
+        c.group_id &&
+        String(c.group_id).toUpperCase() === selectedGroup &&
+        c.company_id &&
+        String(c.company_id).trim() !== '',
+    )
+  }
+  return companies.filter(
+    (c) => !c.group_id || String(c.group_id).trim() === '',
+  )
 }
 
 export function uniqueGroupIds(companies: OwnerCompany[]): string[] {

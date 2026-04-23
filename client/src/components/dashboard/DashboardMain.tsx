@@ -1,5 +1,6 @@
 import { useDashboardWorkspace } from '../../hooks/useDashboardWorkspace'
 import { registerDashboardCharts } from '../../lib/dashboardChartRegister'
+import { QUICK_RANGE_LABEL, type QuickRangeId } from '../../lib/quickDateRange'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import { formatKpiNumber } from '../../lib/kpiFromDashboardData'
 import { Line } from 'react-chartjs-2'
@@ -9,6 +10,24 @@ import './DashboardMain.css'
 type Props = {
   bootstrap: DashboardBootstrapData
 }
+
+const QUICK_ORDER: QuickRangeId[] = [
+  'today',
+  'yesterday',
+  'thisWeek',
+  'lastWeek',
+  'thisMonth',
+  'lastMonth',
+  'thisYear',
+  'lastYear',
+]
+
+const CHART_TOGGLE: { label: string; index: number }[] = [
+  { label: 'Profit', index: 0 },
+  { label: 'Expenses', index: 1 },
+  { label: 'NET', index: 2 },
+  { label: 'Earnings', index: 3 },
+]
 
 export function DashboardMain({ bootstrap }: Props) {
   const id = useId()
@@ -71,23 +90,38 @@ export function DashboardMain({ bootstrap }: Props) {
           </div>
         )}
 
-        {w.companies.length > 1 && (
+        {w.scopeCompanies.length > 0 && (
           <div className="dMain__row">
-            <label className="dMain__label" htmlFor={id + 'co'}>
-              Company
-            </label>
-            <select
-              id={id + 'co'}
-              className="dMain__select"
-              value={w.activeCompanyId ?? ''}
-              onChange={(e) => w.onPickCompany(Number(e.target.value))}
-            >
-              {w.companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {String(c.company_id || '')} (id: {c.id})
-                </option>
-              ))}
-            </select>
+            <span className="dMain__label">Company</span>
+            <div className="dMain__pills" role="group" aria-label="公司">
+              {w.showGroupAll && (
+                <button
+                  type="button"
+                  className={
+                    w.isGroupAllMode
+                      ? 'dMain__pill dMain__pill--active dMain__pill--all'
+                      : 'dMain__pill dMain__pill--all'
+                  }
+                  onClick={w.onToggleGroupAll}
+                >
+                  All
+                </button>
+              )}
+              {w.scopeCompanies.map((c) => {
+                const isActive =
+                  !w.isGroupAllMode && Number(c.id) === Number(w.activeCompanyId)
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={isActive ? 'dMain__pill dMain__pill--active' : 'dMain__pill'}
+                    onClick={() => w.onPickCompany(c.id)}
+                  >
+                    {String(c.company_id || '')}
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
 
@@ -115,6 +149,22 @@ export function DashboardMain({ bootstrap }: Props) {
             </div>
           </div>
         )}
+
+        <div className="dMain__row dMain__row--quick">
+          <span className="dMain__label">Period</span>
+          <div className="dMain__quickRow" role="group" aria-label="快捷日期">
+            {QUICK_ORDER.map((k) => (
+              <button
+                key={k}
+                type="button"
+                className="dMain__qBtn"
+                onClick={() => w.selectQuickRange(k)}
+              >
+                {QUICK_RANGE_LABEL[k]}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="dMain__row dMain__row--date">
           <div>
@@ -144,6 +194,9 @@ export function DashboardMain({ bootstrap }: Props) {
           <button type="button" className="dMain__quick" onClick={w.quickThisMonth}>
             本月
           </button>
+          {w.quickSelectLabel && (
+            <span className="dMain__rangeHint">{w.quickSelectLabel}</span>
+          )}
         </div>
       </div>
 
@@ -200,26 +253,39 @@ export function DashboardMain({ bootstrap }: Props) {
       )}
 
       {w.chartData && w.scopeValid && (
-        <div className="dMain__chart">
-          <Line
-            data={w.chartData}
-            options={{
-              responsive: true,
-              maintainAspectRatio: false,
-              interaction: { mode: 'index', intersect: false },
-              plugins: { legend: { position: 'bottom' } },
-              scales: {
-                y: { ticks: { maxTicksLimit: 8 } },
-                x: { ticks: { maxRotation: 45, minRotation: 0 } },
-              },
-            }}
-          />
+        <div className="dMain__chartBlock">
+          <div className="dMain__chartToggles" role="group" aria-label="图例开关">
+            {CHART_TOGGLE.map(({ label, index }) => {
+              const on = w.chartLineVisible[index]!
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  className={on ? 'dMain__cToggle dMain__cToggle--on' : 'dMain__cToggle'}
+                  onClick={() => w.toggleChartLine(index)}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="dMain__chart">
+            <Line
+              data={w.chartData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: { legend: { display: false } },
+                scales: {
+                  y: { ticks: { maxTicksLimit: 8 } },
+                  x: { ticks: { maxRotation: 45, minRotation: 0 } },
+                },
+              }}
+            />
+          </div>
         </div>
       )}
-
-      <p className="dMain__footNote">
-        图表与 `dashboard.js` 主路径对齐；与经典版的细微差异以经典页为准。侧栏/快捷筛选后续阶段再迁。
-      </p>
     </div>
   )
 }
