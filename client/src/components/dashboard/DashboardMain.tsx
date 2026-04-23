@@ -69,6 +69,16 @@ export function DashboardMain(_props: Props) {
     return () => document.removeEventListener('mousedown', onDoc)
   }, [quickOpen])
 
+  const chartSub = useMemo(() => {
+    if (w.loading && w.scopeValid) return 'Loading data...'
+    if (!w.scopeValid) return '—'
+    const from = w.payload?.date_range?.from || w.dateFrom
+    const to = w.payload?.date_range?.to || w.dateTo
+    return `${formatDmY(from)} to ${formatDmY(to)}`
+  }, [w.loading, w.scopeValid, w.payload, w.dateFrom, w.dateTo])
+
+  const hasEarnings = !!(w.kpi && w.kpi.showEarnings)
+
   if (w.loadCompaniesError || !w.companiesReady) {
     if (w.loadCompaniesError) {
       return (
@@ -95,16 +105,6 @@ export function DashboardMain(_props: Props) {
       </p>
     )
   }
-
-  const hasEarnings = !!(w.kpi && w.kpi.showEarnings)
-
-  const chartSub = useMemo(() => {
-    if (w.loading && w.scopeValid) return 'Loading data...'
-    if (!w.scopeValid) return '—'
-    const from = w.payload?.date_range?.from || w.dateFrom
-    const to = w.payload?.date_range?.to || w.dateTo
-    return `${formatDmY(from)} to ${formatDmY(to)}`
-  }, [w.loading, w.scopeValid, w.payload, w.dateFrom, w.dateTo])
 
   return (
     <div className="dashboard-container">
