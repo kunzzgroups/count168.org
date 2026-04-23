@@ -13,6 +13,11 @@
     const showDescriptionColumn = (typeof window.TRANSACTION_PAGE !== 'undefined' && window.TRANSACTION_PAGE.showDescriptionColumn !== undefined) ? window.TRANSACTION_PAGE.showDescriptionColumn : false;
     const RATE_TYPE_VALUE = 'RATE';
     let isSubmittingTx = false;
+    let activeSearchController = null;
+    let isSearchInFlight = false;
+    let activeSearchKey = '';
+    let lastCompletedSearchKey = '';
+    let lastCompletedSearchTs = 0;
 
     function syncSubmitButtonState() {
         const confirmCheckbox = document.getElementById('confirm_submit');
@@ -43,10 +48,8 @@
         const number = parseFloat(cleaned);
         if (isNaN(number)) return '0.00';
 
-        // Round to 2 decimal places for display (四舍五入到2位小数用于显示)
-        // This ensures consistent display formatting while database stores raw values
-        // 这确保了一致的显示格式，而数据库存储原始值
-        const rounded = Math.round(number * 100) / 100;
+        // Truncate to 2 decimal places for display (只截断到2位小数，不做四舍五入)
+        const rounded = Math.trunc(number * 100) / 100;
 
         // 使用 toLocaleString 添加千分位逗号
         return rounded.toLocaleString('en-US', {
@@ -447,7 +450,7 @@
         setInterval(() => {
             if (document.visibilityState !== 'visible') return;
             refreshTransactionDataFromExternalChange();
-        }, 1000);
+        }, 5000);
 
         // 绑定右侧工作区的 Search 按钮：执行完整日期搜索（不受右侧 Type 选择影响）
         const actionSearchBtn = document.getElementById('action_search_btn');
@@ -1189,9 +1192,34 @@
 
     // ==================== 切换 Company ====================
     async function switchCompany(companyId, companyCode) {
+        const normalizedCompanyId = (function (raw) {
+            if (raw === null || raw === undefined) return null;
+            const str = String(raw).trim();
+            if (!str || str.toLowerCase() === 'null' || str.toLowerCase() === 'undefined') return null;
+            return str;
+        })(companyId);
+
+        // Group 取消选择后的空状态：不刷新整页，不带 company_id=null，直接清空当前页数据
+        if (!normalizedCompanyId) {
+            currentCompanyId = null;
+            selectedCurrencies = [];
+            showAllCurrencies = false;
+            currencyList = [];
+            lastSearchData = null;
+            currentDisplayData = { left_table: [], right_table: [] };
+
+            const currencyWrapper = document.getElementById('currency-buttons-wrapper');
+            const currencyContainer = document.getElementById('currency-buttons-container');
+            if (currencyContainer) currencyContainer.innerHTML = '';
+            if (currencyWrapper) currencyWrapper.style.display = 'none';
+
+            renderTables([], []);
+            return;
+        }
+
         // 先更新 session
         try {
-            const response = await fetch(`/api/session/update_company_session_api.php?company_id=${companyId}`);
+            const response = await fetch(`/api/session/update_company_session_api.php?company_id=${normalizedCompanyId}`);
             const result = await response.json();
             if (!result.success) {
                 const blocked = (typeof window.handleCompanySwitchDenied === 'function')
@@ -1210,7 +1238,7 @@
 
         // 立即刷新整页，让 sidebar 按新 company 的 session 状态重渲染
         const url = new URL(window.location.href);
-        url.searchParams.set('company_id', companyId);
+        url.searchParams.set('company_id', normalizedCompanyId);
         window.location.href = url.toString();
         return;
 
@@ -1855,6 +1883,8 @@
                 if (summarySection) summarySection.style.display = 'flex';
                 applyZeroBalanceFilterAndRender();
                 saveTxListSearchToSession(searchData);
+                lastCompletedSearchKey = requestKey;
+                lastCompletedSearchTs = Date.now();
                 if (!quiet) {
                     showNotification('Search completed but no data found. Please check date range, Currency filter, or confirm data has been submitted', 'info');
                 }
@@ -1882,6 +1912,8 @@
                 }
             }
             saveTxListSearchToSession(searchData);
+            lastCompletedSearchKey = requestKey;
+            lastCompletedSearchTs = Date.now();
         };
 
         const singleSelectedCurrency = (!showAllCurrencies && selectedCurrencies.length === 1)
@@ -1889,14 +1921,42 @@
             : '';
         const categoryParam = (selectedCategories.length > 0 && !selectedCategories.includes(''))
             ? selectedCategories.join(',')
-            : ''
+            : '';
+        const requestKey = JSON.stringify({
+            dateFrom,
+            dateTo,
+            categoryParam,
+            showInactive,
+            showCaptureOnly,
+            hideZero,
+            companyId: currentCompanyId || '',
+            showAllCurrencies: !!showAllCurrencies,
+            currencies: [...selectedCurrencies].sort().join(',')
+        });
+
+        if (isSearchInFlight && activeSearchKey === requestKey) {
+            return;
+        }
+        if (!isInitialLoad && lastCompletedSearchKey === requestKey && (Date.now() - lastCompletedSearchTs) < 1200) {
+            return;
+        }
+
+        // 新的搜索发起前，取消尚未完成的旧请求，避免慢请求回写覆盖新结果
+        if (activeSearchController) {
+            try { activeSearchController.abort(); } catch (e) { /* ignore */ }
+        }
+        activeSearchController = new AbortController();
+        const { signal } = activeSearchController;
+        isSearchInFlight = true;
+        activeSearchKey = requestKey;
 
         fetch(url, {
             method: 'GET',
             cache: 'no-cache',
             headers: {
                 'Cache-Control': 'no-cache'
-            }
+            },
+            signal
         })
             .then(response => response.json())
             .then(data => {
@@ -1931,7 +1991,8 @@
                             cache: 'no-cache',
                             headers: {
                                 'Cache-Control': 'no-cache'
-                            }
+                            },
+                            signal
                         })
                             .then(resp => resp.json())
                             .then(fallback => {
@@ -1960,6 +2021,7 @@
                                 commitSearchData(rebuiltData, { quiet: silent });
                             })
                             .catch(error => {
+                                if (error && error.name === 'AbortError') return;
                                 if (loadingEl) loadingEl.style.display = 'none';
                                 console.error('❌ 单币别兜底搜索失败:', error);
                                 commitSearchData(currentSearchData, { quiet: silent });
@@ -1990,7 +2052,8 @@
                             cache: 'no-cache',
                             headers: {
                                 'Cache-Control': 'no-cache'
-                            }
+                            },
+                            signal
                         })
                             .then(resp => resp.json())
                             .then(fallback => {
@@ -2007,6 +2070,7 @@
                                 commitSearchData(rebuiltData, { quiet: silent });
                             })
                             .catch(error => {
+                                if (error && error.name === 'AbortError') return;
                                 if (loadingEl) loadingEl.style.display = 'none';
                                 console.error('❌ Win/Loss 空结果 totals 兜底失败:', error);
                                 commitSearchData(currentSearchData, { quiet: silent });
@@ -2023,10 +2087,17 @@
                 }
             })
             .catch(error => {
+                if (error && error.name === 'AbortError') return;
                 if (loadingEl) loadingEl.style.display = 'none';
                 if (!silent && tablesSection) tablesSection.style.display = 'none';
                 console.error('❌ 搜索失败:', error);
                 showNotification('Search failed: ' + error.message, 'error');
+            })
+            .finally(() => {
+                if (activeSearchKey === requestKey) {
+                    isSearchInFlight = false;
+                    activeSearchKey = '';
+                }
             });
     }
 

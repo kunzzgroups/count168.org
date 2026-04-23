@@ -6,20 +6,11 @@ if (session_status() == PHP_SESSION_NONE) {
 
 // 检查用户是否已登录
 if (!isset($_SESSION['user_id'])) {
-    $redirectLang = isset($_GET['lang']) && in_array(strtolower((string) $_GET['lang']), ['zh', 'en'], true)
-        ? strtolower((string) $_GET['lang'])
-        : (isset($_SESSION['ui_lang']) && in_array($_SESSION['ui_lang'], ['zh', 'en'], true) ? $_SESSION['ui_lang'] : 'en');
     // 如果未登录，输出 JavaScript 重定向到登录页
     // 这样可以确保整个页面都停止工作，而不仅仅是 sidebar 消失
-    echo '<script>window.location.href = "index.php?lang=' . htmlspecialchars($redirectLang, ENT_QUOTES, 'UTF-8') . '";</script>';
+    echo '<script>window.location.href = "index.php";</script>';
     exit();
 }
-
-$ui_lang = isset($_GET['lang']) ? strtolower((string) $_GET['lang']) : ($_SESSION['ui_lang'] ?? 'en');
-if (!in_array($ui_lang, ['zh', 'en'], true)) {
-    $ui_lang = 'en';
-}
-$_SESSION['ui_lang'] = $ui_lang;
 
 $isMember = isset($_SESSION['user_type']) && strtolower($_SESSION['user_type']) === 'member';
 
@@ -170,7 +161,7 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
     <link rel="stylesheet" href="css/sidebar.css">
     <script src="js/sidebar.js?v=<?php echo time(); ?>" defer></script>
   如需 favicon 与头像预加载，可在主页面 <head> 中按需添加。
-    <link rel="icon" type="image/png" href="images/count_logo.png">
+    <link rel="icon" type="image/png" href="/images/count_logo.png">
     <link rel="preload" href="(当前用户头像 URL)" as="image">
 ================================================================================
 -->
@@ -285,11 +276,11 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
             </div>
         </div>
         <!-- 语言切换按钮 -->
-        <div class="language-switcher">
+        <!-- <div class="language-switcher">
             <div class="language-dropdown">
-                <button type="button" class="language-btn" onclick="toggleLanguageDropdown()">
-                    <img src="<?php echo $ui_lang === 'zh' ? 'images/china.png' : 'images/uk.png'; ?>" alt="<?php echo $ui_lang === 'zh' ? '中文' : 'English'; ?>" class="flag-icon" id="current-flag">
-                    <span class="language-text" id="current-lang"><?php echo $ui_lang === 'zh' ? '中文' : 'English'; ?></span>
+                <button class="language-btn" onclick="toggleLanguageDropdown()">
+                    <img src="images/uk.png" alt="English" class="flag-icon" id="current-flag">
+                    <span class="language-text" id="current-lang">English</span>
                     <span class="dropdown-arrow">&#9658;</span>
                 </button>
                 <div class="language-dropdown-list" id="languageDropdown">
@@ -298,12 +289,12 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
                         <span>English</span>
                     </div>
                     <div class="language-option" onclick="selectLanguage('zh')">
-                        <img src="images/china.png" alt="中文" class="flag-icon">
-                        <span>中文</span>
+                        <img src="images/china.png" alt="涓枃" class="flag-icon">
+                        <span>涓枃</span>
                     </div>
                 </div>
             </div>
-        </div>
+        </div> -->
     </div>
 
     <div class="informationmenu-content">
@@ -570,7 +561,6 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
 <!-- Sidebar JavaScript: PHP 变量注入，调用外部 js/sidebar.js 中的 updateExpirationCountdown / updateSidebarDataCaptureVisibility -->
 <script>
     window.SIDEBAR_IS_MEMBER = <?php echo $isMember ? 'true' : 'false'; ?>;
-    window.SIDEBAR_LANG = <?php echo json_encode($ui_lang); ?>;
     window.SIDEBAR_EXPIRATION_DATE = '<?php echo $company_expiration_date ? addslashes($company_expiration_date) : ''; ?>';
     window.SIDEBAR_COMPANY_HAS_GAMBLING = <?php echo $companyHasGambling ? 'true' : 'false'; ?>;
     window.SIDEBAR_COMPANY_HAS_BANK = <?php echo $companyHasBank ? 'true' : 'false'; ?>;
@@ -588,100 +578,6 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
     })();
 </script>
 <script>
-    (function () {
-        var lang = (window.SIDEBAR_LANG === 'zh') ? 'zh' : 'en';
-        window.APP_UI_LANG = lang;
-        if (lang !== 'zh') {
-            return;
-        }
-
-        // 统一登录后页面常见文案（覆盖 transaction/datacapture/maintenance/report 等页面中的静态英文）
-        var textMap = {
-            'Search': '搜索',
-            'Reset': '重置',
-            'Save': '保存',
-            'Delete': '删除',
-            'Update': '更新',
-            'Edit': '编辑',
-            'Add': '新增',
-            'Submit': '提交',
-            'Cancel': '取消',
-            'Confirm': '确认',
-            'Close': '关闭',
-            'Export': '导出',
-            'Import': '导入',
-            'Total': '总计',
-            'Amount': '金额',
-            'Date': '日期',
-            'Type': '类型',
-            'Category': '分类',
-            'Remark': '备注',
-            'Status': '状态',
-            'Success': '成功',
-            'Failed': '失败',
-            'Please select': '请选择',
-            'No data': '暂无数据',
-            'No Data': '暂无数据',
-            'Loading...': '加载中...',
-            'Today': '今天',
-            'Start Date': '开始日期',
-            'End Date': '结束日期',
-            'Transaction': '交易',
-            'Data Capture': '数据录入',
-            'Report': '报表',
-            'Maintenance': '维护',
-            'Customer Report': '客户报表',
-            'Domain Report': '域名报表',
-            'Payment': '付款',
-            'Process': '流程',
-            'Formula': '公式',
-            'Win/Loss': '输赢'
-        };
-
-        function translateNodeText(root) {
-            var selector = 'button, a, label, th, td, h1, h2, h3, h4, h5, h6, span, p, option';
-            root.querySelectorAll(selector).forEach(function (el) {
-                if (el.children.length > 0) return;
-                var raw = (el.textContent || '').trim();
-                if (!raw) return;
-                if (textMap[raw]) {
-                    el.textContent = textMap[raw];
-                }
-            });
-        }
-
-        function translatePlaceholders(root) {
-            root.querySelectorAll('input[placeholder], textarea[placeholder]').forEach(function (el) {
-                var raw = (el.getAttribute('placeholder') || '').trim();
-                if (textMap[raw]) {
-                    el.setAttribute('placeholder', textMap[raw]);
-                }
-            });
-        }
-
-        function appendLangForLinks(root) {
-            root.querySelectorAll('a[href]').forEach(function (a) {
-                var href = a.getAttribute('href') || '';
-                if (!href || href.indexOf('javascript:') === 0 || href.indexOf('#') === 0) return;
-                if (href.indexOf('lang=') !== -1) return;
-                a.setAttribute('href', href + (href.indexOf('?') === -1 ? '?' : '&') + 'lang=zh');
-            });
-        }
-
-        function runTranslate() {
-            translateNodeText(document);
-            translatePlaceholders(document);
-            appendLangForLinks(document);
-        }
-
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', runTranslate);
-        } else {
-            runTranslate();
-        }
-    })();
-</script>
-<script>
     // B2B Cross-Account Sharing & Partnership: Partner Read-Only Mode
     window.isExternalView = <?php echo (isset($_SESSION['is_external_view']) && $_SESSION['is_external_view']) || (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'partnership' && (!isset($_SESSION['read_only']) || $_SESSION['read_only'] == 1)) ? 'true' : 'false'; ?>;
 
@@ -689,16 +585,15 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
         document.addEventListener('DOMContentLoaded', () => {
             console.log("External Partner Mode Active: Read-Only");
 
-            // Hide non-view categories (language-independent)
-            const blockedPages = ['userlist.php', 'account-list.php', 'ownership.php', 'processlist.php', 'datacapture.php', 'transaction.php'];
-            const blockedSections = ['maintenance'];
-            document.querySelectorAll('.informationmenu-section-title').forEach((btn) => {
-                const page = (btn.getAttribute('data-page') || '').split('?')[0];
-                const section = btn.getAttribute('data-section') || '';
-                if (blockedPages.includes(page) || blockedSections.includes(section)) {
-                    const sectionWrap = btn.closest('.informationmenu-section');
-                    if (sectionWrap) {
-                        sectionWrap.style.display = 'none';
+            // Hide non-view categories
+            const hideCategories = ['Admin', 'Account', 'Process', 'Data Capture', 'Transaction Payment', 'Maintenance'];
+
+            document.querySelectorAll('.informationmenu-menu a.informationmenu-btn, .informationmenu-menu div.informationmenu-btn').forEach(btn => {
+                const textSpan = btn.querySelector('.btn-text');
+                if (textSpan) {
+                    const text = textSpan.textContent.trim();
+                    if (hideCategories.includes(text)) {
+                        btn.style.display = 'none';
                     }
                 }
             });
@@ -710,7 +605,7 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
                     if (t.includes('add') || t.includes('save') || t.includes('delete') || t.includes('update') || t.includes('confirm') || t.includes('upload') || b.querySelector('svg:not(.view-icon)')) {
                         b.style.pointerEvents = 'none';
                         b.style.opacity = '0.4';
-                        b.title = (window.SIDEBAR_LANG === 'zh') ? '合作伙伴只读模式' : 'Read-Only Partner Mode';
+                        b.title = 'Read-Only Partner Mode';
                         b.setAttribute('data-readonly-processed', 'true');
                     }
                 });

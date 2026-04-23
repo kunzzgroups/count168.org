@@ -28,7 +28,7 @@ const scriptCloseTag = '\n    </script>';
 const fullScriptBlock = content.slice(scriptStart, scriptEnd + scriptCloseTag.length);
 let jsContent = content.slice(scriptStart + '    <script>\n'.length, scriptEnd);
 
-// Replace PHP variable lines with window.*
+// Replace PHP variable lines with window.
 jsContent = jsContent.replace(
   /let showInactive = <\?php echo isset\(\$_GET\['showInactive'\]\) \? 'true' : 'false'; \?>;/,
   "let showInactive = (typeof window.PROCESSLIST_SHOW_INACTIVE !== 'undefined' ? window.PROCESSLIST_SHOW_INACTIVE : false);"

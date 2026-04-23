@@ -888,6 +888,35 @@ function buildCacheKey() {
     });
 }
 
+// Compute the group-link multiplier for a given company + current view group.
+//   e.g. VG (native IG) viewed under AP filter where IG→AP = 3% → returns 0.03.
+//   Native-group views (company.group_id === selectedDashboardGroup) → returns 1.
+function getLinkMultiplierForCompany(companyId, groupFilter) {
+    if (!groupFilter || !Array.isArray(allOwnerCompanies)) return 1;
+    const gf = String(groupFilter).toUpperCase();
+    const row = allOwnerCompanies.find(c =>
+        parseInt(c.id) === parseInt(companyId) &&
+        c.group_id && c.group_id.toUpperCase() === gf
+    );
+    if (row && row.link_percentage !== undefined && row.link_percentage !== null) {
+        const pct = parseFloat(row.link_percentage);
+        if (!isNaN(pct) && pct >= 0) return pct / 100;
+    }
+    return 1;
+}
+
+// Attach the group-link multiplier to the dashboard payload WITHOUT touching the
+// raw numbers. Profit / Expenses / Net Profit / Trend Chart stay equal to the
+// company's real figures (same as its native-group view). Only the Earnings
+// card consumes `_link_multiplier` to apply the link percentage.
+function scaleDashboardData(data, mul) {
+    if (!data) return data;
+    if (mul !== 1 && mul !== null && mul !== undefined) {
+        data._link_multiplier = mul;
+    }
+    return data;
+}
+
 // 对单个 company 发起 Dashboard API 请求
 async function fetchDashboardForCompany(companyId) {
     const queryParams = new URLSearchParams({
@@ -897,6 +926,11 @@ async function fetchDashboardForCompany(companyId) {
     });
     if (window.dashboardCurrency) {
         queryParams.append('currency', window.dashboardCurrency);
+    }
+    // Let the backend pick the right company_ownership group-equity row when a
+    // company has been split across multiple groups (e.g. 95 → IG 30% + AP 1%).
+    if (selectedDashboardGroup) {
+        queryParams.append('view_group', selectedDashboardGroup);
     }
 
     const controller = new AbortController();
@@ -912,7 +946,8 @@ async function fetchDashboardForCompany(companyId) {
     }
     const result = await response.json();
     if (result.success && result.data) {
-        return result.data;
+        const multiplier = getLinkMultiplierForCompany(companyId, selectedDashboardGroup);
+        return scaleDashboardData(result.data, multiplier);
     }
     throw new Error(result.message || 'Failed to load data');
 }
@@ -962,11 +997,22 @@ function mergeGroupData(dataList) {
         const rawE = parseFloat(d?.period_total?.expenses ?? d.expenses) || 0;
         const displayE = rawE > 0 ? -rawE : rawE;
         const netProfit = rawP + displayE;
-        // Combined: direct% + group_equity% × group_account%
-        const effectivePct = hasGrp
-            ? (pct / 100) + (grpPct / 100) * (grpAccPct / 100)
-            : (pct / 100);
+        // Group All mode — same priority cascade as updateDashboard's single-company path.
+        const linkMul = parseFloat(d._link_multiplier);
+        const hasLink = !isNaN(linkMul) && linkMul > 0 && linkMul !== 1;
+        const directPct = pct / 100;
+        let effectivePct;
+        if (hasLink) {
+            const viewerGroupShare = grpAccPct > 0 ? grpAccPct / 100 : 1;
+            effectivePct = linkMul * viewerGroupShare;
+        } else if (directPct > 0) {
+            effectivePct = directPct;
+        } else {
+            const chainPct = hasGrp ? (grpPct / 100) * (grpAccPct / 100) : 0;
+            effectivePct = chainPct === 0 ? 1 : chainPct;
+        }
         const earningsVal = netProfit * effectivePct;
+        hasOwnershipSetup = true;
         companyEarnings.push({ netProfit, pct, grpPct, grpAccPct, hasGrp, earnings: earningsVal });
     });
 
@@ -1198,7 +1244,7 @@ function updateDashboard(data) {
                 const rawProfit = parseFloat(data?.period_total?.profit ?? data.profit) || 0
                 const rawExpenses = parseFloat(data?.period_total?.expenses ?? data.expenses) || 0;
 
-                // Profit 卡片：直接沿用 Payment 的符号（Payment 为负，这里也显示负）
+                // Dashboard 卡片口径：Profit 以正数显示（与业务展示预期一致）。
                 const displayProfitNum = rawProfit;
 
                 // Expenses 卡片：Payment 为正数时，Dashboard 用负数显示支出；如果本身是负数则保持
@@ -1209,14 +1255,50 @@ function updateDashboard(data) {
                 const netProfitDisplay = displayProfitNum + displayExpensesNum;
 
                 // Earnings 卡片：
-                // Combined: direct% + group_equity% × group_account%
+                //   Under a group filter:  Earnings = Net Profit × account_ownership% × group_earnings_link%
+                //     - account_ownership% = this company's equity going to its group
+                //       (from company_ownership owner_type='group'). Defaults to 100% if
+                //       the company has no explicit group_equity row.
+                //     - group_earnings_link% = IG→AP style link (already applied to
+                //       netProfitDisplay by scaleDashboardData). Nothing extra to do here.
+                //   Without a group filter: legacy per-user formula stays.
                 const ownershipPercentage = parseFloat(data?.ownership_percentage) || 0;
                 const groupEquityPercentage = parseFloat(data?.group_equity_percentage) || 0;
                 const groupAccountPercentage = parseFloat(data?.group_account_percentage) || 0;
                 const hasGroupOwnership = !!data?.has_group_ownership;
-                const effectivePct = hasGroupOwnership
-                    ? (ownershipPercentage / 100) + (groupEquityPercentage / 100) * (groupAccountPercentage / 100)
-                    : (ownershipPercentage / 100);
+                const linkMul = parseFloat(data?._link_multiplier);
+                const hasLinkOwnership = !isNaN(linkMul) && linkMul > 0 && linkMul !== 1;
+                const inGroupView = !!selectedDashboardGroup;
+
+                // Earnings priority cascade. The key split: when a company appears
+                // via a group-link (virtual row under a non-native group), Earnings
+                // only reflects the link chain — NOT the viewer's direct owner %
+                // (which belongs to the native-group view).
+                //
+                //   hasLinkOwnership (viewing through a link):
+                //     → Net Profit × link_multiplier × viewer_group_share
+                //       where viewer_group_share = group_account_percentage if set
+                //       (partnership / external owner), else 100% (self-owned group).
+                //
+                //   native (no link):
+                //     → 有直接股权时只用 direct%（避免与 group 链重复，如 JK 90%）
+                //     → 否则：Net Profit × (group_equity% × group_account%)（含多段链由 API 合入 equity%）
+                //     → 无配置时在 group 视图可回退 100%（admin）
+                const directPct = ownershipPercentage / 100;
+                let effectivePct;
+                if (hasLinkOwnership) {
+                    const viewerGroupShare = groupAccountPercentage > 0
+                        ? groupAccountPercentage / 100
+                        : 1;
+                    effectivePct = linkMul * viewerGroupShare;
+                } else if (directPct > 0) {
+                    effectivePct = directPct;
+                } else if (hasGroupOwnership) {
+                    const chainPct = (groupEquityPercentage / 100) * (groupAccountPercentage / 100);
+                    effectivePct = chainPct;
+                } else {
+                    effectivePct = (directPct === 0 && inGroupView) ? 1 : 0;
+                }
                 const earningsDisplay = netProfitDisplay * effectivePct;
 
                 // 记录卡片显示值，供图表 tooltip 统一读取，避免口径不一致
@@ -1230,7 +1312,7 @@ function updateDashboard(data) {
                     earningsEl.textContent = formatCurrency(earningsDisplay);
                     const earningsCard = document.getElementById('earnings-card-wrapper');
                     if (earningsCard) {
-                        const showEarnings = !!data?.has_ownership_setup;
+                        const showEarnings = !!data?.has_ownership_setup || hasLinkOwnership || inGroupView;
                         earningsCard.style.display = showEarnings ? 'flex' : 'none';
                         // Toggle top-row layout: 3-column grid when Earnings visible, full-width when hidden
                         const topRow = earningsCard.closest('.dashboard-top-row');
@@ -1285,8 +1367,9 @@ async function fetchCardPointByDate(dateStr) {
     }
 
     // 单日点位必须使用「当日发生额」口径（period_total），避免把 B/F(initial_balance) 或累计余额带进趋势图
-    const rawProfit = parseFloat(result.data?.period_total?.profit ?? result.data.profit) || 0
-    const rawExpenses = parseFloat(result.data?.period_total?.expenses ?? result.data.expenses) || 0
+    // Raw numbers intentionally match the company's own data (no link scaling on KPIs).
+    const rawProfit = parseFloat(result.data?.period_total?.profit ?? result.data.profit) || 0;
+    const rawExpenses = parseFloat(result.data?.period_total?.expenses ?? result.data.expenses) || 0;
     const point = {
         profit: rawProfit,
         expenses: rawExpenses > 0 ? -rawExpenses : rawExpenses
@@ -1365,10 +1448,13 @@ async function updateChart(data) {
     const groupEquityPercentage = parseFloat(data?.group_equity_percentage) || 0;
     const groupAccountPercentage = parseFloat(data?.group_account_percentage) || 0;
     const hasGroupOwnership = !!data?.has_group_ownership;
-    // Effective multiplier for earnings chart line: direct% + group_equity% × group_account%
-    const earningsMultiplier = hasGroupOwnership
-        ? (ownershipPercentage / 100) + (groupEquityPercentage / 100) * (groupAccountPercentage / 100)
-        : (ownershipPercentage / 100);
+    const directPct = ownershipPercentage / 100;
+    // 有直接股权时只乘 direct；否则 group_equity×group_account（多段链已并入 equity）
+    const earningsMultiplier = directPct > 0
+        ? directPct
+        : (hasGroupOwnership
+            ? (groupEquityPercentage / 100) * (groupAccountPercentage / 100)
+            : 0);
 
     // 初始化累计值（从 API 返回的 initial_balance 开始）
     // initial_balance 是起始日期之前的余额总和（B/F）
@@ -2019,10 +2105,12 @@ function isDashboardDataScopeValid() {
             );
             return groupCompanies.length > 0;
         }
-        const cur = allOwnerCompanies.find(c => parseInt(c.id) === parseInt(window.companyId));
-        if (!cur) return false;
-        return !!(cur.group_id && String(cur.group_id).trim() !== '' &&
-            cur.group_id.toUpperCase() === selectedDashboardGroup);
+        // 当前公司在 allOwnerCompanies 里可能有原生行 + 虚拟行（group_id 不同）。
+        // 只要 .some() 能找到任意一条 (id, group_id=selectedDashboardGroup) 就合法。
+        return allOwnerCompanies.some(c =>
+            parseInt(c.id) === parseInt(window.companyId) &&
+            c.group_id && c.group_id.toUpperCase() === selectedDashboardGroup
+        );
     }
 
     const cur = allOwnerCompanies.find(c => parseInt(c.id) === parseInt(window.companyId));
@@ -2095,16 +2183,30 @@ function loadOwnerCompanies() {
 
                 // 从 sessionStorage 恢复 Group
                 const savedGroup = sessionStorage.getItem('dashboard_group_filter');
-                const currentCompany = data.data.find(c => parseInt(c.id) === parseInt(window.companyId));
+                // 优先选 group_id 匹配 savedGroup 的那条（可能是虚拟行，表示同一个 c.id 被
+                // 通过 group-link 也挂到了 savedGroup 下），这样用户在 AP 筛选下点 IG 公司
+                // 不会被 reload 后跳回到 IG。
+                const currentCompany =
+                    (savedGroup
+                        ? data.data.find(c =>
+                            parseInt(c.id) === parseInt(window.companyId) &&
+                            c.group_id && c.group_id.toUpperCase() === savedGroup
+                          )
+                        : null)
+                    || data.data.find(c => parseInt(c.id) === parseInt(window.companyId));
                 console.log('[Dashboard] loadOwnerCompanies | savedGroup:', savedGroup, '| groups:', groups, '| window.companyId:', window.companyId);
 
                 if (savedGroup && groups.includes(savedGroup)) {
-                    // 确认当前公司确实属于这个 group，防止多标签页/重定向导致的 session 状态与实际内容不同步
-                    if (currentCompany && currentCompany.group_id && currentCompany.group_id.toUpperCase() === savedGroup) {
+                    // 检查当前公司是否在任何一条 row 里属于 savedGroup（原生或虚拟）
+                    const companyUnderSavedGroup = data.data.some(c =>
+                        parseInt(c.id) === parseInt(window.companyId) &&
+                        c.group_id && c.group_id.toUpperCase() === savedGroup
+                    );
+                    if (companyUnderSavedGroup) {
                         selectedDashboardGroup = savedGroup;
                         console.log('[Dashboard] Restored selectedDashboardGroup =', savedGroup);
                     } else {
-                        console.log('[Dashboard] savedGroup', savedGroup, 'does not match current company, clearing');
+                        console.log('[Dashboard] savedGroup', savedGroup, 'does not cover current company, clearing');
                         sessionStorage.removeItem('dashboard_group_filter');
                         selectedDashboardGroup = null;
                     }

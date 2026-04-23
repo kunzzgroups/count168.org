@@ -11,40 +11,9 @@ require_once __DIR__ . '/../../config.php';
 // 根路径（用于重定向，适配子目录部署）
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'], 2), '/');
 
-$lang = isset($_GET['lang']) ? strtolower(trim((string) $_GET['lang'])) : ($_SESSION['ui_lang'] ?? 'en');
-if (!in_array($lang, ['en', 'zh'], true)) {
-    $lang = 'en';
-}
-$_SESSION['ui_lang'] = $lang;
-
-$i18n = [
-    'en' => [
-        'pageTitle' => 'Secondary Password Verification',
-        'pageHint' => 'Please enter your 6-digit secondary password to continue',
-        'inputPlaceholder' => 'Enter 6-digit password',
-        'verifyBtn' => 'Verify',
-        'noticeEnterSecondary' => 'Please enter secondary password',
-        'noticeSecondaryDigits' => 'Secondary password must be exactly 6 digits',
-        'noticeSecondaryWrong' => 'Secondary password is incorrect',
-        'noticeGenericError' => 'An error occurred. Please try again.',
-        'noticeDigitsOnly' => 'Please enter exactly 6 digits',
-    ],
-    'zh' => [
-        'pageTitle' => '二级密码验证',
-        'pageHint' => '请输入 6 位二级密码以继续',
-        'inputPlaceholder' => '请输入 6 位密码',
-        'verifyBtn' => '验证',
-        'noticeEnterSecondary' => '请输入二级密码',
-        'noticeSecondaryDigits' => '二级密码必须为 6 位数字',
-        'noticeSecondaryWrong' => '二级密码错误',
-        'noticeGenericError' => '发生错误，请稍后重试。',
-        'noticeDigitsOnly' => '请输入 6 位数字',
-    ],
-];
-
 // 检查用户是否已登录（必须是user类型，且属于c168公司）
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'user') {
-    header("Location: {$basePath}/index.php?lang=" . urlencode($lang));
+    header("Location: {$basePath}/index.php");
     exit();
 }
 
@@ -72,12 +41,12 @@ function dbGetCompanyC168($pdo, $company_id) {
 if (!$is_c168) {
     $_SESSION['secondary_password_verified'] = true;
     session_write_close(); // 写入完成即释放 session 锁
-    header("Location: {$basePath}/dashboard.php?lang=" . urlencode($lang));
+    header("Location: {$basePath}/dashboard.php");
     exit();
 }
 
 if (isset($_SESSION['secondary_password_verified']) && $_SESSION['secondary_password_verified'] === true) {
-    header("Location: {$basePath}/dashboard.php?lang=" . urlencode($lang));
+    header("Location: {$basePath}/dashboard.php");
     exit();
 }
 
@@ -86,9 +55,9 @@ $error_message = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $secondary_password = trim($_POST['secondary_password'] ?? '');
     if (empty($secondary_password)) {
-        $error_message = $i18n[$lang]['noticeEnterSecondary'];
+        $error_message = 'Please enter secondary password';
     } elseif (!preg_match('/^\d{6}$/', $secondary_password)) {
-        $error_message = $i18n[$lang]['noticeSecondaryDigits'];
+        $error_message = 'Secondary password must be exactly 6 digits';
     } else {
         try {
             $user_id = $_SESSION['user_id'];
@@ -97,19 +66,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (password_verify($secondary_password, $user['secondary_password'])) {
                     $_SESSION['secondary_password_verified'] = true;
                     session_write_close(); // 写入完成即释放 session 锁
-                    header("Location: {$basePath}/dashboard.php?lang=" . urlencode($lang));
+                    header("Location: {$basePath}/dashboard.php");
                     exit();
                 }
-                $error_message = $i18n[$lang]['noticeSecondaryWrong'];
+                $error_message = 'Secondary password is incorrect';
             } else {
                 $_SESSION['secondary_password_verified'] = true;
                 session_write_close(); // 写入完成即释放 session 锁
-                header("Location: {$basePath}/dashboard.php?lang=" . urlencode($lang));
+                header("Location: {$basePath}/dashboard.php");
                 exit();
             }
         } catch (PDOException $e) {
             error_log("Secondary password verification error: " . $e->getMessage());
-            $error_message = $i18n[$lang]['noticeGenericError'];
+            $error_message = 'An error occurred. Please try again.';
         }
     }
 }
@@ -122,11 +91,11 @@ function dbGetUserSecondaryPassword($pdo, $user_id) {
 ?>
 
 <!DOCTYPE html>
-<html lang="<?php echo htmlspecialchars($lang, ENT_QUOTES, 'UTF-8'); ?>">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?php echo htmlspecialchars($i18n[$lang]['pageTitle'], ENT_QUOTES, 'UTF-8'); ?> - EazyCount</title>
+    <title>Secondary Password Verification - EazyCount</title>
     <link rel="stylesheet" href="<?php echo htmlspecialchars($basePath); ?>/css/style.css?v=<?php echo time(); ?>" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -135,14 +104,14 @@ function dbGetUserSecondaryPassword($pdo, $user_id) {
     <div class="login-container">
         <div class="login-card">
             <div class="form-content">
-                <h2 style="text-align: center; margin-bottom: 30px; color: #1e293b; font-size: 24px; font-weight: 600;"><?php echo htmlspecialchars($i18n[$lang]['pageTitle'], ENT_QUOTES, 'UTF-8'); ?></h2>
-                <p style="text-align: center; margin-bottom: 30px; color: #64748b; font-size: 14px;"><?php echo htmlspecialchars($i18n[$lang]['pageHint'], ENT_QUOTES, 'UTF-8'); ?></p>
+                <h2 style="text-align: center; margin-bottom: 30px; color: #1e293b; font-size: 24px; font-weight: 600;">Secondary Password Verification</h2>
+                <p style="text-align: center; margin-bottom: 30px; color: #64748b; font-size: 14px;">Please enter your 6-digit secondary password to continue</p>
                 
                 <form class="login-form" id="secondaryPasswordForm" method="POST">
                     <div class="input-group">
                         <i class="fas fa-lock input-icon"></i>
                         <input type="password" 
-                               placeholder="<?php echo htmlspecialchars($i18n[$lang]['inputPlaceholder'], ENT_QUOTES, 'UTF-8'); ?>" 
+                               placeholder="Enter 6-digit password" 
                                id="secondary_password" 
                                name="secondary_password" 
                                maxlength="6" 
@@ -159,14 +128,8 @@ function dbGetUserSecondaryPassword($pdo, $user_id) {
                     <?php endif; ?>
                     
                     <button type="submit" class="login-btn">
-                        <span><?php echo htmlspecialchars($i18n[$lang]['verifyBtn'], ENT_QUOTES, 'UTF-8'); ?></span>
+                        <span>Verify</span>
                     </button>
-                    <div class="language-switch-container">
-                        <div class="lang-switch" title="Switch Language">
-                            <a href="<?php echo htmlspecialchars($basePath . '/api/users/user_secondary_password.php?lang=zh', ENT_QUOTES, 'UTF-8'); ?>" class="lang-option <?php echo $lang === 'zh' ? 'active' : ''; ?>">中文</a>
-                            <a href="<?php echo htmlspecialchars($basePath . '/api/users/user_secondary_password.php?lang=en', ENT_QUOTES, 'UTF-8'); ?>" class="lang-option <?php echo $lang === 'en' ? 'active' : ''; ?>">English</a>
-                        </div>
-                    </div>
                 </form>
             </div>
         </div>
@@ -185,7 +148,7 @@ function dbGetUserSecondaryPassword($pdo, $user_id) {
         document.getElementById('secondaryPasswordForm').addEventListener('submit', function(e) {
             if (!/^\d{6}$/.test(secondaryPasswordInput.value.trim())) {
                 e.preventDefault();
-                alert(<?php echo json_encode($i18n[$lang]['noticeDigitsOnly']); ?>);
+                alert('Please enter exactly 6 digits');
                 secondaryPasswordInput.focus();
                 return false;
             }

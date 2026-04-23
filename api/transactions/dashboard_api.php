@@ -77,6 +77,89 @@ function dashboardCompanyOwnershipSchema(PDO $pdo): array
     return $schema;
 }
 
+/**
+ * 多段 Group 链：从筛选的 view_group 反向经 group_ownership (owner_type=group) 再接到
+ * company_ownership (owner_type=group)，得到进入当前 view 前的连乘比例 (0~1)。
+ * 例：TT 10%→SS × SS 20%→AA = 0.02。无法解析时返回 null（改走原两段式逻辑）。
+ */
+function dashboardResolveEarningsPathProduct(PDO $pdo, int $companyId, string $viewGroupTrim): ?float
+{
+    $viewG = strtoupper(trim($viewGroupTrim));
+    if ($viewG === '') {
+        return null;
+    }
+    try {
+        if ($pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() < 1) {
+            return null;
+        }
+        if ($pdo->query("SHOW TABLES LIKE 'company_ownership'")->rowCount() < 1) {
+            return null;
+        }
+    } catch (Throwable $e) {
+        return null;
+    }
+
+    $g = $viewG;
+    $path = 1.0;
+    $maxHops = 32;
+    while ($maxHops-- > 0) {
+        $stmt = $pdo->prepare("
+            SELECT group_id, percentage
+            FROM group_ownership
+            WHERE owner_type = 'group'
+              AND percentage > 0
+              AND partner_group_id IS NOT NULL
+              AND TRIM(partner_group_id) <> ''
+              AND UPPER(TRIM(partner_group_id)) = UPPER(TRIM(?))
+            LIMIT 1
+        ");
+        $stmt->execute([$g]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) {
+            break;
+        }
+        $pct = (float) $row['percentage'];
+        if ($pct <= 0) {
+            break;
+        }
+        $path *= ($pct / 100.0);
+        $g = strtoupper(trim((string) $row['group_id']));
+    }
+
+    $stmtCo = $pdo->prepare("
+        SELECT percentage
+        FROM company_ownership
+        WHERE company_id = ?
+          AND owner_type = 'group'
+          AND percentage > 0
+          AND partner_group_id IS NOT NULL
+          AND TRIM(partner_group_id) <> ''
+          AND UPPER(TRIM(partner_group_id)) = UPPER(TRIM(?))
+        LIMIT 1
+    ");
+    $stmtCo->execute([$companyId, $g]);
+    $coPct = $stmtCo->fetchColumn();
+    if ($coPct !== false) {
+        $path *= ((float) $coPct) / 100.0;
+        return $path;
+    }
+
+    $stmtHasGr = $pdo->prepare("SELECT 1 FROM company_ownership WHERE company_id = ? AND owner_type = 'group' LIMIT 1");
+    $stmtHasGr->execute([$companyId]);
+    if ($stmtHasGr->fetchColumn()) {
+        return null;
+    }
+
+    $stmtNat = $pdo->prepare("SELECT UPPER(TRIM(group_id)) FROM company WHERE id = ?");
+    $stmtNat->execute([$companyId]);
+    $nat = $stmtNat->fetchColumn();
+    if ($nat && strtoupper(trim((string) $nat)) === $g) {
+        return $path;
+    }
+
+    return null;
+}
+
 function dashboardContraApprovedWhere(PDO $pdo, string $alias = 't'): string
 {
     if (!dashboardHasContraApprovalColumns($pdo)) {
@@ -298,6 +381,9 @@ try {
                         WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -amount
                         WHEN transaction_type = 'CONTRA' THEN -amount
                         WHEN transaction_type = 'CLEAR' THEN -amount
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN amount
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN amount
                         WHEN transaction_type = 'PAYMENT' THEN -amount
                         WHEN transaction_type = 'WIN' AND (description LIKE 'Process: %') THEN amount
                         WHEN transaction_type = 'LOSE' AND (description LIKE 'Process: %') THEN -amount
@@ -317,6 +403,9 @@ try {
             $sql = "SELECT COALESCE(SUM(CASE 
                         WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM', 'CLEAR') THEN amount
                         WHEN transaction_type = 'CONTRA' THEN amount
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -amount
                         ELSE 0
                     END), 0)
                     FROM transactions t
@@ -378,6 +467,9 @@ try {
                                WHEN transaction_type IN ('RECEIVE', 'CLAIM', 'RATE') THEN -t.amount
                                WHEN transaction_type = 'CONTRA' THEN -t.amount
                                WHEN transaction_type = 'CLEAR' THEN -t.amount
+                               WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN t.amount
+                               WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                               WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
                                WHEN transaction_type = 'PAYMENT' THEN -t.amount
                                WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %') THEN t.amount
                                WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %') THEN -t.amount
@@ -404,6 +496,9 @@ try {
                            COALESCE(SUM(CASE 
                                WHEN transaction_type = 'CONTRA' THEN t.amount
                                WHEN transaction_type = 'CLEAR' THEN t.amount
+                               WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN 0
+                               WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                               WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
                                WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM', 'RATE') THEN t.amount
                                ELSE 0
                            END), 0) as cr_dr
@@ -445,6 +540,55 @@ try {
                     }
                 }
             } catch (Throwable $e) {
+            }
+        }
+
+        // --- 2b. PROFIT 口径对齐 Transaction List：从池账号扣回 Domain Share Commission（毛额 -> 净额） ---
+        if ($role === 'PROFIT' && !empty($account_ids)) {
+            $profitAdjCurrencyFilter = "";
+            $profitAdjCurrencyParams = [];
+            if ($filter_currency_code !== null) {
+                $curr_id = array_search($filter_currency_code, $currency_map);
+                if ($curr_id !== false) {
+                    $profitAdjCurrencyFilter = dashboardTxnCurrencyFilter('from_account_id');
+                    $profitAdjCurrencyParams = [$curr_id, $company_id, $company_id, $curr_id];
+                }
+            }
+
+            // A) 调整期初：起始日前的 Share Commission 需要从 B/F 扣回
+            $adjBfSql = "SELECT COALESCE(SUM(ROUND(t.amount, 2)), 0) AS adj_total
+                         FROM transactions t
+                         WHERE t.company_id = ?
+                           AND t.transaction_type = 'PAYMENT'
+                           AND t.from_account_id IN ($ids_placeholder)
+                           AND t.transaction_date < ?
+                           AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'" . $profitAdjCurrencyFilter;
+            $adjBfStmt = $pdo->prepare($adjBfSql);
+            $adjBfStmt->execute(array_merge([$company_id], $account_ids, [$date_from_db], $profitAdjCurrencyParams));
+            $adjBf = (float) $adjBfStmt->fetchColumn();
+            if (abs($adjBf) > 0.00001) {
+                $total_bf -= $adjBf;
+            }
+
+            // B) 调整本期：按日扣回，保证图表与 period_total 一致
+            $adjDailySql = "SELECT DATE(t.transaction_date) AS date, COALESCE(SUM(ROUND(t.amount, 2)), 0) AS adj_total
+                            FROM transactions t
+                            WHERE t.company_id = ?
+                              AND t.transaction_type = 'PAYMENT'
+                              AND t.from_account_id IN ($ids_placeholder)
+                              AND t.transaction_date BETWEEN ? AND ?
+                              AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'" . $profitAdjCurrencyFilter . "
+                            GROUP BY DATE(t.transaction_date)
+                            ORDER BY DATE(t.transaction_date)";
+            $adjDailyStmt = $pdo->prepare($adjDailySql);
+            $adjDailyStmt->execute(array_merge([$company_id], $account_ids, [$date_from_db, $date_to_db], $profitAdjCurrencyParams));
+            foreach ($adjDailyStmt->fetchAll(PDO::FETCH_ASSOC) as $adjRow) {
+                $d = (string) ($adjRow['date'] ?? '');
+                if ($d === '') {
+                    continue;
+                }
+                $v = (float) ($adjRow['adj_total'] ?? 0);
+                $daily_data[$d] = ($daily_data[$d] ?? 0) - $v;
             }
         }
 
@@ -575,34 +719,89 @@ try {
             }
 
             // ── Group Equity ──
-            // Group equity is stored per-company in company_ownership (owner_type='group')
-            // Account share is stored per-group in group_ownership
-            // Formula: Earnings = NET PROFIT × (direct% + group_equity% × group_account%)
+            // 多段链：TT→SS% × SS→AA% (group_ownership) × AA 内用户% ；Earnings = 净利 × 链上连乘
+            // 有「直接」公司股权 (ownership_percentage>0) 时仅用直接%，避免与链重复（如 JK 90%）
+            // 原两段式：company group 行 × group_ownership
             try {
-                $stmtGrpEquity = $pdo->prepare("
-                    SELECT partner_group_id, percentage 
-                    FROM company_ownership 
-                    WHERE company_id = ? AND owner_type = 'group' 
-                    LIMIT 1
-                ");
-                $stmtGrpEquity->execute([$company_id]);
-                $grpEquityRow = $stmtGrpEquity->fetch(PDO::FETCH_ASSOC);
+                $view_group = isset($_GET['view_group']) ? trim((string) $_GET['view_group']) : '';
+                $skipGroupChain = ((float) $ownership_percentage) > 0.0;
+                $grpEquityRow = null;
+                $multiGroupPathResolved = false;
 
-                if ($grpEquityRow && $grpEquityRow['partner_group_id']) {
-                    $companyGroupId = $grpEquityRow['partner_group_id'];
-                    $group_equity_percentage = (float) $grpEquityRow['percentage'];
+                if (!$skipGroupChain) {
+                    if ($view_group !== '') {
+                        $pathDec = dashboardResolveEarningsPathProduct($pdo, $company_id, $view_group);
+                        if ($pathDec !== null) {
+                            $multiGroupPathResolved = true;
+                            $group_equity_percentage = $pathDec * 100.0;
+                            $hasGroupTable = $pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() > 0;
+                            if ($hasGroupTable) {
+                                $stmtAccShare = $pdo->prepare("
+                                    SELECT percentage FROM group_ownership
+                                    WHERE UPPER(TRIM(group_id)) = UPPER(TRIM(?)) AND account_id = ? AND owner_type = ?
+                                ");
+                                $stmtAccShare->execute([$view_group, $userId, $ownerTypeStr ?? 'owner']);
+                                $accSharePct = $stmtAccShare->fetchColumn();
+                                if ($accSharePct !== false) {
+                                    $group_account_percentage = (float) $accSharePct;
+                                    $has_group_ownership = true;
+                                } else {
+                                    $group_equity_percentage = 0.0;
+                                    $group_account_percentage = 0.0;
+                                }
+                            }
+                        }
+                    }
+                }
 
-                    $hasGroupTable = $pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() > 0;
-                    if ($hasGroupTable) {
-                        $stmtAccShare = $pdo->prepare("
-                            SELECT percentage FROM group_ownership 
-                            WHERE group_id = ? AND account_id = ? AND owner_type = ?
+                if (!$has_group_ownership && !$multiGroupPathResolved) {
+                    if ($view_group !== '') {
+                        $stmtGrpEquity = $pdo->prepare("
+                            SELECT partner_group_id, percentage
+                            FROM company_ownership
+                            WHERE company_id = ? AND owner_type = 'group'
+                              AND UPPER(TRIM(partner_group_id)) = UPPER(TRIM(?))
+                            LIMIT 1
                         ");
-                        $stmtAccShare->execute([$companyGroupId, $userId, $ownerTypeStr ?? 'owner']);
-                        $accSharePct = $stmtAccShare->fetchColumn();
-                        if ($accSharePct !== false) {
-                            $group_account_percentage = (float) $accSharePct;
-                            $has_group_ownership = true;
+                        $stmtGrpEquity->execute([$company_id, $view_group]);
+                        $grpEquityRow = $stmtGrpEquity->fetch(PDO::FETCH_ASSOC);
+                        if (!$grpEquityRow) {
+                            $stmtGrpEquity = $pdo->prepare("
+                                SELECT partner_group_id, percentage
+                                FROM company_ownership
+                                WHERE company_id = ? AND owner_type = 'group'
+                                LIMIT 1
+                            ");
+                            $stmtGrpEquity->execute([$company_id]);
+                            $grpEquityRow = $stmtGrpEquity->fetch(PDO::FETCH_ASSOC);
+                        }
+                    } else {
+                        $stmtGrpEquity = $pdo->prepare("
+                            SELECT partner_group_id, percentage
+                            FROM company_ownership
+                            WHERE company_id = ? AND owner_type = 'group'
+                            LIMIT 1
+                        ");
+                        $stmtGrpEquity->execute([$company_id]);
+                        $grpEquityRow = $stmtGrpEquity->fetch(PDO::FETCH_ASSOC);
+                    }
+
+                    if ($grpEquityRow && $grpEquityRow['partner_group_id']) {
+                        $companyGroupId = $grpEquityRow['partner_group_id'];
+                        $group_equity_percentage = (float) $grpEquityRow['percentage'];
+
+                        $hasGroupTable = $pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() > 0;
+                        if ($hasGroupTable) {
+                            $stmtAccShare = $pdo->prepare("
+                                SELECT percentage FROM group_ownership
+                                WHERE group_id = ? AND account_id = ? AND owner_type = ?
+                            ");
+                            $stmtAccShare->execute([$companyGroupId, $userId, $ownerTypeStr ?? 'owner']);
+                            $accSharePct = $stmtAccShare->fetchColumn();
+                            if ($accSharePct !== false) {
+                                $group_account_percentage = (float) $accSharePct;
+                                $has_group_ownership = true;
+                            }
                         }
                     }
                 }
@@ -793,6 +992,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -amount
                         WHEN transaction_type = 'CONTRA' THEN amount
                         WHEN transaction_type = 'CLEAR' THEN -amount
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN amount
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN amount
                         WHEN transaction_type = 'PAYMENT' THEN -amount
                         WHEN transaction_type = 'WIN' AND (description LIKE 'Process: %') THEN amount
                         WHEN transaction_type = 'LOSE' AND (description LIKE 'Process: %') THEN -amount
@@ -816,6 +1018,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
         // 3. 计算起始日期之前所有 Cr/Dr（作为 From Account）
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -amount
                         WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN amount
                         WHEN transaction_type IN ('CONTRA', 'CLEAR') THEN amount
                         ELSE 0
@@ -947,9 +1152,15 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
                         WHEN t.account_id = :acc_id AND t.transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
                         WHEN t.account_id = :acc_id AND t.transaction_type = 'CLEAR' THEN -t.amount
                         WHEN t.account_id = :acc_id AND t.transaction_type = 'CONTRA' THEN -t.amount
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN t.amount
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
                         WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' THEN -t.amount
 
                         -- 作为 From Account（支付 / 收到）；CONTRA 时 FROM 显示正数
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN 0
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
                         WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' THEN t.amount
                         WHEN t.from_account_id = :acc_id AND t.transaction_type = 'CLEAR' THEN t.amount
                         WHEN t.from_account_id = :acc_id AND t.transaction_type = 'CONTRA' THEN t.amount

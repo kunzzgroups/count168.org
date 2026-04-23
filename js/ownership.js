@@ -1,6 +1,22 @@
 document.addEventListener('DOMContentLoaded', () => {
     fetchCompanies();
 
+    // External Partner (Login ID / Group ID): force uppercase as user types (value + display)
+    document.addEventListener('input', (e) => {
+        const el = e.target;
+        if (!el || !el.classList || !el.classList.contains('own-partner-input')) return;
+        const upper = el.value.toUpperCase();
+        if (el.value === upper) return;
+        const start = el.selectionStart;
+        const end = el.selectionEnd;
+        el.value = upper;
+        if (start != null && end != null) {
+            try {
+                el.setSelectionRange(start, end);
+            } catch (_) { /* ignore */ }
+        }
+    });
+
     // Close group dropdowns when clicking anywhere outside the button wrap.
     // Bubble phase (no capture) so the button's own stopPropagation works correctly.
     document.addEventListener('click', (e) => {
@@ -39,6 +55,27 @@ function $(el, bind) {
     return el.querySelector(`[data-bind="${bind}"]`);
 }
 
+function isApiSuccess(res) {
+    return res && (res.success === true || res.status === 'success');
+}
+
+function isApiConflict(res) {
+    return res && res.status === 'conflict';
+}
+
+function getApiMessage(res, fallback = 'Server error') {
+    if (!res) return fallback;
+    if (typeof res.message === 'string' && res.message.trim() !== '') return res.message;
+    if (typeof res.error === 'string' && res.error.trim() !== '') return res.error;
+    return fallback;
+}
+
+function getApiData(res, fallback = []) {
+    if (!res) return fallback;
+    if (res.data !== undefined) return res.data;
+    return fallback;
+}
+
 // ---------------------------------------------
 // Data Fetching
 // ---------------------------------------------
@@ -56,11 +93,11 @@ function fetchCompanies() {
     fetch('api/ownership/get_companies_api.php?all=1')
         .then(r => r.json())
         .then(res => {
-            if (res.status !== 'success') {
-                showToast(res.message || 'Failed to load companies', 'error');
+            if (!isApiSuccess(res)) {
+                showToast(getApiMessage(res, 'Failed to load companies'), 'error');
                 return;
             }
-            allCompaniesData = res.data;
+            allCompaniesData = getApiData(res, []);
             _rebuildGroupIds();
             _applyGroupFilter();   // sets companiesData then renders
             _renderGroupFilterBar();
@@ -78,6 +115,9 @@ function fetchCompanies() {
 function renderCompanyCards() {
     const container = document.getElementById('companyCardsContainer');
     container.innerHTML = '';
+
+    // Filter switch removes old card nodes; keep expansion state in sync with DOM
+    currentlyExpandedId = null;
 
     // Clear selection whenever cards re-render (data may have changed)
     selectedCompanyIds.clear();
@@ -268,6 +308,7 @@ function renderCompanyCards() {
 
 function toggleCard(companyId, event) {
     const card = document.getElementById(`card-${companyId}`);
+    if (!card) return;
     const isExpanded = card.classList.contains('expanded');
 
     if (!isExpanded && currentlyExpandedId && currentlyExpandedId !== companyId) {
@@ -286,6 +327,7 @@ function toggleCard(companyId, event) {
 function loadCompanyData(companyId) {
     const loader = document.getElementById(`loader-${companyId}`);
     const editor = document.getElementById(`editor-${companyId}`);
+    if (!loader || !editor) return;
     loader.style.display = 'flex';
     editor.classList.add('own-editor-hidden');
 
@@ -297,13 +339,18 @@ function loadCompanyData(companyId) {
         fetch(`api/ownership/get_available_accounts_api.php?company_id=${companyId}`).then(r => r.json()),
         fetch(`api/ownership/get_owners_api.php?company_id=${companyId}`).then(r => r.json())
     ]).then(([accountsRes, ownersRes]) => {
-        loader.style.display = 'none';
-        editor.classList.remove('own-editor-hidden');
+        // User may have changed group filter while requests were in flight
+        const loaderEl = document.getElementById(`loader-${companyId}`);
+        const editorEl = document.getElementById(`editor-${companyId}`);
+        if (!loaderEl || !editorEl) return;
+        loaderEl.style.display = 'none';
+        editorEl.classList.remove('own-editor-hidden');
 
         const accounts = accountsRes.status === 'success' ? accountsRes.data : [];
 
         // If company has a group, add Group ID as a selectable entry (G_ prefix)
-        if (compGroupId) {
+        // only when backend result does not already include it.
+        if (compGroupId && !accounts.some(a => String(a.id) === `G_${compGroupId}`)) {
             accounts.push({
                 id: `G_${compGroupId}`,
                 account_name: `Group: ${compGroupId}`,
@@ -314,8 +361,17 @@ function loadCompanyData(companyId) {
             });
         }
 
+        // Final safeguard: dedupe options by id to avoid duplicate Group rows.
+        const seenIds = new Set();
+        const uniqueAccounts = accounts.filter(acc => {
+            const key = String(acc.id || '');
+            if (!key || seenIds.has(key)) return false;
+            seenIds.add(key);
+            return true;
+        });
+
         companyStates[companyId] = {
-            accounts: accounts,
+            accounts: uniqueAccounts,
             rows: (ownersRes.status === 'success' ? ownersRes.data : []).map(o => ({
                 account_id: o.account_id,
                 percentage: parseFloat(o.percentage),
@@ -331,12 +387,14 @@ function loadCompanyData(companyId) {
     }).catch(err => {
         console.error(err);
         showToast('Error loading data', 'error');
-        loader.style.display = 'none';
+        const loaderEl = document.getElementById(`loader-${companyId}`);
+        if (loaderEl) loaderEl.style.display = 'none';
     });
 }
 
 function cancelEdit(companyId, forceCollapse = false) {
-    document.getElementById(`card-${companyId}`).classList.remove('expanded');
+    const card = document.getElementById(`card-${companyId}`);
+    if (card) card.classList.remove('expanded');
     if (currentlyExpandedId === companyId) currentlyExpandedId = null;
 
     const compIdx = companiesData.findIndex(c => parseInt(c.id) === companyId);
@@ -351,6 +409,7 @@ function cancelEdit(companyId, forceCollapse = false) {
 
 function renderCardBodyRows(companyId) {
     const container = document.getElementById(`rows-container-${companyId}`);
+    if (!container || !companyStates[companyId]) return;
     container.innerHTML = '';
 
     companyStates[companyId].rows.forEach((row, idx) => {
@@ -380,7 +439,12 @@ function createRowElement(companyId, idx, rowData) {
         const opt = document.createElement('option');
         opt.value = acc.id;
         const mainStr = parseInt(acc.is_main_owner) === 1 ? ' - Main' : '';
-        opt.textContent = `${acc.account_name} (${acc.name})${mainStr}`;
+        // Group-type rows (self-group link) already read "Group: AP" in account_name.
+        // Skip the redundant "(Group Equity)" suffix for those.
+        const typeStr = String(acc.type || '').toLowerCase();
+        opt.textContent = typeStr === 'group'
+            ? `${acc.account_name}${mainStr}`
+            : `${acc.account_name} (${acc.name})${mainStr}`;
         if (acc.id == rowData.account_id) opt.selected = true;
         select.appendChild(opt);
     });
@@ -688,13 +752,13 @@ function confirmEdit(companyId) {
         .then(res => {
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Confirm';
-            if (res.status === 'success') {
-                showToast(res.message, 'success');
+            if (isApiSuccess(res)) {
+                showToast(getApiMessage(res, 'Saved successfully'), 'success');
                 const compIdx = companiesData.findIndex(c => parseInt(c.id) === companyId);
                 if (compIdx >= 0) companiesData[compIdx].allocated_percentage = total;
                 cancelEdit(companyId, true);
             } else {
-                showToast(res.message, 'error');
+                showToast(getApiMessage(res, 'Save failed'), 'error');
             }
         })
         .catch(err => {
@@ -863,7 +927,7 @@ function _bulkJoinGroup() {
 
     Promise.all(requests)
         .then(results => {
-            const failed = results.filter(r => r.status !== 'success');
+            const failed = results.filter(r => !isApiSuccess(r));
             if (failed.length === 0) {
                 showToast(`${ids.length} compan${ids.length > 1 ? 'ies' : 'y'} joined group "${groupId}"`, 'success');
             } else {
@@ -899,7 +963,7 @@ function _bulkUngroupCompanies() {
 
     Promise.all(requests)
         .then(results => {
-            const failed = results.filter(r => r.status !== 'success');
+            const failed = results.filter(r => !isApiSuccess(r));
             if (failed.length === 0) {
                 showToast(`${ids.length} compan${ids.length > 1 ? 'ies' : 'y'} removed from group`, 'success');
             } else {
@@ -939,11 +1003,26 @@ function _applyGroupFilter() {
     if (activeGroupFilter === null) {
         // Independent: companies with no group
         companiesData = allCompaniesData.filter(c => !c.group_id || c.group_id.trim() === '');
+
+        // If no independent companies exist, automatically fall back to first group
+        // so the page doesn't look "stuck" with an empty list.
+        if (companiesData.length === 0 && allGroupIds.length > 0) {
+            activeGroupFilter = allGroupIds[0];
+            companiesData = allCompaniesData.filter(c =>
+                c.group_id && c.group_id.toLowerCase() === activeGroupFilter.toLowerCase()
+            );
+        }
     } else {
         companiesData = allCompaniesData.filter(c =>
             c.group_id && c.group_id.toLowerCase() === activeGroupFilter.toLowerCase()
         );
     }
+
+    // Keep filter button active state in sync for auto-fallback case
+    document.querySelectorAll('.own-gfb-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.group === (activeGroupFilter ?? ''));
+    });
+
     renderCompanyCards();
 }
 
@@ -1007,12 +1086,12 @@ function joinCompanyGroup(companyId, groupId, companyName) {
     })
         .then(res => res.json())
         .then(res => {
-            if (res.status === 'success') {
+            if (isApiSuccess(res)) {
                 showToast(`"${companyName}" joined group "${groupId}"`, 'success');
                 // Re-fetch from server so the list immediately reflects the new group context
                 fetchCompanies();
             } else {
-                showToast(res.message, 'error');
+                showToast(getApiMessage(res, 'Join group failed'), 'error');
             }
         })
         .catch(err => {
@@ -1029,12 +1108,12 @@ function ungroupCompany(companyId, companyName) {
     })
         .then(res => res.json())
         .then(res => {
-            if (res.status === 'success') {
+            if (isApiSuccess(res)) {
                 showToast(`"${companyName}" removed from group`, 'success');
                 // Re-fetch from server so the list immediately reflects the new group context
                 fetchCompanies();
             } else {
-                showToast(res.message, 'error');
+                showToast(getApiMessage(res, 'Ungroup failed'), 'error');
             }
         })
         .catch(err => {
@@ -1045,7 +1124,7 @@ function ungroupCompany(companyId, companyName) {
 
 function linkExternalPartner(companyId, event, forceType = '') {
     const loginIdInput = document.getElementById(`partner-login-${companyId}`);
-    const loginId = loginIdInput.value.trim();
+    const loginId = loginIdInput.value.trim().toUpperCase();
     if (!loginId) { showToast('Please enter a Login ID/Group ID', 'error'); return; }
 
     const btn = event.target.closest('[data-action="link-partner"]');
@@ -1061,15 +1140,15 @@ function linkExternalPartner(companyId, event, forceType = '') {
         .then(res => {
             btn.disabled = false;
             btn.textContent = 'Link Partner';
-            if (res.status === 'success') {
-                showToast(res.message, 'success');
+            if (isApiSuccess(res)) {
+                showToast(getApiMessage(res, 'Partner linked successfully'), 'success');
                 loginIdInput.value = '';
                 cancelEdit(companyId, true);
                 setTimeout(() => toggleCard(companyId, null), 300);
-            } else if (res.status === 'conflict') {
-                showConflictModal(companyId, event, res.data);
+            } else if (isApiConflict(res)) {
+                showConflictModal(companyId, event, getApiData(res, {}));
             } else {
-                showToast(res.message, 'error');
+                showToast(getApiMessage(res, 'Link partner failed'), 'error');
             }
         })
         .catch(err => {

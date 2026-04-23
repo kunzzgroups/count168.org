@@ -67,3 +67,30 @@ function userCanAccessC168InformationApis(PDO $pdo): bool
     }
     return userSessionHasC168CompanyContext($pdo);
 }
+
+/**
+ * Domain 自动创建的 MEMBER 旧格式为 OWNERCODE_COMPANY（如 QAA_QA）；新格式为公司短码（如 QA）。
+ * 列表/维护页展示时统一为公司代码（去掉 owner 前缀）。
+ */
+function domainProvisionedMemberAccountIdForDisplay(string $accountId, string $role, ?string $createdSource): string
+{
+    $aid = trim($accountId);
+    if ($aid === '') {
+        return $aid;
+    }
+    if (strtolower(trim($role)) !== 'member') {
+        return $aid;
+    }
+    if (strtolower(trim((string) $createdSource)) !== 'domain_auto') {
+        return $aid;
+    }
+    $pos = strrpos($aid, '_');
+    if ($pos === false || $pos === 0) {
+        return $aid;
+    }
+    $suffix = substr($aid, $pos + 1);
+    if ($suffix === '' || ctype_digit($suffix)) {
+        return $aid;
+    }
+    return strtoupper(trim($suffix));
+}

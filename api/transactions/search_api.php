@@ -14,6 +14,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../../includes/c168_domain_access.php';
 
 /**
  * Contra 审批：过滤未批准的 CONTRA（向后兼容：若无字段则不过滤）
@@ -37,6 +38,20 @@ function contraApprovedWhere(PDO $pdo, string $alias = 't'): string
     $a = $alias !== '' ? $alias . '.' : '';
     // 只对 CONTRA 生效：PENDING 的 CONTRA 不计入 BF / CrDr / Balance
     return " AND ({$a}transaction_type <> 'CONTRA' OR {$a}approval_status = 'APPROVED')";
+}
+
+function searchApiAccountHasCreatedSourceColumn(PDO $pdo): bool
+{
+    static $v = null;
+    if ($v === null) {
+        try {
+            $st = $pdo->query("SHOW COLUMNS FROM account LIKE 'created_source'");
+            $v = $st && $st->rowCount() > 0;
+        } catch (Throwable $e) {
+            $v = false;
+        }
+    }
+    return $v;
 }
 
 /** transactions.currency_id 是否存在（请求内只查一次，避免每个账户/组合重复 SHOW COLUMNS） */
@@ -96,6 +111,18 @@ function searchApiHasAccountCurrencyTable(PDO $pdo): bool
 }
 
 /**
+ * 截断到2位小数（不四舍五入）
+ */
+function trunc2($value): float
+{
+    $n = (float) $value;
+    if ($n >= 0) {
+        return floor($n * 100) / 100;
+    }
+    return ceil($n * 100) / 100;
+}
+
+/**
  * 将 currency 加入列表（根据 currency_id 去重）
  */
 function addAccountCurrencyCombo(array &$list, array &$seenIds, $currencyId, $currencyCode): void
@@ -151,8 +178,14 @@ function searchApiAppendDomainNetProfitVirtualRows(
     array $currency_id_map
 ): void {
     $seen = [];
+    $seenIndex = [];
     foreach ($results as $r) {
-        $seen[$r['account_db_id'] . '_' . strtoupper((string) ($r['currency'] ?? ''))] = true;
+        $key = $r['account_db_id'] . '_' . strtoupper((string) ($r['currency'] ?? ''));
+        $seen[$key] = true;
+    }
+    foreach ($results as $idx => $r) {
+        $key = $r['account_db_id'] . '_' . strtoupper((string) ($r['currency'] ?? ''));
+        $seenIndex[$key] = $idx;
     }
     $ownerCode = searchApiResolveCompanyOwnerCodeByPk($pdo, $company_id);
     if ($ownerCode === '') {
@@ -231,12 +264,12 @@ function searchApiAppendDomainNetProfitVirtualRows(
                      t.currency_id,
                      SUM(CASE
                            WHEN t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %'
-                           THEN ROUND(t.amount, 2)
+                          THEN TRUNCATE(t.amount, 2)
                            ELSE 0
                          END) AS fee_total,
                      SUM(CASE
                            WHEN t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'COMMISION FOR %'
-                           THEN ROUND(t.amount, 2)
+                          THEN TRUNCATE(t.amount, 2)
                            ELSE 0
                          END) AS comm_total
                    FROM transactions t
@@ -250,9 +283,9 @@ function searchApiAppendDomainNetProfitVirtualRows(
             $cid = (int) ($ar['currency_id'] ?? 0);
             if ($cid <= 0)
                 continue;
-            $fee = round((float) ($ar['fee_total'] ?? 0), 2);
-            $comm = round((float) ($ar['comm_total'] ?? 0), 2);
-            $net = round($fee - $comm, 2);
+            $fee = trunc2((float) ($ar['fee_total'] ?? 0));
+            $comm = trunc2((float) ($ar['comm_total'] ?? 0));
+            $net = trunc2($fee - $comm);
             if ($net <= 0)
                 continue;
             if (!empty($currencyFilterIds) && !in_array($cid, $currencyFilterIds, true)) {
@@ -267,7 +300,7 @@ function searchApiAppendDomainNetProfitVirtualRows(
     }
 
     while ($row = (is_array($rows) ? array_shift($rows) : null)) {
-        $amt = round((float) ($row['amount'] ?? 0), 2);
+        $amt = trunc2((float) ($row['amount'] ?? 0));
         if (abs($amt) < 0.00001)
             continue;
         $cid = (int) ($row['currency_id'] ?? 0);
@@ -322,8 +355,14 @@ function searchApiAppendDomainListFeeVirtualRows(
     array $currency_id_map
 ): void {
     $seen = [];
+    $seenIndex = [];
     foreach ($results as $r) {
-        $seen[$r['account_db_id'] . '_' . strtoupper((string) ($r['currency'] ?? ''))] = true;
+        $k = $r['account_db_id'] . '_' . strtoupper((string) ($r['currency'] ?? ''));
+        $seen[$k] = true;
+    }
+    foreach ($results as $idx => $r) {
+        $k = $r['account_db_id'] . '_' . strtoupper((string) ($r['currency'] ?? ''));
+        $seenIndex[$k] = $idx;
     }
 
     $currencyFilterIds = [];
@@ -337,7 +376,7 @@ function searchApiAppendDomainListFeeVirtualRows(
         $currencyFilterIds = array_values(array_unique(array_filter($currencyFilterIds)));
     }
 
-    $sql = "SELECT t.id, t.amount, t.currency_id, t.sms, t.description
+    $sql = "SELECT t.id, t.amount, t.currency_id, t.sms, t.description, t.from_account_id
             FROM transactions t
             WHERE t.company_id = ?
               AND t.transaction_type = 'PAYMENT'
@@ -384,11 +423,12 @@ function searchApiAppendDomainListFeeVirtualRows(
         if ($cur === '')
             continue;
 
-        $amt = round((float) ($row['amount'] ?? 0), 2);
+        $amt = trunc2((float) ($row['amount'] ?? 0));
         if (abs($amt) < 0.00001)
             continue;
 
         $realAccountId = 0;
+        $resolvedByExactCompanyCode = false;
         try {
             $sta = $pdo->prepare("
                 SELECT a.id
@@ -398,17 +438,77 @@ function searchApiAppendDomainListFeeVirtualRows(
                   AND UPPER(TRIM(a.account_id)) = ?
                 LIMIT 1
             ");
-            $sta->execute([$company_id, $src]);
+            $sta->execute([$company_id, strtoupper($src)]);
             $realAccountId = (int) ($sta->fetchColumn() ?: 0);
+            if ($realAccountId > 0) {
+                $resolvedByExactCompanyCode = true;
+            }
+            // Domain 自动建账：新库 account_id=公司短码（QA）；旧库为 OWNERCODE_COMPANY（如 QAA_QA），sms 仍为公司短码（QA）
+            if ($realAccountId <= 0) {
+                try {
+                    $stOwn = $pdo->prepare("
+                        SELECT UPPER(TRIM(COALESCE(o.owner_code, ''))) AS oc
+                        FROM company co
+                        INNER JOIN owner o ON o.id = co.owner_id
+                        WHERE UPPER(TRIM(co.company_id)) = ?
+                        ORDER BY co.id ASC
+                        LIMIT 1
+                    ");
+                    $stOwn->execute([strtoupper(trim($src))]);
+                    $owRaw = trim((string) ($stOwn->fetchColumn() ?: ''));
+                    $owClean = strtoupper(preg_replace('/[^A-Z0-9]/', '', $owRaw));
+                    if ($owClean === '') {
+                        $owClean = 'DOM';
+                    }
+                    $provisionCode = $owClean . '_' . strtoupper(trim($src));
+                    $sta->execute([$company_id, $provisionCode]);
+                    $realAccountId = (int) ($sta->fetchColumn() ?: 0);
+                } catch (Exception $e) {
+                }
+            }
         } catch (PDOException $e) {
         }
 
-        $rowAccountId = $realAccountId > 0 ? $realAccountId : (-(int) ($row['id'] ?? 0));
-        if ($rowAccountId === 0)
+        if ($realAccountId > 0) {
+            $realKey = $realAccountId . '_' . $cur;
+            if (isset($seen[$realKey])) {
+                $idx = $seenIndex[$realKey] ?? null;
+                if ($idx !== null && isset($results[$idx])) {
+                    // 命中真实账号且主结果已存在时，不再二次调整金额，避免 List Fee 重复扣减（如 -2400 变 -4800）。
+                    // 仅做展示归一：旧 OWNER_ 前缀账号统一显示公司短码，并同步公司名称。
+                    if (!$resolvedByExactCompanyCode) {
+                        $results[$idx]['account_id'] = $src;
+                        try {
+                            $sto = $pdo->prepare("
+                                SELECT TRIM(COALESCE(o.name, '')) AS n
+                                FROM company c
+                                INNER JOIN owner o ON o.id = c.owner_id
+                                WHERE UPPER(TRIM(c.company_id)) = ? OR UPPER(TRIM(IFNULL(c.group_id, ''))) = ?
+                                ORDER BY c.id ASC
+                                LIMIT 1
+                            ");
+                            $sto->execute([$src, $src]);
+                            $n = trim((string) ($sto->fetchColumn() ?: ''));
+                            if ($n !== '') {
+                                $results[$idx]['account_name'] = $n;
+                            }
+                        } catch (PDOException $e) {
+                        }
+                    }
+                    $results[$idx]['has_crdr_transactions'] = 1;
+                }
+                continue;
+            }
+        }
+
+        $rowAccountId = -4000000 - (int) ($row['id'] ?? 0);
+        if ($rowAccountId === 0) {
             continue;
+        }
         $k = $rowAccountId . '_' . $cur;
-        if (isset($seen[$k]))
+        if (isset($seen[$k])) {
             continue;
+        }
         $seen[$k] = true;
 
         $name = $src;
@@ -444,6 +544,7 @@ function searchApiAppendDomainListFeeVirtualRows(
             'is_rate_middleman' => 0
         ];
     }
+
 }
 
 /** 当前查询公司在库中的 owner_code（用于标注「入账 C168」等） */
@@ -469,8 +570,9 @@ function searchApiResolveCompanyOwnerCodeByPk(PDO $pdo, int $companyPk): string
 }
 
 /**
- * 将 Domain 相关 PAYMENT（Domain list fee + Domain share commission）聚合到“来源公司”行展示，
- * 并从真实池子账户行中扣除对应贡献，避免出现“95”等池子账户与来源公司重复展示。
+ * Domain Share Commission：bulk Cr/Dr 对 from_account（池子）侧记为 0，池子会只剩 List Fee 全额。
+ * 在此按每笔佣金从池子账户的 Cr/Dr、Balance 扣回，与 Payment History 净额口径一致。
+ * 客户侧 List Fee 仍由 searchApiAppendDomainListFeeVirtualRows 负责，此处不追加虚拟来源行。
  */
 function searchApiApplyDomainSourceCompanyRows(
     PDO $pdo,
@@ -495,25 +597,21 @@ function searchApiApplyDomainSourceCompanyRows(
         }
     }
 
-    $sql = "SELECT t.id, t.account_id, t.from_account_id, t.amount, t.currency_id, t.sms
+    $sql = "SELECT t.from_account_id, t.amount, t.currency_id
             FROM transactions t
             WHERE t.company_id = ?
               AND t.transaction_type = 'PAYMENT'
               AND t.transaction_date BETWEEN ? AND ?
               AND t.currency_id IS NOT NULL
-              AND (
-                    t.sms LIKE '[DOMAIN_LIST_FEE|%'
-                 OR t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'
-              )";
+              AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'
+              AND t.from_account_id IS NOT NULL";
     $par = [$company_id, $date_from_db, $date_to_db];
     if (!empty($currencyFilterIds)) {
         $sql .= ' AND t.currency_id IN (' . implode(',', array_fill(0, count($currencyFilterIds), '?')) . ')';
         $par = array_merge($par, $currencyFilterIds);
     }
 
-    $sourceLabel = []; // [SRC] => ['code'=>, 'name'=>]
-    $sourceAgg = [];   // [SRC][CUR] => amount(正数)
-    $poolAdjust = [];  // [ACC_ID][CUR] => delta (从原账户扣除 Domain 相关贡献)
+    $poolAdjust = []; // [ACC_ID][CUR] => delta
 
     $st = $pdo->prepare($sql);
     $st->execute($par);
@@ -523,133 +621,32 @@ function searchApiApplyDomainSourceCompanyRows(
         if ($curCode === '') {
             continue;
         }
-
-        $sms = (string) ($row['sms'] ?? '');
-        $srcCode = '';
-        $kind = '';
-        $custCode = searchApiParseDomainListFeeCompanyCode((string) ($row['sms'] ?? ''));
-        if ($custCode !== null && $custCode !== '') {
-            $srcCode = $custCode;
-            $kind = 'LIST_FEE';
-        } elseif (preg_match('/^\[DOMAIN_SHARE_COMMISSION\|([^\]|]+)\|/i', trim($sms), $m2)) {
-            $srcCode = strtoupper(trim($m2[1]));
-            $kind = 'SHARE_COMMISSION';
-        }
-        if ($srcCode === '' || $kind === '') {
-            continue;
-        }
-
-        // 来源公司标签：优先公司 code + owner name
-        $srcU = strtoupper($srcCode);
-        if (!isset($sourceLabel[$srcU])) {
-            $sourceLabel[$srcU] = ['code' => $srcU, 'name' => $srcU];
-        }
-        $oname = '';
-        try {
-            $stc = $pdo->prepare("
-                SELECT TRIM(COALESCE(c.company_id, '')) AS company_code,
-                       TRIM(COALESCE(o.name, '')) AS oname
-                FROM company c
-                INNER JOIN owner o ON o.id = c.owner_id
-                WHERE UPPER(TRIM(c.company_id)) = ?
-                   OR UPPER(TRIM(IFNULL(c.group_id, ''))) = ?
-                ORDER BY c.id ASC
-                LIMIT 1
-            ");
-            $stc->execute([$srcU, $srcU]);
-            $cr = $stc->fetch(PDO::FETCH_ASSOC);
-            if ($cr) {
-                $cc = strtoupper(trim((string) ($cr['company_code'] ?? '')));
-                if ($cc !== '') {
-                    $sourceLabel[$srcU]['code'] = $cc;
-                }
-                $oname = trim((string) ($cr['oname'] ?? ''));
-            }
-        } catch (PDOException $e) {
-        }
-        if ($oname !== '') {
-            $sourceLabel[$srcU]['name'] = $oname;
-        }
-
-        $amt = round((float) ($row['amount'] ?? 0), 2);
+        $amt = trunc2((float) ($row['amount'] ?? 0));
         if (abs($amt) < 0.00001) {
             continue;
         }
-
-        // 统一把来源公司展示为正数（用户口径：Commission 正数，Payment 也要展示）
-        $sourceAgg[$srcU][$curCode] = ($sourceAgg[$srcU][$curCode] ?? 0.0) + $amt;
-
-        // 从原账户剔除 Domain 贡献，避免与来源公司行重复
-        if ($kind === 'SHARE_COMMISSION') {
-            // 该笔在原逻辑里由 from_account(池子)计入 +amount
-            $poolId = (int) ($row['from_account_id'] ?? 0);
-            if ($poolId > 0) {
-                $poolAdjust[$poolId][$curCode] = ($poolAdjust[$poolId][$curCode] ?? 0.0) - $amt;
-            }
-        } elseif ($kind === 'LIST_FEE') {
-            // 该笔在原逻辑里由 account_id(池子)计入 -amount
-            $poolId = (int) ($row['account_id'] ?? 0);
-            if ($poolId > 0) {
-                $poolAdjust[$poolId][$curCode] = ($poolAdjust[$poolId][$curCode] ?? 0.0) + $amt;
-            }
+        $poolId = (int) ($row['from_account_id'] ?? 0);
+        if ($poolId > 0) {
+            $poolAdjust[$poolId][$curCode] = ($poolAdjust[$poolId][$curCode] ?? 0.0) - $amt;
         }
     }
 
-    if (empty($sourceAgg) && empty($poolAdjust)) {
+    if (empty($poolAdjust)) {
         return;
     }
 
-    // 应用池子账户修正（移除 domain 贡献）
     foreach ($results as &$row) {
         $aid = (int) ($row['account_db_id'] ?? 0);
         $cur = strtoupper((string) ($row['currency'] ?? ''));
         if ($aid > 0 && $cur !== '' && isset($poolAdjust[$aid][$cur])) {
             $delta = (float) $poolAdjust[$aid][$cur];
-            $row['cr_dr'] = round((float) $row['cr_dr'] + $delta, 2);
-            $row['balance'] = round((float) $row['balance'] + $delta, 2);
+            $row['cr_dr'] = trunc2((float) $row['cr_dr'] + $delta);
+            $row['balance'] = trunc2((float) $row['balance'] + $delta);
             $row['has_crdr_transactions'] = (abs((float) $row['cr_dr']) > 0.00001) ? 1 : (int) $row['has_crdr_transactions'];
         }
     }
     unset($row);
 
-    // 合并来源公司行（虚拟 id：负值，便于前端识别）
-    $seenVirtual = [];
-    foreach ($results as $r) {
-        $seenVirtual[$r['account_db_id'] . '_' . strtoupper((string) ($r['currency'] ?? ''))] = true;
-    }
-    foreach ($sourceAgg as $src => $curMap) {
-        $labelCode = $sourceLabel[$src]['code'] ?? $src;
-        $labelName = $sourceLabel[$src]['name'] ?? $labelCode;
-        foreach ($curMap as $cur => $sumAmt) {
-            $sumAmt = round((float) $sumAmt, 2);
-            if (abs($sumAmt) < 0.00001) {
-                continue;
-            }
-            $vid = -1000000 - (int) crc32($src . '|' . $cur);
-            $k = $vid . '_' . $cur;
-            if (isset($seenVirtual[$k])) {
-                continue;
-            }
-            $seenVirtual[$k] = true;
-            $results[] = [
-                'account_id' => $labelCode,
-                'account_name' => $labelName,
-                'account_db_id' => $vid,
-                'role' => 'DOMAIN',
-                'currency' => $cur,
-                'currency_id_debug' => ($currency_id_map ? (int) array_search($cur, $currency_id_map, true) : 0),
-                'bf' => 0.0,
-                'win_loss' => 0.0,
-                'cr_dr' => $sumAmt,
-                'balance' => $sumAmt,
-                'has_crdr_transactions' => 1,
-                'is_alert' => 0,
-                'is_rate_middleman' => 0,
-            ];
-        }
-    }
-
-    // 清理被修正为 0 的池子行（减少噪音）
     $results = array_values(array_filter($results, function ($r) {
         $aid = (int) ($r['account_db_id'] ?? 0);
         if ($aid <= 0) {
@@ -786,9 +783,46 @@ try {
     $date_from_db = date('Y-m-d 00:00:00', $from_ts);
     $date_to_db = date('Y-m-d 23:59:59', $to_ts);
 
-    // 修复：transaction payment 必须优先保证实时与日期归属准确；
-    // 先禁用文件缓存，避免 Resend/删除后短时间命中旧结果导致显示错位和同步延迟。
+    // 超短时微缓存（按用户 + 查询条件），用于吸收短时间内重复请求，减轻数据库压力。
+    // 仅缓存极短时间，兼顾实时性与加载速度。
     $cache_file = null;
+    $cache_ttl_seconds = 3;
+    $cache_dir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'count168_tx_search_cache';
+    if (!is_dir($cache_dir)) {
+        @mkdir($cache_dir, 0777, true);
+    }
+    if (is_dir($cache_dir)) {
+        $cache_key_payload = [
+            'user_id' => (int) ($_SESSION['user_id'] ?? 0),
+            'user_type' => strtolower((string) ($_SESSION['user_type'] ?? '')),
+            'role' => strtolower((string) ($_SESSION['role'] ?? '')),
+            'company_id' => (int) $company_id,
+            'date_from' => $date_from_db,
+            'date_to' => $date_to_db,
+            'show_inactive' => (int) $show_inactive,
+            'show_capture_only' => (int) $show_capture_only,
+            'hide_zero_balance' => (int) $hide_zero_balance,
+            'categories' => array_values($category_filters),
+            'currencies' => array_values($currency_filters),
+            'target_account_ids' => array_values($target_account_ids),
+        ];
+        sort($cache_key_payload['categories']);
+        sort($cache_key_payload['currencies']);
+        sort($cache_key_payload['target_account_ids']);
+        $cache_hash = sha1(json_encode($cache_key_payload, JSON_UNESCAPED_UNICODE));
+        $cache_file = $cache_dir . DIRECTORY_SEPARATOR . $cache_hash . '.json';
+
+        if (is_file($cache_file)) {
+            $age = time() - (int) @filemtime($cache_file);
+            if ($age >= 0 && $age <= $cache_ttl_seconds) {
+                $cached = @file_get_contents($cache_file);
+                if ($cached !== false && $cached !== '') {
+                    echo $cached;
+                    exit;
+                }
+            }
+        }
+    }
 
     // 构建账户查询条件
     $where_conditions = [];
@@ -969,6 +1003,9 @@ try {
 
     // 构建基础 SQL 查询（只显示已提交过的账户，通过 account_company 表过滤）
     // 同时查询 alert 相关字段
+    $createdSourceSelect = searchApiAccountHasCreatedSourceColumn($pdo)
+        ? ", COALESCE(a.created_source, '') AS created_source"
+        : '';
     $baseSql = "SELECT DISTINCT
                 a.id,
                 a.account_id,
@@ -979,6 +1016,7 @@ try {
                 a.alert_day,
                 a.alert_specific_date,
                 a.alert_amount
+                $createdSourceSelect
             FROM account a
             INNER JOIN account_company ac ON a.id = ac.account_id
             $where_sql";
@@ -1123,6 +1161,9 @@ try {
                         $extraParams = array_merge($extraParams, $category_filters);
                     }
                 }
+                $extraCreated = searchApiAccountHasCreatedSourceColumn($pdo)
+                    ? ", COALESCE(a.created_source, '') AS created_source"
+                    : '';
                 $extraSql = "SELECT DISTINCT
                         a.id,
                         a.account_id,
@@ -1133,6 +1174,7 @@ try {
                         a.alert_day,
                         a.alert_specific_date,
                         a.alert_amount
+                        $extraCreated
                     FROM account a
                     WHERE a.id IN ($cpPh)";
                 if (!empty($extraBits)) {
@@ -1506,8 +1548,7 @@ try {
                         WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
                         ELSE 0 
                     END
@@ -1519,8 +1560,7 @@ try {
                         WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
                         ELSE 0 
                     END
@@ -1663,12 +1703,12 @@ try {
         }
 
         // 4. 计算 Balance（显示口径）
-        // 公式：Balance = round(B/F,2) + round(Win/Loss,2) + round(Cr/Dr,2)
+        // 公式：Balance = trunc(B/F,2) + trunc(Win/Loss,2) + trunc(Cr/Dr,2)
         // 这样与表格上可见列值的手算结果一致，避免 0.01 浮点尾差
-        $bf_display = round((float) $bf, 2);
-        $win_loss_display = round((float) $win_loss, 2);
-        $cr_dr_display = round((float) $cr_dr, 2);
-        $balance = round($bf_display + $win_loss_display + $cr_dr_display, 2);
+        $bf_display = trunc2((float) $bf);
+        $win_loss_display = trunc2((float) $win_loss);
+        $cr_dr_display = trunc2((float) $cr_dr);
+        $balance = trunc2($bf_display + $win_loss_display + $cr_dr_display);
 
         // 4b. 本期是否有 RATE Middle-Man 分录（与 Win/Loss 内 RATE_MIDDLEMAN 查询合并，避免每条组合多一次 EXISTS）
         $is_rate_middleman = !empty($wlPack['has_rate_middleman']);
@@ -1769,8 +1809,17 @@ try {
             }
         }
 
+        $dispAccountId = domainProvisionedMemberAccountIdForDisplay(
+            (string) ($account['account_id'] ?? ''),
+            (string) ($account['role'] ?? ''),
+            isset($account['created_source']) ? (string) $account['created_source'] : null
+        );
+        if ($dispAccountId === '') {
+            $dispAccountId = (string) ($account['account_id'] ?? '');
+        }
+
         $results[] = [
-            'account_id' => $account['account_id'],
+            'account_id' => $dispAccountId,
             'account_name' => $account['name'],
             'account_db_id' => $account_id,
             'role' => $account['role'],
@@ -1780,7 +1829,7 @@ try {
             'bf' => $bf_display,
             'win_loss' => $win_loss_display,
             'cr_dr' => $cr_dr_display,
-            'balance' => round((float) $balance, 2),
+            'balance' => trunc2((float) $balance),
             'has_crdr_transactions' => $has_crdr_transactions ? 1 : 0,
             'has_win_loss_transactions' => $has_win_loss_transactions ? 1 : 0,
             'has_win_loss_history' => $has_win_loss_history ? 1 : 0,
@@ -1801,8 +1850,23 @@ try {
     }
     $results = $deduplicated_results;
 
-    // 第一笔 Domain List Fee：以客户公司（如 LGA）展示在 Transaction Payment
-    searchApiAppendDomainListFeeVirtualRows(
+    // 第一笔 Domain List Fee：以客户公司（如 LGA）展示在 Transaction Payment。
+    // 当分类仅选择 PROFIT 时，不追加 Domain 虚拟来源行，避免筛选结果混入非 PROFIT 行。
+    $isProfitOnlyCategory = (count($category_filters) === 1 && strtoupper((string) $category_filters[0]) === 'PROFIT');
+    if (!$isProfitOnlyCategory) {
+        searchApiAppendDomainListFeeVirtualRows(
+            $pdo,
+            $results,
+            $company_id,
+            $date_from_db,
+            $date_to_db,
+            $filter_currency_codes,
+            $currency_id_map
+        );
+    }
+    // 无论分类如何，都要执行池账号净额校正（List Fee - Commission），
+    // 否则 PROFIT only 会显示毛额，与 Payment History 的净额口径不一致。
+    searchApiApplyDomainSourceCompanyRows(
         $pdo,
         $results,
         $company_id,
@@ -1811,16 +1875,7 @@ try {
         $filter_currency_codes,
         $currency_id_map
     );
-    // 追加 Domain 净利润行：以公司 owner_code（如 C168）展示最终 PROFIT 口径
-    searchApiAppendDomainNetProfitVirtualRows(
-        $pdo,
-        $results,
-        $company_id,
-        $date_from_db,
-        $date_to_db,
-        $filter_currency_codes,
-        $currency_id_map
-    );
+    // Domain 净利润行已停用：最终利润由 Share/Commission 实际分配结果体现。
     // 按 currency 和 account_id 排序
     usort($results, function ($a, $b) {
         if ($a['currency'] !== $b['currency']) {
@@ -2194,7 +2249,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
                         -- Domain Share Commission：收款方显示正数
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
                         ELSE 0
                     END), 0) as cr_dr
@@ -2234,7 +2289,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
                         WHEN transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
                         WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
                         ELSE 0
                     END), 0) as cr_dr
@@ -2576,8 +2631,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
                         -- Domain Share Commission：收款方显示正数
                         WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
                         WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN ROUND(t.amount, 2)
-                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN 0
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
                         WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
 
                         -- 作为 From Account（支付 / 收到）；CONTRA 时 FROM 显示正数
@@ -2624,7 +2678,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
                         WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
                         WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
                         WHEN transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
                         WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
                         ELSE 0
                     END), 0) as cr_dr,

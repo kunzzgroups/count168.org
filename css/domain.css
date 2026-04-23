@@ -377,8 +377,8 @@ h1 {
 
 /* Company Settings modal: split pane (Company | Share %) */
 .modal-content.company-settings-modal-content--split {
-    width: min(980px, 96vw);
-    max-width: min(980px, 96vw);
+    width: min(1120px, 96vw);
+    max-width: min(1120px, 96vw);
 }
 
 .company-settings-modal-body {
@@ -774,6 +774,12 @@ h1 {
     border: 1px solid #bfdbfe;
 }
 
+.company-share-role-badge--profit {
+    background: linear-gradient(135deg, #dbeafe 0%, #e0f2fe 100%);
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
 .company-share-role-badge--cs {
     background: linear-gradient(135deg, #ecfccb 0%, #d9f99d 100%);
     color: #3f6212;
@@ -803,9 +809,17 @@ h1 {
     border-color: #fecaca;
 }
 
+.company-share-column-labels--profit-pool {
+    grid-template-columns: minmax(200px, 2fr) minmax(120px, 1fr) 2.25rem;
+}
+
+.company-share-role-body--profit-pool .company-share-data-row {
+    grid-template-columns: minmax(200px, 2fr) minmax(120px, 1fr) 2.25rem;
+}
+
 .company-share-column-labels {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 2.25rem;
+    grid-template-columns: minmax(180px, 1.45fr) minmax(110px, 0.9fr) minmax(110px, 0.9fr) 2.25rem;
     gap: 8px;
     align-items: center;
     font-size: clamp(10px, 0.73vw, 12px);
@@ -846,7 +860,7 @@ h1 {
 
 .company-share-data-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) 2.25rem;
+    grid-template-columns: minmax(180px, 1.45fr) minmax(110px, 0.9fr) minmax(110px, 0.9fr) 2.25rem;
     gap: 8px;
     align-items: center;
     padding: 8px 10px;
@@ -867,12 +881,53 @@ h1 {
 
 .company-share-select {
     width: 100%;
+    min-width: 0;
+    height: 36px;
+    box-sizing: border-box;
     padding: 8px 10px;
     font-size: clamp(11px, 0.83vw, 14px);
     border: 1px solid #cbd5e1;
     border-radius: 8px;
     background: #fff;
     color: #1e293b;
+}
+
+.company-share-account-inline {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.company-share-cell-account {
+    min-width: 0;
+}
+
+.company-share-cell-account .company-share-select {
+    flex: 1 1 auto;
+}
+
+.company-share-account-plus-btn {
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #67b4ff;
+    border-radius: 50%;
+    background: linear-gradient(180deg, #64bbff 0%, #2a84ef 100%);
+    color: #fff;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(37, 99, 235, 0.3);
+}
+
+.company-share-account-plus-btn:hover {
+    filter: brightness(1.06);
 }
 
 .company-share-pct-wrap {

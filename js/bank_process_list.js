@@ -78,8 +78,7 @@ function toggleBankSupplierSort() {
     bankSupplierSortDirection = bankSupplierSortDirection === 'asc' ? 'desc' : 'asc';
     sortBankProcessesBySupplier();
     currentPage = 1;
-    renderBankTable();
-    renderPagination();
+    renderTable();
     updateBankSupplierSortIndicator();
 }
 
@@ -860,7 +859,10 @@ function renderBankTable() {
 
     const headRow = document.getElementById('bankTableHeadRow');
     const tbody = document.getElementById('bankTableBody');
-    if (!headRow || !tbody) return;
+    if (!headRow || !tbody) {
+        if (typeof updateBankListScrollMode === 'function') updateBankListScrollMode();
+        return;
+    }
 
     const thLabels = ['No', 'Supplier', 'Country', 'Bank', 'Types', 'Card Owner', 'Contract', 'Insurance', 'Customer', 'Cost', 'Price', 'Profit', 'Status', 'Date', 'Action'];
     headRow.innerHTML = thLabels.map((label, i) => {
@@ -913,6 +915,7 @@ function renderBankTable() {
         tbody.innerHTML = '<tr><td colspan="15" class="bank-empty-cell">No process data found</td></tr>';
         renderPagination();
         updateSelectAllProcessesVisibility();
+        if (typeof updateBankListScrollMode === 'function') updateBankListScrollMode();
         return;
     }
 
@@ -976,6 +979,7 @@ function renderBankTable() {
     renderPagination();
     updateSelectAllProcessesVisibility();
     updateDeleteButton();
+    if (typeof updateBankListScrollMode === 'function') updateBankListScrollMode();
 }
 
 /** 仅调整数据列宽度与 th 一致，th 不改；双 rAF 确保布局完成后再取宽 */
@@ -4602,7 +4606,7 @@ return {
     postToTransactionSelected: postToTransactionSelected,
     toggleProcessStatus: toggleProcessStatus,
     refreshAfterFetch: function () { sortBankProcessesBySupplier(); },
-    renderAfterStatusChange: function () { renderBankTable(); renderPagination(); },
+    renderAfterStatusChange: function () { renderTable(); },
     isRealBankInactive: isRealBankInactive,
     executeAccountingDueResend: executeAccountingDueResend,
     getPendingResendScheduleForProcess: getPendingResendScheduleForProcess,

@@ -597,10 +597,17 @@ let currentEditingCompanyId = null;
 let companySnapshotWhenModalOpened = null;
 // Company Settings → Share %：下拉账户列表（来自 API）
 let shareModalAccounts = [];
+let shareModalAccountsProfit = [];
+let domainAddAccountEditData = { roles: [], currencies: [] };
+let domainAddSelectedCurrencyIds = [];
+let domainAddSelectedCompanyIds = [];
+let domainAddDeletedCurrencyIds = [];
+let domainAddPreferredRole = '';
+let domainAddAccountEventsBound = false;
 let domainFeePriceCache = 0;
 
 function defaultFeeShareAllocations() {
-    return { sales: [], cs: [], it: [] };
+    return { profit: [], sales: [], cs: [], it: [] };
 }
 
 function normalizeFeeShareFromServer(raw) {
@@ -608,7 +615,7 @@ function normalizeFeeShareFromServer(raw) {
     if (!raw || typeof raw !== 'object') {
         return d;
     }
-    ['sales', 'cs', 'it'].forEach(function (k) {
+    ['profit', 'sales', 'cs', 'it'].forEach(function (k) {
         if (Array.isArray(raw[k])) {
             d[k] = raw[k].map(function (r) {
                 return {
@@ -628,7 +635,7 @@ function ensureCompanyFeeShare(company) {
     if (!company.fee_share_allocations || typeof company.fee_share_allocations !== 'object') {
         company.fee_share_allocations = defaultFeeShareAllocations();
     }
-    ['sales', 'cs', 'it'].forEach(function (k) {
+    ['profit', 'sales', 'cs', 'it'].forEach(function (k) {
         if (!Array.isArray(company.fee_share_allocations[k])) {
             company.fee_share_allocations[k] = [];
         }
@@ -639,7 +646,7 @@ function isFeeShareAllocationsEmpty(fs) {
     if (!fs || typeof fs !== 'object') {
         return true;
     }
-    return (!fs.sales || !fs.sales.length) && (!fs.cs || !fs.cs.length) && (!fs.it || !fs.it.length);
+    return (!fs.profit || !fs.profit.length) && (!fs.sales || !fs.sales.length) && (!fs.cs || !fs.cs.length) && (!fs.it || !fs.it.length);
 }
 
 function escapeHtmlShare(str) {
@@ -652,42 +659,457 @@ function escapeHtmlShare(str) {
         .replace(/"/g, '&quot;');
 }
 
-function buildShareAccountOptionsHtml(selectedId) {
+function buildShareAccountOptionsHtml(selectedId, accountList) {
+    var accounts = Array.isArray(accountList) ? accountList : shareModalAccounts;
     var sel = selectedId !== undefined && selectedId !== null && selectedId !== '' ? String(selectedId) : '';
     var h = '<option value="">— Select —</option>';
-    shareModalAccounts.forEach(function (a) {
+    var seenSelected = false;
+    accounts.forEach(function (a) {
         var id = String(a.id);
         var label = (a.account_id || '');
+        if (id === sel) {
+            seenSelected = true;
+        }
         h += '<option value="' + id + '"' + (id === sel ? ' selected' : '') + '>' + escapeHtmlShare(label) + '</option>';
     });
+    if (sel && !seenSelected) {
+        h += '<option value="' + escapeHtmlShare(sel) + '" selected>' + escapeHtmlShare(sel) + '</option>';
+    }
     return h;
+}
+
+function openShareAccountAdd(role) {
+    showDomainAddAccountModal(role);
+}
+
+function ensureDomainAddAccountModalExists() {
+    if (document.getElementById('domainAddAccountModal')) {
+        return;
+    }
+    var html = '' +
+        '<div id="domainAddAccountModal" class="account-modal" style="display: none; z-index: 10010;">' +
+        '  <div class="account-modal-content">' +
+        '    <div class="account-modal-header">' +
+        '      <h2>Add Account</h2>' +
+        '      <span class="account-close" onclick="closeDomainAddAccountModal()">&times;</span>' +
+        '    </div>' +
+        '    <div class="account-modal-body">' +
+        '      <form id="domainAddAccountForm" class="account-form">' +
+        '        <div class="account-form-columns">' +
+        '          <div class="account-form-column">' +
+        '            <h3 class="account-section-header">Personal Information</h3>' +
+        '            <div class="account-form-group"><label for="domain_add_account_id">Account ID *</label><input type="text" id="domain_add_account_id" name="account_id" required></div>' +
+        '            <div class="account-form-group"><label for="domain_add_name">Name *</label><input type="text" id="domain_add_name" name="name" required></div>' +
+        '            <div class="account-form-group"><label for="domain_add_role">Role *</label><select id="domain_add_role" name="role" required><option value="">Select Role</option></select></div>' +
+        '            <div class="account-form-group"><label for="domain_add_password">Password *</label><input type="password" id="domain_add_password" name="password" required></div>' +
+        '          </div>' +
+        '          <div class="account-form-column">' +
+        '            <h3 class="account-section-header">Payment</h3>' +
+        '            <div class="account-form-group"><label>Payment Alert</label>' +
+        '              <div class="account-radio-group">' +
+        '                <label class="account-radio-label"><input type="radio" name="add_payment_alert" value="1">Yes</label>' +
+        '                <label class="account-radio-label"><input type="radio" name="add_payment_alert" value="0" checked>No</label>' +
+        '              </div>' +
+        '            </div>' +
+        '            <div class="account-form-row" id="domain_add_alert_fields" style="display: none;">' +
+        '              <div class="account-form-group"><label for="domain_add_alert_type">Alert Type</label><select id="domain_add_alert_type" name="alert_type"><option value="">Select Type</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></div>' +
+        '              <div class="account-form-group"><label for="domain_add_alert_start_date">Start Date</label><input type="date" id="domain_add_alert_start_date" name="alert_start_date"></div>' +
+        '            </div>' +
+        '            <div class="account-form-group" id="domain_add_alert_amount_row" style="display: none;"><label for="domain_add_alert_amount">Alert (Amount)</label><input type="number" id="domain_add_alert_amount" name="alert_amount" step="0.01" placeholder="Enter amount"></div>' +
+        '            <div class="account-form-group"><label for="domain_add_remark">Remark</label><textarea id="domain_add_remark" name="remark" rows="1" style="resize: none; overflow-y: hidden; line-height: 1.5;"></textarea></div>' +
+        '          </div>' +
+        '        </div>' +
+        '        <div class="account-form-section"><div class="account-advance-section"><h3>Advanced Account</h3><div class="account-other-currency"><label>Other Currency:</label><div style="display: flex; gap: 8px; margin-bottom: 12px;"><input type="text" id="domainAddCurrencyInput" placeholder="Enter new currency code (e.g., USD)" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;"><button type="button" class="account-btn-add-currency" onclick="addCurrencyFromInputDomain(); return false;">Create Currency</button></div><div class="account-currency-list" id="domainAddCurrencyList"></div></div><div class="account-other-currency" style="margin-top: 20px;"><label>Company:</label><div class="account-currency-list" id="domainAddCompanyList"></div></div></div></div>' +
+        '        <div class="account-form-actions"><button type="submit" class="account-btn account-btn-save">Add Account</button><button type="button" class="account-btn account-btn-cancel" onclick="closeDomainAddAccountModal()">Cancel</button></div>' +
+        '      </form>' +
+        '    </div>' +
+        '  </div>' +
+        '</div>';
+    document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function bindDomainAddAccountModalEvents() {
+    if (domainAddAccountEventsBound) {
+        return;
+    }
+    var addForm = document.getElementById('domainAddAccountForm');
+    if (addForm) {
+        addForm.addEventListener('submit', submitDomainAddAccountForm);
+    }
+    document.querySelectorAll('input[name="add_payment_alert"]').forEach(function (el) {
+        el.addEventListener('change', toggleDomainAddAlertFields);
+    });
+    var currencyInput = document.getElementById('domainAddCurrencyInput');
+    if (currencyInput) {
+        currencyInput.addEventListener('input', function () {
+            this.value = String(this.value || '').toUpperCase();
+        });
+        currencyInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCurrencyFromInputDomain();
+            }
+        });
+    }
+    domainAddAccountEventsBound = true;
+}
+
+async function showDomainAddAccountModal(role) {
+    ensureDomainAddAccountModalExists();
+    bindDomainAddAccountModalEvents();
+    var modal = document.getElementById('domainAddAccountModal');
+    var form = document.getElementById('domainAddAccountForm');
+    if (!modal || !form) {
+        showAlert('Add Account modal is unavailable.', 'danger');
+        return;
+    }
+    domainAddPreferredRole = (role || '').toUpperCase();
+    form.reset();
+    domainAddSelectedCurrencyIds = [];
+    domainAddSelectedCompanyIds = [];
+    domainAddDeletedCurrencyIds = [];
+    toggleDomainAddAlertFields();
+    modal.style.display = 'block';
+    modal.classList.add('show');
+    await loadDomainAddAccountEditData();
+    await loadDomainAddCurrencies();
+    await loadDomainAddCompanies();
+}
+
+function closeDomainAddAccountModal() {
+    var modal = document.getElementById('domainAddAccountModal');
+    var form = document.getElementById('domainAddAccountForm');
+    if (modal) {
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+    }
+    if (form) {
+        form.reset();
+    }
+    domainAddSelectedCurrencyIds = [];
+    domainAddSelectedCompanyIds = [];
+    domainAddDeletedCurrencyIds = [];
+}
+
+function toggleDomainAddAlertFields() {
+    var paymentAlert = document.querySelector('input[name="add_payment_alert"]:checked');
+    var isOn = paymentAlert && paymentAlert.value === '1';
+    var fields = document.getElementById('domain_add_alert_fields');
+    var amountRow = document.getElementById('domain_add_alert_amount_row');
+    if (fields) fields.style.display = isOn ? 'grid' : 'none';
+    if (amountRow) amountRow.style.display = isOn ? 'block' : 'none';
+}
+
+async function loadDomainAddAccountEditData() {
+    try {
+        var res = await fetch('/api/editdata/editdata_api.php', { cache: 'no-cache' });
+        var json = await res.json();
+        if (json.success && json.data) {
+            domainAddAccountEditData.roles = Array.isArray(json.data.roles) ? json.data.roles : [];
+            domainAddAccountEditData.currencies = Array.isArray(json.data.currencies) ? json.data.currencies : [];
+            renderDomainAddRoles();
+        }
+    } catch (e) {
+        showAlert('Failed to load account form data.', 'danger');
+    }
+}
+
+function renderDomainAddRoles() {
+    var roleEl = document.getElementById('domain_add_role');
+    if (!roleEl) return;
+    roleEl.innerHTML = '<option value="">Select Role</option>';
+    domainAddAccountEditData.roles.forEach(function (role) {
+        var v = String(role || '').trim();
+        if (!v) return;
+        var opt = document.createElement('option');
+        opt.value = v;
+        opt.textContent = v.toUpperCase() === 'UPLINE' ? 'SUPPLIER' : v;
+        roleEl.appendChild(opt);
+    });
+    if (domainAddPreferredRole) {
+        var wanted = domainAddPreferredRole === 'SUPPLIER' ? 'UPLINE' : domainAddPreferredRole;
+        roleEl.value = wanted;
+    }
+}
+
+async function loadDomainAddCurrencies() {
+    var wrap = document.getElementById('domainAddCurrencyList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    try {
+        var res = await fetch('api/accounts/account_currency_api.php?action=get_available_currencies', { cache: 'no-cache' });
+        var json = await res.json();
+        var list = json.success && Array.isArray(json.data) ? json.data : [];
+        if (!list.length) {
+            wrap.innerHTML = '<div class="currency-toggle-note">No currencies available.</div>';
+            return;
+        }
+        if (!domainAddSelectedCurrencyIds.length) {
+            var auto = list.find(function (c) { return String(c.code || '').toUpperCase() === 'MYR'; }) || list[0];
+            domainAddSelectedCurrencyIds = auto ? [auto.id] : [];
+        }
+        list.forEach(function (currency) {
+            if (domainAddDeletedCurrencyIds.indexOf(currency.id) !== -1) return;
+            var item = document.createElement('div');
+            item.className = 'account-currency-item currency-toggle-item';
+            var code = String(currency.code || '').toUpperCase();
+            var codeSpan = document.createElement('span');
+            codeSpan.className = 'currency-code-text';
+            codeSpan.textContent = code;
+            var delBtn = document.createElement('button');
+            delBtn.className = 'currency-delete-btn';
+            delBtn.type = 'button';
+            delBtn.title = 'Delete currency permanently';
+            delBtn.innerHTML = '&times;';
+            delBtn.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteCurrencyPermanentlyDomain(currency.id, code, item);
+            });
+            item.appendChild(codeSpan);
+            item.appendChild(delBtn);
+            item.classList.toggle('selected', domainAddSelectedCurrencyIds.indexOf(currency.id) !== -1);
+            codeSpan.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var idx = domainAddSelectedCurrencyIds.indexOf(currency.id);
+                if (idx === -1) {
+                    domainAddSelectedCurrencyIds.push(currency.id);
+                    item.classList.add('selected');
+                } else {
+                    domainAddSelectedCurrencyIds.splice(idx, 1);
+                    item.classList.remove('selected');
+                }
+            });
+            wrap.appendChild(item);
+        });
+    } catch (e) {
+        wrap.innerHTML = '<div class="currency-toggle-note">Failed to load currencies.</div>';
+    }
+}
+
+async function loadDomainAddCompanies() {
+    var wrap = document.getElementById('domainAddCompanyList');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    var companyId = (typeof window.DOMAIN_SESSION_COMPANY_ID !== 'undefined') ? parseInt(window.DOMAIN_SESSION_COMPANY_ID, 10) : 0;
+    var companyCode = String(window.DOMAIN_SESSION_COMPANY_CODE || 'C168').toUpperCase() || 'C168';
+    domainAddSelectedCompanyIds = companyId ? [companyId] : [];
+    var item = document.createElement('div');
+    item.className = 'account-currency-item currency-toggle-item selected';
+    item.textContent = companyCode;
+    wrap.appendChild(item);
+}
+
+async function addCurrencyFromInputDomain() {
+    var input = document.getElementById('domainAddCurrencyInput');
+    var currencyCode = String((input && input.value) || '').trim().toUpperCase();
+    if (!currencyCode) {
+        showAlert('Please enter currency code', 'danger');
+        if (input) input.focus();
+        return false;
+    }
+    var exists = (domainAddAccountEditData.currencies || []).some(function (c) {
+        return String(c.code || '').toUpperCase() === currencyCode;
+    });
+    if (exists) {
+        showAlert('Currency ' + currencyCode + ' already exists');
+        if (input) input.value = '';
+        return false;
+    }
+    try {
+        var companyId = (typeof window.DOMAIN_SESSION_COMPANY_ID !== 'undefined') ? window.DOMAIN_SESSION_COMPANY_ID : null;
+        var res = await fetch('api/accounts/addcurrencyapi.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: currencyCode, company_id: companyId })
+        });
+        var json = await res.json();
+        if (!json.success || !json.data || !json.data.id) {
+            showAlert(json.error || json.message || 'Failed to create currency', 'danger');
+            return false;
+        }
+        domainAddAccountEditData.currencies.push({ id: json.data.id, code: json.data.code });
+        if (domainAddSelectedCurrencyIds.indexOf(json.data.id) === -1) {
+            domainAddSelectedCurrencyIds.push(json.data.id);
+        }
+        if (input) input.value = '';
+        await loadDomainAddCurrencies();
+        showAlert('Currency ' + currencyCode + ' created successfully');
+    } catch (e) {
+        showAlert('Failed to create currency', 'danger');
+    }
+    return true;
+}
+
+async function deleteCurrencyPermanentlyDomain(currencyId, currencyCode, itemElement) {
+    if (!confirm('Are you sure you want to permanently delete currency ' + currencyCode + '? This action cannot be undone.')) {
+        return;
+    }
+    try {
+        var res = await fetch('api/accounts/delete_currency_api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: currencyId })
+        });
+        var json = await res.json();
+        if (!json.success) {
+            showAlert(json.error || json.message || 'Failed to delete currency', 'danger');
+            return;
+        }
+        if (domainAddDeletedCurrencyIds.indexOf(currencyId) === -1) {
+            domainAddDeletedCurrencyIds.push(currencyId);
+        }
+        domainAddSelectedCurrencyIds = domainAddSelectedCurrencyIds.filter(function (id) { return id !== currencyId; });
+        if (itemElement && itemElement.parentNode) {
+            itemElement.parentNode.removeChild(itemElement);
+        }
+        showAlert('Currency ' + currencyCode + ' deleted successfully!');
+    } catch (e) {
+        showAlert('Failed to delete currency', 'danger');
+    }
+}
+
+async function submitDomainAddAccountForm(e) {
+    e.preventDefault();
+    var form = document.getElementById('domainAddAccountForm');
+    if (!form) return;
+    var fd = new FormData(form);
+    var paymentAlert = document.querySelector('input[name="add_payment_alert"]:checked');
+    fd.set('payment_alert', paymentAlert ? paymentAlert.value : '0');
+    if (!paymentAlert || paymentAlert.value === '0') {
+        fd.set('alert_type', '');
+        fd.set('alert_start_date', '');
+        fd.set('alert_amount', '');
+    }
+    if (domainAddSelectedCurrencyIds.length) {
+        fd.set('currency_ids', JSON.stringify(domainAddSelectedCurrencyIds));
+    }
+    if (domainAddSelectedCompanyIds.length) {
+        fd.set('company_ids', JSON.stringify(domainAddSelectedCompanyIds));
+    } else {
+        var companyId = (typeof window.DOMAIN_SESSION_COMPANY_ID !== 'undefined') ? parseInt(window.DOMAIN_SESSION_COMPANY_ID, 10) : 0;
+        if (companyId) {
+            fd.set('company_ids', JSON.stringify([companyId]));
+        }
+    }
+
+    try {
+        var res = await fetch('/api/accounts/addaccountapi.php', {
+            method: 'POST',
+            body: fd
+        });
+        var json = await res.json();
+        if (!json.success) {
+            showAlert(json.error || json.message || 'Failed to add account', 'danger');
+            return;
+        }
+        var newAccountId = json.data && json.data.id ? parseInt(json.data.id, 10) : 0;
+        if (newAccountId && domainAddSelectedCurrencyIds.length) {
+            await Promise.all(domainAddSelectedCurrencyIds.map(function (currencyId) {
+                return fetch('/api/accounts/account_currency_api.php?action=add_currency', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_id: newAccountId, currency_id: currencyId })
+                }).catch(function () { return null; });
+            }));
+        }
+        if (newAccountId && domainAddSelectedCompanyIds.length) {
+            await Promise.all(domainAddSelectedCompanyIds.map(function (companyId) {
+                return fetch('/api/accounts/account_company_api.php?action=add_company', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ account_id: newAccountId, company_id: companyId })
+                }).catch(function () { return null; });
+            }));
+        }
+        closeDomainAddAccountModal();
+        showAlert('Account added successfully.');
+        if (currentEditingCompanyId) {
+            loadCompanyShareDataForModal(currentEditingCompanyId);
+        }
+    } catch (err) {
+        showAlert('Failed to add account', 'danger');
+    }
+}
+
+function sumFeeShareRolePercentages(rows) {
+    if (!rows || !rows.length) {
+        return 0;
+    }
+    return rows.reduce(function (acc, r) {
+        return acc + (parseFloat(r && r.percentage) || 0);
+    }, 0);
+}
+
+function readStandardShareRowsFromTable(tb) {
+    var rows = [];
+    if (!tb) {
+        return rows;
+    }
+    tb.querySelectorAll('.company-share-data-row').forEach(function (tr) {
+        var sEl = tr.querySelector('.share-account-select');
+        var pEl = tr.querySelector('.share-pct-input');
+        var aid = sEl ? parseInt(sEl.value, 10) : 0;
+        var pct = pEl ? String(pEl.value).trim() : '';
+        if (pct === '') {
+            rows.push({ account_id: aid, percentage: '' });
+            return;
+        }
+        var pctNum = parseFloat(pct);
+        rows.push({ account_id: aid, percentage: isFinite(pctNum) ? pctNum : '' });
+    });
+    return rows;
+}
+
+function readProfitShareRowsFromTable(tb, remainderPct) {
+    var rows = [];
+    if (!tb) {
+        return rows;
+    }
+    var list = Array.prototype.slice.call(tb.querySelectorAll('.company-share-data-row'));
+    var nAssigned = 0;
+    list.forEach(function (tr) {
+        var sEl = tr.querySelector('.share-account-select');
+        var aid = sEl ? parseInt(sEl.value, 10) : 0;
+        if (aid !== 0) {
+            nAssigned++;
+        }
+    });
+    var perBase = nAssigned > 0 ? remainderPct / nAssigned : 0;
+    var perRounded = Math.round(perBase * 10000) / 10000;
+    var assignedCount = 0;
+    var assignedSum = 0;
+    list.forEach(function (tr) {
+        var sEl = tr.querySelector('.share-account-select');
+        var aid = sEl ? parseInt(sEl.value, 10) : 0;
+        if (aid === 0) {
+            rows.push({ account_id: 0, percentage: '' });
+            return;
+        }
+        assignedCount++;
+        var isLast = assignedCount === nAssigned;
+        var pctVal = isLast
+            ? Math.round((remainderPct - assignedSum) * 10000) / 10000
+            : perRounded;
+        if (!isLast) {
+            assignedSum += pctVal;
+        }
+        rows.push({ account_id: aid, percentage: pctVal });
+    });
+    return rows;
 }
 
 function readFeeShareFromModalDom() {
     var out = defaultFeeShareAllocations();
-    var cfg = [['sales', 'shareRowsSales'], ['cs', 'shareRowsCs'], ['it', 'shareRowsIt']];
-    cfg.forEach(function (pair) {
-        var role = pair[0];
-        var tid = pair[1];
-        var tb = document.getElementById(tid);
-        if (!tb) {
-            return;
-        }
-        tb.querySelectorAll('.company-share-data-row').forEach(function (tr) {
-            var sEl = tr.querySelector('.share-account-select');
-            var pEl = tr.querySelector('.share-pct-input');
-            var aid = sEl ? parseInt(sEl.value, 10) : 0;
-            var pct = pEl ? String(pEl.value).trim() : '';
-            // Keep incomplete rows in local state so users can add multiple rows
-            // continuously without previous empty rows being dropped.
-            if (pct === '') {
-                out[role].push({ account_id: aid, percentage: '' });
-                return;
-            }
-            var pctNum = parseFloat(pct);
-            out[role].push({ account_id: aid, percentage: isFinite(pctNum) ? pctNum : '' });
-        });
-    });
+    out.sales = readStandardShareRowsFromTable(document.getElementById('shareRowsSales'));
+    out.cs = readStandardShareRowsFromTable(document.getElementById('shareRowsCs'));
+    out.it = readStandardShareRowsFromTable(document.getElementById('shareRowsIt'));
+    var otherSum = sumFeeShareRolePercentages(out.sales) +
+        sumFeeShareRolePercentages(out.cs) +
+        sumFeeShareRolePercentages(out.it);
+    var remainder = Math.max(0, 100 - otherSum);
+    out.profit = readProfitShareRowsFromTable(document.getElementById('shareRowsProfit'), remainder);
     return out;
 }
 
@@ -701,7 +1123,7 @@ function pruneEmptyShareRows(fs) {
     if (!fs || typeof fs !== 'object') {
         return out;
     }
-    ['sales', 'cs', 'it'].forEach(function (role) {
+    ['profit', 'sales', 'cs', 'it'].forEach(function (role) {
         var rows = Array.isArray(fs[role]) ? fs[role] : [];
         out[role] = rows.filter(function (row) {
             var aid = row && row.account_id !== undefined ? parseInt(row.account_id, 10) : 0;
@@ -721,7 +1143,7 @@ function pruneEmptyShareRows(fs) {
 }
 
 function countShareRoleAssignedAccounts(role) {
-    var map = { sales: 'shareRowsSales', cs: 'shareRowsCs', it: 'shareRowsIt' };
+    var map = { profit: 'shareRowsProfit', sales: 'shareRowsSales', cs: 'shareRowsCs', it: 'shareRowsIt' };
     var tb = document.getElementById(map[role]);
     if (!tb) {
         return 0;
@@ -761,21 +1183,23 @@ function toggleShareRoleCard(role) {
 
 function updateCompanyShareTotals() {
     var out = readFeeShareFromModalDom();
-    var grand = 0;
-    [['sales', 'shareTotalSales'], ['cs', 'shareTotalCs'], ['it', 'shareTotalIt']].forEach(function (pair) {
+    var otherSum = sumFeeShareRolePercentages(out.sales) +
+        sumFeeShareRolePercentages(out.cs) +
+        sumFeeShareRolePercentages(out.it);
+    var profitPool = Math.max(0, 100 - otherSum);
+    var grand = otherSum + profitPool;
+    [['profit', 'shareTotalProfit'], ['sales', 'shareTotalSales'], ['cs', 'shareTotalCs'], ['it', 'shareTotalIt']].forEach(function (pair) {
         var role = pair[0];
         var tid = pair[1];
         var el = document.getElementById(tid);
         if (!el) {
             return;
         }
-        var t = 0;
-        (out[role] || []).forEach(function (r) {
-            t += parseFloat(r.percentage) || 0;
-        });
-        grand += t;
+        var t = role === 'profit'
+            ? profitPool
+            : sumFeeShareRolePercentages(out[role]);
         el.textContent = t.toFixed(2) + '%';
-        el.classList.toggle('company-share-card-sum--over', t > 100);
+        el.classList.toggle('company-share-card-sum--over', role === 'profit' ? otherSum > 100 : t > 100);
 
         var count = countShareRoleAssignedAccounts(role);
         var sumEl = document.getElementById('shareAccountSummary-' + role);
@@ -786,7 +1210,7 @@ function updateCompanyShareTotals() {
         if (fill) {
             var w = Math.min(100, Math.max(0, t));
             fill.style.width = w + '%';
-            fill.classList.toggle('company-share-progress-fill--over', t > 100);
+            fill.classList.toggle('company-share-progress-fill--over', role === 'profit' ? otherSum > 100 : t > 100);
         }
     });
     var grandEl = document.getElementById('shareGrandTotal');
@@ -815,18 +1239,66 @@ function formatShareRowAmount2(value) {
 
 function updateCompanyShareRowAmounts() {
     var price = getDomainPriceForShareCalc();
-    var rows = document.querySelectorAll('.company-share-data-row');
-    rows.forEach(function (row) {
-        var pctEl = row.querySelector('.share-pct-input');
-        var amountEl = row.querySelector('.company-share-amount-input');
-        if (!pctEl || !amountEl) {
+    var profitTb = document.getElementById('shareRowsProfit');
+    var otherSum = 0;
+    ['shareRowsSales', 'shareRowsCs', 'shareRowsIt'].forEach(function (tid) {
+        var tb = document.getElementById(tid);
+        if (!tb) {
             return;
         }
-        var pct = parseFloat(pctEl.value);
-        if (!isFinite(pct) || pct < 0) {
-            pct = 0;
+        tb.querySelectorAll('.company-share-data-row').forEach(function (tr) {
+            var pEl = tr.querySelector('.share-pct-input');
+            var v = pEl ? parseFloat(pEl.value) : 0;
+            otherSum += isFinite(v) ? v : 0;
+        });
+    });
+    var remainder = Math.max(0, 100 - otherSum);
+    var profitRows = profitTb ? Array.prototype.slice.call(profitTb.querySelectorAll('.company-share-data-row')) : [];
+    var profitN = 0;
+    profitRows.forEach(function (tr) {
+        var sEl = tr.querySelector('.share-account-select');
+        var aid = sEl ? parseInt(sEl.value, 10) : 0;
+        if (aid !== 0) {
+            profitN++;
         }
-        // percentage input uses % unit, so convert by /100.
+    });
+    var profitPerBase = profitN > 0 ? remainder / profitN : 0;
+    var profitPerRounded = Math.round(profitPerBase * 10000) / 10000;
+    var profitAssigned = 0;
+    var profitSumPct = 0;
+
+    document.querySelectorAll('.company-share-data-row').forEach(function (row) {
+        var amountEl = row.querySelector('.company-share-amount-input');
+        if (!amountEl) {
+            return;
+        }
+        var inProfit = profitTb && profitTb.contains(row);
+        var pct;
+        if (inProfit) {
+            var sel = row.querySelector('.share-account-select');
+            var aid = sel ? parseInt(sel.value, 10) : 0;
+            if (aid === 0) {
+                pct = 0;
+            } else {
+                profitAssigned++;
+                var isLastProfit = profitAssigned === profitN;
+                pct = isLastProfit
+                    ? Math.round((remainder - profitSumPct) * 10000) / 10000
+                    : profitPerRounded;
+                if (!isLastProfit) {
+                    profitSumPct += pct;
+                }
+            }
+        } else {
+            var pctEl = row.querySelector('.share-pct-input');
+            if (!pctEl) {
+                return;
+            }
+            pct = parseFloat(pctEl.value);
+            if (!isFinite(pct) || pct < 0) {
+                pct = 0;
+            }
+        }
         var amount = price * (pct / 100);
         amountEl.value = formatShareRowAmount2(amount);
     });
@@ -841,7 +1313,7 @@ function renderCompanySharePanel() {
         return;
     }
     ensureCompanyFeeShare(company);
-    var map = { sales: 'shareRowsSales', cs: 'shareRowsCs', it: 'shareRowsIt' };
+    var map = { profit: 'shareRowsProfit', sales: 'shareRowsSales', cs: 'shareRowsCs', it: 'shareRowsIt' };
     Object.keys(map).forEach(function (role) {
         var tbody = document.getElementById(map[role]);
         if (!tbody) {
@@ -855,24 +1327,46 @@ function renderCompanySharePanel() {
             var pctVal = row.percentage !== undefined && row.percentage !== null && row.percentage !== ''
                 ? row.percentage
                 : '';
-            tr.innerHTML = '<div class="company-share-cell company-share-cell-account">' +
-                '<select class="share-account-select company-share-select" aria-label="Account">' +
-                buildShareAccountOptionsHtml(row.account_id) +
-                '</select></div>' +
-                '<div class="company-share-cell company-share-cell-pct">' +
-                '<div class="company-share-pct-wrap">' +
-                '<input type="number" class="share-pct-input company-share-pct-input" step="0.1" min="0" max="100" value="' +
-                (pctVal !== '' ? escapeHtmlShare(String(pctVal)) : '') + '" placeholder="0" inputmode="decimal" aria-label="Percentage" />' +
-                '<span class="company-share-pct-suffix">%</span></div></div>' +
-                '<div class="company-share-cell company-share-cell-amount">' +
-                '<input type="text" class="company-share-amount-input" value="0.00" readonly tabindex="-1" aria-label="Calculated total" />' +
-                '</div>' +
-                '<div class="company-share-cell company-share-cell-remove">' +
-                '<button type="button" class="company-share-remove-btn" data-share-role="' + role + '" data-share-idx="' + idx + '" title="Remove row" aria-label="Remove row">' +
-                '<span aria-hidden="true">&times;</span></button></div>';
+            if (role === 'profit') {
+                tr.innerHTML = '<div class="company-share-cell company-share-cell-account">' +
+                    '<div class="company-share-account-inline">' +
+                    '<select class="share-account-select company-share-select" aria-label="Account">' +
+                    buildShareAccountOptionsHtml(row.account_id, shareModalAccountsProfit) +
+                    '</select>' +
+                    '<button type="button" class="company-share-account-plus-btn" data-share-add-role="' + role + '" title="Add New Account" aria-label="Add New Account">+</button>' +
+                    '</div></div>' +
+                    '<div class="company-share-cell company-share-cell-amount">' +
+                    '<input type="text" class="company-share-amount-input" value="0.00" readonly tabindex="-1" aria-label="Calculated total" />' +
+                    '</div>' +
+                    '<div class="company-share-cell company-share-cell-remove">' +
+                    '<button type="button" class="company-share-remove-btn" data-share-role="' + role + '" data-share-idx="' + idx + '" title="Remove row" aria-label="Remove row">' +
+                    '<span aria-hidden="true">&times;</span></button></div>';
+            } else {
+                tr.innerHTML = '<div class="company-share-cell company-share-cell-account">' +
+                    '<div class="company-share-account-inline">' +
+                    '<select class="share-account-select company-share-select" aria-label="Account">' +
+                    buildShareAccountOptionsHtml(row.account_id, shareModalAccounts) +
+                    '</select>' +
+                    '<button type="button" class="company-share-account-plus-btn" data-share-add-role="' + role + '" title="Add New Account" aria-label="Add New Account">+</button>' +
+                    '</div></div>' +
+                    '<div class="company-share-cell company-share-cell-pct">' +
+                    '<div class="company-share-pct-wrap">' +
+                    '<input type="number" class="share-pct-input company-share-pct-input" step="0.1" min="0" max="100" value="' +
+                    (pctVal !== '' ? escapeHtmlShare(String(pctVal)) : '') + '" placeholder="0" inputmode="decimal" aria-label="Percentage" />' +
+                    '<span class="company-share-pct-suffix">%</span></div></div>' +
+                    '<div class="company-share-cell company-share-cell-amount">' +
+                    '<input type="text" class="company-share-amount-input" value="0.00" readonly tabindex="-1" aria-label="Calculated total" />' +
+                    '</div>' +
+                    '<div class="company-share-cell company-share-cell-remove">' +
+                    '<button type="button" class="company-share-remove-btn" data-share-role="' + role + '" data-share-idx="' + idx + '" title="Remove row" aria-label="Remove row">' +
+                    '<span aria-hidden="true">&times;</span></button></div>';
+            }
             tbody.appendChild(tr);
             tr.querySelector('.company-share-remove-btn').addEventListener('click', function () {
                 removeCompanyShareRow(this.getAttribute('data-share-role'), parseInt(this.getAttribute('data-share-idx'), 10));
+            });
+            tr.querySelector('.company-share-account-plus-btn').addEventListener('click', function () {
+                openShareAccountAdd(this.getAttribute('data-share-add-role'));
             });
         });
         tbody.querySelectorAll('.share-account-select, .share-pct-input').forEach(function (el) {
@@ -886,7 +1380,7 @@ function renderCompanySharePanel() {
     });
     var hint = document.getElementById('companyShareNoAccountsHint');
     if (hint) {
-        hint.style.display = shareModalAccounts.length ? 'none' : 'block';
+        hint.style.display = (shareModalAccounts.length || shareModalAccountsProfit.length) ? 'none' : 'block';
     }
     updateCompanyShareTotals();
 }
@@ -947,6 +1441,11 @@ function loadCompanyShareDataForModal(companyCode) {
             } else {
                 shareModalAccounts = [];
             }
+            if (res.success && res.data && Array.isArray(res.data.accounts_profit)) {
+                shareModalAccountsProfit = res.data.accounts_profit;
+            } else {
+                shareModalAccountsProfit = [];
+            }
             var company = tempCompanies.find(function (c) { return c.company_id === companyCode; });
             if (company && res.success && res.data && res.data.company_exists && isFeeShareAllocationsEmpty(company.fee_share_allocations)) {
                 company.fee_share_allocations = normalizeFeeShareFromServer(res.data.allocations);
@@ -955,6 +1454,7 @@ function loadCompanyShareDataForModal(companyCode) {
         })
         .catch(function () {
             shareModalAccounts = [];
+            shareModalAccountsProfit = [];
             renderCompanySharePanel();
         });
 }
@@ -1279,7 +1779,7 @@ function saveCompanyExpDate() {
             action: 'save_company_share_settings',
             company_id: company.company_id,
             fee_share_allocations: company.fee_share_allocations,
-            apply_commission_payments: false
+            apply_commission_payments: chargeOnSave
         })
     }).then(response => response.json());
 
@@ -2373,6 +2873,8 @@ function closeCompanyExpirationModal() {
 
 // 页面加载完成后初始化搜索功能及表单提交
 document.addEventListener('DOMContentLoaded', function () {
+    ensureDomainAddAccountModalExists();
+    bindDomainAddAccountModalEvents();
     setupSearch();
     initializePagination();
     // 确保现有列表的删除勾选框与受保护 Company 规则（如 C168）保持一致

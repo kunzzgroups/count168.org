@@ -23,15 +23,16 @@ try {
             group_id VARCHAR(50) NOT NULL,
             owner_id INT NOT NULL,
             account_id INT NOT NULL,
-            owner_type ENUM('owner','user') NOT NULL DEFAULT 'owner',
+            owner_type ENUM('owner','user','group') NOT NULL DEFAULT 'owner',
             percentage DECIMAL(6,2) NOT NULL DEFAULT 0.00,
             partner_group_id VARCHAR(50) DEFAULT NULL,
             read_only TINYINT(1) NOT NULL DEFAULT 1,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_group_account (group_id, account_id, owner_type)
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    try { $pdo->exec("ALTER TABLE group_ownership MODIFY COLUMN owner_type ENUM('owner','user','group') NOT NULL DEFAULT 'owner'"); } catch (Exception $e) {}
+    try { $pdo->exec("ALTER TABLE group_ownership DROP INDEX uq_group_account"); } catch (Exception $e) {}
 
     // Get companies with groups for this user
     require_once '../get_companies_helper.php';

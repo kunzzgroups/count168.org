@@ -268,7 +268,8 @@ function normalizeBankFilterState() {
         showBlock = false;
     }
     syncBankFilterCheckboxes();
-    updateBankListScrollMode();
+    /* updateBankListScrollMode 在 renderTable() 末尾调用，避免 Games 取消 Show All 时
+       先去掉 body 类而 DOM 仍为全部行，导致分页样式下瞬间压扁重叠 */
 }
 
 /** Show All：允许页面纵向滚动（Games 和 Bank 统一行为）；否则保持原样 */
@@ -708,8 +709,6 @@ async function fetchProcesses() {
             const totalPages = Math.max(1, Math.ceil(processes.length / pageSize));
             if (currentPage > totalPages) currentPage = totalPages;
             renderTable();
-            renderPagination();
-            updateBankListScrollMode();
             if (selectedPermission === 'Bank') {
                 const bankModule = getBankProcessModule();
                 if (bankModule && typeof bankModule.loadAccountingInbox === 'function') {
@@ -747,6 +746,9 @@ function renderTable() {
         emptyCard.className = 'process-card';
         emptyCard.innerHTML = `<div class="card-item" style="text-align: left; padding: 20px; grid-column: 1 / -1;">No process data found</div>`;
         container.appendChild(emptyCard);
+        renderPagination();
+        updateSelectAllProcessesVisibility();
+        updateBankListScrollMode();
         return;
     }
 
@@ -800,6 +802,7 @@ function renderTable() {
     }
     renderPagination();
     updateSelectAllProcessesVisibility();
+    updateBankListScrollMode();
 }
 
 /** Bank 用真实 table 渲染，th/td 列由浏览器对齐 */
@@ -809,7 +812,10 @@ function renderBankTable() {
 
     const headRow = document.getElementById('bankTableHeadRow');
     const tbody = document.getElementById('bankTableBody');
-    if (!headRow || !tbody) return;
+    if (!headRow || !tbody) {
+        updateBankListScrollMode();
+        return;
+    }
 
     const thLabels = ['No', 'Supplier', 'Country', 'Bank', 'Types', 'Card Owner', 'Contract', 'Insurance', 'Customer', 'Cost', 'Price', 'Profit', 'Status', 'Date', 'Action'];
     headRow.innerHTML = thLabels.map((label, i) => {
@@ -862,6 +868,7 @@ function renderBankTable() {
         tbody.innerHTML = '<tr><td colspan="15" class="bank-empty-cell">No process data found</td></tr>';
         renderPagination();
         updateSelectAllProcessesVisibility();
+        updateBankListScrollMode();
         return;
     }
 
@@ -924,6 +931,7 @@ function renderBankTable() {
     renderPagination();
     updateSelectAllProcessesVisibility();
     updateDeleteButton();
+    updateBankListScrollMode();
 }
 
 /** 仅调整数据列宽度与 th 一致，th 不改；双 rAF 确保布局完成后再取宽 */
@@ -996,6 +1004,7 @@ function showError(message) {
                 </div>
             `;
     showNotification(message, 'danger');
+    updateBankListScrollMode();
 }
 
 function escapeHtml(text) {

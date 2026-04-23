@@ -884,8 +884,24 @@ function editUser(id, isOwnerShadow = false) {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    const permissions = data.data.permissions ? JSON.parse(data.data.permissions) : [];
+                    if (!isEditMode) return;
+                    if (String(document.getElementById('userId').value) !== String(id)) return;
+
+                    let permissions = [];
+                    try {
+                        if (data.data.permissions) {
+                            const parsed = JSON.parse(data.data.permissions);
+                            permissions = Array.isArray(parsed) ? parsed : [];
+                        }
+                    } catch (e) {
+                        permissions = [];
+                    }
                     setUserPermissions(permissions);
+
+                    const apiRole = (data.data.role || '').toLowerCase().trim();
+                    if (apiRole) {
+                        applyRoleTemplateChecks(apiRole);
+                    }
 
                     // 加载 Account 和 Process 权限
                     // null 表示未设置（默认全选），[] 表示已设置但为空（不选），有值表示只选这些
@@ -1091,6 +1107,7 @@ function editUser(id, isOwnerShadow = false) {
 
 
 function closeModal() {
+    isEditMode = false;
     document.getElementById('userModal').style.display = 'none';
 
     // 清理隐藏的 login_id 字段
@@ -1397,6 +1414,32 @@ function restoreAllPermissionsCheckboxes() {
     });
 }
 
+// 目标用户 Role 对应的 Sidebar 权限模板（与下拉框 Role 一致）
+function getRoleTemplateSidebarList(role) {
+    if (!role) return [];
+    const rolePermissions = {
+        'partnership': [],
+        'admin': ['home', 'admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'manager': ['admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'supervisor': ['admin', 'account', 'process', 'datacapture', 'payment', 'report'],
+        'accountant': ['payment', 'report', 'maintenance'],
+        'audit': ['payment', 'report', 'maintenance'],
+        'customer service': ['account', 'process', 'datacapture', 'payment', 'report']
+    };
+
+    return rolePermissions[role.toLowerCase()] || [];
+}
+
+// 按角色模板补勾（与 DB 已有勾选合并，不清空已有勾选）
+function applyRoleTemplateChecks(role) {
+    getRoleTemplateSidebarList(role).forEach(permission => {
+        const checkbox = document.querySelector(`.permission-checkbox[value="${permission}"]`);
+        if (checkbox) {
+            checkbox.checked = true;
+        }
+    });
+}
+
 // 根据角色设置默认权限
 function setDefaultPermissionsByRole(role, options = {}) {
     const { force = false } = options;
@@ -1420,17 +1463,7 @@ function setDefaultPermissionsByRole(role, options = {}) {
         checkbox.checked = false; // 清除所有权限
     });
 
-    // 根据角色设置默认权限
-    const rolePermissions = {
-        'admin': ['home', 'admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'manager': ['admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'supervisor': ['admin', 'account', 'process', 'datacapture', 'payment', 'report'],
-        'accountant': ['payment', 'report', 'maintenance'],
-        'audit': ['payment', 'report', 'maintenance'],
-        'customer service': ['account', 'process', 'datacapture', 'payment', 'report'], 'partnership': []
-    };
-
-    const permissions = rolePermissions[role.toLowerCase()] || [];
+    const permissions = getRoleTemplateSidebarList(role);
 
     // 设置新账号 role 的所有默认权限（不受当前用户权限限制）
     permissions.forEach(permission => {
@@ -2055,8 +2088,10 @@ document.addEventListener('DOMContentLoaded', function () {
         roleSelect.addEventListener('change', function () {
             const selectedRole = this.value;
             if (selectedRole) {
-                // setDefaultPermissionsByRole 内部已经会处理权限限制（创建模式时）
-                setDefaultPermissionsByRole(selectedRole, { force: isEditMode });
+                setDefaultPermissionsByRole(selectedRole, { force: true });
+                if (isEditMode) {
+                    restrictPermissionsByCurrentUserRole();
+                }
             } else {
                 // 选择"Select Role"时，无论模式都清空权限
                 clearAllPermissions();

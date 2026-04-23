@@ -61,6 +61,8 @@ try {
     try {
         $pdo->exec("ALTER TABLE company_ownership MODIFY COLUMN owner_type ENUM('account','owner','user','group') NOT NULL DEFAULT 'account'");
     } catch (Exception $e) { /* already has it or not applicable */ }
+    // Drop legacy UNIQUE (company_id, account_id) key that blocks multi-group rows
+    try { $pdo->exec("ALTER TABLE company_ownership DROP INDEX unique_company_account"); } catch (Exception $e) {}
 
     $pdo->beginTransaction();
 

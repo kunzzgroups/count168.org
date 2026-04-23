@@ -90,14 +90,46 @@ function getUserCompanies(PDO $pdo, $user_id, $user_role, $user_type) {
     if (strtolower($user_role) === 'owner') {
         // Always use the REAL owner_id (never the swapped one) for listing companies
         $owner_id = $_SESSION['real_owner_id'] ?? $_SESSION['owner_id'] ?? $user_id;
-        $stmt = $pdo->prepare("
-            SELECT DISTINCT c.id, c.company_id, c.expiration_date, IF(c.owner_id = ?, 0, 1) as is_external, c.owner_id as real_owner_id
+
+        // Check if group_ownership table exists (group-level partner linking)
+        $hasGroupOwnership = false;
+        try {
+            $hasGroupOwnership = $pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() > 0;
+        } catch (Exception $e) { /* ignore */ }
+
+        // Allow access to companies where this owner is linked via group_ownership
+        // (e.g. TEST linked to JK's group 'IG' should be able to switch into any
+        //  of JK's IG companies).
+        $groupVisibleSQL = $hasGroupOwnership
+            ? "OR EXISTS (
+                    SELECT 1 FROM group_ownership go
+                    WHERE go.owner_type = 'owner'
+                      AND go.account_id = ?
+                      AND go.percentage > 0
+                      AND c.group_id IS NOT NULL
+                      AND TRIM(c.group_id) <> ''
+                      AND LOWER(TRIM(go.group_id)) COLLATE utf8mb4_unicode_ci
+                          = LOWER(TRIM(c.group_id)) COLLATE utf8mb4_unicode_ci
+                )"
+            : "";
+
+        $sql = "
+            SELECT DISTINCT c.id, c.company_id, c.expiration_date,
+                   IF(c.owner_id = ?, 0, 1) as is_external,
+                   c.owner_id as real_owner_id
             FROM company c
             LEFT JOIN company_ownership co ON c.id = co.company_id AND co.owner_type = 'owner'
-            WHERE c.owner_id = ? OR (co.account_id = ? AND co.percentage > 0)
+            WHERE c.owner_id = ?
+               OR (co.account_id = ? AND co.percentage > 0)
+               $groupVisibleSQL
             ORDER BY c.company_id ASC
-        ");
-        $stmt->execute([$owner_id, $owner_id, $owner_id]);
+        ";
+        $params = [$owner_id, $owner_id, $owner_id];
+        if ($hasGroupOwnership) {
+            $params[] = $owner_id;
+        }
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     $stmt = $pdo->prepare("

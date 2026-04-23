@@ -1,4 +1,7 @@
 <?php
-declare(strict_types=1);
-require_once __DIR__ . '/includes/spa_redirect.php';
-count168_spa_redirect('modules/games-process-list', []);
+define('PROCESSLIST_PAGE_FILE', 'games_process_list.php');
+define('PROCESSLIST_PAGE_TITLE', 'Process List');
+define('PROCESSLIST_FORCED_PERMISSION', 'Games');
+define('PROCESSLIST_HIDE_PERMISSION_FILTER', true);
+
+require 'processlist.php';

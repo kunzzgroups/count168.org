@@ -9,6 +9,27 @@ let geGroupsData = [];
 let geGroupStates = {};   // { [groupId]: { accounts:[], rows:[] } }
 let geCurrentlyExpandedId = null;
 
+function geIsApiSuccess(res) {
+    return res && (res.success === true || res.status === 'success');
+}
+
+function geIsApiConflict(res) {
+    return res && res.status === 'conflict';
+}
+
+function geApiMessage(res, fallback = 'Server error') {
+    if (!res) return fallback;
+    if (typeof res.message === 'string' && res.message.trim() !== '') return res.message;
+    if (typeof res.error === 'string' && res.error.trim() !== '') return res.error;
+    return fallback;
+}
+
+function geApiData(res, fallback = []) {
+    if (!res) return fallback;
+    if (res.data !== undefined) return res.data;
+    return fallback;
+}
+
 // ── Tab Switching (called from inline onclick) ───────────────
 function switchOwnershipTab(tabId) {
     // Update tab buttons
@@ -41,11 +62,11 @@ function fetchGroupEarnings() {
     fetch('api/ownership/get_group_earnings_api.php')
         .then(r => r.json())
         .then(res => {
-            if (res.status !== 'success') {
-                showToast(res.message || 'Failed to load groups', 'error');
+            if (!geIsApiSuccess(res)) {
+                showToast(geApiMessage(res, 'Failed to load groups'), 'error');
                 return;
             }
-            geGroupsData = res.data;
+            geGroupsData = geApiData(res, []);
             renderGroupCards();
         })
         .catch(err => {
@@ -135,7 +156,7 @@ function renderGroupCards() {
                             <span class="own-partner-title">External Partner</span>
                             <div class="own-partner-actions">
                                 <input type="text" class="own-partner-input" id="ge-partner-login-${gid}"
-                                    placeholder="Login ID/Group ID" autocomplete="off">
+                                    placeholder="Login ID/Group ID" autocomplete="off" autocapitalize="characters">
                                 <button class="own-partner-link-btn" data-action="link-partner">Link Partner</button>
                             </div>
                         </div>
@@ -538,13 +559,13 @@ function geConfirmEdit(groupId) {
         .then(res => {
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Confirm';
-            if (res.status === 'success') {
-                showToast(res.message, 'success');
+            if (geIsApiSuccess(res)) {
+                showToast(geApiMessage(res, 'Group ownership saved successfully'), 'success');
                 const grpIdx = geGroupsData.findIndex(g => g.group_id === groupId);
                 if (grpIdx >= 0) geGroupsData[grpIdx].allocated_percentage = total;
                 geCancelEdit(groupId, true);
             } else {
-                showToast(res.message, 'error');
+                showToast(geApiMessage(res, 'Save failed'), 'error');
             }
         })
         .catch(err => {
@@ -559,7 +580,7 @@ function geConfirmEdit(groupId) {
 
 function geLinkExternalPartner(groupId, event, forceType = '') {
     const loginIdInput = document.getElementById(`ge-partner-login-${groupId}`);
-    const loginId = loginIdInput.value.trim();
+    const loginId = loginIdInput.value.trim().toUpperCase();
     if (!loginId) { showToast('Please enter a Login ID/Group ID', 'error'); return; }
 
     const btn = event.target.closest('[data-action="link-partner"]');
@@ -575,16 +596,16 @@ function geLinkExternalPartner(groupId, event, forceType = '') {
         .then(res => {
             btn.disabled = false;
             btn.textContent = 'Link Partner';
-            if (res.status === 'success') {
-                showToast(res.message, 'success');
+            if (geIsApiSuccess(res)) {
+                showToast(geApiMessage(res, 'Partner linked successfully'), 'success');
                 loginIdInput.value = '';
                 geCancelEdit(groupId, true);
                 setTimeout(() => geToggleCard(groupId), 300);
-            } else if (res.status === 'conflict') {
+            } else if (geIsApiConflict(res)) {
                 // Simplified conflict handling — just show the error
                 showToast('Multiple matches found. Please specify login or group ID more precisely.', 'error');
             } else {
-                showToast(res.message, 'error');
+                showToast(geApiMessage(res, 'Link partner failed'), 'error');
             }
         })
         .catch(err => {

@@ -29,30 +29,6 @@ $isApiRequest = (
 
 require_once 'config.php';
 
-function currentUiLang(): string
-{
-    $fromQuery = isset($_GET['lang']) ? strtolower((string) $_GET['lang']) : null;
-    if ($fromQuery === 'zh' || $fromQuery === 'en') {
-        $_SESSION['ui_lang'] = $fromQuery;
-        return $fromQuery;
-    }
-
-    $fromSession = $_SESSION['ui_lang'] ?? null;
-    if ($fromSession === 'zh' || $fromSession === 'en') {
-        return $fromSession;
-    }
-
-    $_SESSION['ui_lang'] = 'en';
-    return 'en';
-}
-
-function withLang(string $url): string
-{
-    $lang = currentUiLang();
-    $join = strpos($url, '?') === false ? '?' : '&';
-    return $url . $join . 'lang=' . urlencode($lang);
-}
-
 // 统一的超时时间（秒）- 1小时
 define('SESSION_TIMEOUT', 3600);
 
@@ -129,12 +105,12 @@ if (isset($_SESSION['user_id'])) {
             if (!headers_sent()) {
                 header('Content-Type: application/json');
             }
-            echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => withLang('index.php')]);
+            echo json_encode(['status' => 'error', 'message' => 'Session expired. Please login again.', 'redirect' => 'index.php']);
             exit();
         }
         
         // 重定向到登录页
-        header("Location: " . withLang('index.php'));
+        header("Location: index.php");
         exit();
     }
     
@@ -147,11 +123,11 @@ if (isset($_SESSION['user_id'])) {
                 if (!headers_sent()) {
                     header('Content-Type: application/json');
                 }
-                echo json_encode(['status' => 'error', 'message' => 'Secondary password verification required.', 'redirect' => withLang('owner_secondary_password.php')]);
+                echo json_encode(['status' => 'error', 'message' => 'Secondary password verification required.', 'redirect' => 'owner_secondary_password.php']);
                 exit();
             }
             
-            header("Location: " . withLang('owner_secondary_password.php'));
+            header("Location: owner_secondary_password.php");
             exit();
         }
     }
@@ -193,11 +169,11 @@ if (isset($_SESSION['user_id'])) {
                             if (!headers_sent()) {
                                 header('Content-Type: application/json');
                             }
-                            echo json_encode(['status' => 'error', 'message' => 'Secondary password verification required.', 'redirect' => withLang('api/users/user_secondary_password.php')]);
+                            echo json_encode(['status' => 'error', 'message' => 'Secondary password verification required.', 'redirect' => 'api/users/user_secondary_password.php']);
                             exit();
                         }
                         
-                        header("Location: " . withLang('api/users/user_secondary_password.php'));
+                        header("Location: api/users/user_secondary_password.php");
                         exit();
                     }
                 }
@@ -253,12 +229,12 @@ if (isset($_SESSION['user_id'])) {
         if (!headers_sent()) {
             header('Content-Type: application/json');
         }
-        echo json_encode(['status' => 'error', 'message' => 'Please login first.', 'redirect' => withLang('index.php')]);
+        echo json_encode(['status' => 'error', 'message' => 'Please login first.', 'redirect' => 'index.php']);
         exit();
     }
     
     // 重定向到登录页
-    header("Location: " . withLang('index.php'));
+    header("Location: index.php");
     exit();
 }
 

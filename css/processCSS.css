@@ -894,22 +894,22 @@ body.process-page {
     flex-shrink: 0;
 }
 
-/* Games Show All 模式：允许页面纵向滚动，一页展示所有数据 */
-body.process-page.process-page--show-all {
+/* Games Show All：列宽与分页模式一致；在列表区内纵向滚动；行不参与 flex 压缩（避免重叠） */
+body.process-page.process-page--show-all:not(.process-page--bank) .process-table-wrapper {
+    min-height: 0;
+    overflow: hidden;
+}
+
+body.process-page.process-page--show-all:not(.process-page--bank) .process-cards {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
     overflow-y: auto !important;
-    height: auto;
-    min-height: 100vh;
+    -webkit-overflow-scrolling: touch;
 }
 
-body.process-page.process-page--show-all .container {
-    overflow-y: visible;
-    height: auto;
-    min-height: 100vh;
-}
-
-body.process-page.process-page--show-all .process-cards {
-    max-height: none;
-    overflow-y: visible;
+body.process-page.process-page--show-all:not(.process-page--bank) .process-card {
+    flex-shrink: 0;
 }
 
 /* Process Cards - copied from accountCSS.css */

@@ -851,6 +851,7 @@ body {
     background: white;
     color: var(--own-dark-text);
     transition: border-color 0.2s, box-shadow 0.2s;
+    text-transform: uppercase;
 }
 
 .own-partner-input:focus {

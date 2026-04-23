@@ -5,76 +5,6 @@
 
 (function () {
     'use strict';
-    var sidebarLang = (window.SIDEBAR_LANG === 'zh') ? 'zh' : 'en';
-    var sidebarI18n = {
-        en: {
-            logoutConfirm: 'Are you sure you want to logout?',
-            notice: 'Notice',
-            confirm: 'Confirm',
-            companyDenied: 'Company access denied.',
-            noAnnouncements: 'No announcements',
-            announcementsFailed: 'Failed to load announcements',
-            noExpirationDate: 'No expiration date',
-            expired: 'Expired',
-            expiresToday: 'Expires today',
-            readOnlyTitle: 'Read-Only Partner Mode'
-        },
-        zh: {
-            logoutConfirm: '确定要退出登录吗？',
-            notice: '提示',
-            confirm: '确认',
-            companyDenied: '无公司访问权限。',
-            noAnnouncements: '暂无公告',
-            announcementsFailed: '公告加载失败',
-            noExpirationDate: '未设置到期日',
-            expired: '已过期',
-            expiresToday: '今日到期',
-            readOnlyTitle: '合作伙伴只读模式'
-        }
-    };
-    function t(key) {
-        return (sidebarI18n[sidebarLang] && sidebarI18n[sidebarLang][key]) || sidebarI18n.en[key] || key;
-    }
-    function withLang(url) {
-        if (!url || /^javascript:/i.test(url)) return url;
-        if (url.indexOf('lang=') !== -1) return url;
-        return url + (url.indexOf('?') === -1 ? '?' : '&') + 'lang=' + encodeURIComponent(sidebarLang);
-    }
-    function localizeSidebarText() {
-        if (sidebarLang !== 'zh') return;
-        var map = {
-            'Home': '首页',
-            'Domain': '域名',
-            'Announcement': '公告',
-            'Admin': '管理',
-            'Account': '账号',
-            'Ownership': '归属',
-            'Process': '流程',
-            'Data Capture': '数据录入',
-            'Transaction Payment': '交易付款',
-            'Report': '报表',
-            'Customer Report': '客户报表',
-            'Domain Report': '域名报表',
-            'Maintenance': '维护',
-            'Transaction': '交易',
-            'Payment': '付款',
-            'Formula': '公式',
-            'Win/Loss': '输赢',
-            'Logout': '退出登录',
-            'Choose Avatar': '选择头像',
-            'Male': '男',
-            'Female': '女',
-            'Announcements': '公告'
-        };
-        document.querySelectorAll('.informationmenu-section-title, .submenu-item span, .logout-btn, .options-title, .gender-btn, .notification-header h2').forEach(function (el) {
-            var text = (el.textContent || '').trim();
-            if (map[text]) {
-                el.textContent = map[text];
-            }
-        });
-        var expLabel = document.querySelector('.expiration-label');
-        if (expLabel) expLabel.textContent = '到期:';
-    }
 
     var sidebar = null;
     var overlay = null;
@@ -218,8 +148,8 @@
     }
 
     function handleLogout() {
-        if (confirm(t('logoutConfirm'))) {
-            window.location.href = withLang('dashboard.php?logout=1');
+        if (confirm('Are you sure you want to logout?')) {
+            window.location.href = 'dashboard.php?logout=1';
         }
     }
 
@@ -245,9 +175,6 @@
         if (dropdown) dropdown.classList.remove('show');
         if (button) button.classList.remove('active');
         try { localStorage.setItem('selectedLanguage', lang); } catch (e) { }
-        var currentUrl = new URL(window.location.href);
-        currentUrl.searchParams.set('lang', lang);
-        window.location.href = currentUrl.toString();
     }
 
     function toggleNotificationPanel(event) {
@@ -298,11 +225,11 @@
                 contentContainer.innerHTML = '<div class="notification-empty">' +
                     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' +
                     '<path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>' +
-                    '</svg><p>' + t('noAnnouncements') + '</p></div>';
+                    '</svg><p>No announcements</p></div>';
             }
         }).catch(function (error) {
             console.error('Failed to load announcements:', error);
-            contentContainer.innerHTML = '<div class="notification-empty"><p>' + t('announcementsFailed') + '</p></div>';
+            contentContainer.innerHTML = '<div class="notification-empty"><p>Failed to load announcements</p></div>';
         });
     }
 
@@ -315,8 +242,8 @@
         exp.setHours(0, 0, 0, 0);
         var diffTime = exp - today;
         var diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays < 0) return { text: t('expired'), days: diffDays, status: 'expired' };
-        if (diffDays === 0) return { text: t('expiresToday'), days: 0, status: 'warning' };
+        if (diffDays < 0) return { text: 'Expired', days: diffDays, status: 'expired' };
+        if (diffDays === 0) return { text: 'Expires today', days: 0, status: 'warning' };
         if (diffDays <= 7) return { text: diffDays + ' day' + (diffDays > 1 ? 's' : '') + ' left', days: diffDays, status: 'warning' };
         if (diffDays <= 30) return { text: diffDays + ' days left', days: diffDays, status: 'normal' };
         var months = Math.floor(diffDays / 30);
@@ -331,7 +258,7 @@
         var countdownText = document.getElementById('expirationCountdownText');
         if (!expirationDate || expirationDate.trim() === '' || !countdownText || !countdownContainer) {
             if (countdownText) {
-                countdownText.textContent = t('noExpirationDate');
+                countdownText.textContent = 'No expiration date';
                 countdownText.className = 'expiration-countdown-text normal';
             }
             if (countdownContainer) countdownContainer.className = 'company-expiration-countdown normal';
@@ -343,7 +270,7 @@
             countdownText.className = 'expiration-countdown-text ' + countdown.status;
             countdownContainer.className = 'company-expiration-countdown ' + countdown.status;
         } else {
-            countdownText.textContent = t('noExpirationDate');
+            countdownText.textContent = 'No expiration date';
             countdownText.className = 'expiration-countdown-text normal';
             countdownContainer.className = 'company-expiration-countdown normal';
         }
@@ -469,9 +396,9 @@
             '<circle cx="12" cy="17.2" r="1.1" fill="currentColor"></circle>' +
             '</svg>' +
             '</div>' +
-            '<h3 id="globalCompanyAccessModalTitle" class="global-company-access-modal-title">' + t('notice') + '</h3>' +
+            '<h3 id="globalCompanyAccessModalTitle" class="global-company-access-modal-title">Notice</h3>' +
             '<p id="globalCompanyAccessModalMessage" class="global-company-access-modal-message"></p>' +
-            '<button type="button" id="globalCompanyAccessModalConfirmBtn" class="global-company-access-modal-btn">' + t('confirm') + '</button>' +
+            '<button type="button" id="globalCompanyAccessModalConfirmBtn" class="global-company-access-modal-btn">Confirm</button>' +
             '</div>';
         document.body.appendChild(overlay);
         return overlay;
@@ -483,11 +410,11 @@
             var messageEl = document.getElementById('globalCompanyAccessModalMessage');
             var confirmBtn = document.getElementById('globalCompanyAccessModalConfirmBtn');
             if (!overlay || !messageEl || !confirmBtn) {
-                alert(message || t('companyDenied'));
+                alert(message || 'Company access denied.');
                 resolve();
                 return;
             }
-            messageEl.textContent = message || t('companyDenied');
+            messageEl.textContent = message || 'Company access denied.';
             overlay.classList.add('is-open');
             overlay.setAttribute('aria-hidden', 'false');
 
@@ -514,10 +441,10 @@
         if (result && result.data && result.data.reason) reason = String(result.data.reason).toLowerCase();
         var text = String((result && (result.error || result.message)) || '').toLowerCase();
         if (reason === 'expired' || text.indexOf('expired') !== -1) {
-            return sidebarLang === 'zh' ? '该公司在你登录后已过期，请联系客户服务。' : 'This company since login has expired. Please contact the Customer Service.';
+            return 'This company since login has expired. Please contact the Customer Service.';
         }
         if (reason === 'no_set' || text.indexOf('not set') !== -1 || text.indexOf('date is not set') !== -1) {
-            return sidebarLang === 'zh' ? '请联系客户服务设置到期日。' : 'Please contact the Customer Service to set the expiration date.';
+            return 'Please contact the Customer Service to set the expiration date.';
         }
         return '';
     }
@@ -713,7 +640,7 @@
             }
         });
 
-        var currentLang = sidebarLang;
+        var currentLang = window.location.pathname.indexOf('/cn/') !== -1 ? 'zh' : 'en';
         var currentFlag = document.getElementById('current-flag');
         var currentLangText = document.getElementById('current-lang');
         if (currentLang === 'zh') {
@@ -724,21 +651,6 @@
             if (currentLangText) currentLangText.textContent = 'English';
         }
         try { localStorage.setItem('selectedLanguage', currentLang); } catch (e) { }
-        localizeSidebarText();
-
-        // 统一为侧栏页面跳转附加 lang 参数
-        document.querySelectorAll('.submenu-item[href]').forEach(function (a) {
-            a.setAttribute('href', withLang(a.getAttribute('href')));
-        });
-        document.querySelectorAll('.informationmenu-section-title[data-page]').forEach(function (el) {
-            var page = el.getAttribute('data-page');
-            if (page) el.setAttribute('data-page', withLang(page));
-        });
-        document.querySelectorAll('.informationmenu-section-title[onclick]').forEach(function (el) {
-            var raw = el.getAttribute('onclick') || '';
-            var m = raw.match(/window\.location\.href='([^']+)'/);
-            if (m && m[1]) el.setAttribute('onclick', "window.location.href='" + withLang(m[1]) + "'");
-        });
 
         var savedAvatar = null;
         try { savedAvatar = localStorage.getItem('selectedAvatar'); } catch (e) { }

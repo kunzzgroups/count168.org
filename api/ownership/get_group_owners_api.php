@@ -28,23 +28,32 @@ try {
         exit();
     }
 
-    // Fetch ownership rows for this group, joining owner/user tables for display
+    // Fetch ownership rows for this group, joining owner/user tables for display.
+    // owner_type = 'group' represents a self-group link (another of the same owner's
+    // groups pooled into this one). composite_id uses G_<partner_group_id>.
     $stmt = $pdo->prepare("
         SELECT go.id as ownership_id,
                go.percentage,
                go.owner_type,
                go.account_id,
-               CONCAT(
-                   CASE 
-                       WHEN go.owner_type = 'owner' THEN 'O_'
-                       WHEN go.owner_type = 'user' THEN 'U_'
-                       ELSE 'O_' 
-                   END, 
-                   go.account_id
-               ) as composite_id,
-               COALESCE(go.partner_group_id, o.owner_code, u.login_id) as account_name,
-               COALESCE(o.name, u.name) as name,
-               CASE WHEN go.owner_type = 'user' THEN u.role WHEN go.owner_type = 'owner' THEN 'OWNER' END as role,
+               CASE
+                   WHEN go.owner_type = 'group' THEN CONCAT('G_', go.partner_group_id)
+                   WHEN go.owner_type = 'user'  THEN CONCAT('U_', go.account_id)
+                   ELSE                              CONCAT('O_', go.account_id)
+               END as composite_id,
+               CASE
+                   WHEN go.owner_type = 'group' THEN CONCAT('Group: ', go.partner_group_id)
+                   ELSE COALESCE(go.partner_group_id, o.owner_code, u.login_id)
+               END as account_name,
+               CASE
+                   WHEN go.owner_type = 'group' THEN 'Group Equity'
+                   ELSE COALESCE(o.name, u.name)
+               END as name,
+               CASE
+                   WHEN go.owner_type = 'group' THEN 'GROUP'
+                   WHEN go.owner_type = 'user'  THEN u.role
+                   WHEN go.owner_type = 'owner' THEN 'OWNER'
+               END as role,
                go.partner_group_id,
                CASE WHEN go.owner_type = 'user' THEN go.account_id ELSE NULL END as user_raw_id,
                go.read_only,

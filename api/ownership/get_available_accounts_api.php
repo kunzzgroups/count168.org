@@ -28,6 +28,30 @@ try {
         $stmtOwner->execute(['comp_id1' => $company_id, 'comp_id2' => $company_id]);
         $users = $stmtOwner->fetchAll(PDO::FETCH_ASSOC);
 
+        // Fetch linked group entries for this company so existing G_xxx rows
+        // always have a matching option in the account dropdown.
+        $groups = [];
+        try {
+            $stmtGroup = $pdo->prepare("
+                SELECT DISTINCT
+                    CONCAT('G_', co.partner_group_id) as id,
+                    CONCAT('Group: ', co.partner_group_id) as account_name,
+                    'Group Equity' as name,
+                    'GROUP' as role,
+                    'group' as type,
+                    0 as is_main_owner
+                FROM company_ownership co
+                WHERE co.company_id = ?
+                  AND co.owner_type = 'group'
+                  AND co.partner_group_id IS NOT NULL
+                  AND TRIM(co.partner_group_id) <> ''
+            ");
+            $stmtGroup->execute([$company_id]);
+            $groups = $stmtGroup->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            $groups = [];
+        }
+
         // Fetch user partners mapped to this company (both owner and partnership roles can see this so their own names appear in dropdowns)
         $partners = [];
         if (isset($_SESSION['role']) && in_array(strtolower($_SESSION['role']), ['owner', 'partnership'])) {
@@ -45,7 +69,7 @@ try {
         }
 
         // Sort by account_name
-        $combined = array_merge($users, $partners);
+        $combined = array_merge($users, $partners, $groups);
 
         // Sort alphabetically by account_name
         usort($combined, function ($a, $b) {
