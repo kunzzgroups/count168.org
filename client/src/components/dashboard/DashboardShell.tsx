@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { publicAsset } from '../../lib/publicAsset'
 import { resolvePostLoginRedirect } from '../../lib/resolvePostLoginRedirect'
 import { fetchSidebarContext } from '../../lib/fetchSidebarContext'
@@ -10,11 +10,16 @@ import './DashboardShell.css'
 
 type Props = {
   data: DashboardBootstrapData
+  /** 经典全页 PHP，如 `dashboard_classic.php`、`transaction_classic.php` */
+  classicPage?: string
+  children?: ReactNode
 }
 
-export function DashboardShell({ data }: Props) {
+export function DashboardShell({ data, classicPage, children }: Props) {
   const { userData, companyId } = data
-  const classicUrl = resolvePostLoginRedirect('dashboard_classic.php')
+  const classicUrl = resolvePostLoginRedirect(
+    classicPage ?? 'dashboard_classic.php',
+  )
   const [ctx, setCtx] = useState<SidebarContext | null>(null)
   const [ctxError, setCtxError] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
@@ -123,7 +128,7 @@ export function DashboardShell({ data }: Props) {
           )}
         </aside>
         <main className="dShell__main">
-          <DashboardMain bootstrap={data} />
+          {children ?? <DashboardMain bootstrap={data} />}
         </main>
       </div>
     </div>

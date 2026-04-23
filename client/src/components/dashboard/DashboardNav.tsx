@@ -113,9 +113,15 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
       )}
 
       {can('payment') && (
-        <a className="dNav__item" href={phref('transaction.php')} onClick={go}>
+        <NavLink
+          to="/transaction"
+          className={({ isActive }) =>
+            isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
+          }
+          onClick={go}
+        >
           <span>Transaction Payment</span>
-        </a>
+        </NavLink>
       )}
 
       {can('report') && companyHasGambling && (

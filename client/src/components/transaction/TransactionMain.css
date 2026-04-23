@@ -1,0 +1,36 @@
+/* React Transaction：与 `transaction.css` 同壳，主区在侧栏 flex 内滚动 */
+.tShell__transactionRoot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.dShell__main .tShell__transactionRoot {
+  padding: clamp(8px, 1vw, 12px) clamp(12px, 1.5vw, 40px);
+  max-width: none;
+  width: 100%;
+}
+
+.tShell__sessionMeta {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.tShell__notice {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: #1e3a5f;
+  line-height: 1.5;
+}
+
+.tShell__notice code {
+  font-size: 0.85em;
+}

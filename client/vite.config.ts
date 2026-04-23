@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
         '^/reset-password\\.php$': toPhp,
         // 无 VITE_DEV_POST_LOGIN_BASE 时，iframe 仍可从代理拉取主文档（子资源 /js 等需设基址或同机 PHP）
         '^/dashboard_classic\\.php$': toPhp,
+        '^/transaction_classic\\.php$': toPhp,
       },
     },
   }

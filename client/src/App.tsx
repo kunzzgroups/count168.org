@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { DashboardPage } from './pages/DashboardPage'
+import { TransactionPage } from './pages/TransactionPage'
 import { LoginPage } from './pages/LoginPage'
 import { OwnerSecondaryPasswordPage } from './pages/OwnerSecondaryPasswordPage'
 
@@ -12,6 +13,7 @@ export default function App() {
         element={<OwnerSecondaryPasswordPage />}
       />
       <Route path="/dashboard" element={<DashboardPage />} />
+      <Route path="/transaction" element={<TransactionPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
