@@ -1,0 +1,129 @@
+.dNav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 0;
+  min-width: 0;
+}
+
+.dNav__item {
+  display: block;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.dNav__item:hover,
+.dNav__subHead:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+a.dNav__item.dNav__item--active,
+.dNav__item--active {
+  background: rgba(59, 130, 246, 0.35);
+  color: #fff;
+}
+
+.dNav__sub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.dNav__subHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dNav__chev {
+  font-size: 0.65rem;
+  opacity: 0.8;
+}
+
+.dNav__subList {
+  display: flex;
+  flex-direction: column;
+  padding-left: 0.4rem;
+  border-left: 1px solid rgba(148, 163, 184, 0.25);
+  margin: 0.1rem 0 0.25rem 0.6rem;
+  gap: 0.1rem;
+}
+
+.dNav__subItem {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.82rem;
+  color: #cbd5e1;
+  text-decoration: none;
+  border-radius: 4px;
+}
+
+.dNav__subItem:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dNav__exp {
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.dNav__exp--normal {
+  background: rgba(16, 185, 129, 0.15);
+  color: #a7f3d0;
+}
+.dNav__exp--warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fde68a;
+}
+.dNav__exp--expired {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fecaca;
+}
+
+.dNav__expLab {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dNav__logout {
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.35);
+  border-radius: 6px;
+  text-decoration: none;
+}
+
+.dNav__logout:hover {
+  background: rgba(127, 29, 29, 0.5);
+  color: #fff;
+}

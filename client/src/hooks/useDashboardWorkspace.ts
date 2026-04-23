@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ChartData } from 'chart.js'
 import {
   fetchOrderedCompanyCurrencies,
@@ -57,6 +57,8 @@ export function useDashboardWorkspace(bootstrap: DashboardBootstrapData) {
   const [companyLoadKey, setCompanyLoadKey] = useState(0)
   const [currencyList, setCurrencyList] = useState<CompanyCurrency[]>([])
 
+  const lastSessionCompany = useRef<number | null>(null)
+
   useEffect(() => {
     let alive = true
     ;(async () => {
@@ -114,6 +116,13 @@ export function useDashboardWorkspace(bootstrap: DashboardBootstrapData) {
           setPayload(null)
           return
         }
+        if (
+          lastSessionCompany.current !== null &&
+          lastSessionCompany.current !== activeCompanyId
+        ) {
+          window.dispatchEvent(new Event('c168:company-session-updated'))
+        }
+        lastSessionCompany.current = activeCompanyId
         const curList = await fetchOrderedCompanyCurrencies(activeCompanyId)
         if (cancelled) return
         setCurrencyList(curList)

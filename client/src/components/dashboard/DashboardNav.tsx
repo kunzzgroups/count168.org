@@ -1,0 +1,220 @@
+import { NavLink, useLocation } from 'react-router-dom'
+import { useCallback, useState } from 'react'
+import { apiUrl } from '../../lib/api'
+import type { SidebarContext } from '../../types/sidebarContext'
+import './DashboardNav.css'
+
+type Props = {
+  context: SidebarContext
+  onCloseMobile?: () => void
+}
+
+function hasPerm(permissions: string[], key: string): boolean {
+  if (!permissions || permissions.length === 0) return true
+  return permissions.includes(key)
+}
+
+function phref(path: string): string {
+  const p = path.startsWith('/') ? path : `/${path}`
+  return apiUrl(p)
+}
+
+/**
+ * 与 `sidebar.php` 信息架构对齐；外链为站点根 .php。Home 使用 React `/dashboard`。
+ */
+export function DashboardNav({ context, onCloseMobile }: Props) {
+  const { pathname } = useLocation()
+  const [subOpen, setSubOpen] = useState<Record<string, boolean>>({
+    report: false,
+    maintenance: true,
+  })
+
+  const { permissions, isMember, isExternalView: ext, hasC168DomainPageAccess, companyHasGambling, companyHasBank } =
+    context
+
+  const go = useCallback(() => {
+    onCloseMobile?.()
+  }, [onCloseMobile])
+
+  const toggle = (k: string) => {
+    setSubOpen((s) => ({ ...s, [k]: !s[k] }))
+  }
+
+  const can = (key: string) => !ext && hasPerm(permissions, key)
+  const showHome =
+    !ext && (permissions.length === 0 || permissions.includes('home'))
+
+  if (isMember) {
+    return (
+      <nav className="dNav" aria-label="主菜单">
+        <a className="dNav__item" href={phref('member.php')} onClick={go}>
+          <span>Win/Loss</span>
+        </a>
+      </nav>
+    )
+  }
+
+  return (
+    <nav className="dNav" aria-label="主菜单">
+      {showHome && (
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) =>
+            isActive && pathname === '/dashboard'
+              ? 'dNav__item dNav__item--active'
+              : 'dNav__item'
+          }
+          onClick={go}
+          end
+        >
+          <span>Home</span>
+        </NavLink>
+      )}
+
+      {hasC168DomainPageAccess && (
+        <a className="dNav__item" href={phref('domain.php')} onClick={go}>
+          <span>Domain</span>
+        </a>
+      )}
+
+      {hasC168DomainPageAccess && (
+        <a className="dNav__item" href={phref('announcement.php')} onClick={go}>
+          <span>Announcement</span>
+        </a>
+      )}
+
+      {can('admin') && (
+        <a className="dNav__item" href={phref('userlist.php')} onClick={go}>
+          <span>Admin</span>
+        </a>
+      )}
+
+      {can('account') && (
+        <>
+          <a className="dNav__item" href={phref('account-list.php')} onClick={go}>
+            <span>Account</span>
+          </a>
+          <a className="dNav__item" href={phref('ownership.php')} onClick={go}>
+            <span>Ownership</span>
+          </a>
+        </>
+      )}
+
+      {can('process') && (
+        <a className="dNav__item" href={phref('processlist.php')} onClick={go}>
+          <span>Process</span>
+        </a>
+      )}
+
+      {can('datacapture') && companyHasGambling && (
+        <a className="dNav__item" href={phref('datacapture.php')} onClick={go}>
+          <span>Data Capture</span>
+        </a>
+      )}
+
+      {can('payment') && (
+        <a className="dNav__item" href={phref('transaction.php')} onClick={go}>
+          <span>Transaction Payment</span>
+        </a>
+      )}
+
+      {can('report') && companyHasGambling && (
+        <div className="dNav__sub">
+          <button
+            type="button"
+            className="dNav__subHead"
+            onClick={() => toggle('report')}
+            aria-expanded={subOpen.report}
+          >
+            <span>Report</span>
+            <span className="dNav__chev">{subOpen.report ? '▼' : '▶'}</span>
+          </button>
+          {subOpen.report && (
+            <div className="dNav__subList">
+              <a href={phref('customer_report.php')} onClick={go} className="dNav__subItem">
+                Customer Report
+              </a>
+              <a href={phref('domain_report.php')} onClick={go} className="dNav__subItem">
+                Domain Report
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!ext && (
+        <div className="dNav__sub">
+          <button
+            type="button"
+            className="dNav__subHead"
+            onClick={() => toggle('maintenance')}
+            aria-expanded={subOpen.maintenance}
+          >
+            <span>Maintenance</span>
+            <span className="dNav__chev">{subOpen.maintenance ? '▼' : '▶'}</span>
+          </button>
+          {subOpen.maintenance && (
+            <div className="dNav__subList">
+              {can('maintenance') && companyHasGambling && (
+                <a
+                  className="dNav__subItem"
+                  href={phref('capture_maintenance.php')}
+                  onClick={go}
+                >
+                  Data Capture
+                </a>
+              )}
+              {can('maintenance') && companyHasGambling && (
+                <a
+                  className="dNav__subItem"
+                  href={phref('transaction_maintenance.php')}
+                  onClick={go}
+                >
+                  Transaction
+                </a>
+              )}
+              {can('maintenance') && (
+                <a className="dNav__subItem" href={phref('payment_maintenance.php')} onClick={go}>
+                  Payment
+                </a>
+              )}
+              {companyHasGambling && (
+                <a
+                  className="dNav__subItem"
+                  href={phref('formula_maintenance.php')}
+                  onClick={go}
+                >
+                  Formula
+                </a>
+              )}
+              {can('maintenance') && companyHasBank && (
+                <a
+                  className="dNav__subItem"
+                  href={phref('bankprocess_maintenance.php')}
+                  onClick={go}
+                >
+                  Process
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {context.expiration && (
+        <div className={`dNav__exp dNav__exp--${context.expiration.status}`}>
+          <span className="dNav__expLab">Exp</span>
+          <span className="dNav__expTxt">{context.expiration.text}</span>
+        </div>
+      )}
+
+      <a
+        className="dNav__logout"
+        href={phref('dashboard.php?logout=1')}
+        onClick={go}
+      >
+        Logout
+      </a>
+    </nav>
+  )
+}
