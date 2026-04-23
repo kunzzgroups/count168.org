@@ -29,6 +29,9 @@ export function DashboardShell({
   const [ctx, setCtx] = useState<SidebarContext | null>(null)
   const [ctxError, setCtxError] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
+  const [navNarrow, setNavNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches,
+  )
 
   const loadContext = useCallback(async () => {
     try {
@@ -50,6 +53,23 @@ export function DashboardShell({
   }, [loadContext])
 
   useEffect(() => {
+    const mq = window.matchMedia('(max-width: 899px)')
+    const onMq = () => setNavNarrow(mq.matches)
+    onMq()
+    mq.addEventListener('change', onMq)
+    return () => mq.removeEventListener('change', onMq)
+  }, [])
+
+  useEffect(() => {
+    if (!navOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setNavOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [navOpen])
+
+  useEffect(() => {
     const onCompany = () => {
       void loadContext()
     }
@@ -58,6 +78,27 @@ export function DashboardShell({
   }, [loadContext])
 
   const shellClass = classicSidebarLayout ? 'dShell dShell--classicSidebar' : 'dShell'
+
+  const asideClass =
+    classicSidebarLayout && navNarrow
+      ? navOpen
+        ? 'dShell__aside informationmenu show'
+        : 'dShell__aside informationmenu hide'
+      : [
+          'dShell__aside',
+          classicSidebarLayout ? 'informationmenu' : '',
+          !classicSidebarLayout || !navNarrow ? (navOpen ? 'dShell__aside--open' : '') : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+
+  const backdropClass = [
+    'dShell__backdrop',
+    classicSidebarLayout ? 'informationmenu-overlay' : '',
+    classicSidebarLayout && navOpen ? 'show' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <div className={shellClass}>
@@ -143,19 +184,12 @@ export function DashboardShell({
         {navOpen && (
           <button
             type="button"
-            className="dShell__backdrop"
+            className={backdropClass}
             aria-label="关闭菜单"
             onClick={() => setNavOpen(false)}
           />
         )}
-        <aside
-          className={
-            navOpen
-              ? 'dShell__aside dShell__aside--open'
-              : 'dShell__aside'
-          }
-          aria-label="侧栏"
-        >
+        <aside className={asideClass} aria-label="侧栏">
           {ctxError && (
             <p className="dShell__ctxErr" role="alert">
               菜单信息加载失败

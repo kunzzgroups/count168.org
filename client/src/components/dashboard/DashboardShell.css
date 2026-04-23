@@ -299,3 +299,41 @@
     transform: none !important;
   }
 }
+
+/* Transaction 经典侧栏：与 `sidebar.php` / `css/sidebar.css` 的 `.informationmenu` 视觉与层级一致 */
+.dShell--classicSidebar .dShell__body .dShell__aside.informationmenu {
+  background: #002d49;
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.8);
+  width: clamp(160px, 12.98vw, 235px);
+  padding: 0.35rem 0.25rem 1rem;
+  backdrop-filter: blur(20px);
+}
+
+@media (min-width: 900px) {
+  .dShell--classicSidebar .dShell__body .dShell__aside.informationmenu {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    height: auto;
+    max-height: none;
+    transform: none !important;
+    z-index: auto;
+  }
+}
+
+@media (max-width: 899px) {
+  .dShell--classicSidebar .dShell__body .dShell__aside.informationmenu {
+    width: min(18rem, 90vw);
+    z-index: 1000;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .dShell--classicSidebar .dShell__body .dShell__aside.informationmenu.hide {
+    transform: translateX(-100%) !important;
+  }
+
+  .dShell--classicSidebar .dShell__body .dShell__aside.informationmenu.show {
+    transform: translateX(0) !important;
+  }
+}

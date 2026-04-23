@@ -35,6 +35,7 @@ import flatpickr from 'flatpickr'
 import {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -103,6 +104,8 @@ function singleFlatpickr(
   return (Array.isArray(r) ? r[0] : r) as SingleFlatpickr
 }
 
+const TX_ACCOUNT_DD = 'c168:tx-account-select-open'
+
 function AccountSearchField({
   value,
   onChange,
@@ -114,9 +117,21 @@ function AccountSearchField({
   options: TxAccountOption[]
   placeholder: string
 }) {
+  const instanceId = useId()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState('')
+  const [selIdx, setSelIdx] = useState(0)
   const rootRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const onPeer = (e: Event) => {
+      const d = (e as CustomEvent<string>).detail
+      if (d !== instanceId) setOpen(false)
+    }
+    window.addEventListener(TX_ACCOUNT_DD, onPeer as EventListener)
+    return () => window.removeEventListener(TX_ACCOUNT_DD, onPeer as EventListener)
+  }, [instanceId])
 
   useEffect(() => {
     if (!open) return
@@ -125,6 +140,14 @@ function AccountSearchField({
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  useEffect(() => {
+    if (open) {
+      setQ('')
+      setSelIdx(0)
+      window.setTimeout(() => searchInputRef.current?.focus(), 10)
+    }
   }, [open])
 
   const filtered = useMemo(() => {
@@ -136,40 +159,83 @@ function AccountSearchField({
     })
   }, [options, q])
 
+  useEffect(() => {
+    setSelIdx((i) => (filtered.length === 0 ? 0 : Math.min(i, filtered.length - 1)))
+  }, [filtered])
+
+  const pickAt = (idx: number) => {
+    const o = filtered[idx]
+    if (!o) return
+    onChange({
+      id: o.id,
+      label: o.display_text,
+      code: o.account_id,
+    })
+    setOpen(false)
+    setQ('')
+  }
+
+  const toggleOpen = () => {
+    setOpen((o) => {
+      if (!o) window.dispatchEvent(new CustomEvent(TX_ACCOUNT_DD, { detail: instanceId }))
+      return !o
+    })
+  }
+
   return (
     <div className="custom-select-wrapper" ref={rootRef}>
       <button
         type="button"
         className={`custom-select-button${open ? ' open' : ''}`}
-        onClick={() => setOpen((o) => !o)}
+        onClick={(e) => {
+          e.stopPropagation()
+          toggleOpen()
+        }}
       >
         {value ? value.label : placeholder}
       </button>
       <div className={`custom-select-dropdown${open ? ' show' : ''}`}>
         <div className="custom-select-search">
           <input
+            ref={searchInputRef}
             type="text"
             placeholder="Search account..."
             autoComplete="off"
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setOpen(false)
+              } else if (e.key === 'Backspace' && q === '' && value) {
+                e.preventDefault()
+                onChange(null)
+                setOpen(false)
+              } else if (e.key === 'Enter') {
+                e.preventDefault()
+                if (filtered.length === 0) return
+                pickAt(selIdx >= 0 && selIdx < filtered.length ? selIdx : 0)
+              } else if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                if (filtered.length === 0) return
+                const next = (selIdx + 1) % filtered.length
+                setSelIdx(next)
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                if (filtered.length === 0) return
+                const next = selIdx <= 0 ? filtered.length - 1 : selIdx - 1
+                setSelIdx(next)
+              }
+            }}
           />
         </div>
         <div className="custom-select-options">
-          {filtered.map((o) => (
+          {filtered.map((o, idx) => (
             <button
               key={o.id}
               type="button"
-              className="custom-select-option"
-              onClick={() => {
-                onChange({
-                  id: o.id,
-                  label: o.display_text,
-                  code: o.account_id,
-                })
-                setOpen(false)
-                setQ('')
-              }}
+              className={`custom-select-option${idx === selIdx ? ' selected' : ''}`}
+              onClick={() => pickAt(idx)}
             >
               {o.display_text}
             </button>
@@ -1347,6 +1413,7 @@ export function TransactionMain({ bootstrap }: Props) {
 
           <DashboardCalendarPopup
             key={calendarKey}
+            variant="transaction"
             open={calendarOpen}
             anchorRef={dateAnchorRef}
             dateFrom={w.dateFrom}

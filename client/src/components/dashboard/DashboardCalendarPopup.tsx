@@ -27,6 +27,11 @@ type Props = {
   dateTo: string
   onClose: () => void
   onCommit: (from: string, to: string) => void
+  /**
+   * `transaction`：与 `transaction_classic.php` + `js/date-range-picker.js` 一致
+   *（#calendar-popup、#calendar-days、宽度随 Capture Date 父级）。
+   */
+  variant?: 'spa' | 'transaction'
 }
 
 /**
@@ -40,6 +45,7 @@ export function DashboardCalendarPopup({
   dateTo,
   onClose,
   onCommit,
+  variant = 'spa',
 }: Props) {
   const [viewYear, setViewYear] = useState(() => parseYmd(dateFrom).getFullYear())
   const [viewMonth, setViewMonth] = useState(() => parseYmd(dateFrom).getMonth())
@@ -60,6 +66,8 @@ export function DashboardCalendarPopup({
     left: 0,
   })
 
+  const popupDomId = variant === 'transaction' ? 'calendar-popup' : 'react-dashboard-calendar-popup'
+
   useLayoutEffect(() => {
     const next: CSSProperties = !open
       ? { display: 'none', top: 0, left: 0 }
@@ -67,23 +75,36 @@ export function DashboardCalendarPopup({
           const el = anchorRef.current
           if (!el) return { display: 'none', top: 0, left: 0 }
           const r = el.getBoundingClientRect()
-          return { display: 'block', top: r.bottom + 8, left: r.left }
+          const parent = el.parentElement
+          let width: string | undefined
+          if (
+            variant === 'transaction' &&
+            parent?.classList.contains('transaction-date-range-group')
+          ) {
+            width = `${parent.getBoundingClientRect().width}px`
+          }
+          return {
+            display: 'block',
+            top: r.bottom + 8,
+            left: r.left,
+            ...(width ? { width, boxSizing: 'border-box' as const } : {}),
+          }
         })()
     setPosStyle(next)
-  }, [open, anchorRef])
+  }, [open, anchorRef, variant])
 
   useLayoutEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node
       if (anchorRef.current?.contains(t)) return
-      const pop = document.getElementById('react-dashboard-calendar-popup')
+      const pop = document.getElementById(popupDomId)
       if (pop?.contains(t)) return
       onClose()
     }
     document.addEventListener('mousedown', onDoc)
     return () => document.removeEventListener('mousedown', onDoc)
-  }, [open, anchorRef, onClose])
+  }, [open, anchorRef, onClose, popupDomId])
 
   const yearOptions = useMemo(() => {
     const y = new Date().getFullYear()
@@ -159,7 +180,7 @@ export function DashboardCalendarPopup({
 
   return (
     <div
-      id="react-dashboard-calendar-popup"
+      id={popupDomId}
       className="calendar-popup"
       style={posStyle}
       role="dialog"
@@ -235,7 +256,7 @@ export function DashboardCalendarPopup({
           </div>
         ))}
       </div>
-      <div className="calendar-days">
+      <div className="calendar-days" id={variant === 'transaction' ? 'calendar-days' : undefined}>
         {grid.map((cell, idx) => {
           const dt = new Date(cell.y, cell.m, cell.day)
           dt.setHours(0, 0, 0, 0)

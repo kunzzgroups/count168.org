@@ -4,6 +4,7 @@ import { apiUrl } from '../lib/api'
 import { DashboardShell } from '../components/dashboard/DashboardShell'
 import { TransactionMain } from '../components/transaction/TransactionMain'
 import './DashboardPage.css'
+import '../../../css/sidebar.css'
 
 export function TransactionPage() {
   const { gate, data, refetch } = useDashboardBootstrap()
