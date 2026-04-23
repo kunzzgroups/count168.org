@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch, apiUrl } from '../lib/api'
 import { resolvePostLoginRedirect } from '../lib/resolvePostLoginRedirect'
 import { publicAsset } from '../lib/publicAsset'
@@ -44,11 +44,14 @@ async function readBootstrap(
 /**
  * 对应 `dashboard.php`：校验会话后内嵌全页 `dashboard_classic.php`（PHP 与既有脚本不改业务）。
  */
+const IFRAME_LOAD_MS = 20000
+
 export function DashboardPage() {
   const [view, setView] = useState<ViewState>('loading')
   const [iframeReady, setIframeReady] = useState(false)
   const [errorHint, setErrorHint] = useState('')
   const [classicSrc, setClassicSrc] = useState('')
+  const iframeLoadFallbackRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const goRedirect = useCallback((url: string) => {
     window.location.assign(url)
@@ -91,6 +94,33 @@ export function DashboardPage() {
       alive = false
     }
   }, [runBootstrap])
+
+  /** 少数环境下 iframe 的 load 不触发，超时后仍显示内层，避免一直卡在遮罩。 */
+  useEffect(() => {
+    if (view !== 'ready' || !classicSrc) return
+    if (iframeLoadFallbackRef.current) {
+      clearTimeout(iframeLoadFallbackRef.current)
+      iframeLoadFallbackRef.current = null
+    }
+    iframeLoadFallbackRef.current = setTimeout(() => {
+      iframeLoadFallbackRef.current = null
+      setIframeReady(true)
+    }, IFRAME_LOAD_MS)
+    return () => {
+      if (iframeLoadFallbackRef.current) {
+        clearTimeout(iframeLoadFallbackRef.current)
+        iframeLoadFallbackRef.current = null
+      }
+    }
+  }, [view, classicSrc])
+
+  const onIframeLoad = useCallback(() => {
+    if (iframeLoadFallbackRef.current) {
+      clearTimeout(iframeLoadFallbackRef.current)
+      iframeLoadFallbackRef.current = null
+    }
+    setIframeReady(true)
+  }, [])
 
   if (view === 'error') {
     return (
@@ -150,13 +180,21 @@ export function DashboardPage() {
         >
           <div className="dashboardSpa__spinner" aria-hidden />
           <span>正在加载数据面板…</span>
+          <a
+            className="dashboardSpa__openFull"
+            href={classicSrc}
+            target="_top"
+            rel="noopener"
+          >
+            若长时间未显示，可点此整页打开
+          </a>
         </div>
       )}
       <iframe
         className={`dashboardSpa__frame${iframeReady ? ' dashboardSpa__frame--visible' : ''}`}
         title="EazyCount Dashboard"
         src={classicSrc}
-        onLoad={() => setIframeReady(true)}
+        onLoad={onIframeLoad}
       />
     </div>
   )

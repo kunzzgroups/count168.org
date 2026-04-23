@@ -163,9 +163,24 @@
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
+  padding: 1rem;
+  text-align: center;
   background: #f0f4f8;
   color: #334155;
   font-size: 0.9rem;
+  box-sizing: border-box;
+}
+
+.dashboardSpa__openFull {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dashboardSpa__openFull:hover {
+  color: #1d4ed8;
 }
 
 .dashboardSpa__spinner {
