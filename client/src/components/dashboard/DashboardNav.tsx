@@ -14,6 +14,26 @@ function hasPerm(permissions: string[], key: string): boolean {
   return permissions.includes(key)
 }
 
+/** 与 `sidebar.php` 中 Partnership / external 模式一致：仅屏蔽若干管理入口，不禁用 Home、Report 等查看类菜单 */
+const NAV_HIDDEN_FOR_EXTERNAL = new Set([
+  'admin',
+  'account',
+  'process',
+  'datacapture',
+  'payment',
+  'maintenance',
+])
+
+function canNavItem(
+  permissions: string[],
+  key: string,
+  isExternalView: boolean,
+): boolean {
+  if (!hasPerm(permissions, key)) return false
+  if (!isExternalView) return true
+  return !NAV_HIDDEN_FOR_EXTERNAL.has(key)
+}
+
 function phref(path: string): string {
   const p = path.startsWith('/') ? path : `/${path}`
   return apiUrl(p)
@@ -40,9 +60,8 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
     setSubOpen((s) => ({ ...s, [k]: !s[k] }))
   }
 
-  const can = (key: string) => !ext && hasPerm(permissions, key)
   const showHome =
-    !ext && (permissions.length === 0 || permissions.includes('home'))
+    permissions.length === 0 || permissions.includes('home')
 
   if (isMember) {
     return (
@@ -83,13 +102,13 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
         </a>
       )}
 
-      {can('admin') && (
+      {canNavItem(permissions, 'admin', ext) && (
         <a className="dNav__item" href={phref('userlist.php')} onClick={go}>
           <span>Admin</span>
         </a>
       )}
 
-      {can('account') && (
+      {canNavItem(permissions, 'account', ext) && (
         <>
           <a className="dNav__item" href={phref('account-list.php')} onClick={go}>
             <span>Account</span>
@@ -100,19 +119,19 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
         </>
       )}
 
-      {can('process') && (
+      {canNavItem(permissions, 'process', ext) && (
         <a className="dNav__item" href={phref('processlist.php')} onClick={go}>
           <span>Process</span>
         </a>
       )}
 
-      {can('datacapture') && companyHasGambling && (
+      {canNavItem(permissions, 'datacapture', ext) && companyHasGambling && (
         <a className="dNav__item" href={phref('datacapture.php')} onClick={go}>
           <span>Data Capture</span>
         </a>
       )}
 
-      {can('payment') && (
+      {canNavItem(permissions, 'payment', ext) && (
         <NavLink
           to="/transaction"
           className={({ isActive }) =>
@@ -124,7 +143,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
         </NavLink>
       )}
 
-      {can('report') && companyHasGambling && (
+      {canNavItem(permissions, 'report', ext) && companyHasGambling && (
         <div className="dNav__sub">
           <button
             type="button"
@@ -161,7 +180,8 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
           </button>
           {subOpen.maintenance && (
             <div className="dNav__subList">
-              {can('maintenance') && companyHasGambling && (
+              {canNavItem(permissions, 'maintenance', ext) &&
+                companyHasGambling && (
                 <a
                   className="dNav__subItem"
                   href={phref('capture_maintenance.php')}
@@ -170,7 +190,8 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
                   Data Capture
                 </a>
               )}
-              {can('maintenance') && companyHasGambling && (
+              {canNavItem(permissions, 'maintenance', ext) &&
+                companyHasGambling && (
                 <a
                   className="dNav__subItem"
                   href={phref('transaction_maintenance.php')}
@@ -179,7 +200,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
                   Transaction
                 </a>
               )}
-              {can('maintenance') && (
+              {canNavItem(permissions, 'maintenance', ext) && (
                 <a className="dNav__subItem" href={phref('payment_maintenance.php')} onClick={go}>
                   Payment
                 </a>
@@ -193,7 +214,8 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
                   Formula
                 </a>
               )}
-              {can('maintenance') && companyHasBank && (
+              {canNavItem(permissions, 'maintenance', ext) &&
+                companyHasBank && (
                 <a
                   className="dNav__subItem"
                   href={phref('bankprocess_maintenance.php')}
