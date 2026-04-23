@@ -1,0 +1,23 @@
+为什么 localhost:5173 和 count168.org 不一样
+------------------------------------------
+Vite 开发服 (npm run dev) 只在你本机跑。要让 https://count168.org/ 看到 React，
+必须把 `client` 执行 `npm run build` 后的**构建结果**上传到**网站根目录**（与
+index.php、api/、login_process.php 同一层），并保证 Apache 优先用 index.html。
+
+仓库里已改根目录 .htaccess：DirectoryIndex index.html index.php + 无物理文件时回退到 /index.html。
+
+部署步骤（Apache + 本仓库布局）
+--------------------------------
+1. 本地：cd client && npm ci && npm run build
+2. 把 client/dist/ 里的全部内容上传到主机**网站根目录**（覆盖或合并）：
+   - index.html
+   - assets/   （Vite 打包的 js/css）
+   - images/   （来自 client/public/images，含 count_bg、telegram、count_logo）
+3. 确认根目录 .htaccess 已包含「DirectoryIndex index.html index.php」与 mod_rewrite 段（本仓库已提交）。
+4. 浏览器访问 https://count168.org/ 应出现 React 登录；https://count168.org/login_process.php 等接口仍走 PHP。
+
+说明
+----
+- 旧版 PHP 登录仍可通过直接打开 https://count168.org/index.php 使用（若文件还在）。
+- react_login_entry.php 在「根目录已是 index.html 优先」时一般保持 return '' 即可，不必再 302。
+- 若主机是 Nginx，需自行配置 try_files 与 index 顺序；.htaccess 仅对 Apache 生效。

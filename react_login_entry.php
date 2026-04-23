@@ -1,8 +1,9 @@
 <?php
 /**
- * 设为非空以启用：根 index.php 在未登录时 302 到 Vite 登录（须与 Vite base 一致）。
- * 例: return '/app/';
- * 不启用: return '' ;
- * 勿用 '/'：会与 index 循环。根目录若直接由 Nginx/Apache 指到 dist 则不必用本文件。
+ * 可选 302：仅当「整站仍先走 index.php」又要把人引到子目录里的 React（如 /app/）时再用。
+ * 当根目录已按「COUNT168-线上根目录部署.txt」部署 index.html 且 .htaccess 里
+ * DirectoryIndex 优先 index.html 时，勿改此处，保持 return '' 即可。
+ * 子路径示例: return '/app/';
+ * 禁止: return '/'（会与入口循环）
  */
 return '';
