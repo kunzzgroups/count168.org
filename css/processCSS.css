@@ -1093,6 +1093,92 @@ body.processlist-spa-native.process-page.process-page--bank .pagination-containe
     margin-right: 0 !important;
 }
 
+/* Final bank parity lock: readable classic sizes and spacing */
+body.processlist-spa-native.process-page.process-page--bank {
+    font-size: 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .page-title {
+    font-size: 46px !important;
+    line-height: 1 !important;
+    margin: 0 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons,
+body.processlist-spa-native.process-page.process-page--bank .action-buttons * {
+    font-size: 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn-add,
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete {
+    height: 24px !important;
+    line-height: 20px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier {
+    min-width: 96px !important;
+    max-width: none !important;
+    padding: 0 8px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier .btn-sort-supplier__text {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #0d47a1 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier .btn-sort-supplier__arrow {
+    font-size: 12px !important;
+    line-height: 1 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row {
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .search-container .search-input {
+    width: 110px !important;
+    min-width: 110px !important;
+    max-width: 110px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .process-list-date-filter {
+    min-width: 186px !important;
+    width: 186px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .process-list-date-filter .search-input {
+    width: 86px !important;
+    min-width: 86px !important;
+    max-width: 86px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table {
+    font-size: 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table thead {
+    background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
+    font-size: 11px !important;
+    padding: 2px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+    font-size: 12px !important;
+    padding: 1px 4px !important;
+    line-height: 1.2 !important;
+}
+
 body.processlist-spa-native.process-page.process-page--bank .process-list-date-filter .bank-date-filter-hint {
     font-size: 10px !important;
     color: #546e7a !important;

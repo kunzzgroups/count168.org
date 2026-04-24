@@ -713,6 +713,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                 setCurrentPage(1)
               }}
             >
+              <span className="btn-sort-supplier__text">Sort supplier</span>
               <span className="btn-sort-supplier__arrow" aria-hidden>
                 {sortAsc ? '▲' : '▼'}
               </span>
