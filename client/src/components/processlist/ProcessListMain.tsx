@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import type { GamePermission } from '../../lib/processListTypes'
+import { fetchDomainCompanyPermissions } from '../../lib/processListApi'
 import { ProcessListAccountingDue } from './ProcessListAccountingDue'
 import { ProcessListBankPanel } from './ProcessListBankPanel'
 import { ProcessListGamesPanel } from './ProcessListGamesPanel'
@@ -15,11 +16,13 @@ type Props = { bootstrap: DashboardBootstrapData }
 
 export function ProcessListMain({ bootstrap }: Props) {
   const w = useTransactionWorkspace(bootstrap)
+  const navigate = useNavigate()
   const { pathname } = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const wRef = useRef(w)
   wRef.current = w
   const pendingCompanyPickRef = useRef<number | null>(null)
+  const [companyPermsMap, setCompanyPermsMap] = useState<Record<string, GamePermission[]>>({})
 
   const [notice, setNotice] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null)
 
@@ -33,6 +36,14 @@ export function ProcessListMain({ bootstrap }: Props) {
   const activeCategory = useMemo((): GamePermission => {
     return pathname.includes('/process/bank') ? 'Bank' : 'Games'
   }, [pathname])
+
+  const companyCode = useMemo(() => {
+    const id = w.activeCompanyId
+    if (id == null) return null
+    const row = w.companies.find((c) => Number(c.id) === Number(id))
+    const code = row?.company_id == null ? '' : String(row.company_id).trim()
+    return code || null
+  }, [w.activeCompanyId, w.companies])
 
   useLayoutEffect(() => {
     document.body.classList.add('process-page', 'processlist-spa-embed', 'processlist-spa-native')
@@ -65,6 +76,21 @@ export function ProcessListMain({ bootstrap }: Props) {
       delete window.EAZYCOUNT_SPA_PROCESSLIST
     }
   }, [])
+
+  useEffect(() => {
+    if (!companyCode) return
+    if (companyPermsMap[companyCode]) return
+    let on = true
+    void (async () => {
+      const r = await fetchDomainCompanyPermissions(companyCode)
+      if (!on || !r.success) return
+      const next = (r.data || []).filter(Boolean) as GamePermission[]
+      setCompanyPermsMap((prev) => (prev[companyCode] ? prev : { ...prev, [companyCode]: next }))
+    })()
+    return () => {
+      on = false
+    }
+  }, [companyCode, companyPermsMap])
 
   const replaceCompanyInUrl = useCallback(
     (companyId: number) => {
@@ -153,6 +179,29 @@ export function ProcessListMain({ bootstrap }: Props) {
     if (cur != null && cur !== '') return
     replaceCompanyInUrl(w.activeCompanyId)
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
+
+  useEffect(() => {
+    if (!w.companiesReady || !companyCode) return
+    const perms = companyPermsMap[companyCode]
+    if (!perms || perms.length === 0) return
+    const hasGames = perms.includes('Games') || perms.includes('Gambling' as GamePermission)
+    const hasBank = perms.includes('Bank')
+    if (pathname.includes('/process/bank')) {
+      if (!hasBank && hasGames) {
+        navigate(
+          { pathname: '/process', search: searchParams.toString() ? `?${searchParams.toString()}` : '' },
+          { replace: true },
+        )
+      }
+      return
+    }
+    if (!hasGames && hasBank) {
+      navigate(
+        { pathname: '/process/bank', search: searchParams.toString() ? `?${searchParams.toString()}` : '' },
+        { replace: true },
+      )
+    }
+  }, [w.companiesReady, companyCode, companyPermsMap, pathname, searchParams, navigate])
 
   if (!w.companiesReady) {
     return (
