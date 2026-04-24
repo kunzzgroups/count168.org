@@ -263,6 +263,21 @@
   box-sizing: border-box;
 }
 
+/*
+ * Data Capture（React + 经典侧栏）：与 `datacapture_classic.php` 一样用 window 滚动。
+ * 默认 `overflow: hidden` 会裁切长表格；`dShell` 与 `body` 双背景会发糊。
+ */
+body.datacapture-spa-embed .dShell.dShell--classicSidebar,
+body.datacapture-summary-spa-embed .dShell.dShell--classicSidebar {
+  background: transparent;
+}
+
+body.datacapture-spa-embed .dShell__main,
+body.datacapture-summary-spa-embed .dShell__main {
+  overflow-x: hidden;
+  overflow-y: visible;
+}
+
 @media (max-width: 899px) {
   .dShell__burger {
     display: flex;

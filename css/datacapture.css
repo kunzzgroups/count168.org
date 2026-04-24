@@ -52,6 +52,14 @@ body.datacapture-spa-embed {
     box-sizing: border-box;
 }
 
+/*
+ * React `ClassicDashboardShell`：侧栏在 `dShell__body` 的 flex 里已占一列，主区不应再为「fixed 侧栏」加大 padding-left。
+ * 否则整段内容区变窄，上排「表单 | Submitted Processes」与经典全页（侧栏 fixed + container 留白）视觉不一致。
+ */
+body.datacapture-spa-embed .dShell__main .container {
+    padding: 1px 40px 40px 40px;
+}
+
 h1 {
     color: #002C49;
     text-align: left;

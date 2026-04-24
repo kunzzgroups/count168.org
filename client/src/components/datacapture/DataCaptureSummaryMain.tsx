@@ -4,6 +4,7 @@ import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/accountCSS.css'
 import '../../../../css/datacapturesummary.css'
 import '../../../../css/global-13inch.css'
+import './DataCaptureMain.css'
 
 type Props = {
   bootstrap: DashboardBootstrapData
@@ -47,9 +48,9 @@ const ALERT_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => {
  */
 export function DataCaptureSummaryMain({ bootstrap }: Props) {
   useLayoutEffect(() => {
-    document.body.classList.add('datacapture-summary-spa-embed')
+    document.body.classList.add('datacapture-summary-spa-embed', 'datacapture-page')
     return () => {
-      document.body.classList.remove('datacapture-summary-spa-embed')
+      document.body.classList.remove('datacapture-summary-spa-embed', 'datacapture-page')
     }
   }, [])
 

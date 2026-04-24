@@ -70,9 +70,9 @@ export function DataCaptureMain({ bootstrap }: Props) {
   }, [useReactDateProcessFields])
 
   useLayoutEffect(() => {
-    document.body.classList.add('datacapture-spa-embed')
+    document.body.classList.add('datacapture-spa-embed', 'datacapture-page')
     return () => {
-      document.body.classList.remove('datacapture-spa-embed')
+      document.body.classList.remove('datacapture-spa-embed', 'datacapture-page')
     }
   }, [])
 
