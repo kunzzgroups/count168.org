@@ -11,6 +11,8 @@ import {
   postToggleProcessStatus,
   postUpdateProcess,
 } from '../../lib/processListApi'
+import { ProcessListCompanyGroupFilters } from './ProcessListCompanyGroupFilters'
+import type { ProcessListWorkspacePick } from './processListWorkspacePick'
 
 const PAGE_SIZE = 20
 
@@ -19,6 +21,8 @@ type Props = {
   /** Games / Loan / … 与 `processlist_api` GET `permission` 一致 */
   permission: GamePermission
   onNotice: (msg: string, kind: 'ok' | 'err') => void
+  /** 与经典 `processlist_classic.php`：GroupID / Company 在 Add/Search 行下方 */
+  workspace: ProcessListWorkspacePick
 }
 
 function sortGamesRows(a: GamesProcessRow, b: GamesProcessRow): number {
@@ -37,6 +41,7 @@ export function ProcessListGamesPanel({
   companyId,
   permission,
   onNotice,
+  workspace,
 }: Props) {
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
@@ -352,12 +357,9 @@ export function ProcessListGamesPanel({
 
   return (
     <>
-      <div className="action-buttons-container">
+      <div className="action-buttons-container" id="processListGamesActionBar">
         <div className="action-buttons">
-          <div
-            className="action-controls-row"
-            style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
-          >
+          <div className="action-controls-row">
             <button type="button" className="btn btn-add" onClick={() => void openAdd()}>
               Add Process
             </button>
@@ -411,6 +413,14 @@ export function ProcessListGamesPanel({
             Delete
           </button>
         </div>
+        <ProcessListCompanyGroupFilters
+          groupIds={workspace.groupIds}
+          selectedGroup={workspace.selectedGroup}
+          onSetGroup={workspace.setGroup}
+          scopeCompanies={workspace.scopeCompanies}
+          activeCompanyId={workspace.activeCompanyId}
+          onPickCompany={workspace.onPickCompany}
+        />
       </div>
 
       <div className="process-table-wrapper" id="processTableWrapper">
@@ -506,7 +516,7 @@ export function ProcessListGamesPanel({
             ◀
           </button>
           <span className="pagination-info" id="paginationInfo">
-            Page {page} / {totalPages}
+            {page} of {totalPages}
           </span>
           <button
             type="button"

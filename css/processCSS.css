@@ -1041,6 +1041,90 @@ body.processlist-spa-native.process-page.process-page--bank .process-accounting-
     color: #e2e8f0;
 }
 
+/*
+ * React SPA Games（及 Loan/Rate/Money 等非 Bank 列表）：贴近经典 processlist_classic
+ * — 操作区白盒、表头深蓝、斑马行、ACTIVE/INACTIVE 矩形、分页 n of m、控制行 flex
+ */
+body.processlist-spa-native.process-page:not(.process-page--bank) .action-buttons-container {
+    background: #fafbfc;
+    border: 1px solid #dfe3e8;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    margin-top: 12px;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .action-buttons {
+    padding: 6px 12px;
+    gap: 8px;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .action-controls-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .action-buttons-container .process-company-filter {
+    padding: 0 12px 8px 12px;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .table-header {
+    background: linear-gradient(180deg, #4da3d9 0%, #0d4a9c 100%) !important;
+    font-size: 11px !important;
+    margin-top: 10px !important;
+    padding: 2px 12px !important;
+    gap: 10px !important;
+    border-radius: 4px 4px 0 0;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .table-header .header-item {
+    padding: 1px 2px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .process-card {
+    padding: 2px 12px !important;
+    gap: 10px !important;
+    font-family: Tahoma, 'Segoe UI', Arial, sans-serif;
+    font-size: 12px;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .process-card:nth-child(even) {
+    background: #cceeff99 !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .process-card:nth-child(odd) {
+    background: #ffffff !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .process-card:hover {
+    box-shadow: none;
+    background: #d9eefc !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .role-badge.status-active,
+body.processlist-spa-native.process-page:not(.process-page--bank) .role-badge.status-inactive {
+    border-radius: 3px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .role-badge.status-active {
+    background-color: #c8f5d4 !important;
+    color: #14532a !important;
+    border: 1px solid #7bc896 !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .role-badge.status-inactive {
+    background-color: #ffd6d6 !important;
+    color: #7f1d1d !important;
+    border: 1px solid #f5a3a3 !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .status-clickable:hover {
+    transform: none;
+    opacity: 0.92;
+    box-shadow: none;
+}
+
 /* Table Header - copied from accountCSS.css */
 .process-page .table-header {
     display: grid;

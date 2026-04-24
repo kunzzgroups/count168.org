@@ -272,6 +272,14 @@ export function ProcessListMain({ bootstrap }: Props) {
             companyId={w.activeCompanyId}
             permission={activeCategory}
             onNotice={onNotice}
+            workspace={{
+              groupIds: w.groupIds,
+              selectedGroup: w.selectedGroup,
+              setGroup: w.setGroup,
+              scopeCompanies: w.scopeCompanies,
+              activeCompanyId: w.activeCompanyId,
+              onPickCompany: w.onPickCompany,
+            }}
           />
         )}
 

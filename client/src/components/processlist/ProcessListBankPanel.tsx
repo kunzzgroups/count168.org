@@ -25,7 +25,7 @@ import {
   serializeProfitSharingEntries,
   ymdToday,
 } from '../../lib/processListBankUtils'
-import type { OwnerCompany } from '../../types/dashboard'
+import type { ProcessListWorkspacePick } from './processListWorkspacePick'
 import { BankResendAccountingDueModal } from './BankResendAccountingDueModal'
 import { BankAccountCustomSelect } from './BankAccountCustomSelect'
 import { BankListSelectionModal, BankCountrySelectionModal } from './BankRegionalModals'
@@ -35,19 +35,10 @@ import { ProcessListCompanyGroupFilters } from './ProcessListCompanyGroupFilters
 
 const PAGE_SIZE = 20
 
-type WorkspacePick = {
-  groupIds: string[]
-  selectedGroup: string | null
-  setGroup: (g: string | null) => void
-  scopeCompanies: OwnerCompany[]
-  activeCompanyId: number
-  onPickCompany: (id: number) => void
-}
-
 type Props = {
   companyId: number
   onNotice: (msg: string, kind: 'ok' | 'err') => void
-  workspace: WorkspacePick
+  workspace: ProcessListWorkspacePick
 }
 
 type AccountOpt = { id: number; account_id: string; name?: string; role?: string }
