@@ -135,6 +135,35 @@ body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbo
   height: 24px !important;
 }
 
+/* Fix ACTIVE dropdown clipping by table/rows */
+body.processlist-spa-native.process-page.process-page--bank .bank-table-wrapper {
+  overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table,
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody,
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table tr,
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+  overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+  position: relative !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-dropdown {
+  position: relative !important;
+  z-index: 5 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-dropdown.open {
+  z-index: 9999 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-dropdown .bank-status-menu {
+  z-index: 10000 !important;
+}
+
 /* Stabilize bank table layout: remove conflicting hard column widths */
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table {
   table-layout: auto !important;
@@ -163,6 +192,37 @@ body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(12) {
   text-align: right !important;
   white-space: nowrap !important;
+}
+
+/* Lock right-side columns like classic PHP (no wrap/split) */
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(13),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(13) {
+  min-width: 86px !important;
+  width: 86px !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(14),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(14) {
+  min-width: 96px !important;
+  width: 96px !important;
+  white-space: nowrap !important;
+  word-break: keep-all !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(15),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(15) {
+  min-width: 78px !important;
+  width: 78px !important;
+  white-space: nowrap !important;
+  text-align: center !important;
+}
+
+/* Keep status badge on single line */
+body.processlist-spa-native.process-page.process-page--bank .bank-status-button {
+  white-space: nowrap !important;
+  min-width: 58px !important;
 }
 
 /* Fix separator line under title/action area on bank page */
