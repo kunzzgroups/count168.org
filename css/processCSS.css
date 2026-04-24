@@ -1014,6 +1014,85 @@ body.processlist-spa-native.process-page.process-page--bank #processListBankActi
     flex: 0 0 auto;
 }
 
+/* ===== Bank classic exact alignment (match bank_process_list.php) ===== */
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container {
+    margin-top: 10px !important;
+    border: 1px solid #d7e0ea !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-shadow: none !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons {
+    padding: 8px 12px !important;
+    gap: 10px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container .process-company-filter {
+    padding: 0 12px 8px 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-controls-row {
+    flex-wrap: nowrap !important;
+    gap: 8px !important;
+    align-items: center !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .process-list-date-filter {
+    min-width: 190px !important;
+    width: 190px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .process-list-date-filter .search-input {
+    width: 92px !important;
+    max-width: 92px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .search-container {
+    min-width: 130px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .search-input {
+    font-size: 12px !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .checkbox-section label {
+    font-size: 11px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .checkbox-section input[type="checkbox"] {
+    width: 13px !important;
+    height: 13px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table {
+    font-size: 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
+    font-size: 11px !important;
+    padding: 2px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+    font-size: 12px !important;
+    padding: 2px 4px !important;
+    line-height: 1.2 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-button {
+    min-height: 20px !important;
+    padding: 2px 8px !important;
+    font-size: 11px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .pagination-container {
+    margin-top: 6px !important;
+    margin-right: 0 !important;
+}
+
 body.processlist-spa-native.process-page.process-page--bank .process-list-date-filter .bank-date-filter-hint {
     font-size: 10px !important;
     color: #546e7a !important;
