@@ -86,11 +86,15 @@ let showAll = window.ACCOUNT_LIST_SHOW_ALL;
 let sortColumn = 'account'; // 'account' 鎴?'role'
 let sortDirection = 'asc'; // 'asc' 鎴?'desc'
 
+/** 上一次列表请求成功时用的搜索框 trim 值；用于 blur 与防抖去重 */
+let lastAccountListSearchFetched = null;
+
 // 浠嶢PI鑾峰彇鏁版嵁
 async function fetchAccounts() {
     try {
         const searchInput = document.getElementById('searchInput');
         const searchTerm = searchInput ? searchInput.value : '';
+        const searchNorm = String(searchTerm || '').trim();
         const url = new URL('api/accounts/accountlistapi.php', window.location.href);
 
         // 娣诲姞褰撳墠閫夋嫨鐨?company_id
@@ -113,6 +117,7 @@ async function fetchAccounts() {
         const result = await response.json();
 
         if (result.success) {
+            lastAccountListSearchFetched = searchNorm;
             accounts = result.data && result.data.accounts ? result.data.accounts : (result.data || []);
             // 搴旂敤褰撳墠鎺掑簭
             applySorting();
@@ -1695,7 +1700,11 @@ if (searchInputEl) {
         // 鎼滅储鍔熻兘
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-            fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
+            const inp = document.getElementById('searchInput');
+            const q = inp ? String(inp.value || '').trim() : '';
+            if (q !== lastAccountListSearchFetched) {
+                fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
+            }
             c168PushAccountListFiltersToUrl();
         }, 300); // 寤惰繜300ms閬垮厤棰戠箒璇锋眰
     });
@@ -1703,7 +1712,11 @@ if (searchInputEl) {
     /** SPA：失焦立即拉数并写 URL，避免未满 300ms 就离开导致列表/书签与输入不一致 */
     searchInputEl.addEventListener('blur', function () {
         clearTimeout(searchTimeout);
-        fetchAccounts();
+        const inp = document.getElementById('searchInput');
+        const q = inp ? String(inp.value || '').trim() : '';
+        if (q !== lastAccountListSearchFetched) {
+            fetchAccounts();
+        }
         c168PushAccountListFiltersToUrl();
     });
 
