@@ -13,6 +13,14 @@ body.processlist-spa-native.process-page.process-page--bank .action-buttons-cont
   border-radius: 10px !important;
 }
 
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar {
+  margin-top: 0 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content > div:first-child {
+  margin-top: 0 !important;
+}
+
 body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-buttons {
   padding: 10px 20px !important;
   gap: 12px !important;
