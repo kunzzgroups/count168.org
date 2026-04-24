@@ -11,6 +11,7 @@ import '../../../../css/processCSS.css'
 import '../../../../css/processlist.css'
 import '../../../../css/global-13inch.css'
 import './ProcessListMain.css'
+import './ProcessListBankParity.css'
 
 type Props = { bootstrap: DashboardBootstrapData }
 
