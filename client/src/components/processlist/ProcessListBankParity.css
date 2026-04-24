@@ -135,46 +135,24 @@ body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbo
   height: 24px !important;
 }
 
-/* Column widths/readability tuned to match process list density */
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(1),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(1) {
-  width: 30px !important;
-  min-width: 30px !important;
-  text-align: center !important;
+/* Stabilize bank table layout: remove conflicting hard column widths */
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table {
+  table-layout: auto !important;
+  width: 100% !important;
 }
 
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th,
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+/* Keep important columns readable without breaking the whole grid */
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(2),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(2) {
-  width: 170px !important;
-  min-width: 170px !important;
-}
-
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(3),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(3),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(4),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(4),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(5),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(5) {
-  width: 72px !important;
-  min-width: 72px !important;
-  white-space: nowrap !important;
-}
-
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(2),
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(6),
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(6) {
-  width: 130px !important;
-  min-width: 130px !important;
-}
-
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(7),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(7),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(8),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(8),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(9),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(9) {
-  width: 84px !important;
-  min-width: 84px !important;
-  white-space: nowrap !important;
+  min-width: 120px !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(10),
@@ -183,19 +161,16 @@ body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(11),
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(12),
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(12) {
-  width: 78px !important;
-  min-width: 78px !important;
   text-align: right !important;
   white-space: nowrap !important;
 }
 
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(13),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(13),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(14),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(14),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(15),
-body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(15) {
-  width: 80px !important;
-  min-width: 80px !important;
-  white-space: nowrap !important;
+/* Fix separator line under title/action area on bank page */
+body.processlist-spa-native.process-page.process-page--bank .separator-line {
+  width: 100% !important;
+  left: 0 !important;
+  right: auto !important;
+  margin: 6px 0 8px 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
 }
