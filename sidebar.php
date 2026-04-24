@@ -450,16 +450,6 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
                         Data Capture
                     </div>
                 </div>
-                <div class="informationmenu-section" id="sidebar-datacapturesummary-section" <?php echo $companyHasGambling ? '' : ' style="display:none;"'; ?>>
-                    <div class="informationmenu-section-title" data-page="datacapturesummary.php"
-                        onclick="(function(w,cid){var u=(typeof w.EAZYCOUNT_SPA_DATACAPTURESUMMARY==='string'&&w.EAZYCOUNT_SPA_DATACAPTURESUMMARY)?w.EAZYCOUNT_SPA_DATACAPTURESUMMARY:'datacapturesummary.php';var q=(cid!=null&&cid!=='')?'?company_id='+encodeURIComponent(String(cid)):'';(w.top!==w.self?w.top:w).location.assign(u+q);})(window,<?php echo $companyId ? json_encode((int) $companyId) : 'null'; ?>)">
-                        <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
-                            <path
-                                d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
-                        </svg>
-                        Data Capture Summary
-                    </div>
-                </div>
             <?php endif; ?>
 
             <!-- Transaction Payment Section -->

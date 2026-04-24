@@ -6,12 +6,14 @@
 require_once 'session_check.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $cid = isset($_SESSION['company_id']) ? (int) $_SESSION['company_id'] : 0;
+    $cidQs = ($cid > 0) ? ('&company_id=' . $cid) : '';
     try {
-        header('Location: datacapturesummary_classic.php?success=1');
+        header('Location: datacapturesummary_classic.php?success=1' . $cidQs);
         exit;
     } catch (Exception $e) {
         error_log('Data capture summary error: ' . $e->getMessage());
-        header('Location: datacapturesummary_classic.php?error=1');
+        header('Location: datacapturesummary_classic.php?error=1' . $cidQs);
         exit;
     }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { publicAsset } from '../../lib/publicAsset'
-import { resolvePostLoginRedirect } from '../../lib/resolvePostLoginRedirect'
+import { appendCompanyIdToClassicRedirect } from '../../lib/resolvePostLoginRedirect'
 import { fetchSidebarContext } from '../../lib/fetchSidebarContext'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import type { SidebarContext } from '../../types/sidebarContext'
@@ -132,6 +132,14 @@ export function DashboardShell({
             aria-label="打开菜单"
             onClick={() => setNavOpen(true)}
           />
+          {classicPage && (
+            <a
+              className="dShell__classicMobileLink"
+              href={appendCompanyIdToClassicRedirect(classicPage, data.companyId)}
+            >
+              经典版
+            </a>
+          )}
         </header>
       ) : (
         <header className="dShell__header">
@@ -159,7 +167,10 @@ export function DashboardShell({
           <div className="dShell__headerRight">
             <a
               className="dShell__classic"
-              href={resolvePostLoginRedirect(classicPage ?? 'dashboard_classic.php')}
+              href={appendCompanyIdToClassicRedirect(
+                classicPage ?? 'dashboard_classic.php',
+                data.companyId,
+              )}
             >
               经典版
             </a>
@@ -204,6 +215,11 @@ export function DashboardShell({
                 context={ctx}
                 bootstrap={data}
                 onCloseMobile={() => setNavOpen(false)}
+                classicFullPageHref={
+                  classicPage
+                    ? appendCompanyIdToClassicRedirect(classicPage, data.companyId)
+                    : undefined
+                }
               />
             ) : (
               <DashboardNav context={ctx} onCloseMobile={() => setNavOpen(false)} />

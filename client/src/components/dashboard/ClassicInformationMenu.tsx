@@ -11,6 +11,8 @@ type Props = {
   context: SidebarContext
   bootstrap: DashboardBootstrapData
   onCloseMobile?: () => void
+  /** 当前 SPA 路由对应的经典全页 URL（已含 `company_id`），侧栏底部入口 */
+  classicFullPageHref?: string
 }
 
 const NAV_HIDDEN_FOR_EXTERNAL = new Set([
@@ -140,7 +142,12 @@ function useBankCategoryFlag(companyCode: string) {
 /**
  * 与 `sidebar.php` 结构一致：白 logo、通知铃、头像选择、informationmenu-content、footer、通知浮层。
  */
-export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile }: Props) {
+export function ClassicInformationMenu({
+  context: ctx,
+  bootstrap,
+  onCloseMobile,
+  classicFullPageHref,
+}: Props) {
   const { pathname } = useLocation()
   const rootRef = useRef<HTMLDivElement>(null)
   const reportWrapRef = useRef<HTMLDivElement>(null)
@@ -543,42 +550,23 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
             )}
 
             {canNavItem(permissions, 'datacapture', ext) && (
-              <>
-                <div
-                  className="informationmenu-section"
-                  id="sidebar-datacapture-section"
-                  style={{ display: companyHasGambling ? undefined : 'none' }}
+              <div
+                className="informationmenu-section"
+                id="sidebar-datacapture-section"
+                style={{ display: companyHasGambling ? undefined : 'none' }}
+              >
+                <Link
+                  to={`/datacapture${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
+                  className={`informationmenu-section-title${pathname === '/datacapture' ? ' current-page' : ''}`}
+                  data-page="datacapture.php"
+                  onClick={go}
                 >
-                  <Link
-                    to={`/datacapture${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
-                    className={`informationmenu-section-title${pathname === '/datacapture' ? ' current-page' : ''}`}
-                    data-page="datacapture.php"
-                    onClick={go}
-                  >
-                    <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
-                    </svg>
-                    Data Capture
-                  </Link>
-                </div>
-                <div
-                  className="informationmenu-section"
-                  id="sidebar-datacapturesummary-section"
-                  style={{ display: companyHasGambling ? undefined : 'none' }}
-                >
-                  <Link
-                    to={`/datacapturesummary${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
-                    className={`informationmenu-section-title${pathname === '/datacapturesummary' ? ' current-page' : ''}`}
-                    data-page="datacapturesummary.php"
-                    onClick={go}
-                  >
-                    <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
-                    </svg>
-                    Data Capture Summary
-                  </Link>
-                </div>
-              </>
+                  <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
+                  </svg>
+                  Data Capture
+                </Link>
+              </div>
             )}
 
             {canNavItem(permissions, 'payment', ext) && (
@@ -645,6 +633,15 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
       </div>
 
       <div className="informationmenu-footer">
+        {classicFullPageHref && (
+          <a
+            className="informationmenu-classic-link"
+            href={classicFullPageHref}
+            onClick={go}
+          >
+            经典版
+          </a>
+        )}
         {expDate && expLive && (
           <div className={`company-expiration-countdown ${expLive.status}`} id="companyExpirationCountdown">
             <svg

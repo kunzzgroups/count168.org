@@ -150,18 +150,6 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
         </NavLink>
       )}
 
-      {canNavItem(permissions, 'datacapture', ext) && companyHasGambling && (
-        <NavLink
-          to={`/datacapturesummary${buildCompanyIdSearch(context.sessionCompanyId)}`}
-          className={({ isActive }) =>
-            isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
-          }
-          onClick={go}
-        >
-          <span>Data Capture Summary</span>
-        </NavLink>
-      )}
-
       {canNavItem(permissions, 'payment', ext) && (
         <NavLink
           to={`/transaction${buildCompanyIdSearch(context.sessionCompanyId)}`}
