@@ -88,7 +88,6 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
   const [showOfficial, setShowOfficial] = useState(false)
   const [showEInvoice, setShowEInvoice] = useState(false)
   const [showBlock, setShowBlock] = useState(false)
-  const [waiting, setWaiting] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [dateOpen, setDateOpen] = useState(false)
@@ -234,14 +233,6 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
     return rows.filter((p) => {
       if (!processMatchesSelectedDate(p, dateFrom, dateTo)) return false
       if (!matchesCurrentBankFilters(p, opts)) return false
-      if (waiting) {
-        const c = getContractStateClass(
-          p.day_start || null,
-          p.day_end || null,
-          todayY,
-        )
-        if (c !== 'contract-pending') return false
-      }
       return true
     })
   }, [
@@ -253,8 +244,6 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
     showBlock,
     dateFrom,
     dateTo,
-    waiting,
-    todayY,
   ])
 
   const sorted = useMemo(() => {
@@ -599,46 +588,57 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
   const dateLabel = (() => {
     const from = dateFrom.trim()
     const to = dateTo.trim()
-    if (!from && !to) return 'Select date ran...'
+    if (!from && !to) return 'Select date range'
     return `${from || '...'} ~ ${to || '...'}`
   })()
 
   return (
     <>
       <div className="action-buttons-container" id="processListBankActionBar">
-        <ProcessListCompanyGroupFilters
-          groupIds={workspace.groupIds}
-          selectedGroup={workspace.selectedGroup}
-          onSetGroup={workspace.setGroup}
-          scopeCompanies={workspace.scopeCompanies}
-          activeCompanyId={workspace.activeCompanyId}
-          onPickCompany={workspace.onPickCompany}
-        />
         <div className="action-buttons">
           <div className="action-controls-row">
             <button type="button" className="btn btn-add" onClick={openAddBank}>
               Add Process
             </button>
             <div className="process-list-date-filter process-list-date-filter--bank-classic" id="processListDateFilter">
-              <button
-                type="button"
-                className="bank-date-trigger-icon"
+              <div
+                className="date-range-picker bank-date-trigger"
+                id="date-range-picker"
                 onClick={() => setDateOpen((v) => !v)}
-                aria-label="Open date range picker"
-                title="Open date range picker"
-              >
-                📅
-              </button>
-              <button
-                type="button"
-                className="bank-date-trigger"
-                onClick={() => setDateOpen((v) => !v)}
+                role="button"
+                tabIndex={0}
                 aria-label="Select date range"
-                title="Select date range"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    setDateOpen((v) => !v)
+                  }
+                }}
               >
-                <span className="bank-date-trigger__icon" aria-hidden>📅</span>
-                <span className="bank-date-trigger__text">{dateLabel}</span>
-              </button>
+                <i className="fas fa-calendar-alt" aria-hidden />
+                <span id="date-range-display" className="bank-date-trigger__text">{dateLabel}</span>
+                <button
+                  type="button"
+                  className="process-list-date-clear"
+                  id="processListDateClearBtn"
+                  title="Clear date range"
+                  aria-label="Clear date range"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDateDraftFrom('')
+                    setDateDraftTo('')
+                    setDateFrom('')
+                    setDateTo('')
+                    setCurrentPage(1)
+                    setDateOpen(false)
+                  }}
+                  style={{ display: dateFrom || dateTo ? 'inline-flex' : 'none' }}
+                >
+                  &times;
+                </button>
+              </div>
+              <input type="hidden" id="date_from" value={dateFrom} />
+              <input type="hidden" id="date_to" value={dateTo} />
               {dateOpen ? (
                 <div className="bank-date-popover" role="dialog" aria-label="Date range">
                   <div className="bank-date-popover__row">
@@ -694,7 +694,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                 </div>
               ) : null}
             </div>
-            <div className="search-container" style={{ position: 'relative' }}>
+            <div className="search-container">
               <svg className="search-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                 <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
               </svg>
@@ -711,78 +711,63 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
             <div className="checkbox-section">
               <input
                 type="checkbox"
-                id="showAllBank"
+                id="showAll"
                 checked={showAll}
                 onChange={(e) => {
                   setShowAll(e.target.checked)
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showAllBank">Show All</label>
+              <label htmlFor="showAll">Show All</label>
             </div>
             <div className="checkbox-section">
               <input
                 type="checkbox"
-                id="showInactiveBank"
+                id="showInactive"
                 checked={showInactive}
                 onChange={(e) => {
                   setShowInactive(e.target.checked)
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showInactiveBank">Show Inactive</label>
+              <label htmlFor="showInactive">Show Inactive</label>
             </div>
             <div className="checkbox-section">
               <input
                 type="checkbox"
-                id="showOfficialBank"
+                id="showOfficial"
                 checked={showOfficial}
                 onChange={(e) => {
                   setShowOfficial(e.target.checked)
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showOfficialBank">Show Official</label>
+              <label htmlFor="showOfficial">Show Official</label>
             </div>
             <div className="checkbox-section">
               <input
                 type="checkbox"
-                id="showEInvoiceBank"
+                id="showEInvoice"
                 checked={showEInvoice}
                 onChange={(e) => {
                   setShowEInvoice(e.target.checked)
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showEInvoiceBank">Show E-Invoice</label>
+              <label htmlFor="showEInvoice">Show E-Invoice</label>
             </div>
             <div className="checkbox-section">
               <input
                 type="checkbox"
-                id="showBlockBank"
+                id="showBlock"
                 checked={showBlock}
                 onChange={(e) => {
                   setShowBlock(e.target.checked)
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showBlockBank">Show Block</label>
+              <label htmlFor="showBlock">Show Block</label>
             </div>
-            <div className="checkbox-section">
-              <input
-                type="checkbox"
-                id="waitingBank"
-                checked={waiting}
-                onChange={(e) => {
-                  setWaiting(e.target.checked)
-                  setCurrentPage(1)
-                }}
-              />
-              <label htmlFor="waitingBank">Waiting</label>
-            </div>
-            {loading ? (
-              <span style={{ color: '#64748b', fontSize: 13 }}>Loading…</span>
-            ) : null}
           </div>
           <button
             type="button"
@@ -795,6 +780,14 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
             Delete
           </button>
         </div>
+        <ProcessListCompanyGroupFilters
+          groupIds={workspace.groupIds}
+          selectedGroup={workspace.selectedGroup}
+          onSetGroup={workspace.setGroup}
+          scopeCompanies={workspace.scopeCompanies}
+          activeCompanyId={workspace.activeCompanyId}
+          onPickCompany={workspace.onPickCompany}
+        />
       </div>
 
       <div className="bank-table-wrapper" id="bankTableWrapper">
