@@ -29,6 +29,16 @@ type Props = {
 
 type AccountOpt = { id: number; account_id: string; name?: string; role?: string }
 
+const BANK_CONTRACT_OPTIONS = [
+  '1 MONTH',
+  '2 MONTHS',
+  '3 MONTHS',
+  '6 MONTHS',
+  '1+1',
+  '1+2',
+  '1+3',
+] as const
+
 function dashIfEmpty(val: unknown): string {
   if (val == null) return '-'
   const s = String(val).trim()
@@ -79,6 +89,9 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
 
   const [quickRemarkId, setQuickRemarkId] = useState<number | null>(null)
   const [quickRemarkText, setQuickRemarkText] = useState('')
+
+  const [bankNoteModal, setBankNoteModal] = useState<'sop' | 'remark' | null>(null)
+  const [bankNoteDraft, setBankNoteDraft] = useState('')
 
   const todayY = ymdToday()
 
@@ -216,6 +229,42 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
     setBStatus('active')
   }
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (bankNoteModal) {
+        setBankNoteModal(null)
+        return
+      }
+      if (bankOpen) {
+        setBankOpen(false)
+        resetBankForm()
+      }
+    }
+    if (bankOpen || bankNoteModal) {
+      window.addEventListener('keydown', onKey)
+      return () => window.removeEventListener('keydown', onKey)
+    }
+    return undefined
+  }, [bankOpen, bankNoteModal])
+
+  const openBankNote = (kind: 'sop' | 'remark') => {
+    setBankNoteDraft(kind === 'sop' ? bSop : bRemark)
+    setBankNoteModal(kind)
+  }
+
+  const saveBankNoteAndClose = () => {
+    if (bankNoteModal === 'sop') setBSop(bankNoteDraft)
+    if (bankNoteModal === 'remark') setBRemark(bankNoteDraft)
+    setBankNoteModal(null)
+  }
+
+  const closeBankModal = () => {
+    setBankOpen(false)
+    setBankNoteModal(null)
+    resetBankForm()
+  }
+
   const openAddBank = () => {
     resetBankForm()
     setBankOpen(true)
@@ -225,7 +274,11 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
     setEditBankId(id)
     setBCountry(String(d.country || ''))
     setBBank(String(d.bank || ''))
-    setBType(String(d.type || ''))
+    {
+      const t = String(d.type || '')
+      const tu = t.toUpperCase()
+      setBType(['PERSONAL', 'ENTERPRISE', 'BUSINESS'].includes(tu) ? tu : t)
+    }
     setBName(String(d.name || d.process_name || ''))
     setBCard(d.card_merchant_id != null && d.card_merchant_id !== '' ? Number(d.card_merchant_id) : '')
     setBCust(d.customer_id != null && d.customer_id !== '' ? Number(d.customer_id) : '')
@@ -260,6 +313,10 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
     e.preventDefault()
     if (!bCountry.trim() || !bBank.trim() || !bType.trim() || !bName.trim()) {
       onNotice('Country, Bank, Type and Name are required', 'err')
+      return
+    }
+    if (editBankId == null && !bContract.trim()) {
+      onNotice('Please select a contract', 'err')
       return
     }
     const fd = new FormData()
@@ -721,240 +778,423 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
       ) : null}
 
       {bankOpen ? (
-        <div className="plModalHost">
-          <div
-            className="plModalBackdrop"
-            onClick={() => {
-              setBankOpen(false)
-              resetBankForm()
-            }}
-            role="presentation"
-          />
-          <div className="plModal plModal--wide plModal--tall">
-            <h3 className="plModal__title">
-              {editBankId == null ? 'Add Bank Process' : 'Edit Bank Process'}
-            </h3>
-            <form onSubmit={(e) => void submitBank(e)} className="plModalForm plBankForm">
-              <div className="plRow2">
-                <label className="plField">
-                  <span className="plField__label">Country *</span>
-                  <input
-                    className="plInput"
-                    value={bCountry}
-                    onChange={(e) => setBCountry(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Bank *</span>
-                  <input
-                    className="plInput"
-                    value={bBank}
-                    onChange={(e) => setBBank(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="plRow2">
-                <label className="plField">
-                  <span className="plField__label">Type *</span>
-                  <input
-                    className="plInput"
-                    value={bType}
-                    onChange={(e) => setBType(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Name (Supplier) *</span>
-                  <input
-                    className="plInput"
-                    value={bName}
-                    onChange={(e) => setBName(e.target.value)}
-                  />
-                </label>
-              </div>
-              <div className="plRow2">
-                <label className="plField">
-                  <span className="plField__label">Card merchant (account id)</span>
-                  <select
-                    className="plInput"
-                    value={bCard === '' ? '' : String(bCard)}
-                    onChange={(e) =>
-                      setBCard(e.target.value ? parseInt(e.target.value, 10) : '')
-                    }
-                  >
-                    <option value="">—</option>
-                    {accounts.map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.account_id} {a.name ? `[${a.name}]` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Customer (account id)</span>
-                  <select
-                    className="plInput"
-                    value={bCust === '' ? '' : String(bCust)}
-                    onChange={(e) =>
-                      setBCust(e.target.value ? parseInt(e.target.value, 10) : '')
-                    }
-                  >
-                    <option value="">—</option>
-                    {accounts.map((a) => (
-                      <option key={`c-${a.id}`} value={a.id}>
-                        {a.account_id} {a.name ? `[${a.name}]` : ''}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Profit account</span>
-                <select
-                  className="plInput"
-                  value={bProfitAcc === '' ? '' : String(bProfitAcc)}
-                  onChange={(e) =>
-                    setBProfitAcc(e.target.value ? parseInt(e.target.value, 10) : '')
-                  }
-                >
-                  <option value="">—</option>
-                  {accounts.map((a) => (
-                    <option key={`p-${a.id}`} value={a.id}>
-                      {a.account_id} {a.name ? `[${a.name}]` : ''}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="plRow2">
-                <label className="plField">
-                  <span className="plField__label">Contract</span>
-                  <input
-                    className="plInput"
-                    value={bContract}
-                    onChange={(e) => setBContract(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Insurance</span>
-                  <input
-                    className="plInput"
-                    value={bInsurance}
-                    onChange={(e) => setBInsurance(e.target.value)}
-                  />
-                </label>
-              </div>
-              <label className="plField">
-                <span className="plField__label">SOP</span>
-                <textarea
-                  className="plInput plInput--ta"
-                  value={bSop}
-                  onChange={(e) => setBSop(e.target.value)}
-                  rows={2}
-                />
-              </label>
-              <label className="plField">
-                <span className="plField__label">Remark</span>
-                <textarea
-                  className="plInput plInput--ta"
-                  value={bRemark}
-                  onChange={(e) => setBRemark(e.target.value)}
-                  rows={2}
-                />
-              </label>
-              <div className="plRow3">
-                <label className="plField">
-                  <span className="plField__label">Cost</span>
-                  <input
-                    className="plInput"
-                    value={bCost}
-                    onChange={(e) => setBCost(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Price</span>
-                  <input
-                    className="plInput"
-                    value={bPrice}
-                    onChange={(e) => setBPrice(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Profit</span>
-                  <input
-                    className="plInput"
-                    value={bProfitText}
-                    onChange={(e) => setBProfitText(e.target.value)}
-                  />
-                </label>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Profit sharing</span>
-                <input
-                  className="plInput"
-                  value={bProfitShare}
-                  onChange={(e) => setBProfitShare(e.target.value)}
-                />
-              </label>
-              <div className="plRow2">
-                <label className="plField">
-                  <span className="plField__label">Day start (Y-m-d)</span>
-                  <input
-                    className="plInput"
-                    type="date"
-                    value={bDayStart}
-                    onChange={(e) => setBDayStart(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Day end (Y-m-d)</span>
-                  <input
-                    className="plInput"
-                    type="date"
-                    value={bDayEnd}
-                    onChange={(e) => setBDayEnd(e.target.value)}
-                  />
-                </label>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Day start frequency</span>
-                <select
-                  className="plInput"
-                  value={bFreq}
-                  onChange={(e) => setBFreq(e.target.value)}
-                >
-                  <option value="1st_of_every_month">1st of every month</option>
-                  <option value="monthly">monthly</option>
-                </select>
-              </label>
-              {editBankId != null ? (
-                <label className="plField">
-                  <span className="plField__label">Status</span>
-                  <select
-                    className="plInput"
-                    value={bStatus}
-                    onChange={(e) => setBStatus(e.target.value)}
-                  >
-                    <option value="active">active</option>
-                    <option value="inactive">inactive</option>
-                    <option value="waiting">waiting</option>
-                  </select>
-                </label>
-              ) : null}
-              <div className="plModal__actions">
-                <button
-                  type="button"
-                  className="plBtn"
-                  onClick={() => {
-                    setBankOpen(false)
-                    resetBankForm()
-                  }}
-                >
+        <div
+          id="addBankModal"
+          className="modal bank-modal"
+          style={{ display: 'block' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="bankModalTitle"
+        >
+          <div className="modal-content bank-modal-content">
+            <div className="modal-header">
+              <h2 id="bankModalTitle">
+                {editBankId == null ? 'Add Bank Process' : 'Edit Bank Process'}
+              </h2>
+              <button type="button" className="close" onClick={closeBankModal} aria-label="Close">
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <form
+                id="addBankProcessForm"
+                className="process-form bank-form"
+                onSubmit={(e) => void submitBank(e)}
+              >
+                <input type="hidden" id="bank_edit_id" name="id" value={editBankId ?? ''} />
+                <div className="bank-form-fields-scroll">
+                  <div className="bank-form-row">
+                    <div className="bank-form-cell bank-form-cell-left">
+                      <h3 className="bank-section-title">Bank Information</h3>
+                      <div className="form-row bank-row-two-cols">
+                        <div className="form-group">
+                          <label htmlFor="bank_country">Country (Currency)</label>
+                          <input
+                            type="text"
+                            id="bank_country"
+                            name="country"
+                            className="bank-input"
+                            placeholder="e.g. MYR"
+                            value={bCountry}
+                            onChange={(e) => setBCountry(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="bank_bank">Bank</label>
+                          <input
+                            type="text"
+                            id="bank_bank"
+                            name="bank"
+                            className="bank-input"
+                            placeholder="Bank name"
+                            value={bBank}
+                            onChange={(e) => setBBank(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bank-form-cell bank-form-cell-right">
+                      <h3 className="bank-section-title">Detail</h3>
+                      <div className="form-row bank-row-two-cols">
+                        <div className="form-group">
+                          <label htmlFor="bank_card_merchant">Supplier</label>
+                          <select
+                            id="bank_card_merchant"
+                            name="card_merchant"
+                            className="bank-select"
+                            value={bCard === '' ? '' : String(bCard)}
+                            onChange={(e) =>
+                              setBCard(e.target.value ? parseInt(e.target.value, 10) : '')
+                            }
+                          >
+                            <option value="">Select Account</option>
+                            {accounts.map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.account_id}
+                                {a.name ? ` [${a.name}]` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="bank_cost">Buy Price</label>
+                          <input
+                            type="text"
+                            id="bank_cost"
+                            name="cost"
+                            className="bank-input"
+                            placeholder="Enter amount"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={bCost}
+                            onChange={(e) => setBCost(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bank-form-row">
+                    <div className="bank-form-cell bank-form-cell-left">
+                      <div className="form-row bank-row-two-cols bank-row-type-name">
+                        <div className="form-group">
+                          <label htmlFor="bank_type">Type</label>
+                          <select
+                            id="bank_type"
+                            name="type"
+                            className="bank-select"
+                            value={bType}
+                            onChange={(e) => setBType(e.target.value)}
+                            required
+                          >
+                            <option value="">Select Type</option>
+                            <option value="PERSONAL">PERSONAL</option>
+                            <option value="ENTERPRISE">ENTERPRISE</option>
+                            <option value="BUSINESS">BUSINESS</option>
+                            {bType &&
+                            !['PERSONAL', 'ENTERPRISE', 'BUSINESS'].includes(
+                              String(bType).toUpperCase(),
+                            ) ? (
+                              <option value={bType}>{bType}</option>
+                            ) : null}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="bank_name">Card Owner</label>
+                          <input
+                            type="text"
+                            id="bank_name"
+                            name="name"
+                            className="bank-input"
+                            placeholder="Enter Card Owner"
+                            value={bName}
+                            onChange={(e) => setBName(e.target.value.toUpperCase())}
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bank-form-cell bank-form-cell-right">
+                      <div className="form-row bank-row-two-cols">
+                        <div className="form-group">
+                          <label htmlFor="bank_customer">Customer</label>
+                          <select
+                            id="bank_customer"
+                            name="customer"
+                            className="bank-select"
+                            value={bCust === '' ? '' : String(bCust)}
+                            onChange={(e) =>
+                              setBCust(e.target.value ? parseInt(e.target.value, 10) : '')
+                            }
+                          >
+                            <option value="">Select Account</option>
+                            {accounts.map((a) => (
+                              <option key={`c-${a.id}`} value={a.id}>
+                                {a.account_id}
+                                {a.name ? ` [${a.name}]` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="bank_price">Sell Price</label>
+                          <input
+                            type="text"
+                            id="bank_price"
+                            name="price"
+                            className="bank-input"
+                            placeholder="Enter amount"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={bPrice}
+                            onChange={(e) => setBPrice(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bank-form-row">
+                    <div className="bank-form-cell bank-form-cell-left">
+                      <div className="form-row bank-day-start-row">
+                        <div className="form-group bank-day-start-input-wrap">
+                          <label htmlFor="bank_day_start">Day start</label>
+                          <input
+                            type="date"
+                            id="bank_day_start"
+                            name="day_start"
+                            className="bank-input"
+                            value={bDayStart}
+                            onChange={(e) => setBDayStart(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group bank-day-end-input-wrap">
+                          <label htmlFor="bank_day_end">Day end</label>
+                          <input
+                            type="date"
+                            id="bank_day_end"
+                            name="day_end"
+                            className="bank-input"
+                            value={bDayEnd}
+                            onChange={(e) => setBDayEnd(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bank-form-cell bank-form-cell-right">
+                      <div className="form-row bank-row-two-cols">
+                        <div className="form-group">
+                          <label htmlFor="bank_profit_account">Company</label>
+                          <select
+                            id="bank_profit_account"
+                            name="profit_account"
+                            className="bank-select"
+                            value={bProfitAcc === '' ? '' : String(bProfitAcc)}
+                            onChange={(e) =>
+                              setBProfitAcc(e.target.value ? parseInt(e.target.value, 10) : '')
+                            }
+                          >
+                            <option value="">Select Account</option>
+                            {accounts.map((a) => (
+                              <option key={`p-${a.id}`} value={a.id}>
+                                {a.account_id}
+                                {a.name ? ` [${a.name}]` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="bank_profit">Profit</label>
+                          <input
+                            type="text"
+                            id="bank_profit"
+                            name="profit"
+                            className="bank-input"
+                            placeholder="Auto calculated"
+                            value={bProfitText}
+                            onChange={(e) => setBProfitText(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bank-form-row bank-form-row-last">
+                    <div className="bank-form-cell bank-form-cell-left">
+                      <div className="form-group bank-day-start-frequency-wrap" style={{ marginBottom: 20 }}>
+                        <label htmlFor="bank_day_start_frequency">Frequency</label>
+                        <select
+                          id="bank_day_start_frequency"
+                          name="day_start_frequency"
+                          className="bank-input bank-select"
+                          value={bFreq}
+                          onChange={(e) => setBFreq(e.target.value)}
+                        >
+                          <option value="1st_of_every_month">1st of Every Month</option>
+                          <option value="monthly">Monthly</option>
+                        </select>
+                      </div>
+                      <div className="bank-profit-sharing-container form-group">
+                        <div className="bank-profit-sharing-header">
+                          <h3>Profit sharing</h3>
+                        </div>
+                        <div className="bank-profit-sharing-list" id="selectedProfitSharingList">
+                          <input
+                            type="text"
+                            id="bank_profit_sharing"
+                            name="profit_sharing"
+                            className="bank-input"
+                            style={{ margin: '8px 12px', width: 'calc(100% - 24px)', boxSizing: 'border-box' }}
+                            placeholder="Profit sharing"
+                            value={bProfitShare}
+                            onChange={(e) => setBProfitShare(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="bank-form-cell bank-form-cell-right">
+                      <div className="form-row bank-row-two-cols">
+                        <div className="form-group">
+                          <label htmlFor="bank_contract">Contract</label>
+                          <select
+                            id="bank_contract"
+                            name="contract"
+                            className="bank-select"
+                            value={bContract}
+                            onChange={(e) => setBContract(e.target.value)}
+                            required={editBankId == null}
+                          >
+                            <option value="">Select Contract</option>
+                            {BANK_CONTRACT_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt === '1+1'
+                                  ? '1+1 MONTH'
+                                  : opt === '1+2'
+                                    ? '1+2 MONTHS'
+                                    : opt === '1+3'
+                                      ? '1+3 MONTHS'
+                                      : opt}
+                              </option>
+                            ))}
+                            {bContract &&
+                            !(BANK_CONTRACT_OPTIONS as readonly string[]).includes(bContract) ? (
+                              <option value={bContract}>{bContract}</option>
+                            ) : null}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label htmlFor="bank_insurance">Insurance</label>
+                          <input
+                            type="text"
+                            id="bank_insurance"
+                            name="insurance"
+                            className="bank-input"
+                            placeholder="Enter amount"
+                            inputMode="decimal"
+                            autoComplete="off"
+                            value={bInsurance}
+                            onChange={(e) => setBInsurance(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                      <div className="form-group bank-remark-wrap" style={{ marginTop: 12 }}>
+                        <div className="bank-remark-actions">
+                          <button
+                            type="button"
+                            id="bank_sop_btn"
+                            className="btn btn-save"
+                            onClick={() => openBankNote('sop')}
+                          >
+                            SOP
+                          </button>
+                          <button
+                            type="button"
+                            id="bank_remark_btn"
+                            className="btn btn-save"
+                            onClick={() => openBankNote('remark')}
+                          >
+                            Remark
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {editBankId != null ? (
+                    <div className="form-row" style={{ marginTop: 8 }}>
+                      <div className="form-group" style={{ maxWidth: 280 }}>
+                        <label htmlFor="bank_status_edit">Status</label>
+                        <select
+                          id="bank_status_edit"
+                          className="bank-select"
+                          value={bStatus}
+                          onChange={(e) => setBStatus(e.target.value)}
+                        >
+                          <option value="active">ACTIVE</option>
+                          <option value="inactive">INACTIVE</option>
+                          <option value="waiting">WAITING</option>
+                        </select>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="form-actions bank-actions">
+                  <button type="submit" className="btn btn-save" id="bankSubmitBtn">
+                    {editBankId == null ? 'Add Process' : 'Update Process'}
+                  </button>
+                  <button type="button" className="btn btn-cancel" onClick={closeBankModal}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {bankNoteModal ? (
+        <div
+          id="sopModal"
+          className="modal bank-modal sop-modal"
+          style={{ display: 'block' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="processNoteModalTitle"
+        >
+          <div className="modal-content sop-modal-content">
+            <div className="modal-header">
+              <h2 id="processNoteModalTitle">
+                {bankNoteModal === 'sop' ? 'SOP' : 'Remark'}
+              </h2>
+              <button
+                type="button"
+                className="close"
+                onClick={() => setBankNoteModal(null)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="modal-body sop-modal-body">
+              <textarea
+                id="sop_content"
+                className="bank-input sop-modal-textarea"
+                placeholder="Enter notes for this process..."
+                value={bankNoteDraft}
+                onChange={(e) => setBankNoteDraft(e.target.value)}
+              />
+              <div className="form-actions bank-actions sop-modal-actions">
+                <button type="button" className="btn btn-save" onClick={saveBankNoteAndClose}>
+                  Save
+                </button>
+                <button type="button" className="btn btn-cancel" onClick={() => setBankNoteModal(null)}>
                   Cancel
                 </button>
-                <button type="submit" className="plBtn plBtn--primary">
-                  {editBankId == null ? 'Add' : 'Update'}
-                </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       ) : null}
