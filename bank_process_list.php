@@ -62,10 +62,7 @@ if (!function_exists('renderBankProcessTableHeaders')) {
         <div class="header-item bank-header" style="display: none;">Profit</div>
         <div class="header-item bank-header" style="display: none;">Status</div>
         <div class="header-item bank-header" style="display: none;">Date</div>
-        <div class="header-item bank-header bank-action-header" style="display: none;">Action
-            <input type="checkbox" title="Select all" class="header-action-checkbox"
-                style="margin-left: 10px; cursor: pointer;">
-        </div>
+        <div class="header-item bank-header bank-action-header" style="display: none;">Action</div>
         <?php
     }
 }

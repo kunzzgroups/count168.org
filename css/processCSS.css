@@ -883,15 +883,11 @@ body.process-page {
     min-width: 0;
 }
 
-/* Bank Action 列固定宽度，避免 inactive 时多出 checkbox 导致表头与数据错位 */
+/* Bank Action 列占位宽度；真实全选框仅在 bank 表 thead `#selectAllBankProcesses` */
 .process-page .table-header .bank-action-header {
     min-width: 90px;
     display: flex;
     align-items: center;
-}
-
-.process-page .table-header .bank-action-header .header-action-checkbox {
-    flex-shrink: 0;
 }
 
 /* Games Show All：列宽与分页模式一致；在列表区内纵向滚动；行不参与 flex 压缩（避免重叠） */

@@ -15,7 +15,6 @@ const forcedPermission = (typeof window.PROCESSLIST_FORCED_PERMISSION === 'strin
 // 设为 true 时：Process List 页面隐藏 Category 筛选按钮（Games/Bank/…）。
 // 恢复原状只需将此值改为 false。
 const SINGLE_CATEGORY_MODE = true;
-const hidePermissionFilter = SINGLE_CATEGORY_MODE || !!window.PROCESSLIST_HIDE_PERMISSION_FILTER;
 
 /** React `/processlist` iframe 内文档：`processlist_classic.php?c168_spa_frame=1` */
 function c168ProcessListIsSpaFrameDoc() {
@@ -27,6 +26,14 @@ function c168IsProcessListSpaEmbed() {
     return (typeof document !== 'undefined' && document.body &&
         document.body.classList.contains('process-list-spa-embed')) ||
         (typeof window !== 'undefined' && window.__PROCESS_LIST_SPA_EMBED__ === true);
+}
+
+/** 经典页保留 SINGLE_CATEGORY_MODE；React `/processlist` 需显示 Games/Bank 等与 URL category 同步 */
+function c168ProcessListShouldHidePermissionFilter() {
+    if (c168IsProcessListSpaEmbed()) {
+        return !!window.PROCESSLIST_HIDE_PERMISSION_FILTER;
+    }
+    return SINGLE_CATEGORY_MODE || !!window.PROCESSLIST_HIDE_PERMISSION_FILTER;
 }
 
 function c168ProcessListCategoryFromLocation() {
@@ -6775,7 +6782,7 @@ async function loadPermissionButtons() {
 
         if (permissions.length > 0) {
             if (permissionFilterEl) {
-                permissionFilterEl.style.display = (hidePermissionFilter || permissions.length <= 1) ? 'none' : 'flex';
+                permissionFilterEl.style.display = (c168ProcessListShouldHidePermissionFilter() || permissions.length <= 1) ? 'none' : 'flex';
             }
 
             permissions.forEach(permission => {

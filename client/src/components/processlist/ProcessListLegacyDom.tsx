@@ -216,14 +216,12 @@ export function ProcessListLegacyDom({
               <div className="header-item bank-header" style={{ display: 'none' }}>
                 Date
               </div>
+              {/*
+                Bank 全选仅存在于 `bankTableHeadRow` 内动态渲染的 `#selectAllBankProcesses`（与 processlist.js renderBankTable 一致）。
+                此处仅占位列，避免与真实表头两个 checkbox 混淆。
+              */}
               <div className="header-item bank-header bank-action-header" style={{ display: 'none' }}>
                 Action
-                <input
-                  type="checkbox"
-                  title="Select all"
-                  className="header-action-checkbox"
-                  style={{ marginLeft: 10, cursor: 'pointer' }}
-                />
               </div>
             </div>
 
