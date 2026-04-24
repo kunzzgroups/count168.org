@@ -1,0 +1,4 @@
+/* React `/accounts`：侧栏已在 flex 内，与 `datacapture-spa-embed` 同理收紧 container 左内边距 */
+body.account-list-spa-embed .dShell__main .container {
+  padding: 1px 40px 20px 40px;
+}

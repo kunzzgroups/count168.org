@@ -130,6 +130,8 @@ async function fetchAccounts() {
     }
 }
 
+window.fetchAccounts = fetchAccounts;
+
 function renderTable() {
     const container = document.getElementById('accountTableBody');
     container.innerHTML = '';
@@ -254,6 +256,13 @@ function changePage(newPage) {
     currentPage = newPage;
     renderTable();
 }
+
+window.c168AccountListPrevPage = function () {
+    changePage(currentPage - 1);
+};
+window.c168AccountListNextPage = function () {
+    changePage(currentPage + 1);
+};
 
 function showError(message) {
     const container = document.getElementById('accountTableBody');
@@ -2123,6 +2132,42 @@ async function switchAccountListCompany(companyId, companyCode) {
         console.error('switchAccountListCompany: missing companyId', { companyId, companyCode })
         return
     }
+    const spaEmbed =
+        (typeof document !== 'undefined' &&
+            document.body &&
+            document.body.classList.contains('account-list-spa-embed')) ||
+        (typeof window !== 'undefined' && window.__ACCOUNT_LIST_SPA_EMBED__ === true);
+
+    if (spaEmbed) {
+        try {
+            const response = await fetch(
+                'api/session/update_company_session_api.php?company_id=' + encodeURIComponent(companyId)
+            );
+            const result = await response.json();
+            if (!result.success) {
+                const blocked = (typeof window.handleCompanySwitchDenied === 'function')
+                    ? await window.handleCompanySwitchDenied(result)
+                    : false;
+                if (blocked) return;
+                console.error('Failed to update session:', result.message);
+            }
+        } catch (error) {
+            console.error('Error updating session:', error);
+        }
+        const idNum = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
+        window.ACCOUNT_LIST_COMPANY_ID = idNum;
+        window.ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD = [idNum];
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('company_id', String(companyId));
+            window.history.replaceState({}, '', url.pathname + url.search);
+        } catch (e) {
+            /* ignore */
+        }
+        await fetchAccounts();
+        return;
+    }
+
     // 鍏堟洿鏂?session
     try {
         const response = await fetch(`api/session/update_company_session_api.php?company_id=${companyId}`);
@@ -2147,7 +2192,7 @@ async function switchAccountListCompany(companyId, companyCode) {
 }
 
 // 椤甸潰鍔犺浇鏃惰幏鍙栨暟鎹?
-document.addEventListener('DOMContentLoaded', function () {
+function initAccountListPage() {
     loadEditData(); // Load currencies and roles for edit modal
     updateAccountListScrollMode(); // 初始化滚动模式
     fetchAccounts();
@@ -2356,7 +2401,13 @@ document.addEventListener('DOMContentLoaded', function () {
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
     }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (document.body && document.body.classList.contains('account-list-spa-embed')) return;
+    initAccountListPage();
 });
+window.runAccountListPageInit = initAccountListPage;
 
 // ==========================================
 // Currency Setting Modal Logic

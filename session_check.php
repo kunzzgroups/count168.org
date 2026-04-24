@@ -169,11 +169,11 @@ if (isset($_SESSION['user_id'])) {
                             if (!headers_sent()) {
                                 header('Content-Type: application/json');
                             }
-                            echo json_encode(['status' => 'error', 'message' => 'Secondary password verification required.', 'redirect' => 'api/users/user_secondary_password.php']);
+                            echo json_encode(['status' => 'error', 'message' => 'Secondary password verification required.', 'redirect' => 'user_secondary_password.php']);
                             exit();
                         }
                         
-                        header("Location: api/users/user_secondary_password.php");
+                        header("Location: user_secondary_password.php");
                         exit();
                     }
                 }

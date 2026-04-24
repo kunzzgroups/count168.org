@@ -167,6 +167,9 @@ $eazycountSpaDatacapture = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
 $eazycountSpaDatacapturesummary = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
     ? '/datacapturesummary'
     : $__eazyPrefix . '/datacapturesummary';
+$eazycountSpaAccounts = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
+    ? '/accounts'
+    : $__eazyPrefix . '/accounts';
 ?>
 <!--
 ================================================================================
@@ -179,7 +182,7 @@ $eazycountSpaDatacapturesummary = ($__eazyPrefix === '' || $__eazyPrefix === '.'
     <link rel="preload" href="(当前用户头像 URL)" as="image">
 ================================================================================
 -->
-<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = <?php echo json_encode($eazycountSpaDatacapturesummary); ?>;</script>
+<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = <?php echo json_encode($eazycountSpaDatacapturesummary); ?>;window.EAZYCOUNT_SPA_ACCOUNTS = <?php echo json_encode($eazycountSpaAccounts); ?>;</script>
 <!-- Sidebar HTML (CSS 已移至 css/sidebar.css，JS 逻辑已移至 js/sidebar.js) -->
 <!-- Overlay -->
 <div class="informationmenu-overlay"></div>
@@ -396,7 +399,7 @@ $eazycountSpaDatacapturesummary = ($__eazyPrefix === '' || $__eazyPrefix === '.'
             <?php if (empty($permissions) || in_array('account', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title account-direct" data-page="account-list.php"
-                        onclick="window.location.href='account-list.php'">
+                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_ACCOUNTS==='string'&&w.EAZYCOUNT_SPA_ACCOUNTS)?w.EAZYCOUNT_SPA_ACCOUNTS:'account-list.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path
                                 d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />

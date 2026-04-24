@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { DashboardPage } from './pages/DashboardPage'
 import { DataCapturePage } from './pages/DataCapturePage'
 import { DataCaptureSummaryPage } from './pages/DataCaptureSummaryPage'
+import { AccountListPage } from './pages/AccountListPage'
 import { TransactionPage } from './pages/TransactionPage'
 import { LoginPage } from './pages/LoginPage'
 import { OwnerSecondaryPasswordPage } from './pages/OwnerSecondaryPasswordPage'
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/datacapture" element={<DataCapturePage />} />
       <Route path="/datacapturesummary" element={<DataCaptureSummaryPage />} />
+      <Route path="/accounts" element={<AccountListPage />} />
       <Route path="/transaction" element={<TransactionPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

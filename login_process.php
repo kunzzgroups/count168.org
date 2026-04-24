@@ -221,7 +221,7 @@ try {
 
         if ($needs_secondary_password) {
             // 需要二级密码验证，跳转到二级密码验证页面
-            echo json_encode(['status' => 'success', 'redirect' => 'api/users/user_secondary_password.php']);
+            echo json_encode(['status' => 'success', 'redirect' => 'user_secondary_password.php']);
         } else {
             // 不需要二级密码验证，直接跳转到dashboard
             $_SESSION['secondary_password_verified'] = true; // 标记为已验证（对于不需要二级密码的用户）

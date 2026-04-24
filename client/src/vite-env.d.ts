@@ -19,6 +19,7 @@ interface Window {
   EAZYCOUNT_SPA_TRANSACTION?: string
   EAZYCOUNT_SPA_DATACAPTURE?: string
   EAZYCOUNT_SPA_DATACAPTURESUMMARY?: string
+  EAZYCOUNT_SPA_ACCOUNTS?: string
   /** 与 `client/src/lib/api.ts` 的 `VITE_API_BASE` 一致，供 `datacapture.js` 的 `buildApiUrl` 使用 */
   __C168_API_BASE__?: string
   /** 与 Vite `base` 一致（无前导尾斜杠），供 legacy 脚本拼 `/datacapture`、`/datacapturesummary` */
@@ -35,6 +36,13 @@ interface Window {
     companyId: string | number | null | undefined,
     companyCode: string | null | undefined,
   ) => void
+  ACCOUNT_LIST_SHOW_INACTIVE?: boolean
+  ACCOUNT_LIST_SHOW_ALL?: boolean
+  ACCOUNT_LIST_COMPANY_ID?: number | null
+  ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD?: number[]
+  __ACCOUNT_LIST_SPA_EMBED__?: boolean
+  runAccountListPageInit?: () => void
+  fetchAccounts?: () => void | Promise<void>
   DATACAPTURESUMMARY_COMPANY_ID?: number | null
   runDataCaptureSummaryPageInit?: () => void
   /** `get_processes_by_day` 的 JSON 结果写入自定义 Process 下拉 */

@@ -110,9 +110,15 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
 
       {canNavItem(permissions, 'account', ext) && (
         <>
-          <a className="dNav__item" href={phref('account-list.php')} onClick={go}>
+          <NavLink
+            to="/accounts"
+            className={({ isActive }) =>
+              isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
+            }
+            onClick={go}
+          >
             <span>Account</span>
-          </a>
+          </NavLink>
           <a className="dNav__item" href={phref('ownership.php')} onClick={go}>
             <span>Ownership</span>
           </a>

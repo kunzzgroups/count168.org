@@ -1,19 +1,38 @@
 <?php
 /**
  * 二级密码验证页（仅 C168 公司 user 类型）
- * 路径: api/users/user_secondary_password.php
+ * 与 index.php 同级，位于站点应用根目录。
  */
 session_start();
 // 注意：此文件需要写入 session（设置 secondary_password_verified）
 // session_write_close() 将在每个 session 写入点之后单独调用
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/config.php';
 
-// 根路径（用于重定向，适配子目录部署）
-$basePath = rtrim(dirname($_SERVER['SCRIPT_NAME'], 2), '/');
+/**
+ * 应用根在站点内的 URL 路径：'' 表示域名根下；'/subdir' 表示子目录安装。
+ * 本文件在应用根（与 index.php 同级），用 SCRIPT_NAME 上溯 1 级得到 URL 前缀。
+ * 不要用 DOCUMENT_ROOT+realpath：磁盘路径常在 …/public_html/api，会得到 tail=api → 误判为 /api/css（404）。
+ */
+$appWebBase = '';
+$sn = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+if ($sn !== '' && $sn !== '/') {
+    $up = str_replace('\\', '/', dirname($sn, 1));
+    if ($up !== '/' && $up !== '' && $up !== '.') {
+        $appWebBase = rtrim($up, '/');
+    }
+}
+
+$toAppPath = static function (string $path) use ($appWebBase): string {
+    $path = ltrim(str_replace('\\', '/', $path), '/');
+    if ($appWebBase === '' || $appWebBase === '/') {
+        return '/' . $path;
+    }
+    return rtrim($appWebBase, '/') . '/' . $path;
+};
 
 // 检查用户是否已登录（必须是user类型，且属于c168公司）
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'user') {
-    header("Location: {$basePath}/index.php");
+    header('Location: ' . $toAppPath('index.php'));
     exit();
 }
 
@@ -41,12 +60,12 @@ function dbGetCompanyC168($pdo, $company_id) {
 if (!$is_c168) {
     $_SESSION['secondary_password_verified'] = true;
     session_write_close(); // 写入完成即释放 session 锁
-    header("Location: {$basePath}/dashboard.php");
+    header('Location: ' . $toAppPath('dashboard.php'));
     exit();
 }
 
 if (isset($_SESSION['secondary_password_verified']) && $_SESSION['secondary_password_verified'] === true) {
-    header("Location: {$basePath}/dashboard.php");
+    header('Location: ' . $toAppPath('dashboard.php'));
     exit();
 }
 
@@ -66,14 +85,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (password_verify($secondary_password, $user['secondary_password'])) {
                     $_SESSION['secondary_password_verified'] = true;
                     session_write_close(); // 写入完成即释放 session 锁
-                    header("Location: {$basePath}/dashboard.php");
+                    header('Location: ' . $toAppPath('dashboard.php'));
                     exit();
                 }
                 $error_message = 'Secondary password is incorrect';
             } else {
                 $_SESSION['secondary_password_verified'] = true;
                 session_write_close(); // 写入完成即释放 session 锁
-                header("Location: {$basePath}/dashboard.php");
+                header('Location: ' . $toAppPath('dashboard.php'));
                 exit();
             }
         } catch (PDOException $e) {
@@ -96,9 +115,29 @@ function dbGetUserSecondaryPassword($pdo, $user_id) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secondary Password Verification - EazyCount</title>
-    <link rel="stylesheet" href="<?php echo htmlspecialchars($basePath); ?>/css/style.css?v=<?php echo time(); ?>" />
+    <?php
+    $styleHref = htmlspecialchars($toAppPath('css/style.css'), ENT_QUOTES, 'UTF-8');
+    $global13 = __DIR__ . '/css/global-13inch.css';
+    $global13v = is_readable($global13) ? filemtime($global13) : time();
+    $global13Href = htmlspecialchars($toAppPath('css/global-13inch.css'), ENT_QUOTES, 'UTF-8');
+    ?>
+    <link rel="stylesheet" href="<?php echo $styleHref; ?>?v=<?php echo time(); ?>" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="<?php echo $global13Href; ?>?v=<?php echo (int) $global13v; ?>">
+    <style id="secondary-pwd-layout-fallback">
+        /* 若外链 style 仍失败，保证与登录页一致的居中与表单样式（背景图用根相对路径） */
+        body.bg{min-height:100vh;margin:0;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:url('<?php echo htmlspecialchars($toAppPath('images/count_bg.png'), ENT_QUOTES, 'UTF-8'); ?>') center/cover no-repeat}
+        .login-container{width:100%;max-width:min(420px,90vw);margin:0 auto;position:relative;z-index:2}
+        .login-card{background:rgba(255,255,255,.95);border-radius:0 0 30px 30px;box-shadow:0 20px 40px rgba(0,0,0,.1);padding:0;overflow:hidden;backdrop-filter:blur(10px)}
+        .form-content{padding:clamp(20px,5vw,30px) clamp(15px,4vw,20px)}
+        .login-form{display:flex;flex-direction:column;gap:clamp(15px,4vw,20px)}
+        .input-group{position:relative;display:flex;align-items:center}
+        .input-icon{position:absolute;left:clamp(15px,4vw,20px);top:50%;transform:translateY(-50%);color:#56ccf2;font-size:clamp(14px,3vw,16px);z-index:2}
+        .input-group input{width:100%;padding:clamp(10px,2.5vw,12px) clamp(20px,5vw,25px) clamp(10px,2.5vw,12px) clamp(40px,10vw,46px);border:2px solid #56ccf2;border-radius:50px;font-size:clamp(14px,3vw,16px);background:rgba(255,255,255,.9);color:#333;box-sizing:border-box}
+        .input-group input:focus{outline:none;border-color:#004ff9;box-shadow:0 0 0 3px rgba(0,79,249,.1)}
+        .login-btn{background:linear-gradient(135deg,#004ff9,#56ccf2);color:#fff;border:none;padding:clamp(11px,3vw,15px);border-radius:50px;font-size:clamp(16px,4vw,18px);font-weight:600;cursor:pointer;width:100%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 15px rgba(0,79,249,.3)}
+    </style>
 </head>
 <body class="bg">
     <div class="login-container">

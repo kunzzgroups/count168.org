@@ -36,8 +36,8 @@ if (isset($_SESSION['user_id'])) {
         session_unset();
         session_destroy();
         header('Location: index.php');
-        exit();
-    }
+    exit();
+}
     if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner') {
         if (!isset($_SESSION['secondary_password_verified']) || $_SESSION['secondary_password_verified'] !== true) {
             header('Location: owner_secondary_password.php');
