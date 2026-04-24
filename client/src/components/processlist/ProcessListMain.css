@@ -1,17 +1,274 @@
-/* Process List：iframe 与经典同页，主区拉满 */
-.processListSpa {
-  flex: 1;
-  min-height: 0;
+/* 纯 React Process List 主区（与 `processCSS.css` 的 `.process-page` 并存） */
+.plMain {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  flex: 1;
   width: 100%;
 }
 
-.processListSpa__iframe {
-  width: 100%;
-  flex: 1;
-  min-height: 480px;
-  border: 0;
-  display: block;
+.plMain--loading,
+.plMain--err {
+  padding: 24px;
+}
+
+.plFlash {
+  margin: 8px 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.plFlash--ok {
+  background: #ecfdf5;
+  color: #166534;
+}
+.plFlash--err {
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.plCatRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.plCatBtn {
+  border: 1px solid #cbd5e1;
   background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+.plCatBtn--on {
+  border-color: #6366f1;
+  background: #eef2ff;
+  color: #312e81;
+  font-weight: 600;
+}
+
+.plClassicLink {
+  font-size: 0.9rem;
+  color: #475569;
+}
+.plClassicLink:hover {
+  text-decoration: underline;
+}
+
+.plCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  user-select: none;
+}
+
+/* Games 卡片行：与经典 `process-card` 栅格（processCSS 已含 `.process-card`） */
+.plGames__gridHeader {
+  margin-top: 8px;
+  font-weight: 600;
+  color: #0f172a;
+  grid-template-columns: 0.3fr 0.8fr 0.95fr 0.35fr 0.3fr 1.1fr 0.2fr !important;
+}
+.plGames__body {
+  max-height: min(60vh, 700px);
+  overflow: auto;
+}
+.plGames__body .process-card {
+  grid-template-columns: 0.3fr 0.8fr 0.95fr 0.35fr 0.3fr 1.1fr 0.2fr !important;
+}
+.plGames__h {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+}
+.plGames__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.plGames__loading {
+  margin-left: 8px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+.plGames__empty {
+  grid-column: 1 / -1;
+  padding: 20px;
+}
+
+.plBtn {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.plBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.plBtn--primary {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+.plBtn--sm {
+  padding: 4px 8px;
+  font-size: 0.82rem;
+}
+
+.plPager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+
+/* Bank */
+.plBank__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: center;
+  margin: 10px 0;
+}
+.plBank__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.plBank__scroll {
+  max-height: min(60vh, 700px);
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+.plBank__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+.plBank__table th,
+.plBank__table td {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 6px 4px;
+  text-align: left;
+  vertical-align: top;
+}
+.plBank__table th {
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 1;
+}
+.plBank__empty {
+  text-align: center;
+  padding: 20px;
+  color: #64748b;
+}
+.plBank__status {
+  min-width: 120px;
+  max-width: 160px;
+  font-size: 0.75rem;
+}
+
+/* Modals */
+.plModalHost {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.plModalBackdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+.plModal {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow: auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  padding: 20px 20px 16px;
+}
+.plModal--wide {
+  max-width: 800px;
+}
+.plModal--tall {
+  max-height: 92vh;
+}
+.plModal__title {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+  color: #0f172a;
+}
+.plModal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.plField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.plField__label {
+  font-size: 0.82rem;
+  color: #475569;
+}
+.plInput {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+.plInput--sm {
+  max-width: 120px;
+}
+.plInput--ta {
+  resize: vertical;
+  min-height: 48px;
+}
+.plRow2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.plRow3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+.plCheckGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: #f8fafc;
+}
+
+.plBankForm .plField {
+  margin-bottom: 8px;
 }
