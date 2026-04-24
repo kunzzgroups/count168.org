@@ -9,7 +9,7 @@ body.processlist-spa-native.process-page.process-page--bank {
 }
 
 body.processlist-spa-native.process-page.process-page--bank .action-buttons-container {
-  margin-top: 20px !important;
+  margin-top: 0 !important;
   border-radius: 10px !important;
 }
 
@@ -25,11 +25,28 @@ body.processlist-spa-native.process-page.process-page--bank #processListBankActi
 }
 
 body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .btn.btn-add {
+  background: linear-gradient(180deg, #63c4ff 0%, #0d60ff 100%) !important;
+  color: #fff !important;
+  font-family: 'Amaranth' !important;
   width: clamp(90px, 7vw, 130px) !important;
   height: 24px !important;
   padding: clamp(6px, 0.42vw, 8px) 20px !important;
   font-size: clamp(10px, 0.83vw, 16px) !important;
+  line-height: 1 !important;
+  border: none !important;
   border-radius: 6px !important;
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3) !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .btn.btn-add:hover {
+  background: linear-gradient(180deg, #0d60ff 0%, #63c4ff 100%) !important;
+  box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4) !important;
+  transform: translateY(-1px) !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar #processDeleteSelectedBtn {
@@ -101,17 +118,84 @@ body.processlist-spa-native.process-page.process-page--bank .action-buttons-cont
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
-  font-size: 11px !important;
-  line-height: 1.15 !important;
-  padding: 2px 4px !important;
+  font-size: clamp(10px, 0.89vw, 17px) !important;
+  line-height: 1.1 !important;
+  padding: 1px 4px !important;
+  white-space: nowrap !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
-  font-size: 12px !important;
-  line-height: 1.2 !important;
+  font-size: clamp(12px, 0.82vw, 15px) !important;
+  line-height: 1.25 !important;
   padding: 2px 4px !important;
+  vertical-align: middle !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody tr {
-  height: 22px !important;
+  height: 24px !important;
+}
+
+/* Column widths/readability tuned to match process list density */
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(1),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(1) {
+  width: 30px !important;
+  min-width: 30px !important;
+  text-align: center !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(2),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(2) {
+  width: 170px !important;
+  min-width: 170px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(3),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(3),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(4),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(4),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(5),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(5) {
+  width: 72px !important;
+  min-width: 72px !important;
+  white-space: nowrap !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(6),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(6) {
+  width: 130px !important;
+  min-width: 130px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(7),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(7),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(8),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(8),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(9),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(9) {
+  width: 84px !important;
+  min-width: 84px !important;
+  white-space: nowrap !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(10),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(10),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(11),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(11),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(12),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(12) {
+  width: 78px !important;
+  min-width: 78px !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(13),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(13),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(14),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(14),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(15),
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(15) {
+  width: 80px !important;
+  min-width: 80px !important;
+  white-space: nowrap !important;
 }
