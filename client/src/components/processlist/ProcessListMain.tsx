@@ -107,6 +107,8 @@ export function ProcessListMain({ bootstrap }: Props) {
         (prev) => {
           const p = new URLSearchParams(prev)
           p.set('company_id', String(companyId))
+          // 换公司后勿沿用上一家的 category=Bank；由 loadPermissionButtons + localStorage 决定 Games/Bank，避免先同步 URL 误拉 Bank API
+          p.delete('category')
           return p
         },
         { replace: true },

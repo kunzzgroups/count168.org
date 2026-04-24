@@ -6782,7 +6782,8 @@ async function loadPermissionButtons() {
         const result = await response.json();
         // Process List 仅实现 Games / Bank；Loan、Rate、Money 不在此页提供 Category（与公司其它模块权限无关）
         // 公司业务上：有的公司仅有 Games（博彩流程表）、有的仅有 Bank（银行流程表）、有的两者皆可；仅 Bank 时应对应经典 bank_process_list 视图。
-        let permissions = result.success && result.data && result.data.permissions ? result.data.permissions : ['Games', 'Bank'];
+        // 拉权限失败时勿默认含 Bank，否则 URL 曾带 category=Bank 会与仅 Games 的公司冲突并触发 Unauthorized permission category
+        let permissions = result.success && result.data && result.data.permissions ? result.data.permissions : ['Games'];
         // 兼容旧数据：数据库可能仍是 "Gambling"，统一为 "Games" 显示与逻辑
         permissions = [...new Set(permissions.map(p => p === 'Gambling' ? 'Games' : p))];
         permissions = permissions.filter(function (p) { return p === 'Games' || p === 'Bank'; });
@@ -6840,6 +6841,8 @@ async function loadPermissionButtons() {
             }
         } else {
             if (permissionFilterEl) permissionFilterEl.style.display = 'none';
+            selectedPermission = null;
+            document.body.classList.remove('process-page--bank');
         }
     } catch (error) {
         console.error('Error loading permissions:', error);
@@ -6991,6 +6994,7 @@ async function switchProcessListCompany(companyId) {
         try {
             const url = new URL(window.location.href);
             url.searchParams.set('company_id', String(companyId));
+            url.searchParams.delete('category');
             window.history.replaceState({}, '', url.pathname + url.search + url.hash);
             window.dispatchEvent(new Event('c168:process-list-url-replaced'));
         } catch (e) { /* ignore */ }
