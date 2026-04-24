@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import '../../../../css/date-range-picker.css'
 import type { BankProcessRow } from '../../lib/processListTypes'
 import { apiUrl } from '../../lib/api'
 import {
@@ -31,6 +32,7 @@ import { BankAccountCustomSelect } from './BankAccountCustomSelect'
 import { BankListSelectionModal, BankCountrySelectionModal } from './BankRegionalModals'
 import { BankProfitSharingModal } from './BankProfitSharingModal'
 import { BankStatusDropdown } from './BankStatusDropdown'
+import { DashboardCalendarPopup } from '../dashboard/DashboardCalendarPopup'
 import { ProcessListCompanyGroupFilters } from './ProcessListCompanyGroupFilters'
 
 const PAGE_SIZE = 20
@@ -91,8 +93,6 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [dateOpen, setDateOpen] = useState(false)
-  const [dateDraftFrom, setDateDraftFrom] = useState('')
-  const [dateDraftTo, setDateDraftTo] = useState('')
 
   const [accounts, setAccounts] = useState<AccountOpt[]>([])
   const [bankOpen, setBankOpen] = useState(false)
@@ -153,10 +153,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
     setShowBlock(false)
   }, [showAll])
 
-  useEffect(() => {
-    setDateDraftFrom(dateFrom)
-    setDateDraftTo(dateTo)
-  }, [dateFrom, dateTo])
+  const dateRangeRef = useRef<HTMLDivElement | null>(null)
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -602,6 +599,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
             </button>
             <div className="process-list-date-filter process-list-date-filter--bank-classic" id="processListDateFilter">
               <div
+                ref={dateRangeRef}
                 className="date-range-picker bank-date-trigger"
                 id="date-range-picker"
                 onClick={() => setDateOpen((v) => !v)}
@@ -625,8 +623,6 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                   aria-label="Clear date range"
                   onClick={(e) => {
                     e.stopPropagation()
-                    setDateDraftFrom('')
-                    setDateDraftTo('')
                     setDateFrom('')
                     setDateTo('')
                     setCurrentPage(1)
@@ -639,60 +635,19 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
               </div>
               <input type="hidden" id="date_from" value={dateFrom} />
               <input type="hidden" id="date_to" value={dateTo} />
-              {dateOpen ? (
-                <div className="bank-date-popover" role="dialog" aria-label="Date range">
-                  <div className="bank-date-popover__row">
-                    <input
-                      type="date"
-                      className="search-input"
-                      value={dmyToIso(dateDraftFrom)}
-                      onChange={(e) => {
-                        const dmy = isoToDmy(e.target.value)
-                        setDateDraftFrom(dmy)
-                        setDateFrom(dmy)
-                        setCurrentPage(1)
-                      }}
-                      aria-label="Date from"
-                    />
-                    <span className="bank-date-filter-hint" aria-hidden>~</span>
-                    <input
-                      type="date"
-                      className="search-input"
-                      value={dmyToIso(dateDraftTo)}
-                      onChange={(e) => {
-                        const dmy = isoToDmy(e.target.value)
-                        setDateDraftTo(dmy)
-                        setDateTo(dmy)
-                        setCurrentPage(1)
-                      }}
-                      aria-label="Date to"
-                    />
-                  </div>
-                  <div className="bank-date-popover__actions">
-                    <button
-                      type="button"
-                      className="btn btn-cancel"
-                      onClick={() => {
-                        setDateDraftFrom('')
-                        setDateDraftTo('')
-                        setDateFrom('')
-                        setDateTo('')
-                        setCurrentPage(1)
-                        setDateOpen(false)
-                      }}
-                    >
-                      Clear
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-add"
-                      onClick={() => setDateOpen(false)}
-                    >
-                      Done
-                    </button>
-                  </div>
-                </div>
-              ) : null}
+              <DashboardCalendarPopup
+                key={dateOpen ? `${dmyToIso(dateFrom) || ymdToday()}|${dmyToIso(dateTo) || ymdToday()}` : 'closed'}
+                open={dateOpen}
+                anchorRef={dateRangeRef}
+                dateFrom={dmyToIso(dateFrom) || ymdToday()}
+                dateTo={dmyToIso(dateTo) || ymdToday()}
+                onClose={() => setDateOpen(false)}
+                onCommit={(from, to) => {
+                  setDateFrom(isoToDmy(from))
+                  setDateTo(isoToDmy(to))
+                  setCurrentPage(1)
+                }}
+              />
             </div>
             <div className="search-container">
               <svg className="search-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden>

@@ -4388,3 +4388,93 @@ body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:
     width: 72px !important;
     text-align: center !important;
 }
+
+/* Bank date picker should follow Dashboard style */
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .process-list-date-filter {
+    min-width: 180px !important;
+    width: 180px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .date-range-picker.bank-date-trigger {
+    display: flex !important;
+    align-items: center !important;
+    gap: clamp(4px, 0.42vw, 8px) !important;
+    background: #fff !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: clamp(4px, 0.42vw, 8px) !important;
+    padding: clamp(6px, 0.5vw, 8px) clamp(8px, 0.83vw, 16px) !important;
+    min-width: 180px !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .date-range-picker.bank-date-trigger i {
+    color: #3b82f6 !important;
+    font-size: clamp(9px, 0.74vw, 14px) !important;
+    margin: 0 clamp(2px, 0.32vw, 6px) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    background: transparent !important;
+    border-right: none !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar #date-range-display {
+    color: #374151 !important;
+    font-size: clamp(9px, 0.74vw, 14px) !important;
+    font-weight: 500 !important;
+    padding: 0 !important;
+    height: auto !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar #processListDateClearBtn {
+    right: clamp(8px, 0.83vw, 12px) !important;
+    width: 16px !important;
+    height: 16px !important;
+    font-size: clamp(14px, 1vw, 18px) !important;
+}
+
+/* Bank search should match classic processlist search style */
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container {
+    width: clamp(165px, 13vw, 250px) !important;
+    min-width: clamp(165px, 13vw, 250px) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container .search-input {
+    width: clamp(165px, 13vw, 250px) !important;
+    min-width: clamp(165px, 13vw, 250px) !important;
+    height: 33px !important;
+    padding: 7px 2px clamp(6px, 0.42vw, 8px) clamp(20px, 2.08vw, 32px) !important;
+    border: 1px solid rgba(148, 163, 184, 0.35) !important;
+    border-radius: 6px !important;
+    font-size: clamp(10px, 0.8vw, 15px) !important;
+    background: rgba(255, 255, 255, 1) !important;
+    color: #000000ff !important;
+    backdrop-filter: blur(8px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.2) !important;
+    box-shadow: 0 3px 4px rgba(15, 23, 42, 0.1) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container .search-input::placeholder {
+    color: #6b7280 !important;
+    opacity: 1 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container .search-input:focus {
+    outline: none !important;
+    border-color: #6366f1 !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1), 0 3px 4px rgba(15, 23, 42, 0.1) !important;
+    background: rgba(255, 255, 255, 1) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container .search-icon {
+    position: absolute !important;
+    left: 10px !important;
+    top: 25% !important;
+    transform: none !important;
+    z-index: 2 !important;
+    width: clamp(10px, 0.83vw, 16px) !important;
+    height: clamp(14px, 0.83vw, 16px) !important;
+    color: inherit !important;
+}
