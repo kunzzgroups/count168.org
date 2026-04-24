@@ -1700,6 +1700,13 @@ if (searchInputEl) {
         }, 300); // 寤惰繜300ms閬垮厤棰戠箒璇锋眰
     });
 
+    /** SPA：失焦立即拉数并写 URL，避免未满 300ms 就离开导致列表/书签与输入不一致 */
+    searchInputEl.addEventListener('blur', function () {
+        clearTimeout(searchTimeout);
+        fetchAccounts();
+        c168PushAccountListFiltersToUrl();
+    });
+
     // paste 不做过滤，允许空格与符号
 }
 
