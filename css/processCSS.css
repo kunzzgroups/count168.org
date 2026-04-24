@@ -4347,6 +4347,171 @@ body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbo
     height: 20px !important;
 }
 
+/* ===== USER-LOCKED RULES (authoritative) =====
+   Bank follows ProcessList design baseline;
+   Date range follows Dashboard;
+   Search follows ProcessList.
+*/
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .process-list-date-filter {
+    min-width: 180px !important;
+    width: 180px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .date-range-picker.bank-date-trigger {
+    display: flex !important;
+    align-items: center !important;
+    gap: clamp(4px, 0.42vw, 8px) !important;
+    background: #fff !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: clamp(4px, 0.42vw, 8px) !important;
+    padding: clamp(6px, 0.5vw, 8px) clamp(8px, 0.83vw, 16px) !important;
+    min-width: 180px !important;
+    width: 100% !important;
+    height: auto !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .date-range-picker.bank-date-trigger i {
+    color: #3b82f6 !important;
+    font-size: clamp(9px, 0.74vw, 14px) !important;
+    margin: 0 clamp(2px, 0.32vw, 6px) !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    background: transparent !important;
+    border-right: none !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar #date-range-display {
+    color: #374151 !important;
+    font-size: clamp(9px, 0.74vw, 14px) !important;
+    font-weight: 500 !important;
+    padding: 0 !important;
+    height: auto !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar #processListDateClearBtn {
+    right: clamp(8px, 0.83vw, 12px) !important;
+    width: 16px !important;
+    height: 16px !important;
+    font-size: clamp(14px, 1vw, 18px) !important;
+}
+
+/* Search uses ProcessList look */
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container {
+    width: clamp(165px, 13vw, 250px) !important;
+    min-width: clamp(165px, 13vw, 250px) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container .search-input {
+    width: clamp(165px, 13vw, 250px) !important;
+    min-width: clamp(165px, 13vw, 250px) !important;
+    height: 33px !important;
+    padding: 7px 2px clamp(6px, 0.42vw, 8px) clamp(20px, 2.08vw, 32px) !important;
+    border: 1px solid rgba(148, 163, 184, 0.35) !important;
+    border-radius: 6px !important;
+    font-size: clamp(10px, 0.8vw, 15px) !important;
+    background: rgba(255, 255, 255, 1) !important;
+    color: #000000ff !important;
+    backdrop-filter: blur(8px) saturate(1.2) !important;
+    -webkit-backdrop-filter: blur(8px) saturate(1.2) !important;
+    box-shadow: 0 3px 4px rgba(15, 23, 42, 0.1) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container .search-input::placeholder {
+    color: #6b7280 !important;
+    opacity: 1 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .search-container .search-icon {
+    position: absolute !important;
+    left: 10px !important;
+    top: 25% !important;
+    transform: none !important;
+    width: clamp(10px, 0.83vw, 16px) !important;
+    height: clamp(14px, 0.83vw, 16px) !important;
+}
+
+/* ===== Bank typography/spacing unified to ProcessList baseline ===== */
+body.processlist-spa-native.process-page.process-page--bank {
+    font-size: 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .page-title {
+    font-size: clamp(26px, 2.08vw, 40px) !important;
+    line-height: 1.05 !important;
+    margin: clamp(12px, 1.04vw, 20px) 0 clamp(16px, 1.35vw, 26px) 0 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container {
+    margin-top: 20px !important;
+    border-radius: 10px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons {
+    padding: 10px 20px !important;
+    gap: 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-controls-row {
+    gap: 10px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container .process-company-filter {
+    padding: 0 20px 10px 20px !important;
+    gap: clamp(8px, 0.83vw, 16px) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-company-label {
+    font-size: clamp(10px, 0.73vw, 14px) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-company-buttons {
+    gap: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-company-btn {
+    padding: clamp(3px, 0.31vw, 6px) clamp(10px, 0.83vw, 16px) !important;
+    font-size: clamp(9px, 0.63vw, 12px) !important;
+    min-height: 22px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .btn.btn-add,
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar #processDeleteSelectedBtn {
+    height: 24px !important;
+    line-height: 20px !important;
+    font-size: clamp(10px, 0.83vw, 16px) !important;
+    border-radius: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .checkbox-section label {
+    font-size: clamp(10px, 0.8vw, 15px) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .checkbox-section input[type="checkbox"] {
+    width: 13px !important;
+    height: 13px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table {
+    font-size: 12px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    padding: 2px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+    padding: 2px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody tr {
+    height: 22px !important;
+}
+
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:nth-child(1),
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table td:nth-child(1) {
     width: 18px !important;
