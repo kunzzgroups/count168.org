@@ -1,39 +1,14 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { apiUrl } from '../../lib/api'
 import { resolveProcessListCategoryForCompanyCode } from '../../lib/processListCategoryApi'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/processCSS.css'
 import '../../../../css/accountCSS.css'
 import '../../../../css/processlist.css'
-import '../../../../css/date-range-picker.css'
 import '../../../../css/global-13inch.css'
 import './ProcessListMain.css'
-import { ProcessListLegacyDom } from './ProcessListLegacyDom'
-
-let processListScriptsPromise: Promise<void> | null = null
-
-function ensureProcessListScripts(): Promise<void> {
-  if (!processListScriptsPromise) {
-    processListScriptsPromise = new Promise((resolve, reject) => {
-      const s1 = document.createElement('script')
-      s1.src = apiUrl('/js/processlist.js')
-      s1.async = true
-      s1.onload = () => {
-        const s2 = document.createElement('script')
-        s2.src = apiUrl('/js/bank_process_list.js')
-        s2.async = true
-        s2.onload = () => resolve()
-        s2.onerror = () => reject(new Error('Failed to load bank_process_list.js'))
-        document.head.appendChild(s2)
-      }
-      s1.onerror = () => reject(new Error('Failed to load processlist.js'))
-      document.head.appendChild(s1)
-    })
-  }
-  return processListScriptsPromise
-}
+import { ProcessListNative } from './ProcessListNative'
 
 type ProcessListWindow = Window & {
   PROCESSLIST_SHOW_INACTIVE?: boolean
@@ -47,9 +22,6 @@ type ProcessListWindow = Window & {
   PROCESSLIST_COMPANY_CODE_BY_ID?: Record<string, string>
   PROCESSLIST_PAGE_FILE?: string
   __PROCESS_LIST_SPA_EMBED__?: boolean
-  runProcessListPageInit?: () => void
-  fetchProcesses?: () => void | Promise<void>
-  c168SyncProcessListFromLocation?: () => void
 }
 
 type Props = {
@@ -64,23 +36,12 @@ export function ProcessListMain({ bootstrap }: Props) {
   const wRef = useRef(w)
   wRef.current = w
 
-  const [legacyReady, setLegacyReady] = useState(false)
-  const scriptInitRef = useRef(false)
-  const skipLocationSyncRef = useRef(true)
-
   const catIsBank = searchParams.get('category')?.toLowerCase() === 'bank'
-  /** 与 `updateProcessListPageTitle` / 经典 bank_process_list 一致，避免重渲染把标题写回 Games */
-  const pageTitle = catIsBank ? 'Bank Process List' : 'Process List'
-
-  useEffect(() => {
-    document.title = pageTitle
-  }, [pageTitle])
 
   useLayoutEffect(() => {
     document.body.classList.add('process-list-spa-embed', 'process-page')
     if (catIsBank) document.body.classList.add('process-page--bank')
     else document.body.classList.remove('process-page--bank')
-    ;(window as unknown as { __PROCESS_LIST_SPA_EMBED__?: boolean }).__PROCESS_LIST_SPA_EMBED__ = true
     return () => {
       document.body.classList.remove(
         'process-list-spa-embed',
@@ -89,7 +50,6 @@ export function ProcessListMain({ bootstrap }: Props) {
         'process-page--bank-show-all',
         'process-page--show-all',
       )
-      delete (window as unknown as { __PROCESS_LIST_SPA_EMBED__?: boolean }).__PROCESS_LIST_SPA_EMBED__
     }
   }, [catIsBank])
 
@@ -102,7 +62,24 @@ export function ProcessListMain({ bootstrap }: Props) {
     pw.PROCESSLIST_SHOW_BLOCK = searchParams.has('showBlock')
   }, [searchParams])
 
-  /** 先同步写入 company_id（避免 PROCESSLIST_COMPANY_CODE 仍指向上一家公司），再按 domain 权限补全 category，对齐经典 Games/Bank。 */
+  /** 离开页面时清理 legacy 全局变量，避免侧栏与其它 SPA 误用 PROCESSLIST_COMPANY_CODE */
+  useEffect(() => {
+    return () => {
+      const pw = window as ProcessListWindow
+      delete pw.PROCESSLIST_COMPANY_ID
+      delete pw.PROCESSLIST_COMPANY_CODE
+      delete pw.PROCESSLIST_SELECTED_COMPANY_IDS_FOR_ADD
+      delete pw.PROCESSLIST_COMPANY_CODE_BY_ID
+      delete pw.PROCESSLIST_PAGE_FILE
+      delete pw.PROCESSLIST_SHOW_INACTIVE
+      delete pw.PROCESSLIST_SHOW_ALL
+      delete pw.PROCESSLIST_SHOW_OFFICIAL
+      delete pw.PROCESSLIST_SHOW_E_INVOICE
+      delete pw.PROCESSLIST_SHOW_BLOCK
+      delete pw.__PROCESS_LIST_SPA_EMBED__
+    }
+  }, [])
+
   const replaceCompanyInUrl = useCallback(
     (companyId: number, companyCode: string) => {
       setSearchParams(
@@ -161,18 +138,6 @@ export function ProcessListMain({ bootstrap }: Props) {
   }, [])
 
   useEffect(() => {
-    const onReplaced = () => {
-      try {
-        setSearchParams(new URLSearchParams(window.location.search), { replace: true })
-      } catch {
-        /* ignore */
-      }
-    }
-    window.addEventListener('c168:process-list-url-replaced', onReplaced)
-    return () => window.removeEventListener('c168:process-list-url-replaced', onReplaced)
-  }, [setSearchParams])
-
-  useEffect(() => {
     window.onSharedCompanyFilterChanged = (companyId, _companyCode) => {
       const wr = wRef.current
       if (companyId == null || companyId === '') {
@@ -221,9 +186,9 @@ export function ProcessListMain({ bootstrap }: Props) {
     replaceCompanyInUrl(w.activeCompanyId, code)
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl, w.companies])
 
+  /** 供书签 / 旧脚本读取的 company 快照（不设 __PROCESS_LIST_SPA_EMBED__，避免误走 legacy 分支） */
   useEffect(() => {
     if (!w.companiesReady || w.loadCompaniesError || w.activeCompanyId == null) return
-
     const pw = window as ProcessListWindow
     const raw = searchParams.get('company_id')
     let effectiveId = w.activeCompanyId
@@ -241,118 +206,7 @@ export function ProcessListMain({ bootstrap }: Props) {
     }
     pw.PROCESSLIST_COMPANY_CODE_BY_ID = map
     pw.PROCESSLIST_PAGE_FILE = 'processlist_classic.php'
-
-    if (!scriptInitRef.current) {
-      let alive = true
-      void ensureProcessListScripts()
-        .then(() => {
-          if (!alive) return
-          scriptInitRef.current = true
-          const kick = () => {
-            if (!alive) return
-            pw.runProcessListPageInit?.()
-            setLegacyReady(true)
-          }
-          if (typeof requestAnimationFrame === 'function') {
-            requestAnimationFrame(() => requestAnimationFrame(kick))
-          } else {
-            setTimeout(kick, 0)
-          }
-        })
-        .catch((err) => {
-          console.error(err)
-        })
-      return () => {
-        alive = false
-      }
-    }
-
-    // 与 switchProcessListCompany 一致：换公司后须 loadPermissionButtons（内会 switchPermission 或 fetchProcesses）
-    const reloadPerms = window.loadPermissionButtons
-    if (typeof reloadPerms === 'function') {
-      void reloadPerms()
-    } else {
-      void pw.fetchProcesses?.()
-    }
-    return undefined
   }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId, w.companies, spKey])
-
-  useEffect(() => {
-    if (!legacyReady) return
-    if (skipLocationSyncRef.current) {
-      skipLocationSyncRef.current = false
-      return
-    }
-    window.c168SyncProcessListFromLocation?.()
-  }, [legacyReady, spKey])
-
-  const companyRow =
-    w.groupIds.length > 0 || w.companies.length > 0 ? (
-      <>
-        {w.groupIds.length > 0 && (
-          <div id="group-buttons-wrapper" className="account-company-filter shared-group-wrapper">
-            <span className="account-company-label">GroupID:</span>
-            <div id="group-buttons-container" className="account-company-buttons">
-              {w.groupIds.map((g) => {
-                const active =
-                  w.selectedGroup != null && String(w.selectedGroup).toUpperCase() === g
-                return (
-                  <button
-                    key={g}
-                    type="button"
-                    className={
-                      active
-                        ? 'account-company-btn shared-group-btn active'
-                        : 'account-company-btn shared-group-btn'
-                    }
-                    data-group-id={g}
-                    onClick={() => w.setGroup(w.selectedGroup === g ? null : g)}
-                  >
-                    {g}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-        {w.companies.length > 0 && (
-          <div id="company-buttons-wrapper" className="account-company-filter shared-company-wrapper">
-            <span className="account-company-label">Company:</span>
-            <div id="company-buttons-container" className="account-company-buttons" role="group" aria-label="Company">
-              {w.companies.map((c) => {
-                const code = String(c.company_id || '').trim()
-                if (!code) return null
-                const cGid = String(c.group_id || '').trim().toUpperCase()
-                const selG = w.selectedGroup != null ? String(w.selectedGroup).toUpperCase() : null
-                const visible = selG ? cGid === selG : !cGid
-                const isActive = Number(c.id) === Number(w.activeCompanyId)
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    style={{ display: visible ? undefined : 'none' }}
-                    className={
-                      isActive
-                        ? 'account-company-btn shared-company-btn active'
-                        : 'account-company-btn shared-company-btn'
-                    }
-                    data-company-id={c.id}
-                    data-group-id={cGid}
-                    data-company-code={code}
-                    onClick={() => {
-                      w.onPickCompany(c.id)
-                      replaceCompanyInUrl(c.id, code)
-                    }}
-                  >
-                    {code}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </>
-    ) : null
 
   if (w.loadCompaniesError) {
     return (
@@ -374,17 +228,8 @@ export function ProcessListMain({ bootstrap }: Props) {
   }
 
   return (
-    <div className="plShell" data-process-list-spa={legacyReady ? '1' : '0'}>
-      <ProcessListLegacyDom
-        pageTitle={pageTitle}
-        initialSearch={searchParams.get('search') ?? ''}
-        initialShowInactive={searchParams.has('showInactive')}
-        initialShowAll={searchParams.has('showAll')}
-        initialShowOfficial={searchParams.has('showOfficial')}
-        initialShowEInvoice={searchParams.has('showEInvoice')}
-        initialShowBlock={searchParams.has('showBlock')}
-        belowToolbar={companyRow}
-      />
+    <div className="plShell" data-process-list-spa="native">
+      <ProcessListNative bootstrap={bootstrap} workspace={w} replaceCompanyInUrl={replaceCompanyInUrl} />
     </div>
   )
 }

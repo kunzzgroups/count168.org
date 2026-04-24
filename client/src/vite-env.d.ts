@@ -37,6 +37,8 @@ interface Window {
     companyId: string | number | null | undefined,
     companyCode: string | null | undefined,
   ) => void
+  /** `sidebar.js`：按当前公司 Games/Bank 权限刷新侧栏菜单显隐 */
+  updateSidebarDataCaptureVisibility?: (hasGambling: boolean, hasBank?: boolean) => void
   ACCOUNT_LIST_SHOW_INACTIVE?: boolean
   ACCOUNT_LIST_SHOW_ALL?: boolean
   ACCOUNT_LIST_COMPANY_ID?: number | null

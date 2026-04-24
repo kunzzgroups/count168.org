@@ -35,11 +35,12 @@ function preferredDualCategory(companyCode: string): ProcessListCategory {
 /**
  * 按公司代码（如 CX、AG）解析 Process List 应对应的 category，与经典页 `get_company_permissions` 一致。
  */
-export async function resolveProcessListCategoryForCompanyCode(
+/** 公司可用的 Games/Bank 列表（仅这两项，已排序）。 */
+export async function fetchProcessListCategoriesForCompanyCode(
   companyCode: string,
-): Promise<ProcessListCategory> {
+): Promise<ProcessListCategory[]> {
   const code = String(companyCode || '').trim()
-  if (!code) return 'Games'
+  if (!code) return []
   try {
     const res = await apiFetch(apiUrl('/api/domain/domain_api.php'), {
       method: 'POST',
@@ -53,18 +54,25 @@ export async function resolveProcessListCategoryForCompanyCode(
       success?: boolean
       data?: { permissions?: unknown }
     }
-    const perms = normalizeToGamesBank(
+    return normalizeToGamesBank(
       json.success && json.data?.permissions != null ? json.data.permissions : [],
     )
-    if (perms.length === 1) {
-      return perms[0]!
-    }
-    if (perms.includes('Games') && perms.includes('Bank')) {
-      return preferredDualCategory(code)
-    }
-    if (perms.includes('Bank')) return 'Bank'
-    return 'Games'
   } catch {
-    return 'Games'
+    return []
   }
+}
+
+export async function resolveProcessListCategoryForCompanyCode(
+  companyCode: string,
+): Promise<ProcessListCategory> {
+  const perms = await fetchProcessListCategoriesForCompanyCode(companyCode)
+  const code = String(companyCode || '').trim()
+  if (perms.length === 1) {
+    return perms[0]!
+  }
+  if (perms.includes('Games') && perms.includes('Bank')) {
+    return preferredDualCategory(code)
+  }
+  if (perms.includes('Bank')) return 'Bank'
+  return 'Games'
 }
