@@ -124,7 +124,7 @@ export function BankStatusDropdown({ process, onAfterChange, onNotice }: Props) 
   return (
     <div
       ref={rootRef}
-      className={'bank-status-dropdown' + (open ? ' open' : '')}
+      className={'bank-status-dropdown-react' + (open ? ' open' : '')}
       data-current-value={display}
     >
       <button
@@ -140,12 +140,12 @@ export function BankStatusDropdown({ process, onAfterChange, onNotice }: Props) 
       >
         {curLabel}
       </button>
-      <div className="bank-status-menu" role="listbox" onClick={(e) => e.stopPropagation()}>
+      <div className="bank-status-menu-react" role="listbox" onClick={(e) => e.stopPropagation()}>
         {BANK_STATUS_OPTIONS.map((o) => (
           <button
             key={o.value}
             type="button"
-            className={'bank-status-option' + (o.value === display ? ' selected' : '')}
+            className={'bank-status-option-react' + (o.value === display ? ' selected' : '')}
             data-value={o.value}
             onClick={() => void onPick(o.value)}
             role="option"
