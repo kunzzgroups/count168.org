@@ -30,7 +30,7 @@ body.processlist-spa-native.process-page.process-page--bank #processListBankActi
   font-family: 'Amaranth' !important;
   width: clamp(90px, 7vw, 130px) !important;
   min-width: 112px !important;
-  height: 24px !important;
+  height: 35px !important;
   padding: 6px 20px !important;
   font-size: clamp(10px, 0.83vw, 16px) !important;
   line-height: 1.2 !important;
@@ -167,31 +167,53 @@ body.processlist-spa-native.process-page.process-page--bank .bank-status-dropdow
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-menu-react {
   position: fixed !important;
-  padding: 4px !important;
+  padding: 4px 0 !important;
   border: 1px solid #dbe3ee !important;
   border-radius: 10px !important;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 250, 252, 0.98) 100%) !important;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.16) !important;
+  background: #fff !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.14) !important;
   z-index: 9999 !important;
   box-sizing: border-box !important;
-  min-width: 104px !important;
+  min-width: 92px !important;
+  width: 92px !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react {
   width: 100% !important;
   border: none !important;
   background: transparent !important;
-  border-radius: 8px !important;
+  border-radius: 0 !important;
   padding: 6px 8px !important;
-  font-size: clamp(8px, 0.66vw, 12px) !important;
+  font-size: 12px !important;
   font-weight: 700 !important;
   text-align: center !important;
   cursor: pointer !important;
   line-height: 1.1 !important;
+  color: #0f172a !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react + .bank-status-option-react {
   margin-top: 2px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react[data-value='active'] {
+  color: #065f46 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react[data-value='inactive'] {
+  color: #991b1b !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react[data-value='official'] {
+  color: #a16207 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react[data-value='e_invoice'] {
+  color: #c2410c !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react[data-value='block'] {
+  color: #0f172a !important;
 }
 
 /* Stabilize bank table layout: remove conflicting hard column widths */
