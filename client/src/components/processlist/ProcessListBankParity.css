@@ -117,6 +117,26 @@ body.processlist-spa-native.process-page.process-page--bank .action-buttons-cont
   font-size: clamp(9px, 0.63vw, 12px) !important;
 }
 
+/* Pagination unified with ProcessList page style */
+body.processlist-spa-native.process-page.process-page--bank .pagination-container {
+  position: relative !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin-top: 6px !important;
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  width: max-content !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  border-radius: 20px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  padding: 0 !important;
+  z-index: 1 !important;
+}
+
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
   font-size: clamp(10px, 0.89vw, 17px) !important;
   line-height: 1.1 !important;
@@ -148,30 +168,31 @@ body.processlist-spa-native.process-page.process-page--bank .bank-status-dropdow
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-menu-react {
   position: fixed !important;
-  padding: 6px !important;
+  padding: 4px !important;
   border: 1px solid #dbe3ee !important;
-  border-radius: 14px !important;
+  border-radius: 10px !important;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(248, 250, 252, 0.98) 100%) !important;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.18) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.16) !important;
   z-index: 9999 !important;
   box-sizing: border-box !important;
-  min-width: 120px !important;
+  min-width: 104px !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react {
   width: 100% !important;
   border: none !important;
   background: transparent !important;
-  border-radius: 10px !important;
-  padding: 8px 10px !important;
-  font-size: clamp(9px, 0.72vw, 13px) !important;
+  border-radius: 8px !important;
+  padding: 6px 8px !important;
+  font-size: clamp(8px, 0.66vw, 12px) !important;
   font-weight: 700 !important;
   text-align: center !important;
   cursor: pointer !important;
+  line-height: 1.1 !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react + .bank-status-option-react {
-  margin-top: 4px !important;
+  margin-top: 2px !important;
 }
 
 /* Stabilize bank table layout: remove conflicting hard column widths */
