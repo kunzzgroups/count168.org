@@ -92,6 +92,10 @@ h1 {
     height: clamp(208px, 24.23vw, 350px);
     display: flex;
     flex-direction: column;
+    /* GroupID/Company + 多列表单行数较多时避免内容溢出盖住下方表格；与经典页共用此 CSS */
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .submitted-container {
@@ -102,6 +106,9 @@ h1 {
     height: clamp(208px, 24.23vw, 350px);
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
 }
 
 .form-title,
