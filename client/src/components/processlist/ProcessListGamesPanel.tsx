@@ -57,6 +57,7 @@ export function ProcessListGamesPanel({
   const [addRepFrom, setAddRepFrom] = useState('')
   const [addRepTo, setAddRepTo] = useState('')
   const [addRemark, setAddRemark] = useState('')
+  const [addAllDay, setAddAllDay] = useState(false)
 
   const [edProcName, setEdProcName] = useState('')
   const [edStatus, setEdStatus] = useState('active')
@@ -67,6 +68,11 @@ export function ProcessListGamesPanel({
   const [edRepTo, setEdRepTo] = useState('')
   const [edRemark, setEdRemark] = useState('')
   const [edDays, setEdDays] = useState<Record<number, boolean>>({})
+  const [edAllDay, setEdAllDay] = useState(false)
+  const [edDtsModified, setEdDtsModified] = useState('')
+  const [edDtsCreated, setEdDtsCreated] = useState('')
+  const [edModifiedBy, setEdModifiedBy] = useState('')
+  const [edCreatedBy, setEdCreatedBy] = useState('')
 
   const [delSel, setDelSel] = useState<Record<number, boolean>>({})
 
@@ -114,6 +120,18 @@ export function ProcessListGamesPanel({
     if (showAll) setShowInactive(false)
   }, [showAll])
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      if (addOpen) setAddOpen(false)
+      if (editId != null) setEditId(null)
+    }
+    if (addOpen || editId != null) {
+      window.addEventListener('keydown', onKey)
+    }
+    return () => window.removeEventListener('keydown', onKey)
+  }, [addOpen, editId])
+
   const displayRows = useMemo(() => {
     if (showAll) return rows.filter((p) => p.status === 'active')
     return rows
@@ -136,6 +154,7 @@ export function ProcessListGamesPanel({
     setAddSelDesc([])
     setAddCurrency('')
     setAddDays({})
+    setAddAllDay(false)
     setAddRemove('')
     setAddRepFrom('')
     setAddRepTo('')
@@ -246,7 +265,26 @@ export function ProcessListGamesPanel({
         })
     }
     setEdDays(dayMap)
+    setEdDtsModified(p.dts_modified != null ? String(p.dts_modified) : '')
+    setEdDtsCreated(p.dts_created != null ? String(p.dts_created) : '')
+    setEdModifiedBy(p.modified_by != null ? String(p.modified_by) : '')
+    setEdCreatedBy(p.created_by != null ? String(p.created_by) : '')
+    const allDayPick =
+      rMeta.data.days.length > 0 && rMeta.data.days.every((d) => dayMap[d.id])
+    setEdAllDay(!!allDayPick)
   }
+
+  useEffect(() => {
+    if (!formMeta || !addOpen) return
+    const all = formMeta.days.length > 0 && formMeta.days.every((d) => addDays[d.id])
+    setAddAllDay(all)
+  }, [addDays, formMeta, addOpen])
+
+  useEffect(() => {
+    if (!formMeta || editId == null) return
+    const all = formMeta.days.length > 0 && formMeta.days.every((d) => edDays[d.id])
+    setEdAllDay(all)
+  }, [edDays, formMeta, editId])
 
   const submitEdit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -484,280 +522,525 @@ export function ProcessListGamesPanel({
       ) : null}
 
       {addOpen && formMeta ? (
-        <div className="plModalHost">
-          <div
-            className="plModalBackdrop"
-            onClick={() => setAddOpen(false)}
-            onKeyDown={(e) => e.key === 'Escape' && setAddOpen(false)}
-            role="presentation"
-          />
-          <div className="plModal">
-            <h3 className="plModal__title">Add Process</h3>
-            <form onSubmit={(e) => void submitAdd(e)} className="plModalForm">
-              <label className="plCheck">
-                <input
-                  type="checkbox"
-                  checked={addMultiUse}
-                  onChange={(e) => setAddMultiUse(e.target.checked)}
-                />{' '}
-                Multi-use
-              </label>
-              {addMultiUse ? (
-                <div className="plField">
-                  <div className="plField__label">Processes</div>
-                  <div className="plCheckGrid">
-                    {uniqueProcessNames.map((name) => (
-                      <label key={name} className="plCheck">
+        <div
+          id="addModal"
+          className="modal"
+          style={{ display: 'block' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="addModalTitle"
+        >
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2 id="addModalTitle">Add Process</h2>
+              <button
+                type="button"
+                className="close"
+                onClick={() => setAddOpen(false)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <form
+                id="addProcessForm"
+                onSubmit={(e) => void submitAdd(e)}
+                className="process-form add-grid"
+              >
+                <div className="add-col">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="add_process_id">Process ID *</label>
+                      <div className="input-with-checkbox">
                         <input
-                          type="checkbox"
-                          checked={addSelProc.includes(name)}
-                          onChange={(e) => {
-                            if (e.target.checked)
-                              setAddSelProc((s) => [...s, name])
-                            else setAddSelProc((s) => s.filter((x) => x !== name))
-                          }}
+                          type="text"
+                          id="add_process_id"
+                          name="process_id"
+                          placeholder="Enter Process ID"
+                          value={addProcessId}
+                          onChange={(e) => setAddProcessId(e.target.value)}
+                          disabled={addMultiUse}
                         />
-                        {name}
-                      </label>
-                    ))}
+                        <div className="checkbox-container">
+                          <input
+                            type="checkbox"
+                            id="add_multi_use"
+                            name="multi_use_purpose"
+                            checked={addMultiUse}
+                            onChange={(e) => setAddMultiUse(e.target.checked)}
+                          />
+                          <label htmlFor="add_multi_use">Multi-Process</label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {addMultiUse ? (
+                    <div
+                      className="form-row"
+                      id="multi_use_processes"
+                      style={{ display: addMultiUse ? 'block' : 'none' }}
+                    >
+                      <div className="form-group">
+                        <label>Select Multi-use Processes</label>
+                        <div className="process-checkboxes" id="process_checkboxes">
+                          {uniqueProcessNames.map((name) => (
+                            <div key={name} className="checkbox-item">
+                              <input
+                                type="checkbox"
+                                id={`add_proc_${name}`}
+                                name="selected_processes[]"
+                                checked={addSelProc.includes(name)}
+                                onChange={(e) => {
+                                  if (e.target.checked)
+                                    setAddSelProc((s) => [...s, name])
+                                  else setAddSelProc((s) => s.filter((x) => x !== name))
+                                }}
+                              />
+                              <label htmlFor={`add_proc_${name}`}>{name}</label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Description *</label>
+                      <div className="plGamesFormScroll" id="add_description_list">
+                        {formMeta.descriptions.map((d) => (
+                          <div key={d.id} className="checkbox-item">
+                            <input
+                              type="checkbox"
+                              id={`add_desc_${d.id}`}
+                              checked={addSelDesc.includes(d.name)}
+                              onChange={(e) => {
+                                if (e.target.checked)
+                                  setAddSelDesc((s) => [...s, d.name])
+                                else setAddSelDesc((s) => s.filter((x) => x !== d.name))
+                              }}
+                            />
+                            <label htmlFor={`add_desc_${d.id}`}>{d.name}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="add_currency">Currency</label>
+                      <select
+                        id="add_currency"
+                        name="currency_id"
+                        value={addCurrency}
+                        onChange={(e) => setAddCurrency(e.target.value)}
+                      >
+                        <option value="">Select Currency</option>
+                        {formMeta.currencies.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              ) : (
-                <label className="plField">
-                  <span className="plField__label">Process ID</span>
-                  <input
-                    className="plInput"
-                    value={addProcessId}
-                    onChange={(e) => setAddProcessId(e.target.value)}
-                  />
-                </label>
-              )}
-              <div className="plField">
-                <div className="plField__label">Descriptions</div>
-                <div className="plCheckGrid">
-                  {formMeta.descriptions.map((d) => (
-                    <label key={d.id} className="plCheck">
+
+                <div className="add-col">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="add_remove_words">Remove Words</label>
                       <input
-                        type="checkbox"
-                        checked={addSelDesc.includes(d.name)}
-                        onChange={(e) => {
-                          if (e.target.checked)
-                            setAddSelDesc((s) => [...s, d.name])
-                          else setAddSelDesc((s) => s.filter((x) => x !== d.name))
-                        }}
+                        type="text"
+                        id="add_remove_words"
+                        name="remove_word"
+                        placeholder="Enter words to remove"
+                        value={addRemove}
+                        onChange={(e) => setAddRemove(e.target.value)}
                       />
-                      {d.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Currency</span>
-                <select
-                  className="plInput"
-                  value={addCurrency}
-                  onChange={(e) => setAddCurrency(e.target.value)}
-                >
-                  <option value="">—</option>
-                  {formMeta.currencies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="plField">
-                <div className="plField__label">Days</div>
-                <div className="plCheckGrid">
-                  {formMeta.days.map((d) => (
-                    <label key={d.id} className="plCheck">
+                      <small className="field-help">
+                        (Use semicolon to separate multiple words, e.g. abc;cde;efg)
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <div className="day-use-header">
+                        <label>Day Use</label>
+                        <div className="all-day-checkbox">
+                          <input
+                            type="checkbox"
+                            id="add_all_day"
+                            name="all_day"
+                            checked={addAllDay}
+                            onChange={(e) => {
+                              const v = e.target.checked
+                              setAddAllDay(v)
+                              if (!formMeta) return
+                              setAddDays((prev) => {
+                                const next = { ...prev }
+                                formMeta.days.forEach((d) => {
+                                  next[d.id] = v
+                                })
+                                return next
+                              })
+                            }}
+                          />
+                          <label htmlFor="add_all_day">All Day</label>
+                        </div>
+                      </div>
+                      <div className="day-checkboxes" id="day_checkboxes">
+                        {formMeta.days.map((d) => (
+                          <div key={d.id} className="checkbox-item">
+                            <input
+                              type="checkbox"
+                              id={`add_day_${d.id}`}
+                              name="day_use[]"
+                              value={d.id}
+                              checked={!!addDays[d.id]}
+                              onChange={(e) =>
+                                setAddDays((prev) => ({
+                                  ...prev,
+                                  [d.id]: e.target.checked,
+                                }))
+                              }
+                            />
+                            <label htmlFor={`add_day_${d.id}`}>{d.day_name}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-row row-two-cols">
+                    <div className="form-group">
+                      <label htmlFor="add_replace_word_from">Replace From</label>
                       <input
-                        type="checkbox"
-                        checked={!!addDays[d.id]}
-                        onChange={(e) =>
-                          setAddDays((prev) => ({ ...prev, [d.id]: e.target.checked }))
-                        }
+                        type="text"
+                        id="add_replace_word_from"
+                        name="replace_word_from"
+                        placeholder="Old word"
+                        value={addRepFrom}
+                        onChange={(e) => setAddRepFrom(e.target.value)}
                       />
-                      {d.day_name}
-                    </label>
-                  ))}
+                      <small className="field-help">(Word to be replaced)</small>
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="add_replace_word_to">Replace To</label>
+                      <input
+                        type="text"
+                        id="add_replace_word_to"
+                        name="replace_word_to"
+                        placeholder="New word"
+                        value={addRepTo}
+                        onChange={(e) => setAddRepTo(e.target.value)}
+                      />
+                      <small className="field-help">(Replacement word)</small>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="add_remarks">Remarks</label>
+                      <textarea
+                        id="add_remarks"
+                        name="remark"
+                        rows={5}
+                        placeholder="Enter remarks..."
+                        value={addRemark}
+                        onChange={(e) => setAddRemark(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Remove word</span>
-                <input
-                  className="plInput"
-                  value={addRemove}
-                  onChange={(e) => setAddRemove(e.target.value)}
-                />
-              </label>
-              <div className="plRow2">
-                <label className="plField">
-                  <span className="plField__label">Replace from</span>
-                  <input
-                    className="plInput"
-                    value={addRepFrom}
-                    onChange={(e) => setAddRepFrom(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Replace to</span>
-                  <input
-                    className="plInput"
-                    value={addRepTo}
-                    onChange={(e) => setAddRepTo(e.target.value)}
-                  />
-                </label>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Remark</span>
-                <textarea
-                  className="plInput plInput--ta"
-                  value={addRemark}
-                  onChange={(e) => setAddRemark(e.target.value)}
-                  rows={2}
-                />
-              </label>
-              <div className="plModal__actions">
-                <button type="button" className="plBtn" onClick={() => setAddOpen(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="plBtn plBtn--primary">
-                  Save
-                </button>
-              </div>
-            </form>
+
+                <div className="form-actions add-actions">
+                  <button type="submit" className="btn btn-save">
+                    Add Process
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-cancel"
+                    onClick={() => setAddOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       ) : null}
 
       {editId != null && formMeta ? (
-        <div className="plModalHost">
-          <div
-            className="plModalBackdrop"
-            onClick={() => setEditId(null)}
-            onKeyDown={(e) => e.key === 'Escape' && setEditId(null)}
-            role="presentation"
-          />
-          <div className="plModal plModal--wide">
-            <h3 className="plModal__title">Edit Process</h3>
-            <form onSubmit={(e) => void submitEdit(e)} className="plModalForm">
-              <label className="plField">
-                <span className="plField__label">Process name</span>
-                <input
-                  className="plInput"
-                  value={edProcName}
-                  onChange={(e) => setEdProcName(e.target.value)}
-                />
-              </label>
-              <label className="plField">
-                <span className="plField__label">Status</span>
-                <select
-                  className="plInput"
-                  value={edStatus}
-                  onChange={(e) => setEdStatus(e.target.value)}
-                >
-                  <option value="active">ACTIVE</option>
-                  <option value="inactive">INACTIVE</option>
-                </select>
-              </label>
-              <div className="plField">
-                <div className="plField__label">Description (first is saved)</div>
-                <div className="plCheckGrid">
-                  {formMeta.descriptions.map((d) => (
-                    <label key={d.id} className="plCheck">
+        <div
+          id="editModal"
+          className="modal"
+          style={{ display: 'block' }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="editModalTitle"
+        >
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2 id="editModalTitle">Edit Process</h2>
+              <button
+                type="button"
+                className="close"
+                onClick={() => setEditId(null)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+            <div className="modal-body">
+              <form
+                id="editProcessForm"
+                onSubmit={(e) => void submitEdit(e)}
+                className="process-form add-grid"
+              >
+                <input type="hidden" name="id" value={editId} />
+                <input type="hidden" name="status" value={edStatus} />
+
+                <div className="add-col">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="edit_process_name">Process Name *</label>
                       <input
-                        type="checkbox"
-                        checked={edDesc.includes(d.name)}
-                        onChange={() => {
-                          setEdDesc((prev) => {
-                            if (prev.includes(d.name))
-                              return prev.filter((x) => x !== d.name)
-                            return [...prev, d.name]
-                          })
+                        type="text"
+                        id="edit_process_name"
+                        name="process_name"
+                        value={edProcName}
+                        readOnly
+                        style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Description</label>
+                      <div className="plGamesFormScroll" id="edit_description_list">
+                        {formMeta.descriptions.map((d) => (
+                          <div key={d.id} className="checkbox-item">
+                            <input
+                              type="checkbox"
+                              id={`edit_desc_${d.id}`}
+                              checked={edDesc.includes(d.name)}
+                              onChange={() => {
+                                setEdDesc((prev) => {
+                                  if (prev.includes(d.name))
+                                    return prev.filter((x) => x !== d.name)
+                                  return [...prev, d.name]
+                                })
+                              }}
+                            />
+                            <label htmlFor={`edit_desc_${d.id}`}>{d.name}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="edit_currency">Currency</label>
+                      <select
+                        id="edit_currency"
+                        name="currency_id"
+                        value={edCurrency}
+                        onChange={(e) => setEdCurrency(e.target.value)}
+                      >
+                        <option value="">Select Currency</option>
+                        {formMeta.currencies.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label style={{ fontWeight: 600, color: '#666' }}>DTS Modified:</label>
+                      <div
+                        className="edit-dts-readonly"
+                        style={{
+                          backgroundColor: '#f5f5f5',
+                          marginTop: 5,
+                          padding: '8px 12px',
+                          border: '1px solid #ddd',
+                          borderRadius: 4,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          width: '100%',
+                          minWidth: 200,
+                          minHeight: 38,
+                          boxSizing: 'border-box',
                         }}
-                      />
-                      {d.name}
-                    </label>
-                  ))}
+                      >
+                        <span>{edDtsModified ? edDtsModified.replace('T', ' ').slice(0, 19) : ''}</span>
+                        <span style={{ fontWeight: 600 }}>{edModifiedBy}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label style={{ fontWeight: 600, color: '#666' }}>DTS Created:</label>
+                      <div
+                        className="edit-dts-readonly"
+                        style={{
+                          backgroundColor: '#f5f5f5',
+                          marginTop: 5,
+                          padding: '8px 12px',
+                          border: '1px solid #ddd',
+                          borderRadius: 4,
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          width: '100%',
+                          minWidth: 200,
+                          minHeight: 38,
+                          boxSizing: 'border-box',
+                        }}
+                      >
+                        <span>{edDtsCreated ? edDtsCreated.replace('T', ' ').slice(0, 19) : ''}</span>
+                        <span style={{ fontWeight: 600 }}>{edCreatedBy}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Currency</span>
-                <select
-                  className="plInput"
-                  value={edCurrency}
-                  onChange={(e) => setEdCurrency(e.target.value)}
-                >
-                  <option value="">—</option>
-                  {formMeta.currencies.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.code}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="plField">
-                <div className="plField__label">Days</div>
-                <div className="plCheckGrid">
-                  {formMeta.days.map((d) => (
-                    <label key={d.id} className="plCheck">
+
+                <div className="add-col">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="edit_remove_words">Remove Words</label>
                       <input
-                        type="checkbox"
-                        checked={!!edDays[d.id]}
-                        onChange={(e) =>
-                          setEdDays((prev) => ({ ...prev, [d.id]: e.target.checked }))
-                        }
+                        type="text"
+                        id="edit_remove_words"
+                        name="remove_word"
+                        placeholder="Enter words to remove"
+                        value={edRemove}
+                        onChange={(e) => setEdRemove(e.target.value)}
                       />
-                      {d.day_name}
-                    </label>
-                  ))}
+                      <small className="field-help">
+                        (Use semicolon to separate multiple words, e.g. abc;cde;efg)
+                      </small>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <div className="day-use-header">
+                        <label>Day Use</label>
+                        <div className="all-day-checkbox">
+                          <input
+                            type="checkbox"
+                            id="edit_all_day"
+                            name="all_day"
+                            checked={edAllDay}
+                            onChange={(e) => {
+                              const v = e.target.checked
+                              setEdAllDay(v)
+                              if (!formMeta) return
+                              setEdDays((prev) => {
+                                const next = { ...prev }
+                                formMeta.days.forEach((d) => {
+                                  next[d.id] = v
+                                })
+                                return next
+                              })
+                            }}
+                          />
+                          <label htmlFor="edit_all_day">All Day</label>
+                        </div>
+                      </div>
+                      <div className="day-checkboxes" id="edit_day_checkboxes">
+                        {formMeta.days.map((d) => (
+                          <div key={d.id} className="checkbox-item">
+                            <input
+                              type="checkbox"
+                              id={`edit_day_${d.id}`}
+                              name="edit_day_use[]"
+                              value={d.id}
+                              checked={!!edDays[d.id]}
+                              onChange={(e) =>
+                                setEdDays((prev) => ({
+                                  ...prev,
+                                  [d.id]: e.target.checked,
+                                }))
+                              }
+                            />
+                            <label htmlFor={`edit_day_${d.id}`}>{d.day_name}</label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-row row-two-cols">
+                    <div className="form-group">
+                      <label htmlFor="edit_replace_word_from">Replace From</label>
+                      <input
+                        type="text"
+                        id="edit_replace_word_from"
+                        name="replace_word_from"
+                        placeholder="Old word"
+                        value={edRepFrom}
+                        onChange={(e) => setEdRepFrom(e.target.value)}
+                      />
+                      <small className="field-help">(Word to be replaced)</small>
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="edit_replace_word_to">Replace To</label>
+                      <input
+                        type="text"
+                        id="edit_replace_word_to"
+                        name="replace_word_to"
+                        placeholder="New word"
+                        value={edRepTo}
+                        onChange={(e) => setEdRepTo(e.target.value)}
+                      />
+                      <small className="field-help">(Replacement word)</small>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="edit_remarks">Remarks</label>
+                      <textarea
+                        id="edit_remarks"
+                        name="remark"
+                        rows={5}
+                        placeholder="Enter remarks..."
+                        value={edRemark}
+                        onChange={(e) => setEdRemark(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Remove word</span>
-                <input
-                  className="plInput"
-                  value={edRemove}
-                  onChange={(e) => setEdRemove(e.target.value)}
-                />
-              </label>
-              <div className="plRow2">
-                <label className="plField">
-                  <span className="plField__label">Replace from</span>
-                  <input
-                    className="plInput"
-                    value={edRepFrom}
-                    onChange={(e) => setEdRepFrom(e.target.value)}
-                  />
-                </label>
-                <label className="plField">
-                  <span className="plField__label">Replace to</span>
-                  <input
-                    className="plInput"
-                    value={edRepTo}
-                    onChange={(e) => setEdRepTo(e.target.value)}
-                  />
-                </label>
-              </div>
-              <label className="plField">
-                <span className="plField__label">Remark</span>
-                <textarea
-                  className="plInput plInput--ta"
-                  value={edRemark}
-                  onChange={(e) => setEdRemark(e.target.value)}
-                  rows={2}
-                />
-              </label>
-              <div className="plModal__actions">
-                <button type="button" className="plBtn" onClick={() => setEditId(null)}>
-                  Cancel
-                </button>
-                <button type="submit" className="plBtn plBtn--primary">
-                  Update
-                </button>
-              </div>
-            </form>
+
+                <div className="form-actions add-actions">
+                  <button type="submit" className="btn btn-save">
+                    Update Process
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-cancel"
+                    onClick={() => setEditId(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       ) : null}

@@ -178,6 +178,24 @@
   font-size: 0.75rem;
 }
 
+/* 与 `processlist_classic` 一致：弹窗 header 内 `.close` 绝对定位 */
+.process-page .modal-header {
+  position: relative;
+}
+
+/* Games Add/Edit：描述多选区纵向滚动，贴近经典弹窗 */
+.plGamesFormScroll {
+  max-height: 11rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border: 1px solid #dbe1ea;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #fafbfc;
+}
+
 /* Modals */
 .plModalHost {
   position: fixed;
