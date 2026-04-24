@@ -40,6 +40,7 @@ export function ProcessListMain({ bootstrap }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
   const wRef = useRef(w)
   wRef.current = w
+  const pendingCompanyPickRef = useRef<number | null>(null)
 
   const [domainPerms, setDomainPerms] = useState<GamePermission[]>([
     'Games',
@@ -147,6 +148,7 @@ export function ProcessListMain({ bootstrap }: Props) {
       if (!Number.isFinite(id)) return
       const row = w.companies.find((c) => Number(c.id) === Number(id))
       if (!row) return
+      pendingCompanyPickRef.current = Number(id)
       replaceCompanyInUrl(Number(id))
       const g =
         row.group_id && String(row.group_id).trim() !== ''
@@ -171,6 +173,7 @@ export function ProcessListMain({ bootstrap }: Props) {
       if (!Number.isFinite(id)) return
       const row = wRef.current.companies.find((c) => Number(c.id) === Number(id))
       if (!row) return
+      pendingCompanyPickRef.current = id
       replaceCompanyInUrl(id)
       const g =
         row.group_id && String(row.group_id).trim() !== ''
@@ -219,7 +222,15 @@ export function ProcessListMain({ bootstrap }: Props) {
 
   useEffect(() => {
     if (!w.companiesReady || w.activeCompanyId == null) return
+    const pending = pendingCompanyPickRef.current
+    if (pending != null && Number(w.activeCompanyId) === Number(pending)) {
+      pendingCompanyPickRef.current = null
+    }
     const cur = searchParams.get('company_id')
+    if (pending != null && cur === String(pending) && Number(w.activeCompanyId) !== Number(pending)) {
+      // 正在执行一次用户触发的切换：不要被旧 activeCompany 回写 URL
+      return
+    }
     if (cur === String(w.activeCompanyId)) return
     replaceCompanyInUrl(w.activeCompanyId)
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
@@ -319,7 +330,13 @@ export function ProcessListMain({ bootstrap }: Props) {
 
         <div className="separator-line" />
 
-        {activeCategory === 'Bank' ? (
+        {!permLoaded ? (
+          <div style={{ padding: '12px 4px', color: '#64748b', fontSize: 13 }}>
+            Loading company permissions...
+          </div>
+        ) : null}
+
+        {permLoaded && activeCategory === 'Bank' ? (
           <ProcessListBankPanel
             key={String(w.activeCompanyId)}
             companyId={w.activeCompanyId}
@@ -333,7 +350,8 @@ export function ProcessListMain({ bootstrap }: Props) {
               onPickCompany: handlePickCompany,
             }}
           />
-        ) : (
+        ) : null}
+        {permLoaded && activeCategory !== 'Bank' ? (
           <ProcessListGamesPanel
             key={w.activeCompanyId + activeCategory}
             companyId={w.activeCompanyId}
@@ -348,7 +366,7 @@ export function ProcessListMain({ bootstrap }: Props) {
               onPickCompany: handlePickCompany,
             }}
           />
-        )}
+        ) : null}
 
         <a
           className="plClassicLink"
