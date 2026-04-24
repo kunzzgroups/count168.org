@@ -115,20 +115,7 @@ export function ProcessListMain({ bootstrap }: Props) {
     [setSearchParams],
   )
 
-  const ensureCategoryInUrl = useCallback(() => {
-    setSearchParams(
-      (prev) => {
-        const p = new URLSearchParams(prev)
-        if (!p.get('category')) p.set('category', 'Games')
-        return p
-      },
-      { replace: true },
-    )
-  }, [setSearchParams])
-
-  useEffect(() => {
-    ensureCategoryInUrl()
-  }, [ensureCategoryInUrl])
+  // category 不写死为 Games：仅 Games / 仅 Bank / 双权限 由 `loadPermissionButtons` 按公司 permissions 与 URL 写入（对齐经典「有 Bank 权则进 Bank 列表」）
 
   useEffect(() => {
     const id = 'c168-font-awesome-process'
