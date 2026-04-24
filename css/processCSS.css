@@ -1257,6 +1257,39 @@ body.processlist-spa-native.process-page .pagination-container {
     background: #fff !important;
 }
 
+/* ===== Classic layout parity: remove SPA full-height blank area ===== */
+body.processlist-spa-native.process-page .container {
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page .content {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page .process-table-wrapper,
+body.processlist-spa-native.process-page .bank-table-wrapper {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page .process-cards {
+    flex: 0 0 auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page .process-card {
+    min-height: 24px;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .table-header {
+    margin-top: 12px !important;
+}
+
 /* Table Header - copied from accountCSS.css */
 .process-page .table-header {
     display: grid;
