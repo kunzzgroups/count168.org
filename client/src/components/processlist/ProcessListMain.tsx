@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { apiUrl } from '../../lib/api'
+import { resolveProcessListCategoryForCompanyCode } from '../../lib/processListCategoryApi'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/processCSS.css'
@@ -101,23 +102,32 @@ export function ProcessListMain({ bootstrap }: Props) {
     pw.PROCESSLIST_SHOW_BLOCK = searchParams.has('showBlock')
   }, [searchParams])
 
+  /** 先同步写入 company_id（避免 PROCESSLIST_COMPANY_CODE 仍指向上一家公司），再按 domain 权限补全 category，对齐经典 Games/Bank。 */
   const replaceCompanyInUrl = useCallback(
-    (companyId: number) => {
+    (companyId: number, companyCode: string) => {
       setSearchParams(
         (prev) => {
           const p = new URLSearchParams(prev)
           p.set('company_id', String(companyId))
-          // 换公司后勿沿用上一家的 category=Bank；由 loadPermissionButtons + localStorage 决定 Games/Bank，避免先同步 URL 误拉 Bank API
           p.delete('category')
           return p
         },
         { replace: true },
       )
+      void resolveProcessListCategoryForCompanyCode(companyCode).then((category) => {
+        setSearchParams(
+          (prev) => {
+            const p = new URLSearchParams(prev)
+            if (p.get('company_id') !== String(companyId)) return prev
+            p.set('category', category)
+            return p
+          },
+          { replace: true },
+        )
+      })
     },
     [setSearchParams],
   )
-
-  // category 不写死为 Games：仅 Games / 仅 Bank / 双权限 由 `loadPermissionButtons` 按公司 permissions 与 URL 写入（对齐经典「有 Bank 权则进 Bank 列表」）
 
   useEffect(() => {
     const id = 'c168-font-awesome-process'
@@ -172,7 +182,11 @@ export function ProcessListMain({ bootstrap }: Props) {
       const id = typeof companyId === 'number' ? companyId : parseInt(String(companyId), 10)
       if (!Number.isFinite(id)) return
       wr.onPickCompany(id)
-      replaceCompanyInUrl(id)
+      const row = wr.companies.find((c) => Number(c.id) === id)
+      const code = row
+        ? String(row.company_id || '').trim()
+        : String(_companyCode || '').trim()
+      replaceCompanyInUrl(id, code)
     }
     return () => {
       delete window.onSharedCompanyFilterChanged
@@ -202,8 +216,10 @@ export function ProcessListMain({ bootstrap }: Props) {
   useEffect(() => {
     if (!w.companiesReady || w.activeCompanyId == null) return
     if (searchParams.get('company_id')) return
-    replaceCompanyInUrl(w.activeCompanyId)
-  }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
+    const row = w.companies.find((c) => Number(c.id) === Number(w.activeCompanyId))
+    const code = row ? String(row.company_id || '').trim() : ''
+    replaceCompanyInUrl(w.activeCompanyId, code)
+  }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl, w.companies])
 
   useEffect(() => {
     if (!w.companiesReady || w.loadCompaniesError || w.activeCompanyId == null) return
@@ -325,7 +341,7 @@ export function ProcessListMain({ bootstrap }: Props) {
                     data-company-code={code}
                     onClick={() => {
                       w.onPickCompany(c.id)
-                      replaceCompanyInUrl(c.id)
+                      replaceCompanyInUrl(c.id, code)
                     }}
                   >
                     {code}
