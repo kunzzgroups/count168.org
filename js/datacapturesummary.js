@@ -77,13 +77,22 @@ function hideNotification() {
     }, 300);
 }
 
-/** SPA（React `/datacapturesummary`）与经典 `.php` 共用：返回 Data Capture */
+/** SPA（React）与经典 `.php` 共用：返回 Data Capture */
 function navigateToDataCaptureFromSummary(queryWithoutQuestion) {
     var q = '';
     if (queryWithoutQuestion != null && String(queryWithoutQuestion).length > 0) {
         q = '?' + String(queryWithoutQuestion).replace(/^\?/, '');
     }
     if (document.body && document.body.classList.contains('datacapture-summary-spa-embed')) {
+        var spaDc =
+            typeof window.EAZYCOUNT_SPA_DATACAPTURE === 'string' && window.EAZYCOUNT_SPA_DATACAPTURE
+                ? String(window.EAZYCOUNT_SPA_DATACAPTURE)
+                : '';
+        if (spaDc) {
+            var path = spaDc.charAt(0) === '/' ? spaDc : '/' + spaDc;
+            window.location.href = window.location.origin + path + q;
+            return;
+        }
         var base =
             typeof window.__C168_SPA_LINK_BASE__ === 'string'
                 ? String(window.__C168_SPA_LINK_BASE__).replace(/\/$/, '')

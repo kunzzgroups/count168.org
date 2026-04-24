@@ -79,6 +79,22 @@ export function DashboardShell({
     return () => window.removeEventListener('c168:company-session-updated', onCompany)
   }, [loadContext])
 
+  /** 与 `sidebar.php` 中 `EAZYCOUNT_SPA_*` 一致，供 `datacapture.js` / `datacapturesummary.js` 在子路径部署下解析路由 */
+  useEffect(() => {
+    if (!classicSidebarLayout) return
+    const pre = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
+    window.EAZYCOUNT_SPA_DASHBOARD = pre ? `${pre}/dashboard` : '/dashboard'
+    window.EAZYCOUNT_SPA_TRANSACTION = pre ? `${pre}/transaction` : '/transaction'
+    window.EAZYCOUNT_SPA_DATACAPTURE = pre ? `${pre}/datacapture` : '/datacapture'
+    window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = pre ? `${pre}/datacapturesummary` : '/datacapturesummary'
+    return () => {
+      delete window.EAZYCOUNT_SPA_DASHBOARD
+      delete window.EAZYCOUNT_SPA_TRANSACTION
+      delete window.EAZYCOUNT_SPA_DATACAPTURE
+      delete window.EAZYCOUNT_SPA_DATACAPTURESUMMARY
+    }
+  }, [classicSidebarLayout])
+
   const shellClass = classicSidebarLayout ? 'dShell dShell--classicSidebar' : 'dShell'
 
   const asideClass =

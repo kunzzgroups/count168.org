@@ -164,6 +164,9 @@ $eazycountSpaTransaction = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
 $eazycountSpaDatacapture = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
     ? '/datacapture'
     : $__eazyPrefix . '/datacapture';
+$eazycountSpaDatacapturesummary = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
+    ? '/datacapturesummary'
+    : $__eazyPrefix . '/datacapturesummary';
 ?>
 <!--
 ================================================================================
@@ -176,7 +179,7 @@ $eazycountSpaDatacapture = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
     <link rel="preload" href="(当前用户头像 URL)" as="image">
 ================================================================================
 -->
-<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;</script>
+<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = <?php echo json_encode($eazycountSpaDatacapturesummary); ?>;</script>
 <!-- Sidebar HTML (CSS 已移至 css/sidebar.css，JS 逻辑已移至 js/sidebar.js) -->
 <!-- Overlay -->
 <div class="informationmenu-overlay"></div>

@@ -16,9 +16,20 @@ function buildApiUrl(pathAndQuery) {
     return new URL(p.replace(/^\//, ''), base).href;
 }
 
-/** 提交表格后进入 Summary：SPA 用 `/datacapturesummary`；`datacapturesummary.php` 会 302 到该路由；经典全页为 `datacapturesummary_classic.php` */
+/** 提交表格后进入 Summary：SPA 用 `EAZYCOUNT_SPA_DATACAPTURESUMMARY` 或 `__C168_SPA_LINK_BASE__`；`datacapturesummary.php` 会 302；经典全页为 `datacapturesummary_classic.php` */
 function navigateToDataCaptureSummarySuccess() {
     if (document.body && document.body.classList.contains('datacapture-spa-embed')) {
+        var spaSum =
+            typeof window.EAZYCOUNT_SPA_DATACAPTURESUMMARY === 'string' &&
+            window.EAZYCOUNT_SPA_DATACAPTURESUMMARY
+                ? String(window.EAZYCOUNT_SPA_DATACAPTURESUMMARY)
+                : '';
+        if (spaSum) {
+            var p = spaSum.charAt(0) === '/' ? spaSum : '/' + spaSum;
+            window.location.href =
+                window.location.origin + p + (p.indexOf('?') === -1 ? '?success=1' : '&success=1');
+            return;
+        }
         var base =
             typeof window.__C168_SPA_LINK_BASE__ === 'string'
                 ? String(window.__C168_SPA_LINK_BASE__).replace(/\/$/, '')

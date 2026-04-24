@@ -14,6 +14,11 @@ interface ImportMeta {
 }
 
 interface Window {
+  /** 由经典 `sidebar.php` 注入，与部署子路径一致（React 壳层通常不设） */
+  EAZYCOUNT_SPA_DASHBOARD?: string
+  EAZYCOUNT_SPA_TRANSACTION?: string
+  EAZYCOUNT_SPA_DATACAPTURE?: string
+  EAZYCOUNT_SPA_DATACAPTURESUMMARY?: string
   /** 与 `client/src/lib/api.ts` 的 `VITE_API_BASE` 一致，供 `datacapture.js` 的 `buildApiUrl` 使用 */
   __C168_API_BASE__?: string
   /** 与 Vite `base` 一致（无前导尾斜杠），供 legacy 脚本拼 `/datacapture`、`/datacapturesummary` */
