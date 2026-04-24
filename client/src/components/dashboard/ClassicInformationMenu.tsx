@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch, apiUrl } from '../../lib/api'
-import { buildProcessListSearch } from '../../lib/buildProcessListSearch'
+import { buildCompanyIdSearch, buildProcessListSearch } from '../../lib/buildProcessListSearch'
 import { publicAsset } from '../../lib/publicAsset'
 import type { SidebarContext } from '../../types/sidebarContext'
 import type { DashboardBootstrapData } from '../../types/dashboard'
@@ -499,7 +499,7 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
               <>
                 <div className="informationmenu-section">
                   <Link
-                    to="/accounts"
+                    to={`/accounts${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
                     className={`informationmenu-section-title account-direct${pathname === '/accounts' ? ' current-page' : ''}`}
                     data-page="account-list.php"
                     onClick={go}
@@ -543,29 +543,48 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
             )}
 
             {canNavItem(permissions, 'datacapture', ext) && (
-              <div
-                className="informationmenu-section"
-                id="sidebar-datacapture-section"
-                style={{ display: companyHasGambling ? undefined : 'none' }}
-              >
-                <Link
-                  to="/datacapture"
-                  className={`informationmenu-section-title${pathname === '/datacapture' ? ' current-page' : ''}`}
-                  data-page="datacapture.php"
-                  onClick={go}
+              <>
+                <div
+                  className="informationmenu-section"
+                  id="sidebar-datacapture-section"
+                  style={{ display: companyHasGambling ? undefined : 'none' }}
                 >
-                  <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
-                  </svg>
-                  Data Capture
-                </Link>
-              </div>
+                  <Link
+                    to={`/datacapture${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
+                    className={`informationmenu-section-title${pathname === '/datacapture' ? ' current-page' : ''}`}
+                    data-page="datacapture.php"
+                    onClick={go}
+                  >
+                    <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
+                    </svg>
+                    Data Capture
+                  </Link>
+                </div>
+                <div
+                  className="informationmenu-section"
+                  id="sidebar-datacapturesummary-section"
+                  style={{ display: companyHasGambling ? undefined : 'none' }}
+                >
+                  <Link
+                    to={`/datacapturesummary${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
+                    className={`informationmenu-section-title${pathname === '/datacapturesummary' ? ' current-page' : ''}`}
+                    data-page="datacapturesummary.php"
+                    onClick={go}
+                  >
+                    <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z" />
+                    </svg>
+                    Data Capture Summary
+                  </Link>
+                </div>
+              </>
             )}
 
             {canNavItem(permissions, 'payment', ext) && (
               <div className="informationmenu-section">
                 <Link
-                  to="/transaction"
+                  to={`/transaction${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
                   className={`informationmenu-section-title${pathname === '/transaction' ? ' current-page' : ''}`}
                   data-page="transaction.php"
                   onClick={go}

@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { apiUrl } from '../../lib/api'
+import { updateSessionCompany } from '../../lib/ownerCompaniesApi'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/accountCSS.css'
 import '../../../../css/datacapturesummary.css'
@@ -47,6 +49,32 @@ const ALERT_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => {
  * React `/datacapturesummary`：DOM 与 `datacapturesummary_classic.php` 对齐，由 `js/datacapturesummary.js` 驱动。
  */
 export function DataCaptureSummaryMain({ bootstrap }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const spKey = searchParams.toString()
+
+  const effectiveCompanyId = useMemo(() => {
+    const raw = searchParams.get('company_id')
+    if (raw != null && raw !== '') {
+      const want = parseInt(raw, 10)
+      if (Number.isFinite(want)) return want
+    }
+    return bootstrap.companyId ?? null
+  }, [searchParams, bootstrap.companyId])
+
+  const replaceCompanyInUrl = useCallback(
+    (companyId: number) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          p.set('company_id', String(companyId))
+          return p
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
+
   useLayoutEffect(() => {
     document.body.classList.add('datacapture-summary-spa-embed', 'datacapture-page')
     return () => {
@@ -55,11 +83,11 @@ export function DataCaptureSummaryMain({ bootstrap }: Props) {
   }, [])
 
   useLayoutEffect(() => {
-    window.DATACAPTURESUMMARY_COMPANY_ID = bootstrap.companyId ?? null
+    window.DATACAPTURESUMMARY_COMPANY_ID = effectiveCompanyId
     return () => {
       delete window.DATACAPTURESUMMARY_COMPANY_ID
     }
-  }, [bootstrap.companyId])
+  }, [effectiveCompanyId])
 
   useEffect(() => {
     window.__C168_API_BASE__ = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
@@ -71,17 +99,37 @@ export function DataCaptureSummaryMain({ bootstrap }: Props) {
   }, [])
 
   useEffect(() => {
+    if (effectiveCompanyId == null) return
+    void updateSessionCompany(effectiveCompanyId)
+  }, [effectiveCompanyId])
+
+  /** 无 `company_id` 时写入 bootstrap 会话公司 */
+  useEffect(() => {
+    if (searchParams.get('company_id')) return
+    if (bootstrap.companyId == null) return
+    replaceCompanyInUrl(bootstrap.companyId)
+  }, [bootstrap.companyId, searchParams, replaceCompanyInUrl])
+
+  useEffect(() => {
     let alive = true
     void ensureDatacaptureSummaryScript()
       .then(() => {
         if (!alive) return
-        window.runDataCaptureSummaryPageInit?.()
+        const kick = () => {
+          if (!alive) return
+          window.runDataCaptureSummaryPageInit?.()
+        }
+        if (typeof requestAnimationFrame === 'function') {
+          requestAnimationFrame(() => requestAnimationFrame(kick))
+        } else {
+          setTimeout(kick, 0)
+        }
       })
       .catch((err) => console.error(err))
     return () => {
       alive = false
     }
-  }, [])
+  }, [spKey])
 
   return (
     <div className="dcShell">

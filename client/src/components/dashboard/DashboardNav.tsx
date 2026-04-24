@@ -1,7 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCallback, useState } from 'react'
 import { apiUrl } from '../../lib/api'
-import { buildProcessListSearch } from '../../lib/buildProcessListSearch'
+import { buildCompanyIdSearch, buildProcessListSearch } from '../../lib/buildProcessListSearch'
 import type { SidebarContext } from '../../types/sidebarContext'
 import './DashboardNav.css'
 
@@ -112,7 +112,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
       {canNavItem(permissions, 'account', ext) && (
         <>
           <NavLink
-            to="/accounts"
+            to={`/accounts${buildCompanyIdSearch(context.sessionCompanyId)}`}
             className={({ isActive }) =>
               isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
             }
@@ -140,7 +140,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
 
       {canNavItem(permissions, 'datacapture', ext) && companyHasGambling && (
         <NavLink
-          to="/datacapture"
+          to={`/datacapture${buildCompanyIdSearch(context.sessionCompanyId)}`}
           className={({ isActive }) =>
             isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
           }
@@ -150,9 +150,21 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
         </NavLink>
       )}
 
+      {canNavItem(permissions, 'datacapture', ext) && companyHasGambling && (
+        <NavLink
+          to={`/datacapturesummary${buildCompanyIdSearch(context.sessionCompanyId)}`}
+          className={({ isActive }) =>
+            isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
+          }
+          onClick={go}
+        >
+          <span>Data Capture Summary</span>
+        </NavLink>
+      )}
+
       {canNavItem(permissions, 'payment', ext) && (
         <NavLink
-          to="/transaction"
+          to={`/transaction${buildCompanyIdSearch(context.sessionCompanyId)}`}
           className={({ isActive }) =>
             isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
           }

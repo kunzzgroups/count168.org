@@ -207,9 +207,15 @@ export function ProcessListMain({ bootstrap }: Props) {
     if (!w.companiesReady || w.loadCompaniesError || w.activeCompanyId == null) return
 
     const pw = window as ProcessListWindow
-    pw.PROCESSLIST_COMPANY_ID = w.activeCompanyId
-    pw.PROCESSLIST_SELECTED_COMPANY_IDS_FOR_ADD = w.activeCompanyId ? [w.activeCompanyId] : []
-    const activeRow = w.companies.find((c) => Number(c.id) === Number(w.activeCompanyId))
+    const raw = searchParams.get('company_id')
+    let effectiveId = w.activeCompanyId
+    if (raw != null && raw !== '') {
+      const want = parseInt(raw, 10)
+      if (Number.isFinite(want)) effectiveId = want
+    }
+    pw.PROCESSLIST_COMPANY_ID = effectiveId
+    pw.PROCESSLIST_SELECTED_COMPANY_IDS_FOR_ADD = effectiveId ? [effectiveId] : []
+    const activeRow = w.companies.find((c) => Number(c.id) === Number(effectiveId))
     pw.PROCESSLIST_COMPANY_CODE = activeRow ? String(activeRow.company_id || '').trim() : ''
     const map: Record<string, string> = {}
     for (const c of w.companies) {
@@ -224,8 +230,16 @@ export function ProcessListMain({ bootstrap }: Props) {
         .then(() => {
           if (!alive) return
           scriptInitRef.current = true
-          pw.runProcessListPageInit?.()
-          setLegacyReady(true)
+          const kick = () => {
+            if (!alive) return
+            pw.runProcessListPageInit?.()
+            setLegacyReady(true)
+          }
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => requestAnimationFrame(kick))
+          } else {
+            setTimeout(kick, 0)
+          }
         })
         .catch((err) => {
           console.error(err)
@@ -243,7 +257,7 @@ export function ProcessListMain({ bootstrap }: Props) {
       void pw.fetchProcesses?.()
     }
     return undefined
-  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId, w.companies])
+  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId, w.companies, spKey])
 
   useEffect(() => {
     if (!legacyReady) return

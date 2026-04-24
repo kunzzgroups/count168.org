@@ -76,7 +76,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $path = $prefix === '' || $prefix === '.' || $prefix === '/'
         ? '/datacapturesummary'
         : $prefix . '/datacapturesummary';
-    header('Location: ' . $path . '?success=1', true, 303);
+    $cid = isset($_SESSION['company_id']) ? (int) $_SESSION['company_id'] : 0;
+    $extra = ($cid > 0) ? ('&company_id=' . $cid) : '';
+    header('Location: ' . $path . '?success=1' . $extra, true, 303);
     exit();
 }
 

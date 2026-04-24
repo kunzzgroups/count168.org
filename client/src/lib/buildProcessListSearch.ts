@@ -1,6 +1,19 @@
 import type { SidebarContext } from '../types/sidebarContext'
 
 /**
+ * 侧栏或书签：`?company_id=`，与 Account / Process / Data Capture / Transaction SPA 一致。
+ */
+export function buildCompanyIdSearch(companyId: number | null | undefined): string {
+  const p = new URLSearchParams()
+  const id = companyId != null ? Number(companyId) : NaN
+  if (Number.isFinite(id) && id > 0) {
+    p.set('company_id', String(id))
+  }
+  const s = p.toString()
+  return s === '' ? '' : `?${s}`
+}
+
+/**
  * 侧栏「Process」链接 query：与 `loadPermissionButtons` 规则一致——
  * 仅 Bank 权 → `category=Bank`；仅 Games → `Games`；两者皆有 → 默认 `Games`；并附带当前 `company_id`。
  */

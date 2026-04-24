@@ -327,6 +327,9 @@
         var dcSection = document.getElementById('sidebar-datacapture-section');
         if (dcSection) dcSection.style.display = hasGambling ? '' : 'none';
 
+        var dcSumSection = document.getElementById('sidebar-datacapturesummary-section');
+        if (dcSumSection) dcSumSection.style.display = hasGambling ? '' : 'none';
+
         var maintCapture = document.getElementById('maintenance-capture-link');
         if (maintCapture) {
             if (isBankCategory) {

@@ -169,8 +169,14 @@ export function AccountListMain({ bootstrap }: Props) {
     if (!w.companiesReady || w.loadCompaniesError || w.activeCompanyId == null) return
 
     const aw = window as AccountListWindow
-    aw.ACCOUNT_LIST_COMPANY_ID = w.activeCompanyId
-    aw.ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD = w.activeCompanyId ? [w.activeCompanyId] : []
+    const raw = searchParams.get('company_id')
+    let effectiveId = w.activeCompanyId
+    if (raw != null && raw !== '') {
+      const want = parseInt(raw, 10)
+      if (Number.isFinite(want)) effectiveId = want
+    }
+    aw.ACCOUNT_LIST_COMPANY_ID = effectiveId
+    aw.ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD = effectiveId ? [effectiveId] : []
 
     if (!scriptInitRef.current) {
       let alive = true
@@ -178,8 +184,16 @@ export function AccountListMain({ bootstrap }: Props) {
         .then(() => {
           if (!alive) return
           scriptInitRef.current = true
-          aw.runAccountListPageInit?.()
-          setLegacyReady(true)
+          const kick = () => {
+            if (!alive) return
+            aw.runAccountListPageInit?.()
+            setLegacyReady(true)
+          }
+          if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => requestAnimationFrame(kick))
+          } else {
+            setTimeout(kick, 0)
+          }
         })
         .catch((err) => {
           console.error(err)
@@ -191,7 +205,7 @@ export function AccountListMain({ bootstrap }: Props) {
 
     void aw.fetchAccounts?.()
     return undefined
-  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId])
+  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId, spKey])
 
   /** 前进/后退或 React 内更新 query：刷新 legacy 勾选与列表（跳过首次，避免与 init 双请求） */
   useEffect(() => {
