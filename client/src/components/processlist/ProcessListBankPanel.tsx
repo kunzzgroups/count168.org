@@ -59,6 +59,23 @@ function dashIfEmpty(val: unknown): string {
   return s === '' ? '-' : s
 }
 
+function dmyToIso(v: string): string {
+  const t = String(v || '').trim()
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t)
+  if (!m) return ''
+  const dd = m[1]!.padStart(2, '0')
+  const mm = m[2]!.padStart(2, '0')
+  const yy = m[3]!
+  return `${yy}-${mm}-${dd}`
+}
+
+function isoToDmy(v: string): string {
+  const t = String(v || '').trim()
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t)
+  if (!m) return ''
+  return `${m[3]!}/${m[2]!}/${m[1]!}`
+}
+
 export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) {
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<BankProcessRow[]>([])
@@ -617,36 +634,32 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                 <div className="bank-date-popover" role="dialog" aria-label="Date range">
                   <div className="bank-date-popover__row">
                     <input
-                      type="text"
+                      type="date"
                       className="search-input"
-                      value={dateDraftFrom}
-                      onChange={(e) => setDateDraftFrom(e.target.value)}
-                      placeholder="dd/mm/yyyy"
+                      value={dmyToIso(dateDraftFrom)}
+                      onChange={(e) => {
+                        const dmy = isoToDmy(e.target.value)
+                        setDateDraftFrom(dmy)
+                        setDateFrom(dmy)
+                        setCurrentPage(1)
+                      }}
                       aria-label="Date from"
                     />
                     <span className="bank-date-filter-hint" aria-hidden>~</span>
                     <input
-                      type="text"
+                      type="date"
                       className="search-input"
-                      value={dateDraftTo}
-                      onChange={(e) => setDateDraftTo(e.target.value)}
-                      placeholder="dd/mm/yyyy"
+                      value={dmyToIso(dateDraftTo)}
+                      onChange={(e) => {
+                        const dmy = isoToDmy(e.target.value)
+                        setDateDraftTo(dmy)
+                        setDateTo(dmy)
+                        setCurrentPage(1)
+                      }}
                       aria-label="Date to"
                     />
                   </div>
                   <div className="bank-date-popover__actions">
-                    <button
-                      type="button"
-                      className="btn btn-add"
-                      onClick={() => {
-                        setDateFrom(dateDraftFrom)
-                        setDateTo(dateDraftTo)
-                        setCurrentPage(1)
-                        setDateOpen(false)
-                      }}
-                    >
-                      Apply
-                    </button>
                     <button
                       type="button"
                       className="btn btn-cancel"
@@ -660,6 +673,13 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                       }}
                     >
                       Clear
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-add"
+                      onClick={() => setDateOpen(false)}
+                    >
+                      Done
                     </button>
                   </div>
                 </div>
