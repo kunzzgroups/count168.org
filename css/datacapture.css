@@ -119,6 +119,17 @@ h1 {
     -webkit-overflow-scrolling: touch;
 }
 
+/* 桌面经典版：表单与 Submitted 整块随内容增高，由窗口滚动，不在白卡片内嵌滚动条 */
+@media (min-width: 900px) {
+
+    .form-container,
+    .submitted-container {
+        height: auto;
+        min-height: clamp(208px, 24.23vw, 350px);
+        overflow-y: visible;
+    }
+}
+
 .form-title,
 .submitted-title {
     margin: 0 0 clamp(6px, 0.83vw, 16px) 0;
