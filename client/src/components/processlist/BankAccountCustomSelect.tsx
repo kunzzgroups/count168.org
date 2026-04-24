@@ -39,7 +39,7 @@ export function BankAccountCustomSelect({
 }: Props) {
   const isOpen = openGate === gate
   const btnRef = useRef<HTMLButtonElement>(null)
-  const dropRef = useRef<HTMLDivElement>(null)
+  const [dropEl, setDropEl] = useState<HTMLDivElement | null>(null)
   const [search, setSearch] = useState('')
   const { pos, setMenuEl, recompute } = useFloatingPortalPosition(isOpen, btnRef, {
     preferredMinWidth: 220,
@@ -62,12 +62,12 @@ export function BankAccountCustomSelect({
     if (!isOpen) return
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node
-      if (btnRef.current?.contains(t) || dropRef.current?.contains(t)) return
+      if (btnRef.current?.contains(t) || dropEl?.contains(t)) return
       close()
     }
     document.addEventListener('click', onDoc, true)
     return () => document.removeEventListener('click', onDoc, true)
-  }, [isOpen, close])
+  }, [isOpen, close, dropEl])
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim()
@@ -107,7 +107,7 @@ export function BankAccountCustomSelect({
     isOpen && typeof document !== 'undefined' ? (
       <div
         ref={(el) => {
-          dropRef.current = el
+          setDropEl(el)
           setMenuEl(el)
         }}
         id={dropdownId}
