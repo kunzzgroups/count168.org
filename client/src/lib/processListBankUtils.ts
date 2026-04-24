@@ -160,3 +160,79 @@ export function getBankStatusSelectValue(p: BankProcessRow): string {
   if (f) return f
   return String(p.status || '').toLowerCase() === 'inactive' ? 'inactive' : 'active'
 }
+
+const BANK_FORM_ROLE_SET = new Set([
+  'PARTNER',
+  'SUPPLIER',
+  'UPLINE',
+  'STAFF',
+  'AGENT',
+  'MEMBER',
+  'PROFIT',
+])
+
+export function normalizeBankAccountRole(role: unknown): string {
+  return String(role || '')
+    .trim()
+    .toUpperCase()
+}
+
+export function isAllowedBankFormRole(role: unknown): boolean {
+  return BANK_FORM_ROLE_SET.has(normalizeBankAccountRole(role))
+}
+
+/** 与 `js/processlist.js` formatBankAccountDisplay 一致 */
+export function formatBankAccountDisplay(
+  codeRaw: unknown,
+  nameRaw: unknown,
+  fallbackRaw?: unknown,
+): string {
+  const code = String(codeRaw || '').trim()
+  const name = String(nameRaw || '').trim()
+  const fallback = String(fallbackRaw || '').trim()
+  if (code) {
+    const safeName = name || code
+    return `${code}[${safeName}]`
+  }
+  if (name) return name
+  return fallback
+}
+
+export type ProfitSharingEntry = {
+  accountId: number
+  accountText: string
+  amount: string
+}
+
+/** 解析 `bank_profit_sharing` 存库串（与 classic `split(',')` + `' - '` 一致） */
+export function parseProfitSharingString(raw: unknown): ProfitSharingEntry[] {
+  const s = String(raw || '').trim()
+  if (!s) return []
+  const out: ProfitSharingEntry[] = []
+  for (const part of s.split(',')) {
+    const t = part.trim()
+    if (!t) continue
+    const d = t.lastIndexOf(' - ')
+    if (d > -1) {
+      out.push({
+        accountId: 0,
+        accountText: t.slice(0, d).trim(),
+        amount: t.slice(d + 3).trim(),
+      })
+    }
+  }
+  return out
+}
+
+export function serializeProfitSharingEntries(entries: ProfitSharingEntry[]): string {
+  const parts: string[] = []
+  for (const e of entries) {
+    const text = (e.accountText || '').trim()
+    const raw = (e.amount || '').trim()
+    if (!text || raw === '') continue
+    const num = parseFloat(raw)
+    const amount = Number.isFinite(num) ? num.toFixed(2) : raw
+    parts.push(`${text} - ${amount}`)
+  }
+  return parts.join(', ')
+}

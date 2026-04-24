@@ -2,9 +2,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'reac
 import type { BankProcessRow } from '../../lib/processListTypes'
 import { apiUrl } from '../../lib/api'
 import {
+  BANK_FORM_ACCOUNT_ROLES,
   fetchAccountList,
+  fetchBankCountryDropdown,
   fetchGetProcess,
   fetchProcessList,
+  fetchSelectedBanksByCountry,
   postAddProcess,
   postDeleteProcesses,
   postUpdateBankRemark,
@@ -15,9 +18,15 @@ import {
   getContractStateClass,
   isGrayContractActive,
   matchesCurrentBankFilters,
+  parseProfitSharingString,
+  type ProfitSharingEntry,
   processMatchesSelectedDate,
+  serializeProfitSharingEntries,
   ymdToday,
 } from '../../lib/processListBankUtils'
+import { BankAccountCustomSelect } from './BankAccountCustomSelect'
+import { BankListSelectionModal, BankCountrySelectionModal } from './BankRegionalModals'
+import { BankProfitSharingModal } from './BankProfitSharingModal'
 import { BankStatusDropdown } from './BankStatusDropdown'
 
 const PAGE_SIZE = 20
@@ -78,8 +87,6 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
   const [bRemark, setBRemark] = useState('')
   const [bCost, setBCost] = useState('')
   const [bPrice, setBPrice] = useState('')
-  const [bProfitText, setBProfitText] = useState('')
-  const [bProfitShare, setBProfitShare] = useState('')
   const [bDayStart, setBDayStart] = useState('')
   const [bDayEnd, setBDayEnd] = useState('')
   const [bFreq, setBFreq] = useState('1st_of_every_month')
@@ -92,6 +99,14 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
 
   const [bankNoteModal, setBankNoteModal] = useState<'sop' | 'remark' | null>(null)
   const [bankNoteDraft, setBankNoteDraft] = useState('')
+
+  const [countryOptions, setCountryOptions] = useState<string[]>([])
+  const [banksByCountryMap, setBanksByCountryMap] = useState<Record<string, string[]>>({})
+  const [countryPickModal, setCountryPickModal] = useState(false)
+  const [bankPickModal, setBankPickModal] = useState(false)
+  const [profitPickModal, setProfitPickModal] = useState(false)
+  const [profitSharingEntries, setProfitSharingEntries] = useState<ProfitSharingEntry[]>([])
+  const [accountDropdownGate, setAccountDropdownGate] = useState<string | null>(null)
 
   const todayY = ymdToday()
 
@@ -135,15 +150,38 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
   }, [loadList])
 
   useEffect(() => {
+    if (!bankOpen) return
+    const preserveCo = bCountry.trim()
+    const preserveBk = bBank.trim()
     let alive = true
     void (async () => {
-      const r = await fetchAccountList(companyId)
-      if (alive && r.success) setAccounts((r.data.accounts || []) as AccountOpt[])
+      const [c, b, a] = await Promise.all([
+        fetchBankCountryDropdown(companyId),
+        fetchSelectedBanksByCountry(companyId),
+        fetchAccountList(companyId, { roles: BANK_FORM_ACCOUNT_ROLES }),
+      ])
+      if (!alive) return
+      if (c.success) {
+        const merged = new Set(c.data)
+        if (preserveCo) merged.add(preserveCo)
+        setCountryOptions([...merged].sort((x, y) => x.localeCompare(y)))
+      }
+      if (b.success) {
+        const map: Record<string, string[]> = { ...b.data }
+        if (preserveCo && preserveBk) {
+          const cur = map[preserveCo] || []
+          if (!cur.includes(preserveBk)) {
+            map[preserveCo] = [...cur, preserveBk].sort((x, y) => x.localeCompare(y))
+          }
+        }
+        setBanksByCountryMap(map)
+      }
+      if (a.success) setAccounts((a.data.accounts || []) as AccountOpt[])
     })()
     return () => {
       alive = false
     }
-  }, [companyId])
+  }, [bankOpen, companyId])
 
   const filtered = useMemo(() => {
     const opts = {
@@ -206,6 +244,39 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
   }, [sorted, page, showAll])
   const startIndex = showAll ? 0 : (page - 1) * PAGE_SIZE
 
+  const bankRowOptions = useMemo(() => {
+    const c = bCountry.trim()
+    const raw = (c ? banksByCountryMap[c] : undefined) || []
+    const uniq = new Set(raw.map((x) => String(x).trim()).filter(Boolean))
+    const bk = bBank.trim()
+    if (bk) uniq.add(bk)
+    return [...uniq].sort((a, b) => a.localeCompare(b))
+  }, [banksByCountryMap, bCountry, bBank])
+
+  const grossProfit = useMemo(() => {
+    const cost = parseFloat(bCost) || 0
+    const price = parseFloat(bPrice) || 0
+    return price - cost
+  }, [bCost, bPrice])
+
+  const profitSharingSum = useMemo(
+    () =>
+      profitSharingEntries.reduce((s, e) => {
+        const n = parseFloat(e.amount)
+        return s + (Number.isFinite(n) ? n : 0)
+      }, 0),
+    [profitSharingEntries],
+  )
+
+  const displayedNetProfit = Math.max(0, grossProfit - profitSharingSum).toFixed(2)
+
+  useEffect(() => {
+    const opts = banksByCountryMap[bCountry.trim()] || []
+    if (opts.length === 0) return
+    const bk = bBank.trim()
+    if (bk && !opts.includes(bk)) setBBank('')
+  }, [bCountry, banksByCountryMap, bBank])
+
   const resetBankForm = () => {
     setEditBankId(null)
     setBCountry('')
@@ -221,8 +292,7 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
     setBRemark('')
     setBCost('')
     setBPrice('')
-    setBProfitText('')
-    setBProfitShare('')
+    setProfitSharingEntries([])
     setBDayStart('')
     setBDayEnd('')
     setBFreq('1st_of_every_month')
@@ -232,6 +302,18 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      if (profitPickModal) {
+        setProfitPickModal(false)
+        return
+      }
+      if (bankPickModal) {
+        setBankPickModal(false)
+        return
+      }
+      if (countryPickModal) {
+        setCountryPickModal(false)
+        return
+      }
       if (bankNoteModal) {
         setBankNoteModal(null)
         return
@@ -241,12 +323,18 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
         resetBankForm()
       }
     }
-    if (bankOpen || bankNoteModal) {
+    if (
+      bankOpen ||
+      bankNoteModal ||
+      countryPickModal ||
+      bankPickModal ||
+      profitPickModal
+    ) {
       window.addEventListener('keydown', onKey)
       return () => window.removeEventListener('keydown', onKey)
     }
     return undefined
-  }, [bankOpen, bankNoteModal])
+  }, [bankOpen, bankNoteModal, countryPickModal, bankPickModal, profitPickModal])
 
   const openBankNote = (kind: 'sop' | 'remark') => {
     setBankNoteDraft(kind === 'sop' ? bSop : bRemark)
@@ -262,6 +350,10 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
   const closeBankModal = () => {
     setBankOpen(false)
     setBankNoteModal(null)
+    setCountryPickModal(false)
+    setBankPickModal(false)
+    setProfitPickModal(false)
+    setAccountDropdownGate(null)
     resetBankForm()
   }
 
@@ -291,12 +383,25 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
     setBRemark(String(d.remark || ''))
     setBCost(d.cost != null && d.cost !== '' ? String(d.cost) : '')
     setBPrice(d.price != null && d.price !== '' ? String(d.price) : '')
-    setBProfitText(d.profit != null && d.profit !== '' ? String(d.profit) : '')
-    setBProfitShare(String(d.profit_sharing || ''))
+    setProfitSharingEntries(parseProfitSharingString(d.profit_sharing))
     setBDayStart(d.day_start != null ? String(d.day_start).slice(0, 10) : '')
     setBDayEnd(d.day_end != null ? String(d.day_end).slice(0, 10) : '')
     setBFreq(String(d.day_start_frequency || '1st_of_every_month'))
     setBStatus(String(d.status || 'active'))
+    const co = String(d.country || '').trim()
+    const bk = String(d.bank || '').trim()
+    if (co) {
+      setCountryOptions((prev) =>
+        prev.includes(co) ? prev : [...prev, co].sort((a, b) => a.localeCompare(b)),
+      )
+    }
+    if (co && bk) {
+      setBanksByCountryMap((prev) => {
+        const cur = prev[co] || []
+        if (cur.includes(bk)) return prev
+        return { ...prev, [co]: [...cur, bk].sort((a, b) => a.localeCompare(b)) }
+      })
+    }
   }
 
   const openEditBank = async (id: number) => {
@@ -335,8 +440,9 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
     fd.set('remark', bRemark)
     if (bCost !== '') fd.set('cost', bCost)
     if (bPrice !== '') fd.set('price', bPrice)
-    if (bProfitText !== '') fd.set('profit', bProfitText)
-    fd.set('profit_sharing', bProfitShare)
+    const gross = (parseFloat(bPrice) || 0) - (parseFloat(bCost) || 0)
+    fd.set('profit', gross.toFixed(2))
+    fd.set('profit_sharing', serializeProfitSharingEntries(profitSharingEntries))
     if (bDayStart) fd.set('day_start', bDayStart)
     if (bDayEnd) fd.set('day_end', bDayEnd)
     fd.set('day_start_frequency', bFreq)
@@ -809,29 +915,68 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                       <div className="form-row bank-row-two-cols">
                         <div className="form-group">
                           <label htmlFor="bank_country">Country (Currency)</label>
-                          <input
-                            type="text"
-                            id="bank_country"
-                            name="country"
-                            className="bank-input"
-                            placeholder="e.g. MYR"
-                            value={bCountry}
-                            onChange={(e) => setBCountry(e.target.value)}
-                            required
-                          />
+                          <div className="select-with-add">
+                            <select
+                              id="bank_country"
+                              name="country"
+                              className="bank-select"
+                              value={bCountry}
+                              onChange={(e) => {
+                                setBCountry(e.target.value)
+                                setBBank('')
+                              }}
+                              required
+                            >
+                              <option value="">Select Country</option>
+                              {countryOptions.map((c) => (
+                                <option key={c} value={c}>
+                                  {c}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              className="bank-add-btn"
+                              title="Add New Country"
+                              onClick={() => setCountryPickModal(true)}
+                            >
+                              +
+                            </button>
+                          </div>
                         </div>
                         <div className="form-group">
                           <label htmlFor="bank_bank">Bank</label>
-                          <input
-                            type="text"
-                            id="bank_bank"
-                            name="bank"
-                            className="bank-input"
-                            placeholder="Bank name"
-                            value={bBank}
-                            onChange={(e) => setBBank(e.target.value)}
-                            required
-                          />
+                          <div className="select-with-add">
+                            <select
+                              id="bank_bank"
+                              name="bank"
+                              className="bank-select"
+                              value={bBank}
+                              onChange={(e) => setBBank(e.target.value)}
+                              required
+                            >
+                              <option value="">Select Bank</option>
+                              {bankRowOptions.map((bk) => (
+                                <option key={bk} value={bk}>
+                                  {bk}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              className="bank-add-btn"
+                              title="Add New Bank"
+                              onClick={() => {
+                                if (!bCountry.trim()) {
+                                  onNotice('Please select Country first', 'err')
+                                  return
+                                }
+                                setBankPickModal(true)
+                              }}
+                            >
+                              +
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -840,23 +985,19 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                       <div className="form-row bank-row-two-cols">
                         <div className="form-group">
                           <label htmlFor="bank_card_merchant">Supplier</label>
-                          <select
-                            id="bank_card_merchant"
-                            name="card_merchant"
-                            className="bank-select"
-                            value={bCard === '' ? '' : String(bCard)}
-                            onChange={(e) =>
-                              setBCard(e.target.value ? parseInt(e.target.value, 10) : '')
+                          <BankAccountCustomSelect
+                            gate="bank_card_merchant"
+                            openGate={accountDropdownGate}
+                            setOpenGate={setAccountDropdownGate}
+                            accounts={accounts}
+                            value={bCard}
+                            onChange={setBCard}
+                            buttonId="bank_card_merchant"
+                            dropdownId="bank_card_merchant_dropdown"
+                            onAddAccountClick={() =>
+                              onNotice('新增账户请使用经典银行页或账户管理。', 'ok')
                             }
-                          >
-                            <option value="">Select Account</option>
-                            {accounts.map((a) => (
-                              <option key={a.id} value={a.id}>
-                                {a.account_id}
-                                {a.name ? ` [${a.name}]` : ''}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </div>
                         <div className="form-group">
                           <label htmlFor="bank_cost">Buy Price</label>
@@ -920,23 +1061,19 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                       <div className="form-row bank-row-two-cols">
                         <div className="form-group">
                           <label htmlFor="bank_customer">Customer</label>
-                          <select
-                            id="bank_customer"
-                            name="customer"
-                            className="bank-select"
-                            value={bCust === '' ? '' : String(bCust)}
-                            onChange={(e) =>
-                              setBCust(e.target.value ? parseInt(e.target.value, 10) : '')
+                          <BankAccountCustomSelect
+                            gate="bank_customer"
+                            openGate={accountDropdownGate}
+                            setOpenGate={setAccountDropdownGate}
+                            accounts={accounts}
+                            value={bCust}
+                            onChange={setBCust}
+                            buttonId="bank_customer"
+                            dropdownId="bank_customer_dropdown"
+                            onAddAccountClick={() =>
+                              onNotice('新增账户请使用经典银行页或账户管理。', 'ok')
                             }
-                          >
-                            <option value="">Select Account</option>
-                            {accounts.map((a) => (
-                              <option key={`c-${a.id}`} value={a.id}>
-                                {a.account_id}
-                                {a.name ? ` [${a.name}]` : ''}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </div>
                         <div className="form-group">
                           <label htmlFor="bank_price">Sell Price</label>
@@ -987,23 +1124,19 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                       <div className="form-row bank-row-two-cols">
                         <div className="form-group">
                           <label htmlFor="bank_profit_account">Company</label>
-                          <select
-                            id="bank_profit_account"
-                            name="profit_account"
-                            className="bank-select"
-                            value={bProfitAcc === '' ? '' : String(bProfitAcc)}
-                            onChange={(e) =>
-                              setBProfitAcc(e.target.value ? parseInt(e.target.value, 10) : '')
+                          <BankAccountCustomSelect
+                            gate="bank_profit_account"
+                            openGate={accountDropdownGate}
+                            setOpenGate={setAccountDropdownGate}
+                            accounts={accounts}
+                            value={bProfitAcc}
+                            onChange={setBProfitAcc}
+                            buttonId="bank_profit_account"
+                            dropdownId="bank_profit_account_dropdown"
+                            onAddAccountClick={() =>
+                              onNotice('新增账户请使用经典银行页或账户管理。', 'ok')
                             }
-                          >
-                            <option value="">Select Account</option>
-                            {accounts.map((a) => (
-                              <option key={`p-${a.id}`} value={a.id}>
-                                {a.account_id}
-                                {a.name ? ` [${a.name}]` : ''}
-                              </option>
-                            ))}
-                          </select>
+                          />
                         </div>
                         <div className="form-group">
                           <label htmlFor="bank_profit">Profit</label>
@@ -1013,8 +1146,9 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                             name="profit"
                             className="bank-input"
                             placeholder="Auto calculated"
-                            value={bProfitText}
-                            onChange={(e) => setBProfitText(e.target.value)}
+                            readOnly
+                            style={{ backgroundColor: '#f5f5f5' }}
+                            value={displayedNetProfit}
                           />
                         </div>
                       </div>
@@ -1038,19 +1172,48 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                       </div>
                       <div className="bank-profit-sharing-container form-group">
                         <div className="bank-profit-sharing-header">
-                          <h3>Profit sharing</h3>
+                          <h3>Selected Profit Sharing</h3>
+                          <button
+                            type="button"
+                            className="bank-add-btn"
+                            title="Add Profit Sharing"
+                            onClick={() => setProfitPickModal(true)}
+                          >
+                            +
+                          </button>
                         </div>
+                        <input
+                          type="hidden"
+                          id="bank_profit_sharing"
+                          name="profit_sharing"
+                          value={serializeProfitSharingEntries(profitSharingEntries)}
+                        />
                         <div className="bank-profit-sharing-list" id="selectedProfitSharingList">
-                          <input
-                            type="text"
-                            id="bank_profit_sharing"
-                            name="profit_sharing"
-                            className="bank-input"
-                            style={{ margin: '8px 12px', width: 'calc(100% - 24px)', boxSizing: 'border-box' }}
-                            placeholder="Profit sharing"
-                            value={bProfitShare}
-                            onChange={(e) => setBProfitShare(e.target.value)}
-                          />
+                          {profitSharingEntries.length === 0 ? (
+                            <div className="no-profit-sharing">
+                              <p>No profit sharing selected</p>
+                            </div>
+                          ) : (
+                            profitSharingEntries.map((entry, index) => {
+                              const num = parseFloat(entry.amount)
+                              const displayAmount = Number.isFinite(num) ? num.toFixed(2) : entry.amount
+                              const text = `${entry.accountText} - ${displayAmount}`
+                              return (
+                                <div key={`${text}_${index}`} className="selected-country-modal-item">
+                                  <span>{text}</span>
+                                  <button
+                                    type="button"
+                                    className="remove-country-modal"
+                                    onClick={() =>
+                                      setProfitSharingEntries((prev) => prev.filter((_, i) => i !== index))
+                                    }
+                                  >
+                                    &times;
+                                  </button>
+                                </div>
+                              )
+                            })
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1198,6 +1361,39 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
           </div>
         </div>
       ) : null}
+
+      <BankProfitSharingModal
+        open={profitPickModal}
+        onClose={() => setProfitPickModal(false)}
+        accounts={accounts}
+        onSubmit={(entries) => setProfitSharingEntries((prev) => [...prev, ...entries])}
+      />
+      <BankCountrySelectionModal
+        open={countryPickModal}
+        companyId={companyId}
+        initialSelected={countryOptions}
+        onClose={() => setCountryPickModal(false)}
+        onSaved={(list) => {
+          setCountryOptions(list)
+          setBCountry((cur) => (list.includes(cur) ? cur : list[0] || ''))
+        }}
+        onNotice={onNotice}
+      />
+      <BankListSelectionModal
+        open={bankPickModal}
+        companyId={companyId}
+        country={bCountry}
+        initialSelectedBanks={banksByCountryMap[bCountry.trim()] || []}
+        fullSelectedBanksMap={banksByCountryMap}
+        onClose={() => setBankPickModal(false)}
+        onSaved={(next) => {
+          setBanksByCountryMap(next)
+          const cur = bCountry.trim()
+          const banks = (cur ? next[cur] : undefined) || []
+          if (banks.length && bBank.trim() && !banks.includes(bBank.trim())) setBBank(banks[0] || '')
+        }}
+        onNotice={onNotice}
+      />
     </>
   )
 }

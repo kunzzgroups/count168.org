@@ -159,8 +159,15 @@ export async function fetchAddProcessFormData(
   return parseJson<AddProcessFormPayload>(r)
 }
 
-/** 与 Bank 模态中账户下拉一致：`accountlistapi.php` */
-export async function fetchAccountList(companyId: number): Promise<
+/** Bank 表单账户：`js/processlist.js` BANK_ALLOWED_ACCOUNT_ROLES */
+export const BANK_FORM_ACCOUNT_ROLES =
+  'PARTNER,SUPPLIER,UPLINE,STAFF,AGENT,MEMBER,PROFIT' as const
+
+/** 与 Bank 模态中账户下拉一致：`accountlistapi.php`（可选 `roles` 与经典一致） */
+export async function fetchAccountList(
+  companyId: number,
+  opts?: { roles?: string },
+): Promise<
   ApiResult<{
     accounts: {
       id: number
@@ -175,6 +182,7 @@ export async function fetchAccountList(companyId: number): Promise<
     company_id: String(companyId),
     showAll: 'true',
   })
+  if (opts?.roles) q.set('roles', opts.roles)
   const r = await apiFetch(`api/accounts/accountlistapi.php?${q}`)
   if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
   const j = (await r.json()) as {
@@ -223,6 +231,112 @@ export async function fetchGetProcess(
   const r = await apiFetch(`api/processes/processlist_api.php?${q}`)
   if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
   return parseJson<Record<string, unknown>>(r)
+}
+
+export async function fetchBankCountryDropdown(companyId: number): Promise<ApiResult<string[]>> {
+  const r1 = await apiFetch(
+    `api/processes/processlist_api.php?action=get_selected_countries&company_id=${encodeURIComponent(String(companyId))}`,
+  )
+  if (!r1.ok) return { success: false, error: `HTTP ${r1.status}` }
+  const j1 = (await r1.json()) as { success?: boolean; data?: string[] }
+  if (j1.success && Array.isArray(j1.data) && j1.data.length > 0) {
+    return { success: true, data: j1.data }
+  }
+  const r2 = await apiFetch(
+    `api/processes/processlist_api.php?action=get_countries&company_id=${encodeURIComponent(String(companyId))}`,
+  )
+  if (!r2.ok) return { success: false, error: `HTTP ${r2.status}` }
+  return parseJson<string[]>(r2)
+}
+
+export async function fetchBanksByCountryApi(
+  companyId: number,
+  country: string,
+): Promise<ApiResult<string[]>> {
+  const c = encodeURIComponent(country.trim())
+  const r = await apiFetch(
+    `api/processes/processlist_api.php?action=get_banks_by_country&country=${c}&company_id=${encodeURIComponent(String(companyId))}`,
+  )
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  return parseJson<string[]>(r)
+}
+
+export async function fetchSelectedBanksByCountry(
+  companyId: number,
+): Promise<ApiResult<Record<string, string[]>>> {
+  const r = await apiFetch(
+    `api/processes/processlist_api.php?action=get_selected_banks&company_id=${encodeURIComponent(String(companyId))}`,
+  )
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  const j = (await r.json()) as { success?: boolean; data?: unknown }
+  if (!j.success) return { success: false, error: 'Failed to load selected banks' }
+  const d = j.data
+  if (d && typeof d === 'object' && !Array.isArray(d)) {
+    return { success: true, data: d as Record<string, string[]> }
+  }
+  return { success: true, data: {} }
+}
+
+export async function postSaveSelectedCountries(
+  companyId: number,
+  countries: string[],
+): Promise<ApiResult<unknown>> {
+  const fd = new FormData()
+  fd.set('company_id', String(companyId))
+  countries.forEach((c) => {
+    const t = c.trim()
+    if (t) fd.append('countries[]', t)
+  })
+  const r = await apiFetch('api/processes/processlist_api.php?action=save_selected_countries', {
+    method: 'POST',
+    body: fd,
+  })
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  return parseJson(r)
+}
+
+export async function postAddCompanyCountry(
+  companyId: number,
+  country: string,
+): Promise<ApiResult<unknown>> {
+  const fd = new FormData()
+  fd.set('company_id', String(companyId))
+  fd.set('country', country.trim())
+  const r = await apiFetch('api/processes/processlist_api.php?action=add_country', { method: 'POST', body: fd })
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  return parseJson(r)
+}
+
+export async function postSaveCountryBanksList(
+  companyId: number,
+  country: string,
+  banks: string[],
+): Promise<ApiResult<unknown>> {
+  const fd = new FormData()
+  fd.set('company_id', String(companyId))
+  fd.set('country', country.trim())
+  ;[...new Set(banks.map((b) => b.trim()).filter(Boolean))].forEach((b) => fd.append('banks[]', b))
+  const r = await apiFetch('api/processes/processlist_api.php?action=save_country_banks', {
+    method: 'POST',
+    body: fd,
+  })
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  return parseJson(r)
+}
+
+export async function postSaveSelectedBanksMap(
+  companyId: number,
+  selected: Record<string, string[]>,
+): Promise<ApiResult<unknown>> {
+  const fd = new FormData()
+  fd.set('company_id', String(companyId))
+  fd.set('selected', JSON.stringify(selected))
+  const r = await apiFetch('api/processes/processlist_api.php?action=save_selected_banks', {
+    method: 'POST',
+    body: fd,
+  })
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  return parseJson(r)
 }
 
 export { apiUrl }
