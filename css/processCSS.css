@@ -208,6 +208,16 @@ body.process-page {
     box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
 }
 
+.process-page .process-company-btn.is-disabled,
+.process-page .process-company-btn:disabled {
+    background: #e5e7eb;
+    color: #9ca3af;
+    border-color: #d1d5db;
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 1;
+}
+
 /* Buttons - mirror user list styles */
 .process-page .content .btn:hover {
     transform: translateY(-1px);

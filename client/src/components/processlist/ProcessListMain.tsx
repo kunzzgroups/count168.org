@@ -70,6 +70,11 @@ export function ProcessListMain({ bootstrap }: Props) {
     return resolveActiveCategory(pathname, companyCode, dom as GamePermission[])
   }, [pathname, companyCode, domainPerms, permLoaded])
 
+  const availableCategories = useMemo(
+    () => (permLoaded ? domainPerms : (CAT_ORDER as GamePermission[])),
+    [permLoaded, domainPerms],
+  )
+
   useLayoutEffect(() => {
     document.body.classList.add('process-page', 'processlist-spa-embed', 'processlist-spa-native')
     return () => {
@@ -220,6 +225,7 @@ export function ProcessListMain({ bootstrap }: Props) {
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
   const goCategory = (cat: string) => {
+    if (!availableCategories.includes(cat as GamePermission)) return
     if (companyCode) writeStoredCategory(companyCode, cat)
     const path = routeForCategory(cat)
     navigate({ pathname: path, search: searchParams.toString() ? `?${searchParams.toString()}` : '' })
@@ -288,18 +294,25 @@ export function ProcessListMain({ bootstrap }: Props) {
           <div className="process-company-filter process-permission-filter-header">
             <span className="process-company-label">Category:</span>
             <div className="process-company-buttons" id="process-list-permission-buttons">
-              {domainPerms.map((p) => (
+              {CAT_ORDER.map((p) => {
+                const enabled = availableCategories.includes(p as GamePermission)
+                return (
                 <button
                   key={p}
                   type="button"
                   className={
-                    'process-company-btn' + (activeCategory === p ? ' active' : '')
+                    'process-company-btn' +
+                    (activeCategory === p ? ' active' : '') +
+                    (!enabled ? ' is-disabled' : '')
                   }
+                  disabled={!enabled}
+                  title={enabled ? '' : `${p} is not available for this company`}
                   onClick={() => goCategory(p)}
                 >
                   {p}
                 </button>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
