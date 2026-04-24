@@ -198,13 +198,16 @@ if ($req_company_id) {
         'get_selected_banks', 'save_selected_banks', 'update_bank_process'
     ];
 
-    $requiredCategory = 'Games'; // Default fallback
+    $requiredCategory = 'Games'; // Default: gambling / process 表（含未传 permission）
     if (in_array($action, $bankOnlyActions)) {
         $requiredCategory = 'Bank';
     } else {
         $reqPermission = $_GET['permission'] ?? $_POST['permission'] ?? '';
         if ($reqPermission === 'Bank') {
             $requiredCategory = 'Bank';
+        } elseif (in_array($reqPermission, ['Loan', 'Rate', 'Money'], true)) {
+            // 与 `company.permissions` 及 Category 按钮一致；此前误用 Games 校验会导致仅有 Loan 等类别的公司永远 403
+            $requiredCategory = $reqPermission;
         }
     }
 
