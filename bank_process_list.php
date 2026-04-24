@@ -818,5 +818,17 @@ if (!function_exists('renderBankProcessModals')) {
 }
 
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    require __DIR__ . '/processlist.php';
+    if (!defined('PROCESSLIST_PAGE_FILE')) {
+        define('PROCESSLIST_PAGE_FILE', 'bank_process_list.php');
+    }
+    $processListPageFile = 'bank_process_list.php';
+    require_once 'session_check.php';
+    require_once __DIR__ . '/includes/processlist_delete_post.inc.php';
+    $prefix = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
+    $path = $prefix === '' || $prefix === '.' || $prefix === '/'
+        ? '/process/bank'
+        : $prefix . '/process/bank';
+    $qs = (!empty($_SERVER['QUERY_STRING'])) ? ('?' . $_SERVER['QUERY_STRING']) : '';
+    header('Location: ' . $path . $qs, true, 302);
+    exit;
 }

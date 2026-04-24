@@ -20,6 +20,7 @@ interface Window {
   EAZYCOUNT_SPA_DATACAPTURE?: string
   EAZYCOUNT_SPA_DATACAPTURESUMMARY?: string
   EAZYCOUNT_SPA_ACCOUNTS?: string
+  EAZYCOUNT_SPA_PROCESSLIST?: string
   /** 与 `client/src/lib/api.ts` 的 `VITE_API_BASE` 一致，供 `datacapture.js` 的 `buildApiUrl` 使用 */
   __C168_API_BASE__?: string
   /** 与 Vite `base` 一致（无前导尾斜杠），供 legacy 脚本拼 `/datacapture`、`/datacapturesummary` */

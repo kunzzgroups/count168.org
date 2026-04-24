@@ -1,0 +1,17 @@
+/* Process List：iframe 与经典同页，主区拉满 */
+.processListSpa {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.processListSpa__iframe {
+  width: 100%;
+  flex: 1;
+  min-height: 480px;
+  border: 0;
+  display: block;
+  background: #fff;
+}

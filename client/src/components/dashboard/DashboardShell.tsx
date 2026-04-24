@@ -88,12 +88,14 @@ export function DashboardShell({
     window.EAZYCOUNT_SPA_DATACAPTURE = pre ? `${pre}/datacapture` : '/datacapture'
     window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = pre ? `${pre}/datacapturesummary` : '/datacapturesummary'
     window.EAZYCOUNT_SPA_ACCOUNTS = pre ? `${pre}/accounts` : '/accounts'
+    window.EAZYCOUNT_SPA_PROCESSLIST = pre ? `${pre}/process` : '/process'
     return () => {
       delete window.EAZYCOUNT_SPA_DASHBOARD
       delete window.EAZYCOUNT_SPA_TRANSACTION
       delete window.EAZYCOUNT_SPA_DATACAPTURE
       delete window.EAZYCOUNT_SPA_DATACAPTURESUMMARY
       delete window.EAZYCOUNT_SPA_ACCOUNTS
+      delete window.EAZYCOUNT_SPA_PROCESSLIST
     }
   }, [classicSidebarLayout])
 

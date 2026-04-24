@@ -9,7 +9,12 @@ let waiting = false;
 let currentPage = 1;
 const pageSize = 20;
 let selectedPermission = null;
-const currentProcessListPage = (typeof window.PROCESSLIST_PAGE_FILE === 'string' ? window.PROCESSLIST_PAGE_FILE.trim() : '');
+function getCurrentProcessListPage() {
+    if (typeof window.__C168_PROCESSLIST_PAGE_FILE__ === 'string' && window.__C168_PROCESSLIST_PAGE_FILE__.trim() !== '') {
+        return window.__C168_PROCESSLIST_PAGE_FILE__.trim();
+    }
+    return (typeof window.PROCESSLIST_PAGE_FILE === 'string' ? window.PROCESSLIST_PAGE_FILE.trim() : '');
+}
 const forcedPermission = (typeof window.PROCESSLIST_FORCED_PERMISSION === 'string' ? window.PROCESSLIST_FORCED_PERMISSION.trim() : '');
 // ★★★ SINGLE_CATEGORY_MODE ★★★
 // 设为 true 时：Process List 页面隐藏 Category 筛选按钮（Games/Bank/…）。
@@ -112,7 +117,28 @@ function getProcessListPageByPermission(permission) {
 }
 
 function redirectToProcessListPage(targetPage, permission) {
-    if (!targetPage || targetPage === currentProcessListPage) return false;
+    if (!targetPage || targetPage === getCurrentProcessListPage()) return false;
+    if (typeof window.__C168_SPA_LINK_BASE__ === 'string') {
+        const pre = String(window.__C168_SPA_LINK_BASE__ || '').replace(/\/$/, '');
+        let sub = '/process';
+        if (targetPage === 'bank_process_list.php') sub = '/process/bank';
+        else if (targetPage === 'games_process_list.php') sub = '/process/games';
+        const normalizedPermission = String(permission || '').trim();
+        if (normalizedPermission) {
+            const currentCompanyCode = (typeof window.PROCESSLIST_COMPANY_CODE !== 'undefined' ? window.PROCESSLIST_COMPANY_CODE : '');
+            if (currentCompanyCode) {
+                localStorage.setItem(`selectedPermission_${currentCompanyCode}`, normalizedPermission);
+            }
+        }
+        window._isRedirecting = true;
+        const targetUrl = (pre || '') + sub;
+        if (window.__C168_PROCESSLIST_IFRAME_EMBED__ && window.top && window.top !== window) {
+            window.top.location.assign(targetUrl);
+        } else {
+            window.location.assign(targetUrl);
+        }
+        return true;
+    }
     const url = new URL(window.location.href);
     url.pathname = url.pathname.replace(/[^/]*$/, targetPage);
     const normalizedPermission = String(permission || '').trim();
@@ -621,8 +647,16 @@ async function handleBankStatusSelectChange(dropdownEl, processId, forcedValue) 
     showConfirmInactiveModal(processId, selectedValue);
 }
 
-// 构造 API 绝对 URL（始终基于站点根目录，避免相对路径解析错误）
+// 构造 API 绝对 URL（与 React `apiUrl` 对齐；可注入 `window.__C168_API_BASE__`）
 function buildApiUrl(fileName) {
+    if (typeof window.__C168_API_BASE__ !== 'undefined') {
+        const b = String(window.__C168_API_BASE__ || '').replace(/\/$/, '');
+        const f = String(fileName || '').replace(/^\//, '');
+        if (b === '') {
+            return window.location.protocol + '//' + window.location.host + '/' + f;
+        }
+        return b + '/' + f;
+    }
     const pathname = window.location.pathname || '/';
     const basePath = pathname.replace(/[^/]*$/, '') || '/';
     const base = window.location.origin + basePath;
@@ -6089,7 +6123,7 @@ function removeProfitSharingEntry(index) {
     renderSelectedProfitSharing();
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+function runProcessListPageInit() {
     restoreSelectedCountriesFromStorage();
     // Add Account modal: payment alert toggle
     document.querySelectorAll('input[name="add_payment_alert"]').forEach(radio => {
@@ -6539,7 +6573,9 @@ document.addEventListener('DOMContentLoaded', function () {
         accountingInboxPost.addEventListener('click', () => postAccountingInboxToTransaction());
     }
     /* Accounting Due 弹窗：点击弹窗以外区域不关闭，仅通过 X 或 Cancel 关闭 */
-});
+}
+document.addEventListener('DOMContentLoaded', function () { void runProcessListPageInit(); });
+window.runProcessListPageInit = runProcessListPageInit;
 
 window.addEventListener('resize', function () {
     if (selectedPermission === 'Bank') {
@@ -6556,7 +6592,11 @@ window.addEventListener('resize', function () {
 window.addEventListener('popstate', function (e) {
     try {
         const pageName = window.location.pathname.replace(/.*\//, '');
-        const permission = (pageName === 'bank_process_list.php') ? 'Bank' : 'Games';
+        const pathFull = window.location.pathname || '';
+        let permission = 'Games';
+        if (pageName === 'bank_process_list.php' || pageName === 'bank' || pathFull.indexOf('/process/bank') >= 0) {
+            permission = 'Bank';
+        }
         if (permission !== selectedPermission) {
             // 直接执行原地切换（不再 pushState，避免递归）
             selectedPermission = permission;
@@ -6603,7 +6643,7 @@ async function loadPermissionButtons() {
     }
 
     try {
-        const response = await fetch('api/domain/domain_api.php', {
+        const response = await fetch(buildApiUrl('api/domain/domain_api.php'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -6659,8 +6699,28 @@ async function loadPermissionButtons() {
 // 切换权限
 function switchPermission(permission) {
     const targetPage = getProcessListPageByPermission(permission);
+    if (typeof window.__C168_SPA_LINK_BASE__ === 'string' && targetPage) {
+        const pre = String(window.__C168_SPA_LINK_BASE__ || '').replace(/\/$/, '');
+        let wantSub = '/process';
+        if (targetPage === 'bank_process_list.php') wantSub = '/process/bank';
+        const pathRaw = (window.location.pathname || '').replace(/\/$/, '');
+        const pathSub = pathRaw.indexOf('/process/bank') >= 0 ? '/process/bank'
+            : (pathRaw.indexOf('/process/games') >= 0 ? '/process/games' : '/process');
+        if (pathSub !== wantSub) {
+            const currentCompanyCode = (typeof window.PROCESSLIST_COMPANY_CODE !== 'undefined' ? window.PROCESSLIST_COMPANY_CODE : '');
+            if (currentCompanyCode) {
+                localStorage.setItem(`selectedPermission_${currentCompanyCode}`, permission);
+            }
+            const targetUrl = pre + wantSub;
+            if (window.__C168_PROCESSLIST_IFRAME_EMBED__ && window.top && window.top !== window) {
+                window.top.location.assign(targetUrl);
+            } else {
+                window.location.assign(targetUrl);
+            }
+            return;
+        }
+    }
     // 使用 history.pushState 无刷新更新 URL（替代全页跳转，消除白屏卡顿）
-    // 注：currentProcessListPage 是 const 不会更新，必须从实时 URL 读取当前页名做比较
     if (targetPage) {
         const _currentPageName = window.location.pathname.replace(/.*\//, '');
         if (targetPage !== _currentPageName) {

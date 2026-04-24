@@ -4,6 +4,7 @@ import { DataCapturePage } from './pages/DataCapturePage'
 import { DataCaptureSummaryPage } from './pages/DataCaptureSummaryPage'
 import { AccountListPage } from './pages/AccountListPage'
 import { TransactionPage } from './pages/TransactionPage'
+import { ProcessListPage } from './pages/ProcessListPage'
 import { LoginPage } from './pages/LoginPage'
 import { OwnerSecondaryPasswordPage } from './pages/OwnerSecondaryPasswordPage'
 
@@ -20,6 +21,9 @@ export default function App() {
       <Route path="/datacapturesummary" element={<DataCaptureSummaryPage />} />
       <Route path="/accounts" element={<AccountListPage />} />
       <Route path="/transaction" element={<TransactionPage />} />
+      <Route path="/process" element={<ProcessListPage />} />
+      <Route path="/process/bank" element={<ProcessListPage />} />
+      <Route path="/process/games" element={<ProcessListPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
