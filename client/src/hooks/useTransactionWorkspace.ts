@@ -132,8 +132,12 @@ export function useTransactionWorkspace(bootstrap: DashboardBootstrapData) {
       if (g === null) {
         writeStoredGroupFilter(null)
         setSelectedGroup(null)
+        // 与 `includes/company_filter.php` 无 Group 时一致：仅显示无 group_id 且有公司代码的行
         const independent = companies.filter(
-          (c) => !c.group_id || String(c.group_id).trim() === '',
+          (c) =>
+            c.company_id &&
+            String(c.company_id).trim() !== '' &&
+            (!c.group_id || String(c.group_id).trim() === ''),
         )
         if (independent.length > 0) {
           setActiveCompanyId(independent[0]!.id)

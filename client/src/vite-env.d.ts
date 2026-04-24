@@ -29,6 +29,12 @@ interface Window {
   DATACAPTURE_COMPANY_CODE?: string
   runDataCapturePageInit?: () => void | Promise<void>
   refreshDataCapturePageData?: () => void | Promise<void>
+  switchDataCaptureCompany?: (companyId: number | string | null | undefined) => void | Promise<void>
+  /** 与 `datacapture_classic.php` / `shared_company_filter.js` 约定一致 */
+  onSharedCompanyFilterChanged?: (
+    companyId: string | number | null | undefined,
+    companyCode: string | null | undefined,
+  ) => void
   DATACAPTURESUMMARY_COMPANY_ID?: number | null
   runDataCaptureSummaryPageInit?: () => void
   /** `get_processes_by_day` 的 JSON 结果写入自定义 Process 下拉 */

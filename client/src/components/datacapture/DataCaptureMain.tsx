@@ -85,6 +85,20 @@ export function DataCaptureMain({ bootstrap }: Props) {
     }
   }, [])
 
+  /** 与 `datacapture_classic.php` 内 `onSharedCompanyFilterChanged` 对齐，供 legacy / 书签脚本调用 */
+  useEffect(() => {
+    window.onSharedCompanyFilterChanged = (companyId, _companyCode) => {
+      if (companyId == null || companyId === '') return
+      const id =
+        typeof companyId === 'number' ? companyId : parseInt(String(companyId), 10)
+      if (!Number.isFinite(id)) return
+      void window.switchDataCaptureCompany?.(id)
+    }
+    return () => {
+      delete window.onSharedCompanyFilterChanged
+    }
+  }, [])
+
   useLayoutEffect(() => {
     if (!w.companiesReady || w.loadCompaniesError) return
     const id = w.activeCompanyId
@@ -412,7 +426,7 @@ export function DataCaptureMain({ bootstrap }: Props) {
           <div className="form-actions">
             <button
               id="dataCaptureSubmitBtn"
-              type="button"
+              type="submit"
               className="btn btn-save"
               onClick={dcCall('submitDataCaptureForm')}
             >
