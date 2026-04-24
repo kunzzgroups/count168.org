@@ -269,13 +269,15 @@
  */
 body.datacapture-spa-embed .dShell.dShell--classicSidebar,
 body.datacapture-summary-spa-embed .dShell.dShell--classicSidebar,
-body.account-list-spa-embed .dShell.dShell--classicSidebar {
+body.account-list-spa-embed .dShell.dShell--classicSidebar,
+body.process-list-spa-embed .dShell.dShell--classicSidebar {
   background: transparent;
 }
 
 body.datacapture-spa-embed .dShell__main,
 body.datacapture-summary-spa-embed .dShell__main,
-body.account-list-spa-embed .dShell__main {
+body.account-list-spa-embed .dShell__main,
+body.process-list-spa-embed .dShell__main {
   overflow-x: hidden;
   overflow-y: visible;
 }

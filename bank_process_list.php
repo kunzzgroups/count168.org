@@ -818,5 +818,5 @@ if (!function_exists('renderBankProcessModals')) {
 }
 
 if (realpath($_SERVER['SCRIPT_FILENAME'] ?? '') === __FILE__) {
-    require __DIR__ . '/processlist.php';
+    require __DIR__ . '/processlist_classic.php';
 }

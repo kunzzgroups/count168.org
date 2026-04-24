@@ -4,4 +4,4 @@ define('PROCESSLIST_PAGE_TITLE', 'Process List');
 define('PROCESSLIST_FORCED_PERMISSION', 'Games');
 define('PROCESSLIST_HIDE_PERMISSION_FILTER', true);
 
-require 'processlist.php';
+require 'processlist_classic.php';

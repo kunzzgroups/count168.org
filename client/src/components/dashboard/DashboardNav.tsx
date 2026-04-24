@@ -126,9 +126,15 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
       )}
 
       {canNavItem(permissions, 'process', ext) && (
-        <a className="dNav__item" href={phref('processlist.php')} onClick={go}>
+        <NavLink
+          to="/processlist"
+          className={({ isActive }) =>
+            isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
+          }
+          onClick={go}
+        >
           <span>Process</span>
-        </a>
+        </NavLink>
       )}
 
       {canNavItem(permissions, 'datacapture', ext) && companyHasGambling && (

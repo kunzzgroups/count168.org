@@ -527,12 +527,17 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
 
             {canNavItem(permissions, 'process', ext) && (
               <div className="informationmenu-section">
-                <a className="informationmenu-section-title" data-page="processlist.php" href={phref('processlist.php')} onClick={go}>
+                <Link
+                  to="/processlist"
+                  className={`informationmenu-section-title${pathname === '/processlist' ? ' current-page' : ''}`}
+                  data-page="processlist.php"
+                  onClick={go}
+                >
                   <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                   </svg>
                   Process
-                </a>
+                </Link>
               </div>
             )}
 
