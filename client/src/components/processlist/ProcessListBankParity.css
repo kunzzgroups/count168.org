@@ -119,12 +119,10 @@ body.processlist-spa-native.process-page.process-page--bank .action-buttons-cont
 
 /* Pagination unified with ProcessList page style */
 body.processlist-spa-native.process-page.process-page--bank .pagination-container {
-  position: relative !important;
-  right: auto !important;
-  bottom: auto !important;
-  margin-top: 6px !important;
-  margin-left: auto !important;
-  margin-right: 0 !important;
+  position: fixed !important;
+  right: 42px !important;
+  bottom: 18px !important;
+  margin: 0 !important;
   width: max-content !important;
   display: flex !important;
   align-items: center !important;
@@ -134,7 +132,7 @@ body.processlist-spa-native.process-page.process-page--bank .pagination-containe
   border: 1px solid rgba(148, 163, 184, 0.2) !important;
   background: rgba(255, 255, 255, 0.95) !important;
   padding: 0 !important;
-  z-index: 1 !important;
+  z-index: 120 !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
