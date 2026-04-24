@@ -775,8 +775,8 @@ body.process-page {
     align-items: center;
     flex: 1;
     min-width: 0;
-    flex-wrap: nowrap !important;
-    gap: clamp(4px, 0.5vw, 10px) !important;
+    flex-wrap: wrap !important;
+    gap: 6px 10px !important;
 }
 
 .process-page.process-page--bank .checkbox-section {
@@ -797,14 +797,14 @@ body.process-page {
 
 /* Bank 搜索框宽度稍窄，给 checkbox 留空间 */
 .process-page.process-page--bank .search-input {
-    width: clamp(110px, 8.5vw, 200px);
+    width: clamp(90px, 9vw, 180px);
 }
 
 /* Bank 日期选择器宽度稍窄 */
 .process-page.process-page--bank .process-list-date-filter,
 .process-page.process-page--bank .process-list-date-filter .date-range-picker {
-    min-width: clamp(140px, 11vw, 200px);
-    width: clamp(140px, 11vw, 200px);
+    min-width: clamp(150px, 15vw, 220px);
+    width: clamp(150px, 15vw, 220px);
 }
 
 @media (max-height: 820px) {
@@ -998,6 +998,20 @@ body.processlist-spa-native.process-page.process-page--bank .search-icon {
 
 body.processlist-spa-native.process-page.process-page--bank .search-container .search-input {
     padding-left: 24px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .process-list-date-filter {
+    flex: 0 0 auto;
+    min-width: 260px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .search-container {
+    flex: 0 0 auto;
+    min-width: 130px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .checkbox-section {
+    flex: 0 0 auto;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .process-list-date-filter .bank-date-filter-hint {
