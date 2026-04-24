@@ -107,6 +107,7 @@ export function ProcessListMain({ bootstrap }: Props) {
       setPermLoaded(true)
       return
     }
+    setPermLoaded(false)
     let on = true
     void (async () => {
       const r = await fetchDomainCompanyPermissions(companyCode)
@@ -135,6 +136,26 @@ export function ProcessListMain({ bootstrap }: Props) {
     [setSearchParams],
   )
 
+  /** 与 URL、侧栏同步：先写 query，再更新 workspace，避免列表请求与 category 判断抢跑 */
+  const handlePickCompany = useCallback(
+    (id: number) => {
+      if (!Number.isFinite(id)) return
+      const row = w.companies.find((c) => Number(c.id) === Number(id))
+      if (!row) return
+      replaceCompanyInUrl(Number(id))
+      const g =
+        row.group_id && String(row.group_id).trim() !== ''
+          ? String(row.group_id).toUpperCase()
+          : null
+      if (g && String(w.selectedGroup || '').toUpperCase() !== g) {
+        w.setGroup(g, { preferredCompanyId: Number(id) })
+      } else {
+        w.onPickCompany(Number(id))
+      }
+    },
+    [w, replaceCompanyInUrl],
+  )
+
   useEffect(() => {
     window.onSharedCompanyFilterChanged = (companyId) => {
       if (companyId == null || companyId === '') {
@@ -143,8 +164,18 @@ export function ProcessListMain({ bootstrap }: Props) {
       }
       const id = typeof companyId === 'number' ? companyId : parseInt(String(companyId), 10)
       if (!Number.isFinite(id)) return
-      wRef.current.onPickCompany(id)
+      const row = wRef.current.companies.find((c) => Number(c.id) === Number(id))
+      if (!row) return
       replaceCompanyInUrl(id)
+      const g =
+        row.group_id && String(row.group_id).trim() !== ''
+          ? String(row.group_id).toUpperCase()
+          : null
+      if (g && String(wRef.current.selectedGroup || '').toUpperCase() !== g) {
+        wRef.current.setGroup(g, { preferredCompanyId: id })
+      } else {
+        wRef.current.onPickCompany(id)
+      }
     }
     return () => {
       delete window.onSharedCompanyFilterChanged
@@ -165,9 +196,21 @@ export function ProcessListMain({ bootstrap }: Props) {
       row.group_id && String(row.group_id).trim() !== ''
         ? String(row.group_id).toUpperCase()
         : null
-    if (g) w.setGroup(g)
-    window.setTimeout(() => w.onPickCompany(want), 0)
-  }, [w.companiesReady, spKey, w.companies, w.activeCompanyId, w.setGroup, w.onPickCompany, searchParams])
+    if (g && String(w.selectedGroup || '').toUpperCase() !== String(g).toUpperCase()) {
+      w.setGroup(g, { preferredCompanyId: want })
+    } else {
+      w.onPickCompany(want)
+    }
+  }, [
+    w.companiesReady,
+    spKey,
+    w.companies,
+    w.activeCompanyId,
+    w.selectedGroup,
+    w.setGroup,
+    w.onPickCompany,
+    searchParams,
+  ])
 
   useEffect(() => {
     if (!w.companiesReady || w.activeCompanyId == null) return
@@ -274,7 +317,7 @@ export function ProcessListMain({ bootstrap }: Props) {
               setGroup: w.setGroup,
               scopeCompanies: w.scopeCompanies,
               activeCompanyId: w.activeCompanyId,
-              onPickCompany: w.onPickCompany,
+              onPickCompany: handlePickCompany,
             }}
           />
         ) : (
@@ -289,7 +332,7 @@ export function ProcessListMain({ bootstrap }: Props) {
               setGroup: w.setGroup,
               scopeCompanies: w.scopeCompanies,
               activeCompanyId: w.activeCompanyId,
-              onPickCompany: w.onPickCompany,
+              onPickCompany: handlePickCompany,
             }}
           />
         )}

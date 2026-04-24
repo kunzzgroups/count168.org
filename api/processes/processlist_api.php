@@ -198,14 +198,18 @@ if ($req_company_id) {
         'get_selected_banks', 'save_selected_banks', 'update_bank_process'
     ];
 
-    $requiredCategory = 'Games'; // Default fallback
-    if (in_array($action, $bankOnlyActions)) {
+    $reqPermission = $_GET['permission'] ?? $_POST['permission'] ?? '';
+
+    // 与 GET permission 一致：Loan/Rate/Money 等公司不能只按 Games 校验，否则切公司后整页 API 误拒
+    $requiredCategory = 'Games';
+    if (in_array($action, $bankOnlyActions, true)) {
         $requiredCategory = 'Bank';
-    } else {
-        $reqPermission = $_GET['permission'] ?? $_POST['permission'] ?? '';
-        if ($reqPermission === 'Bank') {
-            $requiredCategory = 'Bank';
-        }
+    } elseif ($reqPermission === 'Bank') {
+        $requiredCategory = 'Bank';
+    } elseif ($reqPermission === 'Loan' || $reqPermission === 'Rate' || $reqPermission === 'Money') {
+        $requiredCategory = $reqPermission;
+    } elseif ($reqPermission === 'Games' || $reqPermission === 'Gambling') {
+        $requiredCategory = 'Games';
     }
 
     if (!checkCompanyCategoryPermission($pdo, $req_company_id, $requiredCategory)) {

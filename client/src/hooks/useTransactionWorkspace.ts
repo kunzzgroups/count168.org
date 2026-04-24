@@ -128,7 +128,7 @@ export function useTransactionWorkspace(bootstrap: DashboardBootstrapData) {
   )
 
   const setGroup = useCallback(
-    (g: string | null) => {
+    (g: string | null, opts?: { preferredCompanyId?: number | null }) => {
       if (g === null) {
         writeStoredGroupFilter(null)
         setSelectedGroup(null)
@@ -144,9 +144,26 @@ export function useTransactionWorkspace(bootstrap: DashboardBootstrapData) {
         }
         return
       }
+      const u = g.toUpperCase()
+      // 已在本组时再次点同一 Group：不要重置到「组内第一家」，否则同组公司 pill（95→CX）永远切不过去
+      if (selectedGroup != null && String(selectedGroup).toUpperCase() === u) {
+        writeStoredGroupFilter(g)
+        const pref = opts?.preferredCompanyId
+        if (pref != null && Number.isFinite(Number(pref))) {
+          const ok = companies.some(
+            (c) =>
+              Number(c.id) === Number(pref) &&
+              c.group_id &&
+              String(c.group_id).toUpperCase() === u &&
+              c.company_id &&
+              String(c.company_id).trim() !== '',
+          )
+          if (ok) setActiveCompanyId(Number(pref))
+        }
+        return
+      }
       writeStoredGroupFilter(g)
       setSelectedGroup(g)
-      const u = g.toUpperCase()
       const groupCompanies = companies.filter(
         (c) =>
           c.group_id &&
@@ -155,10 +172,17 @@ export function useTransactionWorkspace(bootstrap: DashboardBootstrapData) {
           String(c.company_id).trim() !== '',
       )
       if (groupCompanies.length > 0) {
-        setActiveCompanyId(groupCompanies[0]!.id)
+        const pref = opts?.preferredCompanyId
+        const pick =
+          pref != null &&
+          Number.isFinite(Number(pref)) &&
+          groupCompanies.some((c) => Number(c.id) === Number(pref))
+            ? Number(pref)
+            : groupCompanies[0]!.id
+        setActiveCompanyId(pick)
       }
     },
-    [companies],
+    [companies, selectedGroup],
   )
 
   const onPickCompany = (id: number) => {

@@ -4,7 +4,7 @@ import type { OwnerCompany } from '../../types/dashboard'
 export type ProcessListWorkspacePick = {
   groupIds: string[]
   selectedGroup: string | null
-  setGroup: (g: string | null) => void
+  setGroup: (g: string | null, opts?: { preferredCompanyId?: number | null }) => void
   scopeCompanies: OwnerCompany[]
   activeCompanyId: number
   onPickCompany: (id: number) => void
