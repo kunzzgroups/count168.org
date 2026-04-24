@@ -182,6 +182,17 @@ export function ProcessListMain({ bootstrap }: Props) {
     navigate({ pathname: path, search: searchParams.toString() ? `?${searchParams.toString()}` : '' })
   }
 
+  // 与经典版一致：Games / Bank 使用 `/process/games`、`/process/bank`（经典为 pushState 子路径）；
+  // 入口 302 到 `/process` 时按存储与权限对齐子路径，便于后退、书签与 popstate。
+  useEffect(() => {
+    if (!w.companiesReady || companyCode == null || !permLoaded) return
+    const resolved = resolveActiveCategory(pathname, companyCode, domainPerms)
+    const want = routeForCategory(resolved)
+    if (want === pathname) return
+    const qs = searchParams.toString()
+    navigate({ pathname: want, search: qs ? `?${qs}` : '' }, { replace: true })
+  }, [w.companiesReady, companyCode, permLoaded, pathname, domainPerms, spKey, navigate])
+
   if (!w.companiesReady) {
     return (
       <div className="plMain plMain--loading">
