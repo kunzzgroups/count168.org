@@ -38,7 +38,6 @@ export function ProcessListPage() {
     <ClassicDashboardShell
       data={data}
       classicPage="processlist_classic.php"
-      documentTitle="Process List"
     >
       <ProcessListMain bootstrap={data} />
     </ClassicDashboardShell>

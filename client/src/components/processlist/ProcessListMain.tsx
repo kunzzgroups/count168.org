@@ -68,6 +68,12 @@ export function ProcessListMain({ bootstrap }: Props) {
   const skipLocationSyncRef = useRef(true)
 
   const catIsBank = searchParams.get('category')?.toLowerCase() === 'bank'
+  /** 与 `updateProcessListPageTitle` / 经典 bank_process_list 一致，避免重渲染把标题写回 Games */
+  const pageTitle = catIsBank ? 'Bank Process List' : 'Process List'
+
+  useEffect(() => {
+    document.title = pageTitle
+  }, [pageTitle])
 
   useLayoutEffect(() => {
     document.body.classList.add('process-list-spa-embed', 'process-page')
@@ -345,7 +351,7 @@ export function ProcessListMain({ bootstrap }: Props) {
   return (
     <div className="plShell" data-process-list-spa={legacyReady ? '1' : '0'}>
       <ProcessListLegacyDom
-        pageTitle="Process List"
+        pageTitle={pageTitle}
         initialSearch={searchParams.get('search') ?? ''}
         initialShowInactive={searchParams.has('showInactive')}
         initialShowAll={searchParams.has('showAll')}

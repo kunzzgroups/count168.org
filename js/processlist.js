@@ -6715,6 +6715,11 @@ window.addEventListener('resize', function () {
 // 浏览器后退/前进时还原 category 状态（配合 history.pushState 实现的无刷新切换）
 window.addEventListener('popstate', function (e) {
     try {
+        // React `/processlist`：由 React Router 更新 query 后 `c168SyncProcessListFromLocation` 统一走 `switchPermission`，
+        // 避免此处半套 DOM 更新与 React 重复执行导致表头/标题错乱。
+        if (c168IsProcessListSpaEmbed()) {
+            return;
+        }
         const permission = c168ProcessListCategoryFromLocation();
         if (permission !== selectedPermission) {
             // 直接执行原地切换（不再 pushState，避免递归）
