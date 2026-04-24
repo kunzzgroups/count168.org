@@ -1290,6 +1290,94 @@ body.processlist-spa-native.process-page:not(.process-page--bank) .table-header 
     margin-top: 12px !important;
 }
 
+/* ===== Classic exact pass (Games/non-bank) ===== */
+body.processlist-spa-native.process-page:not(.process-page--bank) .action-buttons-container {
+    background: #ffffff !important;
+    border: none !important;
+    border-radius: 10px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    margin-top: 20px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .action-buttons {
+    padding: 10px 20px !important;
+    gap: 12px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .action-buttons-container .process-company-filter {
+    padding: 0 20px 10px 20px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn-add {
+    width: clamp(90px, 7vw, 130px) !important;
+    padding: clamp(6px, 0.42vw, 8px) 20px !important;
+    font-size: clamp(10px, 0.83vw, 16px) !important;
+    border-radius: 6px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn.btn-delete,
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn-delete {
+    width: clamp(80px, 6.25vw, 120px) !important;
+    padding: clamp(6px, 0.42vw, 8px) 20px !important;
+    font-size: clamp(10px, 0.83vw, 16px) !important;
+    border-radius: 6px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .search-input {
+    width: clamp(165px, 13vw, 250px) !important;
+    padding: 7px 2px clamp(6px, 0.42vw, 8px) clamp(20px, 2.08vw, 32px) !important;
+    border: 1px solid rgba(148, 163, 184, 0.35) !important;
+    border-radius: 6px !important;
+    font-size: clamp(10px, 0.8vw, 15px) !important;
+    box-shadow: 0 3px 4px rgba(15, 23, 42, 0.1) !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .table-header {
+    background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%) !important;
+    font-size: clamp(10px, 0.89vw, 17px) !important;
+    margin-top: 20px !important;
+    padding: 0px 20px !important;
+    gap: 15px !important;
+    border-radius: 8px 8px 0 0 !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .table-header .header-item {
+    padding: 2px 4px !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .process-card {
+    padding: 0 20px !important;
+    gap: 15px !important;
+    font-size: clamp(10px, 0.7vw, 13px) !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .process-card:nth-child(even) {
+    background: #cceeff99 !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .process-card:nth-child(odd) {
+    background: #ffffff !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .role-badge.status-active {
+    background-color: #beffd4 !important;
+    color: #000 !important;
+    border: 1px solid #beffd4 !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .role-badge.status-inactive {
+    background-color: #ffc3c3 !important;
+    color: #000 !important;
+    border: 1px solid #ffc3c3 !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .pagination-container {
+    border-radius: 20px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    border: 1px solid rgba(148, 163, 184, 0.2) !important;
+    background: rgba(255, 255, 255, 0.95) !important;
+}
+
 /* Table Header - copied from accountCSS.css */
 .process-page .table-header {
     display: grid;
