@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { BankProcessRow } from '../../lib/processListTypes'
 import { BANK_STATUS_OPTIONS } from '../../lib/processListTypes'
 import { getBankStatusSelectValue, normalizeBankIssueFlag } from '../../lib/processListBankUtils'
@@ -6,6 +7,7 @@ import {
   postToggleProcessStatus,
   postUpdateBankIssueFlag,
 } from '../../lib/processListApi'
+import { useFloatingPortalPosition } from './useFloatingPortalPosition'
 
 type Props = {
   process: BankProcessRow
@@ -35,8 +37,13 @@ function labelFor(value: string): string {
 export function BankStatusDropdown({ process, onAfterChange, onNotice }: Props) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement | null>(null)
   const pid = process.id
   const display = getBankStatusSelectValue(process)
+  const { pos, setMenuEl, recompute } = useFloatingPortalPosition(open, rootRef, {
+    preferredMinWidth: 120,
+    gap: 6,
+  })
 
   const onPick = useCallback(
     async (raw: string) => {
@@ -103,7 +110,9 @@ export function BankStatusDropdown({ process, onAfterChange, onNotice }: Props) 
   useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+      const t = e.target as Node
+      if (rootRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      if (rootRef.current && !rootRef.current.contains(t)) {
         setOpen(false)
       }
     }
@@ -133,27 +142,50 @@ export function BankStatusDropdown({ process, onAfterChange, onNotice }: Props) 
         data-value={display}
         onClick={(e) => {
           e.stopPropagation()
-          setOpen((o) => !o)
+          setOpen((o) => {
+            const next = !o
+            if (next) window.requestAnimationFrame(() => recompute())
+            return next
+          })
         }}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         {curLabel}
       </button>
-      <div className="bank-status-menu-react" role="listbox" onClick={(e) => e.stopPropagation()}>
-        {BANK_STATUS_OPTIONS.map((o) => (
-          <button
-            key={o.value}
-            type="button"
-            className={'bank-status-option-react' + (o.value === display ? ' selected' : '')}
-            data-value={o.value}
-            onClick={() => void onPick(o.value)}
-            role="option"
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
+      {open && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              ref={(el) => {
+                menuRef.current = el
+                setMenuEl(el)
+              }}
+              className="bank-status-menu-react"
+              role="listbox"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                top: pos.top,
+                left: pos.left,
+                minWidth: pos.minWidth,
+              }}
+            >
+              {BANK_STATUS_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  className={'bank-status-option-react' + (o.value === display ? ' selected' : '')}
+                  data-value={o.value}
+                  onClick={() => void onPick(o.value)}
+                  role="option"
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   )
 }

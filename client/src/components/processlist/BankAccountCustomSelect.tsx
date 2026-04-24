@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatBankAccountDisplay, isAllowedBankFormRole } from '../../lib/processListBankUtils'
+import { useFloatingPortalPosition } from './useFloatingPortalPosition'
 
 export type BankAccountPick = {
   id: number
@@ -40,7 +41,10 @@ export function BankAccountCustomSelect({
   const btnRef = useRef<HTMLButtonElement>(null)
   const dropRef = useRef<HTMLDivElement>(null)
   const [search, setSearch] = useState('')
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 220 })
+  const { pos, setMenuEl, recompute } = useFloatingPortalPosition(isOpen, btnRef, {
+    preferredMinWidth: 220,
+    gap: 2,
+  })
 
   const list = useMemo(
     () => accounts.filter((a) => isAllowedBankFormRole(a.role)),
@@ -48,14 +52,9 @@ export function BankAccountCustomSelect({
   )
 
   useLayoutEffect(() => {
-    if (!isOpen || !btnRef.current) return
-    const r = btnRef.current.getBoundingClientRect()
-    setPos({
-      top: r.bottom + 2,
-      left: r.left,
-      width: Math.max(r.width, 220),
-    })
-  }, [isOpen])
+    if (!isOpen) return
+    recompute()
+  }, [isOpen, recompute])
 
   const close = useCallback(() => setOpenGate(null), [setOpenGate])
 
@@ -107,15 +106,17 @@ export function BankAccountCustomSelect({
   const dropdown =
     isOpen && typeof document !== 'undefined' ? (
       <div
-        ref={dropRef}
+        ref={(el) => {
+          dropRef.current = el
+          setMenuEl(el)
+        }}
         id={dropdownId}
         className="custom-select-dropdown"
         style={{
           position: 'fixed',
           top: pos.top,
           left: pos.left,
-          width: pos.width,
-          minWidth: pos.width,
+          minWidth: pos.minWidth,
           zIndex: 10001,
           display: 'block',
         }}

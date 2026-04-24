@@ -147,10 +147,7 @@ body.processlist-spa-native.process-page.process-page--bank .bank-status-dropdow
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-menu-react {
-  position: absolute !important;
-  top: calc(100% + 6px) !important;
-  left: 0 !important;
-  display: none !important;
+  position: fixed !important;
   padding: 6px !important;
   border: 1px solid #dbe3ee !important;
   border-radius: 14px !important;
@@ -159,10 +156,6 @@ body.processlist-spa-native.process-page.process-page--bank .bank-status-menu-re
   z-index: 9999 !important;
   box-sizing: border-box !important;
   min-width: 120px !important;
-}
-
-body.processlist-spa-native.process-page.process-page--bank .bank-status-dropdown-react.open .bank-status-menu-react {
-  display: block !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-option-react {
