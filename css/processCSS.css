@@ -1186,7 +1186,7 @@ body.processlist-spa-native.process-page.process-page--bank .process-list-date-f
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table thead {
-    background: #455a64 !important;
+    background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%) !important;
     font-size: 11px !important;
 }
 
