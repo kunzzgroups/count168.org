@@ -29,9 +29,9 @@ body.processlist-spa-native.process-page.process-page--bank #processListBankActi
   color: #fff !important;
   font-family: 'Amaranth' !important;
   width: clamp(90px, 7vw, 130px) !important;
-  min-width: 106px !important;
+  min-width: 112px !important;
   height: 24px !important;
-  padding: clamp(6px, 0.42vw, 8px) 20px !important;
+  padding: 6px 20px !important;
   font-size: clamp(10px, 0.83vw, 16px) !important;
   line-height: 1.2 !important;
   border: none !important;
