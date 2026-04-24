@@ -12,6 +12,7 @@ export type GamesProcessRow = {
 /** Bank 行（与 processlist_api getBankProcesses 主字段一致，其余可选） */
 export type BankProcessRow = {
   id: number
+  remark?: string
   status?: string
   issue_flag?: string | null
   card_lower?: string

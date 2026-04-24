@@ -13,6 +13,7 @@ import {
 } from './processListMainHelpers'
 import { apiUrl } from '../../lib/api'
 import '../../../../css/processCSS.css'
+import '../../../../css/processlist.css'
 import '../../../../css/global-13inch.css'
 import './ProcessListMain.css'
 
@@ -48,9 +49,6 @@ export function ProcessListMain({ bootstrap }: Props) {
   ])
   const [permLoaded, setPermLoaded] = useState(false)
   const [notice, setNotice] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null)
-  const [search, setSearch] = useState('')
-  const [showInactive, setShowInactive] = useState(false)
-  const [showAll, setShowAll] = useState(false)
 
   const onNotice = useCallback((text: string, kind: 'ok' | 'err') => {
     setNotice({ text, kind })
@@ -204,84 +202,72 @@ export function ProcessListMain({ bootstrap }: Props) {
   }
 
   return (
-    <div className="plMain container process-page__inner">
-      {notice ? (
-        <div className={notice.kind === 'ok' ? 'plFlash plFlash--ok' : 'plFlash plFlash--err'}>
-          {notice.text}
-        </div>
-      ) : null}
+    <div className="container">
+      <div className="content">
+        {notice ? (
+          <div className={notice.kind === 'ok' ? 'plFlash plFlash--ok' : 'plFlash plFlash--err'}>
+            {notice.text}
+          </div>
+        ) : null}
 
-      <div className="action-buttons-container" style={{ marginTop: 8 }}>
-        <div className="action-buttons" style={{ flexWrap: 'wrap' }}>
-          <div className="plCatRow">
-            {domainPerms.map((p) => (
-              <button
-                key={p}
-                type="button"
-                className={'plCatBtn' + (activeCategory === p ? ' plCatBtn--on' : '')}
-                onClick={() => goCategory(p)}
-              >
-                {p}
-              </button>
-            ))}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 0,
+            marginTop: 20,
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <h1 className="page-title" style={{ margin: 0 }}>
+            Process List
+          </h1>
+          <div className="process-company-filter process-permission-filter-header">
+            <span className="process-company-label">Category:</span>
+            <div className="process-company-buttons" id="process-list-permission-buttons">
+              {domainPerms.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className={
+                    'process-company-btn' + (activeCategory === p ? ' active' : '')
+                  }
+                  onClick={() => goCategory(p)}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="search-container" style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative' }}>
-          <input
-            className="search-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search…"
-            style={{ minWidth: 200 }}
-            aria-label="Search"
+        <div className="separator-line" />
+
+        {activeCategory === 'Bank' ? (
+          <ProcessListBankPanel
+            key={String(w.activeCompanyId)}
+            companyId={w.activeCompanyId}
+            onNotice={onNotice}
           />
-        </div>
-        {activeCategory !== 'Bank' ? (
-          <>
-            <label className="plCheck">
-              <input
-                type="checkbox"
-                checked={showInactive}
-                onChange={(e) => setShowInactive(e.target.checked)}
-              />
-              Inactive
-            </label>
-            <label className="plCheck">
-              <input
-                type="checkbox"
-                checked={showAll}
-                onChange={(e) => setShowAll(e.target.checked)}
-              />
-              Show all
-            </label>
-          </>
-        ) : null}
-        <a className="plClassicLink" href={apiUrl('/processlist_classic.php')}>
-          经典版
+        ) : (
+          <ProcessListGamesPanel
+            key={w.activeCompanyId + activeCategory}
+            companyId={w.activeCompanyId}
+            permission={activeCategory}
+            onNotice={onNotice}
+          />
+        )}
+
+        <a
+          className="plClassicLink"
+          href={apiUrl('/processlist_classic.php')}
+          style={{ display: 'inline-block', marginTop: 8 }}
+        >
+          打开经典全页
         </a>
       </div>
-
-      {activeCategory === 'Bank' ? (
-        <ProcessListBankPanel
-          key={w.activeCompanyId + String(search)}
-          companyId={w.activeCompanyId}
-          search={search}
-          onNotice={onNotice}
-        />
-      ) : (
-        <ProcessListGamesPanel
-          key={w.activeCompanyId + activeCategory + String(search)}
-          companyId={w.activeCompanyId}
-          permission={activeCategory}
-          search={search}
-          showInactive={showInactive}
-          showAll={showAll}
-          onNotice={onNotice}
-        />
-      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import type { GamesProcessRow, GamePermission } from '../../lib/processListTypes'
+import { apiUrl } from '../../lib/api'
 import {
   type AddProcessFormPayload,
   fetchAddProcessFormData,
@@ -17,9 +18,6 @@ type Props = {
   companyId: number
   /** Games / Loan / … 与 `processlist_api` GET `permission` 一致 */
   permission: GamePermission
-  search: string
-  showInactive: boolean
-  showAll: boolean
   onNotice: (msg: string, kind: 'ok' | 'err') => void
 }
 
@@ -38,11 +36,11 @@ function sortGamesRows(a: GamesProcessRow, b: GamesProcessRow): number {
 export function ProcessListGamesPanel({
   companyId,
   permission,
-  search,
-  showInactive,
-  showAll,
   onNotice,
 }: Props) {
+  const [search, setSearch] = useState('')
+  const [showInactive, setShowInactive] = useState(false)
+  const [showAll, setShowAll] = useState(false)
   const [rows, setRows] = useState<GamesProcessRow[]>([])
   const [loading, setLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -98,6 +96,23 @@ export function ProcessListGamesPanel({
   useEffect(() => {
     void loadList()
   }, [loadList])
+
+  useLayoutEffect(() => {
+    if (showAll) {
+      document.body.classList.add('process-page--show-all')
+    } else {
+      document.body.classList.remove('process-page--show-all')
+    }
+    return () => document.body.classList.remove('process-page--show-all')
+  }, [showAll])
+
+  useEffect(() => {
+    if (showInactive) setShowAll(false)
+  }, [showInactive])
+
+  useEffect(() => {
+    if (showAll) setShowInactive(false)
+  }, [showAll])
 
   const displayRows = useMemo(() => {
     if (showAll) return rows.filter((p) => p.status === 'active')
@@ -285,104 +300,185 @@ export function ProcessListGamesPanel({
     } else onNotice(r.error, 'err')
   }
 
+  const toggleSelectAllGames = (checked: boolean) => {
+    setDelSel((prev) => {
+      const next = { ...prev }
+      pageItems.forEach((p) => {
+        if (p.status !== 'active' && !p.has_transactions) {
+          next[p.id] = checked
+        }
+      })
+      return next
+    })
+  }
+
   return (
-    <div className="plGames">
-      <div className="plGames__toolbar">
-        <button type="button" className="plBtn plBtn--primary" onClick={() => void openAdd()}>
-          Add Process
-        </button>
-        <button type="button" className="plBtn" onClick={() => void doDelete()} disabled={!toDelete.length}>
-          Delete
-        </button>
-        {loading ? <span className="plGames__loading">Loading…</span> : null}
-      </div>
-
-      <div className="plGames__gridHeader process-card" aria-hidden>
-        <div className="card-item plGames__h">No</div>
-        <div className="card-item plGames__h">Process</div>
-        <div className="card-item plGames__h">Description</div>
-        <div className="card-item plGames__h">Status</div>
-        <div className="card-item plGames__h">CCY</div>
-        <div className="card-item plGames__h">Day</div>
-        <div className="card-item plGames__h">Act</div>
-      </div>
-
-      <div id="processTableBody" className="plGames__body">
-        {displayRows.length === 0 && !loading ? (
-          <div className="process-card plGames__empty">
-            <div className="card-item">No process data found</div>
-          </div>
-        ) : null}
-        {pageItems.map((process, idx) => (
-          <div key={process.id} className="process-card" data-id={process.id}>
-            <div className="card-item">{startIndex + idx + 1}</div>
-            <div className="card-item">{(process.process_name || '').toUpperCase()}</div>
-            <div className="card-item">{(process.description || '').toUpperCase()}</div>
-            <div className="card-item">
-              <span
-                className={
-                  'role-badge ' +
-                  (process.status === 'active' ? 'status-active' : 'status-inactive') +
-                  ' status-clickable'
-                }
-                onClick={() => void onToggle(process.id)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') void onToggle(process.id)
-                }}
-                role="button"
-                tabIndex={0}
-                title="Click to toggle"
-              >
-                {(process.status || '').toUpperCase()}
-              </span>
+    <>
+      <div className="action-buttons-container">
+        <div className="action-buttons">
+          <div
+            className="action-controls-row"
+            style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+          >
+            <button type="button" className="btn btn-add" onClick={() => void openAdd()}>
+              Add Process
+            </button>
+            <div className="search-container" style={{ position: 'relative' }}>
+              <svg className="search-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+              </svg>
+              <input
+                type="text"
+                id="searchInput"
+                className="search-input"
+                placeholder="Search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                aria-label="Search"
+              />
             </div>
-            <div className="card-item">{process.currency || ''}</div>
-            <div className="card-item">{process.day_use || ''}</div>
-            <div className="card-item plGames__actions">
-              <button
-                type="button"
-                className="edit-btn"
-                onClick={() => void openEdit(process.id)}
-                title="Edit"
-                aria-label="Edit"
-              >
-                ✎
-              </button>
-              {process.status === 'active' || process.has_transactions ? null : (
-                <input
-                  type="checkbox"
-                  className="row-checkbox"
-                  checked={!!delSel[process.id]}
-                  onChange={(e) =>
-                    setDelSel((prev) => ({ ...prev, [process.id]: e.target.checked }))
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="showAllGames"
+                checked={showAll}
+                onChange={(e) => setShowAll(e.target.checked)}
+              />
+              <label htmlFor="showAllGames">Show All</label>
+            </div>
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="showInactiveGames"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+              />
+              <label htmlFor="showInactiveGames">Show Inactive</label>
+            </div>
+            <a className="plClassicLink" href={apiUrl('/processlist_classic.php')} style={{ fontSize: 14 }}>
+              经典版
+            </a>
+            {loading ? (
+              <span style={{ color: '#64748b', fontSize: 13 }}>Loading…</span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="btn btn-delete"
+            id="processDeleteSelectedBtn"
+            onClick={() => void doDelete()}
+            disabled={!toDelete.length}
+            title="Only inactive processes can be deleted"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+
+      <div className="process-table-wrapper" id="processTableWrapper">
+        <div className="table-header" id="tableHeader">
+          <div className="header-item gambling-header">No</div>
+          <div className="header-item gambling-header">Process ID</div>
+          <div className="header-item gambling-header">Description</div>
+          <div className="header-item gambling-header">Status</div>
+          <div className="header-item gambling-header">Currency</div>
+          <div className="header-item gambling-header">Day Use</div>
+          <div className="header-item gambling-header">
+            Action
+            <input
+              type="checkbox"
+              id="selectAllProcesses"
+              title="Select all"
+              style={{ marginLeft: 10, cursor: 'pointer' }}
+              onChange={(e) => toggleSelectAllGames(e.target.checked)}
+            />
+          </div>
+        </div>
+
+        <div className="process-cards" id="processTableBody">
+          {displayRows.length === 0 && !loading ? (
+            <div className="process-card">
+              <div className="card-item" style={{ gridColumn: '1 / -1' }}>
+                No process data found
+              </div>
+            </div>
+          ) : null}
+          {pageItems.map((process, idx) => (
+            <div key={process.id} className="process-card" data-id={process.id}>
+              <div className="card-item">{startIndex + idx + 1}</div>
+              <div className="card-item">{(process.process_name || '').toUpperCase()}</div>
+              <div className="card-item">{(process.description || '').toUpperCase()}</div>
+              <div className="card-item" style={{ justifyContent: 'center' }}>
+                <span
+                  className={
+                    'role-badge ' +
+                    (process.status === 'active' ? 'status-active' : 'status-inactive') +
+                    ' status-clickable'
                   }
-                />
-              )}
+                  onClick={() => void onToggle(process.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') void onToggle(process.id)
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  title="Click to toggle status"
+                >
+                  {(process.status || '').toUpperCase()}
+                </span>
+              </div>
+              <div className="card-item">{process.currency || ''}</div>
+              <div className="card-item">{process.day_use || ''}</div>
+              <div className="card-item" style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  type="button"
+                  className="edit-btn"
+                  onClick={() => void openEdit(process.id)}
+                  title="Edit"
+                  aria-label="Edit"
+                >
+                  <img src={apiUrl('/images/edit.svg')} alt="" width={16} height={16} />
+                </button>
+                {process.status === 'active' || process.has_transactions ? null : (
+                  <input
+                    type="checkbox"
+                    className="row-checkbox"
+                    data-id={String(process.id)}
+                    checked={!!delSel[process.id]}
+                    onChange={(e) =>
+                      setDelSel((prev) => ({ ...prev, [process.id]: e.target.checked }))
+                    }
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
 
       {!showAll && displayRows.length > 0 ? (
-        <div className="plPager">
+        <div className="pagination-container" id="paginationContainer">
           <button
             type="button"
-            className="plBtn"
+            className="pagination-btn"
+            id="prevBtn"
             disabled={page <= 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            aria-label="Previous"
           >
-            Prev
+            ◀
           </button>
-          <span className="plPager__text">
+          <span className="pagination-info" id="paginationInfo">
             Page {page} / {totalPages}
           </span>
           <button
             type="button"
-            className="plBtn"
+            className="pagination-btn"
+            id="nextBtn"
             disabled={page >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            aria-label="Next"
           >
-            Next
+            ▶
           </button>
         </div>
       ) : null}
@@ -665,6 +761,6 @@ export function ProcessListGamesPanel({
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   )
 }

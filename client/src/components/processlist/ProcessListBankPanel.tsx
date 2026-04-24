@@ -1,38 +1,42 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import type { BankProcessRow } from '../../lib/processListTypes'
-import { BANK_STATUS_OPTIONS } from '../../lib/processListTypes'
+import { apiUrl } from '../../lib/api'
 import {
   fetchAccountList,
   fetchGetProcess,
   fetchProcessList,
   postAddProcess,
   postDeleteProcesses,
-  postToggleProcessStatus,
-  postUpdateBankIssueFlag,
+  postUpdateBankRemark,
   postUpdateProcess,
 } from '../../lib/processListApi'
 import {
   formatContractLabel,
-  getBankStatusSelectValue,
   getContractStateClass,
   isGrayContractActive,
   matchesCurrentBankFilters,
-  normalizeBankIssueFlag,
   processMatchesSelectedDate,
   ymdToday,
 } from '../../lib/processListBankUtils'
+import { BankStatusDropdown } from './BankStatusDropdown'
 
 const PAGE_SIZE = 20
 
 type Props = {
   companyId: number
-  search: string
   onNotice: (msg: string, kind: 'ok' | 'err') => void
 }
 
 type AccountOpt = { id: number; account_id: string; name?: string; role?: string }
 
-export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
+function dashIfEmpty(val: unknown): string {
+  if (val == null) return '-'
+  const s = String(val).trim()
+  return s === '' ? '-' : s
+}
+
+export function ProcessListBankPanel({ companyId, onNotice }: Props) {
+  const [search, setSearch] = useState('')
   const [rows, setRows] = useState<BankProcessRow[]>([])
   const [loading, setLoading] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -73,7 +77,27 @@ export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
 
   const [delSel, setDelSel] = useState<Record<number, boolean>>({})
 
+  const [quickRemarkId, setQuickRemarkId] = useState<number | null>(null)
+  const [quickRemarkText, setQuickRemarkText] = useState('')
+
   const todayY = ymdToday()
+
+  useLayoutEffect(() => {
+    if (showAll) {
+      document.body.classList.add('process-page--bank-show-all')
+    } else {
+      document.body.classList.remove('process-page--bank-show-all')
+    }
+    return () => document.body.classList.remove('process-page--bank-show-all')
+  }, [showAll])
+
+  useEffect(() => {
+    if (!showAll) return
+    setShowInactive(false)
+    setShowOfficial(false)
+    setShowEInvoice(false)
+    setShowBlock(false)
+  }, [showAll])
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -278,57 +302,6 @@ export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
     }
   }
 
-  const onBankStatusSelect = async (p: BankProcessRow, newVal: string) => {
-    const v = newVal.toLowerCase()
-    const prevSel = getBankStatusSelectValue(p)
-    if (v === prevSel) return
-
-    if (v === 'official' || v === 'e_invoice' || v === 'block') {
-      const r = await postUpdateBankIssueFlag(p.id, v)
-      if (r.success) {
-        onNotice('Status updated', 'ok')
-        void loadList()
-      } else onNotice(r.error, 'err')
-      return
-    }
-
-    if (v !== 'active' && v !== 'inactive') return
-
-    const st = String(p.status || '').toLowerCase()
-    const hasIssue = !!normalizeBankIssueFlag(p.issue_flag)
-    // 与 `handleBankStatusSelectChange`：已是 active/ inactive 但仅清 issue 旗标
-    if (v === 'active' && st === 'active' && hasIssue) {
-      const r = await postUpdateBankIssueFlag(p.id, '')
-      if (r.success) {
-        onNotice('Updated', 'ok')
-        void loadList()
-      } else onNotice(r.error, 'err')
-      return
-    }
-    if (v === 'inactive' && st === 'inactive' && hasIssue) {
-      const r = await postUpdateBankIssueFlag(p.id, '')
-      if (r.success) {
-        onNotice('Updated', 'ok')
-        void loadList()
-      } else onNotice(r.error, 'err')
-      return
-    }
-
-    if (!window.confirm(v === 'inactive' ? 'Switch to Inactive?' : 'Switch to Active?')) return
-    const t = await postToggleProcessStatus(p.id, 'Bank')
-    if (!t.success) {
-      onNotice(t.error, 'err')
-      return
-    }
-    try {
-      await postUpdateBankIssueFlag(p.id, '')
-    } catch {
-      /* ignore: 与经典 confirmInactive 后清旗标 */
-    }
-    onNotice('Status updated', 'ok')
-    void loadList()
-  }
-
   const toDelete = Object.entries(delSel)
     .filter(([, v]) => v)
     .map(([k]) => parseInt(k, 10))
@@ -348,146 +321,232 @@ export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
     } else onNotice(r.error, 'err')
   }
 
+  const showHeaderDeleteCb =
+    showInactive || showOfficial || showEInvoice || showBlock
+
+  const openQuickRemark = (p: BankProcessRow) => {
+    setQuickRemarkId(p.id)
+    setQuickRemarkText(String(p.remark || '').trim())
+  }
+
+  const saveQuickRemark = async () => {
+    if (quickRemarkId == null) return
+    const r = await postUpdateBankRemark(quickRemarkId, quickRemarkText.trim())
+    if (r.success) {
+      onNotice('Remark updated', 'ok')
+      setQuickRemarkId(null)
+      void loadList()
+    } else onNotice(r.error, 'err')
+  }
+
+  const toggleSelectAllBank = (checked: boolean) => {
+    setDelSel((prev) => {
+      const next = { ...prev }
+      pageItems.forEach((p) => {
+        const isRealInactive = String(p.status || '').toLowerCase() === 'inactive'
+        if (isRealInactive && !p.has_transactions) {
+          next[p.id] = checked
+        }
+      })
+      return next
+    })
+  }
+
   return (
-    <div className="plBank">
-      <div className="plBank__filters">
-        <label className="plCheck">
-          <input
-            type="checkbox"
-            checked={showAll}
-            onChange={(e) => {
-              setShowAll(e.target.checked)
-              setCurrentPage(1)
-            }}
-          />{' '}
-          Show all (no pager)
-        </label>
-        <label className="plCheck">
-          <input
-            type="checkbox"
-            checked={showInactive}
-            onChange={(e) => {
-              setShowInactive(e.target.checked)
-              setCurrentPage(1)
-            }}
-          />
-          Inactive
-        </label>
-        <label className="plCheck">
-          <input
-            type="checkbox"
-            checked={showOfficial}
-            onChange={(e) => {
-              setShowOfficial(e.target.checked)
-              setCurrentPage(1)
-            }}
-          />
-          Official
-        </label>
-        <label className="plCheck">
-          <input
-            type="checkbox"
-            checked={showEInvoice}
-            onChange={(e) => {
-              setShowEInvoice(e.target.checked)
-              setCurrentPage(1)
-            }}
-          />
-          E-Invoice
-        </label>
-        <label className="plCheck">
-          <input
-            type="checkbox"
-            checked={showBlock}
-            onChange={(e) => {
-              setShowBlock(e.target.checked)
-              setCurrentPage(1)
-            }}
-          />
-          Block
-        </label>
-        <label className="plCheck">
-          <input
-            type="checkbox"
-            checked={waiting}
-            onChange={(e) => {
-              setWaiting(e.target.checked)
-              setCurrentPage(1)
-            }}
-          />
-          Waiting
-        </label>
-        <div className="plBank__dates">
-          <label>
-            From (dd/mm/yyyy)
-            <input
-              className="plInput plInput--sm"
-              value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value)
+    <>
+      <div className="action-buttons-container" id="processListBankActionBar">
+        <div className="action-buttons">
+          <div
+            className="action-controls-row"
+            style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+          >
+            <button type="button" className="btn btn-add" onClick={openAddBank}>
+              Add Process
+            </button>
+            <div className="process-list-date-filter" id="processListDateFilter">
+              <span style={{ fontSize: 12, color: '#64748b', marginRight: 6 }}>From (dd/mm/yyyy)</span>
+              <input
+                type="text"
+                className="search-input"
+                style={{ maxWidth: 120 }}
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value)
+                  setCurrentPage(1)
+                }}
+                placeholder="dd/mm/yyyy"
+                aria-label="Date from"
+              />
+              <span style={{ fontSize: 12, color: '#64748b', margin: '0 6px' }}>To</span>
+              <input
+                type="text"
+                className="search-input"
+                style={{ maxWidth: 120 }}
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value)
+                  setCurrentPage(1)
+                }}
+                placeholder="dd/mm/yyyy"
+                aria-label="Date to"
+              />
+            </div>
+            <div className="search-container" style={{ position: 'relative' }}>
+              <svg className="search-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+              </svg>
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                id="searchInput"
+                aria-label="Search"
+              />
+            </div>
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="showAllBank"
+                checked={showAll}
+                onChange={(e) => {
+                  setShowAll(e.target.checked)
+                  setCurrentPage(1)
+                }}
+              />
+              <label htmlFor="showAllBank">Show All</label>
+            </div>
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="showInactiveBank"
+                checked={showInactive}
+                onChange={(e) => {
+                  setShowInactive(e.target.checked)
+                  setCurrentPage(1)
+                }}
+              />
+              <label htmlFor="showInactiveBank">Inactive</label>
+            </div>
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="showOfficialBank"
+                checked={showOfficial}
+                onChange={(e) => {
+                  setShowOfficial(e.target.checked)
+                  setCurrentPage(1)
+                }}
+              />
+              <label htmlFor="showOfficialBank">Official</label>
+            </div>
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="showEInvoiceBank"
+                checked={showEInvoice}
+                onChange={(e) => {
+                  setShowEInvoice(e.target.checked)
+                  setCurrentPage(1)
+                }}
+              />
+              <label htmlFor="showEInvoiceBank">E-Invoice</label>
+            </div>
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="showBlockBank"
+                checked={showBlock}
+                onChange={(e) => {
+                  setShowBlock(e.target.checked)
+                  setCurrentPage(1)
+                }}
+              />
+              <label htmlFor="showBlockBank">Block</label>
+            </div>
+            <div className="checkbox-section">
+              <input
+                type="checkbox"
+                id="waitingBank"
+                checked={waiting}
+                onChange={(e) => {
+                  setWaiting(e.target.checked)
+                  setCurrentPage(1)
+                }}
+              />
+              <label htmlFor="waitingBank">Waiting</label>
+            </div>
+            <button
+              type="button"
+              className="btn"
+              style={{
+                border: '1px solid #cbd5e1',
+                borderRadius: 8,
+                background: '#fff',
+                padding: '6px 10px',
+                cursor: 'pointer',
+              }}
+              onClick={() => {
+                setSortAsc((s) => !s)
                 setCurrentPage(1)
               }}
-            />
-          </label>
-          <label>
-            To
-            <input
-              className="plInput plInput--sm"
-              value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value)
-                setCurrentPage(1)
-              }}
-            />
-          </label>
+            >
+              Sort supplier {sortAsc ? '▲' : '▼'}
+            </button>
+            {loading ? (
+              <span style={{ color: '#64748b', fontSize: 13 }}>Loading…</span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="btn btn-delete"
+            id="processDeleteSelectedBtn"
+            onClick={() => void doDelete()}
+            disabled={!toDelete.length}
+            title="Only inactive processes can be deleted"
+          >
+            Delete
+          </button>
         </div>
       </div>
 
-      <div className="plBank__toolbar">
-        <button type="button" className="plBtn plBtn--primary" onClick={openAddBank}>
-          Add
-        </button>
-        <button type="button" className="plBtn" onClick={() => void doDelete()} disabled={!toDelete.length}>
-          Delete
-        </button>
-        <button
-          type="button"
-          className="plBtn"
-          onClick={() => {
-            setSortAsc((s) => !s)
-            setCurrentPage(1)
-          }}
-        >
-          Sort supplier {sortAsc ? '▲' : '▼'}
-        </button>
-        {loading ? <span>Loading…</span> : null}
-      </div>
-
-      <div className="plBank__scroll">
-        <table className="plBank__table">
+      <div className="bank-table-wrapper" id="bankTableWrapper">
+        <table className="bank-data-table" id="bankTable">
           <thead>
-            <tr>
-              <th>No</th>
+            <tr id="bankTableHeadRow">
+              <th className="bank-th-no">No</th>
               <th>Supplier</th>
-              <th>Country</th>
+              <th className="bank-th-country">Country</th>
               <th>Bank</th>
-              <th>Types</th>
-              <th>Card Owner</th>
+              <th className="bank-th-types">Types</th>
+              <th className="bank-th-card-owner">Card Owner</th>
               <th>Contract</th>
               <th>Insurance</th>
               <th>Customer</th>
               <th>Cost</th>
               <th>Price</th>
               <th>Profit</th>
-              <th>Status</th>
+              <th className="bank-th-status">Status</th>
               <th>Date</th>
-              <th>Action</th>
+              <th className="bank-th-action bank-action-header">
+                Action
+                {showHeaderDeleteCb ? (
+                  <input
+                    type="checkbox"
+                    className="header-action-checkbox"
+                    title="Select all"
+                    aria-label="Select all bank processes for delete"
+                    onChange={(e) => toggleSelectAllBank(e.target.checked)}
+                  />
+                ) : null}
+              </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="bankTableBody">
             {pageItems.length === 0 && !loading ? (
               <tr>
-                <td colSpan={15} className="plBank__empty">
+                <td colSpan={15} className="bank-empty-cell">
                   No process data found
                 </td>
               </tr>
@@ -500,16 +559,19 @@ export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
                 todayY,
               )
               const cClass = isGrayContractActive(cLabel, baseC)
-              const sel = getBankStatusSelectValue(p)
               const isRealInactive = String(p.status || '').toLowerCase() === 'inactive'
+              const dateCell =
+                p.date != null && String(p.date).trim() !== ''
+                  ? String(p.date)
+                  : dashIfEmpty(p.day_start)
               return (
-                <tr key={p.id} data-id={p.id}>
-                  <td>{startIndex + idx + 1}</td>
-                  <td>{(p.supplier || '-').toString()}</td>
-                  <td>{p.country || '-'}</td>
-                  <td>{p.bank || '-'}</td>
-                  <td>{p.types || '-'}</td>
-                  <td>{p.card_lower || '-'}</td>
+                <tr key={p.id} data-id={p.id} data-status={p.status} data-has-transactions={p.has_transactions ? '1' : '0'}>
+                  <td className="bank-td-no">{startIndex + idx + 1}</td>
+                  <td>{dashIfEmpty(p.supplier)}</td>
+                  <td className="bank-td-country">{dashIfEmpty(p.country)}</td>
+                  <td>{dashIfEmpty(p.bank)}</td>
+                  <td className="bank-td-types">{dashIfEmpty(p.types)}</td>
+                  <td className="bank-td-card-owner">{dashIfEmpty(p.card_lower)}</td>
                   <td>
                     {cLabel ? (
                       <span className={`contract-badge ${cClass}`}>{cLabel}</span>
@@ -517,41 +579,54 @@ export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
                       '-'
                     )}
                   </td>
-                  <td>{p.insurance ?? '-'}</td>
-                  <td>{p.customer || '-'}</td>
-                  <td>{p.cost ?? '-'}</td>
-                  <td>{p.price ?? '-'}</td>
-                  <td>{p.profit ?? '-'}</td>
-                  <td>
-                    <select
-                      className={'plBank__status ' + (sel || 'active')}
-                      value={sel}
-                      onChange={(e) => void onBankStatusSelect(p, e.target.value)}
-                    >
-                      {BANK_STATUS_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                  <td>{dashIfEmpty(p.insurance)}</td>
+                  <td>{dashIfEmpty(p.customer)}</td>
+                  <td>{dashIfEmpty(p.cost)}</td>
+                  <td>{dashIfEmpty(p.price)}</td>
+                  <td>{dashIfEmpty(p.profit)}</td>
+                  <td className="bank-td-status">
+                    <BankStatusDropdown
+                      process={p}
+                      onAfterChange={() => void loadList()}
+                      onNotice={onNotice}
+                    />
                   </td>
-                  <td>
-                    {p.date != null && String(p.date).trim() !== ''
-                      ? String(p.date)
-                      : p.day_start || '-'}
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      className="plBtn plBtn--sm"
-                      onClick={() => void openEditBank(p.id)}
-                    >
-                      Edit
-                    </button>
+                  <td>{dateCell}</td>
+                  <td className="bank-td-action">
+                    <div className="bank-action-tools">
+                      <button
+                        type="button"
+                        className="edit-btn"
+                        onClick={() => void openEditBank(p.id)}
+                        title="Edit"
+                        aria-label="Edit"
+                      >
+                        <img src={apiUrl('/images/edit.svg')} alt="" width={16} height={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="edit-btn remark-action-btn"
+                        onClick={() => openQuickRemark(p)}
+                        title="Remark"
+                        aria-label="Remark"
+                      >
+                        <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden>
+                          <path
+                            d="M6 4h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4h8M8 11h6"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                     {isRealInactive ? (
                       <input
                         type="checkbox"
                         className="row-checkbox bank-checkbox"
+                        data-id={p.id}
                         style={{ marginLeft: 8 }}
                         disabled={!!p.has_transactions}
                         title={
@@ -574,26 +649,74 @@ export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
       </div>
 
       {!showAll && sorted.length > 0 ? (
-        <div className="plPager">
+        <div className="pagination-container" id="paginationContainer">
           <button
             type="button"
-            className="plBtn"
+            className="pagination-btn"
+            id="prevBtn"
             disabled={page <= 1}
             onClick={() => setCurrentPage((x) => Math.max(1, x - 1))}
+            aria-label="Previous page"
           >
-            Prev
+            ◀
           </button>
-          <span>
+          <span className="pagination-info" id="paginationInfo">
             Page {page} / {totalPages}
           </span>
           <button
             type="button"
-            className="plBtn"
+            className="pagination-btn"
+            id="nextBtn"
             disabled={page >= totalPages}
             onClick={() => setCurrentPage((x) => Math.min(totalPages, x + 1))}
+            aria-label="Next page"
           >
-            Next
+            ▶
           </button>
+        </div>
+      ) : null}
+
+      {quickRemarkId != null ? (
+        <div className="modal" style={{ display: 'block' }} role="dialog" aria-modal>
+          <div
+            className="modal-content"
+            style={{ maxWidth: 480 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2>Process Remark</h2>
+              <span
+                className="close"
+                onClick={() => setQuickRemarkId(null)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setQuickRemarkId(null)}
+              >
+                &times;
+              </span>
+            </div>
+            <div className="modal-body">
+              <textarea
+                className="plInput plInput--ta"
+                style={{ width: '100%', minHeight: 100, boxSizing: 'border-box' }}
+                value={quickRemarkText}
+                onChange={(e) => setQuickRemarkText(e.target.value)}
+                placeholder="Enter remark for this process..."
+              />
+              <div className="plModal__actions" style={{ marginTop: 12 }}>
+                <button type="button" className="btn" onClick={() => setQuickRemarkId(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-add"
+                  onClick={() => void saveQuickRemark()}
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -835,6 +958,6 @@ export function ProcessListBankPanel({ companyId, search, onNotice }: Props) {
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   )
 }

@@ -120,6 +120,18 @@ export async function postUpdateBankIssueFlag(
   return parseJson<unknown>(r)
 }
 
+export async function postUpdateBankRemark(
+  id: number,
+  remark: string,
+): Promise<ApiResult<unknown>> {
+  const fd = new FormData()
+  fd.set('id', String(id))
+  fd.set('remark', remark)
+  const r = await apiFetch('api/processes/update_bank_remark_api.php', { method: 'POST', body: fd })
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  return parseJson<unknown>(r)
+}
+
 export type AddProcessFormPayload = {
   currencies: { id: number; code: string }[]
   days: { id: number; day_name: string }[]
