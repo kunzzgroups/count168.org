@@ -1378,6 +1378,33 @@ body.processlist-spa-native.process-page:not(.process-page--bank) .pagination-co
     background: rgba(255, 255, 255, 0.95) !important;
 }
 
+/* Process 页与其他经典页统一 container 内边距 */
+body.processlist-spa-native.process-page .container {
+    padding: 1px 40px 40px !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.processlist-spa-native.process-page .content {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+}
+
+/* Bank 页布局回到经典：表格按内容高度展开，分页紧跟其后 */
+body.processlist-spa-native.process-page.process-page--bank .bank-table-wrapper {
+    margin-top: 10px !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    padding-bottom: 0 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .pagination-container {
+    margin-top: 6px !important;
+}
+
 /* Table Header - copied from accountCSS.css */
 .process-page .table-header {
     display: grid;
