@@ -4478,3 +4478,54 @@ body.processlist-spa-native.process-page.process-page--bank #processListBankActi
     height: clamp(14px, 0.83vw, 16px) !important;
     color: inherit !important;
 }
+
+/* ===== Bank align to ProcessList layout (company/add/table) ===== */
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container .process-company-filter {
+    padding: 0 10px 4px 10px !important;
+    gap: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container .process-company-filter .process-company-label {
+    font-size: 10px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container .process-company-buttons {
+    gap: 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container .process-company-btn {
+    padding: 1px 9px !important;
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+    min-height: 18px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row {
+    gap: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .btn.btn-add {
+    width: clamp(90px, 7vw, 130px) !important;
+    min-width: 0 !important;
+    height: 24px !important;
+    line-height: 20px !important;
+    padding: clamp(6px, 0.42vw, 8px) 20px !important;
+    font-size: clamp(10px, 0.83vw, 16px) !important;
+    border-radius: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
+    font-size: 11px !important;
+    line-height: 1.05 !important;
+    padding: 2px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    padding: 2px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody tr {
+    height: 22px !important;
+}
