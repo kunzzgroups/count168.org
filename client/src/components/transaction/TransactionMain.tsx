@@ -32,7 +32,6 @@ import {
   type TxSearchPayload,
 } from '../../lib/transactionLib'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
-import { useSearchParams } from 'react-router-dom'
 import { DashboardCalendarPopup } from '../dashboard/DashboardCalendarPopup'
 import { QUICK_RANGE_LABEL, type QuickRangeId } from '../../lib/quickDateRange'
 import flatpickr from 'flatpickr'
@@ -264,87 +263,11 @@ function AccountSearchField({
 }
 
 export function TransactionMain({ bootstrap }: Props) {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const spKey = searchParams.toString()
-
   const w = useTransactionWorkspace(bootstrap)
-  const wRef = useRef(w)
-  wRef.current = w
-
-  const replaceCompanyInUrl = useCallback(
-    (companyId: number) => {
-      setSearchParams(
-        (prev) => {
-          const p = new URLSearchParams(prev)
-          p.set('company_id', String(companyId))
-          return p
-        },
-        { replace: true },
-      )
-    },
-    [setSearchParams],
-  )
-
   const viewerRole = String(bootstrap.userData?.role || '').toLowerCase()
   const canApproveContra = ['manager', 'admin', 'owner'].includes(viewerRole)
   /** 与 `transaction_classic.php` 一致：全角色显示 Description 列 */
   const showDescriptionColumn = true
-
-  useEffect(() => {
-    window.onSharedCompanyFilterChanged = (companyId, _companyCode) => {
-      const wr = wRef.current
-      if (companyId == null || companyId === '') {
-        wr.setGroup(null)
-        return
-      }
-      const id = typeof companyId === 'number' ? companyId : parseInt(String(companyId), 10)
-      if (!Number.isFinite(id)) return
-      const row = wr.companies.find((c) => Number(c.id) === id)
-      if (row) {
-        const g =
-          row.group_id && String(row.group_id).trim() !== ''
-            ? String(row.group_id).toUpperCase()
-            : null
-        if (g) wr.setGroup(g)
-        window.setTimeout(() => {
-          wr.onPickCompany(id)
-          replaceCompanyInUrl(id)
-        }, 0)
-      } else {
-        wr.onPickCompany(id)
-        replaceCompanyInUrl(id)
-      }
-    }
-    return () => {
-      delete window.onSharedCompanyFilterChanged
-    }
-  }, [replaceCompanyInUrl])
-
-  useEffect(() => {
-    if (!w.companiesReady) return
-    const raw = searchParams.get('company_id')
-    if (raw == null || raw === '') return
-    const want = parseInt(raw, 10)
-    if (!Number.isFinite(want)) return
-    const active = wRef.current.activeCompanyId
-    if (active != null && Number(active) === want) return
-    const row = wRef.current.companies.find((c) => Number(c.id) === want)
-    if (!row) return
-    const g =
-      row.group_id && String(row.group_id).trim() !== ''
-        ? String(row.group_id).toUpperCase()
-        : null
-    if (g) wRef.current.setGroup(g)
-    window.setTimeout(() => {
-      wRef.current.onPickCompany(want)
-    }, 0)
-  }, [w.companiesReady, spKey])
-
-  useEffect(() => {
-    if (!w.companiesReady || w.activeCompanyId == null) return
-    if (searchParams.get('company_id')) return
-    replaceCompanyInUrl(w.activeCompanyId)
-  }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
   const [categories, setCategories] = useState<string[]>([])
   const [catOpen, setCatOpen] = useState(false)
@@ -1814,10 +1737,7 @@ export function TransactionMain({ bootstrap }: Props) {
                         data-company-id={c.id}
                         data-group-id={cGid}
                         data-company-code={code}
-                        onClick={() => {
-                          w.onPickCompany(c.id)
-                          replaceCompanyInUrl(c.id)
-                        }}
+                        onClick={() => w.onPickCompany(c.id)}
                       >
                         {code}
                       </button>

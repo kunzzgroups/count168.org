@@ -79,23 +79,10 @@ function hideNotification() {
 
 /** SPA（React）与经典 `.php` 共用：返回 Data Capture */
 function navigateToDataCaptureFromSummary(queryWithoutQuestion) {
-    var raw =
-        queryWithoutQuestion != null && String(queryWithoutQuestion).length > 0
-            ? String(queryWithoutQuestion).replace(/^\?/, '')
-            : '';
-    var pms = new URLSearchParams(raw);
-    var sid =
-        typeof window.DATACAPTURESUMMARY_COMPANY_ID !== 'undefined' &&
-        window.DATACAPTURESUMMARY_COMPANY_ID !== null &&
-        window.DATACAPTURESUMMARY_COMPANY_ID !== ''
-            ? String(window.DATACAPTURESUMMARY_COMPANY_ID).trim()
-            : '';
-    if (sid && !pms.get('company_id') && !isNaN(parseInt(sid, 10))) {
-        pms.set('company_id', sid);
+    var q = '';
+    if (queryWithoutQuestion != null && String(queryWithoutQuestion).length > 0) {
+        q = '?' + String(queryWithoutQuestion).replace(/^\?/, '');
     }
-    var merged = pms.toString();
-    var q = merged ? '?' + merged : '';
-
     if (document.body && document.body.classList.contains('datacapture-summary-spa-embed')) {
         var spaDc =
             typeof window.EAZYCOUNT_SPA_DATACAPTURE === 'string' && window.EAZYCOUNT_SPA_DATACAPTURE

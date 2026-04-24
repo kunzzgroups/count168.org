@@ -15,145 +15,7 @@ const forcedPermission = (typeof window.PROCESSLIST_FORCED_PERMISSION === 'strin
 // 设为 true 时：Process List 页面隐藏 Category 筛选按钮（Games/Bank/…）。
 // 恢复原状只需将此值改为 false。
 const SINGLE_CATEGORY_MODE = true;
-
-/** React `/processlist` iframe 内文档：`processlist_classic.php?c168_spa_frame=1` */
-function c168ProcessListIsSpaFrameDoc() {
-    return typeof document !== 'undefined' && document.documentElement &&
-        document.documentElement.getAttribute('data-c168-spa-frame') === '1';
-}
-
-function c168IsProcessListSpaEmbed() {
-    return (typeof document !== 'undefined' && document.body &&
-        document.body.classList.contains('process-list-spa-embed')) ||
-        (typeof window !== 'undefined' && window.__PROCESS_LIST_SPA_EMBED__ === true);
-}
-
-/** 经典页保留 SINGLE_CATEGORY_MODE；React `/processlist` 需显示 Games/Bank 等与 URL category 同步 */
-function c168ProcessListShouldHidePermissionFilter() {
-    if (c168IsProcessListSpaEmbed()) {
-        return !!window.PROCESSLIST_HIDE_PERMISSION_FILTER;
-    }
-    return SINGLE_CATEGORY_MODE || !!window.PROCESSLIST_HIDE_PERMISSION_FILTER;
-}
-
-function c168ProcessListCategoryFromLocation() {
-    if (c168IsProcessListSpaEmbed() || c168ProcessListIsSpaFrameDoc()) {
-        const p = new URLSearchParams(window.location.search);
-        const c = String(p.get('category') || '').trim();
-        if (c.toLowerCase() === 'bank') return 'Bank';
-        return 'Games';
-    }
-    const pageName = window.location.pathname.replace(/.*\//, '');
-    return (pageName === 'bank_process_list.php') ? 'Bank' : 'Games';
-}
-
-/** React `/processlist`：筛选与 Category 写入地址栏（company_id 由 React 与 legacy 共同保留） */
-function c168PushProcessListFiltersToUrl() {
-    if (!c168IsProcessListSpaEmbed()) return;
-    try {
-        const url = new URL(window.location.href);
-        const p = url.searchParams;
-        if (showInactive) {
-            p.set('showInactive', '1');
-        } else {
-            p.delete('showInactive');
-        }
-        if (showAll) {
-            p.set('showAll', '1');
-        } else {
-            p.delete('showAll');
-        }
-        if (showOfficial) {
-            p.set('showOfficial', '1');
-        } else {
-            p.delete('showOfficial');
-        }
-        if (showEInvoice) {
-            p.set('showEInvoice', '1');
-        } else {
-            p.delete('showEInvoice');
-        }
-        if (showBlock) {
-            p.set('showBlock', '1');
-        } else {
-            p.delete('showBlock');
-        }
-        const inp = document.getElementById('searchInput');
-        const q = inp ? String(inp.value || '').trim() : '';
-        if (q) {
-            p.set('search', q);
-        } else {
-            p.delete('search');
-        }
-        if (selectedPermission === 'Bank') {
-            p.set('category', 'Bank');
-        } else {
-            p.set('category', 'Games');
-        }
-        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-        window.dispatchEvent(new Event('c168:process-list-url-replaced'));
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-/** React Router / 前进后退：用 `location.search` 刷新勾选与列表 */
-function c168SyncProcessListFromLocation() {
-    if (!c168IsProcessListSpaEmbed()) return;
-    try {
-        const p = new URLSearchParams(window.location.search);
-        const nextInactive = p.has('showInactive');
-        const nextAll = p.has('showAll');
-        const nextOfficial = p.has('showOfficial');
-        const nextEInv = p.has('showEInvoice');
-        const nextBlock = p.has('showBlock');
-        const nextSearch = p.has('search') ? String(p.get('search') || '') : '';
-
-        const inp = document.getElementById('searchInput');
-        const curSearch = inp ? String(inp.value || '').trim() : '';
-
-        // 不可用「URL category === selectedPermission」早退：二者同为 Games 时当前公司可能仅 Bank（如 CX），必须先经 loadPermissionButtons 按 domain 权限纠正再拉数
-        if (
-            nextInactive === showInactive &&
-            nextAll === showAll &&
-            nextOfficial === showOfficial &&
-            nextEInv === showEInvoice &&
-            nextBlock === showBlock &&
-            nextSearch === curSearch
-        ) {
-            void loadPermissionButtons().catch(function (err) {
-                console.error(err);
-            });
-            return;
-        }
-
-        showInactive = nextInactive;
-        showAll = nextAll;
-        showOfficial = nextOfficial;
-        showEInvoice = nextEInv;
-        showBlock = nextBlock;
-        window.PROCESSLIST_SHOW_INACTIVE = showInactive;
-        window.PROCESSLIST_SHOW_ALL = showAll;
-        window.PROCESSLIST_SHOW_OFFICIAL = showOfficial;
-        window.PROCESSLIST_SHOW_E_INVOICE = showEInvoice;
-        window.PROCESSLIST_SHOW_BLOCK = showBlock;
-
-        if (inp) {
-            inp.value = p.has('search') ? (p.get('search') || '') : '';
-        }
-        normalizeBankFilterState();
-
-        void loadPermissionButtons().catch(function (err) {
-            console.error(err);
-        });
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-window.c168SyncProcessListFromLocation = c168SyncProcessListFromLocation;
-window.c168PushProcessListFiltersToUrl = c168PushProcessListFiltersToUrl;
-
+const hidePermissionFilter = SINGLE_CATEGORY_MODE || !!window.PROCESSLIST_HIDE_PERMISSION_FILTER;
 function getBankProcessModule() {
     return (typeof window !== 'undefined' && window.BankProcessList) ? window.BankProcessList : null;
 }
@@ -3512,7 +3374,6 @@ if (searchInput) {
         searchTimeout = setTimeout(() => {
             currentPage = 1;
             fetchProcesses();
-            if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
         }, 300);
     });
 
@@ -3524,13 +3385,6 @@ if (searchInput) {
             this.value = filteredValue;
             this.setSelectionRange(cursorPosition, cursorPosition);
         }, 0);
-    });
-
-    searchInput.addEventListener('blur', function () {
-        clearTimeout(searchTimeout);
-        currentPage = 1;
-        fetchProcesses();
-        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3547,7 +3401,6 @@ if (showInactiveCheckbox) {
         } else {
             fetchProcesses();
         }
-        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3560,7 +3413,6 @@ if (showOfficialCheckbox) {
         currentPage = 1;
         renderTable();
         renderPagination();
-        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3573,7 +3425,6 @@ if (showEInvoiceCheckbox) {
         currentPage = 1;
         renderTable();
         renderPagination();
-        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3586,7 +3437,6 @@ if (showBlockCheckbox) {
         currentPage = 1;
         renderTable();
         renderPagination();
-        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3603,7 +3453,6 @@ if (showAllCheckbox) {
         } else {
             fetchProcesses();
         }
-        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -6240,7 +6089,7 @@ function removeProfitSharingEntry(index) {
     renderSelectedProfitSharing();
 }
 
-function runProcessListPageInit() {
+document.addEventListener('DOMContentLoaded', function () {
     restoreSelectedCountriesFromStorage();
     // Add Account modal: payment alert toggle
     document.querySelectorAll('input[name="add_payment_alert"]').forEach(radio => {
@@ -6658,16 +6507,15 @@ function runProcessListPageInit() {
     }
 
     initProcessListDateFilter();
-    console.log('DOM loaded, calling loadPermissionButtons...');
+    console.log('DOM loaded, calling fetchProcesses...');
     try {
-        loadPermissionButtons().catch(function (err) {
-            console.error('Error in loadPermissionButtons:', err);
+        loadPermissionButtons().then(() => {
             if (!window._isRedirecting) {
                 fetchProcesses();
             }
         });
     } catch (error) {
-        console.error('Error in loadPermissionButtons:', error);
+        console.error('Error in fetchProcesses:', error);
         showError('Error loading data: ' + error.message);
     }
 
@@ -6691,13 +6539,7 @@ function runProcessListPageInit() {
         accountingInboxPost.addEventListener('click', () => postAccountingInboxToTransaction());
     }
     /* Accounting Due 弹窗：点击弹窗以外区域不关闭，仅通过 X 或 Cancel 关闭 */
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    if (document.body && document.body.classList.contains('process-list-spa-embed')) return;
-    runProcessListPageInit();
 });
-window.runProcessListPageInit = runProcessListPageInit;
 
 window.addEventListener('resize', function () {
     if (selectedPermission === 'Bank') {
@@ -6713,12 +6555,8 @@ window.addEventListener('resize', function () {
 // 浏览器后退/前进时还原 category 状态（配合 history.pushState 实现的无刷新切换）
 window.addEventListener('popstate', function (e) {
     try {
-        // React `/processlist`：由 React Router 更新 query 后 `c168SyncProcessListFromLocation` 统一走 `switchPermission`，
-        // 避免此处半套 DOM 更新与 React 重复执行导致表头/标题错乱。
-        if (c168IsProcessListSpaEmbed()) {
-            return;
-        }
-        const permission = c168ProcessListCategoryFromLocation();
+        const pageName = window.location.pathname.replace(/.*\//, '');
+        const permission = (pageName === 'bank_process_list.php') ? 'Bank' : 'Games';
         if (permission !== selectedPermission) {
             // 直接执行原地切换（不再 pushState，避免递归）
             selectedPermission = permission;
@@ -6777,23 +6615,15 @@ async function loadPermissionButtons() {
         });
 
         const result = await response.json();
-        // Process List 仅实现 Games / Bank；Loan、Rate、Money 不在此页提供 Category（与公司其它模块权限无关）
-        // 公司业务上：有的公司仅有 Games（博彩流程表）、有的仅有 Bank（银行流程表）、有的两者皆可；仅 Bank 时应对应经典 bank_process_list 视图。
-        // 拉权限失败时勿默认含 Bank，否则 URL 曾带 category=Bank 会与仅 Games 的公司冲突并触发 Unauthorized permission category
-        let permissions = result.success && result.data && result.data.permissions ? result.data.permissions : ['Games'];
+        let permissions = result.success && result.data && result.data.permissions ? result.data.permissions : ['Games', 'Bank', 'Loan', 'Rate', 'Money'];
         // 兼容旧数据：数据库可能仍是 "Gambling"，统一为 "Games" 显示与逻辑
         permissions = [...new Set(permissions.map(p => p === 'Gambling' ? 'Games' : p))];
-        permissions = permissions.filter(function (p) { return p === 'Games' || p === 'Bank'; });
-        permissions.sort(function (a, b) {
-            var rank = { Games: 0, Bank: 1 };
-            return (rank[a] != null ? rank[a] : 99) - (rank[b] != null ? rank[b] : 99);
-        });
 
         permissionContainer.innerHTML = '';
 
         if (permissions.length > 0) {
             if (permissionFilterEl) {
-                permissionFilterEl.style.display = (c168ProcessListShouldHidePermissionFilter() || permissions.length <= 1) ? 'none' : 'flex';
+                permissionFilterEl.style.display = (hidePermissionFilter || permissions.length <= 1) ? 'none' : 'flex';
             }
 
             permissions.forEach(permission => {
@@ -6809,66 +6639,36 @@ async function loadPermissionButtons() {
             // 尝试从 localStorage 恢复之前选择的权限（兼容旧值 Gambling）
             let savedPermission = localStorage.getItem(`selectedPermission_${currentCompanyCode}`);
             if (savedPermission === 'Gambling') savedPermission = 'Games';
-            let urlCategoryOverride = null;
-            if (c168IsProcessListSpaEmbed() || c168ProcessListIsSpaFrameDoc()) {
-                const uc = new URLSearchParams(window.location.search).get('category');
-                if (uc && String(uc).toLowerCase() === 'bank') urlCategoryOverride = 'Bank';
-                if (uc && String(uc).toLowerCase() === 'games') urlCategoryOverride = 'Games';
-            }
-            // 换公司后 selectedPermission 可能仍为上一家（如 Bank）；若当前公司无该类别，必须重选否则 API 会 Unauthorized permission category
-            if (selectedPermission && !permissions.includes(selectedPermission)) {
-                selectedPermission = null;
-            }
             if (forcedPermission && permissions.includes(forcedPermission)) {
                 switchPermission(forcedPermission);
-            } else if (urlCategoryOverride && !permissions.includes(urlCategoryOverride)) {
-                // 地址栏 category=Bank 但本公司仅有 Games 等：降到可用类别并写回 URL（switchPermission 内会 push）
-                switchPermission(permissions[0]);
-            } else if (urlCategoryOverride && permissions.includes(urlCategoryOverride)) {
-                switchPermission(urlCategoryOverride);
             } else if (savedPermission && permissions.includes(savedPermission)) {
                 switchPermission(savedPermission);
             } else if (permissions.length > 0 && !selectedPermission) {
                 // 如果没有保存的权限，默认选择第一个
                 switchPermission(permissions[0]);
-            } else if (permissions.length > 0 && selectedPermission && permissions.includes(selectedPermission)) {
-                // 类别未变但公司已换（或仅重载权限）：仍需拉数；避免与 switchPermission 重复请求
-                currentPage = 1;
-                fetchProcesses();
             }
         } else {
             if (permissionFilterEl) permissionFilterEl.style.display = 'none';
-            selectedPermission = null;
-            document.body.classList.remove('process-page--bank');
         }
     } catch (error) {
         console.error('Error loading permissions:', error);
         if (permissionFilterEl) permissionFilterEl.style.display = 'none';
     }
 }
-window.loadPermissionButtons = loadPermissionButtons;
 
-// 切换权限（options.skipUrl：仅从地址栏同步时避免写回 URL）
-function switchPermission(permission, options) {
-    const skipUrl = options && options.skipUrl === true;
+// 切换权限
+function switchPermission(permission) {
     const targetPage = getProcessListPageByPermission(permission);
-    if (targetPage && !skipUrl && !c168IsProcessListSpaEmbed()) {
-        if (c168ProcessListIsSpaFrameDoc()) {
+    // 使用 history.pushState 无刷新更新 URL（替代全页跳转，消除白屏卡顿）
+    // 注：currentProcessListPage 是 const 不会更新，必须从实时 URL 读取当前页名做比较
+    if (targetPage) {
+        const _currentPageName = window.location.pathname.replace(/.*\//, '');
+        if (targetPage !== _currentPageName) {
             try {
                 const _pUrl = new URL(window.location.href);
-                const cat = permission === 'Bank' ? 'Bank' : 'Games';
-                _pUrl.searchParams.set('category', cat);
-                history.pushState({ permission: permission, category: cat }, '', _pUrl.toString());
-            } catch (e) { /* ignore */ }
-        } else {
-            const _currentPageName = window.location.pathname.replace(/.*\//, '');
-            if (targetPage !== _currentPageName) {
-                try {
-                    const _pUrl = new URL(window.location.href);
-                    _pUrl.pathname = _pUrl.pathname.replace(/[^/]*$/, targetPage);
-                    history.pushState({ permission: permission, page: targetPage }, '', _pUrl.toString());
-                } catch (e) { /* 降级：正常跳转 */ window.location.href = window.location.href.replace(/[^/]*$/, targetPage); return; }
-            }
+                _pUrl.pathname = _pUrl.pathname.replace(/[^/]*$/, targetPage);
+                history.pushState({ permission: permission, page: targetPage }, '', _pUrl.toString());
+            } catch (e) { /* 降级：正常跳转 */ window.location.href = window.location.href.replace(/[^/]*$/, targetPage); return; }
         }
     }
 
@@ -6957,10 +6757,6 @@ function switchPermission(permission, options) {
     // 重新加载数据
     currentPage = 1;
     fetchProcesses();
-
-    if (c168IsProcessListSpaEmbed() && !skipUrl) {
-        c168PushProcessListFiltersToUrl();
-    }
 }
 
 async function switchProcessListCompany(companyId) {
@@ -6979,30 +6775,6 @@ async function switchProcessListCompany(companyId) {
     } catch (error) {
         console.error('Error updating session:', error);
         // 即使 API 失败，也继续刷新页面（PHP 端会处理）
-    }
-
-    if (c168IsProcessListSpaEmbed() || c168ProcessListIsSpaFrameDoc()) {
-        const idNum = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
-        window.PROCESSLIST_COMPANY_ID = idNum;
-        window.PROCESSLIST_SELECTED_COMPANY_IDS_FOR_ADD = [idNum];
-        const map = window.PROCESSLIST_COMPANY_CODE_BY_ID || {};
-        const code = map[String(idNum)] != null ? String(map[String(idNum)]) : '';
-        if (code) window.PROCESSLIST_COMPANY_CODE = code;
-        try {
-            const url = new URL(window.location.href);
-            url.searchParams.set('company_id', String(companyId));
-            url.searchParams.delete('category');
-            window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-            window.dispatchEvent(new Event('c168:process-list-url-replaced'));
-        } catch (e) { /* ignore */ }
-        try {
-            await loadPermissionButtons();
-        } catch (eLoad) { console.error(eLoad); }
-        if (!window.PROCESSLIST_COMPANY_CODE) {
-            currentPage = 1;
-            fetchProcesses();
-        }
-        return;
     }
 
     const url = new URL(window.location.href);

@@ -170,9 +170,6 @@ $eazycountSpaDatacapturesummary = ($__eazyPrefix === '' || $__eazyPrefix === '.'
 $eazycountSpaAccounts = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
     ? '/accounts'
     : $__eazyPrefix . '/accounts';
-$eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
-    ? '/processlist'
-    : $__eazyPrefix . '/processlist';
 ?>
 <!--
 ================================================================================
@@ -185,7 +182,7 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
     <link rel="preload" href="(当前用户头像 URL)" as="image">
 ================================================================================
 -->
-<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = <?php echo json_encode($eazycountSpaDatacapturesummary); ?>;window.EAZYCOUNT_SPA_ACCOUNTS = <?php echo json_encode($eazycountSpaAccounts); ?>;window.EAZYCOUNT_SPA_PROCESSLIST = <?php echo json_encode($eazycountSpaProcesslist); ?>;</script>
+<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = <?php echo json_encode($eazycountSpaDatacapturesummary); ?>;window.EAZYCOUNT_SPA_ACCOUNTS = <?php echo json_encode($eazycountSpaAccounts); ?>;</script>
 <!-- Sidebar HTML (CSS 已移至 css/sidebar.css，JS 逻辑已移至 js/sidebar.js) -->
 <!-- Overlay -->
 <div class="informationmenu-overlay"></div>
@@ -429,7 +426,7 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
             <?php if (empty($permissions) || in_array('process', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title" data-page="processlist.php"
-                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_PROCESSLIST==='string'&&w.EAZYCOUNT_SPA_PROCESSLIST)?w.EAZYCOUNT_SPA_PROCESSLIST:'processlist.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
+                        onclick="window.location.href='processlist.php'">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                         </svg>

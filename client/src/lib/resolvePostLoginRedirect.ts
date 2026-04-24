@@ -20,17 +20,3 @@ export function resolvePostLoginRedirect(redirect: string): string {
   }
   return path
 }
-
-/**
- * 顶栏「经典版」等与 SPA 当前公司一致：在经典 PHP URL 上附加 `company_id`（无效 id 或已有参数则原样返回）。
- */
-export function appendCompanyIdToClassicRedirect(
-  redirect: string,
-  companyId: number | null | undefined,
-): string {
-  const href = resolvePostLoginRedirect(redirect)
-  const id = companyId != null ? Number(companyId) : NaN
-  if (!Number.isFinite(id) || id <= 0) return href
-  if (href.includes('company_id=')) return href
-  return `${href}${href.includes('?') ? '&' : '?'}company_id=${encodeURIComponent(String(id))}`
-}

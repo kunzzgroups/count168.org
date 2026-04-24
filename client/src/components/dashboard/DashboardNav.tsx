@@ -1,7 +1,6 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCallback, useState } from 'react'
 import { apiUrl } from '../../lib/api'
-import { buildCompanyIdSearch, buildProcessListSearch } from '../../lib/buildProcessListSearch'
 import type { SidebarContext } from '../../types/sidebarContext'
 import './DashboardNav.css'
 
@@ -112,7 +111,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
       {canNavItem(permissions, 'account', ext) && (
         <>
           <NavLink
-            to={`/accounts${buildCompanyIdSearch(context.sessionCompanyId)}`}
+            to="/accounts"
             className={({ isActive }) =>
               isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
             }
@@ -127,20 +126,14 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
       )}
 
       {canNavItem(permissions, 'process', ext) && (
-        <NavLink
-          to={`/processlist${buildProcessListSearch(context, context.sessionCompanyId, context.companyCode)}`}
-          className={({ isActive }) =>
-            isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
-          }
-          onClick={go}
-        >
+        <a className="dNav__item" href={phref('processlist.php')} onClick={go}>
           <span>Process</span>
-        </NavLink>
+        </a>
       )}
 
       {canNavItem(permissions, 'datacapture', ext) && companyHasGambling && (
         <NavLink
-          to={`/datacapture${buildCompanyIdSearch(context.sessionCompanyId)}`}
+          to="/datacapture"
           className={({ isActive }) =>
             isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
           }
@@ -152,7 +145,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
 
       {canNavItem(permissions, 'payment', ext) && (
         <NavLink
-          to={`/transaction${buildCompanyIdSearch(context.sessionCompanyId)}`}
+          to="/transaction"
           className={({ isActive }) =>
             isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
           }

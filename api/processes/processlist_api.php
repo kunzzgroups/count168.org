@@ -198,7 +198,7 @@ if ($req_company_id) {
         'get_selected_banks', 'save_selected_banks', 'update_bank_process'
     ];
 
-    $requiredCategory = 'Games'; // Default: gambling / process 表（含未传 permission）
+    $requiredCategory = 'Games'; // Default fallback
     if (in_array($action, $bankOnlyActions)) {
         $requiredCategory = 'Bank';
     } else {
@@ -206,7 +206,6 @@ if ($req_company_id) {
         if ($reqPermission === 'Bank') {
             $requiredCategory = 'Bank';
         }
-        // Loan / Rate / Money 的流程列表尚未实现；请求若带这些 permission 仍按 Games 校验（与前端仅展示 Games、Bank 一致）
     }
 
     if (!checkCompanyCategoryPermission($pdo, $req_company_id, $requiredCategory)) {

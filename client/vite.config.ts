@@ -29,7 +29,6 @@ export default defineConfig(({ mode }) => {
         '^/datacapture\\.php$': toPhp,
         '^/datacapture_classic\\.php$': toPhp,
         '^/account-list_classic\\.php$': toPhp,
-        '^/processlist_classic\\.php$': toPhp,
       },
     },
   }

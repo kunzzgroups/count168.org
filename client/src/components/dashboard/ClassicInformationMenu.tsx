@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch, apiUrl } from '../../lib/api'
-import { buildCompanyIdSearch, buildProcessListSearch } from '../../lib/buildProcessListSearch'
 import { publicAsset } from '../../lib/publicAsset'
 import type { SidebarContext } from '../../types/sidebarContext'
 import type { DashboardBootstrapData } from '../../types/dashboard'
@@ -11,8 +10,6 @@ type Props = {
   context: SidebarContext
   bootstrap: DashboardBootstrapData
   onCloseMobile?: () => void
-  /** 当前 SPA 路由对应的经典全页 URL（已含 `company_id`），侧栏底部入口 */
-  classicFullPageHref?: string
 }
 
 const NAV_HIDDEN_FOR_EXTERNAL = new Set([
@@ -142,12 +139,7 @@ function useBankCategoryFlag(companyCode: string) {
 /**
  * 与 `sidebar.php` 结构一致：白 logo、通知铃、头像选择、informationmenu-content、footer、通知浮层。
  */
-export function ClassicInformationMenu({
-  context: ctx,
-  bootstrap,
-  onCloseMobile,
-  classicFullPageHref,
-}: Props) {
+export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile }: Props) {
   const { pathname } = useLocation()
   const rootRef = useRef<HTMLDivElement>(null)
   const reportWrapRef = useRef<HTMLDivElement>(null)
@@ -506,7 +498,7 @@ export function ClassicInformationMenu({
               <>
                 <div className="informationmenu-section">
                   <Link
-                    to={`/accounts${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
+                    to="/accounts"
                     className={`informationmenu-section-title account-direct${pathname === '/accounts' ? ' current-page' : ''}`}
                     data-page="account-list.php"
                     onClick={go}
@@ -535,17 +527,12 @@ export function ClassicInformationMenu({
 
             {canNavItem(permissions, 'process', ext) && (
               <div className="informationmenu-section">
-                <Link
-                  to={`/processlist${buildProcessListSearch(ctx, bootstrap.companyId ?? ctx.sessionCompanyId, ctx.companyCode)}`}
-                  className={`informationmenu-section-title${pathname === '/processlist' ? ' current-page' : ''}`}
-                  data-page="processlist.php"
-                  onClick={go}
-                >
+                <a className="informationmenu-section-title" data-page="processlist.php" href={phref('processlist.php')} onClick={go}>
                   <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                   </svg>
                   Process
-                </Link>
+                </a>
               </div>
             )}
 
@@ -556,7 +543,7 @@ export function ClassicInformationMenu({
                 style={{ display: companyHasGambling ? undefined : 'none' }}
               >
                 <Link
-                  to={`/datacapture${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
+                  to="/datacapture"
                   className={`informationmenu-section-title${pathname === '/datacapture' ? ' current-page' : ''}`}
                   data-page="datacapture.php"
                   onClick={go}
@@ -572,7 +559,7 @@ export function ClassicInformationMenu({
             {canNavItem(permissions, 'payment', ext) && (
               <div className="informationmenu-section">
                 <Link
-                  to={`/transaction${buildCompanyIdSearch(bootstrap.companyId ?? ctx.sessionCompanyId)}`}
+                  to="/transaction"
                   className={`informationmenu-section-title${pathname === '/transaction' ? ' current-page' : ''}`}
                   data-page="transaction.php"
                   onClick={go}
@@ -633,15 +620,6 @@ export function ClassicInformationMenu({
       </div>
 
       <div className="informationmenu-footer">
-        {classicFullPageHref && (
-          <a
-            className="informationmenu-classic-link"
-            href={classicFullPageHref}
-            onClick={go}
-          >
-            经典版
-          </a>
-        )}
         {expDate && expLive && (
           <div className={`company-expiration-countdown ${expLive.status}`} id="companyExpirationCountdown">
             <svg

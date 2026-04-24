@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { publicAsset } from '../../lib/publicAsset'
-import { appendCompanyIdToClassicRedirect } from '../../lib/resolvePostLoginRedirect'
+import { resolvePostLoginRedirect } from '../../lib/resolvePostLoginRedirect'
 import { fetchSidebarContext } from '../../lib/fetchSidebarContext'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import type { SidebarContext } from '../../types/sidebarContext'
@@ -88,14 +88,12 @@ export function DashboardShell({
     window.EAZYCOUNT_SPA_DATACAPTURE = pre ? `${pre}/datacapture` : '/datacapture'
     window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = pre ? `${pre}/datacapturesummary` : '/datacapturesummary'
     window.EAZYCOUNT_SPA_ACCOUNTS = pre ? `${pre}/accounts` : '/accounts'
-    window.EAZYCOUNT_SPA_PROCESSLIST = pre ? `${pre}/processlist` : '/processlist'
     return () => {
       delete window.EAZYCOUNT_SPA_DASHBOARD
       delete window.EAZYCOUNT_SPA_TRANSACTION
       delete window.EAZYCOUNT_SPA_DATACAPTURE
       delete window.EAZYCOUNT_SPA_DATACAPTURESUMMARY
       delete window.EAZYCOUNT_SPA_ACCOUNTS
-      delete window.EAZYCOUNT_SPA_PROCESSLIST
     }
   }, [classicSidebarLayout])
 
@@ -132,14 +130,6 @@ export function DashboardShell({
             aria-label="打开菜单"
             onClick={() => setNavOpen(true)}
           />
-          {classicPage && (
-            <a
-              className="dShell__classicMobileLink"
-              href={appendCompanyIdToClassicRedirect(classicPage, data.companyId)}
-            >
-              经典版
-            </a>
-          )}
         </header>
       ) : (
         <header className="dShell__header">
@@ -167,10 +157,7 @@ export function DashboardShell({
           <div className="dShell__headerRight">
             <a
               className="dShell__classic"
-              href={appendCompanyIdToClassicRedirect(
-                classicPage ?? 'dashboard_classic.php',
-                data.companyId,
-              )}
+              href={resolvePostLoginRedirect(classicPage ?? 'dashboard_classic.php')}
             >
               经典版
             </a>
@@ -215,11 +202,6 @@ export function DashboardShell({
                 context={ctx}
                 bootstrap={data}
                 onCloseMobile={() => setNavOpen(false)}
-                classicFullPageHref={
-                  classicPage
-                    ? appendCompanyIdToClassicRedirect(classicPage, data.companyId)
-                    : undefined
-                }
               />
             ) : (
               <DashboardNav context={ctx} onCloseMobile={() => setNavOpen(false)} />

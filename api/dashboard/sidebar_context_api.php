@@ -114,8 +114,6 @@ api_success([
     'companyHasGambling' => $companyHasGambling,
     'companyHasBank' => $companyHasBank,
     'companyCode' => $currentCompanyCode,
-    /** 当前会话公司 numeric id，供 SPA 侧栏 Process 等链接拼 `company_id` */
-    'sessionCompanyId' => $companyId ?: null,
     'expiration' => $expiration,
     'isExternalView' => (bool) $isExternalView,
 ], 'ok');

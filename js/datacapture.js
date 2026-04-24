@@ -18,19 +18,6 @@ function buildApiUrl(pathAndQuery) {
 
 /** 提交表格后进入 Summary：SPA 用 `EAZYCOUNT_SPA_DATACAPTURESUMMARY` 或 `__C168_SPA_LINK_BASE__`；`datacapturesummary.php` 会 302；经典全页为 `datacapturesummary_classic.php` */
 function navigateToDataCaptureSummarySuccess() {
-    var params = new URLSearchParams();
-    params.set('success', '1');
-    var cid =
-        typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' &&
-        window.DATACAPTURE_COMPANY_ID !== null &&
-        window.DATACAPTURE_COMPANY_ID !== ''
-            ? String(window.DATACAPTURE_COMPANY_ID).trim()
-            : '';
-    if (cid && !isNaN(parseInt(cid, 10))) {
-        params.set('company_id', cid);
-    }
-    var qs = params.toString();
-
     if (document.body && document.body.classList.contains('datacapture-spa-embed')) {
         var spaSum =
             typeof window.EAZYCOUNT_SPA_DATACAPTURESUMMARY === 'string' &&
@@ -39,17 +26,17 @@ function navigateToDataCaptureSummarySuccess() {
                 : '';
         if (spaSum) {
             var p = spaSum.charAt(0) === '/' ? spaSum : '/' + spaSum;
-            var join = p.indexOf('?') === -1 ? '?' : '&';
-            window.location.href = window.location.origin + p + join + qs;
+            window.location.href =
+                window.location.origin + p + (p.indexOf('?') === -1 ? '?success=1' : '&success=1');
             return;
         }
         var base =
             typeof window.__C168_SPA_LINK_BASE__ === 'string'
                 ? String(window.__C168_SPA_LINK_BASE__).replace(/\/$/, '')
                 : '';
-        window.location.href = (base || '') + '/datacapturesummary?' + qs;
+        window.location.href = (base || '') + '/datacapturesummary?success=1';
     } else {
-        window.location.href = buildApiUrl('datacapturesummary.php?' + qs);
+        window.location.href = buildApiUrl('datacapturesummary.php?success=1');
     }
 }
 
@@ -24792,12 +24779,6 @@ async function switchDataCaptureCompany(companyId) {
         if (typeof refreshDataCapturePageData === 'function') {
             await refreshDataCapturePageData();
         }
-        try {
-            var spaUrl = new URL(window.location.href);
-            spaUrl.searchParams.set('company_id', idStr);
-            window.history.replaceState({}, document.title, spaUrl.pathname + spaUrl.search + spaUrl.hash);
-            window.dispatchEvent(new Event('c168:datacapture-url-replaced'));
-        } catch (e) { }
         window.dispatchEvent(new Event('c168:company-session-updated'));
         return;
     }

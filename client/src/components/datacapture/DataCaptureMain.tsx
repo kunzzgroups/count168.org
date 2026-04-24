@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import { apiUrl } from '../../lib/api'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
@@ -41,27 +40,7 @@ function ensureDatacaptureScript(): Promise<void> {
  * 经典全页见 `datacapture_classic.php`（顶栏「经典版」）。
  */
 export function DataCaptureMain({ bootstrap }: Props) {
-  const [searchParams, setSearchParams] = useSearchParams()
-  const spKey = searchParams.toString()
-
   const w = useTransactionWorkspace(bootstrap)
-  const wRef = useRef(w)
-  wRef.current = w
-
-  const replaceCompanyInUrl = useCallback(
-    (companyId: number) => {
-      setSearchParams(
-        (prev) => {
-          const p = new URLSearchParams(prev)
-          p.set('company_id', String(companyId))
-          return p
-        },
-        { replace: true },
-      )
-    },
-    [setSearchParams],
-  )
-
   const [dcPageReady, setDcPageReady] = useState(false)
   /** `restore=1` 时由 legacy 写日期/工序，避免与受控组件冲突 */
   const useReactDateProcessFields = useMemo(
@@ -106,19 +85,6 @@ export function DataCaptureMain({ bootstrap }: Props) {
     }
   }, [])
 
-  /** legacy `switchDataCaptureCompany` 在 SPA 下会 `replaceState`，与 React Router 同步 */
-  useEffect(() => {
-    const onReplaced = () => {
-      try {
-        setSearchParams(new URLSearchParams(window.location.search), { replace: true })
-      } catch {
-        /* ignore */
-      }
-    }
-    window.addEventListener('c168:datacapture-url-replaced', onReplaced)
-    return () => window.removeEventListener('c168:datacapture-url-replaced', onReplaced)
-  }, [setSearchParams])
-
   /** 与 `datacapture_classic.php` 内 `onSharedCompanyFilterChanged` 对齐，供 legacy / 书签脚本调用 */
   useEffect(() => {
     window.onSharedCompanyFilterChanged = (companyId, _companyCode) => {
@@ -126,73 +92,20 @@ export function DataCaptureMain({ bootstrap }: Props) {
       const id =
         typeof companyId === 'number' ? companyId : parseInt(String(companyId), 10)
       if (!Number.isFinite(id)) return
-      const wr = wRef.current
-      const row = wr.companies.find((c) => Number(c.id) === id)
-      if (row) {
-        const g =
-          row.group_id && String(row.group_id).trim() !== ''
-            ? String(row.group_id).toUpperCase()
-            : null
-        if (g) wr.setGroup(g)
-        window.setTimeout(() => {
-          wr.onPickCompany(id)
-          replaceCompanyInUrl(id)
-        }, 0)
-      } else {
-        void window.switchDataCaptureCompany?.(id)
-      }
+      void window.switchDataCaptureCompany?.(id)
     }
     return () => {
       delete window.onSharedCompanyFilterChanged
     }
-  }, [replaceCompanyInUrl])
-
-  /** 地址栏 `company_id` → workspace（与 Account / Process SPA 一致） */
-  useEffect(() => {
-    if (!w.companiesReady) return
-    const raw = searchParams.get('company_id')
-    if (raw == null || raw === '') return
-    const want = parseInt(raw, 10)
-    if (!Number.isFinite(want)) return
-    const active = wRef.current.activeCompanyId
-    if (active != null && Number(active) === want) return
-    const row = wRef.current.companies.find((c) => Number(c.id) === want)
-    if (!row) return
-    const g =
-      row.group_id && String(row.group_id).trim() !== ''
-        ? String(row.group_id).toUpperCase()
-        : null
-    if (g) wRef.current.setGroup(g)
-    window.setTimeout(() => {
-      wRef.current.onPickCompany(want)
-    }, 0)
-  }, [w.companiesReady, spKey])
-
-  /** 无 `company_id` 时写入当前会话公司，便于分享/刷新 */
-  useEffect(() => {
-    if (!w.companiesReady || w.activeCompanyId == null) return
-    if (searchParams.get('company_id')) return
-    replaceCompanyInUrl(w.activeCompanyId)
-  }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
+  }, [])
 
   useLayoutEffect(() => {
     if (!w.companiesReady || w.loadCompaniesError) return
-    const raw = searchParams.get('company_id')
-    let id = w.activeCompanyId
-    if (raw != null && raw !== '') {
-      const want = parseInt(raw, 10)
-      if (Number.isFinite(want)) id = want
-    }
+    const id = w.activeCompanyId
     const row = w.companies.find((c) => Number(c.id) === Number(id))
     window.DATACAPTURE_COMPANY_ID = id ?? null
     window.DATACAPTURE_COMPANY_CODE = row ? String(row.company_id || '') : ''
-  }, [
-    w.companiesReady,
-    w.loadCompaniesError,
-    w.activeCompanyId,
-    w.companies,
-    spKey,
-  ])
+  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId, w.companies])
 
   useEffect(() => {
     const onSessionUpdated = () => {
@@ -218,16 +131,11 @@ export function DataCaptureMain({ bootstrap }: Props) {
     void ensureDatacaptureScript()
       .then(() => {
         if (!alive) return
-        const kick = () => {
-          if (!alive) return
-          void window.runDataCapturePageInit?.()
-          setDcPageReady(true)
-        }
-        if (typeof requestAnimationFrame === 'function') {
-          requestAnimationFrame(() => requestAnimationFrame(kick))
-        } else {
-          setTimeout(kick, 0)
-        }
+        return window.runDataCapturePageInit?.()
+      })
+      .then(() => {
+        if (!alive) return
+        setDcPageReady(true)
       })
       .catch((err) => {
         console.error(err)
@@ -236,7 +144,7 @@ export function DataCaptureMain({ bootstrap }: Props) {
     return () => {
       alive = false
     }
-  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId, spKey])
+  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId])
 
   if (w.loadCompaniesError) {
     return (
@@ -345,10 +253,7 @@ export function DataCaptureMain({ bootstrap }: Props) {
                             data-company-id={c.id}
                             data-group-id={cGid}
                             data-company-code={code}
-                            onClick={() => {
-                              w.onPickCompany(c.id)
-                              replaceCompanyInUrl(c.id)
-                            }}
+                            onClick={() => w.onPickCompany(c.id)}
                           >
                             {code}
                           </button>
