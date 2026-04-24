@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
-import { fetchDomainCompanyPermissions } from '../../lib/processListApi'
 import type { GamePermission } from '../../lib/processListTypes'
 import { ProcessListAccountingDue } from './ProcessListAccountingDue'
 import { ProcessListBankPanel } from './ProcessListBankPanel'
@@ -22,17 +21,6 @@ type Props = { bootstrap: DashboardBootstrapData }
 
 const CAT_ORDER: string[] = ['Games', 'Bank', 'Loan', 'Rate', 'Money']
 
-function sortPerms(p: string[]): string[] {
-  return [...p].sort((a, b) => {
-    const ai = CAT_ORDER.indexOf(a)
-    const bi = CAT_ORDER.indexOf(b)
-    const as = ai === -1 ? 99 : ai
-    const bs = bi === -1 ? 99 : bi
-    if (as !== bs) return as - bs
-    return a.localeCompare(b)
-  })
-}
-
 export function ProcessListMain({ bootstrap }: Props) {
   const w = useTransactionWorkspace(bootstrap)
   const navigate = useNavigate()
@@ -42,14 +30,6 @@ export function ProcessListMain({ bootstrap }: Props) {
   wRef.current = w
   const pendingCompanyPickRef = useRef<number | null>(null)
 
-  const [domainPerms, setDomainPerms] = useState<GamePermission[]>([
-    'Games',
-    'Bank',
-    'Loan',
-    'Rate',
-    'Money',
-  ])
-  const [permLoaded, setPermLoaded] = useState(false)
   const [notice, setNotice] = useState<{ text: string; kind: 'ok' | 'err' } | null>(null)
 
   const onNotice = useCallback((text: string, kind: 'ok' | 'err') => {
@@ -67,14 +47,8 @@ export function ProcessListMain({ bootstrap }: Props) {
   }, [w.activeCompanyId, w.companies])
 
   const activeCategory = useMemo((): GamePermission => {
-    const dom = permLoaded ? domainPerms : ['Games', 'Bank', 'Loan', 'Rate', 'Money']
-    return resolveActiveCategory(pathname, companyCode, dom as GamePermission[])
-  }, [pathname, companyCode, domainPerms, permLoaded])
-
-  const availableCategories = useMemo(
-    () => (permLoaded ? domainPerms : (CAT_ORDER as GamePermission[])),
-    [permLoaded, domainPerms],
-  )
+    return resolveActiveCategory(pathname, companyCode, CAT_ORDER as GamePermission[])
+  }, [pathname, companyCode])
 
   useLayoutEffect(() => {
     document.body.classList.add('process-page', 'processlist-spa-embed', 'processlist-spa-native')
@@ -107,26 +81,6 @@ export function ProcessListMain({ bootstrap }: Props) {
       delete window.EAZYCOUNT_SPA_PROCESSLIST
     }
   }, [])
-
-  useEffect(() => {
-    if (companyCode == null) {
-      setPermLoaded(true)
-      return
-    }
-    setPermLoaded(false)
-    let on = true
-    void (async () => {
-      const r = await fetchDomainCompanyPermissions(companyCode)
-      if (!on) return
-      if (r.success && r.data.length > 0) {
-        setDomainPerms(sortPerms(r.data as string[]) as GamePermission[])
-      }
-      setPermLoaded(true)
-    })()
-    return () => {
-      on = false
-    }
-  }, [companyCode])
 
   const replaceCompanyInUrl = useCallback(
     (companyId: number) => {
@@ -236,7 +190,6 @@ export function ProcessListMain({ bootstrap }: Props) {
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
   const goCategory = (cat: string) => {
-    if (!availableCategories.includes(cat as GamePermission)) return
     if (companyCode) writeStoredCategory(companyCode, cat)
     const path = routeForCategory(cat)
     navigate({ pathname: path, search: searchParams.toString() ? `?${searchParams.toString()}` : '' })
@@ -245,13 +198,13 @@ export function ProcessListMain({ bootstrap }: Props) {
   // 与经典版一致：Games / Bank 使用 `/process/games`、`/process/bank`（经典为 pushState 子路径）；
   // 入口 302 到 `/process` 时按存储与权限对齐子路径，便于后退、书签与 popstate。
   useEffect(() => {
-    if (!w.companiesReady || companyCode == null || !permLoaded) return
-    const resolved = resolveActiveCategory(pathname, companyCode, domainPerms)
+    if (!w.companiesReady || companyCode == null) return
+    const resolved = resolveActiveCategory(pathname, companyCode, CAT_ORDER as GamePermission[])
     const want = routeForCategory(resolved)
     if (want === pathname) return
     const qs = searchParams.toString()
     navigate({ pathname: want, search: qs ? `?${qs}` : '' }, { replace: true })
-  }, [w.companiesReady, companyCode, permLoaded, pathname, domainPerms, spKey, navigate])
+  }, [w.companiesReady, companyCode, pathname, spKey, navigate])
 
   if (!w.companiesReady) {
     return (
@@ -305,38 +258,25 @@ export function ProcessListMain({ bootstrap }: Props) {
           <div className="process-company-filter process-permission-filter-header">
             <span className="process-company-label">Category:</span>
             <div className="process-company-buttons" id="process-list-permission-buttons">
-              {CAT_ORDER.map((p) => {
-                const enabled = availableCategories.includes(p as GamePermission)
-                return (
+              {CAT_ORDER.map((p) => (
                 <button
                   key={p}
                   type="button"
                   className={
-                    'process-company-btn' +
-                    (activeCategory === p ? ' active' : '') +
-                    (!enabled ? ' is-disabled' : '')
+                    'process-company-btn' + (activeCategory === p ? ' active' : '')
                   }
-                  disabled={!enabled}
-                  title={enabled ? '' : `${p} is not available for this company`}
                   onClick={() => goCategory(p)}
                 >
                   {p}
                 </button>
-                )
-              })}
+              ))}
             </div>
           </div>
         </div>
 
         <div className="separator-line" />
 
-        {!permLoaded ? (
-          <div style={{ padding: '12px 4px', color: '#64748b', fontSize: 13 }}>
-            Loading company permissions...
-          </div>
-        ) : null}
-
-        {permLoaded && activeCategory === 'Bank' ? (
+        {activeCategory === 'Bank' ? (
           <ProcessListBankPanel
             key={String(w.activeCompanyId)}
             companyId={w.activeCompanyId}
@@ -351,7 +291,7 @@ export function ProcessListMain({ bootstrap }: Props) {
             }}
           />
         ) : null}
-        {permLoaded && activeCategory !== 'Bank' ? (
+        {activeCategory !== 'Bank' ? (
           <ProcessListGamesPanel
             key={w.activeCompanyId + activeCategory}
             companyId={w.activeCompanyId}

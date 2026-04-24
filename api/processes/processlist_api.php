@@ -188,36 +188,8 @@ function parseProfitSharingTotal(?string $profitSharing): float
 // Handle different actions
 $action = $_GET['action'] ?? '';
 
-// --- BEGIN DATA-LEVEL CATEGORY PERMISSION VALIDATION ---
-$req_company_id = $_GET['company_id'] ?? $_POST['company_id'] ?? $_SESSION['company_id'] ?? null;
-if ($req_company_id) {
-    // Actions that are strictly for 'Bank' category
-    $bankOnlyActions = [
-        'get_banks_by_country', 'get_countries', 'add_country', 'remove_country',
-        'save_country_banks', 'get_selected_countries', 'save_selected_countries', 
-        'get_selected_banks', 'save_selected_banks', 'update_bank_process'
-    ];
-
-    $reqPermission = $_GET['permission'] ?? $_POST['permission'] ?? '';
-
-    // 与 GET permission 一致：Loan/Rate/Money 等公司不能只按 Games 校验，否则切公司后整页 API 误拒
-    $requiredCategory = 'Games';
-    if (in_array($action, $bankOnlyActions, true)) {
-        $requiredCategory = 'Bank';
-    } elseif ($reqPermission === 'Bank') {
-        $requiredCategory = 'Bank';
-    } elseif ($reqPermission === 'Loan' || $reqPermission === 'Rate' || $reqPermission === 'Money') {
-        $requiredCategory = $reqPermission;
-    } elseif ($reqPermission === 'Games' || $reqPermission === 'Gambling') {
-        $requiredCategory = 'Games';
-    }
-
-    if (!checkCompanyCategoryPermission($pdo, $req_company_id, $requiredCategory)) {
-        jsonResponse(false, 'Unauthorized permission category');
-        exit;
-    }
-}
-// --- END DATA-LEVEL CATEGORY PERMISSION VALIDATION ---
+// 经典 processlist 切公司/切 category 不做 company.permissions 类别拦截；
+// 仅由后续的 company access / owner map 校验控制可访问范围。
 
 switch ($action) {
     case 'get_process':
