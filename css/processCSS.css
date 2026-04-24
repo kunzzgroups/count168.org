@@ -4018,3 +4018,190 @@ body.process-page.process-page--show-all:not(.process-page--bank) .process-card 
 .process-page.process-page--bank.process-page--bank-show-all .bank-table-wrapper {
     padding-bottom: 0;
 }
+
+/* ===== FINAL OVERRIDES: Bank classic parity (single source of truth) ===== */
+body.processlist-spa-native.process-page.process-page--bank .page-title {
+    font-size: clamp(38px, 2.08vw, 40px) !important;
+    line-height: 1.02 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container {
+    margin-top: 10px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons {
+    padding: 7px 10px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container .process-company-filter {
+    padding: 0 10px 7px 10px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row {
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .process-list-date-filter {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    min-width: 208px !important;
+    width: 208px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .process-list-date-filter .search-input {
+    width: 76px !important;
+    min-width: 76px !important;
+    max-width: 76px !important;
+    padding-left: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank #processListBankActionBar .action-controls-row .search-container .search-input {
+    width: 110px !important;
+    min-width: 110px !important;
+    max-width: 110px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-list-date-filter .bank-date-filter-hint {
+    font-size: 10px !important;
+    color: #475569 !important;
+    white-space: nowrap !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-list-date-filter--bank-classic {
+    position: relative;
+    min-width: 110px !important;
+    width: auto !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-date-trigger {
+    border: 1px solid #c6d0db;
+    background: #fff;
+    height: 23px;
+    border-radius: 4px;
+    padding: 0 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #334155;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-date-trigger__icon {
+    font-size: 11px;
+    line-height: 1;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-date-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 130;
+    background: #fff;
+    border: 1px solid #d0d7de;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    padding: 8px;
+    min-width: 230px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-date-popover__row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-date-popover__row .search-input {
+    width: 92px !important;
+    min-width: 92px !important;
+    max-width: 92px !important;
+    padding-left: 6px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-date-popover__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-date-popover__actions .btn {
+    height: 22px !important;
+    line-height: 18px !important;
+    min-width: 58px !important;
+    width: auto !important;
+    padding: 0 10px !important;
+    margin: 0 !important;
+    font-size: 11px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn-add,
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete {
+    height: 23px !important;
+    line-height: 19px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier {
+    min-width: 96px !important;
+    max-width: none !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier .btn-sort-supplier__text {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons > .btn.btn-delete {
+    margin-left: auto !important;
+    align-self: flex-start !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table thead {
+    background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th {
+    font-size: 11px !important;
+    padding: 1px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-th-sort-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-th-sort-btn:hover {
+    opacity: 0.9;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+    font-size: 12px !important;
+    line-height: 1.13 !important;
+    padding: 1px 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .pagination-container {
+    position: fixed !important;
+    right: 42px !important;
+    bottom: 18px !important;
+    margin: 0 !important;
+    z-index: 120 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-table-wrapper {
+    padding-bottom: 38px !important;
+}

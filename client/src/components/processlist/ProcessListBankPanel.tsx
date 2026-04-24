@@ -74,6 +74,9 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
   const [waiting, setWaiting] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [dateOpen, setDateOpen] = useState(false)
+  const [dateDraftFrom, setDateDraftFrom] = useState('')
+  const [dateDraftTo, setDateDraftTo] = useState('')
 
   const [accounts, setAccounts] = useState<AccountOpt[]>([])
   const [bankOpen, setBankOpen] = useState(false)
@@ -133,6 +136,11 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
     setShowEInvoice(false)
     setShowBlock(false)
   }, [showAll])
+
+  useEffect(() => {
+    setDateDraftFrom(dateFrom)
+    setDateDraftTo(dateTo)
+  }, [dateFrom, dateTo])
 
   const loadList = useCallback(async () => {
     setLoading(true)
@@ -571,6 +579,13 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
     })
   }
 
+  const dateLabel = (() => {
+    const from = dateFrom.trim()
+    const to = dateTo.trim()
+    if (!from && !to) return 'Select date ran...'
+    return `${from || '...'} ~ ${to || '...'}`
+  })()
+
   return (
     <>
       <div className="action-buttons-container" id="processListBankActionBar">
@@ -587,35 +602,68 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
             <button type="button" className="btn btn-add" onClick={openAddBank}>
               Add Process
             </button>
-            <div className="process-list-date-filter" id="processListDateFilter">
-              <span className="bank-date-filter-hint">From (dd/mm/yyyy)</span>
-              <input
-                type="text"
-                className="search-input"
-                style={{ maxWidth: 120 }}
-                value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value)
-                  setCurrentPage(1)
-                }}
-                placeholder="dd/mm/yyyy"
-                aria-label="Date from"
-              />
-              <span className="bank-date-filter-hint" style={{ margin: '0 4px' }}>
-                To
-              </span>
-              <input
-                type="text"
-                className="search-input"
-                style={{ maxWidth: 120 }}
-                value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value)
-                  setCurrentPage(1)
-                }}
-                placeholder="dd/mm/yyyy"
-                aria-label="Date to"
-              />
+            <div className="process-list-date-filter process-list-date-filter--bank-classic" id="processListDateFilter">
+              <button
+                type="button"
+                className="bank-date-trigger"
+                onClick={() => setDateOpen((v) => !v)}
+                aria-label="Select date range"
+                title="Select date range"
+              >
+                <span className="bank-date-trigger__icon" aria-hidden>📅</span>
+                <span className="bank-date-trigger__text">{dateLabel}</span>
+              </button>
+              {dateOpen ? (
+                <div className="bank-date-popover" role="dialog" aria-label="Date range">
+                  <div className="bank-date-popover__row">
+                    <input
+                      type="text"
+                      className="search-input"
+                      value={dateDraftFrom}
+                      onChange={(e) => setDateDraftFrom(e.target.value)}
+                      placeholder="dd/mm/yyyy"
+                      aria-label="Date from"
+                    />
+                    <span className="bank-date-filter-hint" aria-hidden>~</span>
+                    <input
+                      type="text"
+                      className="search-input"
+                      value={dateDraftTo}
+                      onChange={(e) => setDateDraftTo(e.target.value)}
+                      placeholder="dd/mm/yyyy"
+                      aria-label="Date to"
+                    />
+                  </div>
+                  <div className="bank-date-popover__actions">
+                    <button
+                      type="button"
+                      className="btn btn-add"
+                      onClick={() => {
+                        setDateFrom(dateDraftFrom)
+                        setDateTo(dateDraftTo)
+                        setCurrentPage(1)
+                        setDateOpen(false)
+                      }}
+                    >
+                      Apply
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-cancel"
+                      onClick={() => {
+                        setDateDraftFrom('')
+                        setDateDraftTo('')
+                        setDateFrom('')
+                        setDateTo('')
+                        setCurrentPage(1)
+                        setDateOpen(false)
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="search-container" style={{ position: 'relative' }}>
               <svg className="search-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
@@ -703,21 +751,6 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
               />
               <label htmlFor="waitingBank">Waiting</label>
             </div>
-            <button
-              type="button"
-              className="btn btn-sort-supplier"
-              title="Sort supplier"
-              aria-label={`Sort supplier ${sortAsc ? 'ascending' : 'descending'}`}
-              onClick={() => {
-                setSortAsc((s) => !s)
-                setCurrentPage(1)
-              }}
-            >
-              <span className="btn-sort-supplier__text">Sort supplier</span>
-              <span className="btn-sort-supplier__arrow" aria-hidden>
-                {sortAsc ? '▲' : '▼'}
-              </span>
-            </button>
             {loading ? (
               <span style={{ color: '#64748b', fontSize: 13 }}>Loading…</span>
             ) : null}
@@ -740,7 +773,20 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
           <thead>
             <tr id="bankTableHeadRow">
               <th className="bank-th-no">No</th>
-              <th>Supplier</th>
+              <th className="bank-th-supplier-sort">
+                <button
+                  type="button"
+                  className="bank-th-sort-btn"
+                  title="Sort supplier"
+                  aria-label={`Sort supplier ${sortAsc ? 'ascending' : 'descending'}`}
+                  onClick={() => {
+                    setSortAsc((s) => !s)
+                    setCurrentPage(1)
+                  }}
+                >
+                  Supplier <span aria-hidden>{sortAsc ? '▲' : '▼'}</span>
+                </button>
+              </th>
               <th className="bank-th-country">Country</th>
               <th>Bank</th>
               <th className="bank-th-types">Types</th>
