@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCallback, useState } from 'react'
 import { apiUrl } from '../../lib/api'
+import { buildProcessListSearch } from '../../lib/buildProcessListSearch'
 import type { SidebarContext } from '../../types/sidebarContext'
 import './DashboardNav.css'
 
@@ -127,7 +128,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
 
       {canNavItem(permissions, 'process', ext) && (
         <NavLink
-          to="/processlist"
+          to={`/processlist${buildProcessListSearch(context, context.sessionCompanyId)}`}
           className={({ isActive }) =>
             isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
           }

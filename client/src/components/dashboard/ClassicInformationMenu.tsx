@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { apiFetch, apiUrl } from '../../lib/api'
+import { buildProcessListSearch } from '../../lib/buildProcessListSearch'
 import { publicAsset } from '../../lib/publicAsset'
 import type { SidebarContext } from '../../types/sidebarContext'
 import type { DashboardBootstrapData } from '../../types/dashboard'
@@ -528,7 +529,7 @@ export function ClassicInformationMenu({ context: ctx, bootstrap, onCloseMobile 
             {canNavItem(permissions, 'process', ext) && (
               <div className="informationmenu-section">
                 <Link
-                  to="/processlist"
+                  to={`/processlist${buildProcessListSearch(ctx, bootstrap.companyId ?? ctx.sessionCompanyId)}`}
                   className={`informationmenu-section-title${pathname === '/processlist' ? ' current-page' : ''}`}
                   data-page="processlist.php"
                   onClick={go}
