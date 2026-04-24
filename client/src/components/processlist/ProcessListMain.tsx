@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import type { GamePermission } from '../../lib/processListTypes'
 import { ProcessListAccountingDue } from './ProcessListAccountingDue'
 import { ProcessListBankPanel } from './ProcessListBankPanel'
 import { ProcessListGamesPanel } from './ProcessListGamesPanel'
-import {
-  resolveActiveCategory,
-  routeForCategory,
-  writeStoredCategory,
-} from './processListMainHelpers'
-import { apiUrl } from '../../lib/api'
 import '../../../../css/processCSS.css'
 import '../../../../css/processlist.css'
 import '../../../../css/global-13inch.css'
@@ -19,11 +13,8 @@ import './ProcessListMain.css'
 
 type Props = { bootstrap: DashboardBootstrapData }
 
-const CAT_ORDER: string[] = ['Games', 'Bank', 'Loan', 'Rate', 'Money']
-
 export function ProcessListMain({ bootstrap }: Props) {
   const w = useTransactionWorkspace(bootstrap)
-  const navigate = useNavigate()
   const { pathname } = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const wRef = useRef(w)
@@ -39,16 +30,9 @@ export function ProcessListMain({ bootstrap }: Props) {
     }
   }, [])
 
-  const companyCode = useMemo(() => {
-    const id = w.activeCompanyId
-    if (id == null) return null
-    const row = w.companies.find((c) => Number(c.id) === Number(id))
-    return row && row.company_id ? String(row.company_id) : null
-  }, [w.activeCompanyId, w.companies])
-
   const activeCategory = useMemo((): GamePermission => {
-    return resolveActiveCategory(pathname, companyCode, CAT_ORDER as GamePermission[])
-  }, [pathname, companyCode])
+    return pathname.includes('/process/bank') ? 'Bank' : 'Games'
+  }, [pathname])
 
   useLayoutEffect(() => {
     document.body.classList.add('process-page', 'processlist-spa-embed', 'processlist-spa-native')
@@ -189,23 +173,6 @@ export function ProcessListMain({ bootstrap }: Props) {
     replaceCompanyInUrl(w.activeCompanyId)
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
-  const goCategory = (cat: string) => {
-    if (companyCode) writeStoredCategory(companyCode, cat)
-    const path = routeForCategory(cat)
-    navigate({ pathname: path, search: searchParams.toString() ? `?${searchParams.toString()}` : '' })
-  }
-
-  // 与经典版一致：Games / Bank 使用 `/process/games`、`/process/bank`（经典为 pushState 子路径）；
-  // 入口 302 到 `/process` 时按存储与权限对齐子路径，便于后退、书签与 popstate。
-  useEffect(() => {
-    if (!w.companiesReady || companyCode == null) return
-    const resolved = resolveActiveCategory(pathname, companyCode, CAT_ORDER as GamePermission[])
-    const want = routeForCategory(resolved)
-    if (want === pathname) return
-    const qs = searchParams.toString()
-    navigate({ pathname: want, search: qs ? `?${qs}` : '' }, { replace: true })
-  }, [w.companiesReady, companyCode, pathname, spKey, navigate])
-
   if (!w.companiesReady) {
     return (
       <div className="plMain plMain--loading">
@@ -240,7 +207,7 @@ export function ProcessListMain({ bootstrap }: Props) {
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-start',
             marginBottom: 0,
             marginTop: 20,
             flexWrap: 'wrap',
@@ -254,23 +221,6 @@ export function ProcessListMain({ bootstrap }: Props) {
             {activeCategory === 'Bank' && w.activeCompanyId != null ? (
               <ProcessListAccountingDue companyId={w.activeCompanyId} onNotice={onNotice} />
             ) : null}
-          </div>
-          <div className="process-company-filter process-permission-filter-header">
-            <span className="process-company-label">Category:</span>
-            <div className="process-company-buttons" id="process-list-permission-buttons">
-              {CAT_ORDER.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  className={
-                    'process-company-btn' + (activeCategory === p ? ' active' : '')
-                  }
-                  onClick={() => goCategory(p)}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -308,13 +258,6 @@ export function ProcessListMain({ bootstrap }: Props) {
           />
         ) : null}
 
-        <a
-          className="plClassicLink"
-          href={apiUrl('/processlist_classic.php')}
-          style={{ display: 'inline-block', marginTop: 8 }}
-        >
-          打开经典全页
-        </a>
       </div>
     </div>
   )

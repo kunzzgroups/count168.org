@@ -395,9 +395,6 @@ export function ProcessListGamesPanel({
               />
               <label htmlFor="showInactiveGames">Show Inactive</label>
             </div>
-            <a className="plClassicLink" href={apiUrl('/processlist_classic.php')} style={{ fontSize: 14 }}>
-              经典版
-            </a>
             {loading ? (
               <span style={{ color: '#64748b', fontSize: 13 }}>Loading…</span>
             ) : null}

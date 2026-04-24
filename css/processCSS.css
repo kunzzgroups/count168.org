@@ -880,10 +880,10 @@ body.process-page {
  * 银灰 Add / Sort、扁平 Delete、朴素搜索框、更深表头、矩形 Contract / Status
  */
 body.processlist-spa-native.process-page.process-page--bank .action-buttons-container {
-    background: #fafbfc;
-    border: 1px solid #dfe3e8;
-    border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    background: #ffffff;
+    border: 1px solid #d7e0ea;
+    border-radius: 8px;
+    box-shadow: none;
     margin-top: 12px;
 }
 
@@ -893,10 +893,10 @@ body.processlist-spa-native.process-page.process-page--bank .action-buttons {
 }
 
 body.processlist-spa-native.process-page.process-page--bank .content .btn-add {
-    background: linear-gradient(180deg, #ffffff 0%, #e4e7ec 100%) !important;
-    color: #1a1a1a !important;
-    border: 1px solid #b0b8c4 !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #0a4fd1 !important;
+    box-shadow: none !important;
     width: auto !important;
     min-width: 82px !important;
     padding: 4px 10px !important;
@@ -908,10 +908,10 @@ body.processlist-spa-native.process-page.process-page--bank .content .btn-add {
 }
 
 body.processlist-spa-native.process-page.process-page--bank .content .btn-add:hover {
-    background: linear-gradient(180deg, #f3f5f7 0%, #d4d8de 100%) !important;
-    color: #000 !important;
+    background: linear-gradient(180deg, #0D60FF 0%, #63C4FF 100%) !important;
+    color: #fff !important;
     transform: none !important;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14) !important;
+    box-shadow: none !important;
 }
 
 /* 经典：浅蓝描边方钮 + 深蓝箭头，仅排序方向 */
@@ -941,9 +941,9 @@ body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-so
 
 body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete,
 body.processlist-spa-native.process-page.process-page--bank .content .btn-delete {
-    background: #ff8a65 !important;
+    background: linear-gradient(180deg, #F30E12 0%, #A91215 100%) !important;
     color: #fff !important;
-    border: 1px solid #f4511e !important;
+    border: 1px solid #9d1114 !important;
     box-shadow: none !important;
     border-radius: 4px !important;
     width: auto !important;
@@ -956,8 +956,8 @@ body.processlist-spa-native.process-page.process-page--bank .content .btn-delete
 
 body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete:hover:not(:disabled),
 body.processlist-spa-native.process-page.process-page--bank .content .btn-delete:hover:not(:disabled) {
-    background: #ff7043 !important;
-    border-color: #e64a19 !important;
+    background: linear-gradient(180deg, #A91215 0%, #F30E12 100%) !important;
+    border-color: #8a0f12 !important;
     transform: none !important;
     box-shadow: none !important;
 }
@@ -1081,21 +1081,21 @@ body.processlist-spa-native.process-page.process-page--bank .process-accounting-
 }
 
 body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-btn.process-accounting-inbox-main {
-    background: #111827;
-    color: #fff;
-    border: 1px solid #0f172a;
+    background: #ffffff;
+    color: #111827;
+    border: 1px solid #d0d7de;
     border-radius: 999px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    box-shadow: none;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-btn.process-accounting-inbox-main:hover {
-    background: #1e293b;
-    border-color: #334155;
-    color: #fff;
+    background: #f8fafc;
+    border-color: #c8d2dd;
+    color: #111827;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-icon {
-    color: #e2e8f0;
+    color: #0f172a;
 }
 
 /* 经典：分页跟在表格下、右对齐窄白条，不用视口 fixed */
@@ -1135,10 +1135,10 @@ body.processlist-spa-native.process-page.process-page--bank .bank-table-wrapper 
  * — 操作区白盒、表头深蓝、斑马行、ACTIVE/INACTIVE 矩形、分页 n of m、控制行 flex
  */
 body.processlist-spa-native.process-page:not(.process-page--bank) .action-buttons-container {
-    background: #fafbfc;
-    border: 1px solid #dfe3e8;
-    border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    background: #ffffff;
+    border: 1px solid #d7e0ea;
+    border-radius: 8px;
+    box-shadow: none;
     margin-top: 12px;
 }
 
@@ -1212,6 +1212,49 @@ body.processlist-spa-native.process-page:not(.process-page--bank) .status-clicka
     transform: none;
     opacity: 0.92;
     box-shadow: none;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn-add {
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%) !important;
+    color: #fff !important;
+    border: 1px solid #0a4fd1 !important;
+    box-shadow: none !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn-add:hover {
+    background: linear-gradient(180deg, #0D60FF 0%, #63C4FF 100%) !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn.btn-delete,
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn-delete {
+    background: linear-gradient(180deg, #F30E12 0%, #A91215 100%) !important;
+    color: #fff !important;
+    border: 1px solid #9d1114 !important;
+    box-shadow: none !important;
+}
+
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn.btn-delete:hover:not(:disabled),
+body.processlist-spa-native.process-page:not(.process-page--bank) .content .btn-delete:hover:not(:disabled) {
+    background: linear-gradient(180deg, #A91215 0%, #F30E12 100%) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+body.processlist-spa-native.process-page .search-input {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    border-radius: 4px !important;
+}
+
+body.processlist-spa-native.process-page .pagination-container {
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 1px solid #d7e0ea !important;
+    background: #fff !important;
 }
 
 /* Table Header - copied from accountCSS.css */
