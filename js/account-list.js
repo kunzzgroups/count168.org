@@ -1696,6 +1696,7 @@ if (searchInputEl) {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
             fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
+            c168PushAccountListFiltersToUrl();
         }, 300); // 寤惰繜300ms閬垮厤棰戠箒璇锋眰
     });
 
@@ -1709,8 +1710,10 @@ document.getElementById('showInactive').addEventListener('change', function () {
     if (showAll) {
         document.getElementById('showAll').checked = false;
         showAll = false;
+        updateAccountListScrollMode();
     }
     fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
+    c168PushAccountListFiltersToUrl();
 });
 
 // Real-time filter when Show All checkbox changes
@@ -1725,6 +1728,7 @@ document.getElementById('showAll').addEventListener('change', function () {
     currentPage = 1;
     updateAccountListScrollMode();
     fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
+    c168PushAccountListFiltersToUrl();
 });
 
 /** showAll 时允许页面纵向滚动；否则恢复 overflow hidden */
@@ -1736,6 +1740,79 @@ function updateAccountListScrollMode() {
         document.body.classList.remove('account-page--show-all');
     }
 }
+
+function c168IsAccountListSpaEmbed() {
+    return (typeof document !== 'undefined' && document.body &&
+        document.body.classList.contains('account-list-spa-embed')) ||
+        (typeof window !== 'undefined' && window.__ACCOUNT_LIST_SPA_EMBED__ === true);
+}
+
+/** React `/accounts`：把当前筛选写入地址栏（可书签/分享；经典全页不写回 URL） */
+function c168PushAccountListFiltersToUrl() {
+    if (!c168IsAccountListSpaEmbed()) return;
+    try {
+        const url = new URL(window.location.href);
+        const p = url.searchParams;
+        if (showInactive) {
+            p.set('showInactive', '1');
+        } else {
+            p.delete('showInactive');
+        }
+        if (showAll) {
+            p.set('showAll', '1');
+        } else {
+            p.delete('showAll');
+        }
+        const inp = document.getElementById('searchInput');
+        const q = inp ? String(inp.value || '').trim() : '';
+        if (q) {
+            p.set('search', q);
+        } else {
+            p.delete('search');
+        }
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+        window.dispatchEvent(new Event('c168:account-list-url-replaced'));
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+/** React Router / 浏览器前进后退：用当前 `location.search` 刷新勾选状态与 legacy 变量（与经典页 GET 参数语义一致） */
+function c168SyncAccountListFromLocation() {
+    try {
+        const p = new URLSearchParams(window.location.search);
+        const nextInactive = p.has('showInactive');
+        const nextAll = p.has('showAll');
+        const nextSearch = p.has('search') ? String(p.get('search') || '') : '';
+        const inp = document.getElementById('searchInput');
+        const curSearch = inp ? String(inp.value || '').trim() : '';
+        const si = document.getElementById('showInactive');
+        const sa = document.getElementById('showAll');
+
+        if (
+            nextInactive === showInactive &&
+            nextAll === showAll &&
+            nextSearch === curSearch
+        ) {
+            return;
+        }
+
+        showInactive = nextInactive;
+        showAll = nextAll;
+        if (si) si.checked = showInactive;
+        if (sa) sa.checked = showAll;
+        if (inp) {
+            inp.value = p.has('search') ? (p.get('search') || '') : '';
+        }
+        updateAccountListScrollMode();
+        fetchAccounts();
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+window.c168SyncAccountListFromLocation = c168SyncAccountListFromLocation;
+window.c168PushAccountListFiltersToUrl = c168PushAccountListFiltersToUrl;
 
 // Toggle alert fields visibility
 function toggleAlertFields(type) {
@@ -2161,6 +2238,7 @@ async function switchAccountListCompany(companyId, companyCode) {
             const url = new URL(window.location.href);
             url.searchParams.set('company_id', String(companyId));
             window.history.replaceState({}, '', url.pathname + url.search);
+            window.dispatchEvent(new Event('c168:account-list-url-replaced'));
         } catch (e) {
             /* ignore */
         }

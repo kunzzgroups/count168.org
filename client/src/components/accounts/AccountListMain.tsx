@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { apiUrl } from '../../lib/api'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
@@ -35,40 +36,56 @@ type AccountListWindow = Window & {
   ACCOUNT_LIST_COMPANY_ID?: number | null
   ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD?: number[]
   runAccountListPageInit?: () => void
-  fetchAccounts?: () => void | Promise<void>
+  fetchAccounts?: () => void
+  c168SyncAccountListFromLocation?: () => void
 }
 
 /**
  * React `/accounts`：壳与 Transaction 一致；主区 DOM + `js/account-list.js` 与 `account-list_classic.php` 对齐。
+ * - 查询串与经典 GET 一致：`company_id`、`showInactive`、`showAll`、`search`
+ * - 公司切换走 `useTransactionWorkspace` + React Router `setSearchParams`，与 legacy `replaceState` 不打架
  */
 export function AccountListMain({ bootstrap }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const spKey = searchParams.toString()
+
   const w = useTransactionWorkspace(bootstrap)
   const wRef = useRef(w)
   wRef.current = w
 
   const [legacyReady, setLegacyReady] = useState(false)
   const scriptInitRef = useRef(false)
-
-  const urlInit = useMemo(() => {
-    const p = new URLSearchParams(window.location.search)
-    return {
-      search: p.get('search') ?? '',
-      showInactive: p.has('showInactive'),
-      showAll: p.has('showAll'),
-    }
-  }, [])
+  const skipLocationSyncRef = useRef(true)
 
   useLayoutEffect(() => {
     document.body.classList.add('account-list-spa-embed', 'account-page')
     ;(window as unknown as { __ACCOUNT_LIST_SPA_EMBED__?: boolean }).__ACCOUNT_LIST_SPA_EMBED__ = true
-    const aw = window as AccountListWindow
-    aw.ACCOUNT_LIST_SHOW_INACTIVE = urlInit.showInactive
-    aw.ACCOUNT_LIST_SHOW_ALL = urlInit.showAll
     return () => {
       document.body.classList.remove('account-list-spa-embed', 'account-page')
+      document.body.classList.remove('account-page--show-all')
       delete (window as unknown as { __ACCOUNT_LIST_SPA_EMBED__?: boolean }).__ACCOUNT_LIST_SPA_EMBED__
     }
-  }, [urlInit.showInactive, urlInit.showAll])
+  }, [])
+
+  useLayoutEffect(() => {
+    const aw = window as AccountListWindow
+    aw.ACCOUNT_LIST_SHOW_INACTIVE = searchParams.has('showInactive')
+    aw.ACCOUNT_LIST_SHOW_ALL = searchParams.has('showAll')
+  }, [searchParams])
+
+  const replaceCompanyInUrl = useCallback(
+    (companyId: number) => {
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          p.set('company_id', String(companyId))
+          return p
+        },
+        { replace: true },
+      )
+    },
+    [setSearchParams],
+  )
 
   useEffect(() => {
     const id = 'c168-font-amaranth'
@@ -90,6 +107,19 @@ export function AccountListMain({ bootstrap }: Props) {
     }
   }, [])
 
+  /** legacy `switchAccountListCompany` 使用 `replaceState` 时与 React Router 同步 */
+  useEffect(() => {
+    const onReplaced = () => {
+      try {
+        setSearchParams(new URLSearchParams(window.location.search), { replace: true })
+      } catch {
+        /* ignore */
+      }
+    }
+    window.addEventListener('c168:account-list-url-replaced', onReplaced)
+    return () => window.removeEventListener('c168:account-list-url-replaced', onReplaced)
+  }, [setSearchParams])
+
   useEffect(() => {
     window.onSharedCompanyFilterChanged = (companyId, _companyCode) => {
       const wr = wRef.current
@@ -100,11 +130,40 @@ export function AccountListMain({ bootstrap }: Props) {
       const id = typeof companyId === 'number' ? companyId : parseInt(String(companyId), 10)
       if (!Number.isFinite(id)) return
       wr.onPickCompany(id)
+      replaceCompanyInUrl(id)
     }
     return () => {
       delete window.onSharedCompanyFilterChanged
     }
-  }, [])
+  }, [replaceCompanyInUrl])
+
+  /** 地址栏 `company_id` → workspace（与 `account-list_classic.php` 校验 URL 行为一致） */
+  useEffect(() => {
+    if (!w.companiesReady) return
+    const raw = searchParams.get('company_id')
+    if (raw == null || raw === '') return
+    const want = parseInt(raw, 10)
+    if (!Number.isFinite(want)) return
+    const active = wRef.current.activeCompanyId
+    if (active != null && Number(active) === want) return
+    const row = wRef.current.companies.find((c) => Number(c.id) === want)
+    if (!row) return
+    const g =
+      row.group_id && String(row.group_id).trim() !== ''
+        ? String(row.group_id).toUpperCase()
+        : null
+    if (g) wRef.current.setGroup(g)
+    window.setTimeout(() => {
+      wRef.current.onPickCompany(want)
+    }, 0)
+  }, [w.companiesReady, spKey])
+
+  /** 无 `company_id` 时写入当前会话公司，便于分享/刷新（经典页依赖 session，此处增强为可书签） */
+  useEffect(() => {
+    if (!w.companiesReady || w.activeCompanyId == null) return
+    if (searchParams.get('company_id')) return
+    replaceCompanyInUrl(w.activeCompanyId)
+  }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
   useEffect(() => {
     if (!w.companiesReady || w.loadCompaniesError || w.activeCompanyId == null) return
@@ -133,6 +192,16 @@ export function AccountListMain({ bootstrap }: Props) {
     void aw.fetchAccounts?.()
     return undefined
   }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId])
+
+  /** 前进/后退或 React 内更新 query：刷新 legacy 勾选与列表（跳过首次，避免与 init 双请求） */
+  useEffect(() => {
+    if (!legacyReady) return
+    if (skipLocationSyncRef.current) {
+      skipLocationSyncRef.current = false
+      return
+    }
+    window.c168SyncAccountListFromLocation?.()
+  }, [legacyReady, spKey])
 
   const companyRow =
     w.groupIds.length > 0 || w.companies.length > 0 ? (
@@ -187,7 +256,10 @@ export function AccountListMain({ bootstrap }: Props) {
                     data-company-id={c.id}
                     data-group-id={cGid}
                     data-company-code={code}
-                    onClick={() => w.onPickCompany(c.id)}
+                    onClick={() => {
+                      w.onPickCompany(c.id)
+                      replaceCompanyInUrl(c.id)
+                    }}
                   >
                     {code}
                   </button>
@@ -225,9 +297,9 @@ export function AccountListMain({ bootstrap }: Props) {
   return (
     <div className="alShell" data-account-list-spa={legacyReady ? '1' : '0'}>
       <AccountListLegacyDom
-        initialSearch={urlInit.search}
-        initialShowInactive={urlInit.showInactive}
-        initialShowAll={urlInit.showAll}
+        initialSearch={searchParams.get('search') ?? ''}
+        initialShowInactive={searchParams.has('showInactive')}
+        initialShowAll={searchParams.has('showAll')}
         belowToolbar={companyRow}
       />
     </div>

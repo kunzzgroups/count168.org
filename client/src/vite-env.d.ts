@@ -43,6 +43,8 @@ interface Window {
   __ACCOUNT_LIST_SPA_EMBED__?: boolean
   runAccountListPageInit?: () => void
   fetchAccounts?: () => void | Promise<void>
+  c168SyncAccountListFromLocation?: () => void
+  c168PushAccountListFiltersToUrl?: () => void
   DATACAPTURESUMMARY_COMPANY_ID?: number | null
   runDataCaptureSummaryPageInit?: () => void
   /** `get_processes_by_day` 的 JSON 结果写入自定义 Process 下拉 */
