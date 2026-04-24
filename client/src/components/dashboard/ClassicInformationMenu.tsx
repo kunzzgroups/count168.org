@@ -536,7 +536,7 @@ export function ClassicInformationMenu({
             {canNavItem(permissions, 'process', ext) && (
               <div className="informationmenu-section">
                 <Link
-                  to={`/processlist${buildProcessListSearch(ctx, bootstrap.companyId ?? ctx.sessionCompanyId)}`}
+                  to={`/processlist${buildProcessListSearch(ctx, bootstrap.companyId ?? ctx.sessionCompanyId, ctx.companyCode)}`}
                   className={`informationmenu-section-title${pathname === '/processlist' ? ' current-page' : ''}`}
                   data-page="processlist.php"
                   onClick={go}

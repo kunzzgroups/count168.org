@@ -108,21 +108,22 @@ function c168SyncProcessListFromLocation() {
         const nextEInv = p.has('showEInvoice');
         const nextBlock = p.has('showBlock');
         const nextSearch = p.has('search') ? String(p.get('search') || '') : '';
-        const catRaw = String(p.get('category') || '').trim().toLowerCase();
-        const nextPerm = catRaw === 'bank' ? 'Bank' : 'Games';
 
         const inp = document.getElementById('searchInput');
         const curSearch = inp ? String(inp.value || '').trim() : '';
 
+        // 不可用「URL category === selectedPermission」早退：二者同为 Games 时当前公司可能仅 Bank（如 CX），必须先经 loadPermissionButtons 按 domain 权限纠正再拉数
         if (
             nextInactive === showInactive &&
             nextAll === showAll &&
             nextOfficial === showOfficial &&
             nextEInv === showEInvoice &&
             nextBlock === showBlock &&
-            nextSearch === curSearch &&
-            nextPerm === selectedPermission
+            nextSearch === curSearch
         ) {
+            void loadPermissionButtons().catch(function (err) {
+                console.error(err);
+            });
             return;
         }
 
@@ -142,13 +143,9 @@ function c168SyncProcessListFromLocation() {
         }
         normalizeBankFilterState();
 
-        if (nextPerm !== selectedPermission) {
-            switchPermission(nextPerm, { skipUrl: true });
-        } else {
-            updateBankListScrollMode();
-            currentPage = 1;
-            fetchProcesses();
-        }
+        void loadPermissionButtons().catch(function (err) {
+            console.error(err);
+        });
     } catch (e) {
         console.error(e);
     }

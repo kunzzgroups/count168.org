@@ -128,7 +128,7 @@ export function DashboardNav({ context, onCloseMobile }: Props) {
 
       {canNavItem(permissions, 'process', ext) && (
         <NavLink
-          to={`/processlist${buildProcessListSearch(context, context.sessionCompanyId)}`}
+          to={`/processlist${buildProcessListSearch(context, context.sessionCompanyId, context.companyCode)}`}
           className={({ isActive }) =>
             isActive ? 'dNav__item dNav__item--active' : 'dNav__item'
           }
