@@ -882,10 +882,9 @@ body.processlist-spa-native.process-page.process-page--bank .action-buttons {
     gap: 8px;
 }
 
-body.processlist-spa-native.process-page.process-page--bank .content .btn-add,
-body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier {
+body.processlist-spa-native.process-page.process-page--bank .content .btn-add {
     background: linear-gradient(180deg, #ffffff 0%, #e4e7ec 100%) !important;
-    color: #0d47a1 !important;
+    color: #1a1a1a !important;
     border: 1px solid #b0b8c4 !important;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
     width: auto !important;
@@ -898,19 +897,43 @@ body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-so
     white-space: nowrap !important;
 }
 
-body.processlist-spa-native.process-page.process-page--bank .content .btn-add:hover,
-body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier:hover {
+body.processlist-spa-native.process-page.process-page--bank .content .btn-add:hover {
     background: linear-gradient(180deg, #f3f5f7 0%, #d4d8de 100%) !important;
-    color: #082f6b !important;
+    color: #000 !important;
     transform: none !important;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14) !important;
 }
 
+/* 经典：浅蓝描边方钮 + 深蓝箭头，仅排序方向 */
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier {
+    background: #fff !important;
+    color: #0d47a1 !important;
+    border: 2px solid #64b5f6 !important;
+    box-shadow: none !important;
+    width: auto !important;
+    min-width: 32px !important;
+    max-width: 40px !important;
+    padding: 2px 6px !important;
+    font-size: 15px !important;
+    line-height: 1.1 !important;
+    font-family: Tahoma, 'Segoe UI', Arial, sans-serif !important;
+    border-radius: 4px !important;
+    font-weight: 700 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier:hover {
+    background: #e3f2fd !important;
+    color: #082f6b !important;
+    border-color: #42a5f5 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete,
 body.processlist-spa-native.process-page.process-page--bank .content .btn-delete {
-    background: #c62828 !important;
+    background: #ff8a65 !important;
     color: #fff !important;
-    border: 1px solid #8b1f1f !important;
+    border: 1px solid #f4511e !important;
     box-shadow: none !important;
     border-radius: 4px !important;
     width: auto !important;
@@ -923,7 +946,8 @@ body.processlist-spa-native.process-page.process-page--bank .content .btn-delete
 
 body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete:hover:not(:disabled),
 body.processlist-spa-native.process-page.process-page--bank .content .btn-delete:hover:not(:disabled) {
-    background: #b71c1c !important;
+    background: #ff7043 !important;
+    border-color: #e64a19 !important;
     transform: none !important;
     box-shadow: none !important;
 }
@@ -973,7 +997,7 @@ body.processlist-spa-native.process-page.process-page--bank .process-list-date-f
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table thead {
-    background: linear-gradient(180deg, #4da3d9 0%, #0d4a9c 100%) !important;
+    background: #455a64 !important;
     font-size: 11px !important;
 }
 
@@ -995,14 +1019,36 @@ body.processlist-spa-native.process-page.process-page--bank .bank-data-table td 
     font-weight: normal;
 }
 
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody tr:nth-child(odd) {
+    background: #ffffff !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody tr:nth-child(even) {
+    background: #e8f4fc !important;
+}
+
 body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody tr:hover {
     box-shadow: none;
-    background: #d9eefc;
+    background: #d9eefc !important;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .contract-badge {
     border-radius: 3px !important;
-    font-weight: 600;
+    font-weight: 700;
+    color: #111 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-td-supplier {
+    font-weight: 700;
+    color: #0d47a1;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-th-num,
+body.processlist-spa-native.process-page.process-page--bank .bank-td-num {
+    text-align: right !important;
+    font-variant-numeric: tabular-nums;
 }
 
 body.processlist-spa-native.process-page.process-page--bank .bank-status-button {
@@ -1016,6 +1062,7 @@ body.processlist-spa-native.process-page.process-page--bank .bank-status-button.
     background: #c8f5d4 !important;
     color: #14532a !important;
     border: 1px solid #7bc896 !important;
+    font-weight: 700 !important;
 }
 
 /* Bank 标题旁 Accounting Due：贴近经典（深色条 + 红数字角标） */
@@ -1039,6 +1086,38 @@ body.processlist-spa-native.process-page.process-page--bank .process-accounting-
 
 body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-icon {
     color: #e2e8f0;
+}
+
+/* 经典：分页跟在表格下、右对齐窄白条，不用视口 fixed */
+body.processlist-spa-native.process-page.process-page--bank .pagination-container {
+    position: relative !important;
+    right: auto !important;
+    bottom: auto !important;
+    left: auto !important;
+    top: auto !important;
+    margin-top: 8px !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
+    margin-bottom: 4px !important;
+    border-radius: 4px !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+    border: 1px solid #cfd8dc !important;
+    background: #fff !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .pagination-btn {
+    color: #78909c !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .pagination-btn:hover:not(:disabled) {
+    color: #455a64 !important;
+    background: #eceff1 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-table-wrapper {
+    padding-bottom: 0 !important;
 }
 
 /*

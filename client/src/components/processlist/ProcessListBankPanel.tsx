@@ -706,12 +706,16 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
             <button
               type="button"
               className="btn btn-sort-supplier"
+              title="Sort supplier"
+              aria-label={`Sort supplier ${sortAsc ? 'ascending' : 'descending'}`}
               onClick={() => {
                 setSortAsc((s) => !s)
                 setCurrentPage(1)
               }}
             >
-              Sort supplier {sortAsc ? '▲' : '▼'}
+              <span className="btn-sort-supplier__arrow" aria-hidden>
+                {sortAsc ? '▲' : '▼'}
+              </span>
             </button>
             {loading ? (
               <span style={{ color: '#64748b', fontSize: 13 }}>Loading…</span>
@@ -741,11 +745,11 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
               <th className="bank-th-types">Types</th>
               <th className="bank-th-card-owner">Card Owner</th>
               <th>Contract</th>
-              <th>Insurance</th>
+              <th className="bank-th-num">Insurance</th>
               <th>Customer</th>
-              <th>Cost</th>
-              <th>Price</th>
-              <th>Profit</th>
+              <th className="bank-th-num">Cost</th>
+              <th className="bank-th-num">Price</th>
+              <th className="bank-th-num">Profit</th>
               <th className="bank-th-status">Status</th>
               <th>Date</th>
               <th className="bank-th-action bank-action-header">
@@ -794,7 +798,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                   data-has-transactions={p.has_transactions ? '1' : '0'}
                 >
                   <td className="bank-td-no">{startIndex + idx + 1}</td>
-                  <td>{dashIfEmpty(p.supplier)}</td>
+                  <td className="bank-td-supplier">{dashIfEmpty(p.supplier)}</td>
                   <td className="bank-td-country">{dashIfEmpty(p.country)}</td>
                   <td>{dashIfEmpty(p.bank)}</td>
                   <td className="bank-td-types">{dashIfEmpty(p.types)}</td>
@@ -806,11 +810,11 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                       '-'
                     )}
                   </td>
-                  <td>{dashIfEmpty(p.insurance)}</td>
+                  <td className="bank-td-num">{dashIfEmpty(p.insurance)}</td>
                   <td>{dashIfEmpty(p.customer)}</td>
-                  <td>{dashIfEmpty(p.cost)}</td>
-                  <td>{dashIfEmpty(p.price)}</td>
-                  <td>{dashIfEmpty(p.profit)}</td>
+                  <td className="bank-td-num">{dashIfEmpty(p.cost)}</td>
+                  <td className="bank-td-num">{dashIfEmpty(p.price)}</td>
+                  <td className="bank-td-num">{dashIfEmpty(p.profit)}</td>
                   <td className="bank-td-status">
                     <BankStatusDropdown
                       process={p}
