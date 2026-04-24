@@ -68,6 +68,8 @@ export function ProcessListMain({ bootstrap }: Props) {
 
   const replaceCompanyInUrl = useCallback(
     (companyId: number) => {
+      const cur = searchParams.get('company_id')
+      if (cur === String(companyId)) return
       setSearchParams(
         (prev) => {
           const p = new URLSearchParams(prev)
@@ -77,28 +79,35 @@ export function ProcessListMain({ bootstrap }: Props) {
         { replace: true },
       )
     },
-    [setSearchParams],
+    [setSearchParams, searchParams],
   )
 
-  /** 与 URL、侧栏同步：先写 query，再更新 workspace，避免列表请求与 category 判断抢跑 */
-  const handlePickCompany = useCallback(
+  const applyCompanyFromUrl = useCallback(
     (id: number) => {
       if (!Number.isFinite(id)) return
       const row = w.companies.find((c) => Number(c.id) === Number(id))
       if (!row) return
-      pendingCompanyPickRef.current = Number(id)
-      replaceCompanyInUrl(Number(id))
       const g =
         row.group_id && String(row.group_id).trim() !== ''
           ? String(row.group_id).toUpperCase()
           : null
       if (g && String(w.selectedGroup || '').toUpperCase() !== g) {
-        w.setGroup(g, { preferredCompanyId: Number(id) })
+        w.setGroup(g, { preferredCompanyId: id })
       } else {
-        w.onPickCompany(Number(id))
+        w.onPickCompany(id)
       }
     },
-    [w, replaceCompanyInUrl],
+    [w],
+  )
+
+  /** 公司 pill 点击：只更新 URL，workspace 统一由 URL effect 驱动，避免双向回写抖动 */
+  const handlePickCompany = useCallback(
+    (id: number) => {
+      if (!Number.isFinite(id)) return
+      pendingCompanyPickRef.current = Number(id)
+      replaceCompanyInUrl(Number(id))
+    },
+    [replaceCompanyInUrl],
   )
 
   useEffect(() => {
@@ -109,19 +118,8 @@ export function ProcessListMain({ bootstrap }: Props) {
       }
       const id = typeof companyId === 'number' ? companyId : parseInt(String(companyId), 10)
       if (!Number.isFinite(id)) return
-      const row = wRef.current.companies.find((c) => Number(c.id) === Number(id))
-      if (!row) return
       pendingCompanyPickRef.current = id
       replaceCompanyInUrl(id)
-      const g =
-        row.group_id && String(row.group_id).trim() !== ''
-          ? String(row.group_id).toUpperCase()
-          : null
-      if (g && String(wRef.current.selectedGroup || '').toUpperCase() !== g) {
-        wRef.current.setGroup(g, { preferredCompanyId: id })
-      } else {
-        wRef.current.onPickCompany(id)
-      }
     }
     return () => {
       delete window.onSharedCompanyFilterChanged
@@ -136,26 +134,12 @@ export function ProcessListMain({ bootstrap }: Props) {
     const want = parseInt(raw, 10)
     if (!Number.isFinite(want)) return
     if (w.activeCompanyId != null && Number(w.activeCompanyId) === want) return
-    const row = w.companies.find((c) => Number(c.id) === want)
-    if (!row) return
-    const g =
-      row.group_id && String(row.group_id).trim() !== ''
-        ? String(row.group_id).toUpperCase()
-        : null
-    if (g && String(w.selectedGroup || '').toUpperCase() !== String(g).toUpperCase()) {
-      w.setGroup(g, { preferredCompanyId: want })
-    } else {
-      w.onPickCompany(want)
-    }
+    applyCompanyFromUrl(want)
   }, [
     w.companiesReady,
     spKey,
-    w.companies,
     w.activeCompanyId,
-    w.selectedGroup,
-    w.setGroup,
-    w.onPickCompany,
-    searchParams,
+    applyCompanyFromUrl,
   ])
 
   useEffect(() => {
@@ -164,12 +148,9 @@ export function ProcessListMain({ bootstrap }: Props) {
     if (pending != null && Number(w.activeCompanyId) === Number(pending)) {
       pendingCompanyPickRef.current = null
     }
+    // 仅在 URL 缺失 company_id 时补一次；其余时刻 URL 是唯一真源，避免来回跳
     const cur = searchParams.get('company_id')
-    if (pending != null && cur === String(pending) && Number(w.activeCompanyId) !== Number(pending)) {
-      // 正在执行一次用户触发的切换：不要被旧 activeCompany 回写 URL
-      return
-    }
-    if (cur === String(w.activeCompanyId)) return
+    if (cur != null && cur !== '') return
     replaceCompanyInUrl(w.activeCompanyId)
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
