@@ -761,6 +761,10 @@ body.process-page {
 /* Bank 操作栏：5 个 checkbox（比 Games 多 3 个）+ 日期选择器 + Search，laptop 下防止换行 */
 /* !important 必须：inline style="flex-wrap:wrap" 优先级高于 CSS，需强制覆盖 */
 .process-page.process-page--bank .action-controls-row {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
     flex-wrap: nowrap !important;
     gap: clamp(4px, 0.5vw, 10px) !important;
 }
@@ -859,6 +863,182 @@ body.process-page {
         padding: 1px 7px;
         font-size: clamp(8px, 0.65vw, 12px);
     }
+}
+
+/*
+ * React SPA Bank 列表（processlist-spa-native）：贴近经典 bank_process_list
+ * 银灰 Add / Sort、扁平 Delete、朴素搜索框、更深表头、矩形 Contract / Status
+ */
+body.processlist-spa-native.process-page.process-page--bank .action-buttons-container {
+    background: #fafbfc;
+    border: 1px solid #dfe3e8;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    margin-top: 12px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons {
+    padding: 6px 12px;
+    gap: 8px;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn-add,
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier {
+    background: linear-gradient(180deg, #ffffff 0%, #e4e7ec 100%) !important;
+    color: #0d47a1 !important;
+    border: 1px solid #b0b8c4 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12) !important;
+    width: auto !important;
+    min-width: 82px !important;
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    font-family: Tahoma, 'Segoe UI', Arial, sans-serif !important;
+    border-radius: 4px !important;
+    font-weight: 600 !important;
+    white-space: nowrap !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn-add:hover,
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-sort-supplier:hover {
+    background: linear-gradient(180deg, #f3f5f7 0%, #d4d8de 100%) !important;
+    color: #082f6b !important;
+    transform: none !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14) !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete,
+body.processlist-spa-native.process-page.process-page--bank .content .btn-delete {
+    background: #c62828 !important;
+    color: #fff !important;
+    border: 1px solid #8b1f1f !important;
+    box-shadow: none !important;
+    border-radius: 4px !important;
+    width: auto !important;
+    min-width: 72px !important;
+    padding: 4px 14px !important;
+    font-size: 12px !important;
+    font-family: Tahoma, 'Segoe UI', Arial, sans-serif !important;
+    font-weight: 600 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete:hover:not(:disabled),
+body.processlist-spa-native.process-page.process-page--bank .content .btn-delete:hover:not(:disabled) {
+    background: #b71c1c !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .content .btn.btn-delete:disabled {
+    opacity: 0.45 !important;
+    cursor: not-allowed !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .action-buttons .btn:hover {
+    transform: none !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .search-input {
+    border-radius: 3px !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    font-size: 11px !important;
+    border-color: #bfc7d4 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .search-input:focus {
+    box-shadow: none !important;
+    border-color: #1565c0 !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .search-icon {
+    width: 12px !important;
+    height: 12px !important;
+    top: 50% !important;
+    transform: translateY(-50%);
+    left: 6px !important;
+    color: #546e7a;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .search-container .search-input {
+    padding-left: 24px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-list-date-filter .bank-date-filter-hint {
+    font-size: 10px !important;
+    color: #546e7a !important;
+    margin-right: 4px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table thead {
+    background: linear-gradient(180deg, #4da3d9 0%, #0d4a9c 100%) !important;
+    font-size: 11px !important;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:first-child {
+    border-radius: 4px 0 0 0;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table th:last-child {
+    border-radius: 0 4px 0 0;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table {
+    border-radius: 4px 4px 0 0;
+    font-family: Tahoma, 'Segoe UI', Arial, sans-serif;
+    font-weight: normal;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table td {
+    font-weight: normal;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-data-table tbody tr:hover {
+    box-shadow: none;
+    background: #d9eefc;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .contract-badge {
+    border-radius: 3px !important;
+    font-weight: 600;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-button {
+    border-radius: 4px !important;
+    width: auto;
+    min-width: 64px;
+    max-width: 100%;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .bank-status-button.is-active {
+    background: #c8f5d4 !important;
+    color: #14532a !important;
+    border: 1px solid #7bc896 !important;
+}
+
+/* Bank 标题旁 Accounting Due：贴近经典（深色条 + 红数字角标） */
+body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-wrap {
+    display: block;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-btn.process-accounting-inbox-main {
+    background: #111827;
+    color: #fff;
+    border: 1px solid #0f172a;
+    border-radius: 999px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-btn.process-accounting-inbox-main:hover {
+    background: #1e293b;
+    border-color: #334155;
+    color: #fff;
+}
+
+body.processlist-spa-native.process-page.process-page--bank .process-accounting-inbox-icon {
+    color: #e2e8f0;
 }
 
 /* Table Header - copied from accountCSS.css */

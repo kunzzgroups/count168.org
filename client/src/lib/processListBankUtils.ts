@@ -8,7 +8,68 @@ export function normalizeBankIssueFlag(v: unknown): string {
     .replace(/\s+/g, '_')
 }
 
-/** 与 `js/processlist.js` / `bank_process_list.js` 中 isBankInactiveLike 对齐 */
+/** 与 `processlist.js` normalizeResendDayStartToYmd 一致 */
+export function normalizeResendDayStartToYmd(value: string): string {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  const dmy = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (dmy) {
+    const dd = String(parseInt(dmy[1], 10)).padStart(2, '0')
+    const mm = String(parseInt(dmy[2], 10)).padStart(2, '0')
+    const yy = dmy[3]
+    return `${yy}-${mm}-${dd}`
+  }
+  return ''
+}
+
+/** 供 `input[type=date]` 使用（YYYY-MM-DD 或从 d/m/Y 转换；兼容 `YYYY-MM-DD HH:...`） */
+export function bankDayFieldForDateInput(raw: unknown): string {
+  const s = String(raw ?? '').trim()
+  if (!s) return ''
+  const head = s.length >= 10 ? s.slice(0, 10) : String(s.split(' ')[0] || '').trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(head) && head !== '0000-00-00') return head
+  return normalizeResendDayStartToYmd(s)
+}
+
+export function isSelectedDayStartResendLockedToday(
+  proc: { resend_guard_day_starts_today?: string | null } | null,
+  selectedDayStartRaw: string,
+): boolean {
+  if (!proc) return false
+  const selectedYmd = normalizeResendDayStartToYmd(selectedDayStartRaw)
+  if (!selectedYmd) return false
+  const lockedCsv = String(proc.resend_guard_day_starts_today || '').trim()
+  if (lockedCsv) {
+    const lockedSet = new Set(
+      lockedCsv
+        .split(',')
+        .map((item) => normalizeResendDayStartToYmd(item.trim()))
+        .filter(Boolean),
+    )
+    return lockedSet.has(selectedYmd)
+  }
+  return false
+}
+
+/** 与 `bank_process_list.js` bankResendScheduleDayStartForbiddenMessage 一致（当前恒不拦截） */
+export function bankResendScheduleDayStartForbiddenMessage(
+  _chosenTrim: string,
+  _anchorRaw: string | null | undefined,
+): string | null {
+  return null
+}
+
+export function isBankResendDayStartBackendErrorMessage(text: string): boolean {
+  const s = String(text || '')
+  return (
+    s.includes('不可与今天相同') ||
+    s.includes('Day start cannot be today') ||
+    s.includes('Resend 所填 Day start') ||
+    s.includes('same calendar date as the current contract Day start')
+  )
+}
+
 export function isBankInactiveLike(
   status: string | undefined,
   issueFlag: string | undefined,

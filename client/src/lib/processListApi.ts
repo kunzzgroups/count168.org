@@ -1,5 +1,10 @@
 import { apiFetch, apiUrl } from './api'
-import type { BankProcessRow, GamePermission, GamesProcessRow } from './processListTypes'
+import type {
+  AccountingInboxRow,
+  BankProcessRow,
+  GamePermission,
+  GamesProcessRow,
+} from './processListTypes'
 
 export type ApiOk<T> = { success: true; data: T; error?: string; message?: string }
 export type ApiErr = { success: false; error: string; data?: null }
@@ -337,6 +342,92 @@ export async function postSaveSelectedBanksMap(
   })
   if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
   return parseJson(r)
+}
+
+/**
+ * 依赖会话 `company_id`（与经典 `loadAccountingInbox` 一致；切换公司后已由 workspace 更新 session）。
+ */
+export async function fetchProcessAccountingInbox(): Promise<ApiResult<AccountingInboxRow[]>> {
+  const r = await apiFetch('api/processes/process_accounting_inbox_api.php', { cache: 'no-store' })
+  if (!r.ok) return { success: false, error: `HTTP ${r.status}` }
+  return parseJson<AccountingInboxRow[]>(r)
+}
+
+export async function postAccountingInboxToTransactions(
+  pairs: { id: number; periodType: string; billingMonth: string }[],
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const fd = new FormData()
+  for (const p of pairs) {
+    fd.append('ids[]', String(p.id))
+    fd.append('period_types[]', p.periodType)
+    fd.append('billing_months[]', p.billingMonth)
+  }
+  fd.set('allow_future_monthly', '1')
+  const r = await apiFetch('api/processes/process_post_to_transaction_api.php', { method: 'POST', body: fd })
+  const j = (await r.json()) as { success?: boolean; message?: string; error?: string }
+  if (j.success === true) {
+    return { success: true, message: j.message || 'Posted successfully.' }
+  }
+  return { success: false, error: j.error || j.message || 'Post failed.' }
+}
+
+export async function postDismissAccountingDueRows(
+  pairs: { id: number; periodType: string; billingMonth: string }[],
+): Promise<{ success: boolean; message?: string; error?: string }> {
+  const fd = new FormData()
+  for (const p of pairs) {
+    fd.append('ids[]', String(p.id))
+    fd.append('period_types[]', p.periodType)
+    fd.append('billing_months[]', p.billingMonth)
+  }
+  const r = await apiFetch('api/processes/dismiss_accounting_due_api.php', { method: 'POST', body: fd })
+  const j = (await r.json()) as { success?: boolean; message?: string; error?: string }
+  if (j.success === true) {
+    return { success: true, message: j.message || 'Removed from Accounting Due.' }
+  }
+  return { success: false, error: j.error || j.message || 'Remove failed.' }
+}
+
+export async function postCheckBankResendDayStartLock(
+  bankProcessId: number,
+  dayStartYmd: string,
+): Promise<{ success: boolean; locked?: boolean; error?: string }> {
+  const r = await apiFetch('api/bankprocess_maintenance/resend_accounting_due_api.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      bank_process_id: bankProcessId,
+      mode: 'check_daystart_lock',
+      day_start: dayStartYmd,
+    }),
+  })
+  const j = (await r.json()) as {
+    success?: boolean
+    message?: string
+    data?: { locked?: boolean }
+  }
+  if (j.success === true) {
+    return { success: true, locked: !!j.data?.locked }
+  }
+  return { success: false, error: j.message || 'Check failed.' }
+}
+
+export async function postResendAccountingDue(payload: {
+  bank_process_id: number
+  day_start?: string
+  day_end?: string
+  day_start_frequency?: string
+}): Promise<{ success: boolean; message?: string; error?: string }> {
+  const r = await apiFetch('api/bankprocess_maintenance/resend_accounting_due_api.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  const j = (await r.json()) as { success?: boolean; message?: string; error?: string }
+  if (j.success === true) {
+    return { success: true, message: j.message || 'Done: This process can appear in Accounting Due again.' }
+  }
+  return { success: false, error: j.message || j.error || 'Resend failed.' }
 }
 
 export { apiUrl }

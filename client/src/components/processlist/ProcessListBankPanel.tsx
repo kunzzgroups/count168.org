@@ -16,6 +16,7 @@ import {
 import {
   formatContractLabel,
   getContractStateClass,
+  isBankInactiveLike,
   isGrayContractActive,
   matchesCurrentBankFilters,
   parseProfitSharingString,
@@ -24,16 +25,29 @@ import {
   serializeProfitSharingEntries,
   ymdToday,
 } from '../../lib/processListBankUtils'
+import type { OwnerCompany } from '../../types/dashboard'
+import { BankResendAccountingDueModal } from './BankResendAccountingDueModal'
 import { BankAccountCustomSelect } from './BankAccountCustomSelect'
 import { BankListSelectionModal, BankCountrySelectionModal } from './BankRegionalModals'
 import { BankProfitSharingModal } from './BankProfitSharingModal'
 import { BankStatusDropdown } from './BankStatusDropdown'
+import { ProcessListCompanyGroupFilters } from './ProcessListCompanyGroupFilters'
 
 const PAGE_SIZE = 20
+
+type WorkspacePick = {
+  groupIds: string[]
+  selectedGroup: string | null
+  setGroup: (g: string | null) => void
+  scopeCompanies: OwnerCompany[]
+  activeCompanyId: number
+  onPickCompany: (id: number) => void
+}
 
 type Props = {
   companyId: number
   onNotice: (msg: string, kind: 'ok' | 'err') => void
+  workspace: WorkspacePick
 }
 
 type AccountOpt = { id: number; account_id: string; name?: string; role?: string }
@@ -54,7 +68,7 @@ function dashIfEmpty(val: unknown): string {
   return s === '' ? '-' : s
 }
 
-export function ProcessListBankPanel({ companyId, onNotice }: Props) {
+export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) {
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState<BankProcessRow[]>([])
   const [loading, setLoading] = useState(false)
@@ -96,6 +110,8 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
 
   const [quickRemarkId, setQuickRemarkId] = useState<number | null>(null)
   const [quickRemarkText, setQuickRemarkText] = useState('')
+
+  const [resendRow, setResendRow] = useState<BankProcessRow | null>(null)
 
   const [bankNoteModal, setBankNoteModal] = useState<'sop' | 'remark' | null>(null)
   const [bankNoteDraft, setBankNoteDraft] = useState('')
@@ -147,6 +163,12 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
 
   useEffect(() => {
     void loadList()
+  }, [loadList])
+
+  useEffect(() => {
+    const onRefresh = () => void loadList()
+    window.addEventListener('c168:bank-accounting-due-updated', onRefresh)
+    return () => window.removeEventListener('c168:bank-accounting-due-updated', onRefresh)
   }, [loadList])
 
   useEffect(() => {
@@ -465,6 +487,49 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
     }
   }
 
+  /** 与 `bank_process_list.js` persistOpenBankEditBeforeResend 一致：不提交 country/bank/type/name/day 系列，避免 Resend 误改主档 */
+  const persistOpenBankEditBeforeResend = useCallback(
+    async (targetProcessId: number) => {
+      if (!bankOpen || editBankId !== targetProcessId) return
+      const fd = new FormData()
+      fd.set('permission', 'Bank')
+      fd.set('id', String(editBankId))
+      const gross = (parseFloat(bPrice) || 0) - (parseFloat(bCost) || 0)
+      fd.set('profit', gross.toFixed(2))
+      fd.set('profit_sharing', serializeProfitSharingEntries(profitSharingEntries))
+      fd.set('contract', bContract)
+      if (bInsurance !== '') fd.set('insurance', bInsurance)
+      fd.set('sop', bSop)
+      fd.set('remark', bRemark)
+      if (bCost !== '') fd.set('cost', bCost)
+      if (bPrice !== '') fd.set('price', bPrice)
+      if (bCard !== '') fd.set('card_merchant_id', String(bCard))
+      if (bCust !== '') fd.set('customer_id', String(bCust))
+      if (bProfitAcc !== '') fd.set('profit_account_id', String(bProfitAcc))
+      fd.set('status', bStatus)
+      try {
+        await postUpdateProcess(fd)
+      } catch {
+        /* 与经典一致：失败不阻塞 Resend */
+      }
+    },
+    [
+      bankOpen,
+      editBankId,
+      bCard,
+      bCust,
+      bProfitAcc,
+      bContract,
+      bInsurance,
+      bSop,
+      bRemark,
+      bCost,
+      bPrice,
+      bStatus,
+      profitSharingEntries,
+    ],
+  )
+
   const toDelete = Object.entries(delSel)
     .filter(([, v]) => v)
     .map(([k]) => parseInt(k, 10))
@@ -518,16 +583,21 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
   return (
     <>
       <div className="action-buttons-container" id="processListBankActionBar">
+        <ProcessListCompanyGroupFilters
+          groupIds={workspace.groupIds}
+          selectedGroup={workspace.selectedGroup}
+          onSetGroup={workspace.setGroup}
+          scopeCompanies={workspace.scopeCompanies}
+          activeCompanyId={workspace.activeCompanyId}
+          onPickCompany={workspace.onPickCompany}
+        />
         <div className="action-buttons">
-          <div
-            className="action-controls-row"
-            style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
-          >
+          <div className="action-controls-row">
             <button type="button" className="btn btn-add" onClick={openAddBank}>
               Add Process
             </button>
             <div className="process-list-date-filter" id="processListDateFilter">
-              <span style={{ fontSize: 12, color: '#64748b', marginRight: 6 }}>From (dd/mm/yyyy)</span>
+              <span className="bank-date-filter-hint">From (dd/mm/yyyy)</span>
               <input
                 type="text"
                 className="search-input"
@@ -540,7 +610,9 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                 placeholder="dd/mm/yyyy"
                 aria-label="Date from"
               />
-              <span style={{ fontSize: 12, color: '#64748b', margin: '0 6px' }}>To</span>
+              <span className="bank-date-filter-hint" style={{ margin: '0 4px' }}>
+                To
+              </span>
               <input
                 type="text"
                 className="search-input"
@@ -642,14 +714,7 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
             </div>
             <button
               type="button"
-              className="btn"
-              style={{
-                border: '1px solid #cbd5e1',
-                borderRadius: 8,
-                background: '#fff',
-                padding: '6px 10px',
-                cursor: 'pointer',
-              }}
+              className="btn btn-sort-supplier"
               onClick={() => {
                 setSortAsc((s) => !s)
                 setCurrentPage(1)
@@ -723,12 +788,20 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
               )
               const cClass = isGrayContractActive(cLabel, baseC)
               const isRealInactive = String(p.status || '').toLowerCase() === 'inactive'
+              const isBankStatusActive = String(p.status || '').trim().toLowerCase() === 'active'
+              const showResend = isBankStatusActive && !isBankInactiveLike(p.status, p.issue_flag ?? undefined)
               const dateCell =
                 p.date != null && String(p.date).trim() !== ''
                   ? String(p.date)
                   : dashIfEmpty(p.day_start)
               return (
-                <tr key={p.id} data-id={p.id} data-status={p.status} data-has-transactions={p.has_transactions ? '1' : '0'}>
+                <tr
+                  key={p.id}
+                  data-id={p.id}
+                  data-status={p.status}
+                  data-issue-flag={p.issue_flag != null ? String(p.issue_flag) : ''}
+                  data-has-transactions={p.has_transactions ? '1' : '0'}
+                >
                   <td className="bank-td-no">{startIndex + idx + 1}</td>
                   <td>{dashIfEmpty(p.supplier)}</td>
                   <td className="bank-td-country">{dashIfEmpty(p.country)}</td>
@@ -784,6 +857,44 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
                           />
                         </svg>
                       </button>
+                      {showResend ? (
+                        <button
+                          type="button"
+                          className="bank-resend-btn"
+                          title="Resend"
+                          aria-label="Resend to Accounting Due"
+                          onClick={() => {
+                            const st = String(p.status || '').trim().toLowerCase()
+                            if (st !== 'active' || isBankInactiveLike(p.status, p.issue_flag ?? undefined)) {
+                              onNotice(
+                                'Resend is only available for Active processes (not Inactive, Official, E-INVOICE, or Block).',
+                                'err',
+                              )
+                              return
+                            }
+                            setResendRow(p)
+                          }}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden focusable="false">
+                            <path
+                              d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.75"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M3 3v5h5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.75"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                      ) : null}
                     </div>
                     {isRealInactive ? (
                       <input
@@ -824,7 +935,7 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
             ◀
           </button>
           <span className="pagination-info" id="paginationInfo">
-            Page {page} / {totalPages}
+            {page} of {totalPages}
           </span>
           <button
             type="button"
@@ -1391,6 +1502,18 @@ export function ProcessListBankPanel({ companyId, onNotice }: Props) {
           const cur = bCountry.trim()
           const banks = (cur ? next[cur] : undefined) || []
           if (banks.length && bBank.trim() && !banks.includes(bBank.trim())) setBBank(banks[0] || '')
+        }}
+        onNotice={onNotice}
+      />
+
+      <BankResendAccountingDueModal
+        process={resendRow}
+        open={resendRow != null}
+        onClose={() => setResendRow(null)}
+        beforeResend={persistOpenBankEditBeforeResend}
+        onSuccess={() => {
+          void loadList()
+          window.dispatchEvent(new Event('c168:bank-accounting-due-updated'))
         }}
         onNotice={onNotice}
       />

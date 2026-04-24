@@ -4,6 +4,7 @@ import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import { fetchDomainCompanyPermissions } from '../../lib/processListApi'
 import type { GamePermission } from '../../lib/processListTypes'
+import { ProcessListAccountingDue } from './ProcessListAccountingDue'
 import { ProcessListBankPanel } from './ProcessListBankPanel'
 import { ProcessListGamesPanel } from './ProcessListGamesPanel'
 import {
@@ -170,7 +171,8 @@ export function ProcessListMain({ bootstrap }: Props) {
 
   useEffect(() => {
     if (!w.companiesReady || w.activeCompanyId == null) return
-    if (searchParams.get('company_id')) return
+    const cur = searchParams.get('company_id')
+    if (cur === String(w.activeCompanyId)) return
     replaceCompanyInUrl(w.activeCompanyId)
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
@@ -221,9 +223,14 @@ export function ProcessListMain({ bootstrap }: Props) {
             gap: 12,
           }}
         >
-          <h1 className="page-title" style={{ margin: 0 }}>
-            Process List
-          </h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <h1 className="page-title" style={{ margin: 0 }}>
+              {activeCategory === 'Bank' ? 'Bank Process List' : 'Process List'}
+            </h1>
+            {activeCategory === 'Bank' && w.activeCompanyId != null ? (
+              <ProcessListAccountingDue companyId={w.activeCompanyId} onNotice={onNotice} />
+            ) : null}
+          </div>
           <div className="process-company-filter process-permission-filter-header">
             <span className="process-company-label">Category:</span>
             <div className="process-company-buttons" id="process-list-permission-buttons">
@@ -250,6 +257,14 @@ export function ProcessListMain({ bootstrap }: Props) {
             key={String(w.activeCompanyId)}
             companyId={w.activeCompanyId}
             onNotice={onNotice}
+            workspace={{
+              groupIds: w.groupIds,
+              selectedGroup: w.selectedGroup,
+              setGroup: w.setGroup,
+              scopeCompanies: w.scopeCompanies,
+              activeCompanyId: w.activeCompanyId,
+              onPickCompany: w.onPickCompany,
+            }}
           />
         ) : (
           <ProcessListGamesPanel
