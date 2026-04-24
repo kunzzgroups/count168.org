@@ -1,4 +1,4 @@
-import { apiFetch, apiUrl } from './api'
+import { apiFetch } from './api'
 
 export type ProcessListPermission = 'Games' | 'Bank'
 
@@ -46,24 +46,28 @@ export type ProcessListFetchFilters = {
   showBlock: boolean
 }
 
-function buildListUrl(
+/** 相对路径 + query（供 `apiFetch` → `apiUrl`），禁止 `new URL('/path')`（无 base 时在浏览器会抛错导致列表永远 Loading） */
+function buildListPathWithQuery(
   companyId: number,
   permission: ProcessListPermission,
   filters: ProcessListFetchFilters,
 ): string {
-  const u = new URL(apiUrl('/api/processes/processlist_api.php'))
-  u.searchParams.set('company_id', String(companyId))
-  u.searchParams.set('permission', permission)
+  const params = new URLSearchParams()
+  params.set('company_id', String(companyId))
+  params.set('permission', permission)
   const q = filters.search.trim()
-  if (q) u.searchParams.set('search', q)
+  if (q) params.set('search', q)
 
   if (permission === 'Bank') {
-    u.searchParams.set('showAll', '1')
+    params.set('showAll', '1')
   } else {
-    if (filters.showInactive) u.searchParams.set('showInactive', '1')
-    if (filters.showAll) u.searchParams.set('showAll', '1')
+    if (filters.showInactive) params.set('showInactive', '1')
+    if (filters.showAll) params.set('showAll', '1')
   }
-  return u.toString()
+  const qs = params.toString()
+  return qs
+    ? `/api/processes/processlist_api.php?${qs}`
+    : '/api/processes/processlist_api.php'
 }
 
 export async function fetchProcessListRows(
@@ -71,23 +75,28 @@ export async function fetchProcessListRows(
   permission: ProcessListPermission,
   filters: ProcessListFetchFilters,
 ): Promise<{ ok: true; rows: GamesProcessRow[] | BankProcessRow[] } | { ok: false; message: string }> {
-  const url = buildListUrl(companyId, permission, filters)
-  const res = await apiFetch(url, { credentials: 'include', cache: 'no-cache' })
-  if (!res.ok) {
-    return { ok: false, message: `HTTP ${res.status}` }
-  }
-  const json = (await res.json()) as {
-    success?: boolean
-    message?: string
-    error?: string
-    data?: unknown
-  }
-  if (!json.success) {
-    return {
-      ok: false,
-      message: String(json.message || json.error || 'Request failed'),
+  const path = buildListPathWithQuery(companyId, permission, filters)
+  try {
+    const res = await apiFetch(path, { credentials: 'include', cache: 'no-cache' })
+    if (!res.ok) {
+      return { ok: false, message: `HTTP ${res.status}` }
     }
+    const json = (await res.json()) as {
+      success?: boolean
+      message?: string
+      error?: string
+      data?: unknown
+    }
+    if (!json.success) {
+      return {
+        ok: false,
+        message: String(json.message || json.error || 'Request failed'),
+      }
+    }
+    const data = Array.isArray(json.data) ? json.data : []
+    return { ok: true, rows: data as GamesProcessRow[] | BankProcessRow[] }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    return { ok: false, message: msg || 'Network error' }
   }
-  const data = Array.isArray(json.data) ? json.data : []
-  return { ok: true, rows: data as GamesProcessRow[] | BankProcessRow[] }
 }
