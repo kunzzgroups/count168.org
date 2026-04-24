@@ -65,7 +65,6 @@ export function ProcessListNative({ bootstrap, workspace: w, replaceCompanyInUrl
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [permCats, setPermCats] = useState<ProcessListCategory[]>([])
-  const [permReady, setPermReady] = useState(false)
   const [rows, setRows] = useState<(GamesProcessRow | BankProcessRow)[]>([])
   const [loadState, setLoadState] = useState<'idle' | 'loading' | 'err'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
@@ -110,21 +109,18 @@ export function ProcessListNative({ bootstrap, workspace: w, replaceCompanyInUrl
     document.title = pageTitle
   }, [pageTitle])
 
-  /** 拉取公司 Games/Bank 权限 */
+  /** 拉取公司 Games/Bank 权限（不设「permReady」门闩，避免列表已 loading 时门闩变 false 导致永久卡在 Loading） */
   useEffect(() => {
     let alive = true
-    setPermReady(false)
     void (async () => {
       if (!companyCode) {
         if (!alive) return
         setPermCats([])
-        setPermReady(true)
         return
       }
       const list = await fetchProcessListCategoriesForCompanyCode(companyCode)
       if (!alive) return
       setPermCats(list)
-      setPermReady(true)
     })()
     return () => {
       alive = false
@@ -205,7 +201,6 @@ export function ProcessListNative({ bootstrap, workspace: w, replaceCompanyInUrl
 
   /** 列表请求 */
   useEffect(() => {
-    if (!permReady) return
     if (effectiveCompanyId == null || !Number.isFinite(Number(effectiveCompanyId))) return
     let cancelled = false
     setLoadState('loading')
@@ -242,7 +237,6 @@ export function ProcessListNative({ bootstrap, workspace: w, replaceCompanyInUrl
     showOfficial,
     showEInvoice,
     showBlock,
-    permReady,
   ])
 
   const gamesPrepared = useMemo(() => {
