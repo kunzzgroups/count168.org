@@ -4090,6 +4090,21 @@ body.processlist-spa-native.process-page.process-page--bank .bank-date-trigger {
     white-space: nowrap;
 }
 
+body.processlist-spa-native.process-page.process-page--bank .bank-date-trigger-icon {
+    border: 1px solid #0a4fd1;
+    background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
+    color: #fff;
+    height: 23px;
+    min-width: 24px;
+    border-radius: 4px;
+    padding: 0 5px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    cursor: pointer;
+}
+
 body.processlist-spa-native.process-page.process-page--bank .bank-date-trigger__icon {
     font-size: 11px;
     line-height: 1;

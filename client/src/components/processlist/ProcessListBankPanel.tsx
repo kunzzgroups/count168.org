@@ -622,6 +622,15 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
             <div className="process-list-date-filter process-list-date-filter--bank-classic" id="processListDateFilter">
               <button
                 type="button"
+                className="bank-date-trigger-icon"
+                onClick={() => setDateOpen((v) => !v)}
+                aria-label="Open date range picker"
+                title="Open date range picker"
+              >
+                📅
+              </button>
+              <button
+                type="button"
                 className="bank-date-trigger"
                 onClick={() => setDateOpen((v) => !v)}
                 aria-label="Select date range"
@@ -721,7 +730,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showInactiveBank">Inactive</label>
+              <label htmlFor="showInactiveBank">Show Inactive</label>
             </div>
             <div className="checkbox-section">
               <input
@@ -733,7 +742,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showOfficialBank">Official</label>
+              <label htmlFor="showOfficialBank">Show Official</label>
             </div>
             <div className="checkbox-section">
               <input
@@ -745,7 +754,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showEInvoiceBank">E-Invoice</label>
+              <label htmlFor="showEInvoiceBank">Show E-Invoice</label>
             </div>
             <div className="checkbox-section">
               <input
@@ -757,7 +766,7 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                   setCurrentPage(1)
                 }}
               />
-              <label htmlFor="showBlockBank">Block</label>
+              <label htmlFor="showBlockBank">Show Block</label>
             </div>
             <div className="checkbox-section">
               <input
