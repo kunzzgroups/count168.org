@@ -6774,9 +6774,11 @@ async function loadPermissionButtons() {
         });
 
         const result = await response.json();
-        let permissions = result.success && result.data && result.data.permissions ? result.data.permissions : ['Games', 'Bank', 'Loan', 'Rate', 'Money'];
+        // Process List 仅实现 Games / Bank；Loan、Rate、Money 不在此页提供 Category（与公司其它模块权限无关）
+        let permissions = result.success && result.data && result.data.permissions ? result.data.permissions : ['Games', 'Bank'];
         // 兼容旧数据：数据库可能仍是 "Gambling"，统一为 "Games" 显示与逻辑
         permissions = [...new Set(permissions.map(p => p === 'Gambling' ? 'Games' : p))];
+        permissions = permissions.filter(function (p) { return p === 'Games' || p === 'Bank'; });
 
         permissionContainer.innerHTML = '';
 

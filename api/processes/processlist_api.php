@@ -205,10 +205,8 @@ if ($req_company_id) {
         $reqPermission = $_GET['permission'] ?? $_POST['permission'] ?? '';
         if ($reqPermission === 'Bank') {
             $requiredCategory = 'Bank';
-        } elseif (in_array($reqPermission, ['Loan', 'Rate', 'Money'], true)) {
-            // 与 `company.permissions` 及 Category 按钮一致；此前误用 Games 校验会导致仅有 Loan 等类别的公司永远 403
-            $requiredCategory = $reqPermission;
         }
+        // Loan / Rate / Money 的流程列表尚未实现；请求若带这些 permission 仍按 Games 校验（与前端仅展示 Games、Bank 一致）
     }
 
     if (!checkCompanyCategoryPermission($pdo, $req_company_id, $requiredCategory)) {
