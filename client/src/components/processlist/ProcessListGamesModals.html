@@ -1,0 +1,357 @@
+<!-- Edit Process Popup Modal -->
+    <div id="editModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Edit Process</h2>
+                <span class="close" onclick="closeEditModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="editProcessForm" class="process-form add-grid">
+                    <input type="hidden" id="edit_process_id" name="id">
+                    <input type="hidden" id="edit_description_id" name="description_id">
+                    <input type="hidden" id="edit_status" name="status" value="active">
+
+                    <!-- Left column -->
+                    <div class="add-col">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit_process_name">Process Name *</label>
+                                <input type="text" id="edit_process_name" name="process_name" required readonly
+                                    style="background-color: #f5f5f5; cursor: not-allowed;">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit_description">Description</label>
+                                <div class="input-with-icon">
+                                    <input type="text" id="edit_description" name="description" readonly
+                                        placeholder="Click + to select descriptions">
+                                    <button type="button" class="add-icon" onclick="expandEditDescription()">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Selected Descriptions Display for Edit (hidden by default) -->
+                        <div class="form-row" id="edit_selected_descriptions_display" style="display: none;">
+                            <div class="form-group">
+                                <label>Selected Descriptions</label>
+                                <div class="selected-descriptions" id="edit_selected_descriptions_list"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit_currency">Currency</label>
+                                <select id="edit_currency" name="currency_id">
+                                    <option value="">Select Currency</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit_dts_modified" style="font-weight: 600; color: #666;">DTS
+                                    Modified:</label>
+                                <div id="edit_dts_modified" readonly
+                                    style="background-color: #f5f5f5; cursor: not-allowed; margin-top: 5px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; width: 100%; min-width: 200px; min-height: 38px; box-sizing: border-box;">
+                                    <span id="edit_dts_modified_date" style="min-height: 1em;"></span>
+                                    <span id="edit_dts_modified_user" style="font-weight: 600; min-height: 1em;"></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit_dts_created" style="font-weight: 600; color: #666;">DTS
+                                    Created:</label>
+                                <div id="edit_dts_created" readonly
+                                    style="background-color: #f5f5f5; cursor: not-allowed; margin-top: 5px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; width: 100%; min-width: 200px; min-height: 38px; box-sizing: border-box;">
+                                    <span id="edit_dts_created_date" style="min-height: 1em;"></span>
+                                    <span id="edit_dts_created_user" style="font-weight: 600; min-height: 1em;"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right column -->
+                    <div class="add-col">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit_remove_words">Remove Words</label>
+                                <input type="text" id="edit_remove_words" name="remove_word"
+                                    placeholder="Enter words to remove">
+                                <small class="field-help">(Use semicolon to separate multiple words, e.g.
+                                    abc;cde;efg)</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <div class="day-use-header">
+                                    <label>Day Use</label>
+                                    <div class="all-day-checkbox">
+                                        <input type="checkbox" id="edit_all_day" name="all_day">
+                                        <label for="edit_all_day">All Day</label>
+                                    </div>
+                                </div>
+                                <div class="day-checkboxes" id="edit_day_checkboxes"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row row-two-cols">
+                            <div class="form-group">
+                                <label for="edit_replace_word_from">Replace From</label>
+                                <input type="text" id="edit_replace_word_from" name="replace_word_from"
+                                    placeholder="Old word">
+                                <small class="field-help">(Word to be replaced)</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="edit_replace_word_to">Replace To</label>
+                                <input type="text" id="edit_replace_word_to" name="replace_word_to"
+                                    placeholder="New word">
+                                <small class="field-help">(Replacement word)</small>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="edit_remarks">Remarks</label>
+                                <textarea id="edit_remarks" name="remark" rows="5"
+                                    placeholder="Enter remarks..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-actions add-actions">
+                        <button type="submit" class="btn btn-save">Update Process</button>
+                        <button type="button" class="btn btn-cancel" onclick="closeEditModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Process Popup Modal -->
+    <div id="addModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add Process</h2>
+                <span class="close" onclick="closeAddModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="addProcessForm" class="process-form add-grid">
+                    <!-- Left column -->
+                    <div class="add-col">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="add_copy_from_btn">Copy From</label>
+                                <div class="custom-select-wrapper">
+                                    <button type="button" class="custom-select-button" id="add_copy_from_btn"
+                                        data-placeholder="Select Process to Copy From">Select Process to Copy
+                                        From</button>
+                                    <div class="custom-select-dropdown" id="add_copy_from_dropdown">
+                                        <div class="custom-select-search">
+                                            <input type="text" placeholder="Search process..." autocomplete="off">
+                                        </div>
+                                        <div class="custom-select-options"></div>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="add_copy_from" name="copy_from" value="">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="add_process_id">Process ID *</label>
+                                <div class="input-with-checkbox">
+                                    <input type="text" id="add_process_id" name="process_id"
+                                        placeholder="Enter Process ID" required>
+                                    <div class="checkbox-container">
+                                        <input type="checkbox" id="add_multi_use" name="multi_use_purpose">
+                                        <label for="add_multi_use">Multi-Process</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Multi-use Process Selection (hidden by default) -->
+                        <div class="form-row" id="multi_use_processes" style="display: none;">
+                            <div class="form-group">
+                                <label>Select Multi-use Processes</label>
+                                <div class="process-checkboxes" id="process_checkboxes"></div>
+                                <div class="multi-use-actions">
+                                    <button type="button" class="btn btn-save btn-small"
+                                        onclick="confirmMultiUseProcessSelection()">Confirm</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Selected Processes Display (hidden by default) -->
+                        <div class="form-row" id="selected_processes_display" style="display: none;">
+                            <div class="form-group">
+                                <label>Selected Multi-use Processes</label>
+                                <div class="selected-processes" id="selected_processes_list"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="add_description">Description *</label>
+                                <div class="input-with-icon">
+                                    <input type="text" id="add_description" name="description" required readonly
+                                        placeholder="Click + to select descriptions">
+                                    <button type="button" class="add-icon" onclick="expandDescription()">+</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Selected Descriptions Display (hidden by default) -->
+                        <div class="form-row" id="selected_descriptions_display" style="display: none;">
+                            <div class="form-group">
+                                <label>Selected Descriptions</label>
+                                <div class="selected-descriptions" id="selected_descriptions_list"></div>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="add_currency">Currency</label>
+                                <select id="add_currency" name="currency_id">
+                                    <option value="">Select Currency</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right column -->
+                    <div class="add-col">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="add_remove_words">Remove Words</label>
+                                <input type="text" id="add_remove_words" name="remove_word"
+                                    placeholder="Enter words to remove">
+                                <small class="field-help">(Use semicolon to separate multiple words, e.g.
+                                    abc;cde;efg)</small>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <div class="day-use-header">
+                                    <label>Day Use</label>
+                                    <div class="all-day-checkbox">
+                                        <input type="checkbox" id="add_all_day" name="all_day">
+                                        <label for="add_all_day">All Day</label>
+                                    </div>
+                                </div>
+                                <div class="day-checkboxes" id="day_checkboxes"></div>
+                            </div>
+                        </div>
+                        <div class="form-row row-two-cols">
+                            <div class="form-group">
+                                <label for="add_replace_word_from">Replace From</label>
+                                <input type="text" id="add_replace_word_from" name="replace_word_from"
+                                    placeholder="Old word">
+                                <small class="field-help">(Word to be replaced)</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="add_replace_word_to">Replace To</label>
+                                <input type="text" id="add_replace_word_to" name="replace_word_to"
+                                    placeholder="New word">
+                                <small class="field-help">(Replacement word)</small>
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="add_remarks">Remarks</label>
+                                <textarea id="add_remarks" name="remark" rows="5"
+                                    placeholder="Enter remarks..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Actions: span full width -->
+                    <div class="form-actions add-actions">
+                        <button type="submit" class="btn btn-save">Add Process</button>
+                        <button type="button" class="btn btn-cancel" onclick="closeAddModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Description Selection Modal -->
+    <div id="descriptionSelectionModal" class="modal" style="display: none;">
+        <div class="modal-content description-selection-modal">
+            <div class="modal-header">
+                <h2>Select or Add Description</h2>
+                <span class="close" onclick="closeDescriptionSelectionModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="description-selection-container">
+                    <!-- Left side - Selected descriptions -->
+                    <div class="selected-descriptions-section">
+                        <h3>Selected Descriptions</h3>
+                        <div class="selected-descriptions-list" id="selectedDescriptionsInModal">
+                            <!-- Selected descriptions will be displayed here -->
+                        </div>
+                    </div>
+
+                    <!-- Right side - Add new and available descriptions -->
+                    <div class="available-descriptions-section">
+                        <!-- Add new description section -->
+                        <div class="add-description-bar">
+                            <h3>Add New Description</h3>
+                            <form id="addDescriptionForm" class="add-description-form">
+                                <div class="add-description-input-group">
+                                    <input type="text" id="new_description_name" name="description_name"
+                                        placeholder="Enter new description name..." required>
+                                    <button type="submit" class="btn btn-save">Add</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <h3>Available Descriptions</h3>
+                        <div class="description-search">
+                            <input type="text" id="descriptionSearch" placeholder="Search descriptions..."
+                                onkeyup="filterDescriptions()">
+                        </div>
+                        <div class="description-list" id="existingDescriptions">
+                            <!-- Available descriptions will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancel"
+                        onclick="closeDescriptionSelectionModal()">Cancel</button>
+                    <button type="button" class="btn btn-save" id="confirmDescriptionsBtn"
+                        onclick="confirmDescriptions()">Confirm Selection</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="processNotificationContainer" class="process-notification-container"></div>
+
+    <!-- Confirm Delete Modal -->
+    <div id="confirmDeleteModal" class="process-modal" style="display: none;">
+        <div class="process-confirm-modal-content">
+            <div class="process-confirm-icon-container">
+                <svg class="process-confirm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+            </div>
+            <h2 class="process-confirm-title">Confirm Delete</h2>
+            <p id="confirmDeleteMessage" class="process-confirm-message">This action cannot be undone.</p>
+            <div class="process-confirm-actions">
+                <button type="button" class="process-btn process-btn-cancel confirm-cancel"
+                    onclick="closeConfirmDeleteModal()">Cancel</button>
+                <button type="button" class="process-btn process-btn-delete confirm-delete"
+                    onclick="confirmDelete()">Delete</button>
+            </div>
+        </div>
+    </div>

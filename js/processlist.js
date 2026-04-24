@@ -23,8 +23,14 @@ function c168ProcessListIsSpaFrameDoc() {
         document.documentElement.getAttribute('data-c168-spa-frame') === '1';
 }
 
+function c168IsProcessListSpaEmbed() {
+    return (typeof document !== 'undefined' && document.body &&
+        document.body.classList.contains('process-list-spa-embed')) ||
+        (typeof window !== 'undefined' && window.__PROCESS_LIST_SPA_EMBED__ === true);
+}
+
 function c168ProcessListCategoryFromLocation() {
-    if (c168ProcessListIsSpaFrameDoc()) {
+    if (c168IsProcessListSpaEmbed() || c168ProcessListIsSpaFrameDoc()) {
         const p = new URLSearchParams(window.location.search);
         const c = String(p.get('category') || '').trim();
         if (c.toLowerCase() === 'bank') return 'Bank';
@@ -34,16 +40,115 @@ function c168ProcessListCategoryFromLocation() {
     return (pageName === 'bank_process_list.php') ? 'Bank' : 'Games';
 }
 
-function c168NotifyProcessListParentUrl(urlObj) {
+/** React `/processlist`：筛选与 Category 写入地址栏（company_id 由 React 与 legacy 共同保留） */
+function c168PushProcessListFiltersToUrl() {
+    if (!c168IsProcessListSpaEmbed()) return;
     try {
-        if (!c168ProcessListIsSpaFrameDoc() || window.parent === window) return;
-        const child = urlObj instanceof URL ? urlObj : new URL(String(urlObj || ''), window.location.href);
-        const sync = new URLSearchParams(child.search);
-        sync.delete('c168_spa_frame');
-        const targetOrigin = window.location.origin || '*';
-        window.parent.postMessage({ type: 'c168-processlist-sync', search: sync.toString() }, targetOrigin);
-    } catch (e) { /* ignore */ }
+        const url = new URL(window.location.href);
+        const p = url.searchParams;
+        if (showInactive) {
+            p.set('showInactive', '1');
+        } else {
+            p.delete('showInactive');
+        }
+        if (showAll) {
+            p.set('showAll', '1');
+        } else {
+            p.delete('showAll');
+        }
+        if (showOfficial) {
+            p.set('showOfficial', '1');
+        } else {
+            p.delete('showOfficial');
+        }
+        if (showEInvoice) {
+            p.set('showEInvoice', '1');
+        } else {
+            p.delete('showEInvoice');
+        }
+        if (showBlock) {
+            p.set('showBlock', '1');
+        } else {
+            p.delete('showBlock');
+        }
+        const inp = document.getElementById('searchInput');
+        const q = inp ? String(inp.value || '').trim() : '';
+        if (q) {
+            p.set('search', q);
+        } else {
+            p.delete('search');
+        }
+        if (selectedPermission === 'Bank') {
+            p.set('category', 'Bank');
+        } else {
+            p.set('category', 'Games');
+        }
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+        window.dispatchEvent(new Event('c168:process-list-url-replaced'));
+    } catch (e) {
+        console.error(e);
+    }
 }
+
+/** React Router / 前进后退：用 `location.search` 刷新勾选与列表 */
+function c168SyncProcessListFromLocation() {
+    if (!c168IsProcessListSpaEmbed()) return;
+    try {
+        const p = new URLSearchParams(window.location.search);
+        const nextInactive = p.has('showInactive');
+        const nextAll = p.has('showAll');
+        const nextOfficial = p.has('showOfficial');
+        const nextEInv = p.has('showEInvoice');
+        const nextBlock = p.has('showBlock');
+        const nextSearch = p.has('search') ? String(p.get('search') || '') : '';
+        const catRaw = String(p.get('category') || '').trim().toLowerCase();
+        const nextPerm = catRaw === 'bank' ? 'Bank' : 'Games';
+
+        const inp = document.getElementById('searchInput');
+        const curSearch = inp ? String(inp.value || '').trim() : '';
+
+        if (
+            nextInactive === showInactive &&
+            nextAll === showAll &&
+            nextOfficial === showOfficial &&
+            nextEInv === showEInvoice &&
+            nextBlock === showBlock &&
+            nextSearch === curSearch &&
+            nextPerm === selectedPermission
+        ) {
+            return;
+        }
+
+        showInactive = nextInactive;
+        showAll = nextAll;
+        showOfficial = nextOfficial;
+        showEInvoice = nextEInv;
+        showBlock = nextBlock;
+        window.PROCESSLIST_SHOW_INACTIVE = showInactive;
+        window.PROCESSLIST_SHOW_ALL = showAll;
+        window.PROCESSLIST_SHOW_OFFICIAL = showOfficial;
+        window.PROCESSLIST_SHOW_E_INVOICE = showEInvoice;
+        window.PROCESSLIST_SHOW_BLOCK = showBlock;
+
+        if (inp) {
+            inp.value = p.has('search') ? (p.get('search') || '') : '';
+        }
+        normalizeBankFilterState();
+
+        if (nextPerm !== selectedPermission) {
+            switchPermission(nextPerm, { skipUrl: true });
+        } else {
+            updateBankListScrollMode();
+            currentPage = 1;
+            fetchProcesses();
+        }
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+window.c168SyncProcessListFromLocation = c168SyncProcessListFromLocation;
+window.c168PushProcessListFiltersToUrl = c168PushProcessListFiltersToUrl;
 
 function getBankProcessModule() {
     return (typeof window !== 'undefined' && window.BankProcessList) ? window.BankProcessList : null;
@@ -3403,6 +3508,7 @@ if (searchInput) {
         searchTimeout = setTimeout(() => {
             currentPage = 1;
             fetchProcesses();
+            if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
         }, 300);
     });
 
@@ -3414,6 +3520,13 @@ if (searchInput) {
             this.value = filteredValue;
             this.setSelectionRange(cursorPosition, cursorPosition);
         }, 0);
+    });
+
+    searchInput.addEventListener('blur', function () {
+        clearTimeout(searchTimeout);
+        currentPage = 1;
+        fetchProcesses();
+        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3430,6 +3543,7 @@ if (showInactiveCheckbox) {
         } else {
             fetchProcesses();
         }
+        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3442,6 +3556,7 @@ if (showOfficialCheckbox) {
         currentPage = 1;
         renderTable();
         renderPagination();
+        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3454,6 +3569,7 @@ if (showEInvoiceCheckbox) {
         currentPage = 1;
         renderTable();
         renderPagination();
+        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3466,6 +3582,7 @@ if (showBlockCheckbox) {
         currentPage = 1;
         renderTable();
         renderPagination();
+        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -3482,6 +3599,7 @@ if (showAllCheckbox) {
         } else {
             fetchProcesses();
         }
+        if (c168IsProcessListSpaEmbed()) c168PushProcessListFiltersToUrl();
     });
 }
 
@@ -6118,7 +6236,7 @@ function removeProfitSharingEntry(index) {
     renderSelectedProfitSharing();
 }
 
-document.addEventListener('DOMContentLoaded', function () {
+function runProcessListPageInit() {
     restoreSelectedCountriesFromStorage();
     // Add Account modal: payment alert toggle
     document.querySelectorAll('input[name="add_payment_alert"]').forEach(radio => {
@@ -6568,7 +6686,13 @@ document.addEventListener('DOMContentLoaded', function () {
         accountingInboxPost.addEventListener('click', () => postAccountingInboxToTransaction());
     }
     /* Accounting Due 弹窗：点击弹窗以外区域不关闭，仅通过 X 或 Cancel 关闭 */
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (document.body && document.body.classList.contains('process-list-spa-embed')) return;
+    runProcessListPageInit();
 });
+window.runProcessListPageInit = runProcessListPageInit;
 
 window.addEventListener('resize', function () {
     if (selectedPermission === 'Bank') {
@@ -6668,7 +6792,7 @@ async function loadPermissionButtons() {
             let savedPermission = localStorage.getItem(`selectedPermission_${currentCompanyCode}`);
             if (savedPermission === 'Gambling') savedPermission = 'Games';
             let urlCategoryOverride = null;
-            if (c168ProcessListIsSpaFrameDoc()) {
+            if (c168IsProcessListSpaEmbed() || c168ProcessListIsSpaFrameDoc()) {
                 const uc = new URLSearchParams(window.location.search).get('category');
                 if (uc && String(uc).toLowerCase() === 'bank') urlCategoryOverride = 'Bank';
                 if (uc && String(uc).toLowerCase() === 'games') urlCategoryOverride = 'Games';
@@ -6692,19 +6816,17 @@ async function loadPermissionButtons() {
     }
 }
 
-// 切换权限
-function switchPermission(permission) {
+// 切换权限（options.skipUrl：仅从地址栏同步时避免写回 URL）
+function switchPermission(permission, options) {
+    const skipUrl = options && options.skipUrl === true;
     const targetPage = getProcessListPageByPermission(permission);
-    // 使用 history.pushState 无刷新更新 URL（替代全页跳转，消除白屏卡顿）
-    // 注：currentProcessListPage 是 const 不会更新，必须从实时 URL 读取当前页名做比较
-    if (targetPage) {
+    if (targetPage && !skipUrl && !c168IsProcessListSpaEmbed()) {
         if (c168ProcessListIsSpaFrameDoc()) {
             try {
                 const _pUrl = new URL(window.location.href);
                 const cat = permission === 'Bank' ? 'Bank' : 'Games';
                 _pUrl.searchParams.set('category', cat);
                 history.pushState({ permission: permission, category: cat }, '', _pUrl.toString());
-                c168NotifyProcessListParentUrl(_pUrl);
             } catch (e) { /* ignore */ }
         } else {
             const _currentPageName = window.location.pathname.replace(/.*\//, '');
@@ -6803,6 +6925,10 @@ function switchPermission(permission) {
     // 重新加载数据
     currentPage = 1;
     fetchProcesses();
+
+    if (c168IsProcessListSpaEmbed() && !skipUrl) {
+        c168PushProcessListFiltersToUrl();
+    }
 }
 
 async function switchProcessListCompany(companyId) {
@@ -6823,7 +6949,7 @@ async function switchProcessListCompany(companyId) {
         // 即使 API 失败，也继续刷新页面（PHP 端会处理）
     }
 
-    if (c168ProcessListIsSpaFrameDoc()) {
+    if (c168IsProcessListSpaEmbed() || c168ProcessListIsSpaFrameDoc()) {
         const idNum = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
         window.PROCESSLIST_COMPANY_ID = idNum;
         window.PROCESSLIST_SELECTED_COMPANY_IDS_FOR_ADD = [idNum];
@@ -6833,8 +6959,8 @@ async function switchProcessListCompany(companyId) {
         try {
             const url = new URL(window.location.href);
             url.searchParams.set('company_id', String(companyId));
-            window.history.replaceState({}, '', url.toString());
-            c168NotifyProcessListParentUrl(url);
+            window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+            window.dispatchEvent(new Event('c168:process-list-url-replaced'));
         } catch (e) { /* ignore */ }
         try {
             await loadPermissionButtons();

@@ -1,16 +1,50 @@
+/* React `/processlist`：与 `account-list-spa-embed` 同理 */
+body.process-list-spa-embed .dShell__main .container {
+  padding: 1px 40px 20px 40px;
+}
+
 .plShell {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
 }
 
-.plShell__frame {
-  flex: 1;
-  width: 100%;
+body.process-list-spa-embed.process-page:not(.process-page--show-all):not(.process-page--bank-show-all)
+  .dShell__main
+  .plShell
+  .container {
+  height: 100% !important;
+  max-height: 100%;
   min-height: 0;
-  border: 0;
-  background: transparent;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+body.process-list-spa-embed.process-page:not(.process-page--show-all):not(.process-page--bank-show-all)
+  .dShell__main
+  .plShell
+  .content {
+  flex: 1;
+  min-height: 0;
+  height: auto !important;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+body.process-list-spa-embed.process-page.process-page--show-all .dShell__main .plShell .container,
+body.process-list-spa-embed.process-page.process-page--show-all .dShell__main .plShell .content,
+body.process-list-spa-embed.process-page.process-page--bank-show-all .dShell__main .plShell .container,
+body.process-list-spa-embed.process-page.process-page--bank-show-all .dShell__main .plShell .content {
+  height: auto !important;
+  max-height: none;
 }
 
 .plShell--loading,

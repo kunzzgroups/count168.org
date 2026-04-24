@@ -46,6 +46,20 @@ interface Window {
   fetchAccounts?: () => void | Promise<void>
   c168SyncAccountListFromLocation?: () => void
   c168PushAccountListFiltersToUrl?: () => void
+  PROCESSLIST_SHOW_INACTIVE?: boolean
+  PROCESSLIST_SHOW_ALL?: boolean
+  PROCESSLIST_SHOW_OFFICIAL?: boolean
+  PROCESSLIST_SHOW_E_INVOICE?: boolean
+  PROCESSLIST_SHOW_BLOCK?: boolean
+  PROCESSLIST_COMPANY_ID?: number | null
+  PROCESSLIST_COMPANY_CODE?: string
+  PROCESSLIST_SELECTED_COMPANY_IDS_FOR_ADD?: number[]
+  PROCESSLIST_COMPANY_CODE_BY_ID?: Record<string, string>
+  PROCESSLIST_PAGE_FILE?: string
+  __PROCESS_LIST_SPA_EMBED__?: boolean
+  runProcessListPageInit?: () => void
+  fetchProcesses?: () => void | Promise<void>
+  c168SyncProcessListFromLocation?: () => void
   DATACAPTURESUMMARY_COMPANY_ID?: number | null
   runDataCaptureSummaryPageInit?: () => void
   /** `get_processes_by_day` 的 JSON 结果写入自定义 Process 下拉 */
