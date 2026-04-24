@@ -58,6 +58,7 @@ interface Window {
   PROCESSLIST_PAGE_FILE?: string
   __PROCESS_LIST_SPA_EMBED__?: boolean
   runProcessListPageInit?: () => void
+  loadPermissionButtons?: () => Promise<void>
   fetchProcesses?: () => void | Promise<void>
   c168SyncProcessListFromLocation?: () => void
   DATACAPTURESUMMARY_COMPANY_ID?: number | null

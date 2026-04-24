@@ -248,7 +248,13 @@ export function ProcessListMain({ bootstrap }: Props) {
       }
     }
 
-    void pw.fetchProcesses?.()
+    // 与 switchProcessListCompany 一致：换公司后须 loadPermissionButtons（内会 switchPermission 或 fetchProcesses）
+    const reloadPerms = window.loadPermissionButtons
+    if (typeof reloadPerms === 'function') {
+      void reloadPerms()
+    } else {
+      void pw.fetchProcesses?.()
+    }
     return undefined
   }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId, w.companies])
 

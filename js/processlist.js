@@ -6661,15 +6661,16 @@ function runProcessListPageInit() {
     }
 
     initProcessListDateFilter();
-    console.log('DOM loaded, calling fetchProcesses...');
+    console.log('DOM loaded, calling loadPermissionButtons...');
     try {
-        loadPermissionButtons().then(() => {
+        loadPermissionButtons().catch(function (err) {
+            console.error('Error in loadPermissionButtons:', err);
             if (!window._isRedirecting) {
                 fetchProcesses();
             }
         });
     } catch (error) {
-        console.error('Error in fetchProcesses:', error);
+        console.error('Error in loadPermissionButtons:', error);
         showError('Error loading data: ' + error.message);
     }
 
@@ -6811,8 +6812,15 @@ async function loadPermissionButtons() {
                 if (uc && String(uc).toLowerCase() === 'bank') urlCategoryOverride = 'Bank';
                 if (uc && String(uc).toLowerCase() === 'games') urlCategoryOverride = 'Games';
             }
+            // 换公司后 selectedPermission 可能仍为上一家（如 Bank）；若当前公司无该类别，必须重选否则 API 会 Unauthorized permission category
+            if (selectedPermission && !permissions.includes(selectedPermission)) {
+                selectedPermission = null;
+            }
             if (forcedPermission && permissions.includes(forcedPermission)) {
                 switchPermission(forcedPermission);
+            } else if (urlCategoryOverride && !permissions.includes(urlCategoryOverride)) {
+                // 地址栏 category=Bank 但本公司仅有 Games 等：降到可用类别并写回 URL（switchPermission 内会 push）
+                switchPermission(permissions[0]);
             } else if (urlCategoryOverride && permissions.includes(urlCategoryOverride)) {
                 switchPermission(urlCategoryOverride);
             } else if (savedPermission && permissions.includes(savedPermission)) {
@@ -6820,6 +6828,10 @@ async function loadPermissionButtons() {
             } else if (permissions.length > 0 && !selectedPermission) {
                 // 如果没有保存的权限，默认选择第一个
                 switchPermission(permissions[0]);
+            } else if (permissions.length > 0 && selectedPermission && permissions.includes(selectedPermission)) {
+                // 类别未变但公司已换（或仅重载权限）：仍需拉数；避免与 switchPermission 重复请求
+                currentPage = 1;
+                fetchProcesses();
             }
         } else {
             if (permissionFilterEl) permissionFilterEl.style.display = 'none';
@@ -6829,6 +6841,7 @@ async function loadPermissionButtons() {
         if (permissionFilterEl) permissionFilterEl.style.display = 'none';
     }
 }
+window.loadPermissionButtons = loadPermissionButtons;
 
 // 切换权限（options.skipUrl：仅从地址栏同步时避免写回 URL）
 function switchPermission(permission, options) {
