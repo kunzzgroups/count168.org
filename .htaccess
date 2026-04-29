@@ -25,3 +25,25 @@ php_value memory_limit 256M
 # 3. 如果这些设置不生效，可能需要通过 php.ini 或服务器配置来设置
 # 4. 修改后可能需要等待几分钟让配置生效
 
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteBase /
+
+# Redirect legacy non-classic PHP entry pages to React routes
+RewriteRule ^dashboard\.php$ /dashboard [R=302,L]
+RewriteRule ^transaction\.php$ /transaction [R=302,L]
+RewriteRule ^processlist\.php$ /process [R=302,L]
+RewriteRule ^account-list\.php$ /accounts [R=302,L]
+RewriteRule ^datacapture\.php$ /datacapture [R=302,L]
+RewriteRule ^datacapturesummary\.php$ /datacapturesummary [R=302,L]
+RewriteRule ^owner_secondary_password\.php$ /owner-secondary-password [R=302,L]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^ index.html [L]
+</IfModule>
+

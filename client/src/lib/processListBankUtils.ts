@@ -1,4 +1,5 @@
 import type { BankProcessRow } from './processListTypes'
+import { formatMoney2, isValidMoneyInput } from './moneyFormat'
 
 export function normalizeBankIssueFlag(v: unknown): string {
   return String(v || '')
@@ -54,9 +55,11 @@ export function isSelectedDayStartResendLockedToday(
 
 /** 与 `bank_process_list.js` bankResendScheduleDayStartForbiddenMessage 一致（当前恒不拦截） */
 export function bankResendScheduleDayStartForbiddenMessage(
-  _chosenTrim: string,
-  _anchorRaw: string | null | undefined,
+  chosenTrim: string,
+  anchorRaw: string | null | undefined,
 ): string | null {
+  void chosenTrim
+  void anchorRaw
   return null
 }
 
@@ -291,8 +294,7 @@ export function serializeProfitSharingEntries(entries: ProfitSharingEntry[]): st
     const text = (e.accountText || '').trim()
     const raw = (e.amount || '').trim()
     if (!text || raw === '') continue
-    const num = parseFloat(raw)
-    const amount = Number.isFinite(num) ? num.toFixed(2) : raw
+    const amount = isValidMoneyInput(raw) ? formatMoney2(raw, { useGrouping: false }) : raw
     parts.push(`${text} - ${amount}`)
   }
   return parts.join(', ')

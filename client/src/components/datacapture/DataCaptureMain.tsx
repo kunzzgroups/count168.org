@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, useMemo } from 'react'
 import { apiUrl } from '../../lib/api'
+import { ensureMoneyDecimalDeps } from '../../lib/legacyMoneyDecimal'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import { DataCaptureDateProcessFields } from './DataCaptureDateProcessFields'
@@ -23,14 +24,17 @@ let datacaptureScriptPromise: Promise<void> | null = null
 
 function ensureDatacaptureScript(): Promise<void> {
   if (!datacaptureScriptPromise) {
-    datacaptureScriptPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = apiUrl('/js/datacapture.js')
-      s.async = true
-      s.onload = () => resolve()
-      s.onerror = () => reject(new Error('Failed to load datacapture.js'))
-      document.head.appendChild(s)
-    })
+    datacaptureScriptPromise = ensureMoneyDecimalDeps().then(
+      () =>
+        new Promise((resolve, reject) => {
+          const s = document.createElement('script')
+          s.src = apiUrl('/js/datacapture.js')
+          s.async = true
+          s.onload = () => resolve()
+          s.onerror = () => reject(new Error('Failed to load datacapture.js'))
+          document.head.appendChild(s)
+        }),
+    )
   }
   return datacaptureScriptPromise
 }

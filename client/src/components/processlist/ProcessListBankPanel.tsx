@@ -26,6 +26,7 @@ import {
   serializeProfitSharingEntries,
   ymdToday,
 } from '../../lib/processListBankUtils'
+import { formatMoney2, isValidMoneyInput, parseMoneyNumber } from '../../lib/moneyFormat'
 import type { ProcessListWorkspacePick } from './processListWorkspacePick'
 import { BankResendAccountingDueModal } from './BankResendAccountingDueModal'
 import { BankAccountCustomSelect } from './BankAccountCustomSelect'
@@ -278,21 +279,21 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
   }, [banksByCountryMap, bCountry, bBank])
 
   const grossProfit = useMemo(() => {
-    const cost = parseFloat(bCost) || 0
-    const price = parseFloat(bPrice) || 0
+    const cost = parseMoneyNumber(bCost)
+    const price = parseMoneyNumber(bPrice)
     return price - cost
   }, [bCost, bPrice])
 
   const profitSharingSum = useMemo(
     () =>
       profitSharingEntries.reduce((s, e) => {
-        const n = parseFloat(e.amount)
+        const n = parseMoneyNumber(e.amount)
         return s + (Number.isFinite(n) ? n : 0)
       }, 0),
     [profitSharingEntries],
   )
 
-  const displayedNetProfit = Math.max(0, grossProfit - profitSharingSum).toFixed(2)
+  const displayedNetProfit = formatMoney2(Math.max(0, grossProfit - profitSharingSum), { useGrouping: false })
 
   useEffect(() => {
     const opts = banksByCountryMap[bCountry.trim()] || []
@@ -464,8 +465,8 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
     fd.set('remark', bRemark)
     if (bCost !== '') fd.set('cost', bCost)
     if (bPrice !== '') fd.set('price', bPrice)
-    const gross = (parseFloat(bPrice) || 0) - (parseFloat(bCost) || 0)
-    fd.set('profit', gross.toFixed(2))
+    const gross = parseMoneyNumber(bPrice) - parseMoneyNumber(bCost)
+    fd.set('profit', formatMoney2(gross, { useGrouping: false }))
     fd.set('profit_sharing', serializeProfitSharingEntries(profitSharingEntries))
     if (bDayStart) fd.set('day_start', bDayStart)
     if (bDayEnd) fd.set('day_end', bDayEnd)
@@ -496,8 +497,8 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
       const fd = new FormData()
       fd.set('permission', 'Bank')
       fd.set('id', String(editBankId))
-      const gross = (parseFloat(bPrice) || 0) - (parseFloat(bCost) || 0)
-      fd.set('profit', gross.toFixed(2))
+      const gross = parseMoneyNumber(bPrice) - parseMoneyNumber(bCost)
+      fd.set('profit', formatMoney2(gross, { useGrouping: false }))
       fd.set('profit_sharing', serializeProfitSharingEntries(profitSharingEntries))
       fd.set('contract', bContract)
       if (bInsurance !== '') fd.set('insurance', bInsurance)
@@ -1325,8 +1326,9 @@ export function ProcessListBankPanel({ companyId, onNotice, workspace }: Props) 
                             </div>
                           ) : (
                             profitSharingEntries.map((entry, index) => {
-                              const num = parseFloat(entry.amount)
-                              const displayAmount = Number.isFinite(num) ? num.toFixed(2) : entry.amount
+                              const displayAmount = isValidMoneyInput(entry.amount)
+                                ? formatMoney2(entry.amount, { useGrouping: false })
+                                : entry.amount
                               const text = `${entry.accountText} - ${displayAmount}`
                               return (
                                 <div key={`${text}_${index}`} className="selected-country-modal-item">
