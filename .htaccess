@@ -31,6 +31,15 @@ DirectoryIndex index.html index.php
 RewriteEngine On
 RewriteBase /
 
+# Redirect legacy non-classic PHP entry pages to React routes
+RewriteRule ^dashboard\.php$ /dashboard [R=302,L]
+RewriteRule ^transaction\.php$ /transaction [R=302,L]
+RewriteRule ^processlist\.php$ /process [R=302,L]
+RewriteRule ^account-list\.php$ /accounts [R=302,L]
+RewriteRule ^datacapture\.php$ /datacapture [R=302,L]
+RewriteRule ^datacapturesummary\.php$ /datacapturesummary [R=302,L]
+RewriteRule ^owner_secondary_password\.php$ /owner-secondary-password [R=302,L]
+
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
