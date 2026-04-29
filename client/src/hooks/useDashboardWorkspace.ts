@@ -25,7 +25,7 @@ import {
   QUICK_RANGE_LABEL,
   computeQuickDateRange,
 } from '../lib/quickDateRange'
-import { apiFetch, apiUrl } from '../lib/api'
+import { apiFetch } from '../lib/api'
 import {
   fetchOwnerCompaniesList,
   updateSessionCompany,
@@ -502,7 +502,7 @@ export function useDashboardWorkspace(bootstrap: DashboardBootstrapData) {
       } catch {
         /* ignore */
       }
-      void apiFetch(apiUrl('/api/transactions/user_currency_order_api.php'), {
+      void apiFetch('/api/transactions/user_currency_order_api.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order: uniq }),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { apiUrl } from '../../lib/api'
+import { ensureMoneyDecimalDeps } from '../../lib/legacyMoneyDecimal'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/accountCSS.css'
@@ -13,14 +14,17 @@ let accountListScriptPromise: Promise<void> | null = null
 
 function ensureAccountListScript(): Promise<void> {
   if (!accountListScriptPromise) {
-    accountListScriptPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = apiUrl('/js/account-list.js')
-      s.async = true
-      s.onload = () => resolve()
-      s.onerror = () => reject(new Error('Failed to load account-list.js'))
-      document.head.appendChild(s)
-    })
+    accountListScriptPromise = ensureMoneyDecimalDeps().then(
+      () =>
+        new Promise((resolve, reject) => {
+          const s = document.createElement('script')
+          s.src = apiUrl('/js/account-list.js')
+          s.async = true
+          s.onload = () => resolve()
+          s.onerror = () => reject(new Error('Failed to load account-list.js'))
+          document.head.appendChild(s)
+        }),
+    )
   }
   return accountListScriptPromise
 }

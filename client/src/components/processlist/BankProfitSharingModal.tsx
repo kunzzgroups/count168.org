@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ProfitSharingEntry } from '../../lib/processListBankUtils'
 import { formatBankAccountDisplay } from '../../lib/processListBankUtils'
+import { formatMoney2, isValidMoneyInput } from '../../lib/moneyFormat'
 import { BankAccountCustomSelect, type BankAccountPick } from './BankAccountCustomSelect'
 
 type Row = { key: string; accountId: number | ''; amount: string }
@@ -44,8 +45,9 @@ export function BankProfitSharingModal({ open, onClose, accounts, onSubmit }: Pr
       const accountText = acc
         ? formatBankAccountDisplay(acc.account_id, acc.name, acc.id)
         : String(row.accountId)
-      const num = parseFloat(String(row.amount).trim())
-      const amount = Number.isFinite(num) ? num.toFixed(2) : String(row.amount).trim()
+      const amount = isValidMoneyInput(row.amount)
+        ? formatMoney2(row.amount, { useGrouping: false })
+        : String(row.amount).trim()
       out.push({ accountId: Number(row.accountId), accountText, amount })
     }
     if (out.length === 0) return

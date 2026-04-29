@@ -15,8 +15,10 @@ import {
   fetchTxCategories,
   fetchTxPaymentHistory,
   fetchTxSearch,
+  formatTxFixed2,
   formatTxNumber,
   getRoleClass,
+  parseTxNumber,
   postContraApprove,
   postContraReject,
   resolveSubmitAccountIds,
@@ -960,8 +962,8 @@ export function TransactionMain({ bootstrap }: Props) {
       const label = acc?.display_text || code
       const slot: AccountSlot = { id, label, code }
       const cur = String(row.currency || '').trim().toUpperCase()
-      const rawBal = parseFloat(String(row.balance).replace(/,/g, ''))
-      const absBal = Number.isFinite(rawBal) ? Math.abs(rawBal).toFixed(2) : ''
+      const rawBal = parseTxNumber(row.balance)
+      const absBal = Number.isFinite(rawBal) ? formatTxFixed2(Math.abs(rawBal)) : ''
       if (isLeftTable) {
         setRateAcctTo(slot)
         setRateXferFrom(slot)
@@ -986,7 +988,7 @@ export function TransactionMain({ bootstrap }: Props) {
 
     let treatAsLeft = isLeftTable
     if (txType === 'PROFIT') {
-      const bal = parseFloat(String(row.balance).replace(/,/g, ''))
+      const bal = parseTxNumber(row.balance)
       if (!Number.isNaN(bal)) treatAsLeft = bal >= 0
     }
 
@@ -995,8 +997,8 @@ export function TransactionMain({ bootstrap }: Props) {
     } else {
       setFromAccount({ id, label, code })
     }
-    const b = parseFloat(String(row.balance).replace(/,/g, ''))
-    if (!Number.isNaN(b)) setAmount(Math.abs(b).toFixed(2))
+    const b = parseTxNumber(row.balance)
+    if (!Number.isNaN(b)) setAmount(formatTxFixed2(Math.abs(b)))
     if (cur) setFormCurrency(cur)
   }
 
@@ -1011,13 +1013,13 @@ export function TransactionMain({ bootstrap }: Props) {
 
   const rateParsed = useMemo(() => parseRateExpression(rateExchRaw), [rateExchRaw])
   const rateMmAmtNum = useMemo(() => {
-    const a = parseFloat(String(rateFromAmt).replace(/,/g, '')) || 0
-    const m = parseFloat(String(rateMMRate).replace(/,/g, '')) || 0
+    const a = parseTxNumber(rateFromAmt)
+    const m = parseTxNumber(rateMMRate)
     if (a > 0 && m > 0) return a * m
     return 0
   }, [rateFromAmt, rateMMRate])
   const rateToComputedNum = useMemo(() => {
-    const a = parseFloat(String(rateFromAmt).replace(/,/g, '')) || 0
+    const a = parseTxNumber(rateFromAmt)
     const er = rateParsed.valid ? rateParsed.value : 0
     if (a > 0 && er > 0) return a * er - rateMmAmtNum
     return NaN
@@ -1026,9 +1028,9 @@ export function TransactionMain({ bootstrap }: Props) {
     rateToAmtOverride !== null && rateToAmtOverride !== ''
       ? rateToAmtOverride
       : Number.isFinite(rateToComputedNum) && rateToComputedNum > 0
-        ? rateToComputedNum.toFixed(2)
+        ? formatTxFixed2(rateToComputedNum)
         : ''
-  const rateMmDisplayStr = rateMmAmtNum > 0 ? rateMmAmtNum.toFixed(2) : ''
+  const rateMmDisplayStr = rateMmAmtNum > 0 ? formatTxFixed2(rateMmAmtNum) : ''
 
   const reverseRatePrimary = () => {
     const a = rateAcctTo
@@ -1038,7 +1040,7 @@ export function TransactionMain({ bootstrap }: Props) {
       rateToAmtOverride !== null && rateToAmtOverride !== ''
         ? rateToAmtOverride
         : Number.isFinite(rateToComputedNum) && rateToComputedNum > 0
-          ? rateToComputedNum.toFixed(2)
+          ? formatTxFixed2(rateToComputedNum)
           : ''
     setRateToAmtOverride(rateFromAmt || null)
     setRateFromAmt(tv)
@@ -1132,8 +1134,8 @@ export function TransactionMain({ bootstrap }: Props) {
         showTxNotification('Please select both currencies', 'err')
         return
       }
-      const fromNum = parseFloat(String(rateFromAmt).replace(/,/g, '')) || 0
-      const toNum = parseFloat(String(rateToDisplayStr).replace(/,/g, '')) || 0
+      const fromNum = parseTxNumber(rateFromAmt)
+      const toNum = parseTxNumber(rateToDisplayStr)
       if (fromNum <= 0 || toNum <= 0) {
         showTxNotification('Please enter valid currency amounts', 'err')
         return
@@ -1176,7 +1178,7 @@ export function TransactionMain({ bootstrap }: Props) {
           return
         }
         const mmId = rateMiddleAcct?.id
-        const mmRateN = parseFloat(String(rateMMRate).replace(/,/g, '')) || 0
+        const mmRateN = parseTxNumber(rateMMRate)
         let middlemanAmount = rateMmAmtNum
         if (mmId || rateMMRate.trim()) {
           if (!mmId) {
@@ -1195,12 +1197,12 @@ export function TransactionMain({ bootstrap }: Props) {
         const originalTransferFromAmount = fromNum * rateParsed.value
         let middlemanDescription = ''
         if (middlemanAmount > 0) {
-          middlemanDescription = `Rate charge (x${rateMMRate}) from ${rdf} ${fromNum.toFixed(2)}`
+          middlemanDescription = `Rate charge (x${rateMMRate}) from ${rdf} ${formatTxFixed2(fromNum)}`
         }
         secondLeg = {
-          rate_transfer_from_amount: originalTransferFromAmount.toFixed(2),
+          rate_transfer_from_amount: formatTxFixed2(originalTransferFromAmount),
           rate_transfer_from_description: xferFromDesc,
-          rate_transfer_to_amount: transferAmountValue.toFixed(2),
+          rate_transfer_to_amount: formatTxFixed2(transferAmountValue),
           rate_transfer_to_description: xferToDesc,
           rate_transfer_from_currency: rdt,
           rate_transfer_to_currency: rdt,
@@ -1208,7 +1210,7 @@ export function TransactionMain({ bootstrap }: Props) {
             mmId && middlemanAmount > 0
               ? {
                   rate_middleman_currency: rdt,
-                  rate_middleman_amount: middlemanAmount.toFixed(2),
+                  rate_middleman_amount: formatTxFixed2(middlemanAmount),
                   rate_middleman_description: middlemanDescription,
                 }
               : null,
@@ -1284,7 +1286,7 @@ export function TransactionMain({ bootstrap }: Props) {
       return
     }
     const amtNorm = amount.trim().replace(/,/g, '')
-    const amtNum = parseFloat(amtNorm)
+    const amtNum = parseTxNumber(amtNorm)
     if (!Number.isFinite(amtNum) || amtNum < 0) {
       showTxNotification('Please enter a valid amount (>= 0)', 'err')
       return

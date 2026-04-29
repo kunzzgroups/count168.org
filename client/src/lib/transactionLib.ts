@@ -1,5 +1,6 @@
-import { apiFetch, apiUrl } from './api'
+import { apiFetch } from './api'
 import type { ApiResult } from '../types/api'
+import { formatMoney2, parseMoneyNumber } from './moneyFormat'
 
 export type TxSearchRow = {
   account_db_id?: string | number
@@ -277,15 +278,16 @@ export function parseRateExpression(rawValue: unknown): {
 
 /** 与 `js/transaction.js` `formatNumber` 一致：千分位 + 截断到 2 位小数（非四舍五入） */
 export function formatTxNumber(n: number | string | undefined): string {
-  const cleaned =
-    typeof n === 'string' ? n.replace(/,/g, '').trim() : String(n ?? '')
-  const number = parseFloat(cleaned)
-  if (Number.isNaN(number)) return '0.00'
-  const truncated = Math.trunc(number * 100) / 100
-  return truncated.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
+  return formatMoney2(n)
+}
+
+export function parseTxNumber(n: number | string | undefined): number {
+  return parseMoneyNumber(n)
+}
+
+/** 与 legacy `MoneyDecimal.formatFixedHalfUp(value, 2)` 对齐（不加千分位）。 */
+export function formatTxFixed2(n: number | string | undefined): string {
+  return formatMoney2(n, { useGrouping: false })
 }
 
 export function getRoleClass(role: string): string {
@@ -340,10 +342,10 @@ export function sortTxRowsByRole<T extends TxSearchRow>(data: T[]): T[] {
 export function calculateTxTotals(rows: TxSearchRow[]): TxTotals {
   const zero: TxTotals = { bf: 0, win_loss: 0, cr_dr: 0, balance: 0 }
   return rows.reduce<TxTotals>((totals, row) => {
-    let bf = parseFloat(String(row.bf)) || 0
+    const bf = parseFloat(String(row.bf)) || 0
     let winLoss = parseFloat(String(row.win_loss)) || 0
-    let crDr = parseFloat(String(row.cr_dr)) || 0
-    let balance = parseFloat(String(row.balance)) || 0
+    const crDr = parseFloat(String(row.cr_dr)) || 0
+    const balance = parseFloat(String(row.balance)) || 0
     const isRateMiddleman =
       row.is_rate_middleman === 1 || row.is_rate_middleman === true
     if (isRateMiddleman) {
@@ -460,10 +462,9 @@ export async function fetchTxSearch(params: {
   if (params.currencyCsv) q.set('currency', params.currencyCsv)
   q.set('_t', String(Date.now()))
   try {
-    const res = await apiFetch(
-      apiUrl(`/api/transactions/search_api.php?${q.toString()}`),
-      { signal: params.signal },
-    )
+    const res = await apiFetch(`/api/transactions/search_api.php?${q.toString()}`, {
+      signal: params.signal,
+    })
     const json = await res.json()
     if (json.success && json.data) {
       return { ok: true, data: json.data as TxSearchPayload }
@@ -513,14 +514,11 @@ export async function fetchTxPaymentHistory(params: {
   q.set('company_id', String(params.companyId))
   q.set('_t', String(Date.now()))
   try {
-    const res = await apiFetch(
-      apiUrl(`/api/transactions/history_api.php?${q.toString()}`),
-      {
-        signal: params.signal,
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache' },
-      },
-    )
+    const res = await apiFetch(`/api/transactions/history_api.php?${q.toString()}`, {
+      signal: params.signal,
+      cache: 'no-store',
+      headers: { 'Cache-Control': 'no-cache' },
+    })
     const json = await res.json()
     if (json.success && json.data) {
       return { ok: true, data: json.data as TxPaymentHistoryPayload }
@@ -541,9 +539,7 @@ export async function fetchTxAccounts(
   companyId: number,
 ): Promise<TxAccountOption[]> {
   const res = await apiFetch(
-    apiUrl(
-      `/api/transactions/get_accounts_api.php?company_id=${encodeURIComponent(String(companyId))}`,
-    ),
+    `/api/transactions/get_accounts_api.php?company_id=${encodeURIComponent(String(companyId))}`,
   )
   const json: ApiResult<TxAccountOption[]> = await res.json()
   if (json.success && Array.isArray(json.data)) return json.data
@@ -576,7 +572,7 @@ export async function submitStandardTransaction(body: {
       ? crypto.randomUUID()
       : `tx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   fd.append('client_request_id', rid)
-  const res = await apiFetch(apiUrl('/api/transactions/submit_api.php'), {
+  const res = await apiFetch('/api/transactions/submit_api.php', {
     method: 'POST',
     body: fd,
   })
@@ -697,7 +693,7 @@ export async function submitRateTransaction(body: {
       : `tx_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
   fd.append('client_request_id', rid)
 
-  const res = await apiFetch(apiUrl('/api/transactions/submit_api.php'), {
+  const res = await apiFetch('/api/transactions/submit_api.php', {
     method: 'POST',
     body: fd,
   })
@@ -712,9 +708,7 @@ export async function fetchContraInbox(
   companyId: number,
 ): Promise<ContraInboxRow[]> {
   const res = await apiFetch(
-    apiUrl(
-      `/api/transactions/contra_inbox_api.php?company_id=${encodeURIComponent(String(companyId))}`,
-    ),
+    `/api/transactions/contra_inbox_api.php?company_id=${encodeURIComponent(String(companyId))}`,
   )
   const json: ApiResult<ContraInboxRow[]> = await res.json()
   if (json.success && Array.isArray(json.data)) return json.data
@@ -728,7 +722,7 @@ export async function postContraApprove(
   const fd = new FormData()
   fd.append('company_id', String(companyId))
   fd.append('transaction_id', String(transactionId))
-  const res = await apiFetch(apiUrl('/api/transactions/contra_approve_api.php'), {
+  const res = await apiFetch('/api/transactions/contra_approve_api.php', {
     method: 'POST',
     body: fd,
   })
@@ -743,7 +737,7 @@ export async function postContraReject(
   const fd = new FormData()
   fd.append('company_id', String(companyId))
   fd.append('transaction_id', String(transactionId))
-  const res = await apiFetch(apiUrl('/api/transactions/contra_reject_api.php'), {
+  const res = await apiFetch('/api/transactions/contra_reject_api.php', {
     method: 'POST',
     body: fd,
   })

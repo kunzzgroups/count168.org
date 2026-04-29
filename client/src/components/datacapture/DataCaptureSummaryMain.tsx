@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect } from 'react'
 import { apiUrl } from '../../lib/api'
+import { ensureMoneyDecimalDeps } from '../../lib/legacyMoneyDecimal'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/accountCSS.css'
 import '../../../../css/datacapturesummary.css'
@@ -14,14 +15,17 @@ let summaryScriptPromise: Promise<void> | null = null
 
 function ensureDatacaptureSummaryScript(): Promise<void> {
   if (!summaryScriptPromise) {
-    summaryScriptPromise = new Promise((resolve, reject) => {
-      const s = document.createElement('script')
-      s.src = apiUrl('/js/datacapturesummary.js')
-      s.async = true
-      s.onload = () => resolve()
-      s.onerror = () => reject(new Error('Failed to load datacapturesummary.js'))
-      document.head.appendChild(s)
-    })
+    summaryScriptPromise = ensureMoneyDecimalDeps().then(
+      () =>
+        new Promise((resolve, reject) => {
+          const s = document.createElement('script')
+          s.src = apiUrl('/js/datacapturesummary.js')
+          s.async = true
+          s.onload = () => resolve()
+          s.onerror = () => reject(new Error('Failed to load datacapturesummary.js'))
+          document.head.appendChild(s)
+        }),
+    )
   }
   return summaryScriptPromise
 }
