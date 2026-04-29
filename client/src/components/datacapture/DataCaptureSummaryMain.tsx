@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect } from 'react'
-import { apiUrl } from '../../lib/api'
-import { ensureMoneyDecimalDeps } from '../../lib/legacyMoneyDecimal'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { apiFetch } from '../../lib/api'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/accountCSS.css'
 import '../../../../css/datacapturesummary.css'
@@ -11,46 +11,71 @@ type Props = {
   bootstrap: DashboardBootstrapData
 }
 
-let summaryScriptPromise: Promise<void> | null = null
-
-function ensureDatacaptureSummaryScript(): Promise<void> {
-  if (!summaryScriptPromise) {
-    summaryScriptPromise = ensureMoneyDecimalDeps().then(
-      () =>
-        new Promise((resolve, reject) => {
-          const s = document.createElement('script')
-          s.src = apiUrl('/js/datacapturesummary.js')
-          s.async = true
-          s.onload = () => resolve()
-          s.onerror = () => reject(new Error('Failed to load datacapturesummary.js'))
-          document.head.appendChild(s)
-        }),
-    )
-  }
-  return summaryScriptPromise
+type ProcessData = {
+  date?: string
+  process?: string | number
+  process_name?: string
+  processName?: string
+  description?: string
+  currency?: string
+  remark?: string
 }
 
-function legacySummary(name: string, ...args: unknown[]) {
-  const w = window as unknown as Record<string, unknown>
-  const fn = w[name]
-  if (typeof fn === 'function') {
-    ;(fn as (...a: unknown[]) => void)(...args)
+type AccountListApiRow = {
+  id: number
+  account_id: string
+}
+
+type Cell = {
+  type?: string
+  value?: string | number
+}
+
+type CapturedTableData = {
+  headers?: Cell[]
+  rows?: Cell[][]
+}
+
+function parseJsonStorage<T>(key: string): T | null {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    return JSON.parse(raw) as T
+  } catch {
+    return null
   }
 }
 
-const ALERT_DAY_OPTIONS = Array.from({ length: 31 }, (_, i) => {
-  const n = i + 1
-  return (
-    <option key={n} value={String(n)}>
-      {n} Days
-    </option>
-  )
-})
+function cellText(cell: Cell | undefined): string {
+  if (!cell) return ''
+  return String(cell.value ?? '').trim()
+}
+
+function normalizeHeaderName(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function findHeaderIndex(headers: string[], aliases: string[]): number {
+  const norm = headers.map((h) => normalizeHeaderName(h))
+  for (const a of aliases) {
+    const idx = norm.findIndex((h) => h === normalizeHeaderName(a))
+    if (idx >= 0) return idx
+  }
+  return -1
+}
 
 /**
- * React `/datacapturesummary`：DOM 与 `datacapturesummary_classic.php` 对齐，由 `js/datacapturesummary.js` 驱动。
+ * React `/datacapturesummary` 第一阶段：
+ * - 由 React 直接读取 Data Capture 写入的 localStorage 快照并展示 Summary
+ * - 暂不接入复杂公式编辑器与批量提交（下一阶段再迁移）
  */
 export function DataCaptureSummaryMain({ bootstrap }: Props) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [processData, setProcessData] = useState<ProcessData | null>(null)
+  const [tableData, setTableData] = useState<CapturedTableData | null>(null)
+  const [notice, setNotice] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
   useLayoutEffect(() => {
     document.body.classList.add('datacapture-summary-spa-embed', 'datacapture-page')
     return () => {
@@ -66,101 +91,220 @@ export function DataCaptureSummaryMain({ bootstrap }: Props) {
   }, [bootstrap.companyId])
 
   useEffect(() => {
-    window.__C168_API_BASE__ = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
-    window.__C168_SPA_LINK_BASE__ = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
-    return () => {
-      delete window.__C168_API_BASE__
-      delete window.__C168_SPA_LINK_BASE__
-    }
+    setProcessData(parseJsonStorage<ProcessData>('capturedProcessData'))
+    setTableData(parseJsonStorage<CapturedTableData>('capturedTableData'))
   }, [])
 
   useEffect(() => {
-    let alive = true
-    void ensureDatacaptureSummaryScript()
-      .then(() => {
-        if (!alive) return
-        window.runDataCaptureSummaryPageInit?.()
-      })
-      .catch((err) => console.error(err))
-    return () => {
-      alive = false
+    if (searchParams.get('success') === '1') {
+      setNotice({ kind: 'ok', msg: 'Data captured and summary generated successfully.' })
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          p.delete('success')
+          return p
+        },
+        { replace: true },
+      )
+    } else if (searchParams.get('error') === '1') {
+      setNotice({ kind: 'err', msg: 'Failed to generate summary. Please try again.' })
+      setSearchParams(
+        (prev) => {
+          const p = new URLSearchParams(prev)
+          p.delete('error')
+          return p
+        },
+        { replace: true },
+      )
     }
-  }, [])
+  }, [searchParams, setSearchParams])
+
+  const displayRows = useMemo(() => {
+    const rows = tableData?.rows
+    if (!Array.isArray(rows)) return []
+    return rows.filter((r) => Array.isArray(r) && r.some((c) => cellText(c) !== ''))
+  }, [tableData])
+
+  const displayHeaders = useMemo(() => {
+    const h = tableData?.headers
+    if (!Array.isArray(h) || h.length === 0) return []
+    return h.map((x) => cellText(x))
+  }, [tableData])
+
+  const processLabel =
+    processData?.process_name || processData?.processName || String(processData?.process || '-')
+
+  const canTrySubmitBeta = displayRows.length > 0 && displayHeaders.length > 0
+
+  const submitBeta = async () => {
+    if (!processData?.date || !processData?.process) {
+      setNotice({
+        kind: 'err',
+        msg: 'Missing process metadata. Please go back to Data Capture and regenerate summary.',
+      })
+      return
+    }
+    const idxIdProduct = findHeaderIndex(displayHeaders, ['Id Product', 'ID Product'])
+    const idxAccount = findHeaderIndex(displayHeaders, ['Account'])
+    const idxCurrency = findHeaderIndex(displayHeaders, ['Currency'])
+    const idxFormula = findHeaderIndex(displayHeaders, ['Formula'])
+    const idxProcessed = findHeaderIndex(displayHeaders, [
+      'Processed Amount',
+      'Amount',
+      'Final Amount',
+    ])
+
+    if (idxIdProduct < 0 || idxAccount < 0 || idxCurrency < 0 || idxProcessed < 0) {
+      setNotice({
+        kind: 'err',
+        msg: 'Cannot detect required columns (Id Product / Account / Currency / Processed Amount). Please use Open Classic.',
+      })
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const companyId = bootstrap.companyId
+      const accountRes = await apiFetch(
+        `/api/accounts/accountlistapi.php?company_id=${encodeURIComponent(String(companyId))}&showAll=1`,
+      )
+      const accountJson = (await accountRes.json()) as {
+        success?: boolean
+        data?: { accounts?: AccountListApiRow[] }
+      }
+      const accounts = Array.isArray(accountJson.data?.accounts) ? accountJson.data!.accounts : []
+      const byAccountId = new Map(
+        accounts.map((a) => [String(a.account_id || '').trim().toUpperCase(), Number(a.id)]),
+      )
+
+      const summaryRows: Array<Record<string, unknown>> = []
+      for (const r of displayRows) {
+        const idProduct = cellText(r[idxIdProduct])
+        const accountText = cellText(r[idxAccount])
+        const currencyText = cellText(r[idxCurrency]).replace(/[()]/g, '').trim()
+        const processedRaw = cellText(r[idxProcessed]).replace(/,/g, '')
+        const formulaText = idxFormula >= 0 ? cellText(r[idxFormula]) : ''
+        if (!idProduct || !accountText) continue
+        const accountKey = accountText.split(/\s+/)[0]?.trim().toUpperCase() || accountText.toUpperCase()
+        const accountId = byAccountId.get(accountKey)
+        if (!accountId) continue
+        const processedNum = parseFloat(processedRaw)
+        if (!Number.isFinite(processedNum)) continue
+        summaryRows.push({
+          idProductMain: idProduct,
+          idProduct: idProduct,
+          productType: 'main',
+          accountId,
+          account: accountText,
+          accountDisplay: accountText,
+          currency: currencyText,
+          currencyDisplay: currencyText,
+          formula: formulaText,
+          processedAmount: processedNum,
+        })
+      }
+
+      if (summaryRows.length === 0) {
+        setNotice({
+          kind: 'err',
+          msg: 'No valid rows could be mapped for submit. Please use Open Classic.',
+        })
+        return
+      }
+
+      const submitBody = {
+        captureDate: processData.date,
+        processId: processData.process,
+        processName: processData.processName || processData.process_name || '',
+        currencyId: processData.currency || '',
+        currencyName: processData.currency || '',
+        remark: processData.remark || '',
+        summaryRows,
+      }
+      const url = `/api/datacapture_summary/summary_api.php?action=submit&company_id=${encodeURIComponent(String(companyId))}`
+      const res = await apiFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(submitBody),
+      })
+      const json = (await res.json()) as { success?: boolean; message?: string; error?: string }
+      if (!json.success) {
+        throw new Error(String(json.message || json.error || 'Submit failed'))
+      }
+      setNotice({ kind: 'ok', msg: 'Submitted successfully (beta submit).' })
+    } catch (e) {
+      setNotice({
+        kind: 'err',
+        msg: e instanceof Error ? e.message : 'Submit failed, please use Open Classic.',
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   return (
     <div className="dcShell">
       <div className="container">
         <h1>Data Capture Summary</h1>
+        {notice && (
+          <p className={notice.kind === 'ok' ? 'tShell__searchOk' : 'tShell__searchErr'}>
+            {notice.msg}
+          </p>
+        )}
 
-        <div id="loadingState" className="loading-container">
-          <div className="loading-spinner" />
-          <p>Loading data...</p>
-        </div>
-
-        <div className="summary-action-buttons" id="actionButtons" style={{ display: 'none' }}>
-          <div style={{ flex: 1 }} />
-          <div className="batch-controls-group">
-            <label htmlFor="rateInput" className="batch-label">
-              Rate
-            </label>
-            <input type="text" id="rateInput" className="batch-input" placeholder="e.g. *3 or /3" />
-            <button
-              type="button"
-              className="btn-update-all"
-              id="rateSelectAllBtn"
-              onClick={(e) => legacySummary('toggleAllRate', e.currentTarget)}
-            >
-              Select All
-            </button>
-            <button type="button" className="btn-update-all" id="topSubmitBtn" onClick={() => legacySummary('submitRateValues')}>
-              Submit
-            </button>
-          </div>
-          <div style={{ flex: 1 }} />
+        <div className="summary-action-buttons" id="actionButtons" style={{ display: 'flex' }}>
           <button
             type="button"
             className="summary-btn summary-btn-delete"
-            id="summaryDeleteSelectedBtn"
-            onClick={() => legacySummary('deleteSelectedRows')}
-            title="Delete selected rows"
-            disabled
+            onClick={() => void submitBeta()}
+            disabled={!canTrySubmitBeta || submitting}
+            title="React beta submit"
           >
-            Delete
+            {submitting ? 'Submitting...' : 'Submit (Beta)'}
+          </button>
+          <button
+            type="button"
+            className="summary-btn summary-btn-cancel"
+            onClick={() => {
+              window.location.href = '/datacapture'
+            }}
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            className="summary-btn summary-btn-delete"
+            onClick={() => {
+              window.location.href = '/datacapturesummary_classic.php'
+            }}
+            title="Open classic summary for advanced edit/submit"
+          >
+            Open Classic
           </button>
         </div>
 
-        <div className="summary-table-container" id="summaryTableContainer" style={{ display: 'none' }}>
-          <div className="process-info-container" id="processInfoContainer" style={{ display: 'none' }}>
+        <div className="summary-table-container" id="summaryTableContainer" style={{ display: 'block' }}>
+          <div className="process-info-container" id="processInfoContainer" style={{ display: 'block' }}>
             <div className="process-info-row">
               <div className="process-info-item">
                 <span className="process-info-label">Date:</span>
-                <span className="process-info-value" id="processInfoDate">
-                  -
-                </span>
+                <span className="process-info-value">{processData?.date || '-'}</span>
               </div>
               <div className="process-info-item">
                 <span className="process-info-label">Process:</span>
-                <span className="process-info-value" id="processInfoProcess">
-                  -
-                </span>
+                <span className="process-info-value">{processLabel}</span>
               </div>
               <div className="process-info-item">
                 <span className="process-info-label">Description:</span>
-                <span className="process-info-value" id="processInfoDescription">
-                  -
-                </span>
+                <span className="process-info-value">{processData?.description || '-'}</span>
               </div>
               <div className="process-info-item">
                 <span className="process-info-label">Currency:</span>
-                <span className="process-info-value" id="processInfoCurrency">
-                  -
-                </span>
+                <span className="process-info-value">{processData?.currency || '-'}</span>
               </div>
               <div className="process-info-item">
                 <span className="process-info-label">Remark:</span>
-                <span className="process-info-value" id="processInfoRemark">
-                  -
-                </span>
+                <span className="process-info-value">{processData?.remark || '-'}</span>
               </div>
             </div>
           </div>
@@ -168,199 +312,34 @@ export function DataCaptureSummaryMain({ bootstrap }: Props) {
             <table className="summary-table" id="summaryTable">
               <thead>
                 <tr>
-                  <th className="id-product-header">Id Product</th>
-                  <th>Account</th>
-                  <th />
-                  <th>Currency</th>
-                  <th>Formula</th>
-                  <th>Source</th>
-                  <th>Rate</th>
-                  <th>Rate Value</th>
-                  <th>Processed Amount</th>
-                  <th>Skip</th>
-                  <th>Delete</th>
+                  {(displayHeaders.length > 0 ? displayHeaders : ['Data']).map((h, idx) => (
+                    <th key={`${h}_${idx}`}>{h || `Column ${idx + 1}`}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody id="summaryTableBody" />
-              <tfoot>
-                <tr id="summaryTotalRow">
-                  <td colSpan={8} className="summary-total-label" />
-                  <td id="summaryTotalAmount">0.00</td>
-                  <td />
-                  <td />
-                </tr>
-              </tfoot>
+              <tbody id="summaryTableBody">
+                {displayRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={Math.max(displayHeaders.length, 1)}>No captured summary data found.</td>
+                  </tr>
+                ) : (
+                  displayRows.map((r, rowIdx) => (
+                    <tr key={`r_${rowIdx}`}>
+                      {r.map((c, colIdx) => (
+                        <td key={`c_${rowIdx}_${colIdx}`}>{cellText(c)}</td>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
             </table>
           </div>
         </div>
-
-        <div className="summary-submit-container" id="summarySubmitContainer" style={{ display: 'none' }}>
-          <button type="button" className="btn btn-submit" id="summarySubmitBtn" onClick={() => legacySummary('submitSummaryData')}>
-            Submit
-          </button>
-          <button type="button" className="btn btn-cancel" onClick={() => legacySummary('goBackToDataCapture')} style={{ marginLeft: 10 }}>
-            Back
-          </button>
-          <button type="button" className="btn btn-refresh" onClick={() => legacySummary('refreshPage')} title="Refresh page">
-            <img src={apiUrl('/images/refresh.svg')} alt="Refresh" style={{ width: 'clamp(23px, 1.8vw, 35px)', height: 'clamp(23px, 1.8vw, 35px)' }} />
-          </button>
-        </div>
-      </div>
-
-      <div id="notificationPopup" className="notification-popup" style={{ display: 'none' }}>
-        <div className="notification-header">
-          <span className="notification-title" id="notificationTitle">
-            Notification
-          </span>
-          <button type="button" className="notification-close" onClick={() => legacySummary('hideNotification')}>
-            &times;
-          </button>
-        </div>
-        <div className="notification-message" id="notificationMessage">
-          Message
-        </div>
-      </div>
-
-      <div id="confirmDeleteModal" className="summary-modal" style={{ display: 'none' }}>
-        <div className="summary-confirm-modal-content">
-          <div className="summary-confirm-icon-container">
-            <svg className="summary-confirm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
+        {displayRows.length === 0 && (
+          <div style={{ marginTop: 12, color: '#6b7280' }}>
+            Use `Back` to run Data Capture first, or open classic page to recover legacy data.
           </div>
-          <h2 className="summary-confirm-title">Confirm Delete</h2>
-          <p id="confirmDeleteMessage" className="summary-confirm-message">
-            This action cannot be undone.
-          </p>
-          <div className="summary-confirm-actions">
-            <button type="button" className="summary-btn summary-btn-cancel confirm-cancel" onClick={() => legacySummary('closeConfirmDeleteModal')}>
-              Cancel
-            </button>
-            <button type="button" className="summary-btn summary-btn-delete confirm-delete" onClick={() => legacySummary('confirmDelete')}>
-              Delete
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div id="addModal" className="account-modal" style={{ display: 'none' }}>
-        <div className="account-modal-content">
-          <div className="account-modal-header">
-            <h2>Add Account</h2>
-            <span className="account-close" onClick={() => legacySummary('closeAddModal')} role="presentation">
-              &times;
-            </span>
-          </div>
-          <div className="account-modal-body">
-            <form id="addAccountForm" className="account-form">
-              <div className="account-form-columns">
-                <div className="account-form-column">
-                  <h3 className="account-section-header">Personal Information</h3>
-                  <div className="account-form-group">
-                    <label htmlFor="add_account_id">Account ID *</label>
-                    <input type="text" id="add_account_id" name="account_id" required />
-                  </div>
-                  <div className="account-form-group">
-                    <label htmlFor="add_name">Name *</label>
-                    <input type="text" id="add_name" name="name" required />
-                  </div>
-                  <div className="account-form-group">
-                    <label htmlFor="add_role">Role *</label>
-                    <select id="add_role" name="role" required defaultValue="">
-                      <option value="">Select Role</option>
-                    </select>
-                  </div>
-                  <div className="account-form-group">
-                    <label htmlFor="add_password">Password *</label>
-                    <input type="password" id="add_password" name="password" required autoComplete="new-password" />
-                  </div>
-                </div>
-
-                <div className="account-form-column">
-                  <h3 className="account-section-header">Payment</h3>
-                  <div className="account-form-group" />
-                  <div className="account-form-group">
-                    <label>Payment Alert</label>
-                    <div className="account-radio-group">
-                      <label className="account-radio-label">
-                        <input type="radio" name="add_payment_alert" value="1" />
-                        Yes
-                      </label>
-                      <label className="account-radio-label">
-                        <input type="radio" name="add_payment_alert" value="0" defaultChecked />
-                        No
-                      </label>
-                    </div>
-                  </div>
-                  <div className="account-form-row" id="add_alert_fields" style={{ display: 'none' }}>
-                    <div className="account-form-group">
-                      <label htmlFor="add_alert_type">Alert Type</label>
-                      <select id="add_alert_type" name="alert_type" defaultValue="">
-                        <option value="">Select Type</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                        {ALERT_DAY_OPTIONS}
-                      </select>
-                    </div>
-                    <div className="account-form-group">
-                      <label htmlFor="add_alert_start_date">Start Date</label>
-                      <input type="date" id="add_alert_start_date" name="alert_start_date" />
-                    </div>
-                  </div>
-                  <div className="account-form-group" id="add_alert_amount_row" style={{ display: 'none' }}>
-                    <label htmlFor="add_alert_amount">Alert (Amount)</label>
-                    <input type="number" id="add_alert_amount" name="alert_amount" step="0.01" placeholder="Enter amount (auto-converted to negative)" />
-                  </div>
-                  <div className="account-form-group">
-                    <label htmlFor="add_remark">Remark</label>
-                    <textarea id="add_remark" name="remark" rows={1} style={{ resize: 'none', overflowY: 'hidden', lineHeight: 1.5 }} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="account-form-section">
-                <div className="account-advance-section">
-                  <h3>Advanced Account</h3>
-
-                  <div className="account-other-currency">
-                    <label>Other Currency:</label>
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                      <input
-                        type="text"
-                        id="addCurrencyInput"
-                        placeholder="Enter new currency code (e.g., EUR, JPY, GBP)"
-                        style={{ flex: 1, padding: 8, border: '1px solid #ddd', borderRadius: 4 }}
-                      />
-                      <button type="button" className="account-btn-add-currency" onClick={() => legacySummary('addCurrencyFromInput', 'add')}>
-                        Create Currency
-                      </button>
-                    </div>
-                    <div className="account-currency-list" id="addCurrencyList" />
-                  </div>
-
-                  <div className="account-other-currency" style={{ marginTop: 20 }}>
-                    <label>Company:</label>
-                    <div className="account-currency-list" id="addCompanyList" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="account-form-actions">
-                <button type="submit" className="account-btn account-btn-save">
-                  Add Account
-                </button>
-                <button type="button" className="account-btn account-btn-cancel" onClick={() => legacySummary('closeAddModal')}>
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        )}
       </div>
     </div>
   )

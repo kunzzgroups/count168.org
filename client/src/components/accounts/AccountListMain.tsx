@@ -1,81 +1,66 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { apiUrl } from '../../lib/api'
-import { ensureMoneyDecimalDeps } from '../../lib/legacyMoneyDecimal'
+import { apiFetch } from '../../lib/api'
 import { useTransactionWorkspace } from '../../hooks/useTransactionWorkspace'
 import type { DashboardBootstrapData } from '../../types/dashboard'
 import '../../../../css/accountCSS.css'
 import '../../../../css/account-list.css'
 import '../../../../css/global-13inch.css'
 import './AccountListMain.css'
-import { AccountListLegacyDom } from './AccountListLegacyDom'
-
-let accountListScriptPromise: Promise<void> | null = null
-
-function ensureAccountListScript(): Promise<void> {
-  if (!accountListScriptPromise) {
-    accountListScriptPromise = ensureMoneyDecimalDeps().then(
-      () =>
-        new Promise((resolve, reject) => {
-          const s = document.createElement('script')
-          s.src = apiUrl('/js/account-list.js')
-          s.async = true
-          s.onload = () => resolve()
-          s.onerror = () => reject(new Error('Failed to load account-list.js'))
-          document.head.appendChild(s)
-        }),
-    )
-  }
-  return accountListScriptPromise
-}
 
 type Props = {
   bootstrap: DashboardBootstrapData
 }
 
-/** 供 `account-list.js` 读取的全局字段（与 IDE 的 Window 合并类型对齐） */
-type AccountListWindow = Window & {
-  ACCOUNT_LIST_SHOW_INACTIVE?: boolean
-  ACCOUNT_LIST_SHOW_ALL?: boolean
-  ACCOUNT_LIST_COMPANY_ID?: number | null
-  ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD?: number[]
-  runAccountListPageInit?: () => void
-  fetchAccounts?: () => void
-  c168SyncAccountListFromLocation?: () => void
+type AccountRow = {
+  id: number
+  account_id: string
+  name: string
+  role: string
+  status: string
+  payment_alert: number | boolean | string
+  last_login: string | null
+  remark: string | null
+}
+
+type ApiWrap<T> = {
+  success: boolean
+  message?: string
+  error?: string
+  data?: T
 }
 
 /**
- * React `/accounts`：壳与 Transaction 一致；主区 DOM + `js/account-list.js` 与 `account-list_classic.php` 对齐。
- * - 查询串与经典 GET 一致：`company_id`、`showInactive`、`showAll`、`search`
- * - 公司切换走 `useTransactionWorkspace` + React Router `setSearchParams`，与 legacy `replaceState` 不打架
+ * React `/accounts` 纯 React 版本：
+ * - 与经典一致保留 URL 查询串：`company_id`、`showInactive`、`showAll`、`search`
+ * - 公司切换走 `useTransactionWorkspace` + React Router
  */
 export function AccountListMain({ bootstrap }: Props) {
   const [searchParams, setSearchParams] = useSearchParams()
-  const spKey = searchParams.toString()
 
   const w = useTransactionWorkspace(bootstrap)
   const wRef = useRef(w)
   wRef.current = w
-
-  const [legacyReady, setLegacyReady] = useState(false)
-  const scriptInitRef = useRef(false)
-  const skipLocationSyncRef = useRef(true)
+  const [rows, setRows] = useState<AccountRow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [notice, setNotice] = useState<{ msg: string; kind: 'ok' | 'err' } | null>(null)
+  const [sortKey, setSortKey] = useState<'account' | 'role'>('account')
+  const [sortAsc, setSortAsc] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [deleteSel, setDeleteSel] = useState<Record<number, boolean>>({})
+  const PAGE_SIZE = 20
+  const showInactive = searchParams.has('showInactive')
+  const showAll = searchParams.has('showAll')
+  const searchText = searchParams.get('search') ?? ''
 
   useLayoutEffect(() => {
     document.body.classList.add('account-list-spa-embed', 'account-page')
-    ;(window as unknown as { __ACCOUNT_LIST_SPA_EMBED__?: boolean }).__ACCOUNT_LIST_SPA_EMBED__ = true
     return () => {
       document.body.classList.remove('account-list-spa-embed', 'account-page')
       document.body.classList.remove('account-page--show-all')
-      delete (window as unknown as { __ACCOUNT_LIST_SPA_EMBED__?: boolean }).__ACCOUNT_LIST_SPA_EMBED__
     }
   }, [])
-
-  useLayoutEffect(() => {
-    const aw = window as AccountListWindow
-    aw.ACCOUNT_LIST_SHOW_INACTIVE = searchParams.has('showInactive')
-    aw.ACCOUNT_LIST_SHOW_ALL = searchParams.has('showAll')
-  }, [searchParams])
 
   const replaceCompanyInUrl = useCallback(
     (companyId: number) => {
@@ -90,39 +75,6 @@ export function AccountListMain({ bootstrap }: Props) {
     },
     [setSearchParams],
   )
-
-  useEffect(() => {
-    const id = 'c168-font-amaranth'
-    if (!document.getElementById(id)) {
-      const l = document.createElement('link')
-      l.id = id
-      l.rel = 'stylesheet'
-      l.href = 'https://fonts.googleapis.com/css2?family=Amaranth:wght@400;700&display=swap'
-      document.head.appendChild(l)
-    }
-  }, [])
-
-  useEffect(() => {
-    window.__C168_API_BASE__ = (import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
-    window.__C168_SPA_LINK_BASE__ = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '')
-    return () => {
-      delete window.__C168_API_BASE__
-      delete window.__C168_SPA_LINK_BASE__
-    }
-  }, [])
-
-  /** legacy `switchAccountListCompany` 使用 `replaceState` 时与 React Router 同步 */
-  useEffect(() => {
-    const onReplaced = () => {
-      try {
-        setSearchParams(new URLSearchParams(window.location.search), { replace: true })
-      } catch {
-        /* ignore */
-      }
-    }
-    window.addEventListener('c168:account-list-url-replaced', onReplaced)
-    return () => window.removeEventListener('c168:account-list-url-replaced', onReplaced)
-  }, [setSearchParams])
 
   useEffect(() => {
     window.onSharedCompanyFilterChanged = (companyId, _companyCode) => {
@@ -141,7 +93,6 @@ export function AccountListMain({ bootstrap }: Props) {
     }
   }, [replaceCompanyInUrl])
 
-  /** 地址栏 `company_id` → workspace（与 `account-list_classic.php` 校验 URL 行为一致） */
   useEffect(() => {
     if (!w.companiesReady) return
     const raw = searchParams.get('company_id')
@@ -160,52 +111,161 @@ export function AccountListMain({ bootstrap }: Props) {
     window.setTimeout(() => {
       wRef.current.onPickCompany(want)
     }, 0)
-  }, [w.companiesReady, spKey])
+  }, [w.companiesReady, searchParams, w.companies])
 
-  /** 无 `company_id` 时写入当前会话公司，便于分享/刷新（经典页依赖 session，此处增强为可书签） */
   useEffect(() => {
     if (!w.companiesReady || w.activeCompanyId == null) return
     if (searchParams.get('company_id')) return
     replaceCompanyInUrl(w.activeCompanyId)
   }, [w.companiesReady, w.activeCompanyId, searchParams, replaceCompanyInUrl])
 
-  useEffect(() => {
-    if (!w.companiesReady || w.loadCompaniesError || w.activeCompanyId == null) return
-
-    const aw = window as AccountListWindow
-    aw.ACCOUNT_LIST_COMPANY_ID = w.activeCompanyId
-    aw.ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD = w.activeCompanyId ? [w.activeCompanyId] : []
-
-    if (!scriptInitRef.current) {
-      let alive = true
-      void ensureAccountListScript()
-        .then(() => {
-          if (!alive) return
-          scriptInitRef.current = true
-          aw.runAccountListPageInit?.()
-          setLegacyReady(true)
-        })
-        .catch((err) => {
-          console.error(err)
-        })
-      return () => {
-        alive = false
+  const loadAccounts = useCallback(async () => {
+    if (w.activeCompanyId == null) return
+    setLoading(true)
+    setErr(null)
+    const q = new URLSearchParams()
+    q.set('company_id', String(w.activeCompanyId))
+    if (searchText.trim()) q.set('search', searchText.trim())
+    if (showInactive) q.set('showInactive', '1')
+    if (showAll) q.set('showAll', '1')
+    try {
+      const res = await apiFetch(`/api/accounts/accountlistapi.php?${q.toString()}`)
+      const json = (await res.json()) as ApiWrap<{ accounts: AccountRow[] }>
+      if (!json.success) {
+        setErr(String(json.error || json.message || 'Failed to load accounts'))
+        setRows([])
+        return
       }
+      setRows(Array.isArray(json.data?.accounts) ? json.data!.accounts : [])
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Failed to load accounts')
+      setRows([])
+    } finally {
+      setLoading(false)
     }
+  }, [w.activeCompanyId, searchText, showInactive, showAll])
 
-    void aw.fetchAccounts?.()
-    return undefined
-  }, [w.companiesReady, w.loadCompaniesError, w.activeCompanyId])
-
-  /** 前进/后退或 React 内更新 query：刷新 legacy 勾选与列表（跳过首次，避免与 init 双请求） */
   useEffect(() => {
-    if (!legacyReady) return
-    if (skipLocationSyncRef.current) {
-      skipLocationSyncRef.current = false
-      return
+    void loadAccounts()
+  }, [loadAccounts])
+
+  const sortedRows = useMemo(() => {
+    const list = [...rows]
+    list.sort((a, b) => {
+      let cmp = 0
+      if (sortKey === 'account') {
+        cmp = String(a.account_id || '').localeCompare(String(b.account_id || ''))
+      } else {
+        cmp = String(a.role || '').localeCompare(String(b.role || ''))
+      }
+      return sortAsc ? cmp : -cmp
+    })
+    return list
+  }, [rows, sortKey, sortAsc])
+
+  const pageRows = useMemo(() => {
+    if (showAll) return sortedRows.filter((x) => String(x.status).toLowerCase() === 'active')
+    const start = (currentPage - 1) * PAGE_SIZE
+    return sortedRows.slice(start, start + PAGE_SIZE)
+  }, [sortedRows, currentPage, showAll])
+
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE))
+
+  useEffect(() => {
+    setCurrentPage(1)
+    setDeleteSel({})
+  }, [searchText, showInactive, showAll, w.activeCompanyId])
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages)
+  }, [currentPage, totalPages])
+
+  const toggleParam = (key: 'showInactive' | 'showAll', checked: boolean) => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (checked) p.set(key, '1')
+        else p.delete(key)
+        return p
+      },
+      { replace: true },
+    )
+  }
+
+  const setSearchTerm = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const p = new URLSearchParams(prev)
+        if (value.trim()) p.set('search', value)
+        else p.delete('search')
+        return p
+      },
+      { replace: true },
+    )
+  }
+
+  const postFormToggle = async (url: string, id: number) => {
+    const fd = new FormData()
+    fd.set('id', String(id))
+    const res = await apiFetch(url, { method: 'POST', body: fd })
+    const json = (await res.json()) as ApiWrap<unknown>
+    if (!json.success) throw new Error(String(json.error || json.message || 'Update failed'))
+  }
+
+  const onToggleStatus = async (id: number) => {
+    try {
+      await postFormToggle('/api/accounts/toggle_account_status_api.php', id)
+      setNotice({ msg: 'Status updated', kind: 'ok' })
+      void loadAccounts()
+    } catch (e) {
+      setNotice({ msg: e instanceof Error ? e.message : 'Status update failed', kind: 'err' })
     }
-    window.c168SyncAccountListFromLocation?.()
-  }, [legacyReady, spKey])
+  }
+
+  const onTogglePaymentAlert = async (id: number) => {
+    try {
+      await postFormToggle('/api/accounts/toggle_payment_alert_api.php', id)
+      setNotice({ msg: 'Payment alert updated', kind: 'ok' })
+      void loadAccounts()
+    } catch (e) {
+      setNotice({ msg: e instanceof Error ? e.message : 'Payment alert update failed', kind: 'err' })
+    }
+  }
+
+  const selectedIds = Object.entries(deleteSel)
+    .filter(([, v]) => v)
+    .map(([k]) => Number(k))
+    .filter((x) => Number.isFinite(x))
+
+  const onDeleteSelected = async () => {
+    if (selectedIds.length === 0) return
+    if (!window.confirm(`Delete ${selectedIds.length} account(s)?`)) return
+    try {
+      const res = await apiFetch('/api/accounts/delete_accounts_api.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: selectedIds }),
+      })
+      const json = (await res.json()) as ApiWrap<{ deleted?: number }>
+      if (!json.success) throw new Error(String(json.error || json.message || 'Delete failed'))
+      setNotice({ msg: json.message || 'Deleted', kind: 'ok' })
+      setDeleteSel({})
+      void loadAccounts()
+    } catch (e) {
+      setNotice({ msg: e instanceof Error ? e.message : 'Delete failed', kind: 'err' })
+    }
+  }
+
+  const canDeleteRow = (r: AccountRow) => String(r.status || '').toLowerCase() === 'inactive'
+  const openClassicAccountList = (opts?: { accountId?: number }) => {
+    const p = new URLSearchParams()
+    p.set('company_id', String(w.activeCompanyId))
+    if (searchText.trim()) p.set('search', searchText.trim())
+    if (showInactive) p.set('showInactive', '1')
+    if (showAll) p.set('showAll', '1')
+    if (opts?.accountId) p.set('focus_account_id', String(opts.accountId))
+    window.location.href = `/account-list_classic.php?${p.toString()}`
+  }
 
   const companyRow =
     w.groupIds.length > 0 || w.companies.length > 0 ? (
@@ -275,6 +335,19 @@ export function AccountListMain({ bootstrap }: Props) {
       </>
     ) : null
 
+  const onSort = (k: 'account' | 'role') => {
+    if (sortKey === k) setSortAsc((s) => !s)
+    else {
+      setSortKey(k)
+      setSortAsc(true)
+    }
+  }
+
+  const statusClass = (status: string) =>
+    String(status).toLowerCase() === 'active'
+      ? 'account-status-active'
+      : 'account-status-inactive'
+
   if (w.loadCompaniesError) {
     return (
       <div className="container">
@@ -299,13 +372,135 @@ export function AccountListMain({ bootstrap }: Props) {
   }
 
   return (
-    <div className="alShell" data-account-list-spa={legacyReady ? '1' : '0'}>
-      <AccountListLegacyDom
-        initialSearch={searchParams.get('search') ?? ''}
-        initialShowInactive={searchParams.has('showInactive')}
-        initialShowAll={searchParams.has('showAll')}
-        belowToolbar={companyRow}
-      />
+    <div className="alShell" data-account-list-spa="1">
+      <div className="container">
+        <div className="content">
+          <h1 className="account-page-title">Account List</h1>
+          <div className="account-separator-line" />
+          <div className="account-action-buttons-container" style={{ marginBottom: 20 }}>
+            <div className="account-action-buttons" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button type="button" className="account-btn account-btn-add" onClick={() => openClassicAccountList()}>
+                  Add Account
+                </button>
+                <div className="account-search-container">
+                  <svg className="account-search-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                  </svg>
+                  <input type="text" value={searchText} placeholder="Search by Account or Name" className="account-search-input" onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+                <div className="account-checkbox-section">
+                  <input type="checkbox" id="showInactive" checked={showInactive} onChange={(e) => toggleParam('showInactive', e.target.checked)} />
+                  <label htmlFor="showInactive">Show Inactive</label>
+                </div>
+                <div className="account-checkbox-section">
+                  <input type="checkbox" id="showAll" checked={showAll} onChange={(e) => toggleParam('showAll', e.target.checked)} />
+                  <label htmlFor="showAll">Show All</label>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <button type="button" className="account-btn account-btn-setting" onClick={() => openClassicAccountList()}>
+                  Currency Setting
+                </button>
+                <button type="button" className="account-btn account-btn-delete" disabled={selectedIds.length === 0} onClick={() => void onDeleteSelected()}>
+                  Delete
+                </button>
+              </div>
+            </div>
+            {companyRow}
+          </div>
+
+          {notice && (
+            <p className={notice.kind === 'ok' ? 'tShell__searchOk' : 'tShell__searchErr'}>
+              {notice.msg}
+            </p>
+          )}
+          {err && <p className="tShell__searchErr">{err}</p>}
+
+          <div className="account-table-wrapper" id="accountTableWrapper">
+            <div className="account-table-header">
+              <div className="account-header-item">No</div>
+              <div className="account-header-item account-header-sortable" role="presentation" onClick={() => onSort('account')}>
+                Account <span className="account-sort-indicator">{sortKey === 'account' ? (sortAsc ? '▲' : '▼') : ''}</span>
+              </div>
+              <div className="account-header-item">Name</div>
+              <div className="account-header-item account-header-sortable" role="presentation" onClick={() => onSort('role')}>
+                Role <span className="account-sort-indicator">{sortKey === 'role' ? (sortAsc ? '▲' : '▼') : ''}</span>
+              </div>
+              <div className="account-header-item">Alert</div>
+              <div className="account-header-item">Status</div>
+              <div className="account-header-item">Last Login</div>
+              <div className="account-header-item">Remark</div>
+              <div className="account-header-item">Action</div>
+            </div>
+            <div className="account-cards" id="accountTableBody">
+              {loading ? (
+                <div className="account-card"><div className="account-card-item">Loading...</div></div>
+              ) : pageRows.length === 0 ? (
+                <div className="account-card"><div className="account-card-item">No account data found</div></div>
+              ) : (
+                pageRows.map((r, idx) => {
+                  const hasAlert =
+                    r.payment_alert === 1 || r.payment_alert === true || String(r.payment_alert) === '1'
+                  return (
+                    <div className="account-card" key={r.id}>
+                      <div className="account-card-item">{(currentPage - 1) * PAGE_SIZE + idx + 1}</div>
+                      <div className="account-card-item">{String(r.account_id || '').toUpperCase()}</div>
+                      <div className="account-card-item">{String(r.name || '').toUpperCase()}</div>
+                      <div className="account-card-item">
+                        <span className={`account-role-badge account-role-${String(r.role || 'none').toLowerCase().replace(/\s+/g, '-')}`}>
+                          {String(r.role || '').toUpperCase() === 'UPLINE' ? 'SUPPLIER' : String(r.role || '').toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="account-card-item">
+                        <span className={`account-role-badge ${hasAlert ? 'account-status-active' : 'account-status-inactive'} account-status-clickable`} title="Click to toggle payment alert" onClick={() => void onTogglePaymentAlert(r.id)}>
+                          {hasAlert ? 'ON' : 'OFF'}
+                        </span>
+                      </div>
+                      <div className="account-card-item">
+                        <span className={`account-role-badge ${statusClass(r.status)} account-status-clickable`} title="Click to toggle status" onClick={() => void onToggleStatus(r.id)}>
+                          {String(r.status || '').toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="account-card-item">{r.last_login || '-'}</div>
+                      <div className="account-card-item">{String(r.remark || '').toUpperCase()}</div>
+                      <div className="account-card-item">
+                        <button
+                          className="account-edit-btn"
+                          onClick={() => openClassicAccountList({ accountId: r.id })}
+                          aria-label="Edit in classic page"
+                          title="Edit in classic page"
+                        >
+                          <img src="/images/edit.svg" alt="Edit" />
+                        </button>
+                        {canDeleteRow(r) ? (
+                          <input
+                            type="checkbox"
+                            checked={!!deleteSel[r.id]}
+                            onChange={(e) => setDeleteSel((s) => ({ ...s, [r.id]: e.target.checked }))}
+                          />
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+          {!showAll && (
+            <div className="account-pagination-container" id="paginationContainer">
+              <button type="button" className="account-pagination-btn" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+                ◀
+              </button>
+              <span className="account-pagination-info">{currentPage} of {totalPages}</span>
+              <button type="button" className="account-pagination-btn" disabled={currentPage >= totalPages} onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}>
+                ▶
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
