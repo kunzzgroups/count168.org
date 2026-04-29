@@ -7,6 +7,7 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -19,6 +20,17 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
         'message' => $message,
         'data' => $data
     ], JSON_UNESCAPED_UNICODE);
+}
+
+function normalizeAlertAmount(?string $value): ?string {
+    $value = trim((string)($value ?? ''));
+    if ($value === '') {
+        return null;
+    }
+    if (!money_is_valid($value)) {
+        throw new Exception('Alert amount must be a valid decimal amount');
+    }
+    return money_normalize($value);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -76,7 +88,7 @@ try {
         $alert_start_date = null;
         $alert_amount = null;
     } else {
-        $alert_amount = !empty($_POST['alert_amount']) ? (float) $_POST['alert_amount'] : null;
+        $alert_amount = normalizeAlertAmount($_POST['alert_amount'] ?? null);
     }
 
     $alert_day = $alert_type;

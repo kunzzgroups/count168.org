@@ -5,6 +5,7 @@
  */
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -71,9 +72,8 @@ try {
     $stmt->execute([$group_id]);
     $owners = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Convert percentage to float
     foreach ($owners as &$owner) {
-        $owner['percentage'] = (float) $owner['percentage'];
+        $owner['percentage'] = money_out($owner['percentage'], 2);
     }
 
     echo json_encode([

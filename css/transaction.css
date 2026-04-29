@@ -1129,7 +1129,8 @@ body.transaction-page .expiration-countdown-text {
     top: calc(100% + 8px);
     /* JS 会给元素写死宽度，这里用 !important 强制限制最大宽度，避免在较小屏幕溢出 */
     width: auto !important;
-    max-width: min(760px, calc(100vw - 40px)) !important;
+    min-width: 980px;
+    max-width: min(1280px, calc(100vw - 40px)) !important;
     max-height: 420px;
     overflow: hidden;
     border: 1px solid #d0d7de;
@@ -1166,7 +1167,8 @@ body.transaction-page .expiration-countdown-text {
 }
 
 .contra-inbox-table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
 }
 
@@ -1178,6 +1180,7 @@ body.transaction-page .expiration-countdown-text {
     font-weight: 700;
     text-align: left;
     vertical-align: top;
+    white-space: nowrap;
 }
 
 .contra-inbox-approve {

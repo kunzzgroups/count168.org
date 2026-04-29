@@ -153,26 +153,6 @@ if ($companyId) {
     }
 }
 $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategories);
-
-$__eazyPrefix = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'])), '/');
-$eazycountSpaDashboard = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
-    ? '/dashboard'
-    : $__eazyPrefix . '/dashboard';
-$eazycountSpaTransaction = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
-    ? '/transaction'
-    : $__eazyPrefix . '/transaction';
-$eazycountSpaDatacapture = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
-    ? '/datacapture'
-    : $__eazyPrefix . '/datacapture';
-$eazycountSpaDatacapturesummary = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
-    ? '/datacapturesummary'
-    : $__eazyPrefix . '/datacapturesummary';
-$eazycountSpaAccounts = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
-    ? '/accounts'
-    : $__eazyPrefix . '/accounts';
-$eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__eazyPrefix === '/')
-    ? '/process'
-    : $__eazyPrefix . '/process';
 ?>
 <!--
 ================================================================================
@@ -185,7 +165,6 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
     <link rel="preload" href="(当前用户头像 URL)" as="image">
 ================================================================================
 -->
-<script>window.EAZYCOUNT_SPA_DASHBOARD = <?php echo json_encode($eazycountSpaDashboard); ?>;window.EAZYCOUNT_SPA_TRANSACTION = <?php echo json_encode($eazycountSpaTransaction); ?>;window.EAZYCOUNT_SPA_DATACAPTURE = <?php echo json_encode($eazycountSpaDatacapture); ?>;window.EAZYCOUNT_SPA_DATACAPTURESUMMARY = <?php echo json_encode($eazycountSpaDatacapturesummary); ?>;window.EAZYCOUNT_SPA_ACCOUNTS = <?php echo json_encode($eazycountSpaAccounts); ?>;window.EAZYCOUNT_SPA_PROCESSLIST = <?php echo json_encode($eazycountSpaProcesslist); ?>;</script>
 <!-- Sidebar HTML (CSS 已移至 css/sidebar.css，JS 逻辑已移至 js/sidebar.js) -->
 <!-- Overlay -->
 <div class="informationmenu-overlay"></div>
@@ -338,7 +317,7 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
             <?php if (empty($permissions) || in_array('home', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title" data-page="dashboard.php"
-                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_DASHBOARD==='string'&&w.EAZYCOUNT_SPA_DASHBOARD)?w.EAZYCOUNT_SPA_DASHBOARD:'dashboard.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
+                        onclick="window.location.href='dashboard.php'">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
                         </svg>
@@ -402,7 +381,7 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
             <?php if (empty($permissions) || in_array('account', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title account-direct" data-page="account-list.php"
-                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_ACCOUNTS==='string'&&w.EAZYCOUNT_SPA_ACCOUNTS)?w.EAZYCOUNT_SPA_ACCOUNTS:'account-list.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
+                        onclick="window.location.href='account-list.php'">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path
                                 d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
@@ -410,8 +389,10 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
                         Account
                     </div>
                 </div>
+            <?php endif; ?>
 
-
+            <!-- Ownership：仅由 ownership 权限控制显示 -->
+            <?php if (empty($permissions) || in_array('ownership', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title account-direct" data-page="ownership.php"
                         onclick="window.location.href='ownership.php'">
@@ -422,14 +403,13 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
                         Ownership
                     </div>
                 </div>
-
             <?php endif; ?>
 
             <!-- Process Section -->
             <?php if (empty($permissions) || in_array('process', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title" data-page="processlist.php"
-                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_PROCESSLIST==='string'&&w.EAZYCOUNT_SPA_PROCESSLIST)?w.EAZYCOUNT_SPA_PROCESSLIST:'processlist.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
+                        onclick="window.location.href='processlist.php'">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                         </svg>
@@ -442,7 +422,7 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
             <?php if (empty($permissions) || in_array('datacapture', $permissions)): ?>
                 <div class="informationmenu-section" id="sidebar-datacapture-section" <?php echo $companyHasGambling ? '' : ' style="display:none;"'; ?>>
                     <div class="informationmenu-section-title" data-page="datacapture.php"
-                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_DATACAPTURE==='string'&&w.EAZYCOUNT_SPA_DATACAPTURE)?w.EAZYCOUNT_SPA_DATACAPTURE:'datacapture.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
+                        onclick="window.location.href='datacapture.php'">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path
                                 d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
@@ -456,7 +436,7 @@ $eazycountSpaProcesslist = ($__eazyPrefix === '' || $__eazyPrefix === '.' || $__
             <?php if (empty($permissions) || in_array('payment', $permissions)): ?>
                 <div class="informationmenu-section">
                     <div class="informationmenu-section-title" data-page="transaction.php"
-                        onclick="(function(w){var u=(typeof w.EAZYCOUNT_SPA_TRANSACTION==='string'&&w.EAZYCOUNT_SPA_TRANSACTION)?w.EAZYCOUNT_SPA_TRANSACTION:'transaction.php';(w.top!==w.self?w.top:w).location.assign(u);})(window)">
+                        onclick="window.location.href='transaction.php'">
                         <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
                             <path
                                 d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />

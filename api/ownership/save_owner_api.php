@@ -1,6 +1,7 @@
 <?php
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -23,9 +24,9 @@ if (!$company_id || !$account_id || $percentage === null) {
     exit();
 }
 
-$percentage = (float)$percentage;
+$percentage = money_normalize($percentage, 2);
 
-if ($percentage <= 0 || $percentage > 100) {
+if (money_cmp($percentage, '0', 2) <= 0 || money_cmp($percentage, '100', 2) > 0) {
     echo json_encode(['status' => 'error', 'message' => 'Percentage must be between 0 and 100']);
     exit();
 }
@@ -40,13 +41,14 @@ try {
         WHERE company_id = ? AND account_id != ?
     ");
     $stmt->execute([$company_id, $account_id]);
-    $currentTotal = (float)$stmt->fetchColumn();
+    $currentTotal = money_normalize($stmt->fetchColumn(), 2);
 
-    if ($currentTotal + $percentage > 100) {
-        $allowed = 100 - $currentTotal;
+    $newTotal = money_add($currentTotal, $percentage, 2);
+    if (money_cmp($newTotal, '100', 2) > 0) {
+        $allowed = money_sub('100', $currentTotal, 2);
         echo json_encode([
             'status' => 'error', 
-            'message' => 'Cannot assign percentage. Total would exceed 100%. Maximum allowed for this account is ' . number_format($allowed, 2) . '%.'
+            'message' => 'Cannot assign percentage. Total would exceed 100%. Maximum allowed for this account is ' . money_out($allowed, 2) . '%.'
         ]);
         $pdo->rollBack();
         exit();

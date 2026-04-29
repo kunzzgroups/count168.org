@@ -34,10 +34,10 @@ function ensureTransactionsDeletedTable(PDO $pdo) {
             id INT AUTO_INCREMENT PRIMARY KEY,
             transaction_id INT NOT NULL,
             company_id INT NOT NULL,
-            transaction_type ENUM('WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'RATE') NOT NULL,
+            transaction_type ENUM('WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'RATE', 'CLAIM', 'CLEAR', 'ADJUSTMENT') NOT NULL,
             account_id INT NOT NULL,
             from_account_id INT NULL,
-            amount DECIMAL(15, 2) NOT NULL,
+            amount DECIMAL(25, 8) NOT NULL,
             currency_id INT NULL,
             transaction_date DATE NOT NULL,
             description VARCHAR(500) NULL,
@@ -56,6 +56,14 @@ function ensureTransactionsDeletedTable(PDO $pdo) {
     $pdo->exec($sql);
 
     // 兼容已有表结构：若缺少 currency_id 字段则补充
+    try {
+        $amountCol = $pdo->query("SHOW COLUMNS FROM transactions_deleted LIKE 'amount'")->fetch(PDO::FETCH_ASSOC);
+        if ($amountCol && stripos((string)($amountCol['Type'] ?? ''), 'decimal(25,8)') === false) {
+            $pdo->exec("ALTER TABLE transactions_deleted MODIFY COLUMN amount DECIMAL(25,8) NOT NULL");
+        }
+    } catch (PDOException $e) {
+    }
+
     try {
         $colStmt = $pdo->query("SHOW COLUMNS FROM transactions_deleted LIKE 'currency_id'");
         if ($colStmt->rowCount() === 0) {

@@ -1,6 +1,7 @@
 <?php
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -75,11 +76,11 @@ try {
         
         // Map totals to companies
         foreach ($companies as &$company) {
-            $company['allocated_percentage'] = isset($totals[$company['id']]) ? (float)$totals[$company['id']] : 0.00;
+            $company['allocated_percentage'] = isset($totals[$company['id']]) ? money_out($totals[$company['id']], 2) : '0';
         }
     } else {
         foreach ($companies as &$company) {
-            $company['allocated_percentage'] = 0.00;
+            $company['allocated_percentage'] = '0';
         }
     }
 

@@ -297,6 +297,8 @@ $default_date_to = $today_dt->format('d/m/Y');
         window.MEMBER_ACCOUNT_NAME = <?php echo json_encode($accountName ?? ''); ?>;
         window.MEMBER_COMPANY_ID = <?php echo (int)$currentCompanyId; ?>;
     </script>
+    <script src="js/decimal.min.js?v=<?php echo file_exists('js/decimal.min.js') ? filemtime('js/decimal.min.js') : time(); ?>"></script>
+    <script src="js/money-decimal.js?v=<?php echo file_exists('js/money-decimal.js') ? filemtime('js/money-decimal.js') : time(); ?>"></script>
     <script src="js/member.js?v=<?php echo file_exists('js/member.js') ? filemtime('js/member.js') : time(); ?>"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 </body>

@@ -6,6 +6,23 @@
     if (typeof window.ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD === 'undefined') window.ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD = [];
 })();
 
+function accountMoneyDecimal(value, fallback) {
+    return MoneyDecimal.toDecimal(value, fallback === undefined ? 0 : fallback);
+}
+
+function accountMoneyIsValid(value) {
+    try {
+        accountMoneyDecimal(value);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
+function accountMoneyCmp(a, b) {
+    return MoneyDecimal.cmp(a || '0', b || '0');
+}
+
 // Notification functions - 与 userlist 保持一致
 function showNotification(message, type = 'success') {
     const container = document.getElementById('accountNotificationContainer');
@@ -75,6 +92,13 @@ function confirmDelete() {
     closeConfirmDeleteModal();
 }
 
+function formatAccountIdForDisplay(rawAccountId) {
+    const value = String(rawAccountId || '').trim();
+    if (!value) return '';
+    const match = value.match(/^[^_]+_([0-9]+)(?:_[0-9]+)?$/);
+    return match ? match[1] : value;
+}
+
 
 const PAGE_SIZE = 20;
 let accounts = [];
@@ -86,15 +110,11 @@ let showAll = window.ACCOUNT_LIST_SHOW_ALL;
 let sortColumn = 'account'; // 'account' 鎴?'role'
 let sortDirection = 'asc'; // 'asc' 鎴?'desc'
 
-/** 上一次列表请求成功时用的搜索框 trim 值；用于 blur 与防抖去重 */
-let lastAccountListSearchFetched = null;
-
 // 浠嶢PI鑾峰彇鏁版嵁
 async function fetchAccounts() {
     try {
         const searchInput = document.getElementById('searchInput');
         const searchTerm = searchInput ? searchInput.value : '';
-        const searchNorm = String(searchTerm || '').trim();
         const url = new URL('api/accounts/accountlistapi.php', window.location.href);
 
         // 娣诲姞褰撳墠閫夋嫨鐨?company_id
@@ -117,7 +137,6 @@ async function fetchAccounts() {
         const result = await response.json();
 
         if (result.success) {
-            lastAccountListSearchFetched = searchNorm;
             accounts = result.data && result.data.accounts ? result.data.accounts : (result.data || []);
             // 搴旂敤褰撳墠鎺掑簭
             applySorting();
@@ -134,8 +153,6 @@ async function fetchAccounts() {
         showNotification('Network connection failed', 'danger');
     }
 }
-
-window.fetchAccounts = fetchAccounts;
 
 function renderTable() {
     const container = document.getElementById('accountTableBody');
@@ -206,7 +223,7 @@ function renderTable() {
                             ${escapeHtml((account.status || '').toUpperCase())}
                         </span>
                     </div>
-                    <div class="account-card-item">${escapeHtml((account.last_login || '').toUpperCase())}</div>
+                    <div class="account-card-item">${formatLastLogin(account.last_login)}</div>
                     <div class="account-card-item">${escapeHtml((account.remark || '').toUpperCase())}</div>
                     <div class="account-card-item">
                         <button class="account-edit-btn" onclick="editAccount(${account.id})" aria-label="Edit" title="Edit">
@@ -262,13 +279,6 @@ function changePage(newPage) {
     renderTable();
 }
 
-window.c168AccountListPrevPage = function () {
-    changePage(currentPage - 1);
-};
-window.c168AccountListNextPage = function () {
-    changePage(currentPage + 1);
-};
-
 function showError(message) {
     const container = document.getElementById('accountTableBody');
     container.innerHTML = `
@@ -285,6 +295,20 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+function formatLastLogin(lastLogin) {
+    if (!lastLogin) {
+        return '-';
+    }
+
+    const date = new Date(lastLogin);
+    if (Number.isNaN(date.getTime())) {
+        return escapeHtml(String(lastLogin));
+    }
+
+    const pad = (num) => String(num).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 // 鎺掑簭鍑芥暟
@@ -1370,7 +1394,7 @@ async function editAccount(id) {
 
         // Populate form with account data
         document.getElementById('edit_account_id').value = account.id;
-        document.getElementById('edit_account_id_field').value = (account.account_id || '').toUpperCase();
+        document.getElementById('edit_account_id_field').value = formatAccountIdForDisplay(account.account_id).toUpperCase();
         document.getElementById('edit_name').value = (account.name || '').toUpperCase();
         document.getElementById('edit_password').value = account.password || ''; // Show password from database
 
@@ -1664,9 +1688,8 @@ function deleteSelected() {
                 const result = await response.json();
                 if (result.success && result.data && typeof result.data.deleted === 'number') {
                     const deletedCount = result.data.deleted;
-                    accounts = accounts.filter(acc => !idsToDelete.includes(parseInt(acc.id, 10)));
-                    renderTable();
-                    renderPagination();
+                    // Always re-fetch from backend to avoid UI/DB mismatch when only part of ids are deleted.
+                    await fetchAccounts();
                     updateDeleteButton();
                     showNotification(deletedCount === 1 ? '1 account deleted successfully' : deletedCount + ' accounts deleted successfully', 'success');
                 } else {
@@ -1700,24 +1723,8 @@ if (searchInputEl) {
         // 鎼滅储鍔熻兘
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-            const inp = document.getElementById('searchInput');
-            const q = inp ? String(inp.value || '').trim() : '';
-            if (q !== lastAccountListSearchFetched) {
-                fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
-            }
-            c168PushAccountListFiltersToUrl();
+            fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
         }, 300); // 寤惰繜300ms閬垮厤棰戠箒璇锋眰
-    });
-
-    /** SPA：失焦立即拉数并写 URL，避免未满 300ms 就离开导致列表/书签与输入不一致 */
-    searchInputEl.addEventListener('blur', function () {
-        clearTimeout(searchTimeout);
-        const inp = document.getElementById('searchInput');
-        const q = inp ? String(inp.value || '').trim() : '';
-        if (q !== lastAccountListSearchFetched) {
-            fetchAccounts();
-        }
-        c168PushAccountListFiltersToUrl();
     });
 
     // paste 不做过滤，允许空格与符号
@@ -1730,10 +1737,8 @@ document.getElementById('showInactive').addEventListener('change', function () {
     if (showAll) {
         document.getElementById('showAll').checked = false;
         showAll = false;
-        updateAccountListScrollMode();
     }
     fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
-    c168PushAccountListFiltersToUrl();
 });
 
 // Real-time filter when Show All checkbox changes
@@ -1748,7 +1753,6 @@ document.getElementById('showAll').addEventListener('change', function () {
     currentPage = 1;
     updateAccountListScrollMode();
     fetchAccounts(); // 瀹炴椂鑾峰彇鏁版嵁
-    c168PushAccountListFiltersToUrl();
 });
 
 /** showAll 时允许页面纵向滚动；否则恢复 overflow hidden */
@@ -1760,79 +1764,6 @@ function updateAccountListScrollMode() {
         document.body.classList.remove('account-page--show-all');
     }
 }
-
-function c168IsAccountListSpaEmbed() {
-    return (typeof document !== 'undefined' && document.body &&
-        document.body.classList.contains('account-list-spa-embed')) ||
-        (typeof window !== 'undefined' && window.__ACCOUNT_LIST_SPA_EMBED__ === true);
-}
-
-/** React `/accounts`：把当前筛选写入地址栏（可书签/分享；经典全页不写回 URL） */
-function c168PushAccountListFiltersToUrl() {
-    if (!c168IsAccountListSpaEmbed()) return;
-    try {
-        const url = new URL(window.location.href);
-        const p = url.searchParams;
-        if (showInactive) {
-            p.set('showInactive', '1');
-        } else {
-            p.delete('showInactive');
-        }
-        if (showAll) {
-            p.set('showAll', '1');
-        } else {
-            p.delete('showAll');
-        }
-        const inp = document.getElementById('searchInput');
-        const q = inp ? String(inp.value || '').trim() : '';
-        if (q) {
-            p.set('search', q);
-        } else {
-            p.delete('search');
-        }
-        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-        window.dispatchEvent(new Event('c168:account-list-url-replaced'));
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-/** React Router / 浏览器前进后退：用当前 `location.search` 刷新勾选状态与 legacy 变量（与经典页 GET 参数语义一致） */
-function c168SyncAccountListFromLocation() {
-    try {
-        const p = new URLSearchParams(window.location.search);
-        const nextInactive = p.has('showInactive');
-        const nextAll = p.has('showAll');
-        const nextSearch = p.has('search') ? String(p.get('search') || '') : '';
-        const inp = document.getElementById('searchInput');
-        const curSearch = inp ? String(inp.value || '').trim() : '';
-        const si = document.getElementById('showInactive');
-        const sa = document.getElementById('showAll');
-
-        if (
-            nextInactive === showInactive &&
-            nextAll === showAll &&
-            nextSearch === curSearch
-        ) {
-            return;
-        }
-
-        showInactive = nextInactive;
-        showAll = nextAll;
-        if (si) si.checked = showInactive;
-        if (sa) sa.checked = showAll;
-        if (inp) {
-            inp.value = p.has('search') ? (p.get('search') || '') : '';
-        }
-        updateAccountListScrollMode();
-        fetchAccounts();
-    } catch (e) {
-        console.error(e);
-    }
-}
-
-window.c168SyncAccountListFromLocation = c168SyncAccountListFromLocation;
-window.c168PushAccountListFiltersToUrl = c168PushAccountListFiltersToUrl;
 
 // Toggle alert fields visibility
 function toggleAlertFields(type) {
@@ -1876,7 +1807,7 @@ function validatePaymentAlert() {
             return false;
         }
         // Validate alert amount must be a negative number
-        if (alertAmount && (isNaN(parseFloat(alertAmount)) || parseFloat(alertAmount) >= 0)) {
+        if (alertAmount && (!accountMoneyIsValid(alertAmount) || accountMoneyCmp(alertAmount, '0') >= 0)) {
             showNotification('Alert Amount must be a negative number.', 'danger');
             return false;
         }
@@ -2060,7 +1991,7 @@ function validatePaymentAlertForAdd() {
             return false;
         }
         // Validate alert amount must be a negative number
-        if (alertAmount && (isNaN(parseFloat(alertAmount)) || parseFloat(alertAmount) >= 0)) {
+        if (alertAmount && (!accountMoneyIsValid(alertAmount) || accountMoneyCmp(alertAmount, '0') >= 0)) {
             showNotification('Alert Amount must be a negative number.', 'danger');
             return false;
         }
@@ -2229,43 +2160,6 @@ async function switchAccountListCompany(companyId, companyCode) {
         console.error('switchAccountListCompany: missing companyId', { companyId, companyCode })
         return
     }
-    const spaEmbed =
-        (typeof document !== 'undefined' &&
-            document.body &&
-            document.body.classList.contains('account-list-spa-embed')) ||
-        (typeof window !== 'undefined' && window.__ACCOUNT_LIST_SPA_EMBED__ === true);
-
-    if (spaEmbed) {
-        try {
-            const response = await fetch(
-                'api/session/update_company_session_api.php?company_id=' + encodeURIComponent(companyId)
-            );
-            const result = await response.json();
-            if (!result.success) {
-                const blocked = (typeof window.handleCompanySwitchDenied === 'function')
-                    ? await window.handleCompanySwitchDenied(result)
-                    : false;
-                if (blocked) return;
-                console.error('Failed to update session:', result.message);
-            }
-        } catch (error) {
-            console.error('Error updating session:', error);
-        }
-        const idNum = typeof companyId === 'string' ? parseInt(companyId, 10) : companyId;
-        window.ACCOUNT_LIST_COMPANY_ID = idNum;
-        window.ACCOUNT_LIST_SELECTED_COMPANY_IDS_FOR_ADD = [idNum];
-        try {
-            const url = new URL(window.location.href);
-            url.searchParams.set('company_id', String(companyId));
-            window.history.replaceState({}, '', url.pathname + url.search);
-            window.dispatchEvent(new Event('c168:account-list-url-replaced'));
-        } catch (e) {
-            /* ignore */
-        }
-        await fetchAccounts();
-        return;
-    }
-
     // 鍏堟洿鏂?session
     try {
         const response = await fetch(`api/session/update_company_session_api.php?company_id=${companyId}`);
@@ -2290,7 +2184,7 @@ async function switchAccountListCompany(companyId, companyCode) {
 }
 
 // 椤甸潰鍔犺浇鏃惰幏鍙栨暟鎹?
-function initAccountListPage() {
+document.addEventListener('DOMContentLoaded', function () {
     loadEditData(); // Load currencies and roles for edit modal
     updateAccountListScrollMode(); // 初始化滚动模式
     fetchAccounts();
@@ -2449,15 +2343,13 @@ function initAccountListPage() {
             // 澶卞幓鐒︾偣鏃讹紝纭繚鏄湁鏁堢殑璐熸暟
             if (value) {
                 if (value.startsWith('-')) {
-                    const numValue = parseFloat(value);
-                    if (isNaN(numValue) || numValue >= 0) {
+                    if (!accountMoneyIsValid(value) || accountMoneyCmp(value, '0') >= 0) {
                         // 鏃犳晥鐨勮礋鏁帮紝娓呯┖
                         this.value = '';
                     }
                 } else {
                     // 濡傛灉鏄鏁帮紝杞崲涓鸿礋鏁?
-                    const numValue = parseFloat(value);
-                    if (!isNaN(numValue) && numValue > 0) {
+                    if (accountMoneyIsValid(value) && accountMoneyCmp(value, '0') > 0) {
                         this.value = '-' + value;
                     } else {
                         this.value = '';
@@ -2499,13 +2391,7 @@ function initAccountListPage() {
         // Clean up URL
         window.history.replaceState({}, document.title, window.location.pathname);
     }
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    if (document.body && document.body.classList.contains('account-list-spa-embed')) return;
-    initAccountListPage();
 });
-window.runAccountListPageInit = initAccountListPage;
 
 // ==========================================
 // Currency Setting Modal Logic

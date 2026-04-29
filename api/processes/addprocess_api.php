@@ -7,6 +7,7 @@
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -117,7 +118,7 @@ function getExistingProcessesForCopy(PDO $pdo, int $companyId): array {
         SELECT p.id as process_id, p.process_id as process_name, d.name as description_name
         FROM process p
         LEFT JOIN description d ON p.description_id = d.id
-        WHERE p.company_id = ?
+        WHERE p.company_id = ? AND p.status IN ('active', 'inactive')
         ORDER BY p.process_id, p.dts_created DESC
     ");
     $stmt->execute([$companyId]);
@@ -202,9 +203,17 @@ function getSourceTemplatesForCopy(PDO $pdo, $processIdOrDbId, int $companyId): 
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function processExists(PDO $pdo, string $processId, $descriptionId): bool {
-    $stmt = $pdo->prepare("SELECT id FROM process WHERE process_id = ? AND description_id = ?");
-    $stmt->execute([$processId, $descriptionId]);
+function processExists(PDO $pdo, string $processId, $descriptionId, int $companyId): bool {
+    $stmt = $pdo->prepare("
+        SELECT id
+        FROM process
+        WHERE process_id = ?
+          AND description_id = ?
+          AND company_id = ?
+          AND status IN ('active', 'inactive')
+        LIMIT 1
+    ");
+    $stmt->execute([$processId, $descriptionId, $companyId]);
     return $stmt->fetch() !== false;
 }
 
@@ -466,12 +475,12 @@ try {
             'customer_id' => (isset($_POST['customer_id']) && $_POST['customer_id'] !== '') ? (int)$_POST['customer_id'] : null,
             'profit_account_id' => (isset($_POST['profit_account_id']) && $_POST['profit_account_id'] !== '') ? (int)$_POST['profit_account_id'] : null,
             'contract' => trim($_POST['contract'] ?? ''),
-            'insurance' => (isset($_POST['insurance']) && $_POST['insurance'] !== '') ? (float)$_POST['insurance'] : null,
+            'insurance' => money_optional($_POST['insurance'] ?? null),
             'sop' => trim($_POST['sop'] ?? ''),
             'remark' => trim($_POST['remark'] ?? ''),
-            'cost' => (isset($_POST['cost']) && $_POST['cost'] !== '') ? (float)$_POST['cost'] : null,
-            'price' => (isset($_POST['price']) && $_POST['price'] !== '') ? (float)$_POST['price'] : null,
-            'profit' => (isset($_POST['profit']) && $_POST['profit'] !== '') ? (float)$_POST['profit'] : null,
+            'cost' => money_optional($_POST['cost'] ?? null),
+            'price' => money_optional($_POST['price'] ?? null),
+            'profit' => money_optional($_POST['profit'] ?? null),
             'profit_sharing' => trim($_POST['profit_sharing'] ?? ''),
             'day_start' => trim($_POST['day_start'] ?? '') ?: null,
             'day_start_frequency' => $day_start_frequency,
@@ -603,7 +612,7 @@ try {
         try {
             foreach ($processIds as $processId) {
                 foreach ($descriptionIds as $descriptionId) {
-                    if (processExists($pdo, $processId, $descriptionId)) {
+                    if (processExists($pdo, $processId, $descriptionId, $companyId)) {
                         $errors[] = "Process already exists for process_id $processId and description $descriptionId";
                         continue;
                     }

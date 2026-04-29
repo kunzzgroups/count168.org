@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -67,14 +68,14 @@ try {
     }
 
     $transaction_id = (int) ($payload['transaction_id'] ?? 0);
-    $amount = isset($payload['amount']) ? (float) $payload['amount'] : null;
+    $amount = isset($payload['amount']) ? money_normalize($payload['amount']) : null;
     $description = trim($payload['description'] ?? '');
     $remark = trim($payload['remark'] ?? '');
 
     if ($transaction_id <= 0) {
         throw new Exception('缺少交易记录 ID');
     }
-    if ($amount === null || $amount < 0) {
+    if ($amount === null || money_cmp($amount, '0') < 0) {
         throw new Exception('金额不能小于 0');
     }
 
@@ -86,7 +87,7 @@ try {
 
     jsonResponse(true, '交易更新成功', [
         'transaction_id' => $transaction_id,
-        'amount' => $amount,
+        'amount' => money_out($amount),
         'description' => $description,
         'remark' => $remark
     ]);

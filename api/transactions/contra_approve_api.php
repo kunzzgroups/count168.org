@@ -22,6 +22,11 @@ function tableHasColumn(PDO $pdo, string $table, string $column): bool {
     return $stmt->rowCount() > 0;
 }
 
+function canApproveTransactionType(string $transactionType): bool {
+    $type = strtoupper(trim($transactionType));
+    return in_array($type, ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'PROFIT', 'WIN', 'LOSE'], true);
+}
+
 function resolveContraCompanyIdPost(PDO $pdo): int {
     $userRole = strtolower($_SESSION['role'] ?? '');
     $rid = isset($_POST['company_id']) ? trim($_POST['company_id']) : '';
@@ -49,7 +54,7 @@ function approveContraTransaction(PDO $pdo, int $transactionId, int $companyId, 
     $stmt->execute([$transactionId, $companyId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) throw new Exception('记录不存在或不属于当前公司');
-    if ($row['transaction_type'] !== 'CONTRA') throw new Exception('仅允许批准 CONTRA');
+    if (!canApproveTransactionType((string)($row['transaction_type'] ?? ''))) throw new Exception('该类型不在审批范围内');
     if (strtoupper((string)$row['approval_status']) === 'APPROVED') return;
     $setParts = ["approval_status = 'APPROVED'"];
     $params = [];

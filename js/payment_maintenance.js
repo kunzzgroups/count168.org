@@ -52,12 +52,11 @@
 
         // Format number function
         function formatNumber(num) {
-            const number = parseFloat(num);
-            if (isNaN(number)) return '0.00';
-            return number.toLocaleString('en-US', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
+            try {
+                return MoneyDecimal.formatThousands(num, 2);
+            } catch (_) {
+                return '0.00';
+            }
         }
 
         // 从 PHP session 中获取 company_id（用于跨页面同步）
@@ -287,7 +286,7 @@
             console.log('🔍 搜索参数:', { transactionType, dateFrom, dateTo, companyId: currentCompanyId, currency: selectedCurrency });
             
             // 构建URL
-            let url = `api/payment_maintenance/search_api.php?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`;
+            let url = `api/payment_maintenance/search_api.php?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&_=${Date.now()}`;
             if (transactionType) {
                 url += `&transaction_type=${encodeURIComponent(transactionType)}`;
             }
@@ -387,9 +386,23 @@
             });
         }
 
+        function parseMaintenanceSortTime(row) {
+            const created = String(row?.dts_created || '').trim();
+            const createdMatch = created.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2}:\d{2})$/);
+            if (!createdMatch) return 0;
+            const iso = `${createdMatch[3]}-${createdMatch[2]}-${createdMatch[1]}T${createdMatch[4]}`;
+            const ts = Date.parse(iso);
+            return Number.isFinite(ts) ? ts : 0;
+        }
+
         // Fill list function
         function fillTable(data) {
             data = mergeProfitRows(data);
+            data.sort((a, b) => {
+                const cmp = parseMaintenanceSortTime(b) - parseMaintenanceSortTime(a);
+                if (cmp !== 0) return cmp;
+                return Number(b?.transaction_id || 0) - Number(a?.transaction_id || 0);
+            });
             const tbody = document.getElementById('dataTableBody');
             tbody.innerHTML = '';
             

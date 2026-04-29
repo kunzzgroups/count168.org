@@ -1,6 +1,7 @@
 <?php
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -11,6 +12,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 if (!isset($_SESSION['user_id'])) {
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
+    exit();
+}
+if (strtolower($_SESSION['role'] ?? '') !== 'owner') {
+    echo json_encode(['status' => 'error', 'message' => 'Read-only: only owner can modify ownership']);
     exit();
 }
 
@@ -34,22 +39,30 @@ if (!$company_id) {
     exit();
 }
 
+function ownershipPct($value): string {
+    return money_normalize($value, 2);
+}
+
+function ownershipPctOut($value): string {
+    return money_out($value, 2);
+}
+
 // Validate total percentage
-$total_percentage = 0;
+$total_percentage = '0.00';
 foreach ($owners as $owner) {
     if (!isset($owner['account_id']) || !isset($owner['percentage'])) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid owner data format']);
         exit();
     }
-    $pct = (float) $owner['percentage'];
-    if ($pct <= 0 || $pct > 100) {
+    $pct = ownershipPct($owner['percentage']);
+    if (money_cmp($pct, '0', 2) <= 0 || money_cmp($pct, '100', 2) > 0) {
         echo json_encode(['status' => 'error', 'message' => 'Percentage must be between 0 and 100']);
         exit();
     }
-    $total_percentage += $pct;
+    $total_percentage = money_add($total_percentage, $pct, 2);
 }
 
-if ($total_percentage > 100) {
+if (money_cmp($total_percentage, '100', 2) > 0) {
     echo json_encode(['status' => 'error', 'message' => 'Total allocation exceeds 100%']);
     exit();
 }
@@ -130,7 +143,7 @@ try {
                         $roVal = $existingReadOnly[(int) $real_id] ?? 1;
                     }
                 }
-                $insertStmt->execute([$company_id, (int) $real_id, $owner_type, (float) $owner['percentage'], $pgid, $roVal]);
+                $insertStmt->execute([$company_id, (int) $real_id, $owner_type, ownershipPctOut($owner['percentage']), $pgid, $roVal]);
 
                 // 同步 read_only 到 user 表的全局设置作为默认回退
                 if ($owner_type === 'user') {
@@ -140,7 +153,7 @@ try {
             } else {
                 // If migration hasn't run, we must drop Users so it doesn't crash, or attempt.
                 // In a perfect world, migration is run first. If not, only save numbers.
-                $insertStmt->execute([$company_id, (int) $real_id, (float) $owner['percentage']]);
+                $insertStmt->execute([$company_id, (int) $real_id, ownershipPctOut($owner['percentage'])]);
             }
         }
     }

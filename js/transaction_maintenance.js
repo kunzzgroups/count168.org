@@ -626,8 +626,8 @@
             const percentDisplay = (row.percent !== null && row.percent !== undefined && row.percent !== '') ? escapeHtml(row.percent) : '-';
             const currencyDisplay = row.currency ? escapeHtml(row.currency) : '-';
             const rateDisplay = (row.rate !== null && row.rate !== undefined && row.rate !== '') ? escapeHtml(row.rate) : '-';
-            const crDisplay = row.cr !== null && row.cr !== undefined && row.cr !== '' ? escapeHtml(parseFloat(row.cr).toFixed(2)) : '-';
-            const drDisplay = row.dr !== null && row.dr !== undefined && row.dr !== '' ? escapeHtml(parseFloat(row.dr).toFixed(2)) : '-';
+            const crDisplay = row.cr !== null && row.cr !== undefined && row.cr !== '' ? escapeHtml(MoneyDecimal.formatFixed(row.cr, 2)) : '-';
+            const drDisplay = row.dr !== null && row.dr !== undefined && row.dr !== '' ? escapeHtml(MoneyDecimal.formatFixed(row.dr, 2)) : '-';
             const createdByDisplay = row.created_by ? escapeHtml(row.created_by) : '-';
 
             const isDeleted = row.is_deleted === 1 || row.is_deleted === '1' || row.is_deleted === true;

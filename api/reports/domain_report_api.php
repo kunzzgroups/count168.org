@@ -9,6 +9,11 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
+
+function domainReportMoneyOut($value): string {
+    return money_out($value ?? '0');
+}
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -132,15 +137,15 @@ function fetchDomainReportRows(PDO $pdo, int $company_id, string $date_from, str
  */
 function buildReportResult(array $rows, string $date_from, string $date_to) {
     $report_data = [];
-    $total_turnover = 0;
-    $total_win = 0;
-    $total_lose = 0;
+    $total_turnover = '0.00000000';
+    $total_win = '0.00000000';
+    $total_lose = '0.00000000';
 
     foreach ($rows as $row) {
-        $turnover = (float)$row['turnover_total'];
-        $win = (float)$row['win_total'];
-        $lose = (float)$row['lose_total'];
-        $winLose = $win - $lose;
+        $turnover = domainReportMoneyOut($row['turnover_total'] ?? '0');
+        $win = domainReportMoneyOut($row['win_total'] ?? '0');
+        $lose = domainReportMoneyOut($row['lose_total'] ?? '0');
+        $winLose = domainReportMoneyOut(money_sub($win, $lose));
 
         $report_data[] = [
             'process_id' => (int)$row['process_pk'],
@@ -152,18 +157,18 @@ function buildReportResult(array $rows, string $date_from, string $date_to) {
             'win_lose' => $winLose
         ];
 
-        $total_turnover += $turnover;
-        $total_win += $win;
-        $total_lose += $lose;
+        $total_turnover = money_add($total_turnover, $turnover);
+        $total_win = money_add($total_win, $win);
+        $total_lose = money_add($total_lose, $lose);
     }
 
     return [
         'report_data' => $report_data,
         'totals' => [
-            'turnover' => $total_turnover,
-            'win' => $total_win,
-            'lose' => $total_lose,
-            'win_lose' => $total_win - $total_lose
+            'turnover' => domainReportMoneyOut($total_turnover),
+            'win' => domainReportMoneyOut($total_win),
+            'lose' => domainReportMoneyOut($total_lose),
+            'win_lose' => domainReportMoneyOut(money_sub($total_win, $total_lose))
         ],
         'date_from' => $date_from,
         'date_to' => $date_to

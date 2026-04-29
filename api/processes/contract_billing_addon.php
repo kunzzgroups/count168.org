@@ -34,7 +34,7 @@ function getContractOnePlusExtraFullMonths(?string $contract): int
 }
 
 /** 从 startYmd 到当月底（含）占当月天数的比例 */
-function ratioRemainingDaysInMonthFromStartYmd(string $startYmd): ?float
+function ratioRemainingDaysInMonthFromStartYmd(string $startYmd): ?string
 {
     $ts = strtotime($startYmd);
     if ($ts === false) {
@@ -47,24 +47,24 @@ function ratioRemainingDaysInMonthFromStartYmd(string $startYmd): ?float
     }
     $daysRemaining = max(0, $daysInMonth - $dayOfMonth + 1);
 
-    return $daysRemaining / $daysInMonth;
+    return money_div((string) $daysRemaining, (string) $daysInMonth, MONEY_CALC_SCALE);
 }
 
 /**
- * @param float|null $prorationRatio 本次入账「剩余天数/当月天数」；null 或 ≥1 时不调整
- * @param float        $origCost      整月 Buy
- * @param float        $origPrice     整月 Sell
- * @param float        $origProfit    整月 Profit
+ * @param string|null $prorationRatio 本次入账「剩余天数/当月天数」；null 或 >=1 时不调整
+ * @param string      $origCost       整月 Buy
+ * @param string      $origPrice      整月 Sell
+ * @param string      $origProfit     整月 Profit
  */
 function applyOnePlusXRemainingDaysBuySellAddon(
     ?string $contract,
-    float $origCost,
-    float $origPrice,
-    float $origProfit,
-    float &$cost,
-    float &$price,
-    float &$profit,
-    ?float $prorationRatio
+    string $origCost,
+    string $origPrice,
+    string $origProfit,
+    string &$cost,
+    string &$price,
+    string &$profit,
+    ?string $prorationRatio
 ): void {
     // New rule: active billing always keeps 1-month amounts.
     // 1+N compensation is handled only in manual_inactive flow.
@@ -120,31 +120,31 @@ function billingInclusiveDaysBetween(string $fromYmd, string $toYmd): int
  * Monthly 对日对月：整期 [p0,p1] 对应一笔固定月价（cost/price/profit），仅按 [from,p1] 占整期的日历天数比例缩放。
  * 不可使用 prorateInclusiveDateRange：该函数按「每个自然月」切片乘整月价，跨两自然月的一期会得到比例之和 >1（如 1111→1125）。
  *
- * @return array{cost:float,price:float,profit:float,ratio:?float}
+ * @return array{cost:string,price:string,profit:string,ratio:?string}
  */
 function prorateMonthlyAnniversaryPeriodLinear(
     string $p0,
     string $p1,
     string $from,
-    float $cost,
-    float $price,
-    float $profit
+    string $cost,
+    string $price,
+    string $profit
 ): array {
     if ($from > $p1) {
-        return ['cost' => 0.0, 'price' => 0.0, 'profit' => 0.0, 'ratio' => null];
+        return ['cost' => '0.00000000', 'price' => '0.00000000', 'profit' => '0.00000000', 'ratio' => null];
     }
     $adjFrom = $from < $p0 ? $p0 : $from;
     $fullD = billingInclusiveDaysBetween($p0, $p1);
     $useD = billingInclusiveDaysBetween($adjFrom, $p1);
     if ($fullD <= 0) {
-        return ['cost' => 0.0, 'price' => 0.0, 'profit' => 0.0, 'ratio' => null];
+        return ['cost' => '0.00000000', 'price' => '0.00000000', 'profit' => '0.00000000', 'ratio' => null];
     }
-    $r = $useD / $fullD;
+    $r = money_div((string) $useD, (string) $fullD, MONEY_CALC_SCALE);
 
     return [
-        'cost' => round($cost * $r, 2),
-        'price' => round($price * $r, 2),
-        'profit' => round($profit * $r, 2),
+        'cost' => money_mul($cost, $r, 2),
+        'price' => money_mul($price, $r, 2),
+        'profit' => money_mul($profit, $r, 2),
         'ratio' => $r,
     ];
 }

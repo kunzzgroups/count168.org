@@ -33,12 +33,24 @@ function showNotification(message, type = 'success') {
 }
 
 function formatAmount(amount) {
-    let num = Number(amount || 0);
-    // 避免出现 -0.00 的情况，接近 0 的负数直接当成 0 处理
-    if (Math.abs(num) < 0.005) {
-        num = 0;
-    }
-    return num.toFixed(2);
+    const value = MoneyDecimal.cmp(MoneyDecimal.abs(amount || '0'), '0.005') < 0 ? '0' : (amount || '0');
+    return MoneyDecimal.formatFixed(value, 2);
+}
+
+function reportAdd(a, b) {
+    return MoneyDecimal.add(a || '0', b || '0');
+}
+
+function reportSub(a, b) {
+    return MoneyDecimal.sub(a || '0', b || '0');
+}
+
+function reportCmp(a, b) {
+    return MoneyDecimal.cmp(a || '0', b || '0');
+}
+
+function reportInt(value) {
+    return MoneyDecimal.toDecimal(value || '0', 0).toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber();
 }
 
 let currentCompanyId = typeof window.DOMAIN_REPORT_COMPANY_ID !== 'undefined' ? window.DOMAIN_REPORT_COMPANY_ID : null;
@@ -95,7 +107,7 @@ async function switchCompany(companyId, companyCode) {
 
     const buttons = document.querySelectorAll('#company-buttons-container .transaction-company-btn');
     buttons.forEach(btn => {
-        if (parseInt(btn.dataset.companyId, 10) === parseInt(companyId, 10)) {
+        if (reportInt(btn.dataset.companyId) === reportInt(companyId)) {
             btn.classList.add('active');
         } else {
             btn.classList.remove('active');
@@ -441,8 +453,7 @@ function renderReport(data, totals = null) {
         const card = document.createElement('div');
         card.className = 'domain-report-card';
         const label = item.description ? `${item.process} (${item.description})` : item.process;
-        const winLoseValue = Number(item.win_lose || 0);
-        const winLoseClass = winLoseValue > 0 ? 'domain-report-win-lose-positive' : (winLoseValue < 0 ? 'domain-report-win-lose-negative' : '');
+        const winLoseClass = reportCmp(item.win_lose || '0', '0') > 0 ? 'domain-report-win-lose-positive' : (reportCmp(item.win_lose || '0', '0') < 0 ? 'domain-report-win-lose-negative' : '');
         card.innerHTML = `
             <div class="domain-report-card-item">${label}</div>
             <div class="domain-report-card-item domain-report-amount"><strong>${formatAmount(item.turnover)}</strong></div>
@@ -453,17 +464,17 @@ function renderReport(data, totals = null) {
         container.appendChild(card);
     });
 
-    const totalTurnover = totals?.turnover ?? data.reduce((sum, item) => sum + Number(item.turnover || 0), 0);
-    const totalWin = totals?.win ?? data.reduce((sum, item) => sum + Number(item.win || 0), 0);
-    const totalLose = totals?.lose ?? data.reduce((sum, item) => sum + Number(item.lose || 0), 0);
-    const totalWinLose = totals?.win_lose ?? (totalWin - totalLose);
+    const totalTurnover = totals?.turnover ?? data.reduce((sum, item) => reportAdd(sum, item.turnover), '0');
+    const totalWin = totals?.win ?? data.reduce((sum, item) => reportAdd(sum, item.win), '0');
+    const totalLose = totals?.lose ?? data.reduce((sum, item) => reportAdd(sum, item.lose), '0');
+    const totalWinLose = totals?.win_lose ?? reportSub(totalWin, totalLose);
 
     document.getElementById('totalTurnover').innerHTML = '<strong>' + formatAmount(totalTurnover) + '</strong>';
     document.getElementById('totalWin').innerHTML = '<strong>' + formatAmount(totalWin) + '</strong>';
     document.getElementById('totalLose').innerHTML = '<strong>' + formatAmount(totalLose) + '</strong>';
     
     const totalWinLoseElement = document.getElementById('totalWinLose');
-    const totalWinLoseClass = totalWinLose > 0 ? 'domain-report-win-lose-positive' : (totalWinLose < 0 ? 'domain-report-win-lose-negative' : '');
+    const totalWinLoseClass = reportCmp(totalWinLose, '0') > 0 ? 'domain-report-win-lose-positive' : (reportCmp(totalWinLose, '0') < 0 ? 'domain-report-win-lose-negative' : '');
     totalWinLoseElement.className = 'domain-report-amount ' + totalWinLoseClass;
     totalWinLoseElement.innerHTML = '<strong>' + formatAmount(totalWinLose) + '</strong>';
     

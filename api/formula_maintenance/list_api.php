@@ -127,7 +127,9 @@ function mapRowsToDisplay(array $rows) {
     // 但不影响底层 data_capture_templates 中的所有记录（仅列表展示去重）。
     $displayRowsByKey = [];
     foreach ($rows as $row) {
-        $sourceValue = $row['columns_display'] ?? $row['source_columns'] ?? '';
+        $sourceRef = $row['columns_display'] ?? $row['source_columns'] ?? '';
+        // Source 列与 Data Capture Summary 一致：展示 source_percent（列引用仍放在 source_ref 供保存）
+        $sourceDisplay = formatSourcePercentForMaintenanceList($row['source_percent'] ?? null);
         // 列表展示：$5 * (0.18)；编辑框用 $5*0.18（与 update 解析一致）
         $formulaDisplayParen = buildFormulaDisplayParenFromRow($row);
         $formulaEdit = buildFormulaEditFromRow($row);
@@ -143,8 +145,11 @@ function mapRowsToDisplay(array $rows) {
         $inputMethod = $row['input_method'] ?? '';
         $description = $row['description'] ?? '';
         $productType = $row['product_type'] ?? 'main';
+        // description 必须参与去重 key：主产品与「红股%」等子说明共用同一 id_product、同 account 时，
+        // 若省略则会被合并为一条，导致 Maintenance 行数少于 Data Capture Summary（例如少显示第 4 行）。
+        $descriptionKey = strtolower(trim((string) $description));
 
-        // 只要「同一个 Process + Account + Currency + Product + 类型」，
+        // 只要「同一个 Process + Account + Currency + Product + 类型 + 说明」，
         // 就视为同一条当前有效公式，只保留最新一条（id 最大），
         // 历史上旧公式仍保留在表里，但不会额外占一行，避免 Data Summary 25 条而 Maintenance - Formula 显示 26 条的情况。
         $keyParts = [
@@ -153,6 +158,7 @@ function mapRowsToDisplay(array $rows) {
             strtolower(trim((string)$currencyDisplay)),
             strtolower(trim((string)$product)),
             $productType,
+            $descriptionKey,
         ];
         $dedupKey = implode('|', $keyParts);
 
@@ -165,7 +171,8 @@ function mapRowsToDisplay(array $rows) {
                 'account_id' => $row['account_id'],
                 'account_name' => $row['account_name'] ?? '',
                 'currency' => $currencyDisplay,
-                'source' => $sourceValue,
+                'source' => $sourceDisplay,
+                'source_ref' => is_string($sourceRef) ? trim($sourceRef) : trim((string) $sourceRef),
                 'product' => $product,
                 'input_method' => $inputMethod,
                 'formula' => $formulaDisplayParen,
@@ -180,7 +187,8 @@ function mapRowsToDisplay(array $rows) {
                 $displayRowsByKey[$dedupKey]['id'] = $currentId;
                 $displayRowsByKey[$dedupKey]['formula'] = $formulaDisplayParen;
                 $displayRowsByKey[$dedupKey]['formula_edit'] = $formulaEdit;
-                $displayRowsByKey[$dedupKey]['source'] = $sourceValue;
+                $displayRowsByKey[$dedupKey]['source'] = $sourceDisplay;
+                $displayRowsByKey[$dedupKey]['source_ref'] = is_string($sourceRef) ? trim($sourceRef) : trim((string) $sourceRef);
                 $displayRowsByKey[$dedupKey]['input_method'] = $inputMethod;
                 $displayRowsByKey[$dedupKey]['description'] = $description;
                 $displayRowsByKey[$dedupKey]['account'] = $accountDisplay;

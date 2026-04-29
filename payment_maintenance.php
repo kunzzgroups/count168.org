@@ -80,6 +80,7 @@ if (!empty($session_company_id)) {
                         <option value="PAYMENT">PAYMENT</option>
                         <option value="RECEIVE">RECEIVE</option>
                         <option value="CLAIM">CLAIM</option>
+                        <option value="ADJUSTMENT">ADJUSTMENT</option>
                         <option value="RATE">RATE</option>
                     </select>
                 </div>
@@ -240,6 +241,8 @@ if (!empty($session_company_id)) {
     </div>
 
     <script>window.currentCompanyId = <?php echo json_encode($session_company_id); ?>; window.currentCompanyCode = <?php echo json_encode($session_company_code); ?>;</script>
+    <script src="js/decimal.min.js?v=<?php echo time(); ?>"></script>
+    <script src="js/money-decimal.js?v=<?php echo time(); ?>"></script>
     <script src="js/date-range-picker.js?v=<?php echo time(); ?>"></script>
     <script src="js/payment_maintenance.js?v=<?php echo time(); ?>"></script>
 </body>

@@ -147,24 +147,9 @@
         if (selectedOption) selectedOption.classList.add('selected');
     }
 
-    function goDashboard() {
-        var u =
-            (typeof window.EAZYCOUNT_SPA_DASHBOARD === 'string' && window.EAZYCOUNT_SPA_DASHBOARD) || 'dashboard.php';
-        if (window.top !== window.self) {
-            window.top.location.assign(u);
-        } else {
-            window.location.assign(u);
-        }
-    }
-
     function handleLogout() {
         if (confirm('Are you sure you want to logout?')) {
-            var u = 'dashboard.php?logout=1';
-            if (window.top !== window.self) {
-                window.top.location.assign(u);
-            } else {
-                window.location.assign(u);
-            }
+            window.location.href = 'dashboard.php?logout=1';
         }
     }
 
@@ -477,7 +462,6 @@
     window.toggleAvatarOptions = toggleAvatarOptions;
     window.selectGender = selectGender;
     window.selectAvatar = selectAvatar;
-    window.goDashboard = goDashboard;
     window.handleLogout = handleLogout;
     window.toggleLanguageDropdown = toggleLanguageDropdown;
     window.selectLanguage = selectLanguage;

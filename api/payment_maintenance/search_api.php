@@ -11,6 +11,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../includes/c168_domain_access.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -206,7 +207,7 @@ function fetchMainTransactions(PDO $pdo, $company_id, $date_from_db, $date_to_db
         $sql .= " AND {$schema['currencyFilterField']} IN ($placeholders)";
         $params = array_merge($params, array_map('strtoupper', $currency_filters));
     }
-    $sql .= " AND t.transaction_type <> 'RATE' ORDER BY t.transaction_date DESC, t.created_at DESC";
+    $sql .= " AND t.transaction_type <> 'RATE' ORDER BY t.created_at DESC, t.id DESC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -234,7 +235,12 @@ function rowToItem(array $row, $is_deleted = 0, string $ownerCode = '', string $
     }
 
     $description = $row['description'] ?? '';
-    if (empty($description) && in_array($row['transaction_type'] ?? '', ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM'])) {
+    if (empty($description) && ($row['transaction_type'] ?? '') === 'ADJUSTMENT') {
+        $description = 'ADJUSTMENT - WIN/LOSS';
+    } elseif (empty($description) && in_array($row['transaction_type'] ?? '', ['WIN', 'LOSE'], true)) {
+        $fromCode = trim((string) ($row['from_account_code'] ?? ''));
+        $description = (($row['transaction_type'] ?? '') === 'WIN' ? 'PROFIT FROM ' : 'PROFIT TO ') . ($fromCode !== '' ? $fromCode : 'N/A');
+    } elseif (empty($description) && in_array($row['transaction_type'] ?? '', ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM'])) {
         $description = ($row['transaction_type'] ?? '') . ' FROM ' . ($row['from_account_code'] ?? 'N/A');
     }
     if ($isDomainShareCommission) {
@@ -331,7 +337,7 @@ function rowToItem(array $row, $is_deleted = 0, string $ownerCode = '', string $
         'account' => $displayAccount,
         'from_account' => $fromDisplay,
         'currency' => $row['currency_code'] ?? '-',
-        'amount' => (float) $row['amount'],
+        'amount' => money_out($row['amount'] ?? '0'),
         'description' => $description,
         'remark' => ($isDomainShareCommission || $isDomainListFee) ? '' : ($row['remark'] ?? ''),
         'dts_created' => $row['dts_created'] ?? '',
@@ -391,12 +397,17 @@ function remapPaymentMaintenanceAccountCode(?string $code, string $ownerCode, st
     if ($v === '') {
         return '-';
     }
-    // 只将系统代码 C168 标准化为 PROFIT；不替换 owner code，
-    // 避免把正常账户代码（如 K）错误地替换为其他账户（如 ALBB）。
-    if ($v === 'C168') {
-        return 'PROFIT';
-    }
+    // Account(To/From) 统一展示真实 account_id，不做 C168->PROFIT 映射。
     return $v;
+}
+
+function paymentMaintenanceSortTimestamp(array $item): int {
+    $created = trim((string)($item['dts_created'] ?? ''));
+    if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2}:\d{2})$/', $created, $m)) {
+        $ts = strtotime($m[3] . '-' . $m[2] . '-' . $m[1] . ' ' . $m[4]);
+        return $ts === false ? 0 : $ts;
+    }
+    return 0;
 }
 
 function resolveDomainSubmitter(PDO $pdo, int $companyId, string $dateFromDb, string $dateToDb): string
@@ -507,6 +518,21 @@ function paymentMaintenanceClassifyDomainFeeOrCommissionRow(array $row): ?array
     return null;
 }
 
+/**
+ * 将 DB datetime/date 转为 Payment Maintenance 列表用的 d/m/Y H:i:s（与 fetchMainTransactions 一致）。
+ */
+function paymentMaintenanceFormatRowDtsCreated(?string $dbDatetime): string
+{
+    if ($dbDatetime === null || trim($dbDatetime) === '') {
+        return '';
+    }
+    $ts = strtotime($dbDatetime);
+    if ($ts === false) {
+        return '';
+    }
+    return date('d/m/Y H:i:s', $ts);
+}
+
 function appendVirtualDomainNetProfitItem(
     PDO $pdo,
     array &$data,
@@ -525,12 +551,17 @@ function appendVirtualDomainNetProfitItem(
     }
 
     $profitCode = resolveProfitDisplayCode($pdo, $companyId);
-    $submitter = resolveDomainSubmitter($pdo, $companyId, $dateFromDb, $dateToDb);
+    $fallbackSubmitter = resolveDomainSubmitter($pdo, $companyId, $dateFromDb, $dateToDb);
     $ownerCodeU = strtoupper(trim($ownerCode));
 
-    $sql = "SELECT t.sms, t.description, t.amount, UPPER(COALESCE(c.code, '')) AS currency_code
+    // 与 Payment History rollup 一致：展示元数据取自「同源 List Fee 入账」中按业务时间最早的一笔（fee_tx 口径）
+    $sql = "SELECT t.sms, t.description, t.amount, t.transaction_date, t.created_at,
+                UPPER(COALESCE(c.code, '')) AS currency_code,
+                u.login_id AS created_by_login, o.owner_code AS created_by_owner
             FROM transactions t
             LEFT JOIN currency c ON t.currency_id = c.id
+            LEFT JOIN user u ON t.created_by = u.id
+            LEFT JOIN owner o ON t.created_by_owner = o.id
             WHERE t.company_id = ?
               AND t.transaction_type = 'PAYMENT'
               AND t.transaction_date BETWEEN ? AND ?
@@ -540,10 +571,12 @@ function appendVirtualDomainNetProfitItem(
                  OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %'
                  OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'COMMISION FOR %'
                  OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'COMMISSION FOR %'
-              )";
+              )
+            ORDER BY t.transaction_date ASC, t.created_at ASC, t.id ASC";
     $st = $pdo->prepare($sql);
     $st->execute([$companyId, $dateFromDb, $dateToDb]);
-    $agg = []; // [src][currency] => ['fee'=>float,'comm'=>float]
+    // [src][currency] => fee, comm, fee_ref（首笔 List Fee 元数据，供日期/创建人/创建时间展示）
+    $agg = [];
     while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
         $cls = paymentMaintenanceClassifyDomainFeeOrCommissionRow($r);
         if ($cls === null) {
@@ -555,36 +588,60 @@ function appendVirtualDomainNetProfitItem(
             continue;
         }
         if (!isset($agg[$src][$currencyCode])) {
-            $agg[$src][$currencyCode] = ['fee' => 0.0, 'comm' => 0.0];
+            $agg[$src][$currencyCode] = ['fee' => '0', 'comm' => '0', 'fee_ref' => null];
         }
-        $amt = round((float) ($r['amount'] ?? 0), 2);
+        $amt = money_normalize($r['amount'] ?? '0');
         if ($cls['kind'] === 'fee') {
-            $agg[$src][$currencyCode]['fee'] += $amt;
+            $agg[$src][$currencyCode]['fee'] = money_add($agg[$src][$currencyCode]['fee'], $amt);
+            if ($agg[$src][$currencyCode]['fee_ref'] === null) {
+                $agg[$src][$currencyCode]['fee_ref'] = [
+                    'transaction_date' => $r['transaction_date'] ?? null,
+                    'created_at' => $r['created_at'] ?? null,
+                    'created_by_login' => $r['created_by_login'] ?? '',
+                    'created_by_owner' => $r['created_by_owner'] ?? '',
+                ];
+            }
         } else {
-            $agg[$src][$currencyCode]['comm'] += $amt;
+            $agg[$src][$currencyCode]['comm'] = money_add($agg[$src][$currencyCode]['comm'], $amt);
         }
     }
 
     foreach ($agg as $src => $curMap) {
         foreach ($curMap as $currencyCode => $tot) {
-            $fee = round((float) ($tot['fee'] ?? 0), 2);
-            $comm = round((float) ($tot['comm'] ?? 0), 2);
-            $net = round($fee - $comm, 2);
-            if ($net <= 0) {
+            $fee = money_normalize($tot['fee'] ?? '0');
+            $comm = money_normalize($tot['comm'] ?? '0');
+            $net = money_sub($fee, $comm);
+            if (money_cmp($net, '0') <= 0) {
                 continue;
             }
             $labelSrc = $src !== '' ? $src : ($ownerCodeU !== '' ? $ownerCodeU : $profitCode);
+            $feeRef = isset($tot['fee_ref']) && is_array($tot['fee_ref']) ? $tot['fee_ref'] : null;
+            $txDateRaw = $feeRef['transaction_date'] ?? null;
+            $dateDisplay = ($txDateRaw !== null && $txDateRaw !== '')
+                ? date('d/m/Y', strtotime((string) $txDateRaw))
+                : date('d/m/Y', strtotime($dateToDb));
+            $dtsCreated = paymentMaintenanceFormatRowDtsCreated(isset($feeRef['created_at']) ? (string) $feeRef['created_at'] : null);
+            if ($dtsCreated === '') {
+                $dtsCreated = paymentMaintenanceFormatRowDtsCreated($dateToDb . ' 00:00:00');
+            }
+            $createdBy = '';
+            if ($feeRef !== null) {
+                $createdBy = !empty($feeRef['created_by_login']) ? trim((string) $feeRef['created_by_login']) : trim((string) ($feeRef['created_by_owner'] ?? ''));
+            }
+            if ($createdBy === '') {
+                $createdBy = $fallbackSubmitter;
+            }
             $data[] = [
                 'transaction_id' => 0,
-                'date' => date('d/m/Y', strtotime($dateToDb)),
+                'date' => $dateDisplay,
                 'account' => $profitCode,
                 'from_account' => '-',
                 'currency' => $currencyCode,
-                'amount' => $net,
+                'amount' => money_out($net),
                 'description' => 'PROFIT BY ' . $labelSrc,
                 'remark' => '',
-                'dts_created' => date('d/m/Y H:i:s'),
-                'created_by' => $submitter,
+                'dts_created' => $dtsCreated,
+                'created_by' => $createdBy,
                 'transaction_type' => 'PAYMENT',
                 'is_deleted' => 0,
                 'deleted_by' => null,
@@ -626,7 +683,7 @@ function fetchRateTransactionItems(PDO $pdo, $company_id, $date_from_db, $date_t
                 WHERE h.company_id = ? AND ac.company_id = ? AND h.transaction_type = 'RATE'
                 AND e.entry_type IN ('RATE_FIRST_TO', 'RATE_TRANSFER_TO') AND h.transaction_date BETWEEN ? AND ?
                 $rateCurrencyFilter
-                ORDER BY h.transaction_date DESC, h.created_at DESC, e.id DESC";
+                ORDER BY h.created_at DESC, e.id DESC";
     $rateStmt = $pdo->prepare($rateSql);
     $rateStmt->execute($rateParams);
     $rateRows = $rateStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -684,12 +741,12 @@ function fetchRateTransactionItems(PDO $pdo, $company_id, $date_from_db, $date_t
                 $description = $rateRow['entry_description'];
             }
         }
-        $displayAmount = (float) $rateRow['amount'];
+        $displayAmount = money_normalize($rateRow['amount'] ?? '0');
         if ($entryType === 'RATE_TRANSFER_TO') {
             $rateDetailStmt->execute([$headerId]);
             $originalAmount = $rateDetailStmt->fetchColumn();
-            if ($originalAmount !== false && $originalAmount !== null && $originalAmount > 0) {
-                $displayAmount = (float) $originalAmount;
+            if ($originalAmount !== false && $originalAmount !== null && money_cmp($originalAmount, '0') > 0) {
+                $displayAmount = money_normalize($originalAmount);
             }
         }
         $description = strtoupper((string) $description);
@@ -699,7 +756,7 @@ function fetchRateTransactionItems(PDO $pdo, $company_id, $date_from_db, $date_t
             'account' => remapPaymentMaintenanceAccountCode((string)($rateRow['account_code'] ?? '-'), $ownerCode, $profitCode),
             'from_account' => remapPaymentMaintenanceAccountCode((string)($fromAccountCode ?? '-'), $ownerCode, $profitCode),
             'currency' => $rateRow['currency_code'] ?? '-',
-            'amount' => $displayAmount,
+            'amount' => money_out($displayAmount),
             'description' => $description,
             'remark' => $rateRow['remark'] ?? '',
             'dts_created' => $rateRow['dts_created'] ?? '',
@@ -759,7 +816,7 @@ function fetchDeletedTransactions(PDO $pdo, $company_id, $date_from_db, $date_to
         $params = array_merge($params, array_map('strtoupper', $currency_filters));
     }
     // 包含所有被删除的交易类型（包括 RATE），以便在 Maintenance - Payment 中用红色删除线展示历史记录
-    $sql .= " ORDER BY td.transaction_date DESC, td.created_at DESC";
+    $sql .= " ORDER BY td.created_at DESC, td.transaction_id DESC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -843,8 +900,8 @@ try {
     }
 
     usort($data, function ($a, $b) {
-        $cmp = strcmp($b['date'], $a['date']);
-        return $cmp !== 0 ? $cmp : strcmp($b['dts_created'], $a['dts_created']);
+        $cmp = paymentMaintenanceSortTimestamp($b) <=> paymentMaintenanceSortTimestamp($a);
+        return $cmp !== 0 ? $cmp : ((int)($b['transaction_id'] ?? 0) <=> (int)($a['transaction_id'] ?? 0));
     });
 
     jsonResponse(true, '查询成功', $data);

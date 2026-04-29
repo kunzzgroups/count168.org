@@ -62,21 +62,6 @@ if (isset($_COOKIE['remember_token'])) {
         setcookie('remember_token', '', time() - 3600, "/", "", false, true);
     }
 }
-
-// 可选：未登录时改为使用 React 登录（见 react_login_entry.php）
-$reactEntryFile = __DIR__ . '/react_login_entry.php';
-if (is_file($reactEntryFile)) {
-    $reactPath = include $reactEntryFile;
-    if (is_string($reactPath) && $reactPath !== '') {
-        $p = $reactPath[0] === '/' ? $reactPath : ('/' . $reactPath);
-        $p = rtrim($p, '/') . '/';
-        // 避免 return '/' 导致再次进入本 index 造成死循环
-        if ($p !== '/') {
-            header('Location: ' . $p, true, 302);
-            exit();
-        }
-    }
-}
 ?>
 
 <!DOCTYPE html>

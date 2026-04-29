@@ -1349,13 +1349,13 @@ function setUserPermissions(permissions) {
 // 获取当前用户role的权限列表
 function getCurrentUserRolePermissions() {
     const rolePermissions = {
-        'owner': ['home', 'admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'admin': ['home', 'admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'manager': ['admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'supervisor': ['admin', 'account', 'process', 'datacapture', 'payment', 'report'],
+        'owner': ['home', 'admin', 'account', 'ownership', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'admin': ['home', 'admin', 'account','process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'manager': ['admin', 'account',  'process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'supervisor': ['admin', 'account',  'process', 'datacapture', 'payment', 'report'],
         'accountant': ['payment', 'report', 'maintenance'],
         'audit': ['payment', 'report', 'maintenance'],
-        'customer service': ['account', 'process', 'datacapture', 'payment', 'report'], 'partnership': []
+        'customer service': ['account',  'process', 'datacapture', 'payment', 'report'], 'partnership': []
     };
 
     return rolePermissions[currentUserRole] || [];
@@ -1420,8 +1420,8 @@ function getRoleTemplateSidebarList(role) {
     const rolePermissions = {
         'partnership': [],
         'admin': ['home', 'admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'manager': ['admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'supervisor': ['admin', 'account', 'process', 'datacapture', 'payment', 'report'],
+        'manager': ['admin', 'account',  'process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'supervisor': ['admin', 'account','process', 'datacapture', 'payment', 'report'],
         'accountant': ['payment', 'report', 'maintenance'],
         'audit': ['payment', 'report', 'maintenance'],
         'customer service': ['account', 'process', 'datacapture', 'payment', 'report']
@@ -1495,9 +1495,9 @@ function getFinalPermissionsForCreation(selectedRole) {
 
     // 获取新账号 role 的完整默认权限
     const rolePermissions = {
-        'admin': ['home', 'admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'manager': ['admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'],
-        'supervisor': ['admin', 'account', 'process', 'datacapture', 'payment', 'report'],
+        'admin': ['home', 'admin', 'account',  'process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'manager': ['admin', 'account',  'process', 'datacapture', 'payment', 'report', 'maintenance'],
+        'supervisor': ['admin', 'account',  'process', 'datacapture', 'payment', 'report'],
         'accountant': ['payment', 'report', 'maintenance'],
         'audit': ['payment', 'report', 'maintenance'],
         'customer service': ['account', 'process', 'datacapture', 'payment', 'report'], 'partnership': []
@@ -2314,11 +2314,13 @@ document.getElementById('userForm').addEventListener('submit', function (e) {
         .then(data => {
             console.log('API Response:', data);
             if (data.success) {
-                const apiMessage = data.message || (isEditMode ? 'User updated successfully!' : 'User created successfully!');
+                // 须在 closeModal() 前保存：closeModal 会把 isEditMode 置为 false，否则会误走 addUserCard 出现重复行
+                const wasEditMode = isEditMode
+                const apiMessage = data.message || (wasEditMode ? 'User updated successfully!' : 'User created successfully!');
                 showAlert(apiMessage, 'success');
                 closeModal();
 
-                if (isEditMode) {
+                if (wasEditMode) {
                     const updatedUser = data.data || {};
                     const willLoseAccess = !!updatedUser.will_lose_access;
 

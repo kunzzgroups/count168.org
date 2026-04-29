@@ -18,6 +18,7 @@ header('Content-Type: application/json');
 
 try {
     require_once __DIR__ . '/../../config.php';
+    require_once __DIR__ . '/../includes/money_decimal.php';
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
@@ -41,17 +42,26 @@ function isManagerOrAboveRole(string $role): bool
 }
 
 /**
- * 是否需要 Contra 审批：
- * - 仅对 CONTRA 生效
- * - manager 以下：只要是“今天之前”的交易日期，就需要审批
+ * 是否需要交易审批：
+ * - manager 以下：只要是“今天及之前”的交易日期，就需要审批
  */
-function requiresContraApproval(string $role, string $transactionDateDb): bool
+function requiresTransactionApproval(string $role, string $transactionDateDb): bool
 {
     if (isManagerOrAboveRole($role)) {
         return false;
     }
     $today = date('Y-m-d');
     return $transactionDateDb < $today;
+}
+
+/**
+ * 需要审批的交易类型：
+ * CONTRA / PAYMENT / RECEIVE / CLAIM / CLEAR / ADJUSTMENT / PROFIT(实际落库为 WIN/LOSE)
+ */
+function requiresApprovalForType(string $transactionType): bool
+{
+    $type = strtoupper(trim($transactionType));
+    return in_array($type, ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'PROFIT', 'WIN', 'LOSE'], true);
 }
 
 function tableHasColumn(PDO $pdo, string $table, string $column): bool
@@ -103,13 +113,30 @@ function clearTransactionSearchCache(): void
 /**
  * 截断到2位小数（不四舍五入）
  */
-function submitTrunc2($value): float
+function submitTrunc2($value): string
 {
-    $n = (float) $value;
-    if ($n >= 0) {
-        return floor($n * 100) / 100;
+    if ($value === null || trim((string)$value) === '') {
+        return money_normalize('0', 2);
     }
-    return ceil($n * 100) / 100;
+    return money_normalize($value ?? '0', 2);
+}
+
+/**
+ * RATE 专用：四舍五入到2位小数（half-up），其他交易类型继续使用 submitTrunc2。
+ */
+function submitRateRound2($value): string
+{
+    if ($value === null || trim((string)$value) === '') {
+        return money_normalize('0', 2);
+    }
+
+    $normalized = money_normalize($value, MONEY_CALC_SCALE);
+    $adjustment = '0.' . str_repeat('0', 2) . '5';
+    if (strpos($normalized, '-') === 0) {
+        $adjustment = '-' . $adjustment;
+    }
+
+    return money_normalize(bcadd($normalized, $adjustment, MONEY_CALC_SCALE), 2);
 }
 
 /**
@@ -222,7 +249,7 @@ try {
     $transaction_type = trim($_POST['transaction_type'] ?? '');
     $account_id = (int)($_POST['account_id'] ?? 0);
     $from_account_id = !empty($_POST['from_account_id']) ? (int)$_POST['from_account_id'] : null;
-    $amount = submitTrunc2((float)($_POST['amount'] ?? 0));
+    $amount = submitTrunc2($_POST['amount'] ?? '0');
     $transaction_date = trim($_POST['transaction_date'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $sms = trim($_POST['sms'] ?? '');
@@ -230,6 +257,7 @@ try {
     $user_type = $_SESSION['user_type'] ?? 'user';
     $created_by_user = null;
     $created_by_owner = null;
+    $from_account = null;
     
     if ($user_type === 'owner') {
         $created_by_owner = (int)($_SESSION['owner_id'] ?? $_SESSION['user_id'] ?? 0);
@@ -248,20 +276,24 @@ try {
         throw new Exception('请选择交易类型');
     }
     
-    if (!in_array($transaction_type, ['WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR'])) {
+    if (!in_array($transaction_type, ['WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'ADJUSTMENT'])) {
         throw new Exception('无效的交易类型');
     }
     
     // RATE 类型有特殊的验证逻辑
     $is_rate = ($transaction_type === 'RATE');
+    $is_adjustment = ($transaction_type === 'ADJUSTMENT');
     
     if (!$is_rate) {
-    if ($account_id <= 0) {
-        throw new Exception('请选择 To Account');
-    }
-    
-    if ($amount < 0) {
-        throw new Exception('金额不能小于 0');
+        if ($account_id <= 0) {
+            throw new Exception('请选择 To Account');
+        }
+
+        if (!$is_adjustment && money_cmp($amount, '0') < 0) {
+            throw new Exception('金额不能小于 0');
+        }
+        if ($is_adjustment && money_cmp($amount, '0') === 0) {
+            throw new Exception('ADJUSTMENT 金额不能为 0');
         }
     }
     
@@ -269,27 +301,37 @@ try {
         throw new Exception('请选择交易日期');
     }
     
-    // 转换日期格式 (dd/mm/yyyy 转为 yyyy-mm-dd)
-    $transaction_date_db = date('Y-m-d', strtotime(str_replace('/', '-', $transaction_date)));
+    // 转换日期格式 (严格按 dd/mm/yyyy 转为 yyyy-mm-dd，避免 strtotime 把 7/04 解析成 07/04)
+    $transaction_date_obj = DateTime::createFromFormat('d/m/Y', trim($transaction_date));
+    $transaction_date_errors = DateTime::getLastErrors();
+    $has_parse_error = is_array($transaction_date_errors)
+        && (
+            ($transaction_date_errors['warning_count'] ?? 0) > 0
+            || ($transaction_date_errors['error_count'] ?? 0) > 0
+        );
+    if (!$transaction_date_obj || $has_parse_error) {
+        throw new Exception('交易日期格式无效，请使用 dd/mm/yyyy');
+    }
+    $transaction_date_db = $transaction_date_obj->format('Y-m-d');
     
     // 检查 transactions 表字段（向后兼容）
     $has_currency_id = tableHasColumn($pdo, 'transactions', 'currency_id');
     $has_approval_status = tableHasColumn($pdo, 'transactions', 'approval_status');
 
-    // Contra 审批规则
+    // 交易审批规则（所有 type 与 CONTRA 保持一致）
     $approval_status = 'APPROVED';
     $approved_by = $created_by_user;
     $approved_by_owner = $created_by_owner;
     $approved_at = date('Y-m-d H:i:s');
-    $is_contra_pending = false;
+    $is_pending_approval = false;
 
-    if ($transaction_type === 'CONTRA' && $has_approval_status) {
-        if (requiresContraApproval($userRole, $transaction_date_db)) {
+    if ($has_approval_status && requiresApprovalForType($transaction_type)) {
+        if (requiresTransactionApproval($userRole, $transaction_date_db)) {
             $approval_status = 'PENDING';
             $approved_by = null;
             $approved_by_owner = null;
             $approved_at = null;
-            $is_contra_pending = true;
+            $is_pending_approval = true;
         }
     }
 
@@ -369,7 +411,9 @@ try {
     }
     
     // 自动生成 description（如果为空）
-    if (empty($description) && in_array($transaction_type, ['PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'CLEAR'])) {
+    if (empty($description) && $transaction_type === 'ADJUSTMENT') {
+        $description = 'ADJUSTMENT - WIN/LOSS';
+    } elseif (empty($description) && in_array($transaction_type, ['PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'CLEAR'])) {
         // 从 To Account 的视角生成描述
         $description = $transaction_type . ' FROM ' . $from_account['account_id'];
     }
@@ -383,12 +427,12 @@ try {
             // 获取 RATE 相关参数
             $rate_from_account_id = !empty($_POST['rate_from_account_id']) ? (int)$_POST['rate_from_account_id'] : null;
             $rate_from_currency = trim($_POST['rate_from_currency'] ?? '');
-            $rate_from_amount = submitTrunc2((float)($_POST['rate_from_amount'] ?? 0));
+            $rate_from_amount = submitRateRound2($_POST['rate_from_amount'] ?? '0');
             $rate_from_description = trim($_POST['rate_from_description'] ?? '');
             
             $rate_to_account_id = !empty($_POST['rate_to_account_id']) ? (int)$_POST['rate_to_account_id'] : null;
             $rate_to_currency = trim($_POST['rate_to_currency'] ?? '');
-            $rate_to_amount = submitTrunc2((float)($_POST['rate_to_amount'] ?? 0));
+            $rate_to_amount = submitRateRound2($_POST['rate_to_amount'] ?? '0');
             $rate_to_description = trim($_POST['rate_to_description'] ?? '');
             
             // 验证第一个 Account 和 Currency 的记录
@@ -396,7 +440,7 @@ try {
                 throw new Exception('RATE 交易必须填写第一个 Account 和 Currency');
             }
             
-            if ($rate_from_amount <= 0 || $rate_to_amount <= 0) {
+            if (money_cmp($rate_from_amount, '0') <= 0 || money_cmp($rate_to_amount, '0') <= 0) {
                 throw new Exception('RATE 交易的金额必须大于 0');
             }
             
@@ -467,24 +511,24 @@ try {
             
             $transaction_ids = [];
             
-            $rate_exchange_rate = (float)($_POST['rate_exchange_rate'] ?? 0);
-            if ($rate_exchange_rate <= 0) {
+            $rate_exchange_rate = money_normalize($_POST['rate_exchange_rate'] ?? '0');
+            if (money_cmp($rate_exchange_rate, '0') <= 0) {
                 throw new Exception('Exchange Rate 必须大于 0');
             }
             
             $rate_transfer_from_account_id = !empty($_POST['rate_transfer_from_account_id']) ? (int)$_POST['rate_transfer_from_account_id'] : null;
             $rate_transfer_to_account_id = !empty($_POST['rate_transfer_to_account_id']) ? (int)$_POST['rate_transfer_to_account_id'] : null;
-            $rate_transfer_from_amount = !empty($_POST['rate_transfer_from_amount']) ? submitTrunc2((float)$_POST['rate_transfer_from_amount']) : null;
-            $rate_transfer_to_amount = !empty($_POST['rate_transfer_to_amount']) ? submitTrunc2((float)$_POST['rate_transfer_to_amount']) : null;
+            $rate_transfer_from_amount = !empty($_POST['rate_transfer_from_amount']) ? submitRateRound2($_POST['rate_transfer_from_amount']) : null;
+            $rate_transfer_to_amount = !empty($_POST['rate_transfer_to_amount']) ? submitRateRound2($_POST['rate_transfer_to_amount']) : null;
             $rate_transfer_from_description = trim($_POST['rate_transfer_from_description'] ?? '');
             $rate_transfer_to_description = trim($_POST['rate_transfer_to_description'] ?? '');
             $rate_transfer_from_currency = trim($_POST['rate_transfer_from_currency'] ?? '');
             $rate_transfer_to_currency = trim($_POST['rate_transfer_to_currency'] ?? '');
             
             $rate_middleman_account_id = !empty($_POST['rate_middleman_account_id']) ? (int)$_POST['rate_middleman_account_id'] : null;
-            $rate_middleman_amount = !empty($_POST['rate_middleman_amount']) ? submitTrunc2((float)$_POST['rate_middleman_amount']) : null;
+            $rate_middleman_amount = !empty($_POST['rate_middleman_amount']) ? submitRateRound2($_POST['rate_middleman_amount']) : null;
             $rate_middleman_description = trim($_POST['rate_middleman_description'] ?? '');
-            $rate_middleman_rate = !empty($_POST['rate_middleman_rate']) ? (float)$_POST['rate_middleman_rate'] : null;
+            $rate_middleman_rate = !empty($_POST['rate_middleman_rate']) ? money_normalize($_POST['rate_middleman_rate']) : null;
             $rate_middleman_currency = trim($_POST['rate_middleman_currency'] ?? $rate_transfer_to_currency ?: $rate_to_currency ?: $rate_from_currency);
             
             if (!$rate_from_account_id || $rate_from_account_id <= 0) {
@@ -694,7 +738,7 @@ try {
                     $rate_transfer_to_description
                 ]);
                 
-                if ($rate_middleman_account_id && $rate_middleman_amount > 0) {
+                if ($rate_middleman_account_id && $rate_middleman_amount !== null && money_cmp($rate_middleman_amount, '0') > 0) {
                     // 验证 Middleman 账户（只使用 account_company 表）
                     $stmt = $pdo->prepare("
                         SELECT a.id, a.account_id, a.name 
@@ -744,8 +788,8 @@ try {
                         $rate_middleman_description
                     ]);
                     
-                    $middleman_deduction = submitTrunc2($rate_transfer_from_amount - $rate_transfer_to_amount);
-                    if (abs($middleman_deduction) > 0.01) {
+                    $middleman_deduction = submitTrunc2(money_sub($rate_transfer_from_amount, $rate_transfer_to_amount, 8));
+                    if (money_cmp(money_abs($middleman_deduction), '0.01') > 0) {
                         $rateDeduct = [
                             'company_id' => $company_id,
                             'transaction_type' => 'RATE',
@@ -794,7 +838,7 @@ try {
                 $entryStmt = $pdo->prepare($entrySql);
 
                 // 1) 第一行：全部跟随第一个币种（例如 SGD），金额 = rate_from_amount（例如 100）
-                $sgdAmount      = submitTrunc2((float)$rate_from_amount);
+                $sgdAmount      = submitTrunc2($rate_from_amount);
                 $sgdCurrencyId  = (int)$rate_from_currency_id;
 
                 // From account：减
@@ -821,8 +865,8 @@ try {
 
                 // 2) 第二行：全部跟随第二个币种（例如 MYR）
                 if ($rate_transfer_from_account_id && $rate_transfer_to_account_id && $rate_transfer_currency_id) {
-                    $myrFromAmount = submitTrunc2((float)$rate_transfer_from_amount); // 例如 330
-                    $myrToAmount   = submitTrunc2((float)$rate_transfer_to_amount);   // 例如 320
+                    $myrFromAmount = submitTrunc2($rate_transfer_from_amount); // 例如 330
+                    $myrToAmount   = submitTrunc2($rate_transfer_to_amount);   // 例如 320
                     $myrCurrencyId = (int)$rate_transfer_currency_id;
 
                     // - Select To (收款方)：最终显示负数
@@ -848,14 +892,14 @@ try {
                         $company_id,
                         $rate_transfer_to_account_id,
                         $myrCurrencyId,
-                        -$myrToAmount,
+                        money_mul($myrToAmount, '-1', 2),
                         'RATE_TRANSFER_TO',
                         $rate_transfer_to_description
                     ]);
 
                     // Middle-man：MYR 加手续费（如果存在）
-                    if ($rate_middleman_account_id && $rate_middleman_amount > 0) {
-                        $middleAmount = submitTrunc2((float)$rate_middleman_amount);
+                    if ($rate_middleman_account_id && $rate_middleman_amount !== null && money_cmp($rate_middleman_amount, '0') > 0) {
+                        $middleAmount = submitTrunc2($rate_middleman_amount);
                         $middleCurrencyId = (int)$rate_middleman_currency_id ?: $myrCurrencyId;
 
                         $entryStmt->execute([
@@ -897,19 +941,12 @@ try {
             
         } else {
             // 非 RATE 类型的原有逻辑
-            // 确保金额是正数（对于所有交易类型）
-            $amount = submitTrunc2(abs($amount));
-            
-            // WIN/LOSE（含前端 PROFIT）：保存表单的 From 账户用于双记录；数据库触发器要求 from_account_id 必须为 NULL
-            $win_lose_from_account_id = null;
-            if (in_array($transaction_type, ['WIN', 'LOSE']) && $from_account_id && $from_account_id != $account_id) {
-                $win_lose_from_account_id = $from_account_id;
-            }
-            if (in_array($transaction_type, ['WIN', 'LOSE'])) {
-                $from_account_id = null;
+            // ADJUSTMENT 需要保留正负号；其他交易类型仍统一保存正数。
+            if (!$is_adjustment) {
+                $amount = submitTrunc2(abs($amount));
             }
             
-            // 插入交易记录（WIN/LOSE 若选了 From 账户会插入两条：To 账户一条 + From 账户一条相反类型，使右侧表显示 From 账户）
+            // WIN/LOSE（含前端 PROFIT）：按单条记录保存（To + From + Amount），不再自动生成相反类型第二条
             $txnRow = [
                 'company_id' => $company_id,
                 'transaction_type' => $transaction_type,
@@ -939,39 +976,6 @@ try {
             }
 
             $transaction_id = insertTransactionRow($pdo, $txnRow);
-            
-            // WIN/LOSE 且选了 From 账户：再插一条相反类型到 From 账户，使右侧表显示「001 给 002 100」
-            if ($win_lose_from_account_id && $from_account) {
-                $opposite_type = ($transaction_type === 'WIN') ? 'LOSE' : 'WIN';
-                $txnRowOpposite = [
-                    'company_id' => $company_id,
-                    'transaction_type' => $opposite_type,
-                    'account_id' => $win_lose_from_account_id,
-                    'from_account_id' => null,
-                    'amount' => $amount,
-                    'transaction_date' => $transaction_date_db,
-                    'description' => $description,
-                    'sms' => $sms,
-                    'created_by' => $created_by_user,
-                    'created_by_owner' => $created_by_owner,
-                ];
-                if ($has_currency_id) {
-                    $txnRowOpposite['currency_id'] = $currency_id;
-                }
-                if ($has_approval_status) {
-                    $txnRowOpposite['approval_status'] = $approval_status;
-                    if (tableHasColumn($pdo, 'transactions', 'approved_by')) {
-                        $txnRowOpposite['approved_by'] = $approved_by;
-                    }
-                    if (tableHasColumn($pdo, 'transactions', 'approved_by_owner')) {
-                        $txnRowOpposite['approved_by_owner'] = $approved_by_owner;
-                    }
-                    if (tableHasColumn($pdo, 'transactions', 'approved_at')) {
-                        $txnRowOpposite['approved_at'] = $approved_at;
-                    }
-                }
-                insertTransactionRow($pdo, $txnRowOpposite);
-            }
         
         // 提交事务
         $pdo->commit();
@@ -982,8 +986,8 @@ try {
         // 返回成功响应
         $responsePayload = [
             'success' => true,
-            'message' => $is_contra_pending
-                ? 'CONTRA submitted, pending Manager+ approval to take effect'
+            'message' => $is_pending_approval
+                ? 'Transaction submitted, pending Manager+ approval to take effect'
                 : 'Transaction submitted successfully',
             'data' => [
                 'transaction_id' => $transaction_id,

@@ -39,23 +39,26 @@
 
     // ==================== 数字格式化函数 ====================
     function formatNumber(num) {
-        // 预处理字符串：去除逗号和空格，保证 parseFloat 正常工作
-        const cleaned = typeof num === 'string'
-            ? num.replace(/,/g, '').trim()
-            : num;
+        try {
+            return MoneyDecimal.formatThousands(num, 2);
+        } catch (_) {
+            return '0.00';
+        }
+    }
 
-        // 将数字格式化为带千分位逗号的字符串
-        const number = parseFloat(cleaned);
-        if (isNaN(number)) return '0.00';
-
-        // Truncate to 2 decimal places for display (只截断到2位小数，不做四舍五入)
-        const rounded = Math.trunc(number * 100) / 100;
-
-        // 使用 toLocaleString 添加千分位逗号
-        return rounded.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
+    /**
+     * Payment History 专用：history_api 已给两位小数时直接加千分位，避免 parseFloat(-40.80)+Math.trunc 变成 -40.79。
+     * 非标准两位时：与 datacapture 一致 epsilon + 向 0 截断再 toLocaleString。
+     */
+    function formatPaymentHistoryMoney(value) {
+        if (value === '-' || value === null || value === undefined) return '-';
+        const cleaned = String(value).replace(/,/g, '').trim();
+        if (cleaned === '' || cleaned === '-') return '0.00';
+        try {
+            return MoneyDecimal.formatThousands(cleaned, 2);
+        } catch (_) {
+            return '0.00';
+        }
     }
 
     // ==================== 文本转大写显示 ====================
@@ -81,11 +84,14 @@
 
         // 兼容 "/3" 语法，表示除以 3（即乘以 1/3）
         if (/^\/\d*\.?\d+$/.test(normalized)) {
-            const divisor = parseFloat(normalized.slice(1));
-            if (!isFinite(divisor) || divisor <= 0) {
+            let divisor;
+            try {
+                divisor = MoneyDecimal.toDecimal(normalized.slice(1));
+            } catch (_) {
                 return { valid: false, value: 0 };
             }
-            return { valid: true, value: 1 / divisor };
+            if (divisor.lte(0)) return { valid: false, value: 0 };
+            return { valid: true, value: MoneyDecimal.div('1', divisor).toString() };
         }
 
         // 仅允许数字、小数点、*、/；不允许其他字符
@@ -105,10 +111,13 @@
             return { valid: false, value: 0 };
         }
 
-        let result = parseFloat(tokens[0]);
-        if (!isFinite(result) || result <= 0) {
+        let result;
+        try {
+            result = MoneyDecimal.toDecimal(tokens[0]);
+        } catch (_) {
             return { valid: false, value: 0 };
         }
+        if (result.lte(0)) return { valid: false, value: 0 };
 
         for (let i = 1; i < tokens.length; i += 2) {
             const op = tokens[i];
@@ -116,26 +125,32 @@
             if (!numToken || !/^\d*\.?\d+$/.test(numToken)) {
                 return { valid: false, value: 0 };
             }
-            const value = parseFloat(numToken);
-            if (!isFinite(value)) {
+            let value;
+            try {
+                value = MoneyDecimal.toDecimal(numToken);
+            } catch (_) {
                 return { valid: false, value: 0 };
             }
             if (op === '*') {
-                result *= value;
+                result = result.times(value);
             } else if (op === '/') {
-                if (value === 0) {
+                if (value.isZero()) {
                     return { valid: false, value: 0 };
                 }
-                result /= value;
+                result = result.div(value);
             } else {
                 return { valid: false, value: 0 };
             }
         }
 
-        if (!isFinite(result) || result <= 0) {
+        if (result.lte(0)) {
             return { valid: false, value: 0 };
         }
-        return { valid: true, value: result };
+        return { valid: true, value: result.toString() };
+    }
+
+    function formatRateAmount(value) {
+        return MoneyDecimal.formatFixedHalfUp(value || '0', 2);
     }
 
     // ==================== Contra Inbox（Manager+） ====================
@@ -530,6 +545,11 @@
             });
         }
 
+        // 页面初始化时先拉一次 pending 数量，避免未点开前角标一直显示 0
+        if (canApproveContra) {
+            loadContraInbox();
+        }
+
         // 点击外部关闭 Popover
         document.addEventListener('click', (e) => {
             if (!canApproveContra) return;
@@ -729,8 +749,11 @@
     let allAccountOptions = []; // 存储所有账号选项的完整列表（用于过滤）
 
     function parseBalanceValue(rawBalance) {
-        const parsed = parseFloat(String(rawBalance ?? '').replace(/,/g, '').trim());
-        return Number.isFinite(parsed) ? parsed : null;
+        try {
+            return MoneyDecimal.toDecimal(String(rawBalance ?? '').replace(/,/g, '').trim()).toString();
+        } catch (_) {
+            return null;
+        }
     }
 
     function normalizeRateRowsByCrDr(leftRows, rightRows) {
@@ -748,11 +771,11 @@
 
         safeLeft.forEach(row => {
             const crDr = parseBalanceValue(row && row.cr_dr);
-            if (crDr === null || Math.abs(crDr) < 0.00001) {
+            if (crDr === null || MoneyDecimal.toDecimal(crDr).abs().lt('0.00001')) {
                 normalizedLeft.push(row);
                 return;
             }
-            if (crDr > 0) {
+            if (MoneyDecimal.cmp(crDr, '0') > 0) {
                 normalizedLeft.push(row);
             } else {
                 normalizedRight.push(row);
@@ -761,11 +784,11 @@
 
         safeRight.forEach(row => {
             const crDr = parseBalanceValue(row && row.cr_dr);
-            if (crDr === null || Math.abs(crDr) < 0.00001) {
+            if (crDr === null || MoneyDecimal.toDecimal(crDr).abs().lt('0.00001')) {
                 normalizedRight.push(row);
                 return;
             }
-            if (crDr > 0) {
+            if (MoneyDecimal.cmp(crDr, '0') > 0) {
                 normalizedLeft.push(row);
             } else {
                 normalizedRight.push(row);
@@ -785,10 +808,10 @@
                 const numericBalance = parseBalanceValue(row && row.balance);
                 if (!accountId || numericBalance === null) return;
 
-                if (numericBalance >= 0) {
+                if (MoneyDecimal.cmp(numericBalance, '0') >= 0) {
                     positiveIds.add(String(accountId));
                 }
-                if (numericBalance < 0) {
+                if (MoneyDecimal.cmp(numericBalance, '0') < 0) {
                     negativeIds.add(String(accountId));
                 }
             });
@@ -2146,10 +2169,10 @@
                 leftTotals = calculateTotals(sortedLeftRows);
                 rightTotals = calculateTotals(sortedRightRows);
                 summaryTotals = {
-                    bf: leftTotals.bf + rightTotals.bf,
-                    win_loss: leftTotals.win_loss + rightTotals.win_loss,
-                    cr_dr: leftTotals.cr_dr + rightTotals.cr_dr,
-                    balance: leftTotals.balance + rightTotals.balance
+                    bf: MoneyDecimal.add(leftTotals.bf, rightTotals.bf).toString(),
+                    win_loss: MoneyDecimal.add(leftTotals.win_loss, rightTotals.win_loss).toString(),
+                    cr_dr: MoneyDecimal.add(leftTotals.cr_dr, rightTotals.cr_dr).toString(),
+                    balance: MoneyDecimal.add(leftTotals.balance, rightTotals.balance).toString()
                 };
             }
 
@@ -2248,17 +2271,17 @@
             const leftTotals = calculateTotals(leftRows);
             const rightTotals = calculateTotals(rightRows);
             const currencySummary = {
-                bf: leftTotals.bf + rightTotals.bf,
-                win_loss: leftTotals.win_loss + rightTotals.win_loss,
-                cr_dr: leftTotals.cr_dr + rightTotals.cr_dr,
-                balance: leftTotals.balance + rightTotals.balance
+                bf: MoneyDecimal.add(leftTotals.bf, rightTotals.bf).toString(),
+                win_loss: MoneyDecimal.add(leftTotals.win_loss, rightTotals.win_loss).toString(),
+                cr_dr: MoneyDecimal.add(leftTotals.cr_dr, rightTotals.cr_dr).toString(),
+                balance: MoneyDecimal.add(leftTotals.balance, rightTotals.balance).toString()
             };
 
             // 累加到总汇总
-            totalSummary.bf += currencySummary.bf;
-            totalSummary.win_loss += currencySummary.win_loss;
-            totalSummary.cr_dr += currencySummary.cr_dr;
-            totalSummary.balance += currencySummary.balance;
+            totalSummary.bf = MoneyDecimal.add(totalSummary.bf, currencySummary.bf).toString();
+            totalSummary.win_loss = MoneyDecimal.add(totalSummary.win_loss, currencySummary.win_loss).toString();
+            totalSummary.cr_dr = MoneyDecimal.add(totalSummary.cr_dr, currencySummary.cr_dr).toString();
+            totalSummary.balance = MoneyDecimal.add(totalSummary.balance, currencySummary.balance).toString();
 
             // 为该 currency 创建 Summary Table
             const summaryWrapper = document.createElement('div');
@@ -2293,19 +2316,19 @@
         tbody.innerHTML = `
         <tr class="transaction-table-row">
             <td class="transaction-summary-label">B/F</td>
-            <td>${formatNumber(totals.bf)}</td>
+            <td>${formatPaymentHistoryMoney(totals.bf)}</td>
         </tr>
         <tr class="transaction-table-row">
             <td class="transaction-summary-label">Win/Loss</td>
-            <td>${formatNumber(totals.win_loss)}</td>
+            <td>${formatPaymentHistoryMoney(totals.win_loss)}</td>
         </tr>
         <tr class="transaction-table-row">
             <td class="transaction-summary-label">Cr/Dr</td>
-            <td>${formatNumber(totals.cr_dr)}</td>
+            <td>${formatPaymentHistoryMoney(totals.cr_dr)}</td>
         </tr>
         <tr class="transaction-table-row">
             <td class="transaction-summary-label">Balance</td>
-            <td>${formatNumber(totals.balance)}</td>
+            <td>${formatPaymentHistoryMoney(totals.balance)}</td>
         </tr>
     `;
         table.appendChild(tbody);
@@ -2342,16 +2365,6 @@
 
         if (rows && rows.length > 0) {
             const fallbackRoleClass = getSingleSelectedCategoryRoleClass();
-            // 在 Rate 模式下，识别当前表单中选择的 Middle-Man 账户，用于正数显示金额
-            const isRateView = isRateTypeSelected && typeof isRateTypeSelected === 'function' ? isRateTypeSelected() : false;
-            let middlemanAccountId = '';
-            if (isRateView) {
-                const middlemanBtn = document.getElementById('rate_middleman_account');
-                if (middlemanBtn) {
-                    // 使用内部 account 数据库 ID 与 row.account_db_id 对应，避免显示文本不一致导致匹配失败
-                    middlemanAccountId = middlemanBtn.getAttribute('data-value') || '';
-                }
-            }
 
             // 判断是左边还是右边的表格（根据 tableId 判断）
             const isLeftTable = tableId.includes('_left');
@@ -2368,29 +2381,20 @@
                     ? `transaction-account-cell ${roleClass}`
                     : 'transaction-account-cell';
 
-                // Middle-Man 行：将 Win/Loss 和 Balance 显示为正数
-                let winLossValue = row.win_loss;
-                let crDrValue = row.cr_dr;
-                let balanceValue = row.balance;
-                const isMiddlemanRow = (row.is_rate_middleman === 1 || row.is_rate_middleman === true) ||
-                    (isRateView && middlemanAccountId && String(row.account_db_id) === String(middlemanAccountId));
-                if (isMiddlemanRow) {
-                    const nWinLoss = parseFloat(winLossValue);
-                    const nBalance = parseFloat(balanceValue);
-                    if (!isNaN(nWinLoss)) winLossValue = Math.abs(nWinLoss);
-                    // Balance 必须与 Payment History 的 API 返回符号一致
-                    if (!isNaN(nBalance)) balanceValue = nBalance;
-                }
+                // Win/Loss、Cr/Dr、Balance 一律沿用后端符号，不在前端 Math.abs 强转正负（与 Payment History / 合计一致）
+                const winLossValue = row.win_loss;
+                const crDrValue = row.cr_dr;
+                const balanceValue = row.balance;
 
                 tr.innerHTML = `
                 <td class="${accountCellClass}" data-account-id="${row.account_db_id}" data-account-code="${row.account_id}" data-account-name="${row.account_name}" data-currency="${row.currency || ''}" style="cursor:pointer;">
                     ${row.account_id}
                 </td>
                 <td class="transaction-name-column" style="display: ${showName ? '' : 'none'};">${toUpperDisplay(row.account_name)}</td>
-                <td>${formatNumber(row.bf)}</td>
-                <td>${formatNumber(winLossValue)}</td>
-                <td>${formatNumber(crDrValue)}</td>
-                <td class="transaction-balance-cell" data-account-id="${row.account_db_id}" data-account-code="${row.account_id}" data-balance="${balanceValue}" data-crdr="${row.cr_dr}" data-currency="${row.currency || ''}" style="cursor:pointer;">${formatNumber(balanceValue)}</td>
+                <td>${formatPaymentHistoryMoney(row.bf)}</td>
+                <td>${formatPaymentHistoryMoney(winLossValue)}</td>
+                <td>${formatPaymentHistoryMoney(crDrValue)}</td>
+                <td class="transaction-balance-cell" data-account-id="${row.account_db_id}" data-account-code="${row.account_id}" data-balance="${balanceValue}" data-crdr="${row.cr_dr}" data-currency="${row.currency || ''}" style="cursor:pointer;">${formatPaymentHistoryMoney(balanceValue)}</td>
             `;
 
                 // 点击账户单元格打开历史记录
@@ -2421,10 +2425,10 @@
         <tr class="transaction-table-footer">
             <td>Total</td>
             <td class="transaction-name-column" style="display: ${showName ? '' : 'none'};"></td>
-            <td>${formatNumber(totals.bf)}</td>
-            <td>${formatNumber(totals.win_loss)}</td>
-            <td>${formatNumber(totals.cr_dr)}</td>
-            <td>${formatNumber(totals.balance)}</td>
+            <td>${formatPaymentHistoryMoney(totals.bf)}</td>
+            <td>${formatPaymentHistoryMoney(totals.win_loss)}</td>
+            <td>${formatPaymentHistoryMoney(totals.cr_dr)}</td>
+            <td>${formatPaymentHistoryMoney(totals.balance)}</td>
         </tr>
     `;
         table.appendChild(tfoot);
@@ -2434,30 +2438,12 @@
 
     function calculateTotals(rows) {
         return rows.reduce((totals, row) => {
-            let bf = parseFloat(row.bf) || 0;
-            let winLoss = parseFloat(row.win_loss) || 0;
-            let crDr = parseFloat(row.cr_dr) || 0;
-            let balance = parseFloat(row.balance) || 0;
-
-            // Middle-Man 行（后端 is_rate_middleman 或当前表单选的 Middle-Man）的 Win/Loss、Balance 用绝对值参与合计
-            const isRateMiddleman = row.is_rate_middleman === 1 || row.is_rate_middleman === true;
-            const isFormMiddleman = typeof isRateTypeSelected === 'function' && isRateTypeSelected() && (() => {
-                const middlemanBtn = document.getElementById('rate_middleman_account');
-                if (!middlemanBtn) return false;
-                const mid = middlemanBtn.getAttribute('data-value') || '';
-                return mid && String(row.account_db_id) === String(mid);
-            })();
-            if (isRateMiddleman || isFormMiddleman) {
-                winLoss = Math.abs(winLoss);
-                // Balance 不做绝对值，避免与 Payment History 不一致
-            }
-
-            totals.bf += bf;
-            totals.win_loss += winLoss;
-            totals.cr_dr += crDr;
-            totals.balance += balance;
+            totals.bf = MoneyDecimal.add(totals.bf, row.bf || '0').toString();
+            totals.win_loss = MoneyDecimal.add(totals.win_loss, row.win_loss || '0').toString();
+            totals.cr_dr = MoneyDecimal.add(totals.cr_dr, row.cr_dr || '0').toString();
+            totals.balance = MoneyDecimal.add(totals.balance, row.balance || '0').toString();
             return totals;
-        }, { bf: 0, win_loss: 0, cr_dr: 0, balance: 0 });
+        }, { bf: '0', win_loss: '0', cr_dr: '0', balance: '0' });
     }
 
     // ==================== 处理 Balance 点击事件 ====================
@@ -2472,12 +2458,12 @@
         const isRateView = isRateTypeSelected();
         const currentType = document.getElementById('transaction_type')?.value || '';
         const isProfitType = !isRateView && currentType === 'PROFIT';
-        const numericBalance = parseBalanceValue(balance);
+        const parsedBalanceForSide = parseBalanceValue(balance);
         const numericCrDr = parseBalanceValue(rowCrDr);
         // RATE 场景：按你要求用“点左表/点右表”决定落点
         const treatAsPositiveRow = isRateView
             ? isLeftTable
-            : (isProfitType ? (numericBalance === null ? isLeftTable : numericBalance >= 0) : isLeftTable);
+            : (isProfitType ? (parsedBalanceForSide === null ? isLeftTable : MoneyDecimal.cmp(parsedBalanceForSide, '0') >= 0) : isLeftTable);
 
         // 获取表单元素
         // RATE 页面：
@@ -2631,19 +2617,20 @@
         let amountSet = false;
         if (amountInput && balance) {
             // 确保 balance 是数字格式（去除逗号等格式化字符）
-            const numericBalance = parseFloat(balance.toString().replace(/,/g, ''));
-            if (!isNaN(numericBalance)) {
-                amountInput.value = Math.abs(numericBalance).toFixed(2);
+            const numericBalance = parseBalanceValue(balance);
+            if (numericBalance !== null) {
+                const absBalance = MoneyDecimal.abs(numericBalance).toString();
+                amountInput.value = MoneyDecimal.formatFixed(absBalance, 2);
                 if (currencyAmountInput) {
                     if (isRateView) {
                         // RATE 模式（按你的要求）：
                         // Select From -> 正数；Select To -> 负数
                         // 这里维持原本左右字段映射，只调整符号方向
                         currencyAmountInput.value = treatAsPositiveRow
-                            ? Math.abs(numericBalance).toFixed(2)
-                            : (-Math.abs(numericBalance)).toFixed(2);
+                            ? MoneyDecimal.formatFixed(absBalance, 2)
+                            : MoneyDecimal.formatFixed(MoneyDecimal.toDecimal(absBalance).neg(), 2);
                     } else {
-                        currencyAmountInput.value = Math.abs(numericBalance).toFixed(2);
+                        currencyAmountInput.value = MoneyDecimal.formatFixed(absBalance, 2);
                     }
                 }
                 amountSet = true;
@@ -2732,10 +2719,10 @@
             tr.innerHTML = `
             <td class="${accountCellClass}" data-account-id="${row.account_db_id}" data-account-code="${row.account_id}" data-account-name="${row.account_name}" data-currency="${row.currency || ''}" style="cursor:pointer;">${row.account_id}</td>
             <td class="transaction-name-column" style="display: ${showName ? '' : 'none'};">${toUpperDisplay(row.account_name)}</td>
-            <td>${formatNumber(row.bf)}</td>
-            <td>${formatNumber(row.win_loss)}</td>
-            <td>${formatNumber(row.cr_dr)}</td>
-            <td class="transaction-balance-cell" data-account-id="${row.account_db_id}" data-account-code="${row.account_id}" data-balance="${row.balance}" data-crdr="${row.cr_dr}" data-currency="${row.currency || ''}" style="cursor:pointer;">${formatNumber(row.balance)}</td>
+            <td>${formatPaymentHistoryMoney(row.bf)}</td>
+            <td>${formatPaymentHistoryMoney(row.win_loss)}</td>
+            <td>${formatPaymentHistoryMoney(row.cr_dr)}</td>
+            <td class="transaction-balance-cell" data-account-id="${row.account_db_id}" data-account-code="${row.account_id}" data-balance="${row.balance}" data-crdr="${row.cr_dr}" data-currency="${row.currency || ''}" style="cursor:pointer;">${formatPaymentHistoryMoney(row.balance)}</td>
         `;
             tr.querySelector('.transaction-account-cell').addEventListener('click', function () {
                 openHistoryModal(this.getAttribute('data-account-id'), this.getAttribute('data-account-code'), this.getAttribute('data-account-name'), this.getAttribute('data-currency'));
@@ -2777,18 +2764,18 @@
 
     // ==================== 更新总和 ====================
     function updateTotals(side, totals) {
-        document.getElementById(`${side}_total_bf`).textContent = formatNumber(totals.bf);
-        document.getElementById(`${side}_total_winloss`).textContent = formatNumber(totals.win_loss);
-        document.getElementById(`${side}_total_crdr`).textContent = formatNumber(totals.cr_dr);
-        document.getElementById(`${side}_total_balance`).textContent = formatNumber(totals.balance);
+        document.getElementById(`${side}_total_bf`).textContent = formatPaymentHistoryMoney(totals.bf);
+        document.getElementById(`${side}_total_winloss`).textContent = formatPaymentHistoryMoney(totals.win_loss);
+        document.getElementById(`${side}_total_crdr`).textContent = formatPaymentHistoryMoney(totals.cr_dr);
+        document.getElementById(`${side}_total_balance`).textContent = formatPaymentHistoryMoney(totals.balance);
     }
 
     // ==================== 更新汇总 ====================
     function updateSummary(totals) {
-        document.getElementById('sum_total_bf').textContent = formatNumber(totals.bf);
-        document.getElementById('sum_total_winloss').textContent = formatNumber(totals.win_loss);
-        document.getElementById('sum_total_crdr').textContent = formatNumber(totals.cr_dr);
-        document.getElementById('sum_total_balance').textContent = formatNumber(totals.balance);
+        document.getElementById('sum_total_bf').textContent = formatPaymentHistoryMoney(totals.bf);
+        document.getElementById('sum_total_winloss').textContent = formatPaymentHistoryMoney(totals.win_loss);
+        document.getElementById('sum_total_crdr').textContent = formatPaymentHistoryMoney(totals.cr_dr);
+        document.getElementById('sum_total_balance').textContent = formatPaymentHistoryMoney(totals.balance);
     }
 
     // ==================== Show Name 切换 ====================
@@ -2823,23 +2810,24 @@
     // 未勾选 Show 0 balance 时：默认隐藏 balance≈0 的行；但若该行 B/F、Win/Loss、Cr/Dr 仍有数则保留，避免后端 Total 有汇总而明细被全部滤掉
     function rowPassesHideZeroBalanceFilter(showZero, row) {
         if (showZero) return true;
-        const eps = 0.00001;
-        const num = parseFloat(row.balance);
-        if (isNaN(num)) return true;
-        if (Math.abs(num) > eps) return true;
+        const num = parseBalanceValue(row.balance);
+        if (num === null) return true;
+        if (MoneyDecimal.toDecimal(num).abs().gt('0.00001')) return true;
         const flagToBool = (v) => {
             if (typeof v === 'boolean') return v;
             if (typeof v === 'number') return v !== 0;
             return parseInt(v || '0', 10) !== 0;
         };
         const absVal = (v) => {
-            const n = parseFloat(v);
-            if (isNaN(n)) return 0;
-            return Math.abs(n);
+            try {
+                return MoneyDecimal.toDecimal(v || '0').abs();
+            } catch (_) {
+                return MoneyDecimal.toDecimal('0');
+            }
         };
         // 有真实交易记录（例如 PROFIT 0.00）时，不应被“隐藏 0 balance”吃掉。
         const hasTxnFlag = flagToBool(row.has_win_loss_history) || flagToBool(row.has_win_loss_transactions) || flagToBool(row.has_crdr_transactions);
-        return hasTxnFlag || absVal(row.bf) > eps || absVal(row.win_loss) > eps || absVal(row.cr_dr) > eps;
+        return hasTxnFlag || absVal(row.bf).gt('0.00001') || absVal(row.win_loss).gt('0.00001') || absVal(row.cr_dr).gt('0.00001');
     }
 
     // ==================== 根据 Show 0 balance 过滤前端行并渲染 ====================
@@ -2867,8 +2855,8 @@
                         ? row.has_crdr_transactions !== 0
                         : parseInt(row.has_crdr_transactions || '0', 10) !== 0);
                 // Fallback: if backend flag is missing/inconsistent, trust numeric Cr/Dr value.
-                const crdr = parseFloat(row.cr_dr);
-                const byValue = !isNaN(crdr) && Math.abs(crdr) > eps;
+                const crdr = parseBalanceValue(row.cr_dr);
+                const byValue = crdr !== null && MoneyDecimal.toDecimal(crdr).abs().gt('0.00001');
                 return byFlag || byValue;
             };
             const hasWinLoss = row => {
@@ -2877,8 +2865,8 @@
                     : ((typeof row.has_win_loss_transactions === 'number')
                         ? row.has_win_loss_transactions !== 0
                         : parseInt(row.has_win_loss_transactions || '0', 10) !== 0);
-                const wl = parseFloat(row.win_loss);
-                const byValue = !isNaN(wl) && Math.abs(wl) > 0.00001;
+                const wl = parseBalanceValue(row.win_loss);
+                const byValue = wl !== null && MoneyDecimal.toDecimal(wl).abs().gt('0.00001');
                 return byFlag || byValue;
             };
             const shouldShow = showWinLossOnly
@@ -2954,19 +2942,18 @@
         }
 
         const hasCrdr = row => {
-            const eps = 0.00001;
             const byFlag = (typeof row.has_crdr_transactions === 'boolean')
                 ? row.has_crdr_transactions
                 : ((typeof row.has_crdr_transactions === 'number')
                     ? row.has_crdr_transactions !== 0
                     : parseInt(row.has_crdr_transactions || '0', 10) !== 0);
-            const crdr = parseFloat(row.cr_dr);
-            const byValue = !isNaN(crdr) && Math.abs(crdr) > eps;
+            const crdr = parseBalanceValue(row.cr_dr);
+            const byValue = crdr !== null && MoneyDecimal.toDecimal(crdr).abs().gt('0.00001');
             return byFlag || byValue;
         };
         const hasWinLoss = row => {
-            const wl = parseFloat(row.win_loss);
-            return !isNaN(wl) && Math.abs(wl) > 0.00001;
+            const wl = parseBalanceValue(row.win_loss);
+            return wl !== null && MoneyDecimal.toDecimal(wl).abs().gt('0.00001');
         };
         const showWinLossOnly = document.getElementById('show_capture_only')?.checked || false;
         const shouldShow = showWinLossOnly
@@ -3014,6 +3001,7 @@
         const type = document.getElementById('transaction_type').value;
         let effectiveType = (type === 'PROFIT') ? (document.querySelector('input[name="win_lose_side"]:checked')?.value || 'WIN') : type;
         const isRate = type === RATE_TYPE_VALUE;
+        const isAdjustment = type === 'ADJUSTMENT';
 
         const standardToAccountInput = document.getElementById('action_account_id');
         const standardFromAccountInput = document.getElementById('action_account_from');
@@ -3022,8 +3010,8 @@
 
         // PROFIT：第一个下拉为 To、第二个为 From；CONTRA/PAYMENT/RECEIVE/CLAIM/CLEAR 与 RATE：第一个为 To、第二个为 From，与 UI 标签一致
         const needsFromTo = ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM', 'CLEAR'].includes(effectiveType);
-        const accountId = isRate ? getAccountId(rateFromAccountInput) : (type === 'PROFIT' ? getAccountId(standardFromAccountInput) : (needsFromTo ? getAccountId(standardFromAccountInput) : getAccountId(standardToAccountInput)));
-        const fromAccountId = isRate ? getAccountId(rateToAccountInput) : (type === 'PROFIT' ? getAccountId(standardToAccountInput) : (needsFromTo ? getAccountId(standardToAccountInput) : getAccountId(standardFromAccountInput)));
+        const accountId = isRate ? getAccountId(rateFromAccountInput) : ((type === 'PROFIT' || isAdjustment) ? getAccountId(standardFromAccountInput) : (needsFromTo ? getAccountId(standardFromAccountInput) : getAccountId(standardToAccountInput)));
+        const fromAccountId = isRate ? getAccountId(rateToAccountInput) : (isAdjustment ? '' : (type === 'PROFIT' ? getAccountId(standardToAccountInput) : (needsFromTo ? getAccountId(standardToAccountInput) : getAccountId(standardFromAccountInput))));
 
         const standardAmountInput = document.getElementById('action_amount');
         const rateCurrencyFromAmountInput = document.getElementById('rate_currency_from_amount');
@@ -3069,6 +3057,11 @@
         if (type === 'PROFIT') {
             const profitToAccountId = getAccountId(standardFromAccountInput);   // UI: Select To Account
             const profitFromAccountId = getAccountId(standardToAccountInput);   // UI: Select From Account
+
+            if (!profitFromAccountId) {
+                showNotification('PROFIT: Please select From Account', 'error');
+                return;
+            }
 
             // PROFIT 不做余额正负校验，仅限制 To / From 不能同一账户
             if (profitToAccountId && profitFromAccountId && String(profitToAccountId) === String(profitFromAccountId)) {
@@ -3150,22 +3143,34 @@
                 const transferToAccountCode = rateTransferToAccountInput?.getAttribute('data-account-code') || '';
 
                 // 计算金额：使用 rate_currency_to_amount 作为 transfer amount（如果 rate_transfer_amount 未填写）
-                const transferAmountInput = document.getElementById('rate_transfer_amount');
-                let transferAmount = parseFloat(rateTransferAmount) || 0;
-                if (transferAmount <= 0) {
+                let transferAmount = null;
+                try {
+                    transferAmount = MoneyDecimal.toDecimal(rateTransferAmount, 0);
+                } catch (_) {
+                    transferAmount = MoneyDecimal.toDecimal('0');
+                }
+                if (transferAmount.lte(0)) {
                     // 如果没有填写 rate_transfer_amount，使用转换后的金额
-                    transferAmount = parseFloat(rateCurrencyToAmount) || 0;
+                    try {
+                        transferAmount = MoneyDecimal.toDecimal(rateCurrencyToAmount, 0);
+                    } catch (_) {
+                        transferAmount = MoneyDecimal.toDecimal('0');
+                    }
                 }
 
                 // 验证 transferAmount 必须大于 0
-                if (transferAmount <= 0) {
+                if (transferAmount.lte(0)) {
                     showNotification('Please enter currency amounts or transfer amount', 'error');
                     return;
                 }
 
                 // Middle-Man Amount 是自动计算的：currency_from_amount * middle_man_rate
                 // 从输入框读取自动计算的值
-                middlemanAmount = parseFloat(rateMiddlemanAmount) || 0;
+                try {
+                    middlemanAmount = MoneyDecimal.toDecimal(rateMiddlemanAmount, 0).toString();
+                } catch (_) {
+                    middlemanAmount = '0';
+                }
 
                 // 如果有填写 middle-man 信息，验证是否完整
                 if (rateMiddlemanAccount || rateMiddlemanRate) {
@@ -3180,11 +3185,11 @@
                     }
                     // 根据用户需求：第四条记录（PROFIT）使用完整金额 318.40，不扣除手续费
                     // 手续费通过第五条记录单独处理
-                    transferToAmount = transferAmount; // 使用完整金额，不扣除手续费
+                    transferToAmount = transferAmount.toString(); // 使用完整金额，不扣除手续费
                 } else {
                     // 如果没有 middle-man，transferToAmount 等于 transferAmount
-                    transferToAmount = transferAmount;
-                    middlemanAmount = 0;
+                    transferToAmount = transferAmount.toString();
+                    middlemanAmount = '0';
                 }
 
                 // 生成记录的 description（对手方账号）：
@@ -3193,10 +3198,10 @@
                 transferToAccountDescription = `Transaction from ${transferFromAccountCode} (Rate: ${rateExchangeRateRaw})`;
                 // Middle-Man: Rate charge (x{rate}) from {currency_from} {base_amount}
                 // base_amount = currency_from_amount（例如 100），显示来源本金，不是手续费金额
-                if (middlemanAmount > 0) {
-                    const currencyFromAmount = parseFloat(rateCurrencyFromAmount) || 0;
+                if (MoneyDecimal.cmp(middlemanAmount, '0') > 0) {
+                    const currencyFromAmount = MoneyDecimal.toDecimal(rateCurrencyFromAmount, 0).toString();
                     const currencyFromCode = rateCurrencyFromSelect?.value || '';
-                    middlemanDescription = `Rate charge (x${rateMiddlemanRate}) from ${currencyFromCode} ${currencyFromAmount.toFixed(2)}`;
+                    middlemanDescription = `Rate charge (x${rateMiddlemanRate}) from ${currencyFromCode} ${MoneyDecimal.formatFixed(currencyFromAmount, 2)}`;
                 }
             }
 
@@ -3204,9 +3209,14 @@
         } else {
             // amount 来自 input.value（字符串）；Number.isFinite 仅对 number 为 true，否则会误判为无效
             const amountNormalized = String(amount).trim().replace(/,/g, '');
-            const amountNum = parseFloat(amountNormalized);
-            if (!Number.isFinite(amountNum) || amountNum < 0) {
-                showNotification('Please enter a valid amount (>= 0)', 'error');
+            let amountNum;
+            try {
+                amountNum = MoneyDecimal.toDecimal(amountNormalized);
+            } catch (_) {
+                amountNum = null;
+            }
+            if (!amountNum || (!isAdjustment && amountNum.lt(0)) || (isAdjustment && amountNum.isZero())) {
+                showNotification(isAdjustment ? 'Please enter a non-zero adjustment amount' : 'Please enter a valid amount (>= 0)', 'error');
                 return;
             }
             amount = amountNormalized;
@@ -3244,8 +3254,8 @@
                     rateTransferFromAccount,
                     rateTransferToAccount,
                     rateTransferAmount,
-                    transferToAmount: transferToAmount.toFixed(2),
-                    middlemanAmount: middlemanAmount.toFixed(2),
+                    transferToAmount: MoneyDecimal.formatFixed(transferToAmount || '0', 2),
+                    middlemanAmount: MoneyDecimal.formatFixed(middlemanAmount || '0', 2),
                     transferFromAccountDescription,
                     transferToAccountDescription,
                     middlemanDescription,
@@ -3270,13 +3280,13 @@
             // From Account 记录：使用第一个 currency，扣除第一个 amount
             formData.append('rate_from_account_id', fromAccountId);
             formData.append('rate_from_currency', rateCurrencyFromSelect?.value || '');
-            formData.append('rate_from_amount', rateCurrencyFromAmount);
+            formData.append('rate_from_amount', formatRateAmount(rateCurrencyFromAmount));
             formData.append('rate_from_description', fromAccountDescription);
 
             // To Account 记录：使用第二个 currency，增加第二个 amount
             formData.append('rate_to_account_id', accountId);
             formData.append('rate_to_currency', rateCurrencyToSelect?.value || '');
-            formData.append('rate_to_amount', rateCurrencyToAmount);
+            formData.append('rate_to_amount', formatRateAmount(rateCurrencyToAmount));
             formData.append('rate_to_description', toAccountDescription);
 
             // 第二行按当前下拉直接提交：
@@ -3289,44 +3299,52 @@
             // 第二个 Account 和 Middle-Man 的交易记录（如果填写了第二个 account 行）
             if (rateTransferFromAccount && rateTransferToAccount) {
                 // 计算 transfer amount：如果没有填写 rate_transfer_amount，使用 rate_currency_to_amount
-                const transferAmountInput = document.getElementById('rate_transfer_amount');
-                let transferAmountValue = parseFloat(rateTransferAmount) || 0;
-                if (transferAmountValue <= 0) {
-                    transferAmountValue = parseFloat(rateCurrencyToAmount) || 0;
+                let transferAmountValue;
+                try {
+                    transferAmountValue = MoneyDecimal.toDecimal(rateTransferAmount, 0);
+                } catch (_) {
+                    transferAmountValue = MoneyDecimal.toDecimal('0');
+                }
+                if (transferAmountValue.lte(0)) {
+                    try {
+                        transferAmountValue = MoneyDecimal.toDecimal(rateCurrencyToAmount, 0);
+                    } catch (_) {
+                        transferAmountValue = MoneyDecimal.toDecimal('0');
+                    }
                 }
 
                 // 🔧 修复：Transfer To Account 使用完整金额，不扣除手续费
                 // 根据用户需求：第四条记录（PROFIT）应该增加完整金额 318.40，手续费通过第五条记录单独处理
                 let transferToAmountValue = transferAmountValue; // 使用完整金额，不扣除手续费
 
-                const originalTransferFromAmount = (parseFloat(rateCurrencyFromAmount) || 0) * (rateExchangeRate || 0);
+                const originalTransferFromAmount = MoneyDecimal.mul(rateCurrencyFromAmount || '0', rateExchangeRate || '0');
                 formData.append('rate_transfer_from_account_id', rateTransferFromAccountId);
                 formData.append('rate_transfer_from_currency', rateCurrencyToSelect?.value || '');
-                formData.append('rate_transfer_from_amount', originalTransferFromAmount.toFixed(2));
+                formData.append('rate_transfer_from_amount', formatRateAmount(originalTransferFromAmount));
                 formData.append('rate_transfer_from_description', transferFromAccountDescription);
 
                 // Transfer To Account 记录：增加完整金额（不扣除手续费）
                 // 第二个 account 行使用转换后的货币（rate_to_currency，即 MYR）
                 formData.append('rate_transfer_to_account_id', rateTransferToAccountId);
                 formData.append('rate_transfer_to_currency', rateCurrencyToSelect?.value || '');
-                formData.append('rate_transfer_to_amount', transferToAmountValue.toFixed(2));
+                formData.append('rate_transfer_to_amount', formatRateAmount(transferToAmountValue));
                 formData.append('rate_transfer_to_description', transferToAccountDescription);
 
                 // Middle-Man Account 记录：如果有 middle-man，增加手续费金额
                 // Middle-Man 也使用转换后的货币（rate_to_currency，即 MYR）
-                if (rateMiddlemanAccountId && middlemanAmount > 0) {
+                if (rateMiddlemanAccountId && MoneyDecimal.cmp(middlemanAmount || '0', '0') > 0) {
                     formData.append('rate_middleman_account_id', rateMiddlemanAccountId);
                     formData.append('rate_middleman_currency', rateCurrencyToSelect?.value || '');
-                    formData.append('rate_middleman_amount', middlemanAmount.toFixed(2));
+                    formData.append('rate_middleman_amount', formatRateAmount(middlemanAmount));
                     formData.append('rate_middleman_description', middlemanDescription);
                 }
             }
 
             // 其他 Rate 相关参数
             formData.append('rate_currency_from', rateCurrencyFromSelect?.value || '');
-            formData.append('rate_currency_from_amount', rateCurrencyFromAmount);
+            formData.append('rate_currency_from_amount', formatRateAmount(rateCurrencyFromAmount));
             formData.append('rate_currency_to', rateCurrencyToSelect?.value || '');
-            formData.append('rate_currency_to_amount', rateCurrencyToAmount);
+            formData.append('rate_currency_to_amount', formatRateAmount(rateCurrencyToAmount));
             formData.append('rate_exchange_rate', String(rateExchangeRate));
             formData.append('rate_transfer_from_account', rateTransferFromAccountId);
             formData.append('rate_transfer_to_account', rateTransferToAccountId);
@@ -3336,7 +3354,7 @@
             formData.append('rate_account_to_amount', rateTransferAmount);
             formData.append('rate_middleman_account', rateMiddlemanAccountId);
             formData.append('rate_middleman_rate', rateMiddlemanRate);
-            formData.append('rate_middleman_amount', rateMiddlemanAmount);
+            formData.append('rate_middleman_amount', rateMiddlemanAmount ? formatRateAmount(rateMiddlemanAmount) : '');
         }
         if (currentCompanyId) {
             formData.append('company_id', currentCompanyId);
@@ -3357,7 +3375,7 @@
             .then(data => {
                 if (data.success) {
                     console.log('✅ 提交成功:', data.data);
-                    // Manager 以下提交“非当天”的 CONTRA：需要等待批准（后端会返回 approval_status = PENDING）
+                    // Manager 以下提交“当天及之前”的 CONTRA：需要等待批准（后端会返回 approval_status = PENDING）
                     const approvalStatus = data?.data?.approval_status ? String(data.data.approval_status).toUpperCase() : '';
                     if (approvalStatus === 'PENDING') {
                         showNotification('Submitted. Waiting for Manager+ approval to take effect.', 'info');
@@ -3486,10 +3504,10 @@
                             tr.style.backgroundColor = '#f0f0f0';
                         }
 
-                        // 格式化数字列（如果不是 '-'）
-                        const winLoss = row.win_loss === '-' ? '-' : formatNumber(row.win_loss);
-                        const crDr = row.cr_dr === '-' ? '-' : formatNumber(row.cr_dr);
-                        const balance = row.balance === '-' ? '-' : formatNumber(row.balance);
+                        // 格式化数字列（如果不是 '-'）；须用 formatPaymentHistoryMoney，勿用 formatNumber(Math.trunc) 否则 -40.80 变 -40.79
+                        const winLoss = row.win_loss === '-' ? '-' : formatPaymentHistoryMoney(row.win_loss);
+                        const crDr = row.cr_dr === '-' ? '-' : formatPaymentHistoryMoney(row.cr_dr);
+                        const balance = row.balance === '-' ? '-' : formatPaymentHistoryMoney(row.balance);
                         const remarkValue = getHistoryRemark(row);
                         const descriptionDisplay = toUpperDisplay(row.description);
                         const descriptionCells = showDescriptionColumn
@@ -3837,13 +3855,13 @@
 
         // 计算 Middle-Man Amount 函数
         function calculateMiddleManAmount() {
-            const currencyFromAmount = parseFloat(currencyFromAmountInput.value) || 0;
-            const middleManRate = parseFloat(middleManRateInput.value) || 0;
+            const currencyFromAmount = MoneyDecimal.toDecimal(currencyFromAmountInput.value || '0', 0);
+            const middleManRate = MoneyDecimal.toDecimal(middleManRateInput.value || '0', 0);
 
             // 公式: currency_from_amount * middle_man_rate
-            if (currencyFromAmount > 0 && middleManRate > 0) {
-                const result = currencyFromAmount * middleManRate;
-                middleManAmountInput.value = result.toFixed(2);
+            if (currencyFromAmount.gt(0) && middleManRate.gt(0)) {
+                const result = currencyFromAmount.times(middleManRate);
+                middleManAmountInput.value = formatRateAmount(result);
             } else {
                 middleManAmountInput.value = '';
             }
@@ -3854,15 +3872,14 @@
 
         // 计算 Currency To Amount 函数
         function calculateCurrencyToAmount() {
-            const currencyFromAmount = parseFloat(currencyFromAmountInput.value) || 0;
+            const currencyFromAmount = MoneyDecimal.toDecimal(currencyFromAmountInput.value || '0', 0);
             const parsedRate = parseRateExpression(exchangeRateInput.value);
-            const exchangeRate = parsedRate.valid ? parsedRate.value : 0;
-            const middleManAmount = parseFloat(middleManAmountInput.value) || 0;
+            const exchangeRate = parsedRate.valid ? MoneyDecimal.toDecimal(parsedRate.value) : MoneyDecimal.toDecimal('0');
 
-            // 公式: (currency_from_amount * exchange_rate) - middle_man_amount
-            if (currencyFromAmount > 0 && exchangeRate > 0) {
-                const result = (currencyFromAmount * exchangeRate) - middleManAmount;
-                currencyToAmountInput.value = result.toFixed(2);
+            // 与提交入账保持一致：换算金额显示完整 from * rate，middle-man fee 另行显示并单独入账。
+            if (currencyFromAmount.gt(0) && exchangeRate.gt(0)) {
+                const result = currencyFromAmount.times(exchangeRate);
+                currencyToAmountInput.value = formatRateAmount(result);
             } else {
                 currencyToAmountInput.value = '';
             }

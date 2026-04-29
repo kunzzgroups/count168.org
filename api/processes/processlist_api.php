@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -164,21 +165,23 @@ function checkCompanyAccess(PDO $pdo, int $requestedCompanyId): bool
 /**
  * Parse profit_sharing text like "STAFF - 50, AA - 10.5" and return total amount.
  */
-function parseProfitSharingTotal(?string $profitSharing): float
+function parseProfitSharingTotal(?string $profitSharing): string
 {
     if ($profitSharing === null) {
-        return 0.0;
+        return '0.00000000';
     }
 
     $text = trim($profitSharing);
     if ($text === '') {
-        return 0.0;
+        return '0.00000000';
     }
 
-    $total = 0.0;
+    $total = '0.00000000';
     if (preg_match_all('/-\s*(-?\d+(?:\.\d+)?)/', $text, $matches)) {
         foreach ($matches[1] as $num) {
-            $total += (float)$num;
+            if (money_is_valid($num)) {
+                $total = money_add($total, $num);
+            }
         }
     }
 
@@ -188,8 +191,32 @@ function parseProfitSharingTotal(?string $profitSharing): float
 // Handle different actions
 $action = $_GET['action'] ?? '';
 
-// 经典 processlist 切公司/切 category 不做 company.permissions 类别拦截；
-// 仅由后续的 company access / owner map 校验控制可访问范围。
+// --- BEGIN DATA-LEVEL CATEGORY PERMISSION VALIDATION ---
+$req_company_id = $_GET['company_id'] ?? $_POST['company_id'] ?? $_SESSION['company_id'] ?? null;
+if ($req_company_id) {
+    // Actions that are strictly for 'Bank' category
+    $bankOnlyActions = [
+        'get_banks_by_country', 'get_countries', 'add_country', 'remove_country',
+        'save_country_banks', 'get_selected_countries', 'save_selected_countries', 
+        'get_selected_banks', 'save_selected_banks', 'update_bank_process'
+    ];
+
+    $requiredCategory = 'Games'; // Default fallback
+    if (in_array($action, $bankOnlyActions)) {
+        $requiredCategory = 'Bank';
+    } else {
+        $reqPermission = $_GET['permission'] ?? $_POST['permission'] ?? '';
+        if ($reqPermission === 'Bank') {
+            $requiredCategory = 'Bank';
+        }
+    }
+
+    if (!checkCompanyCategoryPermission($pdo, $req_company_id, $requiredCategory)) {
+        jsonResponse(false, 'Unauthorized permission category');
+        exit;
+    }
+}
+// --- END DATA-LEVEL CATEGORY PERMISSION VALIDATION ---
 
 switch ($action) {
     case 'get_process':
@@ -796,9 +823,12 @@ function getBankProcesses() {
 
         $formattedProcesses = [];
         foreach ($rows as $r) {
-            $storedProfit = isset($r['profit']) && $r['profit'] !== '' ? (float)$r['profit'] : 0.0;
+            $storedProfit = isset($r['profit']) && $r['profit'] !== '' ? money_normalize($r['profit']) : '0.00000000';
             $profitSharingTotal = parseProfitSharingTotal($r['profit_sharing'] ?? null);
-            $netProfit = max(0, $storedProfit - $profitSharingTotal);
+            $netProfit = money_sub($storedProfit, $profitSharingTotal);
+            if (money_cmp($netProfit, '0') < 0) {
+                $netProfit = '0.00000000';
+            }
             $issueFlag = normalizeBankIssueFlagValue($r['issue_flag'] ?? null);
             $formattedProcesses[] = [
                 'id' => $r['id'],
@@ -808,11 +838,11 @@ function getBankProcesses() {
                 'types' => $r['type'] ?? '',
                 'card_lower' => $r['card_merchant_account_id'] ?? '',
                 'contract' => $r['contract'] ?? '',
-                'insurance' => $r['insurance'] ?? '',
+                'insurance' => $r['insurance'] !== null && $r['insurance'] !== '' ? money_out($r['insurance']) : '',
                 'customer' => $r['customer_account'] ?? '',
-                'cost' => $r['cost'],
-                'price' => $r['price'],
-                'profit' => number_format($netProfit, 2, '.', ''),
+                'cost' => $r['cost'] !== null && $r['cost'] !== '' ? money_out($r['cost']) : '',
+                'price' => $r['price'] !== null && $r['price'] !== '' ? money_out($r['price']) : '',
+                'profit' => money_out($netProfit),
                 'status' => $r['status'],
                 'issue_flag' => $issueFlag,
                 'remark' => $r['remark'] ?? '',
@@ -890,12 +920,12 @@ function getBankProcess() {
             'customer_name' => $process['customer_name'],
             'customer_account' => $process['customer_account'] ?? '',
             'contract' => $process['contract'],
-            'insurance' => $process['insurance'],
+            'insurance' => $process['insurance'] !== null && $process['insurance'] !== '' ? money_out($process['insurance']) : '',
             'sop' => $process['sop'] ?? '',
             'remark' => $process['remark'] ?? '',
-            'cost' => $process['cost'],
-            'price' => $process['price'],
-            'profit' => $process['profit'],
+            'cost' => $process['cost'] !== null && $process['cost'] !== '' ? money_out($process['cost']) : '',
+            'price' => $process['price'] !== null && $process['price'] !== '' ? money_out($process['price']) : '',
+            'profit' => $process['profit'] !== null && $process['profit'] !== '' ? money_out($process['profit']) : '',
             'profit_sharing' => $process['profit_sharing'],
             'day_start' => $process['day_start'],
             'day_start_frequency' => $process['day_start_frequency'] ?? '1st_of_every_month',
@@ -943,12 +973,12 @@ function updateBankProcess() {
         $customer_id = !empty($_POST['customer_id']) ? (int)$_POST['customer_id'] : null;
         $profit_account_id = !empty($_POST['profit_account_id']) ? (int)$_POST['profit_account_id'] : null;
         $contract = $_POST['contract'] ?? null;
-        $insurance = isset($_POST['insurance']) && $_POST['insurance'] !== '' ? (float)$_POST['insurance'] : null;
+        $insurance = money_optional($_POST['insurance'] ?? null);
         $sop = trim($_POST['sop'] ?? '');
         $remark = trim($_POST['remark'] ?? '');
-        $cost = isset($_POST['cost']) && $_POST['cost'] !== '' ? (float)$_POST['cost'] : null;
-        $price = isset($_POST['price']) && $_POST['price'] !== '' ? (float)$_POST['price'] : null;
-        $profit = isset($_POST['profit']) && $_POST['profit'] !== '' ? (float)$_POST['profit'] : null;
+        $cost = money_optional($_POST['cost'] ?? null);
+        $price = money_optional($_POST['price'] ?? null);
+        $profit = money_optional($_POST['profit'] ?? null);
         $profit_sharing = $_POST['profit_sharing'] ?? null;
         $day_start = isset($_POST['day_start']) ? trim((string)$_POST['day_start']) : '';
         $day_end = isset($_POST['day_end']) ? trim((string)$_POST['day_end']) : '';

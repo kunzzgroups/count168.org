@@ -33,6 +33,50 @@ let chartMetadata = {
     cardExpensesDisplay: 0
 };
 
+function dashDec(value, fallback) {
+    return MoneyDecimal.toDecimal(value, fallback === undefined ? 0 : fallback);
+}
+
+function dashAdd(a, b) {
+    return MoneyDecimal.add(a, b);
+}
+
+function dashSub(a, b) {
+    return MoneyDecimal.sub(a, b);
+}
+
+function dashMul(a, b) {
+    return MoneyDecimal.mul(a, b);
+}
+
+function dashDiv(a, b) {
+    return MoneyDecimal.div(a, b);
+}
+
+function dashNeg(value) {
+    return dashDec(value, 0).negated();
+}
+
+function dashCmp(a, b) {
+    return MoneyDecimal.cmp(a, b);
+}
+
+function dashDisplay(value) {
+    return MoneyDecimal.formatDisplay(value, 8);
+}
+
+function dashChartNumber(value) {
+    return dashDec(value, 0).toNumber();
+}
+
+function dashInt(value) {
+    return dashDec(value, 0).toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber();
+}
+
+function dashRoundNumber(value) {
+    return dashDec(value, 0).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).toNumber();
+}
+
 // 当前选择的图表数据类型（'all', 'capital', 'expenses', 'profit'）
 let selectedChartDataType = 'all';
 
@@ -456,8 +500,8 @@ function renderCalendar() {
     const monthSelect = document.getElementById('calendar-month-select');
     if (!yearSelect || !monthSelect) return;
 
-    const year = parseInt(yearSelect.value);
-    const month = parseInt(monthSelect.value);
+    const year = dashInt(yearSelect.value);
+    const month = dashInt(monthSelect.value);
     calendarCurrentDate = new Date(year, month, 1);
 
     const firstDay = new Date(year, month, 1);
@@ -547,12 +591,12 @@ function highlightPreviewRange(hoverDate) {
     const monthSelect = document.getElementById('calendar-month-select');
     if (!yearSelect || !monthSelect) return;
 
-    const year = parseInt(yearSelect.value);
-    const month = parseInt(monthSelect.value);
+    const year = dashInt(yearSelect.value);
+    const month = dashInt(monthSelect.value);
 
     days.forEach(day => {
         day.classList.remove('preview-range', 'preview-end');
-        const dayText = parseInt(day.textContent);
+        const dayText = dashInt(day.textContent);
         if (!dayText) return;
         let dayDate;
         if (day.classList.contains('other-month')) {
@@ -895,11 +939,11 @@ function getLinkMultiplierForCompany(companyId, groupFilter) {
     if (!groupFilter || !Array.isArray(allOwnerCompanies)) return 1;
     const gf = String(groupFilter).toUpperCase();
     const row = allOwnerCompanies.find(c =>
-        parseInt(c.id) === parseInt(companyId) &&
+        dashInt(c.id) === dashInt(companyId) &&
         c.group_id && c.group_id.toUpperCase() === gf
     );
     if (row && row.link_percentage !== undefined && row.link_percentage !== null) {
-        const pct = parseFloat(row.link_percentage);
+        const pct = dashDec(row.link_percentage || '0').toNumber();
         if (!isNaN(pct) && pct >= 0) return pct / 100;
     }
     return 1;
@@ -954,9 +998,9 @@ async function fetchDashboardForCompany(companyId) {
 
 // 合并多个公司的 Dashboard 数据
 function mergeGroupData(dataList) {
-    let capital = 0, expenses = 0, profit = 0;
-    let periodCapital = 0, periodExpenses = 0, periodProfit = 0;
-    let bfCapital = 0, bfExpenses = 0, bfProfit = 0;
+    let capital = dashDec('0'), expenses = dashDec('0'), profit = dashDec('0');
+    let periodCapital = dashDec('0'), periodExpenses = dashDec('0'), periodProfit = dashDec('0');
+    let bfCapital = dashDec('0'), bfExpenses = dashDec('0'), bfProfit = dashDec('0');
     const dailyCapital = {}, dailyExpenses = {}, dailyProfit = {}, dailyProfitFlow = {};
     let hasOwnershipSetup = false;
 
@@ -964,19 +1008,19 @@ function mergeGroupData(dataList) {
     const companyEarnings = [];
 
     dataList.forEach(d => {
-        capital += parseFloat(d.capital || 0);
-        expenses += parseFloat(d.expenses || 0);
-        profit += parseFloat(d.profit || 0);
+        capital = capital.plus(dashDec(d.capital || '0'));
+        expenses = expenses.plus(dashDec(d.expenses || '0'));
+        profit = profit.plus(dashDec(d.profit || '0'));
 
         if (d.period_total) {
-            periodCapital += parseFloat(d.period_total.capital || 0);
-            periodExpenses += parseFloat(d.period_total.expenses || 0);
-            periodProfit += parseFloat(d.period_total.profit || 0);
+            periodCapital = periodCapital.plus(dashDec(d.period_total.capital || '0'));
+            periodExpenses = periodExpenses.plus(dashDec(d.period_total.expenses || '0'));
+            periodProfit = periodProfit.plus(dashDec(d.period_total.profit || '0'));
         }
         if (d.initial_balance) {
-            bfCapital += parseFloat(d.initial_balance.capital || 0);
-            bfExpenses += parseFloat(d.initial_balance.expenses || 0);
-            bfProfit += parseFloat(d.initial_balance.profit || 0);
+            bfCapital = bfCapital.plus(dashDec(d.initial_balance.capital || '0'));
+            bfExpenses = bfExpenses.plus(dashDec(d.initial_balance.expenses || '0'));
+            bfProfit = bfProfit.plus(dashDec(d.initial_balance.profit || '0'));
         }
         if (d.daily_data) {
             mergeDailyMap(dailyCapital, d.daily_data.capital);
@@ -989,16 +1033,16 @@ function mergeGroupData(dataList) {
         }
 
         // 收集各公司的 Earnings 信息
-        const pct = parseFloat(d.ownership_percentage || 0);
-        const grpPct = parseFloat(d.group_equity_percentage || 0);
-        const grpAccPct = parseFloat(d.group_account_percentage || 0);
+        const pct = dashDec(d.ownership_percentage || '0').toNumber();
+        const grpPct = dashDec(d.group_equity_percentage || '0').toNumber();
+        const grpAccPct = dashDec(d.group_account_percentage || '0').toNumber();
         const hasGrp = !!d.has_group_ownership;
-        const rawP = parseFloat(d?.period_total?.profit ?? d.profit) || 0;
-        const rawE = parseFloat(d?.period_total?.expenses ?? d.expenses) || 0;
-        const displayE = rawE > 0 ? -rawE : rawE;
-        const netProfit = rawP + displayE;
+        const rawP = dashDec(d?.period_total?.profit ?? d.profit ?? '0');
+        const rawE = dashDec(d?.period_total?.expenses ?? d.expenses ?? '0');
+        const displayE = rawE.gt(0) ? rawE.negated() : rawE;
+        const netProfit = rawP.plus(displayE);
         // Group All mode — same priority cascade as updateDashboard's single-company path.
-        const linkMul = parseFloat(d._link_multiplier);
+        const linkMul = dashDec(d._link_multiplier || '0').toNumber();
         const hasLink = !isNaN(linkMul) && linkMul > 0 && linkMul !== 1;
         const directPct = pct / 100;
         let effectivePct;
@@ -1011,25 +1055,25 @@ function mergeGroupData(dataList) {
             const chainPct = hasGrp ? (grpPct / 100) * (grpAccPct / 100) : 0;
             effectivePct = chainPct === 0 ? 1 : chainPct;
         }
-        const earningsVal = netProfit * effectivePct;
+        const earningsVal = netProfit.times(String(effectivePct));
         hasOwnershipSetup = true;
         companyEarnings.push({ netProfit, pct, grpPct, grpAccPct, hasGrp, earnings: earningsVal });
     });
 
     // 合计 Earnings = 各公司的 NET PROFIT × 各自 ownership_percentage 之和
-    const totalEarnings = companyEarnings.reduce((sum, c) => sum + c.earnings, 0);
+    const totalEarnings = companyEarnings.reduce((sum, c) => sum.plus(c.earnings), dashDec('0'));
 
     // 计算合并后的整体 NET PROFIT
     const mergedRawProfit = periodProfit;
     const mergedRawExpenses = periodExpenses;
-    const mergedDisplayExpenses = mergedRawExpenses > 0 ? -mergedRawExpenses : mergedRawExpenses;
-    const mergedNetProfit = mergedRawProfit + mergedDisplayExpenses;
+    const mergedDisplayExpenses = mergedRawExpenses.gt(0) ? mergedRawExpenses.negated() : mergedRawExpenses;
+    const mergedNetProfit = mergedRawProfit.plus(mergedDisplayExpenses);
 
     // 反推等效 ownership_percentage：Earnings = NET_PROFIT × (pct/100)
     // → pct = (totalEarnings / mergedNetProfit) * 100
     let effectiveOwnershipPct = 0;
-    if (mergedNetProfit !== 0) {
-        effectiveOwnershipPct = (totalEarnings / mergedNetProfit) * 100;
+    if (!mergedNetProfit.isZero()) {
+        effectiveOwnershipPct = totalEarnings.div(mergedNetProfit).times(100).toNumber();
     } else if (companyEarnings.length > 0) {
         // NET PROFIT 为 0 时，取各公司 ownership_percentage 的平均值
         const totalPct = companyEarnings.reduce((sum, c) => sum + c.pct, 0);
@@ -1037,9 +1081,9 @@ function mergeGroupData(dataList) {
     }
 
     return {
-        capital, expenses, profit,
-        period_total: { capital: periodCapital, expenses: periodExpenses, profit: periodProfit },
-        initial_balance: { capital: bfCapital, expenses: bfExpenses, profit: bfProfit },
+        capital: dashDisplay(capital), expenses: dashDisplay(expenses), profit: dashDisplay(profit),
+        period_total: { capital: dashDisplay(periodCapital), expenses: dashDisplay(periodExpenses), profit: dashDisplay(periodProfit) },
+        initial_balance: { capital: dashDisplay(bfCapital), expenses: dashDisplay(bfExpenses), profit: dashDisplay(bfProfit) },
         daily_data: {
             capital: dailyCapital,
             expenses: dailyExpenses,
@@ -1056,7 +1100,7 @@ function mergeGroupData(dataList) {
 function mergeDailyMap(target, source) {
     if (!source || typeof source !== 'object') return;
     Object.keys(source).forEach(date => {
-        target[date] = (target[date] || 0) + parseFloat(source[date] || 0);
+        target[date] = dashDisplay(dashAdd(target[date] || '0', source[date] || '0'));
     });
 }
 
@@ -1241,18 +1285,18 @@ function updateDashboard(data) {
                 const earningsEl = document.getElementById('earnings-value');
 
                 // 原始值（跟 Payment 一致）
-                const rawProfit = parseFloat(data?.period_total?.profit ?? data.profit) || 0
-                const rawExpenses = parseFloat(data?.period_total?.expenses ?? data.expenses) || 0;
+                const rawProfit = dashDec(data?.period_total?.profit ?? data.profit ?? '0');
+                const rawExpenses = dashDec(data?.period_total?.expenses ?? data.expenses ?? '0');
 
                 // Dashboard 卡片口径：Profit 以正数显示（与业务展示预期一致）。
                 const displayProfitNum = rawProfit;
 
                 // Expenses 卡片：Payment 为正数时，Dashboard 用负数显示支出；如果本身是负数则保持
-                const displayExpensesNum = rawExpenses > 0 ? -rawExpenses : rawExpenses;
+                const displayExpensesNum = rawExpenses.gt(0) ? rawExpenses.negated() : rawExpenses;
 
                 // NET PROFIT 卡片：沿用「显示值」计算
                 // 规则：NET PROFIT = Profit(显示) + Expenses(显示)
-                const netProfitDisplay = displayProfitNum + displayExpensesNum;
+                const netProfitDisplay = displayProfitNum.plus(displayExpensesNum);
 
                 // Earnings 卡片：
                 //   Under a group filter:  Earnings = Net Profit × account_ownership% × group_earnings_link%
@@ -1262,11 +1306,11 @@ function updateDashboard(data) {
                 //     - group_earnings_link% = IG→AP style link (already applied to
                 //       netProfitDisplay by scaleDashboardData). Nothing extra to do here.
                 //   Without a group filter: legacy per-user formula stays.
-                const ownershipPercentage = parseFloat(data?.ownership_percentage) || 0;
-                const groupEquityPercentage = parseFloat(data?.group_equity_percentage) || 0;
-                const groupAccountPercentage = parseFloat(data?.group_account_percentage) || 0;
+                const ownershipPercentage = dashDec(data?.ownership_percentage || '0').toNumber();
+                const groupEquityPercentage = dashDec(data?.group_equity_percentage || '0').toNumber();
+                const groupAccountPercentage = dashDec(data?.group_account_percentage || '0').toNumber();
                 const hasGroupOwnership = !!data?.has_group_ownership;
-                const linkMul = parseFloat(data?._link_multiplier);
+                const linkMul = dashDec(data?._link_multiplier || '0').toNumber();
                 const hasLinkOwnership = !isNaN(linkMul) && linkMul > 0 && linkMul !== 1;
                 const inGroupView = !!selectedDashboardGroup;
 
@@ -1299,11 +1343,11 @@ function updateDashboard(data) {
                 } else {
                     effectivePct = (directPct === 0 && inGroupView) ? 1 : 0;
                 }
-                const earningsDisplay = netProfitDisplay * effectivePct;
+                const earningsDisplay = netProfitDisplay.times(String(effectivePct));
 
                 // 记录卡片显示值，供图表 tooltip 统一读取，避免口径不一致
-                chartMetadata.cardProfitDisplay = displayProfitNum;
-                chartMetadata.cardExpensesDisplay = displayExpensesNum;
+                chartMetadata.cardProfitDisplay = dashDisplay(displayProfitNum);
+                chartMetadata.cardExpensesDisplay = dashDisplay(displayExpensesNum);
 
                 if (capitalEl) capitalEl.textContent = formatCurrency(displayProfitNum);
                 if (expensesEl) expensesEl.textContent = formatCurrency(displayExpensesNum);
@@ -1368,21 +1412,18 @@ async function fetchCardPointByDate(dateStr) {
 
     // 单日点位必须使用「当日发生额」口径（period_total），避免把 B/F(initial_balance) 或累计余额带进趋势图
     // Raw numbers intentionally match the company's own data (no link scaling on KPIs).
-    const rawProfit = parseFloat(result.data?.period_total?.profit ?? result.data.profit) || 0;
-    const rawExpenses = parseFloat(result.data?.period_total?.expenses ?? result.data.expenses) || 0;
+    const rawProfit = dashDec(result.data?.period_total?.profit ?? result.data.profit ?? '0');
+    const rawExpenses = dashDec(result.data?.period_total?.expenses ?? result.data.expenses ?? '0');
     const point = {
-        profit: rawProfit,
-        expenses: rawExpenses > 0 ? -rawExpenses : rawExpenses
+        profit: dashDisplay(rawProfit),
+        expenses: dashDisplay(rawExpenses.gt(0) ? rawExpenses.negated() : rawExpenses)
     };
     dailyCardPointCache.set(cacheKey, point);
     return point;
 }
 
 function formatCurrency(value) {
-    return parseFloat(value || 0).toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
+    return MoneyDecimal.formatThousands(value || '0', 2);
 }
 
 function formatDateForDisplay(dateString) {
@@ -1444,9 +1485,9 @@ async function updateChart(data) {
     const profitData = [];
     const netProfitData = [];
     const earningsData = [];
-    const ownershipPercentage = parseFloat(data?.ownership_percentage) || 0;
-    const groupEquityPercentage = parseFloat(data?.group_equity_percentage) || 0;
-    const groupAccountPercentage = parseFloat(data?.group_account_percentage) || 0;
+    const ownershipPercentage = dashDec(data?.ownership_percentage || '0').toNumber();
+    const groupEquityPercentage = dashDec(data?.group_equity_percentage || '0').toNumber();
+    const groupAccountPercentage = dashDec(data?.group_account_percentage || '0').toNumber();
     const hasGroupOwnership = !!data?.has_group_ownership;
     const directPct = ownershipPercentage / 100;
     // 有直接股权时只乘 direct；否则 group_equity×group_account（多段链已并入 equity）
@@ -1455,17 +1496,6 @@ async function updateChart(data) {
         : (hasGroupOwnership
             ? (groupEquityPercentage / 100) * (groupAccountPercentage / 100)
             : 0);
-
-    // 初始化累计值（从 API 返回的 initial_balance 开始）
-    // initial_balance 是起始日期之前的余额总和（B/F）
-    const initialBalance = {
-        capital: data.initial_balance ? parseFloat(data.initial_balance.capital || 0) : 0,
-        expenses: data.initial_balance ? parseFloat(data.initial_balance.expenses || 0) : 0,
-        profit: data.initial_balance ? parseFloat(data.initial_balance.profit || 0) : 0
-    };
-    let currentCapital = initialBalance.capital;
-    let currentExpenses = initialBalance.expenses;
-    let currentProfit = initialBalance.profit;
 
     // 检查是否应按月份聚合（年份范围或跨越多个月）
     if (shouldAggregateByMonth() && dateRange.startDate && dateRange.endDate) {
@@ -1488,9 +1518,9 @@ async function updateChart(data) {
 
         // 为每个月聚合数据
         months.forEach(({ year, month, monthKey }) => {
-            let monthCapital = 0;
-            let monthExpenses = 0;
-            let monthProfit = 0;
+            let monthCapital = dashDec('0');
+            let monthExpenses = dashDec('0');
+            let monthProfit = dashDec('0');
 
             // 遍历该月的所有日期
             const firstDay = new Date(year, month - 1, 1);
@@ -1500,30 +1530,30 @@ async function updateChart(data) {
                 const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dateObj = new Date(dateStr);
                 if (dateObj >= startDate && dateObj <= endDate) {
-                    const profitDelta = parseFloat(dailyData.profit && dailyData.profit[dateStr] ? dailyData.profit[dateStr] : 0) || 0;
-                    const expensesDelta = parseFloat(dailyData.expenses && dailyData.expenses[dateStr] ? dailyData.expenses[dateStr] : 0) || 0;
-                    const capitalDelta = parseFloat(dailyData.capital && dailyData.capital[dateStr] ? dailyData.capital[dateStr] : 0) || 0;
+                    const profitDelta = dashDec(dailyData.profit && dailyData.profit[dateStr] ? dailyData.profit[dateStr] : '0');
+                    const expensesDelta = dashDec(dailyData.expenses && dailyData.expenses[dateStr] ? dailyData.expenses[dateStr] : '0');
+                    const capitalDelta = dashDec(dailyData.capital && dailyData.capital[dateStr] ? dailyData.capital[dateStr] : '0');
 
                     const hasStrictProfitDelta = strictProfitDailyFlow
                         && Object.prototype.hasOwnProperty.call(strictProfitDailyFlow, dateStr)
                     const strictProfitDelta = hasStrictProfitDelta
-                        ? (parseFloat(strictProfitDailyFlow[dateStr]) || 0)
+                        ? dashDec(strictProfitDailyFlow[dateStr] || '0')
                         : profitDelta
-                    monthProfit += strictProfitDelta;
-                    monthExpenses += (expensesDelta > 0 ? -expensesDelta : expensesDelta);
-                    monthCapital += capitalDelta;
+                    monthProfit = monthProfit.plus(strictProfitDelta);
+                    monthExpenses = monthExpenses.plus(expensesDelta.gt(0) ? expensesDelta.negated() : expensesDelta);
+                    monthCapital = monthCapital.plus(capitalDelta);
                 }
             }
 
             dates.push(monthKey);
             // 月聚合视图也按「发生额」显示（当月净发生），不做累计
-            capitalData.push(monthCapital);
-            expensesData.push(monthExpenses);
-            profitData.push(monthProfit);
+            capitalData.push(dashChartNumber(monthCapital));
+            expensesData.push(dashChartNumber(monthExpenses));
+            profitData.push(dashChartNumber(monthProfit));
             
-            const monthNetProfit = monthProfit + monthExpenses;
-            netProfitData.push(monthNetProfit);
-            earningsData.push(monthNetProfit * earningsMultiplier);
+            const monthNetProfit = monthProfit.plus(monthExpenses);
+            netProfitData.push(dashChartNumber(monthNetProfit));
+            earningsData.push(dashChartNumber(monthNetProfit.times(String(earningsMultiplier))));
         });
     } else {
         // 非年份范围：按天显示
@@ -1602,22 +1632,22 @@ async function updateChart(data) {
                 dates.push(date);
 
                 // 使用 profit 和 expenses 角色，与仪表盘卡片逻辑一致
-                const profitDelta = parseFloat(dailyData.profit && dailyData.profit[date] ? dailyData.profit[date] : 0) || 0;
-                const expensesDelta = parseFloat(dailyData.expenses && dailyData.expenses[date] ? dailyData.expenses[date] : 0) || 0;
+                const profitDelta = dashDec(dailyData.profit && dailyData.profit[date] ? dailyData.profit[date] : '0');
+                const expensesDelta = dashDec(dailyData.expenses && dailyData.expenses[date] ? dailyData.expenses[date] : '0');
 
                 // 按天图表显示“当日增量”，无数据日为 0（不做累计）
                 const displayProfit = profitDelta;
-                const displayExpenses = (expensesDelta > 0 ? -expensesDelta : expensesDelta);
-                profitData.push(displayProfit);
-                expensesData.push(displayExpenses);
+                const displayExpenses = (expensesDelta.gt(0) ? expensesDelta.negated() : expensesDelta);
+                profitData.push(dashChartNumber(displayProfit));
+                expensesData.push(dashChartNumber(displayExpenses));
                 
-                const netProfit = displayProfit + displayExpenses;
-                netProfitData.push(netProfit);
-                earningsData.push(netProfit * earningsMultiplier);
+                const netProfit = displayProfit.plus(displayExpenses);
+                netProfitData.push(dashChartNumber(netProfit));
+                earningsData.push(dashChartNumber(netProfit.times(String(earningsMultiplier))));
 
                 // 如果需要 capital 数据（虽然当前图表不显示），也可以累计
-                const capitalDelta = parseFloat(dailyData.capital && dailyData.capital[date] ? dailyData.capital[date] : 0) || 0;
-                capitalData.push(capitalDelta);
+                const capitalDelta = dashDec(dailyData.capital && dailyData.capital[date] ? dailyData.capital[date] : '0');
+                capitalData.push(dashChartNumber(capitalDelta));
             } catch (e) {
                 console.warn('Error processing date data:', date, e);
                 profitData.push(0);
@@ -1738,7 +1768,7 @@ async function updateChart(data) {
 
     // 根据按钮状态判断是否隐藏
     document.querySelectorAll('.chart-toggle-btn').forEach(btn => {
-        const datasetIndex = parseInt(btn.dataset.dataset);
+        const datasetIndex = dashInt(btn.dataset.dataset);
         if (allDatasets[datasetIndex]) {
             allDatasets[datasetIndex].hidden = !btn.classList.contains('active');
         }
@@ -1754,7 +1784,7 @@ async function updateChart(data) {
                 if (shouldAggregateByMonth() && d.match(/^\d{4}-\d{2}$/)) {
                     const [year, month] = d.split('-');
                     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                    return monthNames[parseInt(month, 10) - 1];
+                    return monthNames[dashInt(month) - 1];
                 }
                 // 否则是日期格式 "YYYY-MM-DD"
                 const date = new Date(d);
@@ -1832,8 +1862,8 @@ async function updateChart(data) {
                     const dateKey = dates[i];
                     if (pointMap.has(dateKey)) {
                         const p = pointMap.get(dateKey);
-                        profitData[i] = parseFloat(p.profit || 0) || 0;
-                        expensesData[i] = parseFloat(p.expenses || 0) || 0;
+                        profitData[i] = dashChartNumber(p.profit || '0');
+                        expensesData[i] = dashChartNumber(p.expenses || '0');
                         netProfitData[i] = profitData[i] + expensesData[i];
                         earningsData[i] = netProfitData[i] * (ownershipPercentage / 100);
                     }
@@ -1900,7 +1930,7 @@ function createChart(canvas, chartData) {
         console.log('创建图表，数据点数量:', chartData.labels.length, '数据集数量:', chartData.datasets.length);
 
         // 等价于 CSS clamp(9px, 0.82vw, 15px)
-        const axisFontSize = Math.round(Math.min(15, Math.max(9, (0.82 / 100) * window.innerWidth)));
+        const axisFontSize = dashRoundNumber(Math.min(15, Math.max(9, (0.82 / 100) * window.innerWidth)));
 
         // 如果图表已存在，先销毁
         if (trendChart) {
@@ -1959,8 +1989,8 @@ function createChart(canvas, chartData) {
                                     // 多月/年份范围：rawDate 为 "YYYY-MM"，显示 "Mon YYYY"
                                     if (shouldAggregateByMonth() && rawDate.match(/^\d{4}-\d{2}$/)) {
                                         const [yearStr, monthStr] = rawDate.split('-');
-                                        const year = parseInt(yearStr, 10);
-                                        const month = parseInt(monthStr, 10);
+                                        const year = dashInt(yearStr);
+                                        const month = dashInt(monthStr);
                                         if (!year || !month) return '';
                                         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                                         return `${monthNames[month - 1]} ${year}`;
@@ -1971,14 +2001,14 @@ function createChart(canvas, chartData) {
                                     if (rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
                                         // YYYY-MM-DD
                                         const parts = rawDate.split('-');
-                                        year = parseInt(parts[0], 10);
-                                        month = parseInt(parts[1], 10);
-                                        day = parseInt(parts[2], 10);
+                                        year = dashInt(parts[0]);
+                                        month = dashInt(parts[1]);
+                                        day = dashInt(parts[2]);
                                     } else if (rawDate.match(/^\d{1,2}\/\d{1,2}$/)) {
                                         // DD/MM（无年份，用当前年份兜底）
                                         const parts = rawDate.split('/');
-                                        day = parseInt(parts[0], 10);
-                                        month = parseInt(parts[1], 10);
+                                        day = dashInt(parts[0]);
+                                        month = dashInt(parts[1]);
                                         year = new Date().getFullYear();
                                     } else {
                                         const d = new Date(rawDate);
@@ -2019,7 +2049,7 @@ function createChart(canvas, chartData) {
                                             if (shouldAggregateByMonth() && date.match(/^\d{4}-\d{2}$/)) {
                                                 const [year, month] = date.split('-');
                                                 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                                                return `${monthNames[parseInt(month) - 1]} ${year}`;
+                                                return `${monthNames[dashInt(month) - 1]} ${year}`;
                                             }
                                             // 否则是日期格式（日/月/年）
                                             const dateObj = new Date(date);
@@ -2108,12 +2138,12 @@ function isDashboardDataScopeValid() {
         // 当前公司在 allOwnerCompanies 里可能有原生行 + 虚拟行（group_id 不同）。
         // 只要 .some() 能找到任意一条 (id, group_id=selectedDashboardGroup) 就合法。
         return allOwnerCompanies.some(c =>
-            parseInt(c.id) === parseInt(window.companyId) &&
+            dashInt(c.id) === dashInt(window.companyId) &&
             c.group_id && c.group_id.toUpperCase() === selectedDashboardGroup
         );
     }
 
-    const cur = allOwnerCompanies.find(c => parseInt(c.id) === parseInt(window.companyId));
+    const cur = allOwnerCompanies.find(c => dashInt(c.id) === dashInt(window.companyId));
     if (!cur) return false;
     return !cur.group_id || String(cur.group_id).trim() === '';
 }
@@ -2189,17 +2219,17 @@ function loadOwnerCompanies() {
                 const currentCompany =
                     (savedGroup
                         ? data.data.find(c =>
-                            parseInt(c.id) === parseInt(window.companyId) &&
+                            dashInt(c.id) === dashInt(window.companyId) &&
                             c.group_id && c.group_id.toUpperCase() === savedGroup
                           )
                         : null)
-                    || data.data.find(c => parseInt(c.id) === parseInt(window.companyId));
+                    || data.data.find(c => dashInt(c.id) === dashInt(window.companyId));
                 console.log('[Dashboard] loadOwnerCompanies | savedGroup:', savedGroup, '| groups:', groups, '| window.companyId:', window.companyId);
 
                 if (savedGroup && groups.includes(savedGroup)) {
                     // 检查当前公司是否在任何一条 row 里属于 savedGroup（原生或虚拟）
                     const companyUnderSavedGroup = data.data.some(c =>
-                        parseInt(c.id) === parseInt(window.companyId) &&
+                        dashInt(c.id) === dashInt(window.companyId) &&
                         c.group_id && c.group_id.toUpperCase() === savedGroup
                     );
                     if (companyUnderSavedGroup) {
@@ -2275,7 +2305,7 @@ function renderGroupButtons(groups) {
 
                 if (independentCompanies.length > 0) {
                     const firstCompany = independentCompanies[0];
-                    if (parseInt(firstCompany.id) !== parseInt(window.companyId)) {
+                    if (dashInt(firstCompany.id) !== dashInt(window.companyId)) {
                         switchCompany(firstCompany.id, firstCompany.company_id);
                     } else {
                         renderCompanyButtons(allOwnerCompanies);
@@ -2320,8 +2350,8 @@ function renderGroupButtons(groups) {
 
                 if (groupCompanies.length > 0) {
                     const firstCompany = groupCompanies[0];
-                    console.log('[Dashboard] firstCompany:', firstCompany.company_id, firstCompany.id, '| same?', parseInt(firstCompany.id) === parseInt(window.companyId));
-                    if (parseInt(firstCompany.id) !== parseInt(window.companyId)) {
+                    console.log('[Dashboard] firstCompany:', firstCompany.company_id, firstCompany.id, '| same?', dashInt(firstCompany.id) === dashInt(window.companyId));
+                    if (dashInt(firstCompany.id) !== dashInt(window.companyId)) {
                         switchCompany(firstCompany.id, firstCompany.company_id);
                     } else {
                         // 当前公司就是该 group 的第一家，直接渲染并高亮
@@ -2416,7 +2446,7 @@ function renderCompanyButtons(companies) {
         btn.dataset.companyId = company.id;
         
         // 全选模式下只亮 All 按钮（公司按钮不高亮）；否则只高亮当前公司
-        if (!isDashboardGroupAllMode && parseInt(company.id) === parseInt(window.companyId)) {
+        if (!isDashboardGroupAllMode && dashInt(company.id) === dashInt(window.companyId)) {
             btn.classList.add('active');
         }
 
@@ -2674,7 +2704,7 @@ async function switchCompany(companyId, companyCode) {
         // 更新按钮状态
         const buttons = document.querySelectorAll('.transaction-company-btn');
         buttons.forEach(btn => {
-            if (parseInt(btn.dataset.companyId) === parseInt(companyId)) {
+            if (dashInt(btn.dataset.companyId) === dashInt(companyId)) {
                 btn.classList.add('active');
             } else {
                 btn.classList.remove('active');
@@ -2704,7 +2734,7 @@ function initChartDataButtons() {
     buttons.forEach(btn => {
         btn.addEventListener('click', function () {
             this.classList.toggle('active');
-            const datasetIndex = parseInt(this.dataset.dataset);
+            const datasetIndex = dashInt(this.dataset.dataset);
             
             if (trendChart) {
                 const isHidden = !this.classList.contains('active');
@@ -2743,9 +2773,9 @@ document.addEventListener('visibilitychange', function () {
     }
 })();
 
-// 初始化 - 使用防抖避免多次调用；兼容 DOM 已就绪后再执行（如脚本晚于 body 注入时）
+// 初始化 - 使用防抖避免多次调用
 let isInitializing = false;
-async function runDashboardInit() {
+document.addEventListener('DOMContentLoaded', async function () {
     if (isInitializing) return;
     isInitializing = true;
 
@@ -2796,12 +2826,4 @@ async function runDashboardInit() {
     } finally {
         isInitializing = false;
     }
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-        runDashboardInit();
-    });
-} else {
-    runDashboardInit();
-}
+});

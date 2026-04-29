@@ -5,6 +5,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../includes/money_decimal.php';
+
 /**
  * 解析 bank_process.day_start（支持 yyyy-mm-dd、d/m/Y 等），与 history_api 原逻辑一致。
  */
@@ -41,15 +43,12 @@ function bankProcessParseDayStartToYmd($raw): ?string
     return $ts !== false ? date('Y-m-d', $ts) : null;
 }
 
-function bankProcessBillFormatTripartNumber(float $amt): string
+function bankProcessBillFormatTripartNumber($amt): string
 {
-    if (abs($amt - (float) (int) round($amt)) < 0.00001) {
-        return (string) (int) round($amt);
-    }
-    return number_format($amt, 2, '.', '');
+    return money_out($amt ?? '0', 2);
 }
 
-function bankProcessProfitSharingOriginalAmountByAccount(array $t): ?float
+function bankProcessProfitSharingOriginalAmountByAccount(array $t): ?string
 {
     $profitSharingRaw = trim((string) ($t['process_profit_sharing'] ?? ''));
     if ($profitSharingRaw === '') {
@@ -74,7 +73,7 @@ function bankProcessProfitSharingOriginalAmountByAccount(array $t): ?float
             continue;
         }
         if (strcasecmp($accountText, $currentCode) === 0) {
-            return (float) $amountStr;
+            return money_normalize($amountStr, 2);
         }
     }
     return null;
@@ -82,9 +81,9 @@ function bankProcessProfitSharingOriginalAmountByAccount(array $t): ?float
 
 function bankProcessResolveDisplayValueByAccount(array $t): string
 {
-    $buy = isset($t['process_cost']) ? (float) $t['process_cost'] : 0.0;
-    $sell = isset($t['process_price']) ? (float) $t['process_price'] : 0.0;
-    $profit = isset($t['process_profit']) ? (float) $t['process_profit'] : 0.0;
+    $buy = $t['process_cost'] ?? '0';
+    $sell = $t['process_price'] ?? '0';
+    $profit = $t['process_profit'] ?? '0';
 
     $txAccountId = (int) ($t['account_id'] ?? 0);
     $cardMerchantId = (int) ($t['card_merchant_id'] ?? 0);
@@ -95,7 +94,7 @@ function bankProcessResolveDisplayValueByAccount(array $t): string
         return bankProcessBillFormatTripartNumber($buy);
     }
     if ($txAccountId > 0 && $txAccountId === $customerId) {
-        return bankProcessBillFormatTripartNumber(abs($sell));
+        return bankProcessBillFormatTripartNumber(money_abs($sell, 2));
     }
     if ($txAccountId > 0 && $txAccountId === $profitAccountId) {
         return bankProcessBillFormatTripartNumber($profit);
@@ -104,7 +103,7 @@ function bankProcessResolveDisplayValueByAccount(array $t): string
     if ($psAmount !== null) {
         return bankProcessBillFormatTripartNumber($psAmount);
     }
-    return bankProcessBillFormatTripartNumber(isset($t['amount']) ? (float) $t['amount'] : 0.0);
+    return bankProcessBillFormatTripartNumber($t['amount'] ?? '0');
 }
 
 /**

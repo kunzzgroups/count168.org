@@ -5,6 +5,7 @@
  */
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -91,7 +92,7 @@ try {
         ");
         $stmt->execute($allCompanyIds);
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $companyGroupEquity[$row['company_id'] . '_' . $row['partner_group_id']] = (float)$row['percentage'];
+            $companyGroupEquity[$row['company_id'] . '_' . $row['partner_group_id']] = money_out($row['percentage'], 2);
         }
     }
 
@@ -113,12 +114,12 @@ try {
     // Build result
     $result = [];
     foreach ($groups as $gid => $grp) {
-        $alloc = isset($totals[$gid]) ? (float)$totals[$gid] : 0.00;
+        $alloc = isset($totals[$gid]) ? money_out($totals[$gid], 2) : '0';
         // Add per-company group equity to each company entry
         $companiesWithEquity = [];
         foreach ($grp['companies'] as $comp) {
             $key = $comp['id'] . '_' . $gid;
-            $comp['group_equity'] = $companyGroupEquity[$key] ?? 0.00;
+            $comp['group_equity'] = $companyGroupEquity[$key] ?? '0';
             $companiesWithEquity[] = $comp;
         }
         $result[] = [

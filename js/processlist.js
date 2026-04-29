@@ -9,12 +9,7 @@ let waiting = false;
 let currentPage = 1;
 const pageSize = 20;
 let selectedPermission = null;
-function getCurrentProcessListPage() {
-    if (typeof window.__C168_PROCESSLIST_PAGE_FILE__ === 'string' && window.__C168_PROCESSLIST_PAGE_FILE__.trim() !== '') {
-        return window.__C168_PROCESSLIST_PAGE_FILE__.trim();
-    }
-    return (typeof window.PROCESSLIST_PAGE_FILE === 'string' ? window.PROCESSLIST_PAGE_FILE.trim() : '');
-}
+const currentProcessListPage = (typeof window.PROCESSLIST_PAGE_FILE === 'string' ? window.PROCESSLIST_PAGE_FILE.trim() : '');
 const forcedPermission = (typeof window.PROCESSLIST_FORCED_PERMISSION === 'string' ? window.PROCESSLIST_FORCED_PERMISSION.trim() : '');
 // ★★★ SINGLE_CATEGORY_MODE ★★★
 // 设为 true 时：Process List 页面隐藏 Category 筛选按钮（Games/Bank/…）。
@@ -61,6 +56,13 @@ function formatBankAccountDisplay(codeRaw, nameRaw, fallbackRaw) {
     }
     if (name) return name;
     return fallback;
+}
+
+function formatAccountIdForDisplay(rawAccountId) {
+    const value = String(rawAccountId || '').trim();
+    if (!value) return '';
+    const match = value.match(/^[^_]+_([0-9]+)(?:_[0-9]+)?$/);
+    return match ? match[1] : value;
 }
 
 function notifyTransactionDataChanged(sourceTag) {
@@ -117,28 +119,7 @@ function getProcessListPageByPermission(permission) {
 }
 
 function redirectToProcessListPage(targetPage, permission) {
-    if (!targetPage || targetPage === getCurrentProcessListPage()) return false;
-    if (typeof window.__C168_SPA_LINK_BASE__ === 'string') {
-        const pre = String(window.__C168_SPA_LINK_BASE__ || '').replace(/\/$/, '');
-        let sub = '/process';
-        if (targetPage === 'bank_process_list.php') sub = '/process/bank';
-        else if (targetPage === 'games_process_list.php') sub = '/process/games';
-        const normalizedPermission = String(permission || '').trim();
-        if (normalizedPermission) {
-            const currentCompanyCode = (typeof window.PROCESSLIST_COMPANY_CODE !== 'undefined' ? window.PROCESSLIST_COMPANY_CODE : '');
-            if (currentCompanyCode) {
-                localStorage.setItem(`selectedPermission_${currentCompanyCode}`, normalizedPermission);
-            }
-        }
-        window._isRedirecting = true;
-        const targetUrl = (pre || '') + sub;
-        if (window.__C168_PROCESSLIST_IFRAME_EMBED__ && window.top && window.top !== window) {
-            window.top.location.assign(targetUrl);
-        } else {
-            window.location.assign(targetUrl);
-        }
-        return true;
-    }
+    if (!targetPage || targetPage === currentProcessListPage) return false;
     const url = new URL(window.location.href);
     url.pathname = url.pathname.replace(/[^/]*$/, targetPage);
     const normalizedPermission = String(permission || '').trim();
@@ -647,16 +628,8 @@ async function handleBankStatusSelectChange(dropdownEl, processId, forcedValue) 
     showConfirmInactiveModal(processId, selectedValue);
 }
 
-// 构造 API 绝对 URL（与 React `apiUrl` 对齐；可注入 `window.__C168_API_BASE__`）
+// 构造 API 绝对 URL（始终基于站点根目录，避免相对路径解析错误）
 function buildApiUrl(fileName) {
-    if (typeof window.__C168_API_BASE__ !== 'undefined') {
-        const b = String(window.__C168_API_BASE__ || '').replace(/\/$/, '');
-        const f = String(fileName || '').replace(/^\//, '');
-        if (b === '') {
-            return window.location.protocol + '//' + window.location.host + '/' + f;
-        }
-        return b + '/' + f;
-    }
     const pathname = window.location.pathname || '/';
     const basePath = pathname.replace(/[^/]*$/, '') || '/';
     const base = window.location.origin + basePath;
@@ -3693,8 +3666,8 @@ if (addBankProcessForm && !window.__bankAddProcessSubmitBound) {
         }
         const formData = new FormData(this);
         // Profit 栏显示的是扣除 Profit Sharing 后的数额；提交时传 gross（Sell Price - Buy Price）供后端存储
-        const grossProfit = (parseFloat(document.getElementById('bank_price').value) || 0) - (parseFloat(document.getElementById('bank_cost').value) || 0);
-        formData.set('profit', grossProfit.toFixed(2));
+        const grossProfit = MoneyDecimal.sub(document.getElementById('bank_price').value || '0', document.getElementById('bank_cost').value || '0');
+        formData.set('profit', MoneyDecimal.formatFixed(grossProfit, 8));
         formData.append('permission', 'Bank');
         if (cardMerchantBtn && cardMerchantBtn.getAttribute('data-value')) {
             formData.append('card_merchant_id', cardMerchantBtn.getAttribute('data-value'));
@@ -4210,7 +4183,7 @@ function validatePaymentAlertForAddBank() {
             showNotification('When Payment Alert is Yes, both Alert Type and Start Date must be filled.', 'danger');
             return false;
         }
-        if (alertAmount && alertAmount.value && (isNaN(parseFloat(alertAmount.value)) || parseFloat(alertAmount.value) >= 0)) {
+        if (alertAmount && alertAmount.value && (!isValidBankMoneyInput(alertAmount.value) || MoneyDecimal.cmp(alertAmount.value, '0') >= 0)) {
             showNotification('Alert Amount must be a negative number.', 'danger');
             return false;
         }
@@ -4228,7 +4201,7 @@ function validatePaymentAlertForEditBank() {
             showNotification('When Payment Alert is Yes, both Alert Type and Start Date must be filled.', 'danger');
             return false;
         }
-        if (alertAmount && alertAmount.value && (isNaN(parseFloat(alertAmount.value)) || parseFloat(alertAmount.value) >= 0)) {
+        if (alertAmount && alertAmount.value && (!isValidBankMoneyInput(alertAmount.value) || MoneyDecimal.cmp(alertAmount.value, '0') >= 0)) {
             showNotification('Alert Amount must be a negative number.', 'danger');
             return false;
         }
@@ -5914,7 +5887,7 @@ async function openEditAccountModalFromBank(accountId) {
         }
         const account = result.data;
         document.getElementById('edit_account_id').value = account.id;
-        document.getElementById('edit_account_id_field').value = (account.account_id || '').toUpperCase();
+        document.getElementById('edit_account_id_field').value = formatAccountIdForDisplay(account.account_id).toUpperCase();
         document.getElementById('edit_name').value = (account.name || '').toUpperCase();
         document.getElementById('edit_password').value = account.password || '';
         let alertType = account.alert_type || (account.alert_day ? String(account.alert_day).toLowerCase() : '');
@@ -6070,23 +6043,29 @@ function closeProfitSharingModal() {
 // Selected Profit Sharing list (array of { accountId, accountText, amount })
 window.selectedProfitSharingEntries = [];
 
+function isValidBankMoneyInput(value) {
+    try {
+        MoneyDecimal.toDecimal(value);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 /** Profit 显示为扣除 Profit Sharing 后的数额（Sell Price - Buy Price - sum(PS)） */
 function updateBankProfitDisplay() {
     const costInput = document.getElementById('bank_cost');
     const priceInput = document.getElementById('bank_price');
     const profitInput = document.getElementById('bank_profit');
     if (!costInput || !priceInput || !profitInput) return;
-    const cost = parseFloat(costInput.value) || 0;
-    const price = parseFloat(priceInput.value) || 0;
-    const gross = price - cost;
+    const gross = MoneyDecimal.sub(priceInput.value || '0', costInput.value || '0');
     const entries = window.selectedProfitSharingEntries || [];
-    let sumPs = 0;
+    let sumPs = MoneyDecimal.toDecimal('0');
     entries.forEach(function (e) {
-        const amt = parseFloat(e.amount);
-        if (!isNaN(amt)) sumPs += amt;
+        if (isValidBankMoneyInput(e.amount)) sumPs = sumPs.plus(MoneyDecimal.toDecimal(e.amount, 0));
     });
-    const net = Math.max(0, gross - sumPs);
-    profitInput.value = net.toFixed(2);
+    const net = MoneyDecimal.max(MoneyDecimal.sub(gross, sumPs), '0');
+    profitInput.value = MoneyDecimal.formatDisplay(net, 8);
 }
 
 function renderSelectedProfitSharing() {
@@ -6103,7 +6082,7 @@ function renderSelectedProfitSharing() {
     container.innerHTML = '';
     entries.forEach(function (entry, index) {
         const amt = entry.amount;
-        const displayAmount = (amt !== '' && amt != null && !isNaN(parseFloat(amt))) ? parseFloat(amt).toFixed(2) : (amt || '');
+        const displayAmount = (amt !== '' && amt != null && isValidBankMoneyInput(amt)) ? MoneyDecimal.formatDisplay(amt, 8) : (amt || '');
         const text = (entry.accountText || '') + ' - ' + displayAmount;
         parts.push(text);
         const div = document.createElement('div');
@@ -6123,7 +6102,7 @@ function removeProfitSharingEntry(index) {
     renderSelectedProfitSharing();
 }
 
-function runProcessListPageInit() {
+document.addEventListener('DOMContentLoaded', function () {
     restoreSelectedCountriesFromStorage();
     // Add Account modal: payment alert toggle
     document.querySelectorAll('input[name="add_payment_alert"]').forEach(radio => {
@@ -6573,9 +6552,7 @@ function runProcessListPageInit() {
         accountingInboxPost.addEventListener('click', () => postAccountingInboxToTransaction());
     }
     /* Accounting Due 弹窗：点击弹窗以外区域不关闭，仅通过 X 或 Cancel 关闭 */
-}
-document.addEventListener('DOMContentLoaded', function () { void runProcessListPageInit(); });
-window.runProcessListPageInit = runProcessListPageInit;
+});
 
 window.addEventListener('resize', function () {
     if (selectedPermission === 'Bank') {
@@ -6592,11 +6569,7 @@ window.addEventListener('resize', function () {
 window.addEventListener('popstate', function (e) {
     try {
         const pageName = window.location.pathname.replace(/.*\//, '');
-        const pathFull = window.location.pathname || '';
-        let permission = 'Games';
-        if (pageName === 'bank_process_list.php' || pageName === 'bank' || pathFull.indexOf('/process/bank') >= 0) {
-            permission = 'Bank';
-        }
+        const permission = (pageName === 'bank_process_list.php') ? 'Bank' : 'Games';
         if (permission !== selectedPermission) {
             // 直接执行原地切换（不再 pushState，避免递归）
             selectedPermission = permission;
@@ -6643,7 +6616,7 @@ async function loadPermissionButtons() {
     }
 
     try {
-        const response = await fetch(buildApiUrl('api/domain/domain_api.php'), {
+        const response = await fetch('api/domain/domain_api.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -6699,28 +6672,8 @@ async function loadPermissionButtons() {
 // 切换权限
 function switchPermission(permission) {
     const targetPage = getProcessListPageByPermission(permission);
-    if (typeof window.__C168_SPA_LINK_BASE__ === 'string' && targetPage) {
-        const pre = String(window.__C168_SPA_LINK_BASE__ || '').replace(/\/$/, '');
-        let wantSub = '/process';
-        if (targetPage === 'bank_process_list.php') wantSub = '/process/bank';
-        const pathRaw = (window.location.pathname || '').replace(/\/$/, '');
-        const pathSub = pathRaw.indexOf('/process/bank') >= 0 ? '/process/bank'
-            : (pathRaw.indexOf('/process/games') >= 0 ? '/process/games' : '/process');
-        if (pathSub !== wantSub) {
-            const currentCompanyCode = (typeof window.PROCESSLIST_COMPANY_CODE !== 'undefined' ? window.PROCESSLIST_COMPANY_CODE : '');
-            if (currentCompanyCode) {
-                localStorage.setItem(`selectedPermission_${currentCompanyCode}`, permission);
-            }
-            const targetUrl = pre + wantSub;
-            if (window.__C168_PROCESSLIST_IFRAME_EMBED__ && window.top && window.top !== window) {
-                window.top.location.assign(targetUrl);
-            } else {
-                window.location.assign(targetUrl);
-            }
-            return;
-        }
-    }
     // 使用 history.pushState 无刷新更新 URL（替代全页跳转，消除白屏卡顿）
+    // 注：currentProcessListPage 是 const 不会更新，必须从实时 URL 读取当前页名做比较
     if (targetPage) {
         const _currentPageName = window.location.pathname.replace(/.*\//, '');
         if (targetPage !== _currentPageName) {

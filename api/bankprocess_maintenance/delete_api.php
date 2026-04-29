@@ -34,7 +34,7 @@ function ensureTransactionsDeletedTable(PDO $pdo) {
             id INT AUTO_INCREMENT PRIMARY KEY,
             transaction_id INT NOT NULL,
             company_id INT NOT NULL,
-            transaction_type ENUM('WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'RATE') NOT NULL,
+            transaction_type ENUM('WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'RATE', 'CLAIM', 'CLEAR', 'ADJUSTMENT') NOT NULL,
             account_id INT NOT NULL,
             from_account_id INT NULL,
             amount DECIMAL(15, 2) NOT NULL,

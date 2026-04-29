@@ -8,6 +8,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 /**
  * 统一 Rate 显示：最多 8 位小数，不补尾零（与 Data Summary / Payment History 一致）
@@ -17,9 +18,21 @@ function formatRateForDisplay($rate): ?string
     if ($rate === null || $rate === '') {
         return null;
     }
-    $rounded = round((float)$rate, 8);
-    $text = rtrim(rtrim(number_format($rounded, 8, '.', ''), '0'), '.');
-    return $text === '' ? '0' : $text;
+    return money_out($rate, 8);
+}
+
+function maintenanceSplitCrDr($amount): array
+{
+    if (!money_is_valid($amount)) {
+        return [null, null];
+    }
+    if (money_cmp($amount, '0') > 0) {
+        return [money_out($amount), null];
+    }
+    if (money_cmp($amount, '0') < 0) {
+        return [null, money_out(money_abs($amount))];
+    }
+    return ['0', null];
 }
 
 /**
@@ -110,7 +123,7 @@ function ensureMaintenanceRatePrecision(PDO $pdo): void
         }
 
         if ($needsUpgrade) {
-            $pdo->exec("ALTER TABLE data_capture_details MODIFY COLUMN rate DECIMAL(20,8) NULL");
+            $pdo->exec("ALTER TABLE data_capture_details MODIFY COLUMN rate DECIMAL(25,8) NULL");
         }
     } catch (Exception $e) {
         error_log('maintenance_search rate precision ensure warning: ' . $e->getMessage());
@@ -234,10 +247,10 @@ try {
         }
     }
 
-    // Payment / Receive / Contra / Claim / Rate / Clear / 手动 Profit(WIN/LOSE) 等
+    // Payment / Receive / Contra / Claim / Rate / Clear / Adjustment / 手动 Profit(WIN/LOSE) 等
     // 都通过 Transaction Payment / Payment Maintenance 页面维护，
     // 不在 Maintenance - Transaction 中显示，避免重复。
-    $where[] = "t.transaction_type NOT IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'WIN', 'LOSE')";
+    $where[] = "t.transaction_type NOT IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'ADJUSTMENT', 'WIN', 'LOSE')";
 
     $whereSql = 'WHERE ' . implode(' AND ', $where);
 
@@ -274,18 +287,7 @@ try {
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     foreach ($rows as $row) {
-        $amt = $row['amount'] ?? 0;
-        $crVal = null;
-        $drVal = null;
-        if (is_numeric($amt)) {
-            if ($amt > 0) {
-                $crVal = $amt;
-            } elseif ($amt < 0) {
-                $drVal = abs($amt);
-            } else {
-                $crVal = 0;
-            }
-        }
+        [$crVal, $drVal] = maintenanceSplitCrDr($row['amount'] ?? '0');
 
         $formatted[] = [
             'no' => $no++,
@@ -384,19 +386,7 @@ try {
         $captureRows = $captureStmt->fetchAll(PDO::FETCH_ASSOC);
         
         foreach ($captureRows as $row) {
-            $amt = $row['amount'] ?? 0;
-            $crVal = null;
-            $drVal = null;
-            if (is_numeric($amt)) {
-                if ($amt > 0) {
-                    $crVal = $amt;
-                } elseif ($amt < 0) {
-                    $drVal = abs($amt);
-                } else {
-                    // amount === 0: 仍显示该笔 Data Capture 记录，Cr 显示 0.00
-                    $crVal = 0;
-                }
-            }
+            [$crVal, $drVal] = maintenanceSplitCrDr($row['amount'] ?? '0');
             
             $rateDisplay = formatRateForDisplay($row['rate'] ?? null);
             $idProductDisplay = formatMaintenanceIdProductLikeDataSummary($row);
@@ -461,8 +451,8 @@ try {
                     }
                 }
             }
-            // 同样排除 Payment / Receive / Contra / Claim / Rate / Clear / WIN / LOSE 的已删除记录
-            $delWhere .= " AND td.transaction_type NOT IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'WIN', 'LOSE')";
+            // 同样排除 Payment / Receive / Contra / Claim / Rate / Clear / Adjustment / WIN / LOSE 的已删除记录
+            $delWhere .= " AND td.transaction_type NOT IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'ADJUSTMENT', 'WIN', 'LOSE')";
             $deletedSql = "
                 SELECT
                     td.transaction_id,
@@ -495,18 +485,7 @@ try {
             $deletedRows = $delStmt->fetchAll(PDO::FETCH_ASSOC);
             
             foreach ($deletedRows as $row) {
-                $amt = $row['amount'] ?? 0;
-                $crVal = null;
-                $drVal = null;
-                if (is_numeric($amt)) {
-                    if ($amt > 0) {
-                        $crVal = $amt;
-                    } elseif ($amt < 0) {
-                        $drVal = abs($amt);
-                    } else {
-                        $crVal = 0;
-                    }
-                }
+                [$crVal, $drVal] = maintenanceSplitCrDr($row['amount'] ?? '0');
 
                 $formatted[] = [
                     'no' => $no++,
@@ -608,18 +587,7 @@ try {
             $deletedCaptureRows = $deletedCaptureStmt->fetchAll(PDO::FETCH_ASSOC);
             
             foreach ($deletedCaptureRows as $row) {
-                $amt = $row['amount'] ?? 0;
-                $crVal = null;
-                $drVal = null;
-                if (is_numeric($amt)) {
-                    if ($amt > 0) {
-                        $crVal = $amt;
-                    } elseif ($amt < 0) {
-                        $drVal = abs($amt);
-                    } else {
-                        $crVal = 0;
-                    }
-                }
+                [$crVal, $drVal] = maintenanceSplitCrDr($row['amount'] ?? '0');
                 
                 $rateDisplay = formatRateForDisplay($row['rate'] ?? null);
                 $idProductDelDisplay = formatMaintenanceIdProductLikeDataSummary($row);

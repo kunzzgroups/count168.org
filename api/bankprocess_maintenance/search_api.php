@@ -372,8 +372,7 @@ function rowToItem(array $row) {
                 } else {
                     $description = 'Monthly bill';
                 }
-                $amt = isset($row['amount']) ? (float) $row['amount'] : 0.0;
-                $billAmount = ($amt == floor($amt)) ? (string) (int) $amt : number_format($amt, 2);
+                $billAmount = bankProcessBillFormatTripartNumber($row['amount'] ?? '0');
                 $description = $description . ' ' . $billAmount;
             }
         }
@@ -397,7 +396,7 @@ function rowToItem(array $row) {
         'account' => $row['account_code'] ?? '-',
         'from_account' => $fromLabel,
         'currency' => $row['currency_code'] ?? '-',
-        'amount' => (float) $row['amount'],
+        'amount' => money_out($row['amount'] ?? '0'),
         'description' => $description ?: '-',
         'remark' => $row['remark'] ?? '',
         'dts_created' => $row['dts_created'] ?? '',

@@ -3,41 +3,12 @@ let startCell = null;
 let selectedCells = new Set();
 let mouseUpBound = false;
 
-// 构造 API URL（与 React `apiUrl` 对齐；可注入 `window.__C168_API_BASE__`，空字符串表示站点根下的 `/api/...`）
+// 构造 API 绝对 URL（与 processlist.js 一致，避免 404）
 function buildApiUrl(pathAndQuery) {
-    const p = pathAndQuery.startsWith('/') ? pathAndQuery : '/' + pathAndQuery;
-    if (typeof window.__C168_API_BASE__ !== 'undefined') {
-        const b = String(window.__C168_API_BASE__ || '').replace(/\/$/, '');
-        return b + p;
-    }
     const pathname = window.location.pathname || '/';
     const basePath = pathname.replace(/[^/]*$/, '') || '/';
     const base = window.location.origin + basePath;
-    return new URL(p.replace(/^\//, ''), base).href;
-}
-
-/** 提交表格后进入 Summary：SPA 用 `EAZYCOUNT_SPA_DATACAPTURESUMMARY` 或 `__C168_SPA_LINK_BASE__`；`datacapturesummary.php` 会 302；经典全页为 `datacapturesummary_classic.php` */
-function navigateToDataCaptureSummarySuccess() {
-    if (document.body && document.body.classList.contains('datacapture-spa-embed')) {
-        var spaSum =
-            typeof window.EAZYCOUNT_SPA_DATACAPTURESUMMARY === 'string' &&
-            window.EAZYCOUNT_SPA_DATACAPTURESUMMARY
-                ? String(window.EAZYCOUNT_SPA_DATACAPTURESUMMARY)
-                : '';
-        if (spaSum) {
-            var p = spaSum.charAt(0) === '/' ? spaSum : '/' + spaSum;
-            window.location.href =
-                window.location.origin + p + (p.indexOf('?') === -1 ? '?success=1' : '&success=1');
-            return;
-        }
-        var base =
-            typeof window.__C168_SPA_LINK_BASE__ === 'string'
-                ? String(window.__C168_SPA_LINK_BASE__).replace(/\/$/, '')
-                : '';
-        window.location.href = (base || '') + '/datacapturesummary?success=1';
-    } else {
-        window.location.href = buildApiUrl('datacapturesummary.php?success=1');
-    }
+    return new URL(pathAndQuery, base).href;
 }
 
 function redirectToDashboardIfUnauthorizedCategory(errorMessage) {
@@ -54,32 +25,30 @@ function formatNumberToTwoDecimals(value) {
     if (value === null || value === undefined) return value;
     const str = (typeof value === 'string' ? value : String(value)).trim();
     if (str === '') return value;
-    var normalized = str;
-    // 欧洲格式：仅一个逗号且无小数点 → 逗号为小数位（65,1 → 65.1）
-    if (/^-?\d+,\d+$/.test(normalized)) normalized = normalized.replace(',', '.');
-    else normalized = normalized.replace(/,/g, '');
-    var num = parseFloat(normalized);
-    if (!Number.isFinite(num)) return value;
-    return num.toFixed(2);
+    try {
+        return MoneyDecimal.formatFixed(str, 2);
+    } catch (_) {
+        return value;
+    }
 }
 // 显示用：.xx 两位小数 + 千分位逗号（用于表格展示）
 function formatMoneyDisplay(value) {
-    var formatted = formatNumberToTwoDecimals(value);
-    if (formatted === value || formatted === null || formatted === undefined) return value;
-    var num = parseFloat(String(formatted).replace(/,/g, ''));
-    if (!Number.isFinite(num)) return value;
-    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    try {
+        return MoneyDecimal.formatThousands(value, 2);
+    } catch (_) {
+        return value;
+    }
 }
 // 修正 Sub Total / Grand Total 行：每组 Total = W/L + Comm（消除 0.01 舍入差）
 function fixSummaryRowTotalColumns(row) {
     if (!row || row.length < 9) return;
     for (var k = 0; 7 + 3 * k + 2 < row.length; k++) {
-        var wl = parseFloat(String(row[7 + 3 * k] || '').replace(/,/g, ''));
-        var comm = parseFloat(String(row[7 + 3 * k + 1] || '').replace(/,/g, ''));
-        if (!Number.isFinite(wl)) wl = 0;
-        if (!Number.isFinite(comm)) comm = 0;
-        var total = Math.round((wl + comm) * 100) / 100;
-        row[7 + 3 * k + 2] = formatNumberToTwoDecimals(total);
+        try {
+            var total = MoneyDecimal.add(row[7 + 3 * k] || '0', row[7 + 3 * k + 1] || '0');
+            row[7 + 3 * k + 2] = MoneyDecimal.formatFixed(total, 2);
+        } catch (_) {
+            row[7 + 3 * k + 2] = formatNumberToTwoDecimals(row[7 + 3 * k + 2]);
+        }
     }
 }
 
@@ -1070,6 +1039,78 @@ async function loadSubmittedProcesses() {
 
 // Store copied data for paste operations
 let copiedData = null;
+let activeContextMenuAnchor = null;
+
+function positionContextMenu(menu, e, anchorElement) {
+    if (!menu || !e) return;
+
+    if (!anchorElement) {
+        activeContextMenuAnchor = null;
+        positionContextMenuAtPoint(menu, e.clientX, e.clientY);
+        return;
+    }
+
+    const anchorRect = anchorElement.getBoundingClientRect();
+    activeContextMenuAnchor = {
+        menu,
+        anchorElement,
+        offsetX: Math.max(0, Math.min(e.clientX - anchorRect.left, anchorRect.width)),
+        offsetY: Math.max(0, Math.min(e.clientY - anchorRect.top, anchorRect.height)),
+        scrollContainer: anchorElement.closest('.excel-table-container')
+    };
+
+    menu.style.display = 'block';
+    updateActiveContextMenuPosition();
+}
+
+function updateActiveContextMenuPosition() {
+    if (!activeContextMenuAnchor) return;
+
+    const { menu, anchorElement, offsetX, offsetY, scrollContainer } = activeContextMenuAnchor;
+    if (!menu || !anchorElement || !anchorElement.isConnected || menu.style.display === 'none') {
+        activeContextMenuAnchor = null;
+        return;
+    }
+
+    const anchorRect = anchorElement.getBoundingClientRect();
+    if (scrollContainer) {
+        const containerRect = scrollContainer.getBoundingClientRect();
+        const anchorOutsideContainer =
+            anchorRect.bottom < containerRect.top ||
+            anchorRect.top > containerRect.bottom ||
+            anchorRect.right < containerRect.left ||
+            anchorRect.left > containerRect.right;
+
+        if (anchorOutsideContainer) {
+            hideContextMenu();
+            return;
+        }
+    }
+
+    positionContextMenuAtPoint(menu, anchorRect.left + offsetX, anchorRect.top + offsetY);
+}
+
+function positionContextMenuAtPoint(menuElement, cursorX, cursorY) {
+    if (!menuElement) return;
+
+    const margin = 8;
+
+    // Temporarily show menu for accurate size measurement before final placement.
+    menuElement.style.visibility = 'hidden';
+    menuElement.style.display = 'block';
+
+    const menuWidth = menuElement.offsetWidth;
+    const menuHeight = menuElement.offsetHeight;
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+
+    const left = Math.max(margin, Math.min(cursorX, viewportWidth - menuWidth - margin));
+    const top = Math.max(margin, Math.min(cursorY, viewportHeight - menuHeight - margin));
+
+    menuElement.style.left = left + 'px';
+    menuElement.style.top = top + 'px';
+    menuElement.style.visibility = 'visible';
+}
 
 // Show context menu
 function showContextMenu(e, cell) {
@@ -1105,10 +1146,7 @@ function showContextMenu(e, cell) {
     console.log('After showContextMenu, selectedCells.size:', selectedCells.size);
     console.log('Selected cells:', Array.from(selectedCells).map(c => c.textContent || '(empty)'));
 
-    // Set menu position
-    contextMenu.style.left = e.pageX + 'px';
-    contextMenu.style.top = e.pageY + 'px';
-    contextMenu.style.display = 'block';
+    positionContextMenu(contextMenu, e, cell);
 
     // Click elsewhere to close menu
     // But don't close if clicking on menu items
@@ -1134,6 +1172,7 @@ function hideContextMenu() {
     if (contextMenu) contextMenu.style.display = 'none';
     if (columnContextMenu) columnContextMenu.style.display = 'none';
     if (rowContextMenu) rowContextMenu.style.display = 'none';
+    activeContextMenuAnchor = null;
 }
 
 // Show column header context menu
@@ -1147,10 +1186,7 @@ function showColumnContextMenu(e, colIndex) {
     const columnContextMenu = document.getElementById('columnContextMenu');
     if (!columnContextMenu) return;
 
-    // Set menu position
-    columnContextMenu.style.left = e.pageX + 'px';
-    columnContextMenu.style.top = e.pageY + 'px';
-    columnContextMenu.style.display = 'block';
+    positionContextMenu(columnContextMenu, e, e.currentTarget || e.target);
 
     // Click elsewhere to close menu
     setTimeout(() => {
@@ -1169,10 +1205,7 @@ function showRowContextMenu(e, rowIndex) {
     const rowContextMenu = document.getElementById('rowContextMenu');
     if (!rowContextMenu) return;
 
-    // Set menu position
-    rowContextMenu.style.left = e.pageX + 'px';
-    rowContextMenu.style.top = e.pageY + 'px';
-    rowContextMenu.style.display = 'block';
+    positionContextMenu(rowContextMenu, e, e.currentTarget || e.target);
 
     // Click elsewhere to close menu
     setTimeout(() => {
@@ -2484,7 +2517,7 @@ async function loadProcessData(processId) {
         if (!currencySelect || currencySelect.options.length <= 1) {
             // If dropdown is not loaded yet, only load currency data, do not reload processes
             try {
-                const formDataResponse = await fetch(buildApiUrl('api/processes/addprocess_api.php'));
+                const formDataResponse = await fetch('api/processes/addprocess_api.php');
                 const formDataResult = await formDataResponse.json();
                 if (formDataResult.success && formDataResult.currencies) {
                     currencySelect.innerHTML = '<option value="">Select Currency</option>';
@@ -2502,8 +2535,8 @@ async function loadProcessData(processId) {
 
         // Add currently selected company_id
         const currentCompanyId = (typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' ? window.DATACAPTURE_COMPANY_ID : null);
-        const url = buildApiUrl(`api/processes/processlist_api.php?action=get_process&id=${processId}`);
-        const finalUrl = currentCompanyId ? `${url}${url.includes('?') ? '&' : '?'}company_id=${currentCompanyId}` : url;
+        const url = `api/processes/processlist_api.php?action=get_process&id=${processId}`;
+        const finalUrl = currentCompanyId ? `${url}&company_id=${currentCompanyId}` : url;
 
         const response = await fetch(finalUrl);
         console.log('API Response status:', response.status);
@@ -2706,14 +2739,12 @@ function generateDateOptions() {
 // Load form data on page load
 async function loadFormData() {
     try {
-        // Generate date options first（React SPA 内由组件生成日期下拉）
-        if (!window.__DC_REACT_DATE_PROCESS__) {
-            generateDateOptions();
-        }
+        // Generate date options first
+        generateDateOptions();
 
         // Add currently selected company_id
         const currentCompanyId = (typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' ? window.DATACAPTURE_COMPANY_ID : null);
-        const url = buildApiUrl('api/processes/addprocess_api.php');
+        const url = 'api/processes/addprocess_api.php';
         const finalUrl = currentCompanyId ? `${url}?company_id=${currentCompanyId}` : url;
 
         const response = await fetch(finalUrl);
@@ -2730,10 +2761,8 @@ async function loadFormData() {
                 currencySelect.appendChild(option);
             });
 
-            // Load processes based on selected date（React SPA 内由 apiFetch + applyProcessesByDayFetchResult）
-            if (!window.__DC_REACT_DATE_PROCESS__) {
-                await loadProcessesByDate();
-            }
+            // Load processes based on selected date
+            await loadProcessesByDate();
         } else {
             if (redirectToDashboardIfUnauthorizedCategory(result.error)) return;
             showNotification('Failed to load form data: ' + result.error, 'danger');
@@ -2744,105 +2773,13 @@ async function loadFormData() {
     }
 }
 
-// 将 get_processes_by_day 的结果写入 Process 自定义选单（React apiFetch 与 loadProcessesByDate 共用）
-function applyProcessesByDayFetchResult(result, selectedDate) {
-    if (!result.success) {
-        console.error('Failed to load processes by date:', result.error);
-        if (redirectToDashboardIfUnauthorizedCategory(result.error)) return;
-        showNotification('Failed to load processes: ' + result.error, 'danger');
-        return;
-    }
-
-    const processButton = document.getElementById('capture_process');
-    const processDropdown = document.getElementById('capture_process_dropdown');
-    const optionsContainer = processDropdown?.querySelector('.custom-select-options');
-
-    if (!processButton || !processDropdown || !optionsContainer) return;
-
-    processDataMap.clear();
-    optionsContainer.innerHTML = '';
-
-    const previousValue = processButton.getAttribute('data-value') || '';
-
-    if (result.data && result.data.length > 0) {
-        console.log('Loading processes for date:', selectedDate, 'Day of week:', result.day_of_week);
-        result.data.forEach(process => {
-            const displayText = (process.process_display != null && String(process.process_display).trim() !== '')
-                ? String(process.process_display).trim()
-                : (process.description_name ? `${process.process_id} (${process.description_name})` : process.process_id);
-
-            const option = document.createElement('div');
-            option.className = 'custom-select-option';
-            option.textContent = displayText;
-            option.setAttribute('data-value', process.id);
-            option.setAttribute('data-process-code', process.process_id);
-            if (process.description_name) {
-                option.setAttribute('data-description-name', process.description_name);
-            }
-            optionsContainer.appendChild(option);
-
-            processDataMap.set(displayText, {
-                id: process.id,
-                process_id: process.process_id,
-                description_name: process.description_name || null
-            });
-        });
-
-        if (previousValue) {
-            let foundDisplayText = null;
-            for (let [displayText, data] of processDataMap.entries()) {
-                if (String(data.id) === String(previousValue)) {
-                    foundDisplayText = displayText;
-                    break;
-                }
-            }
-            if (foundDisplayText && processDataMap.has(foundDisplayText)) {
-                const processData = processDataMap.get(foundDisplayText);
-                processButton.textContent = foundDisplayText;
-                processButton.setAttribute('data-value', processData.id);
-                processButton.setAttribute('data-process-code', processData.process_id);
-                if (processData.description_name) {
-                    processButton.setAttribute('data-description-name', processData.description_name);
-                }
-                optionsContainer.querySelectorAll('.custom-select-option').forEach(opt => {
-                    opt.classList.remove('selected');
-                    if (opt.getAttribute('data-value') === String(previousValue)) {
-                        opt.classList.add('selected');
-                    }
-                });
-            } else {
-                processButton.textContent = processButton.getAttribute('data-placeholder') || 'Select Process';
-                processButton.removeAttribute('data-value');
-                processButton.removeAttribute('data-process-code');
-                processButton.removeAttribute('data-description-name');
-            }
-        } else {
-            processButton.textContent = processButton.getAttribute('data-placeholder') || 'Select Process';
-            processButton.removeAttribute('data-value');
-            processButton.removeAttribute('data-process-code');
-            processButton.removeAttribute('data-description-name');
-        }
-
-        console.log('Process custom select populated with', result.data.length, 'options for', selectedDate);
-    } else {
-        console.log('No processes found for selected date:', selectedDate);
-        processButton.textContent = processButton.getAttribute('data-placeholder') || 'Select Process';
-        processButton.removeAttribute('data-value');
-        processButton.removeAttribute('data-process-code');
-        processButton.removeAttribute('data-description-name');
-    }
-
-    updateSubmitButtonState();
-}
-
-window.datacaptureApplyProcessesApiResult = applyProcessesByDayFetchResult;
-
 // Load processes based on selected date
 async function loadProcessesByDate() {
     try {
         const dateInput = document.getElementById('capture_date');
         const selectedDate = dateInput.value || getLocalDateString();
 
+        // Add currently selected company_id
         const currentCompanyId = (typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' ? window.DATACAPTURE_COMPANY_ID : null);
         const url = buildApiUrl(`api/processes/submitted_processes_api.php?action=get_processes_by_day&date=${encodeURIComponent(selectedDate)}`);
         const finalUrl = currentCompanyId ? `${url}${url.indexOf('?') >= 0 ? '&' : '?'}company_id=${currentCompanyId}` : url;
@@ -2850,7 +2787,102 @@ async function loadProcessesByDate() {
         const response = await fetch(finalUrl);
         const result = await response.json();
 
-        applyProcessesByDayFetchResult(result, selectedDate);
+        if (result.success) {
+            // Fill process custom select
+            const processButton = document.getElementById('capture_process');
+            const processDropdown = document.getElementById('capture_process_dropdown');
+            const optionsContainer = processDropdown?.querySelector('.custom-select-options');
+
+            if (!processButton || !processDropdown || !optionsContainer) return;
+
+            // 清空数据映射和选项
+            processDataMap.clear();
+            optionsContainer.innerHTML = '';
+
+            // 保存之前的值
+            const previousValue = processButton.getAttribute('data-value') || '';
+
+            if (result.data && result.data.length > 0) {
+                console.log('Loading processes for date:', selectedDate, 'Day of week:', result.day_of_week);
+                result.data.forEach(process => {
+                    // 抓取 Process 全部读取：使用 API 返回的 process_display，例如 F9EJMSUB (JOKER API)
+                    const displayText = (process.process_display != null && String(process.process_display).trim() !== '')
+                        ? String(process.process_display).trim()
+                        : (process.description_name ? `${process.process_id} (${process.description_name})` : process.process_id);
+
+                    // 创建选项
+                    const option = document.createElement('div');
+                    option.className = 'custom-select-option';
+                    option.textContent = displayText;
+                    option.setAttribute('data-value', process.id);
+                    option.setAttribute('data-process-code', process.process_id);
+                    if (process.description_name) {
+                        option.setAttribute('data-description-name', process.description_name);
+                    }
+                    optionsContainer.appendChild(option);
+
+                    // 存储映射：display_text -> {id, process_id, description_name}
+                    processDataMap.set(displayText, {
+                        id: process.id,
+                        process_id: process.process_id,
+                        description_name: process.description_name || null
+                    });
+                });
+
+                // 恢复之前的值（如果仍然存在）
+                if (previousValue) {
+                    // 查找对应的 displayText
+                    let foundDisplayText = null;
+                    for (let [displayText, data] of processDataMap.entries()) {
+                        if (String(data.id) === String(previousValue)) {
+                            foundDisplayText = displayText;
+                            break;
+                        }
+                    }
+                    if (foundDisplayText && processDataMap.has(foundDisplayText)) {
+                        const processData = processDataMap.get(foundDisplayText);
+                        processButton.textContent = foundDisplayText;
+                        processButton.setAttribute('data-value', processData.id);
+                        processButton.setAttribute('data-process-code', processData.process_id);
+                        if (processData.description_name) {
+                            processButton.setAttribute('data-description-name', processData.description_name);
+                        }
+                        // 标记为选中
+                        optionsContainer.querySelectorAll('.custom-select-option').forEach(opt => {
+                            opt.classList.remove('selected');
+                            if (opt.getAttribute('data-value') === String(previousValue)) {
+                                opt.classList.add('selected');
+                            }
+                        });
+                    } else {
+                        processButton.textContent = processButton.getAttribute('data-placeholder') || 'Select Process';
+                        processButton.removeAttribute('data-value');
+                        processButton.removeAttribute('data-process-code');
+                        processButton.removeAttribute('data-description-name');
+                    }
+                } else {
+                    processButton.textContent = processButton.getAttribute('data-placeholder') || 'Select Process';
+                    processButton.removeAttribute('data-value');
+                    processButton.removeAttribute('data-process-code');
+                    processButton.removeAttribute('data-description-name');
+                }
+
+                console.log('Process custom select populated with', result.data.length, 'options for', selectedDate);
+            } else {
+                console.log('No processes found for selected date:', selectedDate);
+                processButton.textContent = processButton.getAttribute('data-placeholder') || 'Select Process';
+                processButton.removeAttribute('data-value');
+                processButton.removeAttribute('data-process-code');
+                processButton.removeAttribute('data-description-name');
+            }
+
+            // Update submit button state
+            updateSubmitButtonState();
+        } else {
+            console.error('Failed to load processes by date:', result.error);
+            if (redirectToDashboardIfUnauthorizedCategory(result.error)) return;
+            showNotification('Failed to load processes: ' + result.error, 'danger');
+        }
     } catch (error) {
         console.error('Error loading processes by date:', error);
         showNotification('Failed to load processes', 'danger');
@@ -2871,7 +2903,7 @@ async function loadExistingDescriptions() {
     try {
         // Add currently selected company_id
         const currentCompanyId = (typeof window.DATACAPTURE_COMPANY_ID !== 'undefined' ? window.DATACAPTURE_COMPANY_ID : null);
-        const url = buildApiUrl('api/processes/addprocess_api.php');
+        const url = 'api/processes/addprocess_api.php';
         const finalUrl = currentCompanyId ? `${url}?company_id=${currentCompanyId}` : url;
 
         const response = await fetch(finalUrl);
@@ -3107,7 +3139,7 @@ async function deleteDescription(descriptionId, descriptionName, itemElement) {
         formData.append('action', 'delete_description');
         formData.append('description_id', descriptionId);
 
-        const response = await fetch(buildApiUrl('api/processes/addprocess_api.php'), {
+        const response = await fetch('api/processes/addprocess_api.php', {
             method: 'POST',
             body: formData
         });
@@ -22080,8 +22112,8 @@ function removeDescription(index) {
     }
 }
 
-// Handle add description form submission（在 runDataCapturePageInit 内绑定，便于 React 路由重挂载）
-async function handleAddDescriptionFormSubmit(e) {
+// Handle add description form submission
+document.getElementById('addDescriptionForm').addEventListener('submit', async function (e) {
     e.preventDefault();
 
     const descriptionName = document.getElementById('new_description_name').value.trim();
@@ -22101,7 +22133,7 @@ async function handleAddDescriptionFormSubmit(e) {
             formData.append('company_id', currentCompanyId);
         }
 
-        const response = await fetch(buildApiUrl('api/processes/addprocess_api.php'), {
+        const response = await fetch('api/processes/addprocess_api.php', {
             method: 'POST',
             body: formData
         });
@@ -22143,7 +22175,7 @@ async function handleAddDescriptionFormSubmit(e) {
         console.error('Error adding description:', error);
         showNotification('Failed to add description', 'danger');
     }
-}
+});
 
 // 2.Format：是否已经成功解析并填充到网格表
 let isFormatGridReady = false;
@@ -23339,14 +23371,14 @@ async function submitDataCaptureForm() {
         localStorage.setItem('capturedDataCaptureType', selectedDataCaptureType);
 
         // Note: Do NOT record submitted process here. It will be recorded
-        // after final submission on datacapturesummary (SPA or classic page)
+        // after final submission on datacapturesummary.php
 
         // Show success notification
         showNotification('Data captured successfully! Redirecting to summary...', 'success');
 
         // Redirect to summary page after a short delay
         setTimeout(() => {
-            navigateToDataCaptureSummarySuccess();
+            window.location.href = 'datacapturesummary.php?success=1';
         }, 1500);
 
     } catch (error) {
@@ -23398,13 +23430,10 @@ function convertBracketedToNegative(value) {
         return value;
     }
 
-    // Preserve original number string format (including decimal precision)
-    // Remove commas for parsing, but we'll add them back later
+    // Preserve original decimal string format and validate without JS Number.
     const numberWithoutCommas = numberStr.replace(/,/g, '');
-    // Convert to number to validate it's a valid number
-    const number = parseFloat(numberWithoutCommas);
-
-    if (!isNaN(number)) {
+    try {
+        MoneyDecimal.toDecimal(numberWithoutCommas);
         // We have a valid number
         // Keep the original format but make it negative
         let processedNumber = numberWithoutCommas;
@@ -23435,10 +23464,10 @@ function convertBracketedToNegative(value) {
         } else {
             return formattedNumber;
         }
+    } catch (_) {
+        // Return original value if conversion failed
+        return value;
     }
-
-    // Return original value if conversion failed
-    return value;
 }
 
 // Capture the entire table data including structure and content
@@ -24507,17 +24536,8 @@ async function restoreFromLocalStorage() {
     }
 }
 
-// Initialize page（支持 React 晚载入脚本；同一表单仅初始化一次）
-async function runDataCapturePageInit() {
-    const form = document.getElementById('dataCaptureForm');
-    if (!form || form.dataset.dcInitialized === '1') {
-        return;
-    }
-    const addDescForm = document.getElementById('addDescriptionForm');
-    if (addDescForm && addDescForm.dataset.dcSubmitBound !== '1') {
-        addDescForm.dataset.dcSubmitBound = '1';
-        addDescForm.addEventListener('submit', handleAddDescriptionFormSubmit);
-    }
+// Initialize page
+document.addEventListener('DOMContentLoaded', async function () {
     // 加载权限按钮
     await loadPermissionButtons();
     // Mark page as ready after a brief delay to ensure CSS is loaded
@@ -24528,6 +24548,11 @@ async function runDataCapturePageInit() {
     // 初始化 Data Capture Type 选择器
     const typeSelect = document.getElementById('dataCaptureTypeSelector');
     const excelTableContainer = document.querySelector('.excel-table-container');
+    if (excelTableContainer) {
+        excelTableContainer.addEventListener('scroll', updateActiveContextMenuPosition, { passive: true });
+    }
+    window.addEventListener('resize', updateActiveContextMenuPosition);
+
     if (typeSelect) {
         currentDataCaptureType = typeSelect.value || '1.Text';
         // CITIBET 模式：为表格容器添加 class，用于完整显示数据（避免字母被裁剪）
@@ -24629,13 +24654,7 @@ async function runDataCapturePageInit() {
         // Restore data from localStorage
         await restoreFromLocalStorage();
     }
-    form.dataset.dcInitialized = '1';
-}
-document.addEventListener('DOMContentLoaded', function () { void runDataCapturePageInit(); });
-if (document.readyState !== 'loading') {
-    void runDataCapturePageInit();
-}
-window.runDataCapturePageInit = runDataCapturePageInit;
+});
 
 // 切换 data capture 的 company
 // 当前选择的权限
@@ -24652,7 +24671,7 @@ async function loadPermissionButtons() {
     }
 
     try {
-        const response = await fetch(buildApiUrl('api/domain/domain_api.php'), {
+        const response = await fetch('api/domain/domain_api.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -24727,39 +24746,10 @@ function switchPermission(permission) {
     }
 }
 
-async function refreshDataCapturePageData() {
-    await loadPermissionButtons();
-    await loadFormData();
-    await loadSubmittedProcesses();
-    if (typeof initializeTable === 'function') {
-        initializeTable(26, 20);
-    }
-    const processInput = document.getElementById('capture_process');
-    if (processInput) {
-        processInput.textContent = processInput.getAttribute('data-placeholder') || 'Select Process';
-        processInput.removeAttribute('data-value');
-        processInput.removeAttribute('data-process-code');
-        processInput.removeAttribute('data-description-name');
-    }
-    if (typeof clearProcessData === 'function') {
-        clearProcessData();
-    }
-    setTimeout(function () {
-        if (typeof updateSubmitButtonState === 'function') {
-            updateSubmitButtonState();
-        }
-    }, 500);
-}
-window.refreshDataCapturePageData = refreshDataCapturePageData;
-
 async function switchDataCaptureCompany(companyId) {
-    if (companyId == null || companyId === '') {
-        return;
-    }
-    const idStr = String(companyId);
     // 先更新 session
     try {
-        const response = await fetch(buildApiUrl(`api/session/update_company_session_api.php?company_id=${encodeURIComponent(idStr)}`));
+        const response = await fetch(`api/session/update_company_session_api.php?company_id=${companyId}`);
         const result = await response.json();
         if (!result.success) {
             console.error('更新 session 失败:', result.error);
@@ -24770,21 +24760,8 @@ async function switchDataCaptureCompany(companyId) {
         // 即使 API 失败，也继续刷新页面（PHP 端会处理）
     }
 
-    const spaEmbed = document.body.classList.contains('datacapture-spa-embed');
-    if (spaEmbed) {
-        const btn = document.querySelector('.shared-company-btn[data-company-id="' + idStr.replace(/"/g, '\\"') + '"]');
-        const code = btn ? (btn.getAttribute('data-company-code') || '') : (window.DATACAPTURE_COMPANY_CODE || '');
-        window.DATACAPTURE_COMPANY_ID = parseInt(idStr, 10);
-        window.DATACAPTURE_COMPANY_CODE = code;
-        if (typeof refreshDataCapturePageData === 'function') {
-            await refreshDataCapturePageData();
-        }
-        window.dispatchEvent(new Event('c168:company-session-updated'));
-        return;
-    }
-
     const url = new URL(window.location.href);
-    url.searchParams.set('company_id', idStr);
+    url.searchParams.set('company_id', companyId);
     window.location.href = url.toString();
 }
 
@@ -24795,9 +24772,8 @@ function setupFormValidationListeners() {
     if (dateInput) {
         dateInput.addEventListener('change', async function () {
             console.log('Date changed to:', this.value);
-            if (!window.__DC_REACT_DATE_PROCESS__) {
-                await loadProcessesByDate();
-            }
+            // Reload processes based on new date
+            await loadProcessesByDate();
             await loadSubmittedProcesses();
             // Clear process selection when date changes (but not during restoration)
             if (!isRestoringData) {

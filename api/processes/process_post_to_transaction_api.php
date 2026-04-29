@@ -13,6 +13,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../bankprocess_maintenance/maintenance_accounting_resend_lib.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/contract_billing_addon.php';
 
 /** 统一 JSON 响应 */
@@ -140,22 +141,23 @@ function clearTransactionSearchCache(): void
 /**
  * 截断到2位小数（不四舍五入）
  */
-function txnTrunc2($value): float
+function txnTrunc2($value): string
 {
-    $n = (float) $value;
-    if ($n >= 0) {
-        return floor($n * 100) / 100;
-    }
-    return ceil($n * 100) / 100;
+    return money_normalize($value, 2);
 }
 
 function txnFormat2($value): string
 {
-    return number_format(txnTrunc2($value), 2, '.', '');
+    return txnTrunc2($value);
+}
+
+function txnDescriptionAmount($value): string
+{
+    return money_out($value, 2);
 }
 
 /** Pro-rated cost/price/profit for partial first month (day_start to end of that month) */
-function partialFirstMonthAmounts(string $dayStart, float $cost, float $price, float $profit): array
+function partialFirstMonthAmounts(string $dayStart, string $cost, string $price, string $profit): array
 {
     $ts = strtotime($dayStart);
     if ($ts === false) {
@@ -167,16 +169,16 @@ function partialFirstMonthAmounts(string $dayStart, float $cost, float $price, f
     if ($daysInMonth <= 0) {
         return ['cost' => $cost, 'price' => $price, 'profit' => $profit];
     }
-    $ratio = $daysRemaining / $daysInMonth;
+    $ratio = money_div((string) $daysRemaining, (string) $daysInMonth, MONEY_CALC_SCALE);
     return [
-        'cost' => txnTrunc2($cost * $ratio),
-        'price' => txnTrunc2($price * $ratio),
-        'profit' => txnTrunc2($profit * $ratio),
+        'cost' => money_mul($cost, $ratio, 2),
+        'price' => money_mul($price, $ratio, 2),
+        'profit' => money_mul($profit, $ratio, 2),
     ];
 }
 
 /** Pro-rated amounts from $startYmd (inclusive) to end of that month (inclusive). */
-function prorateToMonthEndFromStart(string $startYmd, float $cost, float $price, float $profit): array
+function prorateToMonthEndFromStart(string $startYmd, string $cost, string $price, string $profit): array
 {
     $ts = strtotime($startYmd);
     if ($ts === false) {
@@ -188,11 +190,11 @@ function prorateToMonthEndFromStart(string $startYmd, float $cost, float $price,
         return ['cost' => $cost, 'price' => $price, 'profit' => $profit];
     }
     $daysRemaining = max(0, $daysInMonth - $dayOfMonth + 1);
-    $ratio = $daysRemaining / $daysInMonth;
+    $ratio = money_div((string) $daysRemaining, (string) $daysInMonth, MONEY_CALC_SCALE);
     return [
-        'cost' => txnTrunc2($cost * $ratio),
-        'price' => txnTrunc2($price * $ratio),
-        'profit' => txnTrunc2($profit * $ratio),
+        'cost' => money_mul($cost, $ratio, 2),
+        'price' => money_mul($price, $ratio, 2),
+        'profit' => money_mul($profit, $ratio, 2),
     ];
 }
 
@@ -321,20 +323,20 @@ function contractExclusiveEndYmdForFrequency(string $startYmd, ?string $contract
     return billingContractExclusiveEndYmdFirstOfMonth($startYmd, $term);
 }
 
-function prorateInclusiveDateRange(string $fromYmd, string $toYmd, float $cost, float $price, float $profit): array
+function prorateInclusiveDateRange(string $fromYmd, string $toYmd, string $cost, string $price, string $profit): array
 {
     if ($fromYmd > $toYmd) {
-        return ['cost' => 0.0, 'price' => 0.0, 'profit' => 0.0];
+        return ['cost' => '0.00000000', 'price' => '0.00000000', 'profit' => '0.00000000'];
     }
     try {
         $cur = new DateTimeImmutable($fromYmd);
         $end = new DateTimeImmutable($toYmd);
     } catch (Throwable $e) {
-        return ['cost' => 0.0, 'price' => 0.0, 'profit' => 0.0];
+        return ['cost' => '0.00000000', 'price' => '0.00000000', 'profit' => '0.00000000'];
     }
-    $tc = 0.0;
-    $tp = 0.0;
-    $tf = 0.0;
+    $tc = '0.00000000';
+    $tp = '0.00000000';
+    $tf = '0.00000000';
     while ($cur <= $end) {
         $dim = (int) $cur->format('t');
         $monthEnd = $cur->modify('last day of this month');
@@ -343,10 +345,10 @@ function prorateInclusiveDateRange(string $fromYmd, string $toYmd, float $cost, 
         $d1 = (int) $chunkEnd->format('j');
         $chunkDays = $d1 - $d0 + 1;
         if ($dim > 0 && $chunkDays > 0) {
-            $ratio = $chunkDays / $dim;
-            $tc += $cost * $ratio;
-            $tp += $price * $ratio;
-            $tf += $profit * $ratio;
+            $ratio = money_div((string) $chunkDays, (string) $dim, MONEY_CALC_SCALE);
+            $tc = money_add($tc, money_mul($cost, $ratio, MONEY_CALC_SCALE), MONEY_CALC_SCALE);
+            $tp = money_add($tp, money_mul($price, $ratio, MONEY_CALC_SCALE), MONEY_CALC_SCALE);
+            $tf = money_add($tf, money_mul($profit, $ratio, MONEY_CALC_SCALE), MONEY_CALC_SCALE);
         }
         $cur = $chunkEnd->modify('+1 day');
     }
@@ -868,9 +870,8 @@ function parseProfitSharingString(string $profitSharing): array
         if ($dash !== false) {
             $accountText = trim(substr($t, 0, $dash));
             $amountStr = trim(substr($t, $dash + 3));
-            $amount = (float) $amountStr;
-            if ($accountText !== '' && $amount > 0) {
-                $result[] = ['account_text' => $accountText, 'amount' => txnTrunc2($amount)];
+            if ($accountText !== '' && money_is_valid($amountStr) && money_cmp($amountStr, '0') > 0) {
+                $result[] = ['account_text' => $accountText, 'amount' => txnTrunc2($amountStr)];
             }
         }
     }
@@ -994,9 +995,9 @@ try {
         $skipCurrentPair = false;
         $monthlyProrationPsRatio = null;
         $periodType = trim((string) ($pair['period_type'] ?? 'monthly'));
-        $cost = (float) ($p['cost'] ?? 0);
-        $price = (float) ($p['price'] ?? 0);
-        $profit = (float) ($p['profit'] ?? 0);
+        $cost = money_normalize($p['cost'] ?? '0');
+        $price = money_normalize($p['price'] ?? '0');
+        $profit = money_normalize($p['profit'] ?? '0');
         $lastProrationRatio = null;
 
         $dayStartYmd = !empty($p['day_start']) ? bankProcessDateFieldToYmd($p['day_start']) : null;
@@ -1121,7 +1122,7 @@ try {
                             $dim = (int) date('t', $tPr);
                             $dj = (int) date('j', $tPr);
                             if ($dim > 0) {
-                                $monthlyProrationPsRatio = ($dim - $dj + 1) / $dim;
+                                $monthlyProrationPsRatio = money_div((string) ($dim - $dj + 1), (string) $dim, MONEY_CALC_SCALE);
                             }
                         }
                         $firstMonthOnFirstHandled = true;
@@ -1140,7 +1141,7 @@ try {
                             $price = $pr['price'];
                             $profit = $pr['profit'];
                             if ($pr['ratio'] !== null) {
-                                $monthlyProrationPsRatio = (float) $pr['ratio'];
+                                $monthlyProrationPsRatio = $pr['ratio'];
                             }
                         }
                     }
@@ -1153,9 +1154,9 @@ try {
         // 1+1/1+2/1+3：active 期间统一按 1 个月价格入账；仅 manual_inactive 才按赔付月数放大。
         if ($periodType === 'manual_inactive') {
             $mult = getManualInactiveMultiplierFromContract($p['contract'] ?? null);
-            $cost = txnTrunc2($cost * $mult);
-            $price = txnTrunc2($price * $mult);
-            $profit = txnTrunc2($profit * $mult);
+            $cost = money_mul($cost, (string) $mult, 2);
+            $price = money_mul($price, (string) $mult, 2);
+            $profit = money_mul($profit, (string) $mult, 2);
         }
         $isManualInactiveCompensation = ($periodType === 'manual_inactive' && getExtraMonthsFromContract($p['contract'] ?? null) > 0);
 
@@ -1280,31 +1281,31 @@ try {
         }
         $compMonthLabel = getCompensationMonthLabelFromContract($p['contract'] ?? null);
         // Cost → Supplier(card_merchant)，Price → Customer，Profit → Company；首月按比例时三笔均用折算后的 cost/price/profit
-        if (!empty($p['card_merchant_id']) && $cost > 0) {
+        if (!empty($p['card_merchant_id']) && money_cmp($cost, '0') > 0) {
             $txn = $baseTxn;
             $txn['account_id'] = (int) $p['card_merchant_id'];
             $txn['amount'] = txnTrunc2($cost);
             $txn['description'] = $isManualInactiveCompensation
-                ? ("Compensation " . $compMonthLabel . ' ' . (($cost == floor($cost)) ? (string) (int) $cost : txnFormat2($cost)))
+                ? ("Compensation " . $compMonthLabel . ' ' . txnDescriptionAmount($cost))
                 : ("Process: Buy Price for $processLabel" . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
         }
         // Sell Price → Customer：用 LOSE + 正数 amount，Win/Loss 计算时按 -amount 显示在右边「-」侧（Customer 要还钱）；Cost/Profit/Profit Sharing 用 WIN + 正数显示在左边「+」侧
-        if (!empty($p['customer_id']) && $price > 0) {
+        if (!empty($p['customer_id']) && money_cmp($price, '0') > 0) {
             $txn = $baseTxn;
             $txn['transaction_type'] = 'LOSE';
             $txn['account_id'] = (int) $p['customer_id'];
             $txn['amount'] = txnTrunc2($price);
             $txn['description'] = $isManualInactiveCompensation
-                ? ("Compensation " . $compMonthLabel . ' ' . (($price == floor($price)) ? (string) (int) $price : txnFormat2($price)))
+                ? ("Compensation " . $compMonthLabel . ' ' . txnDescriptionAmount($price))
                 : ("Process: Sell Price for $processLabel" . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
         }
         // Profit：先扣 Profit Sharing 再入 Company；Profit Sharing 每笔入对应 account（均记 Win/Loss）
         // 1st of every month 首月按比例时，Profit Sharing 金额也按「剩余天数/当月天数」折算，再分给各 account
-        $psRatio = 1.0;
+        $psRatio = '1.0000000000000000';
         if ($periodType === 'partial_first_month') {
             $ts = strtotime($ledgerDate);
             if ($ts !== false) {
@@ -1312,40 +1313,40 @@ try {
                 $dayOfMonth = (int) date('j', $ts);
                 $daysRemaining = $daysInMonth - $dayOfMonth + 1;
                 if ($daysInMonth > 0) {
-                    $psRatio = $daysRemaining / $daysInMonth;
+                    $psRatio = money_div((string) $daysRemaining, (string) $daysInMonth, MONEY_CALC_SCALE);
                 }
             }
         } elseif ($monthlyProrationPsRatio !== null) {
             $psRatio = $monthlyProrationPsRatio;
         } elseif ($periodType === 'day_end_tail' || $periodType === 'resend_consolidated_range') {
-            $fp = (float) ($p['profit'] ?? 0);
-            $psRatio = ($fp > 0) ? ($profit / $fp) : 0.0;
+            $fp = money_normalize($p['profit'] ?? '0');
+            $psRatio = money_cmp($fp, '0') > 0 ? money_div($profit, $fp, MONEY_CALC_SCALE) : '0.0000000000000000';
         }
         $profitSharingEntries = parseProfitSharingString($p['profit_sharing'] ?? '');
         $profitSharingResolved = [];
-        $totalPs = 0;
+        $totalPs = '0.00000000';
         $psMult = ($periodType === 'manual_inactive') ? getManualInactiveMultiplierFromContract($p['contract'] ?? null) : 1;
         foreach ($profitSharingEntries as $entry) {
             $accId = resolveAccountIdByText($pdo, $companyId, $entry['account_text']);
-            if ($accId !== null && $entry['amount'] > 0) {
-                $proratedAmount = txnTrunc2($entry['amount'] * $psRatio * $psMult);
-                if ($proratedAmount > 0) {
+            if ($accId !== null && money_cmp($entry['amount'], '0') > 0) {
+                $proratedAmount = money_mul(money_mul($entry['amount'], $psRatio, MONEY_CALC_SCALE), (string) $psMult, 2);
+                if (money_cmp($proratedAmount, '0') > 0) {
                     $profitSharingResolved[] = ['account_id' => $accId, 'amount' => $proratedAmount, 'account_text' => $entry['account_text']];
-                    $totalPs += $proratedAmount;
+                    $totalPs = money_add($totalPs, $proratedAmount);
                 }
             }
         }
-        $companyProfit = txnTrunc2($profit - $totalPs);
-        if (abs($companyProfit) < 0.00001) {
-            $companyProfit = 0.0;
+        $companyProfit = money_sub($profit, $totalPs, 2);
+        if (money_cmp(money_abs($companyProfit), '0.00001') < 0) {
+            $companyProfit = '0.00000000';
         }
         // Profit 被 Share 抵消为 0.00 时，也要保留一条 Profit 记录给 Transaction Payment / History。
-        if (!empty($p['profit_account_id']) && $companyProfit >= 0) {
+        if (!empty($p['profit_account_id']) && money_cmp($companyProfit, '0') >= 0) {
             $txn = $baseTxn;
             $txn['account_id'] = (int) $p['profit_account_id'];
             $txn['amount'] = txnTrunc2($companyProfit);
             $txn['description'] = $isManualInactiveCompensation
-                ? ("Compensation " . $compMonthLabel . ' ' . (($profit == floor($profit)) ? (string) (int) $profit : txnFormat2($profit)))
+                ? ("Compensation " . $compMonthLabel . ' ' . txnDescriptionAmount($profit))
                 : ("Process: Profit for $processLabel" . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
@@ -1355,8 +1356,8 @@ try {
             $txn['account_id'] = (int) $ps['account_id'];
             $txn['amount'] = txnTrunc2($ps['amount']);
             $txn['description'] = $isManualInactiveCompensation
-                ? ("Compensation " . $compMonthLabel . ' ' . (($ps['amount'] == floor($ps['amount'])) ? (string) (int) $ps['amount'] : txnFormat2((float) $ps['amount'])))
-                : ("Process: Profit Sharing for $processLabel (" . $ps['account_text'] . ' ' . $ps['amount'] . ')' . $suffix . $resendEndMarker);
+                ? ("Compensation " . $compMonthLabel . ' ' . txnDescriptionAmount($ps['amount']))
+                : ("Process: Profit Sharing for $processLabel (" . $ps['account_text'] . ' ' . money_out($ps['amount'], 2) . ')' . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
         }

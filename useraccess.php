@@ -146,6 +146,10 @@ try {
                             <label for="perm_account">Account</label>
                         </div>
                         <div class="checkbox-item">
+                            <input type="checkbox" id="perm_ownership" value="ownership" onchange="updateManualPermissions()">
+                            <label for="perm_ownership">Ownership</label>
+                        </div>
+                        <div class="checkbox-item">
                             <input type="checkbox" id="perm_process" value="process" onchange="updateManualPermissions()">
                             <label for="perm_process">Process</label>
                         </div>

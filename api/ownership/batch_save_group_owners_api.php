@@ -5,6 +5,7 @@
  */
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -15,6 +16,10 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 if (!isset($_SESSION['user_id'])) {
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
+    exit();
+}
+if (strtolower($_SESSION['role'] ?? '') !== 'owner') {
+    echo json_encode(['status' => 'error', 'message' => 'Read-only: only owner can modify ownership']);
     exit();
 }
 
@@ -28,22 +33,30 @@ if (!$group_id) {
     exit();
 }
 
+function ownershipPct($value): string {
+    return money_normalize($value, 2);
+}
+
+function ownershipPctOut($value): string {
+    return money_out($value, 2);
+}
+
 // Validate total percentage
-$total_percentage = 0;
+$total_percentage = '0.00';
 foreach ($owners as $owner) {
     if (!isset($owner['account_id']) || !isset($owner['percentage'])) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid owner data format']);
         exit();
     }
-    $pct = (float) $owner['percentage'];
-    if ($pct < 0 || $pct > 100) {
+    $pct = ownershipPct($owner['percentage']);
+    if (money_cmp($pct, '0', 2) < 0 || money_cmp($pct, '100', 2) > 0) {
         echo json_encode(['status' => 'error', 'message' => 'Percentage must be between 0 and 100']);
         exit();
     }
-    $total_percentage += $pct;
+    $total_percentage = money_add($total_percentage, $pct, 2);
 }
 
-if ($total_percentage > 100) {
+if (money_cmp($total_percentage, '100', 2) > 0) {
     echo json_encode(['status' => 'error', 'message' => 'Total allocation exceeds 100%']);
     exit();
 }
@@ -151,7 +164,7 @@ try {
                 $real_id = (int) $raw_id;
             }
 
-            $insertStmt->execute([$group_id, $owner_id, $real_id, $owner_type, (float) $owner['percentage'], $pgid, $roVal]);
+            $insertStmt->execute([$group_id, $owner_id, $real_id, $owner_type, ownershipPctOut($owner['percentage']), $pgid, $roVal]);
 
             // Sync read_only to user table
             if ($owner_type === 'user') {

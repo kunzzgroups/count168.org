@@ -8,6 +8,7 @@
  */
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -24,14 +25,14 @@ if (!isset($_SESSION['user_id'])) {
 $data = json_decode(file_get_contents('php://input'), true);
 $group_id   = trim($data['group_id'] ?? '');
 $raw_id     = trim($data['account_id'] ?? '');
-$percentage = (float)($data['percentage'] ?? 0);
+$percentage = money_normalize($data['percentage'] ?? 0, 2);
 
 if (!$group_id || !$raw_id) {
     echo json_encode(['status' => 'error', 'message' => 'Missing group_id or account_id']);
     exit();
 }
 
-if ($percentage < 0 || $percentage > 100) {
+if (money_cmp($percentage, '0', 2) < 0 || money_cmp($percentage, '100', 2) > 0) {
     echo json_encode(['status' => 'error', 'message' => 'Percentage must be between 0 and 100']);
     exit();
 }
@@ -75,12 +76,13 @@ try {
         WHERE group_id = ? AND NOT (account_id = ? AND owner_type = ?)
     ");
     $stmtTotal->execute([$group_id, $real_id, $owner_type]);
-    $currentTotal = (float)$stmtTotal->fetchColumn();
+    $currentTotal = money_normalize($stmtTotal->fetchColumn(), 2);
 
-    if (($currentTotal + $percentage) > 100) {
+    $newTotal = money_add($currentTotal, $percentage, 2);
+    if (money_cmp($newTotal, '100', 2) > 0) {
         echo json_encode([
             'status' => 'error',
-            'message' => 'Total group allocation would exceed 100% (' . ($currentTotal + $percentage) . '%)'
+            'message' => 'Total group allocation would exceed 100% (' . money_out($newTotal, 2) . '%)'
         ]);
         exit();
     }
@@ -95,7 +97,7 @@ try {
 
     echo json_encode([
         'status'  => 'success',
-        'message' => "Group ownership for '{$group_id}' saved ({$percentage}%)"
+        'message' => "Group ownership for '{$group_id}' saved (" . money_out($percentage, 2) . "%)"
     ]);
 
 } catch (PDOException $e) {

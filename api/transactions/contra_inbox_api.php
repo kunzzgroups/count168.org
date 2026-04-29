@@ -1,7 +1,7 @@
 <?php
 /**
- * Contra Approval Inbox API (Manager+)
- * 返回当前公司所有待批准的 CONTRA（approval_status = PENDING）
+ * Approval Inbox API (Manager+)
+ * 返回当前公司所有待批准的审批交易（approval_status = PENDING）
  * 路径: api/transactions/contra_inbox_api.php
  */
 
@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../api_response.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 
@@ -42,6 +43,7 @@ function resolveContraCompanyId(PDO $pdo): int {
 
 function fetchPendingContras(PDO $pdo, int $companyId): array {
     $hasCurrencyId = tableHasColumn($pdo, 'transactions', 'currency_id');
+    $hasCreatedAt = tableHasColumn($pdo, 'transactions', 'created_at');
     $sql = "SELECT t.id, DATE_FORMAT(t.transaction_date, '%d/%m/%Y') AS transaction_date, t.amount,
             COALESCE(t.description, '') AS description,
             to_acc.account_id AS to_account_code, to_acc.name AS to_account_name,
@@ -54,8 +56,12 @@ function fetchPendingContras(PDO $pdo, int $companyId): array {
             LEFT JOIN user u ON t.created_by = u.id
             LEFT JOIN owner o ON t.created_by_owner = o.id";
     if ($hasCurrencyId) $sql .= " LEFT JOIN currency c ON t.currency_id = c.id";
-    $sql .= " WHERE t.company_id = ? AND t.transaction_type = 'CONTRA' AND t.approval_status = 'PENDING'
-            ORDER BY t.transaction_date ASC, t.created_at ASC, t.id ASC";
+    $orderBy = $hasCreatedAt
+        ? " ORDER BY t.transaction_date ASC, t.created_at ASC, t.id ASC"
+        : " ORDER BY t.transaction_date ASC, t.id ASC";
+    $sql .= " WHERE t.company_id = ? AND UPPER(TRIM(COALESCE(t.approval_status, ''))) = 'PENDING'
+              AND t.transaction_type IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','PROFIT','WIN','LOSE')"
+        . $orderBy;
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$companyId]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -68,7 +74,7 @@ function fetchPendingContras(PDO $pdo, int $companyId): array {
             'to_account_code' => $r['to_account_code'] ?? null,
             'to_account_name' => $r['to_account_name'] ?? null,
             'currency' => $r['currency'] ?? '',
-            'amount' => (float)$r['amount'],
+            'amount' => money_out($r['amount'] ?? '0'),
             'submitted_by' => $r['submitted_by'] ?? '-',
             'description' => $r['description'] ?? '',
         ];

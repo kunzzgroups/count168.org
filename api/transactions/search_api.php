@@ -15,9 +15,11 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
 require_once __DIR__ . '/../../includes/c168_domain_access.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/dcd_processed_quant.php';
 
 /**
- * Contra 审批：过滤未批准的 CONTRA（向后兼容：若无字段则不过滤）
+ * 审批过滤：过滤未批准交易（向后兼容：若无字段则不过滤）
  */
 function hasContraApprovalColumns(PDO $pdo): bool
 {
@@ -36,8 +38,11 @@ function contraApprovedWhere(PDO $pdo, string $alias = 't'): string
         return '';
     }
     $a = $alias !== '' ? $alias . '.' : '';
-    // 只对 CONTRA 生效：PENDING 的 CONTRA 不计入 BF / CrDr / Balance
-    return " AND ({$a}transaction_type <> 'CONTRA' OR {$a}approval_status = 'APPROVED')";
+    // 指定 type 生效：CONTRA/PAYMENT/RECEIVE/CLAIM/CLEAR/ADJUSTMENT/PROFIT(落库为 WIN/LOSE) 的 PENDING 不计入
+    return " AND ((
+                {$a}transaction_type IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT')
+                AND {$a}approval_status = 'APPROVED'
+            ) OR {$a}transaction_type NOT IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT'))";
 }
 
 function searchApiAccountHasCreatedSourceColumn(PDO $pdo): bool
@@ -110,16 +115,58 @@ function searchApiHasAccountCurrencyTable(PDO $pdo): bool
     return $v;
 }
 
-/**
- * 截断到2位小数（不四舍五入）
- */
-function trunc2($value): float
+function searchMoney2($value): string
 {
-    $n = (float) $value;
-    if ($n >= 0) {
-        return floor($n * 100) / 100;
+    if ($value === null || trim((string)$value) === '') {
+        return money_normalize('0', 2);
     }
-    return ceil($n * 100) / 100;
+    return money_normalize($value ?? '0', 2);
+}
+
+/**
+ * 截断到2位小数（不四舍五入），返回字符串金额。
+ */
+function trunc2($value): string
+{
+    return searchMoney2($value);
+}
+
+function searchMoneyNeg($value): string
+{
+    return money_mul($value ?? '0', '-1', 8);
+}
+
+function searchMoneyNonZero($value): bool
+{
+    return money_cmp(money_abs($value ?? '0'), '0.00001') > 0;
+}
+
+function searchMoneyIsZero($value): bool
+{
+    return money_cmp($value ?? '0', '0', 8) === 0;
+}
+
+function normalizeMoneyRow(array $row): array
+{
+    foreach (['bf', 'win_loss', 'cr_dr', 'balance'] as $field) {
+        $row[$field] = searchMoney2($row[$field] ?? '0');
+    }
+    return $row;
+}
+
+function normalizeMoneyRows(array $rows): array
+{
+    return array_map('normalizeMoneyRow', $rows);
+}
+
+function addMoneyFields(array $a, array $b): array
+{
+    return [
+        'bf' => money_add($a['bf'] ?? '0', $b['bf'] ?? '0', 2),
+        'win_loss' => money_add($a['win_loss'] ?? '0', $b['win_loss'] ?? '0', 2),
+        'cr_dr' => money_add($a['cr_dr'] ?? '0', $b['cr_dr'] ?? '0', 2),
+        'balance' => money_add($a['balance'] ?? '0', $b['balance'] ?? '0', 2),
+    ];
 }
 
 /**
@@ -264,12 +311,12 @@ function searchApiAppendDomainNetProfitVirtualRows(
                      t.currency_id,
                      SUM(CASE
                            WHEN t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %'
-                          THEN TRUNCATE(t.amount, 2)
+                          THEN t.amount
                            ELSE 0
                          END) AS fee_total,
                      SUM(CASE
                            WHEN t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'COMMISION FOR %'
-                          THEN TRUNCATE(t.amount, 2)
+                          THEN t.amount
                            ELSE 0
                          END) AS comm_total
                    FROM transactions t
@@ -283,10 +330,10 @@ function searchApiAppendDomainNetProfitVirtualRows(
             $cid = (int) ($ar['currency_id'] ?? 0);
             if ($cid <= 0)
                 continue;
-            $fee = trunc2((float) ($ar['fee_total'] ?? 0));
-            $comm = trunc2((float) ($ar['comm_total'] ?? 0));
-            $net = trunc2($fee - $comm);
-            if ($net <= 0)
+            $fee = trunc2($ar['fee_total'] ?? '0');
+            $comm = trunc2($ar['comm_total'] ?? '0');
+            $net = trunc2(money_sub($fee, $comm, 8));
+            if (money_cmp($net, '0') <= 0)
                 continue;
             if (!empty($currencyFilterIds) && !in_array($cid, $currencyFilterIds, true)) {
                 continue;
@@ -300,8 +347,8 @@ function searchApiAppendDomainNetProfitVirtualRows(
     }
 
     while ($row = (is_array($rows) ? array_shift($rows) : null)) {
-        $amt = trunc2((float) ($row['amount'] ?? 0));
-        if (abs($amt) < 0.00001)
+        $amt = trunc2($row['amount'] ?? '0');
+        if (!searchMoneyNonZero($amt))
             continue;
         $cid = (int) ($row['currency_id'] ?? 0);
         $cur = strtoupper((string) ($currency_id_map[$cid] ?? ''));
@@ -330,8 +377,8 @@ function searchApiAppendDomainNetProfitVirtualRows(
             'role' => 'PROFIT',
             'currency' => $cur,
             'currency_id_debug' => $cid,
-            'bf' => 0.0,
-            'win_loss' => 0.0,
+            'bf' => '0',
+            'win_loss' => '0',
             'cr_dr' => $amt,
             'balance' => $amt,
             'has_crdr_transactions' => 1,
@@ -423,8 +470,8 @@ function searchApiAppendDomainListFeeVirtualRows(
         if ($cur === '')
             continue;
 
-        $amt = trunc2((float) ($row['amount'] ?? 0));
-        if (abs($amt) < 0.00001)
+        $amt = trunc2($row['amount'] ?? '0');
+        if (!searchMoneyNonZero($amt))
             continue;
 
         $realAccountId = 0;
@@ -535,10 +582,10 @@ function searchApiAppendDomainListFeeVirtualRows(
             'role' => 'DOMAIN',
             'currency' => $cur,
             'currency_id_debug' => $cid,
-            'bf' => 0.0,
-            'win_loss' => 0.0,
-            'cr_dr' => -$amt,
-            'balance' => -$amt,
+            'bf' => '0',
+            'win_loss' => '0',
+            'cr_dr' => searchMoneyNeg($amt),
+            'balance' => searchMoneyNeg($amt),
             'has_crdr_transactions' => 1,
             'is_alert' => 0,
             'is_rate_middleman' => 0
@@ -572,6 +619,8 @@ function searchApiResolveCompanyOwnerCodeByPk(PDO $pdo, int $companyPk): string
 /**
  * Domain Share Commission：bulk Cr/Dr 对 from_account（池子）侧记为 0，池子会只剩 List Fee 全额。
  * 在此按每笔佣金从池子账户的 Cr/Dr、Balance 扣回，与 Payment History 净额口径一致。
+ * 另：与 dashboard_api PROFIT 池逻辑一致，将「起始日前」已付的 Share Commission 从 B/F 扣回，
+ * 否则次日 B/F 仍按 List Fee 毛额累加，会多出与佣金相等的余额（如 5040+2160=7200）。
  * 客户侧 List Fee 仍由 searchApiAppendDomainListFeeVirtualRows 负责，此处不追加虚拟来源行。
  */
 function searchApiApplyDomainSourceCompanyRows(
@@ -594,6 +643,40 @@ function searchApiApplyDomainSourceCompanyRows(
         $currencyFilterIds = array_values(array_unique(array_filter($currencyFilterIds)));
         if (empty($currencyFilterIds)) {
             return;
+        }
+    }
+
+    // 起始日前的佣金：从池子 B/F 扣回（与 dashboard_api 期初扣回一致）
+    $poolBfAdjust = []; // [ACC_ID][CUR] => delta（负值表示从 bf/balance 扣减）
+    $bfSql = "SELECT t.from_account_id, t.amount, t.currency_id
+            FROM transactions t
+            WHERE t.company_id = ?
+              AND t.transaction_type = 'PAYMENT'
+              AND t.transaction_date < ?
+              AND t.currency_id IS NOT NULL
+              AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'
+              AND t.from_account_id IS NOT NULL";
+    $bfPar = [$company_id, $date_from_db];
+    if (!empty($currencyFilterIds)) {
+        $bfSql .= ' AND t.currency_id IN (' . implode(',', array_fill(0, count($currencyFilterIds), '?')) . ')';
+        $bfPar = array_merge($bfPar, $currencyFilterIds);
+    }
+    $stBf = $pdo->prepare($bfSql);
+    $stBf->execute($bfPar);
+    while ($row = $stBf->fetch(PDO::FETCH_ASSOC)) {
+        $cid = (int) $row['currency_id'];
+        $curCode = strtoupper((string) ($currency_id_map[$cid] ?? ''));
+        if ($curCode === '') {
+            continue;
+        }
+        // amount 保留正负：冲正/退款为负时，池子 B/F 调整方向与代数一致；abs 仅用于近零判断
+        $amt = trunc2($row['amount'] ?? '0');
+        if (!searchMoneyNonZero($amt)) {
+            continue;
+        }
+        $poolId = (int) ($row['from_account_id'] ?? 0);
+        if ($poolId > 0) {
+            $poolBfAdjust[$poolId][$curCode] = money_sub($poolBfAdjust[$poolId][$curCode] ?? '0', $amt, 8);
         }
     }
 
@@ -621,28 +704,36 @@ function searchApiApplyDomainSourceCompanyRows(
         if ($curCode === '') {
             continue;
         }
-        $amt = trunc2((float) ($row['amount'] ?? 0));
-        if (abs($amt) < 0.00001) {
+        // 同上：按带符号 amount 累加 delta，不对金额取 abs
+        $amt = trunc2($row['amount'] ?? '0');
+        if (!searchMoneyNonZero($amt)) {
             continue;
         }
         $poolId = (int) ($row['from_account_id'] ?? 0);
         if ($poolId > 0) {
-            $poolAdjust[$poolId][$curCode] = ($poolAdjust[$poolId][$curCode] ?? 0.0) - $amt;
+            $poolAdjust[$poolId][$curCode] = money_sub($poolAdjust[$poolId][$curCode] ?? '0', $amt, 8);
         }
     }
 
-    if (empty($poolAdjust)) {
+    if (empty($poolAdjust) && empty($poolBfAdjust)) {
         return;
     }
 
     foreach ($results as &$row) {
         $aid = (int) ($row['account_db_id'] ?? 0);
         $cur = strtoupper((string) ($row['currency'] ?? ''));
-        if ($aid > 0 && $cur !== '' && isset($poolAdjust[$aid][$cur])) {
-            $delta = (float) $poolAdjust[$aid][$cur];
-            $row['cr_dr'] = trunc2((float) $row['cr_dr'] + $delta);
-            $row['balance'] = trunc2((float) $row['balance'] + $delta);
-            $row['has_crdr_transactions'] = (abs((float) $row['cr_dr']) > 0.00001) ? 1 : (int) $row['has_crdr_transactions'];
+        if ($aid > 0 && $cur !== '') {
+            if (isset($poolBfAdjust[$aid][$cur])) {
+                $bd = $poolBfAdjust[$aid][$cur];
+                $row['bf'] = trunc2(money_add($row['bf'] ?? '0', $bd, 8));
+                $row['balance'] = trunc2(money_add($row['balance'] ?? '0', $bd, 8));
+            }
+            if (isset($poolAdjust[$aid][$cur])) {
+                $delta = $poolAdjust[$aid][$cur];
+                $row['cr_dr'] = trunc2(money_add($row['cr_dr'] ?? '0', $delta, 8));
+                $row['balance'] = trunc2(money_add($row['balance'] ?? '0', $delta, 8));
+                $row['has_crdr_transactions'] = searchMoneyNonZero($row['cr_dr'] ?? '0') ? 1 : (int) $row['has_crdr_transactions'];
+            }
         }
     }
     unset($row);
@@ -653,10 +744,10 @@ function searchApiApplyDomainSourceCompanyRows(
             return true;
         }
         $has = (int) ($r['has_crdr_transactions'] ?? 0) === 1;
-        $nonZero = abs((float) ($r['bf'] ?? 0)) > 0.00001
-            || abs((float) ($r['win_loss'] ?? 0)) > 0.00001
-            || abs((float) ($r['cr_dr'] ?? 0)) > 0.00001
-            || abs((float) ($r['balance'] ?? 0)) > 0.00001;
+        $nonZero = searchMoneyNonZero($r['bf'] ?? '0')
+            || searchMoneyNonZero($r['win_loss'] ?? '0')
+            || searchMoneyNonZero($r['cr_dr'] ?? '0')
+            || searchMoneyNonZero($r['balance'] ?? '0');
         return $has || $nonZero;
     }));
 }
@@ -883,7 +974,7 @@ try {
                 WHERE t_wl.company_id = ?
                   AND (t_wl.account_id = a.id OR t_wl.from_account_id = a.id)
                   AND t_wl.transaction_date BETWEEN ? AND ?
-                  AND t_wl.transaction_type IN ('WIN', 'LOSE')
+                  AND t_wl.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
             )
             OR EXISTS (
                 SELECT 1 FROM transaction_entry e
@@ -941,7 +1032,7 @@ try {
                 WHERE t_wl.company_id = ?
                   AND (t_wl.account_id = a.id OR t_wl.from_account_id = a.id)
                   AND t_wl.transaction_date BETWEEN ? AND ?
-                  AND t_wl.transaction_type IN ('WIN', 'LOSE')
+                  AND t_wl.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
             )
             OR EXISTS (
                 SELECT 1 FROM transaction_entry e
@@ -1044,9 +1135,9 @@ try {
                 'left_table' => [],
                 'right_table' => [],
                 'totals' => [
-                    'left' => ['bf' => 0, 'win_loss' => 0, 'cr_dr' => 0, 'balance' => 0],
-                    'right' => ['bf' => 0, 'win_loss' => 0, 'cr_dr' => 0, 'balance' => 0],
-                    'summary' => ['bf' => 0, 'win_loss' => 0, 'cr_dr' => 0, 'balance' => 0]
+                'left' => ['bf' => '0.00', 'win_loss' => '0.00', 'cr_dr' => '0.00', 'balance' => '0.00'],
+                'right' => ['bf' => '0.00', 'win_loss' => '0.00', 'cr_dr' => '0.00', 'balance' => '0.00'],
+                'summary' => ['bf' => '0.00', 'win_loss' => '0.00', 'cr_dr' => '0.00', 'balance' => '0.00']
                 ],
                 'active_currency_codes' => []
             ]
@@ -1093,7 +1184,13 @@ try {
                   WHERE t.company_id = ?
                     AND t.from_account_id IS NOT NULL
                     AND t.transaction_date <= ?
-                    AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
+                    AND (
+                        t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
+                        OR (
+                            t.transaction_type IN ('WIN', 'LOSE')
+                            AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL)
+                        )
+                    )
                     AND t.currency_id IS NOT NULL
                     $cpContra";
         $cpParams = [$company_id, $date_to_db];
@@ -1276,7 +1373,7 @@ try {
                 WHERE t.account_id IN ($all_ph)
                   AND t.currency_id IS NOT NULL
                   AND t.transaction_date BETWEEN ? AND ?
-                  AND t.transaction_type IN ('PAYMENT','RECEIVE','CONTRA','CLAIM','WIN','LOSE','RATE')
+                  AND t.transaction_type IN ('PAYMENT','RECEIVE','CONTRA','CLAIM','WIN','LOSE','ADJUSTMENT','RATE')
                 UNION
                 SELECT DISTINCT t.from_account_id AS acc_id, t.currency_id, UPPER(c.code) AS currency_code
                 FROM transactions t
@@ -1285,7 +1382,7 @@ try {
                   AND t.from_account_id IS NOT NULL
                   AND t.currency_id IS NOT NULL
                   AND t.transaction_date BETWEEN ? AND ?
-                  AND t.transaction_type IN ('PAYMENT','RECEIVE','CONTRA','CLAIM','WIN','LOSE','RATE')
+                  AND t.transaction_type IN ('PAYMENT','RECEIVE','CONTRA','CLAIM','WIN','LOSE','ADJUSTMENT','RATE')
             ");
             $st->execute(array_merge([$company_id], $all_ids, [$date_from_db, $date_to_db], [$company_id], $all_ids, [$date_from_db, $date_to_db]));
             while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
@@ -1456,9 +1553,10 @@ try {
         ];
         $contra_where_t = contraApprovedWhere($pdo, 't');
 
+        $dcdQ = dcd_processed_amount_sql_quant2('dcd.processed_amount');
         $sql = "SELECT TRIM(COALESCE(CAST(dcd.account_id AS CHAR), '')) AS acc_str, dcd.currency_id, 
-                       SUM(CASE WHEN dc.capture_date < ? THEN ROUND(dcd.processed_amount, 2) ELSE 0 END) AS bf_total,
-                       SUM(CASE WHEN dc.capture_date BETWEEN ? AND ? THEN ROUND(dcd.processed_amount, 2) ELSE 0 END) AS wl_total,
+                       SUM(CASE WHEN dc.capture_date < ? THEN {$dcdQ} ELSE 0 END) AS bf_total,
+                       SUM(CASE WHEN dc.capture_date BETWEEN ? AND ? THEN {$dcdQ} ELSE 0 END) AS wl_total,
                        SUM(CASE WHEN dc.capture_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS wl_count,
                        COUNT(*) AS up_to_count
                 FROM data_capture_details dcd
@@ -1469,8 +1567,8 @@ try {
         $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $company_id, $company_id, $date_to_db]);
         while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
             $bulk['dcd'][$r['acc_str']][$r['currency_id']] = [
-                'bf' => (float) $r['bf_total'],
-                'wl' => (float) $r['wl_total'],
+                'bf' => trunc2($r['bf_total'] ?? '0'),
+                'wl' => trunc2($r['wl_total'] ?? '0'),
                 'wl_count' => (int) $r['wl_count'],
                 'up_to_count' => (int) ($r['up_to_count'] ?? 0)
             ];
@@ -1506,19 +1604,21 @@ try {
         $sql = "SELECT t.account_id, IFNULL(t.currency_id, 0) AS currency_id,
                  SUM(CASE WHEN $wlDateExpr < ? THEN (
                     CASE 
-                        WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN ROUND(t.amount, 2)
-                        WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -ROUND(t.amount, 2)
-                        WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -ROUND(t.amount, 2)
-                        WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN ROUND(t.amount, 2)
+                        WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN t.amount
+                        WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -t.amount
+                        WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -t.amount
+                        WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN t.amount
+                        WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
                         ELSE 0 
                     END
                  ) ELSE 0 END) AS bf_total,
                  SUM(CASE WHEN $wlDateExpr BETWEEN ? AND ? THEN (
                     CASE 
-                        WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN ROUND(t.amount, 2)
-                        WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -ROUND(t.amount, 2)
-                        WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -ROUND(t.amount, 2)
-                        WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN ROUND(t.amount, 2)
+                        WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN t.amount
+                        WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -t.amount
+                        WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -t.amount
+                        WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN t.amount
+                        WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
                         ELSE 0 
                     END
                  ) ELSE 0 END) AS wl_total,
@@ -1526,42 +1626,80 @@ try {
                  SUM(CASE WHEN $wlDateExpr <= ? THEN 1 ELSE 0 END) AS up_to_count
                 FROM transactions t $wlJoinSql
                 WHERE t.company_id = ?
-                  AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND t.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
                   $contra_where_t $wlFutureGuard
                 GROUP BY t.account_id, IFNULL(t.currency_id, 0)";
         $stmt_bulk = $pdo->prepare($sql);
         $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $date_to_db, $company_id]);
         while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
             $bulk['txn_win_lose'][$r['account_id']][$r['currency_id']] = [
-                'bf' => (float) $r['bf_total'],
-                'wl' => (float) $r['wl_total'],
+                'bf' => trunc2($r['bf_total'] ?? '0'),
+                'wl' => trunc2($r['wl_total'] ?? '0'),
                 'wl_count' => (int) $r['wl_count'],
                 'up_to_count' => (int) ($r['up_to_count'] ?? 0)
+            ];
+        }
+
+        $sql = "SELECT t.from_account_id AS account_id, IFNULL(t.currency_id, 0) AS currency_id,
+                 SUM(CASE WHEN $wlDateExpr < ? THEN (
+                    CASE
+                        WHEN t.transaction_type = 'WIN' THEN t.amount
+                        WHEN t.transaction_type = 'LOSE' THEN -t.amount
+                        ELSE 0
+                    END
+                 ) ELSE 0 END) AS bf_total,
+                 SUM(CASE WHEN $wlDateExpr BETWEEN ? AND ? THEN (
+                    CASE
+                        WHEN t.transaction_type = 'WIN' THEN t.amount
+                        WHEN t.transaction_type = 'LOSE' THEN -t.amount
+                        ELSE 0
+                    END
+                 ) ELSE 0 END) AS wl_total,
+                 SUM(CASE WHEN $wlDateExpr BETWEEN ? AND ? THEN 1 ELSE 0 END) AS wl_count,
+                 SUM(CASE WHEN $wlDateExpr <= ? THEN 1 ELSE 0 END) AS up_to_count
+                FROM transactions t $wlJoinSql
+                WHERE t.company_id = ?
+                  AND t.from_account_id IS NOT NULL
+                  AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL)
+                  $contra_where_t $wlFutureGuard
+                GROUP BY t.from_account_id, IFNULL(t.currency_id, 0)";
+        $stmt_bulk = $pdo->prepare($sql);
+        $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $date_to_db, $company_id]);
+        while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
+            $aid = (int) $r['account_id'];
+            $cid = (int) $r['currency_id'];
+            $existing = $bulk['txn_win_lose'][$aid][$cid] ?? ['bf' => '0', 'wl' => '0', 'wl_count' => 0, 'up_to_count' => 0];
+            $bulk['txn_win_lose'][$aid][$cid] = [
+                'bf' => trunc2(money_add($existing['bf'] ?? '0', $r['bf_total'] ?? '0', 8)),
+                'wl' => trunc2(money_add($existing['wl'] ?? '0', $r['wl_total'] ?? '0', 8)),
+                'wl_count' => (int) ($existing['wl_count'] ?? 0) + (int) $r['wl_count'],
+                'up_to_count' => (int) ($existing['up_to_count'] ?? 0) + (int) ($r['up_to_count'] ?? 0)
             ];
         }
 
         $sql = "SELECT t.account_id, t.currency_id,
                  SUM(CASE WHEN t.transaction_date < ? THEN (
                     CASE 
-                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
+                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
+                        WHEN transaction_type = 'CONTRA' THEN -t.amount
+                        WHEN transaction_type = 'CLEAR' THEN -t.amount
+                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN t.amount
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' THEN -t.amount
                         ELSE 0 
                     END
                  ) ELSE 0 END) AS bf_cr_dr,
                  SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN (
                     CASE 
-                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
+                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
+                        WHEN transaction_type = 'CONTRA' THEN -t.amount
+                        WHEN transaction_type = 'CLEAR' THEN -t.amount
+                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN t.amount
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' THEN -t.amount
                         ELSE 0 
                     END
                  ) ELSE 0 END) AS wl_cr_dr,
@@ -1576,8 +1714,8 @@ try {
         $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $company_id]);
         while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
             $bulk['txn_crdr_to'][$r['account_id']][$r['currency_id']] = [
-                'bf' => (float) $r['bf_cr_dr'],
-                'cr_dr' => (float) $r['wl_cr_dr'],
+                'bf' => trunc2($r['bf_cr_dr'] ?? '0'),
+                'cr_dr' => trunc2($r['wl_cr_dr'] ?? '0'),
                 'count' => (int) $r['wl_txn_count']
             ];
         }
@@ -1585,23 +1723,23 @@ try {
         $sql = "SELECT t.from_account_id AS account_id, t.currency_id,
                  SUM(CASE WHEN t.transaction_date < ? THEN (
                     CASE 
-                        WHEN transaction_type = 'CONTRA' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN ROUND(t.amount, 2)
+                        WHEN transaction_type = 'CONTRA' THEN t.amount
+                        WHEN transaction_type = 'CLEAR' THEN t.amount
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN ROUND(t.amount, 2)
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
+                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN t.amount
                         ELSE 0 
                     END
                  ) ELSE 0 END) AS bf_cr_dr,
                  SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN (
                     CASE 
-                        WHEN transaction_type = 'CONTRA' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN ROUND(t.amount, 2)
+                        WHEN transaction_type = 'CONTRA' THEN t.amount
+                        WHEN transaction_type = 'CLEAR' THEN t.amount
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
                         WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN ROUND(t.amount, 2)
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
+                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN t.amount
                         ELSE 0 
                     END
                  ) ELSE 0 END) AS wl_cr_dr,
@@ -1619,8 +1757,8 @@ try {
         $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $company_id]);
         while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
             $bulk['txn_crdr_from'][$r['account_id']][$r['currency_id']] = [
-                'bf' => (float) $r['bf_cr_dr'],
-                'cr_dr' => (float) $r['wl_cr_dr'],
+                'bf' => trunc2($r['bf_cr_dr'] ?? '0'),
+                'cr_dr' => trunc2($r['wl_cr_dr'] ?? '0'),
                 'count' => (int) $r['wl_txn_count']
             ];
         }
@@ -1628,20 +1766,20 @@ try {
         $sql = "SELECT e.account_id, e.currency_id,
                  SUM(CASE WHEN h.transaction_date < ? THEN (
                     CASE
-                      WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -ROUND(e.amount, 2)
-                      WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -ROUND(e.amount, 2)
-                      WHEN e.entry_type = 'RATE_MIDDLEMAN' THEN ROUND(e.amount, 2)
-                      ELSE ROUND(e.amount, 2)
+                      WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
+                      WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
+                      WHEN e.entry_type = 'RATE_MIDDLEMAN' THEN e.amount
+                      ELSE e.amount
                     END
                  ) ELSE 0 END) AS bf_total,
-                 SUM(CASE WHEN h.transaction_date BETWEEN ? AND ? AND e.entry_type = 'RATE_MIDDLEMAN' THEN ROUND(e.amount, 2) ELSE 0 END) AS wl_rate_mm,
+                 SUM(CASE WHEN h.transaction_date BETWEEN ? AND ? AND e.entry_type = 'RATE_MIDDLEMAN' THEN e.amount ELSE 0 END) AS wl_rate_mm,
                  SUM(CASE WHEN h.transaction_date BETWEEN ? AND ? AND e.entry_type = 'RATE_MIDDLEMAN' THEN 1 ELSE 0 END) AS wl_rate_mm_count,
                  SUM(CASE WHEN h.transaction_date <= ? AND e.entry_type = 'RATE_MIDDLEMAN' THEN 1 ELSE 0 END) AS up_to_rate_mm_count,
                  SUM(CASE WHEN h.transaction_date BETWEEN ? AND ? AND e.entry_type <> 'RATE_MIDDLEMAN' THEN (
                     CASE
-                      WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -ROUND(e.amount, 2)
-                      WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -ROUND(e.amount, 2)
-                      ELSE ROUND(e.amount, 2)
+                      WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
+                      WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
+                      ELSE e.amount
                     END
                  ) ELSE 0 END) AS wl_cr_dr_other,
                  SUM(CASE WHEN h.transaction_date BETWEEN ? AND ? AND e.entry_type <> 'RATE_MIDDLEMAN' THEN 1 ELSE 0 END) AS wl_cr_dr_other_count
@@ -1655,11 +1793,11 @@ try {
         $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $date_to_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $company_id, $company_id]);
         while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
             $bulk['entry'][$r['account_id']][$r['currency_id']] = [
-                'bf' => (float) $r['bf_total'],
-                'wl_mm' => (float) $r['wl_rate_mm'],
+                'bf' => trunc2($r['bf_total'] ?? '0'),
+                'wl_mm' => trunc2($r['wl_rate_mm'] ?? '0'),
                 'wl_mm_count' => (int) $r['wl_rate_mm_count'],
                 'wl_mm_up_to_count' => (int) ($r['up_to_rate_mm_count'] ?? 0),
-                'cr_dr' => (float) $r['wl_cr_dr_other'],
+                'cr_dr' => trunc2($r['wl_cr_dr_other'] ?? '0'),
                 'cr_dr_count' => (int) $r['wl_cr_dr_other_count']
             ];
         }
@@ -1702,13 +1840,11 @@ try {
             }
         }
 
-        // 4. 计算 Balance（显示口径）
-        // 公式：Balance = trunc(B/F,2) + trunc(Win/Loss,2) + trunc(Cr/Dr,2)
-        // 这样与表格上可见列值的手算结果一致，避免 0.01 浮点尾差
-        $bf_display = trunc2((float) $bf);
-        $win_loss_display = trunc2((float) $win_loss);
-        $cr_dr_display = trunc2((float) $cr_dr);
-        $balance = trunc2($bf_display + $win_loss_display + $cr_dr_display);
+        // 4. 计算 Balance（显示口径）：金额保持字符串，经 BC Math 逐项相加后截到 2 位。
+        $bf_display = trunc2($bf);
+        $win_loss_display = trunc2($win_loss);
+        $cr_dr_display = trunc2($cr_dr);
+        $balance = trunc2(money_add(money_add($bf_display, $win_loss_display, 8), $cr_dr_display, 8));
 
         // 4b. 本期是否有 RATE Middle-Man 分录（与 Win/Loss 内 RATE_MIDDLEMAN 查询合并，避免每条组合多一次 EXISTS）
         $is_rate_middleman = !empty($wlPack['has_rate_middleman']);
@@ -1720,7 +1856,7 @@ try {
         $is_alert = false;
 
         // 左边列表（balance >= 0）完全不变色
-        if ($balance >= 0) {
+        if (money_cmp($balance, '0') >= 0) {
             $is_alert = false;
         } elseif ($account['payment_alert'] == 1) {
             // 右边列表（balance < 0）：需要同时满足两个条件才变色
@@ -1731,10 +1867,10 @@ try {
             $timeConditionMet = false;
 
             // 条件1：检查 Alert Amount - balance 是否达到或低于设定的金额（负数阈值）
-            if (!empty($account['alert_amount']) && $account['alert_amount'] < 0) {
-                $alertAmount = (float) $account['alert_amount'];
+            if (!empty($account['alert_amount']) && money_cmp($account['alert_amount'], '0') < 0) {
+                $alertAmount = $account['alert_amount'];
                 // 当 balance 小于等于这个负数阈值时，满足金额条件
-                if ($balance <= $alertAmount) {
+                if (money_cmp($balance, $alertAmount) <= 0) {
                     $alertAmountMet = true;
                 }
             }
@@ -1829,7 +1965,7 @@ try {
             'bf' => $bf_display,
             'win_loss' => $win_loss_display,
             'cr_dr' => $cr_dr_display,
-            'balance' => trunc2((float) $balance),
+            'balance' => $balance,
             'has_crdr_transactions' => $has_crdr_transactions ? 1 : 0,
             'has_win_loss_transactions' => $has_win_loss_transactions ? 1 : 0,
             'has_win_loss_history' => $has_win_loss_history ? 1 : 0,
@@ -1886,11 +2022,11 @@ try {
 
     // 分离左右表格（正数 vs 负数）
     $left_table = array_filter($results, function ($row) {
-        return $row['balance'] >= 0;
+        return money_cmp($row['balance'] ?? '0', '0') >= 0;
     });
 
     $right_table = array_filter($results, function ($row) {
-        return $row['balance'] < 0;
+        return money_cmp($row['balance'] ?? '0', '0') < 0;
     });
 
     // 重新索引数组
@@ -1900,12 +2036,9 @@ try {
     // 计算总和
     $left_totals = calculateTotals($left_table);
     $right_totals = calculateTotals($right_table);
-    $summary_totals = [
-        'bf' => $left_totals['bf'] + $right_totals['bf'],
-        'win_loss' => $left_totals['win_loss'] + $right_totals['win_loss'],
-        'cr_dr' => $left_totals['cr_dr'] + $right_totals['cr_dr'],
-        'balance' => $left_totals['balance'] + $right_totals['balance']
-    ];
+    $summary_totals = addMoneyFields($left_totals, $right_totals);
+    $left_table = normalizeMoneyRows($left_table);
+    $right_table = normalizeMoneyRows($right_table);
 
     // 返回结果（含 active_currency_codes：Edit Account 里勾选的货币，Show 0 balance 时只显示这些）
     $payload = [
@@ -1954,7 +2087,7 @@ try {
  */
 function calculateBF($pdo, $account_id, $date_from, $company_id)
 {
-    $bf = 0;
+    $bf = '0';
 
     // 1. 计算起始日期之前所有 data_capture 的 processed_amount
     $sql = "SELECT COALESCE(SUM(dcd.processed_amount), 0) as total
@@ -1967,9 +2100,9 @@ function calculateBF($pdo, $account_id, $date_from, $company_id)
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $company_id, $account_id, $date_from]);
-    $bf += $stmt->fetchColumn();
+    $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
-    // 2. 计算起始日期之前所有 Cr/Dr（包括 WIN/LOSE/RATE/PAYMENT/RECEIVE/CONTRA/CLAIM，作为 To Account）
+    // 2. 计算起始日期之前所有余额影响（ADJUSTMENT 计入 Win/Loss，作为 To Account）
     $sql = "SELECT 
                 COALESCE(SUM(CASE 
                     WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -amount
@@ -1979,13 +2112,14 @@ function calculateBF($pdo, $account_id, $date_from, $company_id)
                     WHEN transaction_type = 'PAYMENT' THEN -amount
                     WHEN transaction_type = 'WIN' THEN amount
                     WHEN transaction_type = 'LOSE' THEN -amount
+                    WHEN transaction_type = 'ADJUSTMENT' THEN amount
                     ELSE 0
                 END), 0) as cr_dr
             FROM transactions
             WHERE company_id = ?
               AND account_id = ?
               AND transaction_date < ?
-              AND transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'WIN', 'LOSE')
+              AND transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'WIN', 'LOSE', 'ADJUSTMENT')
               AND (
                   -- 对于 RATE 类型，允许 from_account_id 为 NULL（手续费记录）
                   (transaction_type = 'RATE')
@@ -1996,7 +2130,7 @@ function calculateBF($pdo, $account_id, $date_from, $company_id)
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $account_id, $date_from]);
-    $bf += $stmt->fetchColumn();
+    $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
     // 3. 计算起始日期之前所有 Cr/Dr（作为 From Account）
     // 注意：RATE 类型的 from_account_id 可能为 NULL（手续费记录），这些记录不会在这里被计算
@@ -2016,21 +2150,21 @@ function calculateBF($pdo, $account_id, $date_from, $company_id)
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $account_id, $date_from]);
-    $bf += $stmt->fetchColumn(); // 改为加号
+    $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
-    return $bf;
+    return trunc2($bf);
 }
 
 /**
  * 计算 Win/Loss
- * Win/Loss = 日期范围内的 Data Capture + WIN/LOSE 交易
+ * Win/Loss = 日期范围内的 Data Capture + ADJUSTMENT（旧库 fallback）
  */
 function calculateWinLoss($pdo, $account_id, $date_from, $date_to, $company_id)
 {
-    $win_loss = 0;
+    $win_loss = '0';
 
     // 只计算日期范围内的 Data Capture
-    // WIN/LOSE/RATE 交易已移到 Cr/Dr 中计算
+    // WIN/LOSE/RATE 交易已移到 Cr/Dr 中计算；ADJUSTMENT 作为 Win/Loss 调整保留在这里。
     $sql = "SELECT COALESCE(SUM(dcd.processed_amount), 0) as total
             FROM data_capture_details dcd
             JOIN data_captures dc ON dcd.capture_id = dc.id
@@ -2041,9 +2175,20 @@ function calculateWinLoss($pdo, $account_id, $date_from, $date_to, $company_id)
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $company_id, $account_id, $date_from, $date_to]);
-    $win_loss += $stmt->fetchColumn();
+    $win_loss = money_add($win_loss, $stmt->fetchColumn() ?: '0', 8);
 
-    return $win_loss;
+    $sql = "SELECT COALESCE(SUM(amount), 0) as total
+            FROM transactions
+            WHERE company_id = ?
+              AND account_id = ?
+              AND transaction_date BETWEEN ? AND ?
+              AND transaction_type = 'ADJUSTMENT'"
+        . contraApprovedWhere($pdo, '');
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$company_id, $account_id, $date_from, $date_to]);
+    $win_loss = money_add($win_loss, $stmt->fetchColumn() ?: '0', 8);
+
+    return trunc2($win_loss);
 }
 
 /**
@@ -2052,7 +2197,7 @@ function calculateWinLoss($pdo, $account_id, $date_from, $date_to, $company_id)
  */
 function calculateCrDr($pdo, $account_id, $date_from, $date_to)
 {
-    $cr_dr = 0;
+    $cr_dr = '0';
 
     // 作为 To Account - 包括 WIN/LOSE/RATE/PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM
     $sql = "SELECT 
@@ -2080,7 +2225,7 @@ function calculateCrDr($pdo, $account_id, $date_from, $date_to)
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$account_id, $date_from, $date_to]);
-    $cr_dr += $stmt->fetchColumn();
+    $cr_dr = money_add($cr_dr, $stmt->fetchColumn() ?: '0', 8);
 
     // 作为 From Account
     // 注意：RATE 类型的 from_account_id 可能为 NULL（手续费记录），这些记录不会在这里被计算
@@ -2100,9 +2245,9 @@ function calculateCrDr($pdo, $account_id, $date_from, $date_to)
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$account_id, $date_from, $date_to]);
-    $cr_dr += $stmt->fetchColumn();
+    $cr_dr = money_add($cr_dr, $stmt->fetchColumn() ?: '0', 8);
 
-    return $cr_dr;
+    return trunc2($cr_dr);
 }
 
 /**
@@ -2110,24 +2255,21 @@ function calculateCrDr($pdo, $account_id, $date_from, $date_to)
  */
 function calculateTotals($data)
 {
-    $totals = ['bf' => 0, 'win_loss' => 0, 'cr_dr' => 0, 'balance' => 0];
+    $totals = ['bf' => '0', 'win_loss' => '0', 'cr_dr' => '0', 'balance' => '0'];
 
     foreach ($data as $row) {
-        $totals['bf'] += $row['bf'];
-        $totals['win_loss'] += $row['win_loss'];
-        $totals['cr_dr'] += $row['cr_dr'];
-        $totals['balance'] += $row['balance'];
+        $totals['bf'] = money_add($totals['bf'], $row['bf'] ?? '0', 2);
+        $totals['win_loss'] = money_add($totals['win_loss'], $row['win_loss'] ?? '0', 2);
+        $totals['cr_dr'] = money_add($totals['cr_dr'], $row['cr_dr'] ?? '0', 2);
+        $totals['balance'] = money_add($totals['balance'], $row['balance'] ?? '0', 2);
     }
 
-    // IMPORTANT: Keep raw values (not rounded) for accurate calculations
-    // Frontend will round to 2 decimal places for display
-    // 重要：保持原始值（不四舍五入）以确保计算精度
-    // 前端会在显示时四舍五入到2位小数
-    // Note: Totals are calculated from already-rounded row values in the array,
-    // but we keep them as-is to maintain precision for display formatting
-    // 注意：总计是从数组中已四舍五入的行值计算的，但我们保持原样以保持显示格式化的精度
-
-    return $totals;
+    return [
+        'bf' => searchMoney2($totals['bf']),
+        'win_loss' => searchMoney2($totals['win_loss']),
+        'cr_dr' => searchMoney2($totals['cr_dr']),
+        'balance' => searchMoney2($totals['balance']),
+    ];
 }
 
 /**
@@ -2137,35 +2279,35 @@ function calculateTotals($data)
 function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $company_id, $account_code = '', &$bulk = null)
 {
     if ($bulk !== null) {
-        $bf = 0;
+        $bf = '0';
         $acc_str = trim((string) $account_id);
         $code_str = trim((string) $account_code);
 
-        $bf += $bulk['dcd'][$acc_str][$currency_id]['bf'] ?? 0;
+        $bf = money_add($bf, $bulk['dcd'][$acc_str][$currency_id]['bf'] ?? '0', 8);
         if ($code_str !== '' && $code_str !== $acc_str) {
-            $bf += $bulk['dcd'][$code_str][$currency_id]['bf'] ?? 0;
+            $bf = money_add($bf, $bulk['dcd'][$code_str][$currency_id]['bf'] ?? '0', 8);
         }
 
-        $bf += $bulk['txn_crdr_to'][$account_id][$currency_id]['bf'] ?? 0;
-        $bf += $bulk['txn_crdr_from'][$account_id][$currency_id]['bf'] ?? 0;
-        $bf += $bulk['entry'][$account_id][$currency_id]['bf'] ?? 0;
+        $bf = money_add($bf, $bulk['txn_crdr_to'][$account_id][$currency_id]['bf'] ?? '0', 8);
+        $bf = money_add($bf, $bulk['txn_crdr_from'][$account_id][$currency_id]['bf'] ?? '0', 8);
+        $bf = money_add($bf, $bulk['entry'][$account_id][$currency_id]['bf'] ?? '0', 8);
 
-        $txn_wl = $bulk['txn_win_lose'][$account_id][$currency_id] ?? ['bf' => 0, 'wl' => 0];
-        $bf += $txn_wl['bf'];
+        $txn_wl = $bulk['txn_win_lose'][$account_id][$currency_id] ?? ['bf' => '0', 'wl' => '0'];
+        $bf = money_add($bf, $txn_wl['bf'], 8);
 
         // Check fallback for currency_id IS NULL in WIN/LOSE transactions
         $txn_wl_null = $bulk['txn_win_lose'][$account_id][0] ?? null;
         if ($txn_wl_null !== null) {
             // Only aggregate if this currency exists in DCD for this account
             if (isset($bulk['dcd'][$acc_str][$currency_id]) || ($code_str !== '' && isset($bulk['dcd'][$code_str][$currency_id]))) {
-                $bf += $txn_wl_null['bf'];
+                $bf = money_add($bf, $txn_wl_null['bf'], 8);
             }
         }
 
-        return $bf;
+        return trunc2($bf);
     }
 
-    $bf = 0;
+    $bf = '0';
 
     $has_transaction_currency = searchApiTxnHasCurrencyId($pdo);
 
@@ -2195,8 +2337,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
     }
 
     // 1. 计算起始日期之前所有 data_capture（按 currency 过滤）
-    // 必须与 calculateWinLossByCurrency 一致：SUM(ROUND(processed_amount,2))，否则「当日 Balance」与「次日 B/F」会因舍入顺序差 0.01
-    $sql = "SELECT COALESCE(SUM(ROUND(dcd.processed_amount, 2)), 0) as total
+    // 与 calculateWinLossByCurrency / Payment History 一致：每行 dcd 金额先按「向 0 截断到分 + 微纠偏」再 SUM（dcd_processed_amount_sql_quant2）
+    $dcdQbf = dcd_processed_amount_sql_quant2('dcd.processed_amount');
+    $sql = "SELECT COALESCE(SUM({$dcdQbf}), 0) as total
             FROM data_capture_details dcd
             JOIN data_captures dc ON dcd.capture_id = dc.id
             WHERE dcd.company_id = ?
@@ -2210,23 +2353,24 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $company_id, $account_id, (string) $account_code, (string) $account_code, $currency_id, $date_from]);
-    $bf += $stmt->fetchColumn();
+    $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
     // 2. 起始日期之前：Win/Loss 来自 WIN/LOSE（含 PROFIT）+ Cr/Dr 来自 PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM（作为 To Account）；RATE 单独用 transaction_entry 处理
     if ($has_transaction_currency) {
         // 2a. WIN/LOSE（含 PROFIT）：Bank Process 保持 WIN 正 LOSE 负；手动 PROFIT 与 PAYMENT 一致 TO 负 FROM 正
         $sql = "SELECT COALESCE(SUM(CASE
-                  WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN ROUND(t.amount, 2)
-                  WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -ROUND(t.amount, 2)
-                  WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -ROUND(t.amount, 2)
-                  WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN ROUND(t.amount, 2)
+                  WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN t.amount
+                  WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -t.amount
+                  WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -t.amount
+                  WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN t.amount
+                  WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
                   ELSE 0
                 END), 0) as total
                 FROM transactions t $wlJoinSql
                 WHERE t.company_id = ?
                   AND CAST(t.account_id AS CHAR) = CAST(? AS CHAR)
                   AND $wlDateExpr < ?
-                  AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND t.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
                   AND (
                       (t.currency_id = ?)
                       OR (t.currency_id IS NULL AND EXISTS (
@@ -2239,18 +2383,44 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   )" . contraApprovedWhere($pdo, 't') . $wlFutureGuard;
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $currency_id, $company_id, $company_id, $currency_id]);
-        $bf += $stmt->fetchColumn();
+        $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
+
+        $sql = "SELECT COALESCE(SUM(CASE
+                  WHEN t.transaction_type = 'WIN' THEN t.amount
+                  WHEN t.transaction_type = 'LOSE' THEN -t.amount
+                  ELSE 0
+                END), 0) as total
+                FROM transactions t $wlJoinSql
+                WHERE t.company_id = ?
+                  AND CAST(t.from_account_id AS CHAR) = CAST(? AS CHAR)
+                  AND $wlDateExpr < ?
+                  AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL)
+                  AND (
+                      (t.currency_id = ?)
+                      OR (t.currency_id IS NULL AND EXISTS (
+                          SELECT 1 FROM data_capture_details dcd
+                          JOIN data_captures dc ON dcd.capture_id = dc.id
+                          WHERE dcd.company_id = ? AND dc.company_id = ?
+                            AND CAST(dcd.account_id AS CHAR) = CAST(t.from_account_id AS CHAR)
+                            AND dcd.currency_id = ?
+                      ))
+                  )" . contraApprovedWhere($pdo, 't') . $wlFutureGuard;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$company_id, $account_id, $date_from, $currency_id, $company_id, $company_id, $currency_id]);
+        $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
         // 2b. PAYMENT/RECEIVE/CONTRA/CLAIM 作为 To Account 计入 B/F 的 Cr/Dr 部分
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
-                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
+                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
+                        WHEN transaction_type = 'CONTRA' THEN -t.amount
+                        WHEN transaction_type = 'CLEAR' THEN -t.amount
                         -- Domain Share Commission：收款方显示正数
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
+                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' THEN -t.amount
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
@@ -2262,19 +2432,20 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
             . contraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $currency_id]);
-        $bf += $stmt->fetchColumn();
+        $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
     } else {
         // WIN/LOSE 计入 B/F（Bank Process 保持原符号；手动 PROFIT TO 负 FROM 正）
         $sql = "SELECT COALESCE(SUM(CASE
-                  WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN ROUND(t.amount, 2)
-                  WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -ROUND(t.amount, 2)
-                  WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -ROUND(t.amount, 2)
-                  WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN ROUND(t.amount, 2)
+                  WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN t.amount
+                  WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -t.amount
+                  WHEN t.transaction_type = 'WIN' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN -t.amount
+                  WHEN t.transaction_type = 'LOSE' AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL) THEN t.amount
+                  WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
                   ELSE 0
                 END), 0) as total
                 FROM transactions t $wlJoinSql
                 WHERE t.company_id = ? AND t.account_id = ? AND $wlDateExpr < ?
-                  AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND t.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
                   AND EXISTS (
                       SELECT 1 FROM data_capture_details dcd
                       JOIN data_captures dc ON dcd.capture_id = dc.id
@@ -2282,15 +2453,34 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   )" . contraApprovedWhere($pdo, 't') . $wlFutureGuard;
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
-        $bf += $stmt->fetchColumn();
+        $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
+
+        $sql = "SELECT COALESCE(SUM(CASE
+                  WHEN t.transaction_type = 'WIN' THEN t.amount
+                  WHEN t.transaction_type = 'LOSE' THEN -t.amount
+                  ELSE 0
+                END), 0) as total
+                FROM transactions t $wlJoinSql
+                WHERE t.company_id = ? AND t.from_account_id = ? AND $wlDateExpr < ?
+                  AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL)
+                  AND EXISTS (
+                      SELECT 1 FROM data_capture_details dcd
+                      JOIN data_captures dc ON dcd.capture_id = dc.id
+                      WHERE dcd.company_id = ? AND dc.company_id = ? AND dcd.account_id = t.from_account_id AND dcd.currency_id = ?
+                  )" . contraApprovedWhere($pdo, 't') . $wlFutureGuard;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
+        $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
-                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
+                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
+                        WHEN transaction_type = 'CONTRA' THEN -t.amount
+                        WHEN transaction_type = 'CLEAR' THEN -t.amount
+                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' THEN -t.amount
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
@@ -2310,16 +2500,16 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
             . contraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
-        $bf += $stmt->fetchColumn();
+        $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
     }
 
     // 3. 计算起始日期之前所有 Cr/Dr（作为 From Account，按 currency 过滤；RATE 单独用 transaction_entry 处理）
     if ($has_transaction_currency) {
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
-                        WHEN transaction_type = 'CONTRA' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN ROUND(t.amount, 2)
+                        WHEN transaction_type = 'CONTRA' THEN t.amount
+                        WHEN transaction_type = 'CLEAR' THEN t.amount
+                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN t.amount
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
@@ -2329,6 +2519,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')"
             . " AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_SHARE_COMMISSION|%'"
+            . " AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_NET_PROFIT|%'"
             . contraApprovedWhere($pdo, 't');
 
         $stmt = $pdo->prepare($sql);
@@ -2336,9 +2527,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
     } else {
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
-                        WHEN transaction_type = 'CONTRA' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN ROUND(t.amount, 2)
+                        WHEN transaction_type = 'CONTRA' THEN t.amount
+                        WHEN transaction_type = 'CLEAR' THEN t.amount
+                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN t.amount
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
@@ -2346,6 +2537,8 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   AND t.from_account_id = ?
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
+                  AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_SHARE_COMMISSION|%'
+                  AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_NET_PROFIT|%'
                   AND EXISTS (
                       SELECT 1
                       FROM data_capture_details dcd
@@ -2360,15 +2553,15 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
     }
-    $bf += $stmt->fetchColumn();
+    $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
     // 4. 追加起始日期之前的所有 RATE 分录（统一从 transaction_entry 计算）
     $rateStmt = $pdo->prepare("
         SELECT COALESCE(SUM(CASE
-          WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -ROUND(e.amount, 2)
-          WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -ROUND(e.amount, 2)
-          WHEN e.entry_type = 'RATE_MIDDLEMAN' THEN ROUND(e.amount, 2)
-          ELSE ROUND(e.amount, 2)
+          WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
+          WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
+          WHEN e.entry_type = 'RATE_MIDDLEMAN' THEN e.amount
+          ELSE e.amount
         END), 0) AS total
         FROM transaction_entry e
         JOIN transactions h ON e.header_id = h.id
@@ -2380,9 +2573,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
           AND h.transaction_date < ?
     ");
     $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from]);
-    $bf += $rateStmt->fetchColumn();
+    $bf = money_add($bf, $rateStmt->fetchColumn() ?: '0', 8);
 
-    return $bf;
+    return trunc2($bf);
 }
 
 /**
@@ -2396,23 +2589,23 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
 function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from, $date_to, $company_id, $account_code = '', &$bulk = null)
 {
     if ($bulk !== null) {
-        $win_loss = 0;
+        $win_loss = '0';
         $wl_row_count = 0;
         $wl_up_to_count = 0;
         $acc_str = trim((string) $account_id);
         $code_str = trim((string) $account_code);
 
-        $win_loss += $bulk['dcd'][$acc_str][$currency_id]['wl'] ?? 0;
+        $win_loss = money_add($win_loss, $bulk['dcd'][$acc_str][$currency_id]['wl'] ?? '0', 8);
         $wl_row_count += (int) ($bulk['dcd'][$acc_str][$currency_id]['wl_count'] ?? 0);
         $wl_up_to_count += (int) ($bulk['dcd'][$acc_str][$currency_id]['up_to_count'] ?? 0);
         if ($code_str !== '' && $code_str !== $acc_str) {
-            $win_loss += $bulk['dcd'][$code_str][$currency_id]['wl'] ?? 0;
+            $win_loss = money_add($win_loss, $bulk['dcd'][$code_str][$currency_id]['wl'] ?? '0', 8);
             $wl_row_count += (int) ($bulk['dcd'][$code_str][$currency_id]['wl_count'] ?? 0);
             $wl_up_to_count += (int) ($bulk['dcd'][$code_str][$currency_id]['up_to_count'] ?? 0);
         }
 
-        $txn_wl = $bulk['txn_win_lose'][$account_id][$currency_id] ?? ['bf' => 0, 'wl' => 0];
-        $win_loss += $txn_wl['wl'];
+        $txn_wl = $bulk['txn_win_lose'][$account_id][$currency_id] ?? ['bf' => '0', 'wl' => '0'];
+        $win_loss = money_add($win_loss, $txn_wl['wl'], 8);
         $wl_row_count += (int) ($txn_wl['wl_count'] ?? 0);
         $wl_up_to_count += (int) ($txn_wl['up_to_count'] ?? 0);
 
@@ -2421,27 +2614,27 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
         if ($txn_wl_null !== null) {
             // Only aggregate if this currency_id exists in DCD for this account
             if (isset($bulk['dcd'][$acc_str][$currency_id]) || ($code_str !== '' && isset($bulk['dcd'][$code_str][$currency_id]))) {
-                $win_loss += $txn_wl_null['wl'];
+                $win_loss = money_add($win_loss, $txn_wl_null['wl'], 8);
                 $wl_row_count += (int) ($txn_wl_null['wl_count'] ?? 0);
                 $wl_up_to_count += (int) ($txn_wl_null['up_to_count'] ?? 0);
             }
         }
 
-        $win_loss += $bulk['entry'][$account_id][$currency_id]['wl_mm'] ?? 0;
+        $win_loss = money_add($win_loss, $bulk['entry'][$account_id][$currency_id]['wl_mm'] ?? '0', 8);
 
         $has_rate_mm = ($bulk['entry'][$account_id][$currency_id]['wl_mm_count'] ?? 0) > 0;
         $has_rate_mm_up_to = ($bulk['entry'][$account_id][$currency_id]['wl_mm_up_to_count'] ?? 0) > 0;
         $has_win_loss_transactions = $wl_row_count > 0 || $has_rate_mm;
         $has_win_loss_history = $wl_up_to_count > 0 || $has_rate_mm_up_to;
         return [
-            'win_loss' => $win_loss,
+            'win_loss' => trunc2($win_loss),
             'has_rate_middleman' => $has_rate_mm,
             'has_win_loss_transactions' => $has_win_loss_transactions,
             'has_win_loss_history' => $has_win_loss_history,
         ];
     }
 
-    $win_loss = 0;
+    $win_loss = '0';
     $has_rate_middleman = false;
     $wl_row_count = 0;
 
@@ -2471,7 +2664,8 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
     }
 
     // 1. 日期范围内的 Data Capture（按 currency 过滤）
-    $sql = "SELECT COALESCE(SUM(ROUND(dcd.processed_amount, 2)), 0) as total, COUNT(*) AS cnt
+    $dcdQwl = dcd_processed_amount_sql_quant2('dcd.processed_amount');
+    $sql = "SELECT COALESCE(SUM({$dcdQwl}), 0) as total, COUNT(*) AS cnt
             FROM data_capture_details dcd
             JOIN data_captures dc ON dcd.capture_id = dc.id
             WHERE dcd.company_id = ?
@@ -2485,15 +2679,15 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $company_id, $account_id, (string) $account_code, (string) $account_code, $currency_id, $date_from, $date_to]);
     $dcdRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'cnt' => 0];
-    $win_loss += (float) ($dcdRow['total'] ?? 0);
+    $win_loss = money_add($win_loss, $dcdRow['total'] ?? '0', 8);
     $wl_row_count += (int) ($dcdRow['cnt'] ?? 0);
 
     // 2. 所有 Bank Process 的 WIN/LOSE（Cost/Sell Price/Profit，Remaining days 与 1号/Monthly 均计入 Win/Loss）
     if (searchApiTxnHasCurrencyId($pdo)) {
         // 与 history_api 的事件口径一致：每条 transaction 金额先 round(2) 再求和
         $sql = "SELECT COALESCE(SUM(CASE
-                    WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN ROUND(t.amount, 2)
-                    WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -ROUND(t.amount, 2)
+                    WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN t.amount
+                    WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %' OR t.description LIKE 'Inactive Compensation %' OR t.description LIKE 'Compensation %') THEN -t.amount
                     ELSE 0 END), 0) as total, COUNT(*) AS cnt
                 FROM transactions t $wlJoinSql
                 WHERE t.company_id = ? AND t.account_id = ? AND $wlDateExpr BETWEEN ? AND ?
@@ -2503,25 +2697,37 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
         $txnBankRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'cnt' => 0];
-        $win_loss += (float) ($txnBankRow['total'] ?? 0);
+        $win_loss = money_add($win_loss, $txnBankRow['total'] ?? '0', 8);
         $wl_row_count += (int) ($txnBankRow['cnt'] ?? 0);
 
-        // 3. 手动 PROFIT（WIN/LOSE 且 description 不以 Process: 开头）：Select To 显示负数、Select From 显示正数（WIN -> -amount, LOSE -> +amount）
-        $sql = "SELECT COALESCE(SUM(CASE WHEN t.transaction_type = 'WIN' THEN -ROUND(t.amount, 2) WHEN t.transaction_type = 'LOSE' THEN ROUND(t.amount, 2) ELSE 0 END), 0) as total, COUNT(*) AS cnt
+        // 3. 手动 PROFIT（WIN/LOSE 且 description 不以 Process: 开头）+ ADJUSTMENT
+        $sql = "SELECT COALESCE(SUM(CASE WHEN t.transaction_type = 'WIN' THEN -t.amount WHEN t.transaction_type = 'LOSE' THEN t.amount WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount ELSE 0 END), 0) as total, COUNT(*) AS cnt
                 FROM transactions t $wlJoinSql
                 WHERE t.company_id = ? AND t.account_id = ? AND $wlDateExpr BETWEEN ? AND ?
-                  AND t.currency_id = ? AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND t.currency_id = ? AND t.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
                   AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL)"
             . $wlFutureGuard;
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
         $txnManualRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'cnt' => 0];
-        $win_loss += (float) ($txnManualRow['total'] ?? 0);
+        $win_loss = money_add($win_loss, $txnManualRow['total'] ?? '0', 8);
         $wl_row_count += (int) ($txnManualRow['cnt'] ?? 0);
+
+        $sql = "SELECT COALESCE(SUM(CASE WHEN t.transaction_type = 'WIN' THEN t.amount WHEN t.transaction_type = 'LOSE' THEN -t.amount ELSE 0 END), 0) as total, COUNT(*) AS cnt
+                FROM transactions t $wlJoinSql
+                WHERE t.company_id = ? AND t.from_account_id = ? AND $wlDateExpr BETWEEN ? AND ?
+                  AND t.currency_id = ? AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND ((t.description NOT LIKE 'Process: %' AND t.description NOT LIKE 'Inactive Compensation %' AND t.description NOT LIKE 'Compensation %') OR t.description IS NULL)"
+            . $wlFutureGuard;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
+        $txnManualFromRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'cnt' => 0];
+        $win_loss = money_add($win_loss, $txnManualFromRow['total'] ?? '0', 8);
+        $wl_row_count += (int) ($txnManualFromRow['cnt'] ?? 0);
 
         // 4. RATE Middle-Man：手续费应显示在 Win/Loss，而不是 Cr/Dr（一次查询同时得到金额与是否存在）
         $rateStmt = $pdo->prepare("
-            SELECT COALESCE(SUM(ROUND(e.amount, 2)), 0) AS total, COUNT(*) AS cnt
+            SELECT COALESCE(SUM(e.amount), 0) AS total, COUNT(*) AS cnt
             FROM transaction_entry e
             JOIN transactions h ON e.header_id = h.id
             WHERE h.company_id = ?
@@ -2534,12 +2740,12 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
         ");
         $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from, $date_to]);
         $mmRow = $rateStmt->fetch(PDO::FETCH_ASSOC);
-        $win_loss += (float) ($mmRow['total'] ?? 0);
+        $win_loss = money_add($win_loss, $mmRow['total'] ?? '0', 8);
         $has_rate_middleman = ((int) ($mmRow['cnt'] ?? 0)) > 0;
     }
 
     return [
-        'win_loss' => $win_loss,
+        'win_loss' => trunc2($win_loss),
         'has_rate_middleman' => $has_rate_middleman,
         'has_win_loss_transactions' => ($wl_row_count > 0 || $has_rate_middleman),
         'has_win_loss_history' => ($wl_row_count > 0 || $has_rate_middleman),
@@ -2587,33 +2793,33 @@ function hasRateMiddlemanInPeriod(PDO $pdo, $account_id, $currency_id, $date_fro
 function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $date_to, $company_id, &$bulk = null)
 {
     if ($bulk !== null) {
-        $cr_dr = 0;
+        $cr_dr = '0';
         // has_transactions 只统计真实的 PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM 笔数。
         // 修复：不计入 transaction_entry（RATE 分录）的 cr_dr_count，
         // 因为那些是 RATE 汇率交易，不是 Payment，会污染 Show Payment Only 过滤。
         $payment_txn_count = 0;
 
-        $to = $bulk['txn_crdr_to'][$account_id][$currency_id] ?? ['cr_dr' => 0, 'count' => 0];
-        $cr_dr += $to['cr_dr'];
+        $to = $bulk['txn_crdr_to'][$account_id][$currency_id] ?? ['cr_dr' => '0', 'count' => 0];
+        $cr_dr = money_add($cr_dr, $to['cr_dr'], 8);
         $payment_txn_count += $to['count']; // 纯 PAYMENT 类型计数
 
-        $from = $bulk['txn_crdr_from'][$account_id][$currency_id] ?? ['cr_dr' => 0, 'count' => 0];
-        $cr_dr += $from['cr_dr'];
+        $from = $bulk['txn_crdr_from'][$account_id][$currency_id] ?? ['cr_dr' => '0', 'count' => 0];
+        $cr_dr = money_add($cr_dr, $from['cr_dr'], 8);
         $payment_txn_count += $from['count']; // 纯 PAYMENT 类型计数
 
-        $entry = $bulk['entry'][$account_id][$currency_id] ?? ['cr_dr' => 0, 'cr_dr_count' => 0];
-        $cr_dr += $entry['cr_dr']; // RATE 分录金额仍纳入 cr_dr 计算（影响 Cr/Dr 列显示）
+        $entry = $bulk['entry'][$account_id][$currency_id] ?? ['cr_dr' => '0', 'cr_dr_count' => 0];
+        $cr_dr = money_add($cr_dr, $entry['cr_dr'], 8); // RATE 分录金额仍纳入 cr_dr 计算（影响 Cr/Dr 列显示）
         // 注意：$entry['cr_dr_count'] 故意不加入 $payment_txn_count，
         // 因为它统计的是非 RATE_MIDDLEMAN 的 RATE 分录（如 RATE_FIRST_FROM/TO），
         // 这些不属于 PAYMENT 类型，不应使 has_transactions 为 true。
 
         return [
-            'value' => $cr_dr,
-            'has_transactions' => $payment_txn_count > 0 || abs($cr_dr) > 0.01,
+            'value' => trunc2($cr_dr),
+            'has_transactions' => $payment_txn_count > 0 || searchMoneyNonZero($cr_dr),
         ];
     }
 
-    $cr_dr = 0;
+    $cr_dr = '0';
     $transaction_count = 0;
 
     $has_currency_id = searchApiTxnHasCurrencyId($pdo);
@@ -2625,25 +2831,25 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
                 COALESCE(SUM(
                     CASE
                         -- 作为 To Account（收到 / 支付）；CONTRA 时 TO 显示负数
-                        WHEN t.account_id = :acc_id AND t.transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
-                        WHEN t.account_id = :acc_id AND t.transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
-                        WHEN t.account_id = :acc_id AND t.transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
+                        WHEN t.account_id = :acc_id AND t.transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'CLEAR' THEN -t.amount
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'CONTRA' THEN -t.amount
                         -- Domain Share Commission：收款方显示正数
-                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN ROUND(t.amount, 2)
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN t.amount
                         WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
-                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN t.account_id = :acc_id AND t.transaction_type = 'PAYMENT' THEN -t.amount
 
                         -- 作为 From Account（支付 / 收到）；CONTRA 时 FROM 显示正数
                         -- Domain Share Commission：不计入 from_account（避免重复显示池子/右表）
                         WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN 0
                         WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
                         WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -ROUND(t.amount, 2)
-                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' THEN ROUND(t.amount, 2)
-                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'CLEAR' THEN ROUND(t.amount, 2)
-                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'CONTRA' THEN ROUND(t.amount, 2)
-                        WHEN t.from_account_id = :acc_id AND t.transaction_type IN ('RECEIVE', 'CLAIM') THEN ROUND(t.amount, 2)
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'PAYMENT' THEN t.amount
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'CLEAR' THEN t.amount
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type = 'CONTRA' THEN t.amount
+                        WHEN t.from_account_id = :acc_id AND t.transaction_type IN ('RECEIVE', 'CLAIM') THEN t.amount
 
                         ELSE 0
                     END
@@ -2668,18 +2874,18 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
         ]);
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $cr_dr += (float) ($row['cr_dr'] ?? 0);
+        $cr_dr = money_add($cr_dr, $row['cr_dr'] ?? '0', 8);
         $transaction_count += (int) ($row['txn_count'] ?? 0);
 
     } else {
         // 旧环境（没有 currency_id 字段）：Cr/Dr 仅 PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM；WIN/LOSE 计入 Win/Loss
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
-                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CONTRA' THEN -ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'PAYMENT' THEN -ROUND(t.amount, 2)
+                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
+                        WHEN transaction_type = 'CLEAR' THEN -t.amount
+                        WHEN transaction_type = 'CONTRA' THEN -t.amount
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' THEN -t.amount
                         ELSE 0
                     END), 0) as cr_dr,
                     COUNT(*) as txn_count
@@ -2702,16 +2908,16 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to, $company_id, $company_id, $currency_id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $cr_dr += (float) ($row['cr_dr'] ?? 0);
+        $cr_dr = money_add($cr_dr, $row['cr_dr'] ?? '0', 8);
         $transaction_count += (int) ($row['txn_count'] ?? 0);
 
         // From Account（旧逻辑）；CONTRA 时 FROM 显示正数
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
-                        WHEN transaction_type = 'PAYMENT' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CLEAR' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type = 'CONTRA' THEN ROUND(t.amount, 2)
-                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN ROUND(t.amount, 2)
+                        WHEN transaction_type = 'PAYMENT' THEN t.amount
+                        WHEN transaction_type = 'CLEAR' THEN t.amount
+                        WHEN transaction_type = 'CONTRA' THEN t.amount
+                        WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN t.amount
                         ELSE 0
                     END), 0) as cr_dr,
                     COUNT(*) as txn_count
@@ -2734,7 +2940,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to, $company_id, $company_id, $currency_id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $cr_dr += (float) ($row['cr_dr'] ?? 0);
+        $cr_dr = money_add($cr_dr, $row['cr_dr'] ?? '0', 8);
         $transaction_count += (int) ($row['txn_count'] ?? 0);
     }
 
@@ -2743,9 +2949,9 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
     $rateStmt = $pdo->prepare("
         SELECT 
             COALESCE(SUM(CASE
-              WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -ROUND(e.amount, 2)
-              WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -ROUND(e.amount, 2)
-              ELSE ROUND(e.amount, 2)
+              WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
+              WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
+              ELSE e.amount
             END), 0) AS cr_dr,
             COUNT(CASE WHEN e.entry_type <> 'RATE_MIDDLEMAN' THEN 1 END) AS txn_count
         FROM transaction_entry e
@@ -2760,12 +2966,12 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
     ");
     $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from, $date_to]);
     $rateRow = $rateStmt->fetch(PDO::FETCH_ASSOC);
-    $cr_dr += (float) ($rateRow['cr_dr'] ?? 0);
+    $cr_dr = money_add($cr_dr, $rateRow['cr_dr'] ?? '0', 8);
     $transaction_count += (int) ($rateRow['txn_count'] ?? 0);
 
     return [
-        'value' => $cr_dr,
-        'has_transactions' => $transaction_count > 0 || abs($cr_dr) > 0.01,
+        'value' => trunc2($cr_dr),
+        'has_transactions' => $transaction_count > 0 || searchMoneyNonZero($cr_dr),
     ];
 }
 ?>

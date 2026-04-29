@@ -82,7 +82,7 @@ try {
 
 // Get users data
 try {
-    $stmt = $pdo->prepare("
+    $sql = "
         SELECT DISTINCT
             u.id,
             u.login_id,
@@ -95,7 +95,15 @@ try {
             0 as is_owner_shadow
         FROM user u
         INNER JOIN user_company_map ucm ON u.id = ucm.user_id
-        WHERE ucm.company_id = ?" . ($current_user_role !== 'owner' ? " AND LOWER(u.role) != 'partnership'" : "") . "
+        WHERE ucm.company_id = ?";
+
+    $params = [$company_id];
+    if ($current_user_role !== 'owner') {
+        $sql .= " AND (LOWER(u.role) != 'partnership' OR u.id = ?)";
+        $params[] = (int)$current_user_id;
+    }
+
+    $sql .= "
         ORDER BY 
         CASE 
             WHEN login_id REGEXP '^[0-9]' THEN 0 
@@ -105,8 +113,10 @@ try {
             WHEN login_id REGEXP '^[0-9]' THEN CAST(login_id AS UNSIGNED)
             ELSE ASCII(UPPER(login_id))
         END,
-        login_id ASC");
-    $stmt->execute([$company_id]);
+        login_id ASC";
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
     
     // 将owner影子记录添加到列表最前面（只有owner账号自己能看到）
@@ -508,6 +518,7 @@ $showAllUsers = isset($_GET['showAll']);
                                 <div class="permission-item"><label class="permission-label"><input type="checkbox" name="permissions[]" value="home" class="permission-checkbox"><span class="permission-name"><svg class="permission-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>Home</span></label></div>
                                 <div class="permission-item"><label class="permission-label"><input type="checkbox" name="permissions[]" value="admin" class="permission-checkbox"><span class="permission-name"><svg class="permission-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>Admin</span></label></div>
                                 <div class="permission-item"><label class="permission-label"><input type="checkbox" name="permissions[]" value="account" class="permission-checkbox"><span class="permission-name"><svg class="permission-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Account</span></label></div>
+                                <div class="permission-item"><label class="permission-label"><input type="checkbox" name="permissions[]" value="ownership" class="permission-checkbox"><span class="permission-name"><svg class="permission-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>Ownership</span></label></div>
                                 <div class="permission-item"><label class="permission-label"><input type="checkbox" name="permissions[]" value="process" class="permission-checkbox"><span class="permission-name"><svg class="permission-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>Process</span></label></div>
                                 <div class="permission-item"><label class="permission-label"><input type="checkbox" name="permissions[]" value="datacapture" class="permission-checkbox"><span class="permission-name"><svg class="permission-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>Data Capture</span></label></div>
                                 <div class="permission-item"><label class="permission-label"><input type="checkbox" name="permissions[]" value="payment" class="permission-checkbox"><span class="permission-name"><svg class="permission-icon" fill="currentColor" viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>Transaction Payment</span></label></div>

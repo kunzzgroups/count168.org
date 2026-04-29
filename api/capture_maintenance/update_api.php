@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -51,19 +52,19 @@ function getRecordsToUpdate(PDO $pdo, $company_id, $account_id, string $date_fro
 /**
  * 按比例或平均更新 processed_amount
  */
-function updateProcessedAmounts(PDO $pdo, array $records, float $total_amount) {
-    $current_total = floatval($records[0]['current_total']);
+function updateProcessedAmounts(PDO $pdo, array $records, string $total_amount) {
+    $current_total = money_normalize($records[0]['current_total'] ?? '0');
     $record_count = count($records);
     $updateStmt = $pdo->prepare("UPDATE data_capture_details SET processed_amount = ? WHERE id = ?");
-    if ($current_total == 0) {
-        $amount_per_record = $total_amount / $record_count;
+    if (money_cmp($current_total, '0') === 0) {
+        $amount_per_record = money_div($total_amount, (string)$record_count);
         foreach ($records as $record) {
             $updateStmt->execute([$amount_per_record, $record['id']]);
         }
     } else {
         foreach ($records as $record) {
-            $ratio = floatval($record['processed_amount']) / $current_total;
-            $new_amount = $total_amount * $ratio;
+            $ratio = money_div($record['processed_amount'] ?? '0', $current_total, MONEY_CALC_SCALE);
+            $new_amount = money_mul($total_amount, $ratio);
             $updateStmt->execute([$new_amount, $record['id']]);
         }
     }
@@ -84,8 +85,8 @@ try {
     $date_from = $input['date_from'] ?? null;
     $date_to = $input['date_to'] ?? null;
     $process = $input['process'] ?? null;
-    $win = floatval($input['win'] ?? 0);
-    $loss = floatval($input['loss'] ?? 0);
+    $win = money_optional($input['win'] ?? '0') ?? '0';
+    $loss = money_optional($input['loss'] ?? '0') ?? '0';
 
     if (!$account_id) {
         throw new Exception('Account ID是必填项');
@@ -93,13 +94,13 @@ try {
     if (!$date_from || !$date_to) {
         throw new Exception('日期范围是必填项');
     }
-    if ($win > 0 && $loss > 0) {
+    if (money_cmp($win, '0') > 0 && money_cmp($loss, '0') > 0) {
         throw new Exception('Win 和 Loss 不能同时有值');
     }
 
     $date_from_db = date('Y-m-d', strtotime(str_replace('/', '-', $date_from)));
     $date_to_db = date('Y-m-d', strtotime(str_replace('/', '-', $date_to)));
-    $total_amount = $win > 0 ? $win : ($loss > 0 ? -$loss : 0);
+    $total_amount = money_cmp($win, '0') > 0 ? $win : (money_cmp($loss, '0') > 0 ? money_sub('0', $loss) : '0');
 
     $records = getRecordsToUpdate($pdo, $company_id, $account_id, $date_from_db, $date_to_db, $process);
     if (empty($records)) {

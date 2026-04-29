@@ -604,10 +604,22 @@ let domainAddSelectedCompanyIds = [];
 let domainAddDeletedCurrencyIds = [];
 let domainAddPreferredRole = '';
 let domainAddAccountEventsBound = false;
-let domainFeePriceCache = 0;
+let domainFeePriceCache = '0';
 
 function defaultFeeShareAllocations() {
     return { profit: [], sales: [], cs: [], it: [] };
+}
+
+function domainDecimal(value, fallback) {
+    return MoneyDecimal.toDecimal(value, fallback === undefined ? 0 : fallback);
+}
+
+function domainDecimalDisplay(value, scale) {
+    return MoneyDecimal.formatDisplay(value, scale === undefined ? 8 : scale);
+}
+
+function domainDecimalFixed(value, scale) {
+    return MoneyDecimal.formatFixed(value, scale === undefined ? 8 : scale);
 }
 
 function normalizeFeeShareFromServer(raw) {
@@ -620,7 +632,7 @@ function normalizeFeeShareFromServer(raw) {
             d[k] = raw[k].map(function (r) {
                 return {
                     account_id: parseInt(r.account_id, 10) || 0,
-                    percentage: r.percentage != null ? parseFloat(r.percentage) : 0
+                    percentage: r.percentage != null ? domainDecimalDisplay(r.percentage, 4) : '0'
                 };
             }).filter(function (r) { return r.account_id !== 0; });
         }
@@ -1035,11 +1047,11 @@ async function submitDomainAddAccountForm(e) {
 
 function sumFeeShareRolePercentages(rows) {
     if (!rows || !rows.length) {
-        return 0;
+        return domainDecimal('0');
     }
     return rows.reduce(function (acc, r) {
-        return acc + (parseFloat(r && r.percentage) || 0);
-    }, 0);
+        return acc.plus(domainDecimal(r && r.percentage ? r.percentage : '0', 0));
+    }, domainDecimal('0'));
 }
 
 function readStandardShareRowsFromTable(tb) {
@@ -1056,8 +1068,11 @@ function readStandardShareRowsFromTable(tb) {
             rows.push({ account_id: aid, percentage: '' });
             return;
         }
-        var pctNum = parseFloat(pct);
-        rows.push({ account_id: aid, percentage: isFinite(pctNum) ? pctNum : '' });
+        try {
+            rows.push({ account_id: aid, percentage: domainDecimalDisplay(pct, 4) });
+        } catch (e) {
+            rows.push({ account_id: aid, percentage: '' });
+        }
     });
     return rows;
 }
@@ -1076,10 +1091,10 @@ function readProfitShareRowsFromTable(tb, remainderPct) {
             nAssigned++;
         }
     });
-    var perBase = nAssigned > 0 ? remainderPct / nAssigned : 0;
-    var perRounded = Math.round(perBase * 10000) / 10000;
+    var remainder = domainDecimal(remainderPct || '0', 0);
+    var perRounded = nAssigned > 0 ? MoneyDecimal.div(remainder, String(nAssigned)).toFixed(4, Decimal.ROUND_DOWN) : '0';
     var assignedCount = 0;
-    var assignedSum = 0;
+    var assignedSum = domainDecimal('0');
     list.forEach(function (tr) {
         var sEl = tr.querySelector('.share-account-select');
         var aid = sEl ? parseInt(sEl.value, 10) : 0;
@@ -1090,10 +1105,10 @@ function readProfitShareRowsFromTable(tb, remainderPct) {
         assignedCount++;
         var isLast = assignedCount === nAssigned;
         var pctVal = isLast
-            ? Math.round((remainderPct - assignedSum) * 10000) / 10000
+            ? MoneyDecimal.sub(remainder, assignedSum).toFixed(4, Decimal.ROUND_DOWN)
             : perRounded;
         if (!isLast) {
-            assignedSum += pctVal;
+            assignedSum = assignedSum.plus(domainDecimal(pctVal, 0));
         }
         rows.push({ account_id: aid, percentage: pctVal });
     });
@@ -1105,10 +1120,10 @@ function readFeeShareFromModalDom() {
     out.sales = readStandardShareRowsFromTable(document.getElementById('shareRowsSales'));
     out.cs = readStandardShareRowsFromTable(document.getElementById('shareRowsCs'));
     out.it = readStandardShareRowsFromTable(document.getElementById('shareRowsIt'));
-    var otherSum = sumFeeShareRolePercentages(out.sales) +
-        sumFeeShareRolePercentages(out.cs) +
-        sumFeeShareRolePercentages(out.it);
-    var remainder = Math.max(0, 100 - otherSum);
+    var otherSum = sumFeeShareRolePercentages(out.sales)
+        .plus(sumFeeShareRolePercentages(out.cs))
+        .plus(sumFeeShareRolePercentages(out.it));
+    var remainder = MoneyDecimal.max(MoneyDecimal.sub('100', otherSum), '0');
     out.profit = readProfitShareRowsFromTable(document.getElementById('shareRowsProfit'), remainder);
     return out;
 }
@@ -1131,11 +1146,11 @@ function pruneEmptyShareRows(fs) {
             return aid !== 0;
         }).map(function (row) {
             var pct = row && row.percentage !== undefined && row.percentage !== null && row.percentage !== ''
-                ? parseFloat(row.percentage)
+                ? domainDecimalDisplay(row.percentage, 4)
                 : '';
             return {
                 account_id: parseInt(row.account_id, 10) || 0,
-                percentage: isFinite(pct) ? pct : ''
+                percentage: pct
             };
         });
     });
@@ -1183,11 +1198,11 @@ function toggleShareRoleCard(role) {
 
 function updateCompanyShareTotals() {
     var out = readFeeShareFromModalDom();
-    var otherSum = sumFeeShareRolePercentages(out.sales) +
-        sumFeeShareRolePercentages(out.cs) +
-        sumFeeShareRolePercentages(out.it);
-    var profitPool = Math.max(0, 100 - otherSum);
-    var grand = otherSum + profitPool;
+    var otherSum = sumFeeShareRolePercentages(out.sales)
+        .plus(sumFeeShareRolePercentages(out.cs))
+        .plus(sumFeeShareRolePercentages(out.it));
+    var profitPool = MoneyDecimal.max(MoneyDecimal.sub('100', otherSum), '0');
+    var grand = otherSum.plus(profitPool);
     [['profit', 'shareTotalProfit'], ['sales', 'shareTotalSales'], ['cs', 'shareTotalCs'], ['it', 'shareTotalIt']].forEach(function (pair) {
         var role = pair[0];
         var tid = pair[1];
@@ -1198,8 +1213,8 @@ function updateCompanyShareTotals() {
         var t = role === 'profit'
             ? profitPool
             : sumFeeShareRolePercentages(out[role]);
-        el.textContent = t.toFixed(2) + '%';
-        el.classList.toggle('company-share-card-sum--over', role === 'profit' ? otherSum > 100 : t > 100);
+        el.textContent = domainDecimalFixed(t, 2) + '%';
+        el.classList.toggle('company-share-card-sum--over', role === 'profit' ? otherSum.gt(100) : t.gt(100));
 
         var count = countShareRoleAssignedAccounts(role);
         var sumEl = document.getElementById('shareAccountSummary-' + role);
@@ -1208,39 +1223,38 @@ function updateCompanyShareTotals() {
         }
         var fill = document.getElementById('shareProgressFill-' + role);
         if (fill) {
-            var w = Math.min(100, Math.max(0, t));
-            fill.style.width = w + '%';
-            fill.classList.toggle('company-share-progress-fill--over', role === 'profit' ? otherSum > 100 : t > 100);
+            var w = MoneyDecimal.min(MoneyDecimal.max(t, '0'), '100');
+            fill.style.width = w.toString() + '%';
+            fill.classList.toggle('company-share-progress-fill--over', role === 'profit' ? otherSum.gt(100) : t.gt(100));
         }
     });
     var grandEl = document.getElementById('shareGrandTotal');
     var grandBar = document.getElementById('shareGrandTotalBar');
     if (grandEl) {
-        grandEl.textContent = grand.toFixed(2) + '%';
+        grandEl.textContent = domainDecimalFixed(grand, 2) + '%';
     }
     if (grandBar) {
-        grandBar.classList.toggle('company-share-grand-total--over', grand > 100);
+        grandBar.classList.toggle('company-share-grand-total--over', grand.gt(100));
     }
     updateCompanyShareRowAmounts();
 }
 
 function getDomainPriceForShareCalc() {
-    var n = Number(domainFeePriceCache);
-    return isFinite(n) ? n : 0;
+    return domainDecimal(domainFeePriceCache || '0', 0);
 }
 
 function formatShareRowAmount2(value) {
-    var n = Number(value);
-    if (!isFinite(n)) {
-        return '0.00';
+    try {
+        return domainDecimalDisplay(value, 8);
+    } catch (e) {
+        return '0';
     }
-    return n.toFixed(2);
 }
 
 function updateCompanyShareRowAmounts() {
     var price = getDomainPriceForShareCalc();
     var profitTb = document.getElementById('shareRowsProfit');
-    var otherSum = 0;
+    var otherSum = domainDecimal('0');
     ['shareRowsSales', 'shareRowsCs', 'shareRowsIt'].forEach(function (tid) {
         var tb = document.getElementById(tid);
         if (!tb) {
@@ -1248,11 +1262,17 @@ function updateCompanyShareRowAmounts() {
         }
         tb.querySelectorAll('.company-share-data-row').forEach(function (tr) {
             var pEl = tr.querySelector('.share-pct-input');
-            var v = pEl ? parseFloat(pEl.value) : 0;
-            otherSum += isFinite(v) ? v : 0;
+            if (pEl && pEl.value !== '') {
+                try {
+                    var v = domainDecimal(pEl.value, 0);
+                    if (v.gte(0)) otherSum = otherSum.plus(v);
+                } catch (e) {
+                    // Invalid percentage contributes 0 to display-only amount preview.
+                }
+            }
         });
     });
-    var remainder = Math.max(0, 100 - otherSum);
+    var remainder = MoneyDecimal.max(MoneyDecimal.sub('100', otherSum), '0');
     var profitRows = profitTb ? Array.prototype.slice.call(profitTb.querySelectorAll('.company-share-data-row')) : [];
     var profitN = 0;
     profitRows.forEach(function (tr) {
@@ -1262,10 +1282,9 @@ function updateCompanyShareRowAmounts() {
             profitN++;
         }
     });
-    var profitPerBase = profitN > 0 ? remainder / profitN : 0;
-    var profitPerRounded = Math.round(profitPerBase * 10000) / 10000;
+    var profitPerRounded = profitN > 0 ? MoneyDecimal.div(remainder, String(profitN)).toFixed(4, Decimal.ROUND_DOWN) : '0';
     var profitAssigned = 0;
-    var profitSumPct = 0;
+    var profitSumPct = domainDecimal('0');
 
     document.querySelectorAll('.company-share-data-row').forEach(function (row) {
         var amountEl = row.querySelector('.company-share-amount-input');
@@ -1283,10 +1302,10 @@ function updateCompanyShareRowAmounts() {
                 profitAssigned++;
                 var isLastProfit = profitAssigned === profitN;
                 pct = isLastProfit
-                    ? Math.round((remainder - profitSumPct) * 10000) / 10000
+                    ? MoneyDecimal.sub(remainder, profitSumPct).toFixed(4, Decimal.ROUND_DOWN)
                     : profitPerRounded;
                 if (!isLastProfit) {
-                    profitSumPct += pct;
+                    profitSumPct = profitSumPct.plus(domainDecimal(pct, 0));
                 }
             }
         } else {
@@ -1294,12 +1313,14 @@ function updateCompanyShareRowAmounts() {
             if (!pctEl) {
                 return;
             }
-            pct = parseFloat(pctEl.value);
-            if (!isFinite(pct) || pct < 0) {
-                pct = 0;
+            pct = pctEl.value || '0';
+            try {
+                if (domainDecimal(pct, 0).lt(0)) pct = '0';
+            } catch (e) {
+                pct = '0';
             }
         }
-        var amount = price * (pct / 100);
+        var amount = MoneyDecimal.div(MoneyDecimal.mul(price, String(pct || 0)), '100');
         amountEl.value = formatShareRowAmount2(amount);
     });
 }
@@ -2100,11 +2121,11 @@ function formatDomainFeeDisplay2(val) {
     if (val === null || val === undefined || val === '') {
         return '—';
     }
-    var n = Number(val);
-    if (!isFinite(n)) {
+    try {
+        return domainDecimalDisplay(val, 8);
+    } catch (e) {
         return '—';
     }
-    return n.toFixed(2);
 }
 
 /** 编辑用：固定两位小数填入输入框 */
@@ -2112,11 +2133,11 @@ function formatDomainFeeEdit2(val) {
     if (val === null || val === undefined || val === '') {
         return '';
     }
-    var n = Number(val);
-    if (!isFinite(n)) {
+    try {
+        return domainDecimalDisplay(val, 8);
+    } catch (e) {
         return '';
     }
-    return n.toFixed(2);
 }
 
 function buildDomainFeeSummaryHtml2(data) {
@@ -2136,8 +2157,7 @@ function applyDomainFeeSummaryDisplays(data) {
     if (!data) {
         return;
     }
-    var parsedPrice = Number(data.price);
-    domainFeePriceCache = isFinite(parsedPrice) ? parsedPrice : 0;
+    domainFeePriceCache = data.price !== null && data.price !== undefined && data.price !== '' ? String(data.price) : '0';
     var modalEl = document.getElementById('domainFeeSummaryDisplay');
     if (modalEl) {
         modalEl.innerHTML = buildDomainFeeSummaryHtml2(data);
@@ -2213,6 +2233,14 @@ function closeDomainFeeSettingsModal() {
 function saveDomainFeeSettings() {
     var priceEl = document.getElementById('domainFeePrice');
     var price = priceEl ? String(priceEl.value).trim() : '';
+    if (price !== '') {
+        try {
+            price = domainDecimalFixed(price, 8);
+        } catch (e) {
+            showAlert('Price must be a number or empty', 'danger');
+            return;
+        }
+    }
     fetch('api/domain/domain_api.php', {
         cache: 'no-cache',
         method: 'POST',

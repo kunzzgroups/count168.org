@@ -243,6 +243,8 @@ $error = isset($_GET['error']) ? true : false;
 
     <script>window.currentCompanyId = <?php echo json_encode($session_company_id); ?>;</script>
     <script src="js/date-range-picker.js?v=<?php echo time(); ?>"></script>
+    <script src="js/decimal.min.js?v=<?php echo file_exists('js/decimal.min.js') ? filemtime('js/decimal.min.js') : time(); ?>"></script>
+    <script src="js/money-decimal.js?v=<?php echo file_exists('js/money-decimal.js') ? filemtime('js/money-decimal.js') : time(); ?>"></script>
     <script src="js/bankprocess_maintenance.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

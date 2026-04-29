@@ -3,6 +3,7 @@ session_start();
 // session_write_close() 将在 session 写入（回填 company_code）完成后调用
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../includes/c168_domain_access.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -144,6 +145,11 @@ function ensureDomainListFeeSettingsTable(PDO $pdo): void {
         $stmt = $pdo->query("SHOW TABLES LIKE 'domain_list_fee_settings'");
         if ($stmt && $stmt->fetch(PDO::FETCH_NUM) !== false) {
             $pdo->exec("INSERT IGNORE INTO `domain_list_fee_settings` (`id`, `price`) VALUES (1, NULL)");
+            try {
+                $pdo->exec("ALTER TABLE `domain_list_fee_settings` MODIFY COLUMN `price` DECIMAL(25,8) NULL DEFAULT NULL");
+            } catch (Exception $e) {
+                // Best effort for old schemas.
+            }
             $ensured = true;
             return;
         }
@@ -153,10 +159,15 @@ function ensureDomainListFeeSettingsTable(PDO $pdo): void {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS `domain_list_fee_settings` (
             `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-            `price` DECIMAL(14,4) NULL DEFAULT NULL,
+            `price` DECIMAL(25,8) NULL DEFAULT NULL,
             `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+    try {
+        $pdo->exec("ALTER TABLE `domain_list_fee_settings` MODIFY COLUMN `price` DECIMAL(25,8) NULL DEFAULT NULL");
+    } catch (Exception $e) {
+        // Best effort for old schemas; save will still fail visibly if the column is incompatible.
+    }
     $pdo->exec("INSERT IGNORE INTO `domain_list_fee_settings` (`id`, `price`) VALUES (1, NULL)");
     $ensured = true;
 }
@@ -211,7 +222,7 @@ function domainApiHasAccountCreatedSourceColumn(PDO $pdo): bool {
 
 /**
  * @param mixed $raw
- * @return array{profit: list<array{account_id:int,percentage:float}>, sales: list, cs: list, it: list}
+ * @return array{profit: list<array{account_id:int,percentage:string}>, sales: list, cs: list, it: list}
  */
 function normalizeFeeShareAllocationsInput($raw): array {
     $empty = ['profit' => [], 'sales' => [], 'cs' => [], 'it' => []];
@@ -237,12 +248,12 @@ function normalizeFeeShareAllocationsInput($raw): array {
                 continue;
             }
             $aid = isset($row['account_id']) ? (int) $row['account_id'] : 0;
-            $pct = isset($row['percentage']) ? (float) $row['percentage'] : 0.0;
+            $pct = isset($row['percentage']) && money_is_valid($row['percentage']) ? money_normalize($row['percentage'], 4) : '0.0000';
             // 正数 = account.id（须为 C168 旗下 Account）；负数 = -user.id（Admin 用户）
-            if ($aid !== 0 && $pct >= 0) {
+            if ($aid !== 0 && money_cmp($pct, '0', 4) >= 0) {
                 $out[$role][] = [
                     'account_id' => $aid,
-                    'percentage' => round($pct, 4),
+                    'percentage' => money_strip_zeros($pct),
                 ];
             }
         }
@@ -482,7 +493,7 @@ function feeShareAllocationsTargetsValid(PDO $pdo, array $normalized): bool {
  * 表单或 JSON 中的可选十进制数：空为 null，非法返回 false
  *
  * @param mixed $val
- * @return float|null|false
+ * @return string|null|false
  */
 function normalizeOptionalDecimal($val) {
     if ($val === null || $val === '') {
@@ -494,10 +505,10 @@ function normalizeOptionalDecimal($val) {
             return null;
         }
     }
-    if (!is_numeric($val)) {
+    if (!money_is_valid($val)) {
         return false;
     }
-    return round((float) $val, 2);
+    return money_normalize($val);
 }
 
 function tableHasColumn(PDO $pdo, string $table, string $column): bool
@@ -511,7 +522,7 @@ function tableHasColumn(PDO $pdo, string $table, string $column): bool
     }
 }
 
-function getDomainFeePrice(PDO $pdo): ?float
+function getDomainFeePrice(PDO $pdo): ?string
 {
     ensureDomainListFeeSettingsTable($pdo);
     $stmt = $pdo->query("SELECT `price` FROM `domain_list_fee_settings` WHERE `id` = 1");
@@ -519,7 +530,7 @@ function getDomainFeePrice(PDO $pdo): ?float
     if ($price === false || $price === null || $price === '') {
         return null;
     }
-    return (float) $price;
+    return money_normalize($price);
 }
 
 function domainApiClearTransactionSearchCache(): void
@@ -698,8 +709,8 @@ function resolveC168ProfitRoleAccountId(PDO $pdo, int $c168Pk, int $excludeAccou
 function createDomainNetProfitPayment(
     PDO $pdo,
     string $sourceCompanyCode,
-    float $feeAmount,
-    float $commissionTotal,
+    string $feeAmount,
+    string $commissionTotal,
     ?int $fromPoolAccountId,
     ?int $createdByUser,
     ?int $createdByOwner
@@ -708,15 +719,15 @@ function createDomainNetProfitPayment(
         'created' => false,
         'skipped_duplicate' => false,
         'skipped_zero_or_negative' => false,
-        'amount' => 0.0,
+        'amount' => '0',
     ];
     $c168Pk = getC168CompanyPk($pdo);
     if (!$c168Pk) {
         return $out;
     }
-    $net = round((float)$feeAmount - (float)$commissionTotal, 2);
-    $out['amount'] = $net;
-    if ($net <= 0) {
+    $net = money_sub($feeAmount, $commissionTotal, 2);
+    $out['amount'] = money_out($net);
+    if (money_cmp($net, '0') <= 0) {
         $out['skipped_zero_or_negative'] = true;
         return $out;
     }
@@ -739,23 +750,13 @@ function createDomainNetProfitPayment(
         return $out;
     }
 
-    $poolId = $fromPoolAccountId;
-    if (!$poolId || $poolId <= 0) {
-        $poolId = resolveC168DomainFeePoolAccountId($pdo, $c168Pk, 0);
-    }
     // 目标优先使用来源公司 Share% 里配置的 Profit 账号（必须为 C168 且 role=profit）
     $profitAccId = resolveShareProfitTargetAccountId($pdo, $srcU);
     if (!$profitAccId || $profitAccId <= 0) {
-        $profitAccId = resolveC168ProfitRoleAccountId($pdo, $c168Pk, (int)$poolId);
+        $profitAccId = resolveC168ProfitRoleAccountId($pdo, $c168Pk, 0);
     }
-    // 回退：若无 PROFIT role，再回退 owner_code 账号，最后回退资金池
+    // 没有有效 Profit 目标则不建单；from_account_id 固定为空（展示为 "-"）
     if (!$profitAccId || $profitAccId <= 0) {
-        $profitAccId = resolveC168OwnerAccountId($pdo, $c168Pk);
-    }
-    if (!$profitAccId || $profitAccId <= 0) {
-        $profitAccId = $poolId;
-    }
-    if (!$profitAccId || !$poolId || (int)$profitAccId === (int)$poolId) {
         return $out;
     }
 
@@ -777,7 +778,7 @@ function createDomainNetProfitPayment(
         'company_id' => $c168Pk,
         'transaction_type' => 'PAYMENT',
         'account_id' => $profitAccId,
-        'from_account_id' => $poolId,
+        'from_account_id' => null,
         'amount' => $net,
         'transaction_date' => $today,
         'description' => 'Profit By ' . $ownerCode,
@@ -863,8 +864,8 @@ function resolveC168DomainFeeReceiverAccountId(PDO $pdo, int $c168Pk, int $exclu
 }
 
 /**
- * Domain 在 C168 下自动建的 MEMBER 常为 OWNERCODE_COMPANY（见 domainApiResolveProvisionedMemberAccountCode），
- * 与「account_id 等于公司短码」的旧数据并存；List Fee 付款方须能解析到该账号。
+ * Domain 在 C168 下自动建的 MEMBER 现为公司代码本体（如 AA/95），
+ * 但仍需兼容历史 OWNERCODE_COMPANY 旧账号；List Fee 付款方须能解析到该账号。
  */
 function resolveC168DomainProvisionedMemberByCompanyCode(PDO $pdo, int $c168Pk, string $customerCompanyCode, int $excludeAccountId = 0): ?int
 {
@@ -939,30 +940,7 @@ function resolveDomainFeeSourceAccountId(PDO $pdo, int $c168Pk, string $customer
         return $fromProvisioned;
     }
 
-    $customerPk = getCompanyPkByCode($pdo, $srcCode);
-    if ($customerPk) {
-        $fromOwner = resolveCompanyOwnerAccountId($pdo, (int)$customerPk);
-        if ($fromOwner && $fromOwner > 0 && $fromOwner !== $excludeAccountId) {
-            return $fromOwner;
-        }
-        $fromAny = resolvePayerAccountInCompany($pdo, (int)$customerPk, $excludeAccountId);
-        if ($fromAny && $fromAny > 0) {
-            try {
-                $chk = $pdo->prepare("SELECT LOWER(TRIM(COALESCE(role,''))) FROM account WHERE id = ? LIMIT 1");
-                $chk->execute([(int)$fromAny]);
-                $role = strtolower(trim((string)($chk->fetchColumn() ?: '')));
-                $chk2 = $pdo->prepare("SELECT UPPER(TRIM(COALESCE(account_id,''))) FROM account WHERE id = ? LIMIT 1");
-                $chk2->execute([(int)$fromAny]);
-                $code = strtoupper(trim((string)($chk2->fetchColumn() ?: '')));
-                if ($role !== 'profit' && $code !== 'PROFIT') {
-                    return (int)$fromAny;
-                }
-            } catch (PDOException $e) {
-                return (int)$fromAny;
-            }
-        }
-    }
-
+    // 不再回退到 owner/K/任意账号；仅允许公司码映射或 Domain 自动建账映射。
     return null;
 }
 
@@ -1089,8 +1067,8 @@ function domainApiEnsureAccountDefaultCurrency(PDO $pdo, int $accountId, int $co
 
 /**
  * Domain List Fee：客户公司账户 -> Share% 配置的 Profit 入账账号（与佣金 from、净利润 from 同一池）；
- * 顾客款先入该池，再由佣金 PAYMENT 从该池扣出各 %，剩余留在 Profit 账号即净利润，避免「整笔先入 owner/K」语义。
- * 无 Share% Profit 时回退 C168 PROFIT 角色账号，再回退 resolveC168DomainFeeReceiverAccountId。
+ * 顾客款先入该池，再由佣金 PAYMENT 从该池扣出各 %，剩余留在 Profit 账号即净利润。
+ * 无 Share% Profit 时仅回退 C168 PROFIT 角色账号；不再回退到 owner/K 等账户。
  * 去重由 DOMAIN_LIST_FEE sms 标记负责；删除该笔后可再次创建。
  */
 function createDomainListFeePayment(
@@ -1106,15 +1084,15 @@ function createDomainListFeePayment(
         'skipped_no_customer' => false,
         'skipped_no_c168' => false,
         'skipped_no_accounts' => false,
-        'amount' => 0.0,
+        'amount' => '0',
         'pool_account_id' => null,
     ];
     $feePrice = getDomainFeePrice($pdo);
-    if ($feePrice === null || $feePrice <= 0) {
+    if ($feePrice === null || money_cmp($feePrice, '0') <= 0) {
         $out['skipped_no_price'] = true;
         return $out;
     }
-    $out['amount'] = round((float) $feePrice, 2);
+    $out['amount'] = money_normalize($feePrice, 2);
     $customerPk = getCompanyPkByCode($pdo, $customerCompanyCode);
     if (!$customerPk) {
         $out['skipped_no_customer'] = true;
@@ -1129,9 +1107,6 @@ function createDomainListFeePayment(
     $poolEarly = resolveShareProfitTargetAccountId($pdo, $custCodeU);
     if (!$poolEarly || $poolEarly <= 0) {
         $poolEarly = resolveC168ProfitRoleAccountId($pdo, $c168Pk, 0);
-    }
-    if (!$poolEarly || $poolEarly <= 0) {
-        $poolEarly = resolveC168DomainFeeReceiverAccountId($pdo, $c168Pk, 0);
     }
     if ($poolEarly && $poolEarly > 0) {
         $out['pool_account_id'] = (int) $poolEarly;
@@ -1235,11 +1210,11 @@ function createDomainShareCommissionPayments(
         'skipped_invalid_account_count' => 0,
         'skipped_no_from_account_count' => 0,
         'skipped_duplicate_account_count' => 0,
-        'commission_total' => 0.0,
+        'commission_total' => '0',
     ];
 
     $feePrice = getDomainFeePrice($pdo);
-    if ($feePrice === null || $feePrice <= 0) {
+    if ($feePrice === null || money_cmp($feePrice, '0') <= 0) {
         return $result;
     }
 
@@ -1288,18 +1263,18 @@ function createDomainShareCommissionPayments(
         $description = $roleLabel . ' Commision for ' . $c168OwnerCode;
         foreach ($rows as $row) {
             $aid = isset($row['account_id']) ? (int) $row['account_id'] : 0;
-            $pct = isset($row['percentage']) ? (float) $row['percentage'] : 0.0;
+            $pct = isset($row['percentage']) && money_is_valid($row['percentage']) ? money_normalize($row['percentage'], 4) : '0.0000';
 
             if ($aid < 0) {
                 $result['skipped_admin_count']++;
                 continue;
             }
-            if ($aid <= 0 || $pct <= 0) {
+            if ($aid <= 0 || money_cmp($pct, '0', 4) <= 0) {
                 continue;
             }
 
-            $amount = round($feePrice * ($pct / 100), 2);
-            if ($amount <= 0) {
+            $amount = money_div(money_mul($feePrice, $pct, MONEY_CALC_SCALE), '100', 2);
+            if (money_cmp($amount, '0') <= 0) {
                 continue;
             }
 
@@ -1379,7 +1354,7 @@ function createDomainShareCommissionPayments(
             $stmt = $pdo->prepare($sql);
             $stmt->execute(array_values($insertCols));
             $result['created_count']++;
-            $result['commission_total'] = round($result['commission_total'] + $amount, 2);
+            $result['commission_total'] = money_add($result['commission_total'], $amount, 2);
         }
     }
 
@@ -1414,7 +1389,7 @@ function hasDomainNetProfitTransactionExecuted(PDO $pdo, string $sourceCompanyCo
 
 function getDomainFeeAndCommissionTotalsBySource(PDO $pdo, string $sourceCompanyCode): array
 {
-    $out = ['fee' => 0.0, 'commission' => 0.0];
+    $out = ['fee' => '0', 'commission' => '0'];
     $srcU = strtoupper(trim($sourceCompanyCode));
     if ($srcU === '') {
         return $out;
@@ -1426,8 +1401,8 @@ function getDomainFeeAndCommissionTotalsBySource(PDO $pdo, string $sourceCompany
     try {
         $st = $pdo->prepare("
             SELECT
-                SUM(CASE WHEN t.sms LIKE ? THEN ROUND(t.amount, 2) ELSE 0 END) AS fee_total,
-                SUM(CASE WHEN t.sms LIKE ? THEN ROUND(t.amount, 2) ELSE 0 END) AS comm_total
+                SUM(CASE WHEN t.sms LIKE ? THEN t.amount ELSE 0 END) AS fee_total,
+                SUM(CASE WHEN t.sms LIKE ? THEN t.amount ELSE 0 END) AS comm_total
             FROM transactions t
             WHERE t.company_id = ?
               AND t.transaction_type = 'PAYMENT'
@@ -1441,8 +1416,8 @@ function getDomainFeeAndCommissionTotalsBySource(PDO $pdo, string $sourceCompany
             '[DOMAIN_SHARE_COMMISSION|' . $srcU . '%',
         ]);
         $row = $st->fetch(PDO::FETCH_ASSOC) ?: [];
-        $out['fee'] = round((float)($row['fee_total'] ?? 0), 2);
-        $out['commission'] = round((float)($row['comm_total'] ?? 0), 2);
+        $out['fee'] = money_normalize($row['fee_total'] ?? '0');
+        $out['commission'] = money_normalize($row['comm_total'] ?? '0');
     } catch (PDOException $e) {
         return $out;
     }
@@ -1500,17 +1475,16 @@ function normalizeDomainNetProfitTransaction(PDO $pdo, string $sourceCompanyCode
     }
 
     $totals = getDomainFeeAndCommissionTotalsBySource($pdo, $srcU);
-    $net = round((float)$totals['fee'] - (float)$totals['commission'], 2);
-    if ($net <= 0) {
+    $net = money_sub($totals['fee'], $totals['commission'], 2);
+    if (money_cmp($net, '0') <= 0) {
         return false;
     }
 
-    $profitAccId = resolveC168ProfitRoleAccountId($pdo, (int)$c168Pk, 0);
+    $profitAccId = resolveShareProfitTargetAccountId($pdo, $srcU);
     if (!$profitAccId || $profitAccId <= 0) {
-        return false;
+        $profitAccId = resolveC168ProfitRoleAccountId($pdo, (int)$c168Pk, 0);
     }
-    $fromAccId = resolveC168DomainFeeReceiverAccountId($pdo, (int)$c168Pk, (int)$profitAccId);
-    if (!$fromAccId || $fromAccId <= 0 || (int)$fromAccId === (int)$profitAccId) {
+    if (!$profitAccId || $profitAccId <= 0) {
         return false;
     }
 
@@ -1525,7 +1499,7 @@ function normalizeDomainNetProfitTransaction(PDO $pdo, string $sourceCompanyCode
         $st = $pdo->prepare("
             UPDATE transactions t
             SET t.account_id = ?,
-                t.from_account_id = ?,
+                t.from_account_id = NULL,
                 t.amount = ?,
                 t.description = ?
             WHERE t.company_id = ?
@@ -1533,20 +1507,18 @@ function normalizeDomainNetProfitTransaction(PDO $pdo, string $sourceCompanyCode
               AND t.sms LIKE ?
               AND (
                     t.account_id <> ?
-                    OR COALESCE(t.from_account_id, 0) <> ?
-                    OR ROUND(t.amount, 2) <> ?
+                    OR t.from_account_id IS NOT NULL
+                    OR t.amount <> ?
                     OR COALESCE(t.description, '') <> ?
               )
         ");
         $st->execute([
             (int)$profitAccId,
-            (int)$fromAccId,
             $net,
             $desc,
             (int)$c168Pk,
             '[DOMAIN_NET_PROFIT|' . $srcU . '%',
             (int)$profitAccId,
-            (int)$fromAccId,
             $net,
             $desc,
         ]);
@@ -1565,9 +1537,9 @@ function normalizeDomainNetProfitTransaction(PDO $pdo, string $sourceCompanyCode
         $created = createDomainNetProfitPayment(
             $pdo,
             $srcU,
-            (float)$totals['fee'],
-            (float)$totals['commission'],
-            (int)$fromAccId,
+            $totals['fee'],
+            $totals['commission'],
+            null,
             $createdByUser > 0 ? $createdByUser : null,
             $createdByOwner > 0 ? $createdByOwner : null
         );
@@ -1629,8 +1601,8 @@ function domainApiApplyDomainListFeePaymentsFromPayload(PDO $pdo, $companies, bo
         $profitResult = createDomainNetProfitPayment(
             $pdo,
             $cid,
-            (float) ($feeResult['amount'] ?? 0),
-            (float) ($commissionResult['commission_total'] ?? 0),
+            (string) ($feeResult['amount'] ?? '0'),
+            (string) ($commissionResult['commission_total'] ?? '0'),
             $poolId,
             $u,
             $o
@@ -1759,7 +1731,8 @@ function domainApiExtractProvisionCompanyIds($companies): array {
     $ids = [];
     foreach (domainApiNormalizeCompaniesPayload($companies) as $row) {
         $c = strtoupper(trim((string) ($row['company_id'] ?? '')));
-        if ($c !== '') {
+        // C168 主公司不参与 Domain 自动建账（任何场景都跳过）
+        if ($c !== '' && $c !== 'C168') {
             $ids[] = $c;
         }
     }
@@ -1894,11 +1867,12 @@ function domainApiAccountLooksLikeDomainProvisionedMember(PDO $pdo, int $account
 }
 
 /**
- * Domain 自动创建的 MEMBER 登录账号：使用公司短码作为 account_id（如 QA），不再使用 OWNERCODE_ 前缀。
- * 与旧数据 OWNERCODE_COMPANY（如 QAA_QA）并存；解析付款方时见 resolveC168DomainProvisionedMemberByCompanyCode。
+ * Domain 自动创建的 MEMBER 登录账号：固定使用公司代码本体（如 AA / 95）。
+ * 不再生成 OWNERCODE_ 前缀（如 K_95），确保 account_id 直接展示 company id。
  */
 function domainApiBuildDomainProvisionedMemberAccountId(string $ownerCodeUpper, string $companyCode): string {
-    return strtoupper(preg_replace('/[^A-Z0-9]/', '', trim($companyCode)));
+    $cc = strtoupper(trim($companyCode));
+    return $cc;
 }
 
 /** 旧版：OWNERCODE_公司代码，仅用于查找已存在的自动建账账号 */
@@ -1913,43 +1887,11 @@ function domainApiBuildLegacyOwnerPrefixedProvisionedMemberAccountId(string $own
 }
 
 /**
- * 解析最终 account_id：优先 OWNER_COMPANY；若该 id 已被非 Domain MEMBER 模板占用，则顺延 OWNER_COMPANY_2、_3…
- * 若已是 Domain MEMBER 模板则复用该行（幂等）。
+ * 解析最终 account_id：固定使用公司代码本体（如 AA）。
+ * 不再自动追加任何后缀（如 _1/_2/_X），从源头杜绝带后缀账号的自动创建。
  */
 function domainApiResolveProvisionedMemberAccountCode(PDO $pdo, int $c168CompanyId, string $ownerCodeUpper, string $companyCode): string {
-    $base = domainApiBuildDomainProvisionedMemberAccountId($ownerCodeUpper, $companyCode);
-    if ($base === '') {
-        return '';
-    }
-    $chkInC168 = $pdo->prepare("
-        SELECT a.id
-        FROM account a
-        INNER JOIN account_company ac ON ac.account_id = a.id
-        WHERE ac.company_id = ?
-          AND UPPER(TRIM(a.account_id)) = UPPER(TRIM(?))
-        LIMIT 1
-    ");
-    $chkGlobal = $pdo->prepare('SELECT id FROM account WHERE UPPER(TRIM(account_id)) = UPPER(TRIM(?)) LIMIT 1');
-    for ($i = 0; $i < 1000; $i++) {
-        $code = $i === 0 ? $base : $base . '_' . $i;
-        $chkInC168->execute([$c168CompanyId, $code]);
-        $cid = (int) ($chkInC168->fetchColumn() ?: 0);
-        if ($cid > 0) {
-            if (domainApiAccountLooksLikeDomainProvisionedMember($pdo, $cid)) {
-                return $code;
-            }
-            continue;
-        }
-
-        $chkGlobal->execute([$code]);
-        $gid = (int) ($chkGlobal->fetchColumn() ?: 0);
-        if ($gid <= 0) {
-            return $code;
-        }
-        // 全局已存在同 code（无论来源）都不复用，顺延后缀避免串号。
-        continue;
-    }
-    return $base . '_X' . substr(str_replace('.', '', uniqid('', true)), -10);
+    return domainApiBuildDomainProvisionedMemberAccountId($ownerCodeUpper, $companyCode);
 }
 
 /**
@@ -1999,46 +1941,54 @@ function domainApiMergeAccountIntoUserCompanyPermissions(PDO $pdo, array $users,
     if ($newAccountId <= 0 || $account_id === '') {
         return;
     }
+    $loadCurrentStmt = $pdo->prepare("
+        SELECT account_permissions
+        FROM user_company_permissions
+        WHERE user_id = ? AND company_id = ?
+        LIMIT 1
+    ");
     $updateStmt = $pdo->prepare("
         INSERT INTO user_company_permissions (user_id, company_id, account_permissions, process_permissions)
         VALUES (?, ?, ?, NULL)
         ON DUPLICATE KEY UPDATE account_permissions = VALUES(account_permissions)
     ");
     foreach ($users as $user) {
-        $currentPermissions = [];
-        $hasPermissionsSet = false;
-        if (isset($user['account_permissions']) && $user['account_permissions'] !== null && $user['account_permissions'] !== '') {
-            if (strtolower(trim((string) $user['account_permissions'])) === 'null') {
-                $hasPermissionsSet = false;
-            } else {
-                $decoded = json_decode($user['account_permissions'], true);
-                if (is_array($decoded)) {
-                    $hasPermissionsSet = true;
-                    if (!empty($decoded)) {
-                        $currentPermissions = $decoded;
-                    }
-                }
-            }
-        }
-        if (!$hasPermissionsSet) {
-            continue;
-        }
-        $accountExists = false;
-        foreach ($currentPermissions as $permission) {
-            if (isset($permission['id']) && (int) $permission['id'] === (int) $newAccountId) {
-                $accountExists = true;
-                break;
-            }
-        }
-        if ($accountExists) {
-            continue;
-        }
-        $currentPermissions[] = ['id' => (int) $newAccountId, 'account_id' => $account_id];
         foreach ($companyIdsToLink as $comp_id) {
             $comp_id = (int) $comp_id;
             if ($comp_id <= 0) {
                 continue;
             }
+            $currentPermissions = [];
+            $hasPermissionsSet = false;
+            $loadCurrentStmt->execute([(int) $user['id'], $comp_id]);
+            $rawPerm = $loadCurrentStmt->fetchColumn();
+            if ($rawPerm !== false && $rawPerm !== null && trim((string) $rawPerm) !== '' && strtolower(trim((string) $rawPerm)) !== 'null') {
+                $decoded = json_decode((string) $rawPerm, true);
+                if (is_array($decoded)) {
+                    $hasPermissionsSet = true;
+                    $currentPermissions = $decoded;
+                }
+            } elseif (isset($user['account_permissions']) && $user['account_permissions'] !== null && trim((string) $user['account_permissions']) !== '' && strtolower(trim((string) $user['account_permissions'])) !== 'null') {
+                $decodedSeed = json_decode((string) $user['account_permissions'], true);
+                if (is_array($decodedSeed)) {
+                    $hasPermissionsSet = true;
+                    $currentPermissions = $decodedSeed;
+                }
+            }
+            if (!$hasPermissionsSet) {
+                continue;
+            }
+            $accountExists = false;
+            foreach ($currentPermissions as $permission) {
+                if (isset($permission['id']) && (int) $permission['id'] === (int) $newAccountId) {
+                    $accountExists = true;
+                    break;
+                }
+            }
+            if ($accountExists) {
+                continue;
+            }
+            $currentPermissions[] = ['id' => (int) $newAccountId, 'account_id' => $account_id];
             $updateStmt->execute([$user['id'], $comp_id, json_encode($currentPermissions)]);
         }
     }
@@ -2048,7 +1998,7 @@ function domainApiMergeAccountIntoUserCompanyPermissions(PDO $pdo, array $users,
  * C168 在 Add Domain 时为公司代码创建 MEMBER 账户：挂在当前 C168 公司 account list，并关联主账号 C168（account_link）。
  * 密码明文 111，与 login_process.php member 校验一致。
  *
- * @param string $ownerCodeUpper Owner.owner_code；与 company 组成 account_id：OWNERCODE_公司代码（见 domainApiBuildDomainProvisionedMemberAccountId）。
+ * @param string $ownerCodeUpper Owner.owner_code（保留参数用于兼容；当前 account_id 固定为公司代码本体）。
  */
 function domainApiAutoCreateMemberAccountsUnderC168Company(PDO $pdo, int $c168NumericCompanyId, string $ownerDisplayName, array $companyIdStrings, string $ownerCodeUpper = ''): void {
     if ($c168NumericCompanyId <= 0 || empty($companyIdStrings)) {
@@ -2110,7 +2060,8 @@ function domainApiAutoCreateMemberAccountsUnderC168Company(PDO $pdo, int $c168Nu
 
     foreach ($companyIdStrings as $raw) {
         $cid = strtoupper(trim((string) $raw));
-        if ($cid === '') {
+        // 双保险：即便上游漏过，C168 也绝不自动建账
+        if ($cid === '' || $cid === 'C168') {
             continue;
         }
         $useAccountId = domainApiResolveProvisionedMemberAccountCode($pdo, $c168NumericCompanyId, $ownerCodeUpper, $cid);
@@ -2268,7 +2219,8 @@ try {
                     }
                 }
 
-                $provisionCompanyIds = domainApiExtractProvisionCompanyIds($companies);
+                // 复用已标准化的 companies 数组，避免原始 JSON 字符串格式差异导致只提取到部分 company
+                $provisionCompanyIds = domainApiExtractProvisionCompanyIds($companies_data);
                 if (!empty($provisionCompanyIds) && isset($hasC168Context) && domainApiMayProvisionC168MemberAccounts($pdo, $hasC168Context, $canUseC168DomainActions)) {
                     $targetC168 = resolveC168TargetCompanyId($pdo);
                     if ($targetC168 !== null) {
@@ -2557,7 +2509,8 @@ try {
                 }
 
                 // 对该 domain 表单中所有带 company_id 的公司同步 C168 下 MEMBER（幂等；便于历史数据补建）
-                $provisionFromUpdate = domainApiExtractProvisionCompanyIds($companies);
+                // 统一使用已标准化后的数组，确保批量公司都能触发自动建账
+                $provisionFromUpdate = domainApiExtractProvisionCompanyIds($new_companies_data);
                 if (!empty($provisionFromUpdate) && isset($hasC168Context) && domainApiMayProvisionC168MemberAccounts($pdo, $hasC168Context, $canUseC168DomainActions)) {
                     $targetC168 = resolveC168TargetCompanyId($pdo);
                     if ($targetC168 !== null) {
@@ -2999,6 +2952,8 @@ try {
                 $row = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$row) {
                     $row = ['price' => null];
+                } elseif ($row['price'] !== null && $row['price'] !== '') {
+                    $row['price'] = money_out($row['price']);
                 }
                 jsonResponse(true, 'OK', $row);
             } catch (Exception $e) {
@@ -3021,7 +2976,7 @@ try {
                 $stmt = $pdo->prepare("UPDATE `domain_list_fee_settings` SET `price` = ? WHERE `id` = 1");
                 $stmt->execute([$price]);
                 jsonResponse(true, 'Saved successfully', [
-                    'price' => $price
+                    'price' => $price !== null ? money_out($price) : null
                 ]);
             } catch (Exception $e) {
                 jsonResponse(false, 'Error: ' . $e->getMessage(), null);

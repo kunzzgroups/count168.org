@@ -40,7 +40,15 @@ function escapeHtml(text) {
 }
 
 function formatAmount(amount) {
-    return parseFloat(amount).toFixed(2);
+    return MoneyDecimal.formatFixed(amount || '0', 2);
+}
+
+function reportAdd(a, b) {
+    return MoneyDecimal.add(a || '0', b || '0');
+}
+
+function reportInt(value) {
+    return MoneyDecimal.toDecimal(value || '0', 0).toDecimalPlaces(0, Decimal.ROUND_DOWN).toNumber();
 }
 
 // Global variables
@@ -102,7 +110,7 @@ async function switchCompany(companyId, companyCode) {
     // 更新按钮状态
     const buttons = document.querySelectorAll('#company-buttons-container .transaction-company-btn');
     buttons.forEach(btn => {
-        if (parseInt(btn.dataset.companyId) === parseInt(companyId)) {
+        if (reportInt(btn.dataset.companyId) === reportInt(companyId)) {
             btn.classList.add('active');
         } else {
             btn.classList.remove('active');
@@ -669,8 +677,8 @@ function renderReport(data, totalWin, totalLose) {
         }
         // 如果有 currency 为 null 的数据，也显示在默认报告中
         if (hasNullCurrency) {
-            const nullWin = nullCurrencyData.reduce((sum, item) => sum + (parseFloat(item.win) || 0), 0);
-            const nullLose = nullCurrencyData.reduce((sum, item) => sum + (parseFloat(item.lose) || 0), 0);
+            const nullWin = nullCurrencyData.reduce((sum, item) => reportAdd(sum, item.win), '0');
+            const nullLose = nullCurrencyData.reduce((sum, item) => reportAdd(sum, item.lose), '0');
             renderDefaultReport(nullCurrencyData, nullWin, nullLose);
         }
     } else {
@@ -722,11 +730,11 @@ function renderCurrencyGroupedReports(groupedByCurrency, currencies, totalWin, t
         const currencyData = groupedByCurrency[currency];
         
         // 计算该 currency 的总计
-        let currencyWin = 0;
-        let currencyLose = 0;
+        let currencyWin = '0';
+        let currencyLose = '0';
         currencyData.forEach(item => {
-            currencyWin += parseFloat(item.win) || 0;
-            currencyLose += parseFloat(item.lose) || 0;
+            currencyWin = reportAdd(currencyWin, item.win);
+            currencyLose = reportAdd(currencyLose, item.lose);
         });
 
         // 创建 currency 标题

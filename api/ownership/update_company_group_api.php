@@ -17,6 +17,10 @@ if (!isset($_SESSION['user_id'])) {
     echo json_encode(['status' => 'error', 'message' => 'Unauthorized']);
     exit;
 }
+if (strtolower($_SESSION['role'] ?? '') !== 'owner') {
+    echo json_encode(['status' => 'error', 'message' => 'Read-only: only owner can modify ownership']);
+    exit;
+}
 
 $body = json_decode(file_get_contents('php://input'), true);
 $company_id = isset($body['company_id']) ? (int)$body['company_id'] : 0;

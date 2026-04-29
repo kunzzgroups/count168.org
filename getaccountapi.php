@@ -3,6 +3,20 @@ session_start();
 header('Content-Type: application/json');
 require_once 'config.php';
 
+function formatAccountIdForDisplay(string $rawAccountId): string {
+    $rawAccountId = trim($rawAccountId);
+    if ($rawAccountId === '') {
+        return $rawAccountId;
+    }
+
+    // 仅将前缀_公司ID(_冲突后缀)格式展示为纯公司ID
+    if (preg_match('/^[^_]+_([0-9]+)(?:_[0-9]+)?$/', $rawAccountId, $matches)) {
+        return $matches[1];
+    }
+
+    return $rawAccountId;
+}
+
 try {
     // 检查用户是否登录并获取 company_id
     if (!isset($_SESSION['company_id'])) {
@@ -88,6 +102,7 @@ try {
     
     // 添加关联货币信息到账户数据
     $account['account_currencies'] = $account_currencies;
+    $account['account_id'] = formatAccountIdForDisplay((string)($account['account_id'] ?? ''));
     
     // 返回JSON响应
     echo json_encode([

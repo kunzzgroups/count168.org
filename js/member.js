@@ -306,19 +306,35 @@ function setupAccountButtons() {
 }
 
 function formatNumber(value) {
-    const number = parseFloat(String(value).replace(/,/g, ''));
-    if (isNaN(number)) {
+    try {
+        return MoneyDecimal.formatThousands(value || '0', 2);
+    } catch (e) {
         return '0.00';
     }
-    return number.toLocaleString('en-US', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
 }
 
 function normalizeNumber(value) {
-    const parsed = parseFloat(String(value ?? '').replace(/,/g, '').trim());
-    return Number.isNaN(parsed) ? 0 : parsed;
+    try {
+        return MoneyDecimal.toDecimal(value || '0', 0);
+    } catch (e) {
+        return MoneyDecimal.toDecimal('0', 0);
+    }
+}
+
+/** Payment History：避免浏览器浮点格式化与 transaction.js 的 trunc 导致 -40.79 */
+function formatPaymentHistoryMoney(value) {
+    if (value === '-' || value === null || value === undefined) return '-';
+    const cleaned = String(value).replace(/,/g, '').trim();
+    if (cleaned === '' || cleaned === '-') return '0.00';
+    const exact2 = cleaned.match(/^(-?)(\d+)\.(\d{2})$/);
+    if (exact2) {
+        const neg = exact2[1] === '-';
+        const intPart = exact2[2];
+        const dec = exact2[3];
+        const intWithSep = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return (neg ? '-' : '') + intWithSep + '.' + dec;
+    }
+    return formatNumber(cleaned);
 }
 
 function toUpperDisplay(value) {
@@ -877,17 +893,17 @@ function createCurrencyTable(currencyKey, rows) {
     table.className = 'transaction-table member-winloss-table';
 
     const rowsHtml = [];
-    let totalWinLoss = 0;
-    let totalCrDr = 0;
-    let closingBalance = 0;
+    let totalWinLoss = MoneyDecimal.toDecimal('0', 0);
+    let totalCrDr = MoneyDecimal.toDecimal('0', 0);
+    let closingBalance = MoneyDecimal.toDecimal('0', 0);
 
     (rows || []).forEach(row => {
-        const winLoss = row.win_loss === '-' ? '-' : formatNumber(row.win_loss);
-        const crdr = row.cr_dr === '-' ? '-' : formatNumber(row.cr_dr);
-        const balance = row.balance === '-' ? '-' : formatNumber(row.balance);
+        const winLoss = row.win_loss === '-' ? '-' : formatPaymentHistoryMoney(row.win_loss);
+        const crdr = row.cr_dr === '-' ? '-' : formatPaymentHistoryMoney(row.cr_dr);
+        const balance = row.balance === '-' ? '-' : formatPaymentHistoryMoney(row.balance);
 
-        totalWinLoss += normalizeNumber(row.win_loss);
-        totalCrDr += normalizeNumber(row.cr_dr);
+        totalWinLoss = totalWinLoss.plus(normalizeNumber(row.win_loss));
+        totalCrDr = totalCrDr.plus(normalizeNumber(row.cr_dr));
         if (row.balance !== '-' && row.balance !== null && row.balance !== undefined && String(row.balance).trim() !== '') {
             closingBalance = normalizeNumber(row.balance);
         }
@@ -934,9 +950,9 @@ function createCurrencyTable(currencyKey, rows) {
                 <td class="transaction-history-col-product">-</td>
                 <td class="transaction-history-col-currency">-</td>
                 <td class="transaction-history-col-rate">-</td>
-                <td class="transaction-history-col-winloss">${formatNumber(totalWinLoss)}</td>
-                <td class="transaction-history-col-crdr">${formatNumber(totalCrDr)}</td>
-                <td class="transaction-history-col-balance">${formatNumber(closingBalance)}</td>
+                <td class="transaction-history-col-winloss">${formatPaymentHistoryMoney(totalWinLoss)}</td>
+                <td class="transaction-history-col-crdr">${formatPaymentHistoryMoney(totalCrDr)}</td>
+                <td class="transaction-history-col-balance">${formatPaymentHistoryMoney(closingBalance)}</td>
                 <td class="transaction-history-col-description">-</td>
                 <td class="transaction-history-col-remark">-</td>
             </tr>

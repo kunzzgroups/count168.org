@@ -460,9 +460,9 @@ async function persistOpenBankEditBeforeResend(targetProcessId) {
     ['country', 'bank', 'type', 'name', 'day_start', 'day_end', 'day_start_frequency'].forEach(function (key) {
         formData.delete(key);
     });
-    const cost = parseFloat(document.getElementById('bank_cost')?.value || '0') || 0;
-    const price = parseFloat(document.getElementById('bank_price')?.value || '0') || 0;
-    formData.set('profit', (price - cost).toFixed(2));
+    const cost = document.getElementById('bank_cost')?.value || '0';
+    const price = document.getElementById('bank_price')?.value || '0';
+    formData.set('profit', MoneyDecimal.formatFixed(MoneyDecimal.sub(price, cost), 8));
     formData.append('permission', 'Bank');
     formData.set('id', String(editId));
 
@@ -2067,8 +2067,8 @@ if (addBankProcessForm && !window.__bankAddProcessSubmitBound) {
             });
         }
         // Profit 栏显示的是扣除 Profit Sharing 后的数额；提交时传 gross（Sell Price - Buy Price）供后端存储
-        const grossProfit = (parseFloat(document.getElementById('bank_price').value) || 0) - (parseFloat(document.getElementById('bank_cost').value) || 0);
-        formData.set('profit', grossProfit.toFixed(2));
+        const grossProfit = MoneyDecimal.sub(document.getElementById('bank_price').value || '0', document.getElementById('bank_cost').value || '0');
+        formData.set('profit', MoneyDecimal.formatFixed(grossProfit, 8));
         formData.append('permission', 'Bank');
         if (cardMerchantBtn && cardMerchantBtn.getAttribute('data-value')) {
             formData.append('card_merchant_id', cardMerchantBtn.getAttribute('data-value'));
@@ -2586,7 +2586,7 @@ function validatePaymentAlertForAddBank() {
             showNotification('When Payment Alert is Yes, both Alert Type and Start Date must be filled.', 'danger');
             return false;
         }
-        if (alertAmount && alertAmount.value && (isNaN(parseFloat(alertAmount.value)) || parseFloat(alertAmount.value) >= 0)) {
+        if (alertAmount && alertAmount.value && (!isValidBankMoneyInput(alertAmount.value) || MoneyDecimal.cmp(alertAmount.value, '0') >= 0)) {
             showNotification('Alert Amount must be a negative number.', 'danger');
             return false;
         }
@@ -2604,7 +2604,7 @@ function validatePaymentAlertForEditBank() {
             showNotification('When Payment Alert is Yes, both Alert Type and Start Date must be filled.', 'danger');
             return false;
         }
-        if (alertAmount && alertAmount.value && (isNaN(parseFloat(alertAmount.value)) || parseFloat(alertAmount.value) >= 0)) {
+        if (alertAmount && alertAmount.value && (!isValidBankMoneyInput(alertAmount.value) || MoneyDecimal.cmp(alertAmount.value, '0') >= 0)) {
             showNotification('Alert Amount must be a negative number.', 'danger');
             return false;
         }
@@ -3020,8 +3020,7 @@ if (profitSharingFormEl) {
             const rawAmount = (amountInput.value || '').trim();
             if (!accountId || rawAmount === '') return;
             const accountText = (accountBtn && accountBtn.textContent) ? accountBtn.textContent.trim() : '';
-            const num = parseFloat(rawAmount);
-            const amount = (isNaN(num) ? rawAmount : num.toFixed(2));
+            const amount = isValidBankMoneyInput(rawAmount) ? MoneyDecimal.formatDisplay(rawAmount, 8) : rawAmount;
             window.selectedProfitSharingEntries.push({ accountId: accountId, accountText: accountText, amount: amount });
             added++;
         });
@@ -4484,23 +4483,29 @@ function closeProfitSharingModal() {
 // Selected Profit Sharing list (array of { accountId, accountText, amount })
 window.selectedProfitSharingEntries = [];
 
+function isValidBankMoneyInput(value) {
+    try {
+        MoneyDecimal.toDecimal(value);
+        return true;
+    } catch (e) {
+        return false;
+    }
+}
+
 /** Profit 显示为扣除 Profit Sharing 后的数额（Sell Price - Buy Price - sum(PS)） */
 function updateBankProfitDisplay() {
     const costInput = document.getElementById('bank_cost');
     const priceInput = document.getElementById('bank_price');
     const profitInput = document.getElementById('bank_profit');
     if (!costInput || !priceInput || !profitInput) return;
-    const cost = parseFloat(costInput.value) || 0;
-    const price = parseFloat(priceInput.value) || 0;
-    const gross = price - cost;
+    const gross = MoneyDecimal.sub(priceInput.value || '0', costInput.value || '0');
     const entries = window.selectedProfitSharingEntries || [];
-    let sumPs = 0;
+    let sumPs = MoneyDecimal.toDecimal('0');
     entries.forEach(function (e) {
-        const amt = parseFloat(e.amount);
-        if (!isNaN(amt)) sumPs += amt;
+        if (isValidBankMoneyInput(e.amount)) sumPs = sumPs.plus(MoneyDecimal.toDecimal(e.amount, 0));
     });
-    const net = Math.max(0, gross - sumPs);
-    profitInput.value = net.toFixed(2);
+    const net = MoneyDecimal.max(MoneyDecimal.sub(gross, sumPs), '0');
+    profitInput.value = MoneyDecimal.formatDisplay(net, 8);
 }
 
 function renderSelectedProfitSharing() {
@@ -4517,7 +4522,7 @@ function renderSelectedProfitSharing() {
     container.innerHTML = '';
     entries.forEach(function (entry, index) {
         const amt = entry.amount;
-        const displayAmount = (amt !== '' && amt != null && !isNaN(parseFloat(amt))) ? parseFloat(amt).toFixed(2) : (amt || '');
+        const displayAmount = (amt !== '' && amt != null && isValidBankMoneyInput(amt)) ? MoneyDecimal.formatDisplay(amt, 8) : (amt || '');
         const text = (entry.accountText || '') + ' - ' + displayAmount;
         parts.push(text);
         const div = document.createElement('div');

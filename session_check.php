@@ -187,6 +187,40 @@ if (isset($_SESSION['user_id'])) {
     // 注意：此行需在 session_write_close() 之前执行
     $_SESSION['last_activity'] = time();
     
+    // 动态刷新 user 账户的 role/read_only 状态（避免需要重新登录才能生效）
+    if (isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'user') {
+        try {
+            $user_id = $_SESSION['user_id'];
+            $stmt = $pdo->prepare("SELECT role, read_only, status FROM user WHERE id = ?");
+            $stmt->execute([$user_id]);
+            $latestUser = $stmt->fetch(PDO::FETCH_ASSOC);
+
+            if ($latestUser) {
+                if (!empty($latestUser['role'])) {
+                    $_SESSION['role'] = $latestUser['role'];
+                }
+                $_SESSION['read_only'] = isset($latestUser['read_only']) ? (int)$latestUser['read_only'] : 1;
+
+                // 账号被禁用时立即失效当前会话
+                if (isset($latestUser['status']) && strtolower((string)$latestUser['status']) !== 'active') {
+                    session_unset();
+                    session_destroy();
+                    if ($isApiRequest) {
+                        if (!headers_sent()) {
+                            header('Content-Type: application/json');
+                        }
+                        echo json_encode(['status' => 'error', 'message' => 'Account is inactive.', 'redirect' => 'index.php']);
+                        exit();
+                    }
+                    header("Location: index.php");
+                    exit();
+                }
+            }
+        } catch (PDOException $e) {
+            error_log("Failed to refresh user role/read_only: " . $e->getMessage());
+        }
+    }
+
     // 动态刷新 Partnership 账户的 read_only 状态（避免需要重新登录才能生效）
     if (isset($_SESSION['user_type'], $_SESSION['role']) && 
         $_SESSION['user_type'] === 'user' && 

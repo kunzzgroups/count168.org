@@ -322,6 +322,14 @@ try {
             'formula_display_paren' => buildFormulaDisplayParenFromParts($formulaBase, $sp !== null ? $sp : '', $sp !== null ? $en : 0),
             'formula_edit' => buildFormulaEditFromParts($formulaBase, $sp !== null ? $sp : '', $sp !== null ? $en : 0),
         ];
+        $stmtFresh = $pdo->prepare('SELECT source_percent, columns_display, source_columns FROM data_capture_templates WHERE id = ?');
+        $stmtFresh->execute([$templateId]);
+        $freshRow = $stmtFresh->fetch(PDO::FETCH_ASSOC);
+        if ($freshRow) {
+            $cd = isset($freshRow['columns_display']) ? trim((string) $freshRow['columns_display']) : '';
+            $respData['source_ref'] = $cd !== '' ? $cd : trim((string) ($freshRow['source_columns'] ?? ''));
+            $respData['source_summary_display'] = formatSourcePercentForMaintenanceList($freshRow['source_percent'] ?? null);
+        }
         jsonResponse(true, '更新成功', $respData);
     } catch (Exception $e) {
         $pdo->rollBack();

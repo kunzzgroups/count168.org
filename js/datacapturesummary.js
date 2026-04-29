@@ -55,10 +55,12 @@ function findColumnIndexByValue(processValue, numericValue) {
         for (let colIndex = 1; colIndex < processRow.length; colIndex++) {
             const cellData = processRow[colIndex];
             if (cellData && cellData.type === 'data') {
-                const cellValue = parseFloat(removeThousandsSeparators(cellData.value));
-                if (!isNaN(cellValue) && Math.abs(cellValue - numericValue) < 0.0001) {
-                    return colIndex; // Column A = 1, B = 2, ...
-                }
+                try {
+                    const cellValue = MoneyDecimal.toDecimal(removeThousandsSeparators(cellData.value), 0);
+                    if (cellValue.minus(numericValue).abs().lt('0.0001')) {
+                        return colIndex; // Column A = 1, B = 2, ...
+                    }
+                } catch (_) { /* ignore non-numeric cells */ }
             }
         }
 
@@ -77,135 +79,58 @@ function hideNotification() {
     }, 300);
 }
 
-/** SPA（React）与经典 `.php` 共用：返回 Data Capture */
-function navigateToDataCaptureFromSummary(queryWithoutQuestion) {
-    var q = '';
-    if (queryWithoutQuestion != null && String(queryWithoutQuestion).length > 0) {
-        q = '?' + String(queryWithoutQuestion).replace(/^\?/, '');
-    }
-    if (document.body && document.body.classList.contains('datacapture-summary-spa-embed')) {
-        var spaDc =
-            typeof window.EAZYCOUNT_SPA_DATACAPTURE === 'string' && window.EAZYCOUNT_SPA_DATACAPTURE
-                ? String(window.EAZYCOUNT_SPA_DATACAPTURE)
-                : '';
-        if (spaDc) {
-            var path = spaDc.charAt(0) === '/' ? spaDc : '/' + spaDc;
-            window.location.href = window.location.origin + path + q;
-            return;
-        }
-        var base =
-            typeof window.__C168_SPA_LINK_BASE__ === 'string'
-                ? String(window.__C168_SPA_LINK_BASE__).replace(/\/$/, '')
-                : '';
-        window.location.href = (base || '') + '/datacapture' + q;
-    } else {
-        window.location.href = 'datacapture.php' + q;
-    }
-}
 
-function wireSummaryRateInputOnce() {
-    const rateInput = document.getElementById('rateInput');
-    if (!rateInput || rateInput.dataset.summaryWired === '1') return;
-    rateInput.dataset.summaryWired = '1';
-    rateInput.addEventListener('input', function () {
-        recalculateAllRowsWithRate();
-    });
-}
-
-function wireSummaryAddAccountFormOnce() {
-    if (document.body && document.body.dataset.summaryAddFormWired === '1') return;
-    if (document.body) document.body.dataset.summaryAddFormWired = '1';
-    document.querySelectorAll('input[name="add_payment_alert"]').forEach(function (radio) {
-        radio.addEventListener('change', function () {
-            toggleAlertFields('add');
-        });
-    });
-    var uppercaseInputs = ['add_account_id', 'add_name', 'add_remark', 'addCurrencyInput'];
-    uppercaseInputs.forEach(function (inputId) {
-        var input = document.getElementById(inputId);
-        if (input) {
-            input.addEventListener('input', function () {
-                forceUppercase(this);
-            });
-            input.addEventListener('paste', function () {
-                var el = this;
-                setTimeout(function () {
-                    forceUppercase(el);
-                }, 0);
-            });
-        }
-    });
-    var addCurrencyInput = document.getElementById('addCurrencyInput');
-    if (addCurrencyInput) {
-        addCurrencyInput.addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addCurrencyFromInput('add');
-            }
-        });
-    }
-}
-
-// Initialize page（支持 React 晚载入脚本；同一表格仅初始化一次）
-function runDataCaptureSummaryPageInit() {
-    const root = document.getElementById('summaryTable');
-    if (!root || root.dataset.summarySpaInit === '1') {
-        return;
-    }
-    root.dataset.summarySpaInit = '1';
+// Initialize page
+document.addEventListener('DOMContentLoaded', function () {
     try {
+        // 确保页面可以滚动（覆盖 accountCSS.css 中的 overflow: hidden）
         document.body.style.overflowY = 'auto';
         document.body.style.height = 'auto';
 
+        // 确保隐藏任何可能存在的 company 按钮（此页面不需要 company 按钮）
+        // 因为 company 是根据 process 自动计算的
         const companyFilter = document.getElementById('data-capture-summary-company-filter');
         if (companyFilter) {
             companyFilter.style.display = 'none';
         }
 
+        // Pre-load account list so Account column shows [name] only for upline/member/agent when table is built
         if (typeof fetchSummaryAccountList === 'function') {
-            fetchSummaryAccountList()
-                .then(function (accounts) {
-                    if (accounts && accounts.length) {
-                        window.__accountListWithRoles = accounts;
-                        if (typeof applyAccountDisplayByRoleToAllRows === 'function')
-                            applyAccountDisplayByRoleToAllRows();
-                    }
-                })
-                .catch(function () {});
+            fetchSummaryAccountList().then(function (accounts) {
+                if (accounts && accounts.length) {
+                    window.__accountListWithRoles = accounts;
+                    if (typeof applyAccountDisplayByRoleToAllRows === 'function') applyAccountDisplayByRoleToAllRows();
+                }
+            }).catch(function () { });
         }
 
+        // Check for URL parameters and show notifications
         const urlParams = new URLSearchParams(window.location.search);
         window.__summaryFreshFromCapture = urlParams.get('success') === '1';
         if (urlParams.get('success') === '1') {
             showNotification('Success', 'Data captured and summary generated successfully!', 'success');
+            // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
         } else if (urlParams.get('error') === '1') {
             showNotification('Error', 'Failed to generate summary. Please try again.', 'error');
+            // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        wireSummaryRateInputOnce();
-        wireSummaryAddAccountFormOnce();
-
+        // Load captured table data and render it（async：会先拉取服务端 Summary 状态再渲染）
+        // IMPORTANT: 必须在 __summaryFreshFromCapture 设置后执行，避免首屏误走旧缓存恢复分支。
         loadAndRenderCapturedTable().catch(function (e) {
             console.warn('loadAndRenderCapturedTable error:', e);
             hideLoadingState();
             showEmptyState();
         });
     } catch (error) {
-        console.error('Error in runDataCaptureSummaryPageInit:', error);
+        console.error('Error in DOMContentLoaded:', error);
+        // Ensure loading state is hidden even if there's an error
         hideLoadingState();
         showEmptyState();
     }
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-    void runDataCaptureSummaryPageInit();
 });
-if (document.readyState !== 'loading') {
-    void runDataCaptureSummaryPageInit();
-}
-window.runDataCaptureSummaryPageInit = runDataCaptureSummaryPageInit;
 
 // 从 bfcache 返回（浏览器后退等）时 DOM 不会重新跑 DOMContentLoaded，页脚合计可能仍为旧值；此处按当前表格强制对齐
 window.addEventListener('pageshow', function (ev) {
@@ -350,8 +275,8 @@ function normalizeIdProductForKey(idProduct) {
     return s;
 }
 
-// 用「Id Product(去描述) + 原始 Description + Account + Currency + Formula + Source + Rate Value」生成内容 key，
-// 确保同一基础 Id + Account 下，不同描述 / 币种 / 公式 / 来源 / Rate Value 的多行不会互相覆盖（用于保存公式/Rate 等内容）
+// 用「Id Product(去描述) + data-row-index + 原始 Description + Account + Currency + Formula + Source + Rate Value」生成内容 key，
+// 确保同一基础 Id（如 M99M06）下，B/D 等不同 Data Capture 行不会互相覆盖（用于保存公式/Rate 等内容）
 function getSummaryRowKey(row) {
     const cells = row.querySelectorAll('td');
 
@@ -359,6 +284,7 @@ function getSummaryRowKey(row) {
     const idProduct = typeof normalizeIdProductForKey === 'function'
         ? normalizeIdProductForKey(rawIdProduct)
         : rawIdProduct;
+    const rowIndex = (row && row.getAttribute) ? String(row.getAttribute('data-row-index') || '').trim() : '';
     // 使用行上的原始描述（不从单元格文本重新解析），确保带描述与不带描述的行在 key 上可区分
     const description = (row && row.getAttribute) ? (row.getAttribute('data-original-description') || '') : '';
     const account = (cells[1] && cells[1].textContent ? cells[1].textContent.trim() : '');
@@ -379,6 +305,7 @@ function getSummaryRowKey(row) {
 
     return [
         idProduct,
+        rowIndex,
         account,
         description,
         currency,
@@ -389,8 +316,32 @@ function getSummaryRowKey(row) {
 }
 
 // Rate 持久化专用稳定 key：只使用稳定字段，避免把 Formula/Source/RateValue 这种会变化的内容当成 key 导致 refresh 后匹配失败
-// 结构：id_product\taccount(identity)\tcurrency\tproductType\tsubOrder
+// 结构：id_product\trowIndex\taccount(identity)\tcurrency\tproductType\tsubOrder
 function getSummaryRowStableKey(row) {
+    const cells = row.querySelectorAll('td');
+    const rawIdProduct = (cells[0] && cells[0].textContent ? cells[0].textContent.trim().replace(/\s+/g, ' ') : '');
+    const idProduct = typeof normalizeIdProductForKey === 'function'
+        ? normalizeIdProductForKey(rawIdProduct)
+        : rawIdProduct;
+    const rowIndex = (row && row.getAttribute) ? String(row.getAttribute('data-row-index') || '').trim() : '';
+    const accountCell = cells[1] || null;
+    const accountId = accountCell && accountCell.getAttribute ? ((accountCell.getAttribute('data-account-id') || '').trim()) : '';
+    const accountText = (accountCell && accountCell.textContent ? accountCell.textContent.trim().replace(/\s+/g, ' ') : '');
+    const accountIdentity = accountId ? ('id:' + accountId) : ('txt:' + accountText);
+    const currency = (cells[3] && cells[3].textContent ? cells[3].textContent.trim().replace(/\s+/g, ' ') : '');
+    const productType = (row.getAttribute('data-product-type') || 'main').trim();
+    const subOrderRaw = (row.getAttribute('data-sub-order') || '').trim();
+    const subOrder = subOrderRaw !== '' ? subOrderRaw : (productType === 'sub' ? '1' : '0');
+    // IMPORTANT: 同一 main id_product + account 可能出现多行（不同 description/formula 等）。
+    // 为避免 refresh 后 rowsByStableKey 覆盖串行，若该行已有 rowUid，则将其拼入 stableKey 以保证唯一。
+    const rowUid = (row && row.getAttribute) ? (row.getAttribute('data-row-uid') || '').trim() : '';
+    const base = [idProduct, rowIndex, accountIdentity, currency, productType, subOrder].join('\t');
+    return rowUid ? (base + '\t' + rowUid) : base;
+}
+
+// Rate 刷新恢复专用：不含 data-row-index，避免模板重载后 row_index 变化导致 rateValuesByKey 对不上。
+// 含 formula 摘要 + original description + sub 的 parent，用于区分 (B)/(D) 等同 id+account 多行。
+function getSummaryRowRateFingerprintKey(row) {
     const cells = row.querySelectorAll('td');
     const rawIdProduct = (cells[0] && cells[0].textContent ? cells[0].textContent.trim().replace(/\s+/g, ' ') : '');
     const idProduct = typeof normalizeIdProductForKey === 'function'
@@ -404,11 +355,40 @@ function getSummaryRowStableKey(row) {
     const productType = (row.getAttribute('data-product-type') || 'main').trim();
     const subOrderRaw = (row.getAttribute('data-sub-order') || '').trim();
     const subOrder = subOrderRaw !== '' ? subOrderRaw : (productType === 'sub' ? '1' : '0');
-    // IMPORTANT: 同一 main id_product + account 可能出现多行（不同 description/formula 等）。
-    // 为避免 refresh 后 rowsByStableKey 覆盖串行，若该行已有 rowUid，则将其拼入 stableKey 以保证唯一。
-    const rowUid = (row && row.getAttribute) ? (row.getAttribute('data-row-uid') || '').trim() : '';
-    const base = [idProduct, accountIdentity, currency, productType, subOrder].join('\t');
-    return rowUid ? (base + '\t' + rowUid) : base;
+    const parentId = (row.getAttribute('data-parent-id-product') || '').trim().replace(/\s+/g, ' ');
+    const desc = (row.getAttribute('data-original-description') || '').trim().replace(/\s+/g, ' ');
+    let formulaFp = '';
+    if (cells[4]) {
+        const sp = cells[4].querySelector('.formula-text');
+        const t = (sp && sp.textContent ? sp.textContent : (cells[4].textContent || '')).trim().replace(/\s+/g, ' ');
+        formulaFp = t.length > 160 ? t.slice(0, 160) : t;
+    }
+    return [
+        idProduct,
+        accountIdentity,
+        currency,
+        productType,
+        subOrder,
+        parentId,
+        desc,
+        formulaFp
+    ].map(v => (v || '').trim()).join('\t');
+}
+
+// Rate Value 单元格：正在用 input 编辑时 textContent 不可靠，须读 input.value
+function getRateValueTextFromCell(rateValueCell) {
+    if (!rateValueCell) return '';
+    const inp = rateValueCell.querySelector && rateValueCell.querySelector('input');
+    if (inp && inp.tagName === 'INPUT') {
+        return String(inp.value != null ? inp.value : '').trim();
+    }
+    return String(rateValueCell.textContent || '').trim();
+}
+
+function getRateValueTextFromSummaryRow(row) {
+    if (!row) return '';
+    const cells = row.querySelectorAll('td');
+    return getRateValueTextFromCell(cells[7]);
 }
 
 // 规范化 key：trim + 合并多余空格，避免刷新后 Account 显示略差导致匹配失败、行被排到最后
@@ -572,6 +552,7 @@ function saveRateValuesForRefresh() {
     const rows = summaryTableBody.querySelectorAll('tr');
     const byStableKey = {};
     const byRowUid = {};
+    const byRateFingerprint = {};
     rows.forEach(row => {
         let rowUid = row.getAttribute('data-row-uid');
         if (!rowUid) {
@@ -579,14 +560,19 @@ function saveRateValuesForRefresh() {
             row.setAttribute('data-row-uid', rowUid);
         }
         const stableKey = typeof getSummaryRowStableKey === 'function' ? getSummaryRowStableKey(row) : '';
-        const cells = row.querySelectorAll('td');
-        const rateValueCell = cells[7];
-        const val = rateValueCell && rateValueCell.textContent ? rateValueCell.textContent.trim() : '';
+        const val = getRateValueTextFromSummaryRow(row);
+        const rateFp = typeof getSummaryRowRateFingerprintKey === 'function' ? getSummaryRowRateFingerprintKey(row) : '';
+        const rateFpNorm = rateFp && typeof normalizeSummaryRowKey === 'function' ? normalizeSummaryRowKey(rateFp) : rateFp;
         if (val !== '' && stableKey) byStableKey[stableKey] = val;
         if (val !== '' && rowUid) byRowUid[rowUid] = val;
+        if (val !== '' && rateFpNorm) byRateFingerprint[rateFpNorm] = val;
     });
     try {
-        localStorage.setItem('capturedTableRateValues', JSON.stringify({ byStableKey: byStableKey, byRowUid: byRowUid }));
+        localStorage.setItem('capturedTableRateValues', JSON.stringify({
+            byStableKey: byStableKey,
+            byRowUid: byRowUid,
+            byRateFingerprint: byRateFingerprint
+        }));
     } catch (e) {
         console.warn('saveRateValuesForRefresh:', e);
     }
@@ -626,8 +612,7 @@ function saveFormulaSourceForRefresh(opts) {
         if (formula && formula.includes('✏️')) formula = formula.replace(/✏️/g, '').trim();
         const sourceCell = cells[5];
         const source = sourceCell ? sourceCell.textContent.trim() : '';
-        const rateValueCell = cells[7];
-        const rateValue = includeRateValue && rateValueCell && rateValueCell.textContent ? rateValueCell.textContent.trim() : '';
+        const rateValue = includeRateValue ? getRateValueTextFromSummaryRow(row) : '';
         const originalDescription = row.getAttribute('data-original-description') || '';
         const existing = byKey[normKey];
         // 若已存在记录且其中公式/来源/Rate 有有效值，而当前行为空，避免用“空值”覆盖已有数据
@@ -690,27 +675,41 @@ function saveFormulaSourceForRefresh(opts) {
     // 按稳定 key 保存 Rate Value（每行一份），避免 refresh 后因 Formula/Source/Rate 变化造成 key 漂移
     const rateValuesByKey = {};
     const rateValuesByRowUid = {};
+    const rateValuesByRateFingerprint = {};
     if (includeRateValue) {
         rows.forEach(row => {
             const stableKey = typeof getSummaryRowStableKey === 'function' ? getSummaryRowStableKey(row) : '';
             if (!stableKey) return;
-            const cells = row.querySelectorAll('td');
-            const rateValueCell = cells[7];
-            const rv = rateValueCell && rateValueCell.textContent ? rateValueCell.textContent.trim() : '';
+            const rv = getRateValueTextFromSummaryRow(row);
             rateValuesByKey[stableKey] = rv;
             const uidForRate = (row.getAttribute('data-row-uid') || '').trim();
             if (uidForRate) rateValuesByRowUid[uidForRate] = rv;
+            const rateFp = typeof getSummaryRowRateFingerprintKey === 'function' ? getSummaryRowRateFingerprintKey(row) : '';
+            const rateFpNorm = rateFp && typeof normalizeSummaryRowKey === 'function' ? normalizeSummaryRowKey(rateFp) : rateFp;
+            if (rateFpNorm) rateValuesByRateFingerprint[rateFpNorm] = rv;
         });
     }
-    const payload = { processId: processId != null ? processId : null, processCode, rowsByKey: byKey, rowsByStableKey: byStableKey, rowsByRowUid: byRowUid, rowOrder: rowOrder, rateValuesByKey: rateValuesByKey, rateValuesByRowUid: rateValuesByRowUid, savedAt: Date.now() };
+    const payload = {
+        processId: processId != null ? processId : null,
+        processCode,
+        rowsByKey: byKey,
+        rowsByStableKey: byStableKey,
+        rowsByRowUid: byRowUid,
+        rowOrder: rowOrder,
+        rateValuesByKey: rateValuesByKey,
+        rateValuesByRowUid: rateValuesByRowUid,
+        rateValuesByRateFingerprint: rateValuesByRateFingerprint,
+        savedAt: Date.now()
+    };
     try {
         localStorage.setItem('capturedTableFormulaSourceForRefresh', JSON.stringify(payload));
-        if (includeRateValue && Object.keys(rateValuesByKey).length > 0) {
+        if (includeRateValue && (Object.keys(rateValuesByKey).length > 0 || Object.keys(rateValuesByRateFingerprint).length > 0)) {
             localStorage.setItem('capturedTableRateValuesByProductId', JSON.stringify({
                 processId: processId != null ? processId : null,
                 processCode: processCode,
                 rateValuesByKey: rateValuesByKey,
-                rateValuesByRowUid: rateValuesByRowUid
+                rateValuesByRowUid: rateValuesByRowUid,
+                rateValuesByRateFingerprint: rateValuesByRateFingerprint
             }));
         }
     } catch (e) {
@@ -784,6 +783,14 @@ function hasRestorableSummaryRowData(data) {
 
 function hasRestorableSummaryState(saved) {
     if (!saved || typeof saved !== 'object') return false;
+    const rateFpMap = saved.rateValuesByRateFingerprint;
+    if (rateFpMap && typeof rateFpMap === 'object') {
+        const rk = Object.keys(rateFpMap);
+        for (let i = 0; i < rk.length; i++) {
+            const v = rateFpMap[rk[i]];
+            if (v != null && String(v).trim() !== '') return true;
+        }
+    }
     const maps = [saved.rowsByRowUid, saved.rowsByStableKey, saved.rowsByKey];
     for (let i = 0; i < maps.length; i++) {
         const map = maps[i];
@@ -809,6 +816,36 @@ function getSavedSummaryRowData(row, rowsByKey, rowsByStableKey, rowsByRowUid) {
     const key = getSummaryRowKey(row);
     const normKey = typeof normalizeSummaryRowKey === 'function' ? normalizeSummaryRowKey(key) : key;
     return (rowsByKey && typeof rowsByKey === 'object') ? (rowsByKey[normKey] || rowsByKey[key] || null) : null;
+}
+
+// 刷新后恢复 Rate：rowUid > 含 row_index 的 stableKey > 不含 row_index 的 fingerprint（避免模板重写 row_index 后丢失）
+function resolveSavedRateValueForRow(row, saved) {
+    if (!row || !saved || typeof saved !== 'object') return null;
+    const byRowUid = saved.rateValuesByRowUid && typeof saved.rateValuesByRowUid === 'object' ? saved.rateValuesByRowUid : null;
+    const byKey = saved.rateValuesByKey && typeof saved.rateValuesByKey === 'object' ? saved.rateValuesByKey : null;
+    const byFp = saved.rateValuesByRateFingerprint && typeof saved.rateValuesByRateFingerprint === 'object'
+        ? saved.rateValuesByRateFingerprint
+        : null;
+    const uid = (row.getAttribute('data-row-uid') || '').trim();
+    let v = null;
+    if (byRowUid && uid && Object.prototype.hasOwnProperty.call(byRowUid, uid)) {
+        v = byRowUid[uid];
+    }
+    if ((v == null || String(v).trim() === '') && byKey) {
+        const sk = typeof getSummaryRowStableKey === 'function' ? getSummaryRowStableKey(row) : '';
+        if (sk && Object.prototype.hasOwnProperty.call(byKey, sk)) {
+            v = byKey[sk];
+        }
+    }
+    if ((v == null || String(v).trim() === '') && byFp) {
+        const fp = typeof getSummaryRowRateFingerprintKey === 'function' ? getSummaryRowRateFingerprintKey(row) : '';
+        const fpNorm = fp && typeof normalizeSummaryRowKey === 'function' ? normalizeSummaryRowKey(fp) : fp;
+        if (fpNorm && Object.prototype.hasOwnProperty.call(byFp, fpNorm)) {
+            v = byFp[fpNorm];
+        }
+    }
+    if (v != null && String(v).trim() !== '') return String(v).trim();
+    return null;
 }
 
 function readSummaryStateFromLocalStorage() {
@@ -892,17 +929,11 @@ function restoreFormulaSourceFromRefresh() {
     const summaryTableBody = document.getElementById('summaryTableBody');
     if (!summaryTableBody) return;
 
-    // 在按照 rowOrder 重排之前，先为当前 DOM 行补上 data-row-uid（优先按保存时的行序与 rowOrder 对齐，避免同 Id_Product+Account 多行仅靠 stableKey 串数据）。
+    // 先为当前 DOM 行补上 data-row-uid：
+    // 只根据 stable/key 精确匹配恢复，不按 rowOrder 的数组索引硬绑定。
+    // 原因：main/sub 行在 refresh 后顺序可能变化，按索引回填 uid 会把别行数据绑定到当前行（sub row 最明显）。
     try {
         const rowsForUidRestore = summaryTableBody.querySelectorAll('tr');
-        const rowOrderArr = saved.rowOrder;
-        if (Array.isArray(rowOrderArr) && rowOrderArr.length === rowsForUidRestore.length) {
-            Array.from(rowsForUidRestore).forEach((row, idx) => {
-                if (row.getAttribute('data-row-uid')) return;
-                const uid = rowUidFromSummarySavedOrderEntry(rowOrderArr[idx]);
-                if (uid) row.setAttribute('data-row-uid', uid);
-            });
-        }
         rowsForUidRestore.forEach((row) => {
             if (row.getAttribute('data-row-uid')) return;
             const dataForUid = getSavedSummaryRowData(row, byKey, byStableKey, byRowUid);
@@ -926,31 +957,21 @@ function restoreFormulaSourceFromRefresh() {
     );
 
     const rows = summaryTableBody.querySelectorAll('tr');
-    const stableRateValuesByKey = (saved && saved.rateValuesByKey && typeof saved.rateValuesByKey === 'object') ? saved.rateValuesByKey : null;
-    const stableRateValuesByRowUid = (saved && saved.rateValuesByRowUid && typeof saved.rateValuesByRowUid === 'object') ? saved.rateValuesByRowUid : null;
     rows.forEach((row) => {
         const data = getSavedSummaryRowData(row, byKey, byStableKey, byRowUid);
         const cells = row.querySelectorAll('td');
-        const stableKey = typeof getSummaryRowStableKey === 'function' ? getSummaryRowStableKey(row) : '';
-        const uidForStableRate = (row.getAttribute('data-row-uid') || '').trim();
-        let stableRate = null;
-        if (stableRateValuesByRowUid && uidForStableRate && Object.prototype.hasOwnProperty.call(stableRateValuesByRowUid, uidForStableRate)) {
-            stableRate = stableRateValuesByRowUid[uidForStableRate];
-        }
-        if ((stableRate == null || String(stableRate).trim() === '') && stableRateValuesByKey && stableKey) {
-            stableRate = stableRateValuesByKey[stableKey];
-        }
+        const stableRate = typeof resolveSavedRateValueForRow === 'function' ? resolveSavedRateValueForRow(row, saved) : null;
         if (!data) {
             const resolvedRateOnly = (stableRate != null && String(stableRate).trim() !== '') ? stableRate : '';
             if (resolvedRateOnly !== '' && cells[7]) {
                 cells[7].textContent = String(resolvedRateOnly).trim();
             }
             if (cells[8] && typeof applyRateToProcessedAmount === 'function') {
-                const baseAmount = parseFloat(row.getAttribute('data-base-processed-amount') || '0') || 0;
+                const baseAmount = MoneyDecimal.toDecimal(row.getAttribute('data-base-processed-amount') || '0', 0).toString();
                 const finalAmount = applyRateToProcessedAmount(row, baseAmount);
-                const rounded = typeof roundProcessedAmountTo2Decimals === 'function' ? roundProcessedAmountTo2Decimals(Number(finalAmount)) : Number(finalAmount);
+                const rounded = typeof roundProcessedAmountTo2Decimals === 'function' ? roundProcessedAmountTo2Decimals(finalAmount) : finalAmount;
                 cells[8].textContent = typeof formatNumberWithThousands === 'function' ? formatNumberWithThousands(rounded) : String(finalAmount);
-                cells[8].style.color = finalAmount > 0 ? '#0D60FF' : (finalAmount < 0 ? '#A91215' : '#000000');
+                cells[8].style.color = MoneyDecimal.cmp(finalAmount, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(finalAmount, '0') < 0 ? '#A91215' : '#000000');
             }
             return;
         }
@@ -1107,6 +1128,7 @@ function restoreRateValuesFromRefresh() {
                 const legacyFlat = !Object.prototype.hasOwnProperty.call(saved, 'byStableKey') ? saved : null;
                 const rateByStable = saved.byStableKey && typeof saved.byStableKey === 'object' ? saved.byStableKey : legacyFlat;
                 const rateByRowUid = saved.byRowUid && typeof saved.byRowUid === 'object' ? saved.byRowUid : null;
+                const rateByFp = saved.byRateFingerprint && typeof saved.byRateFingerprint === 'object' ? saved.byRateFingerprint : null;
                 let appliedFromThisBucket = 0;
                 rows.forEach((row) => {
                     const stableKey = typeof getSummaryRowStableKey === 'function' ? getSummaryRowStableKey(row) : '';
@@ -1117,6 +1139,13 @@ function restoreRateValuesFromRefresh() {
                     }
                     if (val === undefined || val === null || String(val).trim() === '') {
                         val = stableKey && rateByStable ? rateByStable[stableKey] : undefined;
+                    }
+                    if ((val === undefined || val === null || String(val).trim() === '') && rateByFp) {
+                        const fp = typeof getSummaryRowRateFingerprintKey === 'function' ? getSummaryRowRateFingerprintKey(row) : '';
+                        const fpNorm = fp && typeof normalizeSummaryRowKey === 'function' ? normalizeSummaryRowKey(fp) : fp;
+                        if (fpNorm && Object.prototype.hasOwnProperty.call(rateByFp, fpNorm)) {
+                            val = rateByFp[fpNorm];
+                        }
                     }
                     // 兼容旧缓存：尝试旧内容 key 的精确匹配（不再做按 id_product 广播，避免串行）
                     if (val === undefined || val === null || String(val).trim() === '') {
@@ -1157,6 +1186,9 @@ function restoreRateValuesFromRefresh() {
         const savedByProduct = JSON.parse(rawByProduct);
         const rateValuesByKey = savedByProduct && savedByProduct.rateValuesByKey && typeof savedByProduct.rateValuesByKey === 'object' ? savedByProduct.rateValuesByKey : null;
         const rateValuesByRowUid = savedByProduct && savedByProduct.rateValuesByRowUid && typeof savedByProduct.rateValuesByRowUid === 'object' ? savedByProduct.rateValuesByRowUid : null;
+        const rateValuesByRateFingerprint = savedByProduct && savedByProduct.rateValuesByRateFingerprint && typeof savedByProduct.rateValuesByRateFingerprint === 'object'
+            ? savedByProduct.rateValuesByRateFingerprint
+            : null;
         const rateValuesByProductIdLegacy = savedByProduct && savedByProduct.rateValuesByProductId && typeof savedByProduct.rateValuesByProductId === 'object' ? savedByProduct.rateValuesByProductId : null;
         const currentId = getCurrentProcessId();
         const currentCode = (typeof window.currentProcessCode === 'string' ? window.currentProcessCode : '').trim();
@@ -1169,19 +1201,18 @@ function restoreRateValuesFromRefresh() {
             if (typeof updateProcessedAmountTotal === 'function') updateProcessedAmountTotal();
             return;
         }
-        if ((rateValuesByKey && Object.keys(rateValuesByKey).length > 0) || (rateValuesByRowUid && Object.keys(rateValuesByRowUid).length > 0)) {
+        if ((rateValuesByKey && Object.keys(rateValuesByKey).length > 0) || (rateValuesByRowUid && Object.keys(rateValuesByRowUid).length > 0) || (rateValuesByRateFingerprint && Object.keys(rateValuesByRateFingerprint).length > 0)) {
             let appliedFromThisBucket = 0;
+            const rateSavedBundle = {
+                rateValuesByRowUid: rateValuesByRowUid,
+                rateValuesByKey: rateValuesByKey,
+                rateValuesByRateFingerprint: rateValuesByRateFingerprint
+            };
             rows.forEach((row) => {
-                const stableKey = typeof getSummaryRowStableKey === 'function' ? getSummaryRowStableKey(row) : '';
-                const uid = (row.getAttribute('data-row-uid') || '').trim();
                 let val;
-                if (rateValuesByRowUid && uid && Object.prototype.hasOwnProperty.call(rateValuesByRowUid, uid)) {
-                    val = rateValuesByRowUid[uid];
+                if (typeof resolveSavedRateValueForRow === 'function') {
+                    val = resolveSavedRateValueForRow(row, rateSavedBundle);
                 }
-                if (val === undefined || val === null || String(val).trim() === '') {
-                    val = stableKey && rateValuesByKey ? rateValuesByKey[stableKey] : undefined;
-                }
-                // 兼容旧格式：再尝试旧内容 key 精确匹配
                 if (val === undefined || val === null || String(val).trim() === '') {
                     const legacyKey = getSummaryRowKey(row);
                     const legacyNormKey = typeof normalizeSummaryRowKey === 'function' ? normalizeSummaryRowKey(legacyKey) : legacyKey;
@@ -1230,7 +1261,7 @@ function goBackToDataCapture() {
     if (typeof saveRateValuesForRefresh === 'function') saveRateValuesForRefresh();
     if (typeof saveFormulaSourceForRefresh === 'function') saveFormulaSourceForRefresh();
     window.isNavigatingAwayByBackOrSubmit = true;
-    navigateToDataCaptureFromSummary('restore=1');
+    window.location.href = 'datacapture.php?restore=1';
 }
 
 // Refresh page function: save rate values and formula/source so they are restored after reload
@@ -2974,6 +3005,17 @@ function submitRateValues() {
     }
 }
 
+// Add event listener for rateInput changes
+document.addEventListener('DOMContentLoaded', function () {
+    // Add event listener for rateInput changes
+    const rateInput = document.getElementById('rateInput');
+    if (rateInput) {
+        rateInput.addEventListener('input', function () {
+            recalculateAllRowsWithRate();
+        });
+    }
+});
+
 // ==================== Helper Functions for Account Custom Select ====================
 function getAccountId(buttonElement) {
     if (!buttonElement) return '';
@@ -3247,8 +3289,8 @@ async function loadFormData() {
 
                     // Add account options
                     result.accounts.forEach(account => {
-                        // Only for upline (Supplier in UI), agent, member: display "Account [name]"; other roles show account_id only
-                        const rolesToShowName = ['upline', 'supplier', 'agent', 'member', 'debtor'];
+                        // Only listed roles display "Account [name]"; others show account_id only
+                        const rolesToShowName = ['upline', 'supplier', 'partner', 'staff', 'agent', 'member', 'debtor'];
                         let displayText;
                         if (account.role && rolesToShowName.includes(account.role.toLowerCase()) && account.name) {
                             displayText = account.account_id + ' [' + account.name + ']';
@@ -4801,9 +4843,16 @@ function validatePaymentAlertForAdd() {
             return false;
         }
         // Validate alert amount must be a negative number
-        if (alertAmount && (isNaN(parseFloat(alertAmount)) || parseFloat(alertAmount) >= 0)) {
-            showNotification('Alert Amount must be a negative number.', 'danger');
-            return false;
+        if (alertAmount) {
+            try {
+                if (MoneyDecimal.cmp(alertAmount, '0') >= 0) {
+                    showNotification('Alert Amount must be a negative number.', 'danger');
+                    return false;
+                }
+            } catch (e) {
+                showNotification('Alert Amount must be a negative number.', 'danger');
+                return false;
+            }
         }
     }
     return true;
@@ -5057,6 +5106,49 @@ if (addAccountForm) {
         }
     });
 }
+
+// Add event listeners for payment alert radio buttons and uppercase conversion
+document.addEventListener('DOMContentLoaded', function () {
+    // Add event listeners for payment alert radio buttons
+    document.querySelectorAll('input[name="add_payment_alert"]').forEach(radio => {
+        radio.addEventListener('change', function () {
+            toggleAlertFields('add');
+        });
+    });
+
+    // Add uppercase conversion for account fields
+    const uppercaseInputs = [
+        'add_account_id',
+        'add_name',
+        'add_remark',
+        'addCurrencyInput'
+    ];
+
+    uppercaseInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('input', function () {
+                forceUppercase(this);
+            });
+
+            input.addEventListener('paste', function () {
+                setTimeout(() => forceUppercase(this), 0);
+            });
+        }
+    });
+
+    // Handle Enter key in currency input
+    const addCurrencyInput = document.getElementById('addCurrencyInput');
+    if (addCurrencyInput) {
+        addCurrencyInput.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCurrencyFromInput('add');
+            }
+        });
+    }
+});
+
 
 // Add input validation for Source Percent
 function addSourcePercentValidation() {
@@ -7596,7 +7688,7 @@ function extractRowDataForTemplate(row, formData) {
         columns_display: formData.columnsDisplay || '',
         formula_display: formData.formulaDisplay || '',
         last_source_value: sourceValue || '',
-        last_processed_amount: formData.processedAmount || 0,
+        last_processed_amount: formData.processedAmount || '0',
         template_key: templateKey,
         process_id: getCurrentProcessId(),
         row_index: rowIndex,
@@ -7785,12 +7877,11 @@ function buildFormDataFromRow(row) {
     }
 
     const processedAmountCell = cells[8]; // Processed Amount column
-    let processedAmount = 0;
+    let processedAmount = '0';
     if (processedAmountCell) {
-        const numericValue = parseFloat(processedAmountCell.textContent.replace(/,/g, ''));
-        if (!Number.isNaN(numericValue)) {
-            processedAmount = numericValue;
-        }
+        try {
+            processedAmount = MoneyDecimal.toDecimal(processedAmountCell.textContent.replace(/,/g, ''), 0).toString();
+        } catch (_) { /* keep zero */ }
     }
 
     const productType = row.getAttribute('data-product-type') || 'main';
@@ -8361,12 +8452,16 @@ function saveFormula() {
             // 在编辑模式下，保留原有的 formula_variant 和 template_id，确保更新现有模板而不是创建新模板
             const existingFormulaVariant = editingRow.getAttribute('data-formula-variant');
             const existingTemplateId = editingRow.getAttribute('data-template-id');
+            const existingParentRowIndex = editingRow.getAttribute('data-parent-row-index');
             updateSubIdProductRow(processValue, {
                 ...basePayload,
                 productType: 'sub',
                 templateKey: editingRow.getAttribute('data-template-key') || null,
                 formulaVariant: existingFormulaVariant || null,
-                templateId: existingTemplateId || null
+                templateId: existingTemplateId || null,
+                parentRowIndex: (existingParentRowIndex !== null && existingParentRowIndex !== '' && !Number.isNaN(Number(existingParentRowIndex)))
+                    ? Number(existingParentRowIndex)
+                    : null
             }, editingRow);
         } else {
             // 在编辑模式下，保留原有的 formula_variant 和 template_id，确保更新现有模板而不是创建新模板
@@ -8392,6 +8487,8 @@ function saveFormula() {
         // Get row_index from the new row (should be set by addSubIdProductRow)
         const newRowIndex = newRow ? newRow.getAttribute('data-row-index') : null;
         const rowIndexValue = (newRowIndex && newRowIndex !== '' && newRowIndex !== '999999') ? Number(newRowIndex) : null;
+        const newParentRowIndex = newRow ? newRow.getAttribute('data-parent-row-index') : null;
+        const parentRowIndexValue = (newParentRowIndex && newParentRowIndex !== '' && newParentRowIndex !== '999999') ? Number(newParentRowIndex) : null;
 
         // Get sub_order from the new row (calculated by addSubIdProductRow)
         const subOrderValue = newRow ? (newRow.getAttribute('data-sub-order') || null) : null;
@@ -8420,7 +8517,8 @@ function saveFormula() {
             enableSourcePercent: sourcePercentEnableValue,
             productType: 'sub',
             rowIndex: rowIndexValue, // Pass row_index to preserve order
-            subOrder: subOrderNumber // Pass sub_order to preserve order
+            subOrder: subOrderNumber, // Pass sub_order to preserve order
+            parentRowIndex: parentRowIndexValue
         }, newRow);
 
         // 记录刚创建的 sub 行，供后面的模板保存使用
@@ -8474,6 +8572,8 @@ function saveFormula() {
             // Get row_index from the new row (should be set by addSubIdProductRow)
             const newRowIndex2 = newRow ? newRow.getAttribute('data-row-index') : null;
             const rowIndexValue2 = (newRowIndex2 && newRowIndex2 !== '' && newRowIndex2 !== '999999') ? Number(newRowIndex2) : null;
+            const newParentRowIndex2 = newRow ? newRow.getAttribute('data-parent-row-index') : null;
+            const parentRowIndexValue2 = (newParentRowIndex2 && newParentRowIndex2 !== '' && newParentRowIndex2 !== '999999') ? Number(newParentRowIndex2) : null;
 
             // Get sub_order from the new row (calculated by addSubIdProductRow)
             const subOrderValue2 = newRow ? (newRow.getAttribute('data-sub-order') || null) : null;
@@ -8502,7 +8602,8 @@ function saveFormula() {
                 enableSourcePercent: sourcePercentEnableValue,
                 productType: 'sub',
                 rowIndex: rowIndexValue2, // Pass row_index to preserve order
-                subOrder: subOrderNumber2 // Pass sub_order to preserve order
+                subOrder: subOrderNumber2, // Pass sub_order to preserve order
+                parentRowIndex: parentRowIndexValue2
             }, newRow);
 
             // 记录刚创建的 sub 行，供后面的模板保存使用
@@ -9734,7 +9835,7 @@ function recalculateAndRenderProcessedAmount(row, options = {}) {
         : String(row.getAttribute('data-input-method') || '').trim();
     const enableInputMethod = options.enableInputMethod !== undefined
         ? !!options.enableInputMethod
-        : !!inputMethod;
+        : row.getAttribute('data-enable-input-method') === 'true';
 
     let sourcePercentText = '';
     if (options.sourcePercent !== undefined && options.sourcePercent !== null) {
@@ -9753,7 +9854,19 @@ function recalculateAndRenderProcessedAmount(row, options = {}) {
     } else if (options.formula !== undefined && options.formula !== null && String(options.formula).trim() !== '') {
         formulaText = String(options.formula).trim();
     } else {
-        formulaText = String(row.getAttribute('data-formula-operators') || '').trim() || getFormulaForCalculation(row);
+        const operators = String(row.getAttribute('data-formula-operators') || '').trim();
+        let displayExpanded = String(row.getAttribute('data-formula-display') || '').trim();
+        if (!displayExpanded && cells[4]) {
+            const span = cells[4].querySelector('.formula-text');
+            const fromCell = (span ? span.textContent : cells[4].textContent || '').trim();
+            if (fromCell && fromCell !== 'Formula') displayExpanded = fromCell;
+        }
+        const hasDollarColumnRef = /\$(\d+)/.test(displayExpanded);
+        if (displayExpanded && displayExpanded !== 'Formula' && !hasDollarColumnRef) {
+            formulaText = displayExpanded;
+        } else {
+            formulaText = operators || getFormulaForCalculation(row);
+        }
     }
 
     const processValueForRefs = options.processValue != null && String(options.processValue).trim() !== ''
@@ -9765,7 +9878,7 @@ function recalculateAndRenderProcessedAmount(row, options = {}) {
         ? getEffectiveClickedRefsForDollarOnlyFormula(formulaText, processValueForRefs, refCtx.clickedCellRefs)
         : refCtx.clickedCellRefs
 
-    let baseProcessedAmount = 0;
+    let baseProcessedAmount = '0';
     if (formulaText && formulaText !== 'Formula') {
         baseProcessedAmount = calculateFormulaResultFromExpression(
             formulaText,
@@ -9779,23 +9892,23 @@ function recalculateAndRenderProcessedAmount(row, options = {}) {
         );
     }
 
-    if (baseProcessedAmount === null || isNaN(baseProcessedAmount) || !Number.isFinite(Number(baseProcessedAmount))) {
-        baseProcessedAmount = 0;
-    } else {
-        baseProcessedAmount = Number(baseProcessedAmount);
+    try {
+        baseProcessedAmount = MoneyDecimal.toDecimal(baseProcessedAmount, 0).toString();
+    } catch (_) {
+        baseProcessedAmount = '0';
     }
 
-    row.setAttribute('data-base-processed-amount', baseProcessedAmount.toString());
+    row.setAttribute('data-base-processed-amount', baseProcessedAmount);
 
     let finalProcessedAmount = baseProcessedAmount;
     if (typeof applyRateToProcessedAmount === 'function') {
         finalProcessedAmount = applyRateToProcessedAmount(row, baseProcessedAmount);
     }
 
-    if (finalProcessedAmount === null || isNaN(finalProcessedAmount) || !Number.isFinite(Number(finalProcessedAmount))) {
-        finalProcessedAmount = 0;
-    } else {
-        finalProcessedAmount = Number(finalProcessedAmount);
+    try {
+        finalProcessedAmount = MoneyDecimal.toDecimal(finalProcessedAmount, 0).toString();
+    } catch (_) {
+        finalProcessedAmount = '0';
     }
 
     if (cells[8]) {
@@ -9805,7 +9918,7 @@ function recalculateAndRenderProcessedAmount(row, options = {}) {
         cells[8].textContent = typeof formatNumberWithThousands === 'function'
             ? formatNumberWithThousands(rounded)
             : String(finalProcessedAmount);
-        cells[8].style.color = finalProcessedAmount > 0 ? '#0D60FF' : (finalProcessedAmount < 0 ? '#A91215' : '#000000');
+        cells[8].style.color = MoneyDecimal.cmp(finalProcessedAmount, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(finalProcessedAmount, '0') < 0 ? '#A91215' : '#000000');
     }
 
     if (options.updateTotal !== false && typeof updateProcessedAmountTotal === 'function') {
@@ -9853,10 +9966,10 @@ function recalculateSummaryProcessedAmountsFromDisplayedFormula() {
             processedAmount = 0
         }
 
-        if (!Number.isFinite(Number(processedAmount))) {
-            processedAmount = 0
-        } else {
-            processedAmount = Number(processedAmount)
+        try {
+            processedAmount = MoneyDecimal.toDecimal(processedAmount, 0).toString()
+        } catch (_) {
+            processedAmount = '0'
         }
 
         row.setAttribute('data-base-processed-amount', String(processedAmount))
@@ -9865,7 +9978,7 @@ function recalculateSummaryProcessedAmountsFromDisplayedFormula() {
             : processedAmount
 
         processedAmountCell.textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(finalProcessedAmount))
-        processedAmountCell.style.color = finalProcessedAmount > 0 ? '#0D60FF' : (finalProcessedAmount < 0 ? '#A91215' : '#000000')
+        processedAmountCell.style.color = MoneyDecimal.cmp(finalProcessedAmount, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(finalProcessedAmount, '0') < 0 ? '#A91215' : '#000000')
     })
 
     updateProcessedAmountTotal()
@@ -9920,18 +10033,22 @@ function hasBinaryAdditiveAtDepthZero(prefix) {
 function stripTrailingEmbeddedCommissionFactors(expr, sourceDecimal, options) {
     if (!expr || typeof expr !== 'string') return ''
     const stripDuplicateOfSource = options && options.stripDuplicateOfSource === true
-    if (!stripDuplicateOfSource || sourceDecimal == null || !Number.isFinite(Number(sourceDecimal))) {
+    let src
+    try {
+        src = MoneyDecimal.toDecimal(sourceDecimal)
+    } catch (_) {
         return expr.trim()
     }
-    const src = Number(sourceDecimal)
-    const eps = 0.0001
+    if (!stripDuplicateOfSource || sourceDecimal == null) {
+        return expr.trim()
+    }
     let s = expr.trim().replace(/\s+/g, '')
     const maxIter = 24
     for (let i = 0; i < maxIter && s.length > 0; i++) {
         const mParen = s.match(/^(.*)\*\(([0-9.]+)\)$/)
         if (mParen) {
-            const v = parseFloat(mParen[2])
-            if (!Number.isNaN(v) && Math.abs(v - src) < eps) {
+            const v = MoneyDecimal.toDecimal(mParen[2], 0)
+            if (v.minus(src).abs().lt('0.0001')) {
                 const nextPrefix = mParen[1].trim()
                 if (hasBinaryAdditiveAtDepthZero(nextPrefix)) {
                     break
@@ -9942,8 +10059,8 @@ function stripTrailingEmbeddedCommissionFactors(expr, sourceDecimal, options) {
         }
         const mStar = s.match(/^(.*)\*([0-9.]+)$/)
         if (mStar) {
-            const v = parseFloat(mStar[2])
-            if (!Number.isNaN(v) && Math.abs(v - src) < eps) {
+            const v = MoneyDecimal.toDecimal(mStar[2], 0)
+            if (v.minus(src).abs().lt('0.0001')) {
                 const nextPrefix = mStar[1].trim()
                 if (hasBinaryAdditiveAtDepthZero(nextPrefix)) {
                     break
@@ -9976,10 +10093,10 @@ function createFormulaDisplayFromExpression(formula, sourcePercentValue, enableS
         if (enableSourcePercent && sourcePercentValue && sourcePercentValue.trim() !== '') {
             try {
                 const sanitizedForStrip = removeThousandsSeparators(sourcePercentValue.trim())
-                const sp = evaluateExpression(sanitizedForStrip)
-                if (Number.isFinite(sp) && Math.abs(sp - 1) >= 0.0001) {
+                const sp = MoneyDecimal.toDecimal(evaluateExpression(sanitizedForStrip), 0)
+                if (sp.minus(1).abs().gte('0.0001')) {
                     shouldStripDuplicateOfSource = true
-                    sourceDecimalForStrip = sp
+                    sourceDecimalForStrip = sp.toString()
                 }
             } catch (e) { /* ignore */ }
         }
@@ -10006,13 +10123,13 @@ function createFormulaDisplayFromExpression(formula, sourcePercentValue, enableS
         const sanitizedSourcePercent = removeThousandsSeparators(sourcePercentExpr);
         let decimalValue;
         try {
-            decimalValue = evaluateExpression(sanitizedSourcePercent);
+            decimalValue = MoneyDecimal.toDecimal(evaluateExpression(sanitizedSourcePercent), 0);
         } catch (e) {
             // If evaluation fails, treat as non-1 and add to display
-            decimalValue = 0;
+            decimalValue = MoneyDecimal.toDecimal('0');
         }
 
-        if (Math.abs(decimalValue - 1) < 0.0001) { // Use small epsilon for floating point comparison
+        if (decimalValue.minus(1).abs().lt('0.0001')) {
             // Source is 1, return formula without multiplying
             const balanced = balanceParentheses(trimmedFormula);
             console.log('Formula display created from expression (source is 1, no multiplication):', balanced);
@@ -10040,8 +10157,8 @@ function createFormulaDisplayFromExpression(formula, sourcePercentValue, enableS
                     const trailingExpr = formulaTrimmed.substring(i + 1, lastClose);
                     if (beforeParen.endsWith('*') && trailingExpr && /^[0-9+\-*/().\s]+$/.test(trailingExpr.replace(/\s/g, ''))) {
                         try {
-                            const trailingVal = evaluateExpression(trailingExpr);
-                            if (!isNaN(trailingVal) && Number.isFinite(trailingVal) && Math.abs(trailingVal - decimalValue) < 0.0001) {
+                            const trailingVal = MoneyDecimal.toDecimal(evaluateExpression(trailingExpr), 0);
+                            if (trailingVal.minus(decimalValue).abs().lt('0.0001')) {
                                 alreadyHasSource = true;
                             }
                         } catch (e) { /* ignore */ }
@@ -10119,10 +10236,10 @@ function calculateFormulaResultFromExpression(formula, sourcePercentValue, input
         if (enableSourcePercent && sourcePercentValue && sourcePercentValue.trim() !== '') {
             try {
                 const sanitizedForStrip = removeThousandsSeparators(sourcePercentValue.trim())
-                const sp = evaluateExpression(sanitizedForStrip)
-                if (Number.isFinite(sp) && Math.abs(sp - 1) >= 0.0001) {
+                const sp = MoneyDecimal.toDecimal(evaluateExpression(sanitizedForStrip), 0)
+                if (sp.minus(1).abs().gte('0.0001')) {
                     shouldStripDuplicateOfSource = true
-                    sourceDecimalForStrip = sp
+                    sourceDecimalForStrip = sp.toString()
                 }
             } catch (e) { /* ignore */ }
         }
@@ -10164,7 +10281,7 @@ function calculateFormulaResultFromExpression(formula, sourcePercentValue, input
         // Evaluate the source percent expression directly (no need to divide by 100)
         const sourcePercentExpr = sourcePercentValue.trim();
         const sanitizedSourcePercent = removeThousandsSeparators(sourcePercentExpr);
-        const decimalValue = evaluateExpression(sanitizedSourcePercent);
+        const decimalValue = MoneyDecimal.toDecimal(evaluateExpression(sanitizedSourcePercent), 0);
 
         // If source is 1, don't multiply (multiplying by 1 has no effect)
         // If formula已经含与 Source 相同的尾段，不再乘（用剥完后的式子判断，与 evaluate 输入一致）
@@ -10185,8 +10302,8 @@ function calculateFormulaResultFromExpression(formula, sourcePercentValue, input
                 const trailingExpr = formulaTrimmed.substring(i + 1, lastClose);
                 if (beforeParen.endsWith('*') && trailingExpr && /^[0-9+\-*/().\s]+$/.test(trailingExpr.replace(/\s/g, ''))) {
                     try {
-                        const trailingVal = evaluateExpression(trailingExpr);
-                        if (!isNaN(trailingVal) && Number.isFinite(trailingVal) && Math.abs(trailingVal - decimalValue) < 0.0001) {
+                        const trailingVal = MoneyDecimal.toDecimal(evaluateExpression(trailingExpr), 0);
+                        if (trailingVal.minus(decimalValue).abs().lt('0.0001')) {
                             alreadyHasSource = true;
                         }
                     } catch (e) { /* ignore */ }
@@ -10195,13 +10312,13 @@ function calculateFormulaResultFromExpression(formula, sourcePercentValue, input
         }
 
         let result;
-        if (Math.abs(decimalValue - 1) < 0.0001) { // Use small epsilon for floating point comparison
+        if (decimalValue.minus(1).abs().lt('0.0001')) {
             result = formulaResult; // Don't multiply by 1
         } else if (alreadyHasSource) {
             result = formulaResult; // Formula already contains *(source), don't multiply again
         } else {
             // Calculate: formula result * source percent (already in decimal format)
-            result = formulaResult * decimalValue;
+            result = MoneyDecimal.mul(formulaResult, decimalValue).toString();
         }
 
         // Apply input method transformation if enabled
@@ -10872,15 +10989,14 @@ function createFormulaDisplay(sourceData, sourcePercentValue) {
         const sanitizedPercent = removeThousandsSeparators(percentExpr);
         let decimalValue;
         try {
-            const percentEval = evaluateExpression(sanitizedPercent);
-            decimalValue = percentEval / 100;
-            decimalValue = parseFloat(decimalValue.toFixed(4));
+            const percentEval = MoneyDecimal.toDecimal(evaluateExpression(sanitizedPercent), 0);
+            decimalValue = percentEval.div(100).toDecimalPlaces(4, MoneyDecimal.Decimal.ROUND_DOWN);
         } catch (e) {
             // If evaluation fails, treat as non-1 and add to display
-            decimalValue = 0;
+            decimalValue = MoneyDecimal.toDecimal('0');
         }
 
-        if (Math.abs(decimalValue - 1) < 0.0001) { // Use small epsilon for floating point comparison
+        if (decimalValue.minus(1).abs().lt('0.0001')) {
             // Source is 1 (100%), return formula without multiplying
             console.log('Formula display created (source is 1, no multiplication):', trimmedSourceData);
             return formatNegativeNumbersInFormula(trimmedSourceData);
@@ -10890,14 +11006,12 @@ function createFormulaDisplay(sourceData, sourcePercentValue) {
         let percentDisplay = '';
         const m = percentExpr.match(/^(\d+(?:\.\d+)?)(.*)$/);
         if (m) {
-            const firstNum = parseFloat(m[1]);
             const rest = m[2] || '';
-            const firstDiv100 = formatDecimalValue(firstNum / 100);
+            const firstDiv100 = formatDecimalValue(MoneyDecimal.div(m[1], '100'));
             percentDisplay = `(${firstDiv100}${rest})`;
         } else {
             // 兜底：无法解析则按旧逻辑处理
-            const decimalValue = parseFloat(percentExpr) / 100;
-            percentDisplay = `(${formatDecimalValue(decimalValue)})`;
+            percentDisplay = `(${formatDecimalValue(MoneyDecimal.div(percentExpr, '100'))})`;
         }
 
         // 不对 sourceData 强行加外层括号，保持原样
@@ -10924,11 +11038,11 @@ function calculateFormulaResult(sourceData, sourcePercentValue, inputMethod = ''
         // ensure proper evaluation by removing spaces and using evaluateExpression directly
         // This ensures real-time calculation works correctly
         const sanitizedSourceData = removeThousandsSeparators(sourceData.trim().replace(/\s+/g, ''));
-        let sourceResult = evaluateExpression(sanitizedSourceData);
+        let sourceResult = MoneyDecimal.toDecimal(evaluateExpression(sanitizedSourceData), 0);
 
         // If source percent is empty or not provided, just return the source result
         if (!sourcePercentValue || sourcePercentValue.toString().trim() === '') {
-            let result = sourceResult;
+            let result = sourceResult.toString();
             // Apply input method transformation if enabled
             if (enableInputMethod && inputMethod) {
                 result = applyInputMethodTransformation(result, inputMethod);
@@ -10939,20 +11053,17 @@ function calculateFormulaResult(sourceData, sourcePercentValue, inputMethod = ''
 
         // 将百分比作为表达式求值，然后除以100（支持 "0.85/2" 这类）
         const sanitizedPercent = removeThousandsSeparators(sourcePercentValue.toString().trim());
-        const percentEval = evaluateExpression(sanitizedPercent);
-        let decimalValue = percentEval / 100;
-
-        // Limit to maximum 4 decimal places
-        decimalValue = parseFloat(decimalValue.toFixed(4));
+        const percentEval = MoneyDecimal.toDecimal(evaluateExpression(sanitizedPercent), 0);
+        let decimalValue = percentEval.div(100).toDecimalPlaces(4, MoneyDecimal.Decimal.ROUND_DOWN);
 
         // If source is 1 (or 100% which equals 1 after dividing by 100), don't multiply
         // Only multiply when source is a different number
         let result;
-        if (Math.abs(decimalValue - 1) < 0.0001) { // Use small epsilon for floating point comparison
-            result = sourceResult; // Don't multiply by 1
+        if (decimalValue.minus(1).abs().lt('0.0001')) {
+            result = sourceResult.toString(); // Don't multiply by 1
         } else {
             // Calculate the final result: source result * decimal value
-            result = sourceResult * decimalValue;
+            result = sourceResult.times(decimalValue).toString();
         }
 
         // Apply input method transformation if enabled
@@ -10971,49 +11082,46 @@ function calculateFormulaResult(sourceData, sourcePercentValue, inputMethod = ''
 
 // Apply input method transformation to the result
 function applyInputMethodTransformation(result, inputMethod) {
+    const value = MoneyDecimal.toDecimal(result, 0);
     switch (inputMethod) {
         case 'positive_to_negative_negative_to_positive':
-            return -result; // Flip the sign
+            return value.neg().toString(); // Flip the sign
         case 'positive_to_negative_negative_to_zero':
-            return result > 0 ? -result : 0; // Positive becomes negative, negative becomes zero
+            return value.gt(0) ? value.neg().toString() : '0'; // Positive becomes negative, negative becomes zero
         case 'negative_to_positive_positive_to_zero':
-            return result < 0 ? -result : 0; // Negative becomes positive, positive becomes zero
+            return value.lt(0) ? value.neg().toString() : '0'; // Negative becomes positive, positive becomes zero
         case 'positive_unchanged_negative_to_zero':
-            return result > 0 ? result : 0; // Positive unchanged, negative becomes zero
+            return value.gt(0) ? value.toString() : '0'; // Positive unchanged, negative becomes zero
         case 'negative_unchanged_positive_to_zero':
-            return result < 0 ? result : 0; // Negative unchanged, positive becomes zero
+            return value.lt(0) ? value.toString() : '0'; // Negative unchanged, positive becomes zero
         case 'change_to_positive':
-            return Math.abs(result); // Always positive
+            return value.abs().toString(); // Always positive
         case 'change_to_negative':
-            return -Math.abs(result); // Always negative
+            return value.abs().neg().toString(); // Always negative
         case 'change_to_zero':
-            return 0; // Always zero
+            return '0'; // Always zero
         default:
-            return result; // No transformation
+            return value.toString(); // No transformation
     }
 }
 
-// Processed Amount 专用：.xxx 第三位小数≥5 则进位（round half up），避免浮点误差导致 36.785 显示为 36.78
+// Processed Amount：固定展示 2 位小数，向 0 截断（不四舍五入）。例：-2.089 -> -2.08，2.089 -> 2.08
+// 说明：少数二进制浮点（如语义为 -2.07 但乘 100 略小于 -207）截断后可能显示 -2.06，与「仅截断」规则一致
 function roundProcessedAmountTo2Decimals(value) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return 0;
-    const sign = num >= 0 ? 1 : -1;
-    const absNum = Math.abs(num);
-    return sign * (Math.floor(absNum * 100 + 0.5 + 1e-10) / 100);
+    try {
+        return MoneyDecimal.formatFixed(value, 2);
+    } catch (_) {
+        return '0.00';
+    }
 }
 
 // Evaluate mathematical expression safely
 function formatNumberWithThousands(value) {
-    const num = Number(value);
-    if (!Number.isFinite(num)) {
+    try {
+        return MoneyDecimal.formatThousands(roundProcessedAmountTo2Decimals(value), 2);
+    } catch (_) {
         return '0.00';
     }
-    // Round to 2 decimal places for display (四舍五入到2位小数用于显示)
-    // 使用一致的舍入逻辑：先取绝对值舍入，再恢复符号，确保正负数舍入结果一致
-    const sign = num >= 0 ? 1 : -1;
-    const absNum = Math.abs(num);
-    const rounded = sign * (Math.round(absNum * 100) / 100);
-    return rounded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function removeThousandsSeparators(value) {
@@ -11031,14 +11139,11 @@ function formatDecimalValue(value) {
     if (value === null || value === undefined || value === '') {
         return value;
     }
-    const num = typeof value === 'number' ? value : parseFloat(value);
-    if (isNaN(num) || !Number.isFinite(num)) {
+    try {
+        return MoneyDecimal.formatDisplay(value, 12);
+    } catch (_) {
         return value;
     }
-    // 先按固定小数位圆整再 strip，消除 9.2 -> 9.199999999999999 / 9.200000000000001 等二进制浮点展示噪声
-    const rounded = parseFloat(num.toFixed(12));
-    const fixed = rounded.toFixed(12);
-    return fixed.replace(/\.?0+$/, '');
 }
 
 // Format negative numbers in formula by wrapping them with parentheses
@@ -11071,66 +11176,109 @@ function formatNegativeNumbersInFormula(formula) {
     });
 }
 
+function evaluateMoneyExpression(expression) {
+    let expr = removeThousandsSeparators(String(expression || '').trim())
+        .replace(/\u2212/g, '-')
+        .replace(/\s*\([A-Z]{2,4}\)\s*/g, ' ')
+        .replace(/\s*\(\s*\)\s*/g, ' ')
+        .replace(/\s+/g, '');
+    if (expr === '') return MoneyDecimal.toDecimal('0');
+    if (!/^[0-9+\-*/().]+$/.test(expr)) {
+        expr = expr.replace(/[^0-9+\-*/().]/g, '');
+    }
+    if (expr === '') return MoneyDecimal.toDecimal('0');
+    const openCount = (expr.match(/\(/g) || []).length;
+    const closeCount = (expr.match(/\)/g) || []).length;
+    if (openCount > closeCount) expr += ')'.repeat(openCount - closeCount);
+
+    const output = [];
+    const ops = [];
+    const precedence = { 'u-': 3, '*': 2, '/': 2, '+': 1, '-': 1 };
+    const rightAssoc = { 'u-': true };
+    let i = 0;
+    let prev = 'start';
+
+    while (i < expr.length) {
+        const ch = expr[i];
+        if (/\d|\./.test(ch)) {
+            let j = i + 1;
+            while (j < expr.length && /[\d.]/.test(expr[j])) j++;
+            const token = expr.slice(i, j);
+            output.push(MoneyDecimal.toDecimal(token));
+            i = j;
+            prev = 'number';
+            continue;
+        }
+        if (ch === '(') {
+            ops.push(ch);
+            i++;
+            prev = 'operator';
+            continue;
+        }
+        if (ch === ')') {
+            while (ops.length && ops[ops.length - 1] !== '(') output.push(ops.pop());
+            if (ops.length && ops[ops.length - 1] === '(') ops.pop();
+            i++;
+            prev = 'number';
+            continue;
+        }
+        if ('+-*/'.includes(ch)) {
+            const op = (ch === '-' && (prev === 'start' || prev === 'operator')) ? 'u-' : ch;
+            while (
+                ops.length &&
+                ops[ops.length - 1] !== '(' &&
+                (precedence[ops[ops.length - 1]] > precedence[op] ||
+                    (precedence[ops[ops.length - 1]] === precedence[op] && !rightAssoc[op]))
+            ) {
+                output.push(ops.pop());
+            }
+            ops.push(op);
+            i++;
+            prev = 'operator';
+            continue;
+        }
+        throw new Error('Invalid expression token: ' + ch);
+    }
+    while (ops.length) {
+        const op = ops.pop();
+        if (op !== '(') output.push(op);
+    }
+
+    const stack = [];
+    output.forEach((token) => {
+        if (token instanceof MoneyDecimal.Decimal) {
+            stack.push(token);
+            return;
+        }
+        if (token === 'u-') {
+            stack.push(stack.pop().neg());
+            return;
+        }
+        const b = stack.pop();
+        const a = stack.pop();
+        if (!a || !b) throw new Error('Invalid money expression');
+        if (token === '+') stack.push(a.plus(b));
+        else if (token === '-') stack.push(a.minus(b));
+        else if (token === '*') stack.push(a.times(b));
+        else if (token === '/') stack.push(a.div(b));
+    });
+    return stack.length ? stack[0] : MoneyDecimal.toDecimal('0');
+}
+
 function evaluateExpression(expression) {
     try {
         if (!expression || typeof expression !== 'string') {
             // 使用 warn 避免在控制台显示严重错误，但保持返回 0 的逻辑
             console.warn('Invalid expression:', expression);
-            return 0;
+            return '0';
         }
-
-        let sanitizedExpression = removeThousandsSeparators(expression);
-        // 统一为 ASCII 减号，避免 Unicode 减号 (U+2212) 等导致校验失败或误解析
-        sanitizedExpression = sanitizedExpression.replace(/\u2212/g, '-');
-        // 去掉货币显示 (MYR)、() 等，避免 "(MYR) 70.50" 导致 invalid characters
-        sanitizedExpression = sanitizedExpression.replace(/\s*\([A-Z]{2,4}\)\s*/g, ' ');
-        sanitizedExpression = sanitizedExpression.replace(/\s*\(\s*\)\s*/g, ' ');
-        let jsExpression = sanitizedExpression.trim();
-
-        // Validate that the expression doesn't contain invalid characters
-        // Allow: numbers, operators (+-*/), parentheses, decimal points, spaces
-        if (!/^[0-9+\-*/().\s]+$/.test(jsExpression)) {
-            console.warn('Expression contains invalid characters, trying to sanitize:', jsExpression);
-            // 尽量保留可识别的数字与运算符，其余全部移除作为兜底
-            jsExpression = jsExpression.replace(/[^0-9+\-*/().\s]/g, '').trim();
-            // 若清理后仍然为空，则只能返回 0（与原来的行为一致）
-            if (!jsExpression) {
-                console.warn('Expression still invalid after sanitization, fallback to 0.');
-                return 0;
-            }
-        }
-
-        // Remove spaces for cleaner evaluation
-        // IMPORTANT: For formulas with negative numbers in parentheses (e.g., (-1234.56)-(-2234.78)),
-        // removing spaces ensures proper evaluation
-        jsExpression = jsExpression.replace(/\s+/g, '');
-
-        // 若括号不成对会导致 SyntaxError: Unexpected token ')'，求值前补全缺失的右括号
-        const openCount = (jsExpression.match(/\(/g) || []).length;
-        const closeCount = (jsExpression.match(/\)/g) || []).length;
-        if (openCount > closeCount) {
-            jsExpression = jsExpression + ')'.repeat(openCount - closeCount);
-        }
-
-        console.log('Evaluating expression:', jsExpression);
-
-        // Use Function constructor for safe evaluation
-        // IMPORTANT: This handles expressions with negative numbers in parentheses correctly
-        // Example: (-1234.56)-(-2234.78) will be evaluated as -1234.56 - (-2234.78) = 1000.22
-        const result = new Function('return ' + jsExpression)();
-        const parsedResult = parseFloat(result);
-
-        if (isNaN(parsedResult) || !Number.isFinite(parsedResult)) {
-            console.warn('Invalid result from expression:', result, 'Original expression:', expression);
-            return 0;
-        }
-
-        console.log('Expression result:', parsedResult, 'from expression:', jsExpression);
-        return parsedResult;
+        const result = evaluateMoneyExpression(expression);
+        console.log('Expression result:', result.toString(), 'from expression:', expression);
+        return result.toString();
 
     } catch (error) {
         console.warn('Error evaluating expression:', error, 'Expression:', expression);
-        return 0;
+        return '0';
     }
 }
 
@@ -11857,33 +12005,29 @@ function applyRateToProcessedAmount(row, processedAmount) {
     }
 
     const cells = row.querySelectorAll('td');
+    const applyRateValue = function (rateValueStr) {
+        const value = String(rateValueStr || '').trim();
+        if (value === '') return null;
+        try {
+            if (value.startsWith('*')) {
+                const rateValue = MoneyDecimal.toDecimal(value.substring(1), 0);
+                if (!rateValue.isZero()) return MoneyDecimal.mul(processedAmount, rateValue).toString();
+            } else if (value.startsWith('/')) {
+                const rateValue = MoneyDecimal.toDecimal(value.substring(1), 0);
+                if (!rateValue.isZero()) return MoneyDecimal.div(processedAmount, rateValue).toString();
+            } else {
+                const rateValue = MoneyDecimal.toDecimal(value, 0);
+                if (!rateValue.isZero()) return MoneyDecimal.mul(processedAmount, rateValue).toString();
+            }
+        } catch (_) { /* ignore invalid rate */ }
+        return null;
+    };
 
     // Priority 1: Check Rate Value column (cells[7]) - if has value, use it
     const rateValueCell = cells[7];
     if (rateValueCell && rateValueCell.textContent && rateValueCell.textContent.trim() !== '') {
-        const rateValueStr = rateValueCell.textContent.trim();
-
-        // Check if input starts with "*" for multiplication
-        if (rateValueStr.startsWith('*')) {
-            const rateValue = parseFloat(rateValueStr.substring(1));
-            if (!isNaN(rateValue) && rateValue !== 0) {
-                return processedAmount * rateValue;
-            }
-        }
-        // Check if input starts with "/" for division
-        else if (rateValueStr.startsWith('/')) {
-            const rateValue = parseFloat(rateValueStr.substring(1));
-            if (!isNaN(rateValue) && rateValue !== 0) {
-                return processedAmount / rateValue;
-            }
-        }
-        // Default: treat as multiplication (plain number)
-        else {
-            const rateValue = parseFloat(rateValueStr);
-            if (!isNaN(rateValue) && rateValue !== 0) {
-                return processedAmount * rateValue;
-            }
-        }
+        const rated = applyRateValue(rateValueCell.textContent.trim());
+        if (rated !== null) return rated;
     }
 
     // Priority 2: Check global rateInput if checkbox is checked
@@ -11902,32 +12046,11 @@ function applyRateToProcessedAmount(row, processedAmount) {
             return processedAmount;
         }
 
-        const rateInputValue = rateInput.value.trim();
-
-        // Check if input starts with "*" for multiplication
-        if (rateInputValue.startsWith('*')) {
-            const rateValue = parseFloat(rateInputValue.substring(1));
-            if (!isNaN(rateValue) && rateValue !== 0) {
-                return processedAmount * rateValue;
-            }
-        }
-        // Check if input starts with "/" for division
-        else if (rateInputValue.startsWith('/')) {
-            const rateValue = parseFloat(rateInputValue.substring(1));
-            if (!isNaN(rateValue) && rateValue !== 0) {
-                return processedAmount / rateValue;
-            }
-        }
-        // Default: treat as multiplication (backward compatibility)
-        else {
-            const rateValue = parseFloat(rateInputValue);
-            if (!isNaN(rateValue) && rateValue !== 0) {
-                return processedAmount * rateValue;
-            }
-        }
+        const rated = applyRateValue(rateInput.value.trim());
+        if (rated !== null) return rated;
     }
 
-    return processedAmount;
+    return MoneyDecimal.toDecimal(processedAmount, 0).toString();
 }
 
 // Save original values before batch update
@@ -11994,15 +12117,15 @@ function restoreOriginalRowValues(row) {
 
     // Restore Processed Amount column (index 8)
     if (cells[8] && originalProcessedAmount !== null && originalProcessedAmount !== '') {
-        const val = parseFloat(originalProcessedAmount.replace(/,/g, ''));
-        if (!isNaN(val)) {
+        try {
+            const val = MoneyDecimal.toDecimal(originalProcessedAmount.replace(/,/g, ''), 0).toString();
             // Store the base processed amount (without rate) in row attribute
-            row.setAttribute('data-base-processed-amount', val.toString());
+            row.setAttribute('data-base-processed-amount', val);
             // Apply rate multiplication if checkbox is checked or Rate Value has value
             const finalAmount = applyRateToProcessedAmount(row, val);
             cells[8].textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(finalAmount));
-            cells[8].style.color = finalAmount > 0 ? '#0D60FF' : (finalAmount < 0 ? '#A91215' : '#000000');
-        }
+            cells[8].style.color = MoneyDecimal.cmp(finalAmount, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(finalAmount, '0') < 0 ? '#A91215' : '#000000');
+        } catch (_) { /* ignore invalid original processed amount */ }
     }
 
     // Restore data attributes that are used when building form data
@@ -12575,29 +12698,24 @@ function updateFormulaAndProcessedAmount(row, data) {
 
         // Special handling: for MG95-96 + KL-ELSON, display processed amount as formula
         if (isMg95ElsonSpecialRow(data, row)) {
-            let specialAmount = (data.processedAmount !== undefined && data.processedAmount !== null)
-                ? Number(data.processedAmount)
-                : NaN;
-            if (isNaN(specialAmount)) {
+            let specialAmount = null;
+            if (data.processedAmount !== undefined && data.processedAmount !== null) {
+                try { specialAmount = MoneyDecimal.toDecimal(data.processedAmount, 0).toString(); } catch (_) { specialAmount = null; }
+            }
+            if (specialAmount === null) {
                 const baseAttr = row.getAttribute('data-base-processed-amount');
                 if (baseAttr !== null && baseAttr !== undefined && baseAttr !== '') {
-                    const num = parseFloat(baseAttr);
-                    if (!isNaN(num)) {
-                        specialAmount = num;
-                    }
+                    try { specialAmount = MoneyDecimal.toDecimal(baseAttr, 0).toString(); } catch (_) { specialAmount = null; }
                 }
             }
-            if (isNaN(specialAmount) && cells[8]) {
+            if (specialAmount === null && cells[8]) {
                 const text = (cells[8].textContent || '').replace(/,/g, '');
-                const num = parseFloat(text);
-                if (!isNaN(num)) {
-                    specialAmount = num;
-                }
+                try { specialAmount = MoneyDecimal.toDecimal(text, 0).toString(); } catch (_) { specialAmount = null; }
             }
-            if (!isNaN(specialAmount)) {
+            if (specialAmount !== null) {
                 const rounded = typeof roundProcessedAmountTo2Decimals === 'function'
-                    ? roundProcessedAmountTo2Decimals(Number(specialAmount))
-                    : Number(specialAmount);
+                    ? roundProcessedAmountTo2Decimals(specialAmount)
+                    : specialAmount;
                 const displayVal = typeof formatNumberWithThousands === 'function'
                     ? formatNumberWithThousands(rounded)
                     : String(rounded);
@@ -12756,13 +12874,13 @@ function updateFormulaAndProcessedAmount(row, data) {
     if (canRecalculateProcessedAmount) {
         recalculateAndRenderProcessedAmount(row, restoredRecalculateOptions);
     } else if (cells[8]) {
-        const fallbackProcessedAmount = Number(data.processedAmount);
-        if (!Number.isNaN(fallbackProcessedAmount) && Number.isFinite(fallbackProcessedAmount)) {
-            row.setAttribute('data-base-processed-amount', fallbackProcessedAmount.toString());
+        try {
+            const fallbackProcessedAmount = MoneyDecimal.toDecimal(data.processedAmount, 0).toString();
+            row.setAttribute('data-base-processed-amount', fallbackProcessedAmount);
             const val = applyRateToProcessedAmount(row, fallbackProcessedAmount);
             cells[8].textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(val));
-            cells[8].style.color = val > 0 ? '#0D60FF' : (val < 0 ? '#A91215' : '#000000');
-        }
+            cells[8].style.color = MoneyDecimal.cmp(val, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(val, '0') < 0 ? '#A91215' : '#000000');
+        } catch (_) { /* ignore invalid fallback processed amount */ }
         // cells[8].style.backgroundColor = '#e8f5e8'; // Removed
     }
 
@@ -13994,6 +14112,7 @@ function addSubIdProductRow(parentProcessValue, insertAfterRow = null, rowIndex 
 
     let insertAfterIndex = -1;
     let targetRow = null;
+    let parentRowIndex = null;
     const normalizedParentValue = normalizeIdProductText(parentProcessValue);
 
     // If a specific row is provided, insert directly after it
@@ -14037,6 +14156,10 @@ function addSubIdProductRow(parentProcessValue, insertAfterRow = null, rowIndex 
 
         // 若无指定行，则插在「该父 main 的最后一个 sub」之后，保证 SUB 在 main 下面
         const isSameParent = (row) => {
+            const parentRowIndexAttr = row.getAttribute('data-parent-row-index');
+            if (parentRowIndex !== null && parentRowIndexAttr !== null && parentRowIndexAttr !== '' && !Number.isNaN(Number(parentRowIndexAttr))) {
+                return Number(parentRowIndexAttr) === Number(parentRowIndex);
+            }
             const parentAttr = (row.getAttribute('data-parent-id-product') || '').trim();
             if (parentAttr && useExactMatch) return parentAttr === parentTrimmed;
             if (parentAttr) return normalizeIdProductText(parentAttr) === normalizedParentValue;
@@ -14078,10 +14201,29 @@ function addSubIdProductRow(parentProcessValue, insertAfterRow = null, rowIndex 
         }
     }
 
+    if (targetRow) {
+        const targetType = (targetRow.getAttribute('data-product-type') || 'main').trim();
+        if (targetType === 'sub') {
+            const parentRowIndexAttr = targetRow.getAttribute('data-parent-row-index');
+            if (parentRowIndexAttr !== null && parentRowIndexAttr !== '' && !Number.isNaN(Number(parentRowIndexAttr))) {
+                parentRowIndex = Number(parentRowIndexAttr);
+            }
+        }
+        if (parentRowIndex === null) {
+            const targetRowIndexAttr = targetRow.getAttribute('data-row-index');
+            if (targetRowIndexAttr !== null && targetRowIndexAttr !== '' && !Number.isNaN(Number(targetRowIndexAttr))) {
+                parentRowIndex = Number(targetRowIndexAttr);
+            }
+        }
+    }
+
     // Create new row（Sub 要在 Main 底下，并缩进显示）
     const row = document.createElement('tr');
     row.setAttribute('data-product-type', 'sub');
     row.setAttribute('data-parent-id-product', (parentProcessValue || '').trim());
+    if (parentRowIndex !== null && !Number.isNaN(Number(parentRowIndex))) {
+        row.setAttribute('data-parent-row-index', String(Number(parentRowIndex)));
+    }
 
     // Id Product column (merged main and sub)
     const idProductCell = document.createElement('td');
@@ -14228,14 +14370,21 @@ function addSubIdProductRow(parentProcessValue, insertAfterRow = null, rowIndex 
         const allRowsArray = Array.from(summaryTableBody.querySelectorAll('tr'));
         const insertAfterRowIndex = allRowsArray.indexOf(insertAfterRow);
         const currentRowParentId = normalizeIdProductText(parentProcessValue);
+        const currentParentRowIndex = (parentRowIndex !== null && !Number.isNaN(Number(parentRowIndex))) ? Number(parentRowIndex) : null;
 
         for (let i = insertAfterRowIndex + 1; i < allRowsArray.length; i++) {
             const nextRow = allRowsArray[i];
             const nextRowProductType = nextRow.getAttribute('data-product-type') || 'main';
             const nextRowParentId = nextRow.getAttribute('data-parent-id-product');
+            const nextRowParentRowIndexAttr = nextRow.getAttribute('data-parent-row-index');
+            const nextRowParentRowIndex = (nextRowParentRowIndexAttr !== null && nextRowParentRowIndexAttr !== '' && !Number.isNaN(Number(nextRowParentRowIndexAttr)))
+                ? Number(nextRowParentRowIndexAttr)
+                : null;
 
             // Check if this is a sub row of the same parent
-            if (nextRowProductType === 'sub' && nextRowParentId && normalizeIdProductText(nextRowParentId) === currentRowParentId) {
+            const sameParentByRowIndex = currentParentRowIndex !== null && nextRowParentRowIndex !== null && nextRowParentRowIndex === currentParentRowIndex;
+            const sameParentById = nextRowParentId && normalizeIdProductText(nextRowParentId) === currentRowParentId;
+            if (nextRowProductType === 'sub' && (sameParentByRowIndex || sameParentById)) {
                 const nextSubOrderAttr = nextRow.getAttribute('data-sub-order');
                 if (nextSubOrderAttr && nextSubOrderAttr !== '' && !Number.isNaN(Number(nextSubOrderAttr))) {
                     firstSubOrder = Number(nextSubOrderAttr);
@@ -14255,8 +14404,14 @@ function addSubIdProductRow(parentProcessValue, insertAfterRow = null, rowIndex 
                 const nextRow = allRowsArray[i];
                 const nextRowProductType = nextRow.getAttribute('data-product-type') || 'main';
                 const nextRowParentId = nextRow.getAttribute('data-parent-id-product');
+                const nextRowParentRowIndexAttr = nextRow.getAttribute('data-parent-row-index');
+                const nextRowParentRowIndex = (nextRowParentRowIndexAttr !== null && nextRowParentRowIndexAttr !== '' && !Number.isNaN(Number(nextRowParentRowIndexAttr)))
+                    ? Number(nextRowParentRowIndexAttr)
+                    : null;
 
-                if (nextRowProductType === 'sub' && nextRowParentId && normalizeIdProductText(nextRowParentId) === currentRowParentId) {
+                const sameParentByRowIndex = currentParentRowIndex !== null && nextRowParentRowIndex !== null && nextRowParentRowIndex === currentParentRowIndex;
+                const sameParentById = nextRowParentId && normalizeIdProductText(nextRowParentId) === currentRowParentId;
+                if (nextRowProductType === 'sub' && (sameParentByRowIndex || sameParentById)) {
                     const nextSubOrderAttr = nextRow.getAttribute('data-sub-order');
                     if (nextSubOrderAttr && nextSubOrderAttr !== '' && !Number.isNaN(Number(nextSubOrderAttr))) {
                         nextSubOrder = Number(nextSubOrderAttr);
@@ -14663,6 +14818,12 @@ function updateSubIdProductRow(processValue, data, targetRow = null) {
             // Try to get from parent row if this is a sub row
             if (data.productType === 'sub' || row.getAttribute('data-product-type') === 'sub') {
                 const parentIdProduct = row.getAttribute('data-parent-id-product') || processValue;
+                const parentRowIndexAttr = (data.parentRowIndex !== undefined && data.parentRowIndex !== null && !Number.isNaN(Number(data.parentRowIndex)))
+                    ? String(Number(data.parentRowIndex))
+                    : (row.getAttribute('data-parent-row-index') || '');
+                if (parentRowIndexAttr && parentRowIndexAttr !== '' && parentRowIndexAttr !== '999999' && !Number.isNaN(Number(parentRowIndexAttr))) {
+                    row.setAttribute('data-row-index', String(Number(parentRowIndexAttr)));
+                }
                 if (parentIdProduct) {
                     // Find parent main row by id_product
                     const summaryTableBody = document.getElementById('summaryTableBody');
@@ -14676,7 +14837,11 @@ function updateSubIdProductRow(processValue, data, targetRow = null) {
                                     const otherProductValues = getProductValuesFromCell(otherIdProductCell);
                                     const otherIdProduct = normalizeIdProductText(otherProductValues.main || '');
                                     const normalizedParentId = normalizeIdProductText(parentIdProduct);
-                                    if (otherIdProduct === normalizedParentId) {
+                                    const otherRowIndex = otherRow.getAttribute('data-row-index');
+                                    const parentByRowIndex = parentRowIndexAttr && otherRowIndex && !Number.isNaN(Number(parentRowIndexAttr)) && !Number.isNaN(Number(otherRowIndex))
+                                        ? Number(parentRowIndexAttr) === Number(otherRowIndex)
+                                        : false;
+                                    if (parentByRowIndex || otherIdProduct === normalizedParentId) {
                                         const parentRowIndex = otherRow.getAttribute('data-row-index');
                                         if (parentRowIndex && parentRowIndex !== '' && parentRowIndex !== '999999') {
                                             row.setAttribute('data-row-index', parentRowIndex);
@@ -14716,6 +14881,17 @@ function updateSubIdProductRow(processValue, data, targetRow = null) {
 
     row.setAttribute('data-product-type', data.productType || 'sub');
     row.setAttribute('data-parent-id-product', processValue);
+    if (data.parentRowIndex !== undefined && data.parentRowIndex !== null && !Number.isNaN(Number(data.parentRowIndex))) {
+        row.setAttribute('data-parent-row-index', String(Number(data.parentRowIndex)));
+    } else {
+        const existingParentRowIndex = row.getAttribute('data-parent-row-index');
+        if (!existingParentRowIndex || existingParentRowIndex === '' || existingParentRowIndex === '999999') {
+            const currentRowIndex = row.getAttribute('data-row-index');
+            if (currentRowIndex && currentRowIndex !== '' && currentRowIndex !== '999999' && !Number.isNaN(Number(currentRowIndex))) {
+                row.setAttribute('data-parent-row-index', String(Number(currentRowIndex)));
+            }
+        }
+    }
     const idProductCellForSub = row.querySelector('td:first-child');
     if (idProductCellForSub) {
         if (!idProductCellForSub.classList.contains('sub-id-product')) {
@@ -14773,13 +14949,13 @@ function updateSubIdProductRow(processValue, data, targetRow = null) {
             updateTotal: false
         })
     } else if (cells[8]) {
-        const fallbackProcessedAmount = Number(data.processedAmount)
-        if (!Number.isNaN(fallbackProcessedAmount) && Number.isFinite(fallbackProcessedAmount)) {
-            row.setAttribute('data-base-processed-amount', fallbackProcessedAmount.toString())
+        try {
+            const fallbackProcessedAmount = MoneyDecimal.toDecimal(data.processedAmount, 0).toString()
+            row.setAttribute('data-base-processed-amount', fallbackProcessedAmount)
             const val = applyRateToProcessedAmount(row, fallbackProcessedAmount)
             cells[8].textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(val))
-            cells[8].style.color = val > 0 ? '#0D60FF' : (val < 0 ? '#A91215' : '#000000')
-        }
+            cells[8].style.color = MoneyDecimal.cmp(val, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(val, '0') < 0 ? '#A91215' : '#000000')
+        } catch (_) { /* ignore invalid fallback processed amount */ }
     }
 
     console.log('Updated sub id product row with data:', data);
@@ -15013,7 +15189,7 @@ function updateSummaryTableRow(processValue, data, targetRow = null) {
                 formulaText = formatNegativeNumbersInFormula(apiFormulaDisplay);
             } else if (!formulaText && (
                 // 后端给了 0（或没给），但该行 processedAmount 非 0 且存在 formulaOperators，则用 operators 重新求值得到展示
-                (data.processedAmount !== undefined && data.processedAmount !== null && String(data.processedAmount).trim() !== '' && Number(data.processedAmount) !== 0) &&
+                (data.processedAmount !== undefined && data.processedAmount !== null && String(data.processedAmount).trim() !== '' && MoneyDecimal.cmp(data.processedAmount, '0') !== 0) &&
                 (data.formulaOperators && String(data.formulaOperators).trim() !== '' && String(data.formulaOperators).trim() !== 'Formula') &&
                 typeof evaluateFormulaExpression === 'function'
             )) {
@@ -15023,7 +15199,7 @@ function updateSummaryTableRow(processValue, data, targetRow = null) {
                     rowRefCtxForFormula.clickedCellRefs,
                     rowRefCtxForFormula.rowIndexOverride
                 )
-                if (!Number.isNaN(Number(evaluated)) && Number.isFinite(Number(evaluated)) && Number(evaluated) !== 0) {
+                if (MoneyDecimal.cmp(evaluated, '0') !== 0) {
                     rawFormula = String(data.formulaOperators).trim()
                     const display = formatFormulaDisplayTo2Decimals(String(evaluated))
                     formulaText = formatNegativeNumbersInFormula(display)
@@ -15162,20 +15338,18 @@ function updateSummaryTableRow(processValue, data, targetRow = null) {
 
             // Special handling: for MG95-96 + KL-ELSON, display processed amount as formula
             if (isMg95ElsonSpecialRow(data, row)) {
-                let specialAmount = (data.processedAmount !== undefined && data.processedAmount !== null)
-                    ? Number(data.processedAmount)
-                    : NaN;
-                if (isNaN(specialAmount) && cells[8]) {
-                    const text = (cells[8].textContent || '').replace(/,/g, '');
-                    const num = parseFloat(text);
-                    if (!isNaN(num)) {
-                        specialAmount = num;
-                    }
+                let specialAmount = null;
+                if (data.processedAmount !== undefined && data.processedAmount !== null) {
+                    try { specialAmount = MoneyDecimal.toDecimal(data.processedAmount, 0).toString(); } catch (_) { specialAmount = null; }
                 }
-                if (!isNaN(specialAmount)) {
+                if (specialAmount === null && cells[8]) {
+                    const text = (cells[8].textContent || '').replace(/,/g, '');
+                    try { specialAmount = MoneyDecimal.toDecimal(text, 0).toString(); } catch (_) { specialAmount = null; }
+                }
+                if (specialAmount !== null) {
                     const rounded = typeof roundProcessedAmountTo2Decimals === 'function'
-                        ? roundProcessedAmountTo2Decimals(Number(specialAmount))
-                        : Number(specialAmount);
+                        ? roundProcessedAmountTo2Decimals(specialAmount)
+                        : specialAmount;
                     const displayVal = typeof formatNumberWithThousands === 'function'
                         ? formatNumberWithThousands(rounded)
                         : String(rounded);
@@ -15232,15 +15406,20 @@ function updateSummaryTableRow(processValue, data, targetRow = null) {
         // 某些模板行在这里会先被正确计算出 processedAmount，
         // 但随后又被 updateFormulaAndProcessedAmount 内部用旧的 formulaOperators 重算覆盖。
         // 只在当前调用已明确给出 processedAmount 时，优先保留这次调用算出来的值。
-        const explicitProcessedAmount = Number(data.processedAmount)
-        const hasExplicitProcessedAmount = !Number.isNaN(explicitProcessedAmount) && Number.isFinite(explicitProcessedAmount)
+        let explicitProcessedAmount = null
+        try {
+            explicitProcessedAmount = MoneyDecimal.toDecimal(data.processedAmount, 0).toString()
+        } catch (_) {
+            explicitProcessedAmount = null
+        }
+        const hasExplicitProcessedAmount = explicitProcessedAmount !== null
         if (hasExplicitProcessedAmount && cells[8]) {
-            row.setAttribute('data-base-processed-amount', explicitProcessedAmount.toString())
+            row.setAttribute('data-base-processed-amount', explicitProcessedAmount)
             const finalProcessedAmount = typeof applyRateToProcessedAmount === 'function'
                 ? applyRateToProcessedAmount(row, explicitProcessedAmount)
                 : explicitProcessedAmount
             cells[8].textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(finalProcessedAmount))
-            cells[8].style.color = finalProcessedAmount > 0 ? '#0D60FF' : (finalProcessedAmount < 0 ? '#A91215' : '#000000')
+            cells[8].style.color = MoneyDecimal.cmp(finalProcessedAmount, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(finalProcessedAmount, '0') < 0 ? '#A91215' : '#000000')
         }
 
         // Persist row_index (if provided) on the DOM row for later reordering
@@ -15295,6 +15474,7 @@ function updateSummaryTableRow(processValue, data, targetRow = null) {
             row.setAttribute('data-product-type', 'main');
         }
         row.removeAttribute('data-parent-id-product');
+        row.removeAttribute('data-parent-row-index');
 
         updateProcessedAmountTotal();
         if (typeof updateHeaderCurrencyFromSummaryTable === 'function') {
@@ -15311,7 +15491,8 @@ function updateSummaryTableRow(processValue, data, targetRow = null) {
 
 // Auto-populate summary table rows from saved templates
 // 优先精确匹配整串 id_product（如 GAMS(SV)HKD），避免与 GAMS(SV)MYR 等仅 normalize 相同的行混用
-function findSummaryRowByIdProduct(idProduct) {
+// ctx 为可选精确定位条件（rowIndex/productType/subOrder/accountId），不传时保持旧逻辑
+function findSummaryRowByIdProduct(idProduct, ctx = null) {
     const summaryTableBody = document.getElementById('summaryTableBody');
     if (!summaryTableBody) {
         return null;
@@ -15323,19 +15504,51 @@ function findSummaryRowByIdProduct(idProduct) {
         return null;
     }
 
-    const rows = summaryTableBody.querySelectorAll('tr');
-    // 1) 先找整串完全一致的行，避免 GAMS(SV)HKD 匹配到 GAMS(SV)MYR
-    for (const row of rows) {
+    const rows = Array.from(summaryTableBody.querySelectorAll('tr'));
+    const exactCandidates = [];
+    const normalizedCandidates = [];
+
+    const rowMatchesCtx = function (row) {
+        if (!ctx || typeof ctx !== 'object') return true;
+        const rowType = (row.getAttribute('data-product-type') || 'main').trim();
+        if (ctx.productType && String(ctx.productType).trim() !== '' && rowType !== String(ctx.productType).trim()) {
+            return false;
+        }
+        if (ctx.rowIndex !== undefined && ctx.rowIndex !== null && ctx.rowIndex !== '') {
+            const rowIdxAttr = row.getAttribute('data-row-index');
+            const rowIdx = (rowIdxAttr !== null && rowIdxAttr !== '' && !Number.isNaN(Number(rowIdxAttr))) ? Number(rowIdxAttr) : null;
+            if (rowIdx === null || rowIdx !== Number(ctx.rowIndex)) return false;
+        }
+        if (ctx.subOrder !== undefined && ctx.subOrder !== null && ctx.subOrder !== '') {
+            const rowSubOrderAttr = row.getAttribute('data-sub-order');
+            const rowSubOrder = (rowSubOrderAttr !== null && rowSubOrderAttr !== '' && !Number.isNaN(Number(rowSubOrderAttr))) ? Number(rowSubOrderAttr) : null;
+            if (rowSubOrder === null || rowSubOrder !== Number(ctx.subOrder)) return false;
+        }
+        if (ctx.accountId !== undefined && ctx.accountId !== null && String(ctx.accountId).trim() !== '') {
+            const accountCell = row.querySelector('td:nth-child(2)');
+            const rowAccountId = accountCell && accountCell.getAttribute ? String(accountCell.getAttribute('data-account-id') || '').trim() : '';
+            if (rowAccountId !== String(ctx.accountId).trim()) return false;
+        }
+        return true;
+    };
+
+    // 1) 先找整串完全一致的候选
+    rows.forEach((row) => {
         const idProductCell = row.querySelector('td:first-child');
         const productValues = getProductValuesFromCell(idProductCell);
         const mainRaw = (productValues.main || '').trim();
         const subRaw = (productValues.sub || '').trim();
         if (idProductTrimmed && (mainRaw === idProductTrimmed || subRaw === idProductTrimmed)) {
-            return row;
+            exactCandidates.push(row);
         }
+    });
+    if (exactCandidates.length > 0) {
+        const precise = exactCandidates.find(rowMatchesCtx);
+        return precise || exactCandidates[0];
     }
+
     // 2) 再按 normalize 匹配（兼容旧逻辑）
-    for (const row of rows) {
+    rows.forEach((row) => {
         const idProductCell = row.querySelector('td:first-child');
         const productValues = getProductValuesFromCell(idProductCell);
         const mainCellText = normalizeIdProductText(productValues.main || '');
@@ -15345,9 +15558,11 @@ function findSummaryRowByIdProduct(idProduct) {
         const mainMatch = mainCellText === desired || subCellText === desired
             || (desired && mainRaw.indexOf(' - ') >= 0 && (mainRaw === desired || mainRaw.startsWith(desired + ' ') || mainRaw.startsWith(desired + '(')));
         const subMatch = desired && subRaw.indexOf(' - ') >= 0 && (subRaw === desired || subRaw.startsWith(desired + ' ') || subRaw.startsWith(desired + '('));
-        if (mainMatch || subMatch) {
-            return row;
-        }
+        if (mainMatch || subMatch) normalizedCandidates.push(row);
+    });
+    if (normalizedCandidates.length > 0) {
+        const precise = normalizedCandidates.find(rowMatchesCtx);
+        return precise || normalizedCandidates[0];
     }
 
     return null;
@@ -15425,22 +15640,25 @@ async function autoPopulateSummaryRowsFromTemplates(idProducts) {
             const allSummaryRows = Array.from(summaryTableBody.querySelectorAll('tr'));
             const capturedRows = Array.from(capturedTableBody.querySelectorAll('tr'));
 
-            // Recalculate row_index for each Summary Table row based on Data Capture Table position
-            // IMPORTANT: All rows with the same id_product should use the same row_index (their position in Data Capture Table)
-            // This ensures they are grouped together and sorted correctly
-            const idProductToRowIndex = new Map(); // Cache id_product -> row_index mapping
+            // Recalculate row_index for each Summary Table row based on Data Capture Table position.
+            // IMPORTANT: 同 id_product 的多行（如 M99M06(B)/(D)）必须保留各自不同 row_index，不能合并成同一个。
+            // 因此这里按“出现顺序”建立索引数组，而不是取第一条。
+            const idProductToRowIndexes = new Map(); // Cache id_product -> row_index[]
 
             // First pass: Build mapping from Data Capture Table
             capturedRows.forEach((capturedRow, capturedIndex) => {
                 const capturedIdProductCell = capturedRow.querySelector('td[data-column-index="1"]') || capturedRow.querySelector('td[data-col-index="1"]') || capturedRow.querySelectorAll('td')[1];
                 if (capturedIdProductCell) {
                     const capturedIdProduct = normalizeIdProductText(capturedIdProductCell.textContent.trim());
-                    if (capturedIdProduct && !idProductToRowIndex.has(capturedIdProduct)) {
-                        // Store the first occurrence (position in Data Capture Table)
-                        idProductToRowIndex.set(capturedIdProduct, capturedIndex);
+                    if (capturedIdProduct) {
+                        if (!idProductToRowIndexes.has(capturedIdProduct)) {
+                            idProductToRowIndexes.set(capturedIdProduct, []);
+                        }
+                        idProductToRowIndexes.get(capturedIdProduct).push(capturedIndex);
                     }
                 }
             });
+            const idProductOccurrenceCounter = new Map(); // id_product -> used occurrence count
 
             // Second pass: Set row_index for all Summary Table rows
             // IMPORTANT: Only set row_index if it doesn't exist yet, to preserve initial order
@@ -15474,8 +15692,11 @@ async function autoPopulateSummaryRowsFromTemplates(idProducts) {
                     return;
                 }
 
-                // Get row_index from cache (all rows with same id_product get same row_index)
-                const matchedIndex = idProductToRowIndex.get(summaryIdProduct);
+                // Get row_index from cache by occurrence order（同 id_product 的第 N 行 -> Data Capture 中第 N 个位置）
+                const matchedIndexes = idProductToRowIndexes.get(summaryIdProduct) || [];
+                const usedCount = idProductOccurrenceCounter.get(summaryIdProduct) || 0;
+                const matchedIndex = usedCount < matchedIndexes.length ? matchedIndexes[usedCount] : undefined;
+                idProductOccurrenceCounter.set(summaryIdProduct, usedCount + 1);
 
                 // Set row_index based on Data Capture Table position (only if not already set)
                 const idProductFullForLog = (productValues.main || '').trim() || summaryIdProduct;
@@ -15569,7 +15790,7 @@ async function autoPopulateSummaryRowsFromTemplates(idProducts) {
                     });
                     // Fallback: when we have subs but none were applied (e.g. main row was deleted), only apply subs to a row whose main id_product **exactly** matches the sub's parent (e.g. GAMS(SV)HKD), never to another id_product (e.g. GAMS(SV)MYR), otherwise sub 会跑去和别的 id_product mix
                     if (!anySubsApplied && template.subs && Array.isArray(template.subs) && template.subs.length > 0) {
-                        const firstRow = findSummaryRowByIdProduct(originalIdProduct);
+                        const firstRow = findSummaryRowByIdProduct(originalIdProduct, { productType: 'main' });
                         if (firstRow) {
                             const idProductCell = firstRow.querySelector('td:first-child');
                             const productValues = getProductValuesFromCell(idProductCell);
@@ -15700,7 +15921,14 @@ async function autoPopulateSummaryRowsFromTemplates(idProducts) {
 
 function applyTemplateToSummaryRow(idProduct, template) {
     try {
-        const targetRow = findSummaryRowByIdProduct(idProduct);
+        const targetCtx = { productType: 'main' };
+        if (template && template.row_index !== undefined && template.row_index !== null && !Number.isNaN(Number(template.row_index))) {
+            targetCtx.rowIndex = Number(template.row_index);
+        }
+        if (template && template.account_id !== undefined && template.account_id !== null && String(template.account_id).trim() !== '') {
+            targetCtx.accountId = String(template.account_id).trim();
+        }
+        const targetRow = findSummaryRowByIdProduct(idProduct, targetCtx);
 
         if (!targetRow) {
             return;
@@ -15931,9 +16159,9 @@ function applyTemplateToSummaryRow(idProduct, template) {
                 if (formulaCell) formulaCell.innerHTML = `<span class="formula-text">${savedFormulaDisplay}</span>`;
                 const processedCell = targetRow.querySelector('td:nth-child(9)');
                 if (processedCell && mainTemplate.last_processed_amount !== undefined && mainTemplate.last_processed_amount !== null) {
-                    const val = Number(mainTemplate.last_processed_amount);
+                    const val = MoneyDecimal.toDecimal(mainTemplate.last_processed_amount, 0).toString();
                     processedCell.textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(val));
-                    processedCell.style.color = val > 0 ? '#0D60FF' : (val < 0 ? '#A91215' : '#000000');
+                    processedCell.style.color = MoneyDecimal.cmp(val, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(val, '0') < 0 ? '#A91215' : '#000000');
                 }
                 targetRow.setAttribute('data-formula-display', savedFormulaDisplay);
                 targetRow.setAttribute('data-last-source-value', savedSourceValue || '');
@@ -16438,19 +16666,36 @@ function applyMainTemplateToRow(idProduct, mainTemplate, accountOrderIndex) {
                 return a.index - b.index;
             });
             if (allCandidatesWithoutAccount) {
-                // 多行且均无 account：按 row_index、再按 DOM 顺序选第一个尚未在本轮套用过的行，使模板按顺序套用
-                const firstUnapplied = sortedByRowIndex.find(c => !c.alreadyApplied);
-                if (firstUnapplied) {
-                    targetRow = firstUnapplied.row;
-                    console.log('applyMainTemplateToRow: Multiple rows with no account — applying by order for account_id =', templateAccountId, 'idProduct =', idProduct);
+                // 多行且均无 account：若模板携带 row_index，必须优先命中同 row_index 的行；
+                // 只有在 row_index 缺失/无法命中时，才按顺序选第一个未套用行。
+                let chosen = null;
+                if (templateRowIndex !== null) {
+                    chosen = sortedByRowIndex.find(c => !c.alreadyApplied && c.rowIndex === templateRowIndex) || null;
+                }
+                if (!chosen) {
+                    chosen = sortedByRowIndex.find(c => !c.alreadyApplied) || null;
+                }
+                if (chosen) {
+                    targetRow = chosen.row;
+                    console.log('applyMainTemplateToRow: Multiple rows with no account — applying by row_index/order for account_id =', templateAccountId, 'templateRowIndex =', templateRowIndex, 'idProduct =', idProduct);
                 }
             }
             // 若仍有未匹配且存在「未设置账号且未套用」的行：套用到第一个这样的行，避免 account_id 未写入 data-account-id 时被跳过（如 H8221 + 3300）
             if (!targetRow) {
-                const firstEmptyUnapplied = sortedByRowIndex.find(c => (!c.accountId || String(c.accountId).trim() === '') && !c.alreadyApplied);
-                if (firstEmptyUnapplied) {
-                    targetRow = firstEmptyUnapplied.row;
-                    console.log('applyMainTemplateToRow: No account match — applying to first empty unapplied row for account_id =', templateAccountId, 'idProduct =', idProduct);
+                let chosen = null;
+                if (templateRowIndex !== null) {
+                    chosen = sortedByRowIndex.find(c =>
+                        (!c.accountId || String(c.accountId).trim() === '') &&
+                        !c.alreadyApplied &&
+                        c.rowIndex === templateRowIndex
+                    ) || null;
+                }
+                if (!chosen) {
+                    chosen = sortedByRowIndex.find(c => (!c.accountId || String(c.accountId).trim() === '') && !c.alreadyApplied) || null;
+                }
+                if (chosen) {
+                    targetRow = chosen.row;
+                    console.log('applyMainTemplateToRow: No account match — applying to empty row by row_index/order for account_id =', templateAccountId, 'templateRowIndex =', templateRowIndex, 'idProduct =', idProduct);
                 }
             }
             if (!targetRow) {
@@ -16759,9 +17004,9 @@ function applyMainTemplateToRow(idProduct, mainTemplate, accountOrderIndex) {
             }
             const processedCell = targetRow.querySelector('td:nth-child(9)');
             if (processedCell && mainTemplate.last_processed_amount !== undefined && mainTemplate.last_processed_amount !== null) {
-                const val = Number(mainTemplate.last_processed_amount);
+                const val = MoneyDecimal.toDecimal(mainTemplate.last_processed_amount, 0).toString();
                 processedCell.textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(val));
-                processedCell.style.color = val > 0 ? '#0D60FF' : (val < 0 ? '#A91215' : '#000000');
+                processedCell.style.color = MoneyDecimal.cmp(val, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(val, '0') < 0 ? '#A91215' : '#000000');
             }
             targetRow.setAttribute('data-formula-display', formulaDisplayForManual);
             targetRow.setAttribute('data-last-source-value', savedSourceValue || '');
@@ -17421,6 +17666,10 @@ function reorderSummaryRowsByRowIndex() {
             const rowIndex = (attr !== null && attr !== '' && !Number.isNaN(Number(attr)))
                 ? Number(attr)
                 : null;
+            const parentRowIndexAttr = row.getAttribute('data-parent-row-index');
+            const parentRowIndex = (parentRowIndexAttr !== null && parentRowIndexAttr !== '' && !Number.isNaN(Number(parentRowIndexAttr)))
+                ? Number(parentRowIndexAttr)
+                : null;
 
             const accountCell = row.querySelector('td:nth-child(2)');
             const accountId = accountCell ? accountCell.getAttribute('data-account-id') : null;
@@ -17432,22 +17681,47 @@ function reorderSummaryRowsByRowIndex() {
             const accountOrder = (accountOrderAttr !== null && accountOrderAttr !== '' && !Number.isNaN(Number(accountOrderAttr))) ? Number(accountOrderAttr) : 999999;
 
             let dataCapturePosition = 999999;
-            // 优先使用「初始」row_index（data-preserved-row-index），保证 Summary 的 main id_product
-            // 顺序与控制台中打印的 “Preserved existing row_index” 完全一致。
-            // 若没有 preserved 值，再使用当前的 data-row-index；两者都没有时才回退到 Data Capture Table 顺序。
-            const effectiveIndex = (preservedRowIndex !== null ? preservedRowIndex : rowIndex);
-            if (effectiveIndex !== null && !Number.isNaN(effectiveIndex) && effectiveIndex < 999999) {
-                dataCapturePosition = effectiveIndex;
-            } else if (normalizedMain && dataCaptureTableOrder.length > 0) {
-                const index = dataCaptureTableOrder.findIndex(item => item.idProduct === normalizedMain);
-                if (index !== -1) dataCapturePosition = index;
+            // IMPORTANT:
+            // - 排序优先跟随当前 Data Capture 表中的位置，避免被历史模板 row_index / preserved_row_index 主导。
+            // - row_index 仍保留给模板匹配与保存逻辑使用（例如同 id_product 的多 occurrence 场景）。
+            const hasValidIndex = (v) => (v !== null && v !== undefined && !Number.isNaN(Number(v)) && Number(v) >= 0 && Number(v) < 999999);
+            // 兼容旧流程：优先当前 data-row-index，preserved 仅作兜底，不再主导显示排序。
+            const effectiveIndex = hasValidIndex(rowIndex)
+                ? Number(rowIndex)
+                : (hasValidIndex(preservedRowIndex) ? Number(preservedRowIndex) : null);
+            const groupAnchorIndex = hasValidIndex(parentRowIndex)
+                ? Number(parentRowIndex)
+                : effectiveIndex;
+
+            if (normalizedMain && idProductPositions.has(normalizedMain)) {
+                const positions = idProductPositions.get(normalizedMain) || [];
+                if (positions.length > 0) {
+                    // 若行上带有有效锚点（main 用 row-index，sub 用 parent-row-index），且该锚点存在于当前 Capture 行中，则优先用它。
+                    if (hasValidIndex(groupAnchorIndex) && positions.includes(Number(groupAnchorIndex))) {
+                        dataCapturePosition = Number(groupAnchorIndex);
+                    } else {
+                        dataCapturePosition = positions[0];
+                    }
+                }
             }
+
+            // Capture 无对应位置时，才回退到历史 index（兼容未在 Capture 中出现的旧行）
+            if (!hasValidIndex(dataCapturePosition) && hasValidIndex(groupAnchorIndex)) {
+                dataCapturePosition = Number(groupAnchorIndex);
+            }
+            const groupKey = normalizedMain
+                ? (normalizedMain + '|' + (productType === 'sub'
+                    ? (hasValidIndex(groupAnchorIndex) ? String(Number(groupAnchorIndex)) : (hasValidIndex(dataCapturePosition) ? String(Number(dataCapturePosition)) : 'na'))
+                    : (hasValidIndex(groupAnchorIndex) ? String(Number(groupAnchorIndex)) : (hasValidIndex(dataCapturePosition) ? String(Number(dataCapturePosition)) : 'na'))))
+                : '';
 
             return {
                 row,
                 rowIndex,
+                parentRowIndex,
                 originalIndex,
                 normalizedMain,
+                groupKey,
                 hasMain: !!mainTextRaw,
                 productType,
                 accountId,
@@ -17462,22 +17736,22 @@ function reorderSummaryRowsByRowIndex() {
         // Array.prototype.sort() pairwise comparisons cannot logically group separate items
         // if their primary sort keys (dataCapturePosition) are vastly different.
         // E.g. Main is pos 0, Sub is pos 9 (from DB history). A new item pos 1 will be inserted between them.
-        // To fix this, force all items of the same normalizeMain to adopt the minimum dataCapturePosition of that group.
+        // To fix this, force all items of the same groupKey(normalizedMain + row_index) to adopt the minimum dataCapturePosition of that group.
         const groupPositions = new Map();
         rowData.forEach(item => {
-            if (item.productType !== 'sub' && item.normalizedMain && item.dataCapturePosition !== null && item.dataCapturePosition !== undefined && item.dataCapturePosition < 999999) {
-                if (!groupPositions.has(item.normalizedMain)) {
-                    groupPositions.set(item.normalizedMain, item.dataCapturePosition);
+            if (item.productType !== 'sub' && item.groupKey && item.dataCapturePosition !== null && item.dataCapturePosition !== undefined && item.dataCapturePosition < 999999) {
+                if (!groupPositions.has(item.groupKey)) {
+                    groupPositions.set(item.groupKey, item.dataCapturePosition);
                 } else {
-                    groupPositions.set(item.normalizedMain, Math.min(groupPositions.get(item.normalizedMain), item.dataCapturePosition));
+                    groupPositions.set(item.groupKey, Math.min(groupPositions.get(item.groupKey), item.dataCapturePosition));
                 }
             }
         });
 
         // Apply unified group position to all rows (Main and Sub) of that group
         rowData.forEach(item => {
-            if (item.normalizedMain && groupPositions.has(item.normalizedMain)) {
-                item.dataCapturePosition = groupPositions.get(item.normalizedMain);
+            if (item.groupKey && groupPositions.has(item.groupKey)) {
+                item.dataCapturePosition = groupPositions.get(item.groupKey);
             }
         });
 
@@ -17498,36 +17772,36 @@ function reorderSummaryRowsByRowIndex() {
                 const aHasValidPos = aPos !== null && aPos !== undefined && !Number.isNaN(aPos) && aPos < 999999;
                 const bHasValidPos = bPos !== null && bPos !== undefined && !Number.isNaN(bPos) && bPos < 999999;
 
-                // 如果是同一组（同一个 Main 的 main/sub），不要用 dataCapturePosition 把它们拆开
-                const sameGroup =
-                    a.normalizedMain &&
-                    b.normalizedMain &&
-                    a.normalizedMain === b.normalizedMain;
+                    // 如果是同一组（同一个 Main 的 main/sub），不要用 dataCapturePosition 把它们拆开
+                    const sameGroup =
+                        a.groupKey &&
+                        b.groupKey &&
+                        a.groupKey === b.groupKey;
 
-                if (!sameGroup) {
-                    // 先按是否在 Data Capture Table 中找到位置（有位置的始终在前）
-                    if (aHasValidPos && !bHasValidPos) return -1;
-                    if (!aHasValidPos && bHasValidPos) return 1;
+                    if (!sameGroup) {
+                        // 先按是否在 Data Capture Table 中找到位置（有位置的始终在前）
+                        if (aHasValidPos && !bHasValidPos) return -1;
+                        if (!aHasValidPos && bHasValidPos) return 1;
 
-                    // 双方都有有效 dataCapturePosition：完全以 Data Capture 行号排序
-                    if (aHasValidPos && bHasValidPos && aPos !== bPos) {
-                        return aPos - bPos;
+                        // 双方都有有效 dataCapturePosition：完全以 Data Capture 行号排序
+                        if (aHasValidPos && bHasValidPos && aPos !== bPos) {
+                            return aPos - bPos;
+                        }
                     }
-                }
 
-                // 走到这里，要么：
-                // - 两边都没有有效位置，或
-                // - 位置相同，或
-                // - 同一 Id Product 分组（sameGroup=true），我们有意忽略 dataCapturePosition 差异
-                const aHasIndex = a.rowIndex !== null;
-                const bHasIndex = b.rowIndex !== null;
+                    // 走到这里，要么：
+                    // - 两边都没有有效位置，或
+                    // - 位置相同，或
+                    // - 同一 Id Product 分组（sameGroup=true），我们有意忽略 dataCapturePosition 差异
+                    const aHasIndex = a.rowIndex !== null;
+                    const bHasIndex = b.rowIndex !== null;
 
-                // 再按 row_index（如果双方都有且不在同一 Id Product 分组）
-                // 注意：同一分组（sameGroup=true）时，不使用 row_index 拆散 main / sub，
-                // 只在不同 Id Product 之间用 row_index 作为次级排序条件。
-                if (!sameGroup && aHasIndex && bHasIndex && a.rowIndex !== b.rowIndex) {
-                    return a.rowIndex - b.rowIndex;
-                }
+                    // 再按 row_index（如果双方都有且不在同一 Id Product 分组）
+                    // 注意：同一分组（sameGroup=true）时，不使用 row_index 拆散 main / sub，
+                    // 只在不同 Id Product 之间用 row_index 作为次级排序条件。
+                    if (!sameGroup && aHasIndex && bHasIndex && a.rowIndex !== b.rowIndex) {
+                        return a.rowIndex - b.rowIndex;
+                    }
 
                 // 在同一 Id Product 分组里，main 永远排在 sub 上面
                 if (sameGroup) {
@@ -17639,6 +17913,10 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
     if (!summaryTableBody || !mainRow) {
         return;
     }
+    const mainRowIndexAttr = mainRow.getAttribute('data-row-index');
+    const mainRowIndex = (mainRowIndexAttr !== null && mainRowIndexAttr !== '' && !Number.isNaN(Number(mainRowIndexAttr)))
+        ? Number(mainRowIndexAttr)
+        : null;
 
     // Filter out empty sub templates (those with no meaningful data)
     const validSubTemplates = subTemplates.filter(template => {
@@ -17774,6 +18052,11 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
                 const rowTemplateId = row.getAttribute('data-template-id');
                 const rowTemplateKey = row.getAttribute('data-template-key');
                 const rowFormulaVariant = row.getAttribute('data-formula-variant');
+                const rowParentRowIndexAttr = row.getAttribute('data-parent-row-index');
+                const rowParentRowIndex = (rowParentRowIndexAttr !== null && rowParentRowIndexAttr !== '' && !Number.isNaN(Number(rowParentRowIndexAttr)))
+                    ? Number(rowParentRowIndexAttr)
+                    : null;
+                const parentRowMatch = (mainRowIndex === null) || (rowParentRowIndex !== null && rowParentRowIndex === mainRowIndex);
                 // sub_order must match when matching by template_key/formula_variant so that multiple sub rows
                 // (e.g. first sub 001, second sub 002) are not collapsed into one after refresh
                 const templateSubOrder = (template.sub_order !== undefined && template.sub_order !== null) ? Number(template.sub_order) : null;
@@ -17782,7 +18065,7 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
                 const subOrderMatch = (templateSubOrder === null && rowSubOrder === null) || (templateSubOrder !== null && rowSubOrder !== null && templateSubOrder === rowSubOrder);
 
                 // Match by template_id (most precise)
-                if (templateId && rowTemplateId && rowTemplateId === String(templateId)) {
+                if (parentRowMatch && templateId && rowTemplateId && rowTemplateId === String(templateId)) {
                     targetRow = row;
                     console.log('Found existing sub row by template_id:', templateId);
                     break;
@@ -17790,7 +18073,7 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
 
                 // Match by template_key + formula_variant (if template_id not available)
                 // IMPORTANT: Also require sub_order to match so that first sub row is not overwritten by second sub template on refresh
-                if (!targetRow && templateKey && formulaVariant &&
+                if (!targetRow && parentRowMatch && templateKey && formulaVariant &&
                     rowTemplateKey === templateKey &&
                     rowFormulaVariant === String(formulaVariant) &&
                     subOrderMatch) {
@@ -17802,7 +18085,7 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
                 // Match by template_key only (fallback, less precise)
                 // Only use this if formula_variant is not available (for backward compatibility)
                 // Also require sub_order match to avoid collapsing multiple sub rows
-                if (!targetRow && templateKey && !formulaVariant && rowTemplateKey === templateKey && subOrderMatch) {
+                if (!targetRow && parentRowMatch && templateKey && !formulaVariant && rowTemplateKey === templateKey && subOrderMatch) {
                     targetRow = row;
                     console.log('Found existing sub row by template_key (no formula_variant):', templateKey);
                     break;
@@ -17810,7 +18093,7 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
 
                 // If row is being updated from batch input, check if it matches by account_id (and sub_order when present)
                 // This helps prevent creating duplicate rows when batch selection is toggled
-                if (isUpdatingFromBatch && !targetRow && subOrderMatch) {
+                if (isUpdatingFromBatch && !targetRow && parentRowMatch && subOrderMatch) {
                     const accountCell = row.querySelector('td:nth-child(2)');
                     const rowAccountDbId = accountCell?.getAttribute('data-account-id');
                     const templateAccountId = template.account_id || null;
@@ -17842,6 +18125,9 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
             if (template.sub_order !== undefined && template.sub_order !== null) {
                 newRow.setAttribute('data-sub-order', String(Number(template.sub_order)));
                 console.log('Set sub_order from template:', template.sub_order);
+            }
+            if (mainRowIndex !== null) {
+                newRow.setAttribute('data-parent-row-index', String(mainRowIndex));
             }
             // Set creation order based on template index to maintain stable order when loading from database
             // Since templates are now sorted by row_index and updated_at, use templateIndex to preserve order
@@ -18600,7 +18886,8 @@ function applySubTemplatesToSummaryRow(idProduct, mainRow, subTemplates) {
             productType: 'sub',
             rowIndex: (template.row_index !== undefined && template.row_index !== null)
                 ? Number(template.row_index)
-                : null
+                : null,
+            parentRowIndex: mainRowIndex
         };
         window.currentAddAccountButton = targetButton;
         updateSubIdProductRow(idProduct, data, targetRow);
@@ -18726,11 +19013,14 @@ function formatPercentValue(value) {
     if (value === null || value === undefined || value === '') {
         return '';
     }
-    const num = Number(value);
-    if (!Number.isFinite(num)) {
+    try {
+        return MoneyDecimal.formatDisplay(
+            MoneyDecimal.toDecimal(value, 0).toDecimalPlaces(4, Decimal.ROUND_DOWN),
+            4
+        );
+    } catch (e) {
         return '';
     }
-    return Number(num.toFixed(4)).toString();
 }
 
 // Display source percent as multiplier (no percentage conversion)
@@ -18749,28 +19039,20 @@ function formatSourcePercentForDisplay(value) {
             // Evaluate the expression
             const sanitized = removeThousandsSeparators(valueStr);
             const result = evaluateExpression(sanitized);
-            // Format to remove unnecessary decimals
-            if (result % 1 === 0) {
-                return result.toString();
-            } else {
-                return result.toFixed(6).replace(/\.?0+$/, '');
-            }
+            return MoneyDecimal.formatDisplay(result, 6);
         } catch (e) {
             console.warn('Could not evaluate source percent expression:', valueStr, e);
             return valueStr;
         }
     } else {
         // Simple number, return as-is
-        const numValue = parseFloat(valueStr);
-        if (isNaN(numValue)) {
+        let numValue;
+        try {
+            numValue = MoneyDecimal.toDecimal(valueStr, 0);
+        } catch (e) {
             return valueStr;
         }
-        // Format to remove unnecessary decimals
-        if (numValue % 1 === 0) {
-            return numValue.toString();
-        } else {
-            return numValue.toFixed(6).replace(/\.?0+$/, '');
-        }
+        return MoneyDecimal.formatDisplay(numValue, 6);
     }
 }
 
@@ -18790,10 +19072,15 @@ function convertDisplayPercentToDecimal(displayValue) {
     // If contains "%", it's old display format, just remove the % symbol
     // Only convert if it's clearly old percentage format (>= 10 with %)
     if (valueStr.includes('%')) {
-        const numValue = parseFloat(cleanValueStr);
-        if (!isNaN(numValue) && numValue >= 10) {
+        let numValue;
+        try {
+            numValue = MoneyDecimal.toDecimal(cleanValueStr, 0);
+        } catch (e) {
+            return cleanValueStr;
+        }
+        if (numValue.gte(10)) {
             // Old percentage format (e.g., 100% -> 1), convert to multiplier
-            return (numValue / 100).toString();
+            return MoneyDecimal.formatDisplay(numValue.div(100), 8);
         } else {
             // Has % but value < 10, just remove % (e.g., "1%" -> "1")
             return cleanValueStr;
@@ -18826,11 +19113,11 @@ function updateProcessedAmountCell(processValue, processedAmount) {
             // 与 datacapturesummary.php 表头一致：0 Id Product … 8 Processed Amount
             const processedAmountCell = cells[8];
             if (processedAmountCell) {
-                let val = Number(processedAmount);
+                let val = MoneyDecimal.toDecimal(processedAmount || '0', 0).toString();
                 // Apply rate multiplication if checkbox is checked
                 val = applyRateToProcessedAmount(row, val);
                 processedAmountCell.textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(val));
-                processedAmountCell.style.color = val > 0 ? '#0D60FF' : (val < 0 ? '#A91215' : '#000000');
+                processedAmountCell.style.color = MoneyDecimal.cmp(val, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(val, '0') < 0 ? '#A91215' : '#000000');
                 // processedAmountCell.style.backgroundColor = '#e8f5e8'; // Removed
                 updateProcessedAmountTotal();
             }
@@ -18839,7 +19126,31 @@ function updateProcessedAmountCell(processValue, processedAmount) {
     }
 }
 
-// Update the total processed amount displayed in the summary table footer
+function getSummaryRowFinalAmount(row, cells) {
+    const safeCells = cells || row.querySelectorAll('td');
+    const baseAmountText = row.getAttribute('data-base-processed-amount');
+    const hasBaseAmount = baseAmountText !== null && String(baseAmountText).trim() !== '';
+
+    if (hasBaseAmount) {
+        try {
+            const baseAmount = MoneyDecimal.toDecimal(baseAmountText, 0).toString();
+            if (typeof applyRateToProcessedAmount === 'function') {
+                return applyRateToProcessedAmount(row, baseAmount);
+            }
+            return baseAmount;
+        } catch (_) { /* fallback to cell text */ }
+    }
+
+    const processedAmountCell = safeCells[8];
+    if (!processedAmountCell) return '0';
+    const fallbackText = (processedAmountCell.textContent || '').trim().replace(/,/g, '');
+    try {
+        return MoneyDecimal.toDecimal(fallbackText, 0).toString();
+    } catch (_) {
+        return '0';
+    }
+}
+
 function updateProcessedAmountTotal() {
     const summaryTableBody = document.getElementById('summaryTableBody');
     const totalCell = document.getElementById('summaryTotalAmount');
@@ -18849,7 +19160,7 @@ function updateProcessedAmountTotal() {
         return;
     }
 
-    let total = 0;
+    let total = MoneyDecimal.toDecimal('0');
     let hasValue = false;
     let allRowsHaveCurrencyAndFormula = true; // 有 Account 的行必须都有 Currency 和 Formula 才能 Submit
 
@@ -18875,22 +19186,17 @@ function updateProcessedAmountTotal() {
             }
         }
 
-        const processedAmountCell = cells[8]; // Processed Amount column (index 8)
-        if (processedAmountCell) {
-            const text = processedAmountCell.textContent.trim().replace(/,/g, '');
-            if (text !== '') {
-                const value = parseFloat(text);
-                if (!isNaN(value)) {
-                    total += value;
-                    hasValue = true;
-                }
-            }
-        }
+        const rowFinalAmount = getSummaryRowFinalAmount(row, cells);
+        try {
+            total = total.plus(MoneyDecimal.toDecimal(rowFinalAmount, 0));
+            hasValue = true;
+        } catch (_) { /* ignore invalid row amount */ }
     });
 
-    const finalTotal = hasValue ? total : 0;
+    const finalTotalRaw = hasValue ? total.toString() : '0';
+    const finalTotal = roundProcessedAmountTo2Decimals(finalTotalRaw); // 只在显示时截断到 2 位
     totalCell.textContent = formatNumberWithThousands(finalTotal);
-    if (finalTotal >= -0.05 && finalTotal <= 0.05) {
+    if (MoneyDecimal.cmp(finalTotal, '-0.05') >= 0 && MoneyDecimal.cmp(finalTotal, '0.05') <= 0) {
         totalCell.style.color = '#0D60FF';
     } else {
         totalCell.style.color = '#A91215';
@@ -18898,12 +19204,12 @@ function updateProcessedAmountTotal() {
 
     // Submit 按钮：合计在范围内 且 每行有 Account 的都有 Currency 和 Formula 才可点，否则变灰
     if (submitBtn) {
-        const isWithinRange = finalTotal >= -0.05 && finalTotal <= 0.05;
+        const isWithinRange = MoneyDecimal.cmp(finalTotal, '-0.05') >= 0 && MoneyDecimal.cmp(finalTotal, '0.05') <= 0;
         const canSubmit = isWithinRange && allRowsHaveCurrencyAndFormula;
         submitBtn.disabled = !canSubmit;
 
         if (!isWithinRange) {
-            submitBtn.title = `Total must be between -0.05 and 0.05. Current total: ${finalTotal.toFixed(2)}`;
+            submitBtn.title = `Total must be between -0.05 and 0.05. Current total: ${formatNumberWithThousands(finalTotal)}`;
         } else if (!allRowsHaveCurrencyAndFormula) {
             submitBtn.title = '请为每一行选择 Currency 并填写 Formula 后再提交。';
         } else {
@@ -18960,7 +19266,7 @@ function showEmptyState() {
             </div>
             <div class="empty-state">
                 <p>No captured data found. Please go back to the Data Capture page and submit some data first.</p>
-                <button onclick="navigateToDataCaptureFromSummary('')" class="btn btn-save">Go to Data Capture</button>
+                <button onclick="window.location.href='datacapture.php'" class="btn btn-save">Go to Data Capture</button>
             </div>
         </div>
     `;
@@ -19282,13 +19588,13 @@ function updateBatchSourceColumns() {
 
         // Update Processed Amount column (index 8)
         if (cells[8]) {
-            let val = Number(processedAmount);
+            let val = MoneyDecimal.toDecimal(processedAmount || '0', 0).toString();
             // Store the base processed amount (without rate) in row attribute
-            row.setAttribute('data-base-processed-amount', val.toString());
+            row.setAttribute('data-base-processed-amount', val);
             // Apply rate multiplication if checkbox is checked or Rate Value has value
             val = applyRateToProcessedAmount(row, val);
             cells[8].textContent = formatNumberWithThousands(roundProcessedAmountTo2Decimals(val));
-            cells[8].style.color = val > 0 ? '#0D60FF' : (val < 0 ? '#A91215' : '#000000');
+            cells[8].style.color = MoneyDecimal.cmp(val, '0') > 0 ? '#0D60FF' : (MoneyDecimal.cmp(val, '0') < 0 ? '#A91215' : '#000000');
         }
 
         // Store the updated data in row attributes
@@ -19482,7 +19788,7 @@ async function submitSummaryData() {
     const summaryTableBody = document.getElementById('summaryTableBody');
     const totalCell = document.getElementById('summaryTotalAmount');
     if (summaryTableBody && totalCell) {
-        let total = 0;
+        let totalAmount = MoneyDecimal.toDecimal('0', 0);
         let hasValue = false;
 
         summaryTableBody.querySelectorAll('tr').forEach(row => {
@@ -19493,28 +19799,23 @@ async function submitSummaryData() {
             }
 
             const cells = row.querySelectorAll('td');
-            const processedAmountCell = cells[8]; // Processed Amount column
-            if (processedAmountCell) {
-                const text = processedAmountCell.textContent.trim().replace(/,/g, '');
-                if (text !== '') {
-                    const value = parseFloat(text);
-                    if (!isNaN(value)) {
-                        total += value;
-                        hasValue = true;
-                    }
-                }
-            }
+            const rowFinalAmount = getSummaryRowFinalAmount(row, cells);
+            try {
+                totalAmount = totalAmount.plus(MoneyDecimal.toDecimal(String(rowFinalAmount), 0));
+                hasValue = true;
+            } catch (_) { /* ignore invalid amount */ }
         });
 
-        const finalTotal = hasValue ? total : 0;
-        if (finalTotal < -0.05 || finalTotal > 0.05) {
+        const finalTotalRaw = hasValue ? totalAmount : '0';
+        const finalTotal = roundProcessedAmountTo2Decimals(finalTotalRaw);
+        if (MoneyDecimal.cmp(finalTotal, '-0.05') < 0 || MoneyDecimal.cmp(finalTotal, '0.05') > 0) {
             // Re-enable button on validation error
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.textContent = 'Submit';
             }
             isSubmitting = false;
-            showNotification('Error', `Cannot submit: The sum of Processed Amount must be between -0.05 and 0.05. Current sum: ${finalTotal.toFixed(2)}`, 'error');
+            showNotification('Error', `Cannot submit: The sum of Processed Amount must be between -0.05 and 0.05. Current sum: ${formatNumberWithThousands(finalTotal)}`, 'error');
             return;
         }
     }
@@ -19779,6 +20080,12 @@ async function submitSummaryData() {
             const templateKeyAttr = row.getAttribute('data-template-key') || '';
             const productTypeAttr = row.getAttribute('data-product-type');
             const parentIdProductAttr = row.getAttribute('data-parent-id-product');
+            const templateIdAttr = row.getAttribute('data-template-id');
+            const templateId = templateIdAttr && templateIdAttr !== '' ? parseInt(templateIdAttr, 10) : null;
+            const subOrderAttr = row.getAttribute('data-sub-order');
+            const subOrder = subOrderAttr && subOrderAttr !== '' && !Number.isNaN(Number(subOrderAttr))
+                ? Number(subOrderAttr)
+                : null;
             // Get formulaVariant from row attribute if available
             const formulaVariantAttr = row.getAttribute('data-formula-variant');
             const formulaVariant = formulaVariantAttr && formulaVariantAttr !== '' ? parseInt(formulaVariantAttr, 10) : null;
@@ -19886,6 +20193,9 @@ async function submitSummaryData() {
                 inputMethod: inputMethodAttr,
                 enableInputMethod: enableInputMethodAttr ? 1 : 0,
                 batchSelection: batchSelectionValue ? 1 : 0,
+                templateKey: templateKeyAttr || null,
+                templateId: templateId, // Keep template identity so submit updates the exact sub row
+                subOrder: subOrder, // Keep sub row order so same formula/account rows don't collapse
                 formulaVariant: formulaVariant, // Include formulaVariant to help backend distinguish rows with same account
                 rateChecked: rateChecked, // Rate checkbox state
                 rateValue: rateValue, // Rate Value column value (priority) or global rateInput value (if checkbox checked)
@@ -20076,7 +20386,7 @@ async function submitSummaryData() {
                     try { localStorage.removeItem('capturedCaptureId'); } catch (e) { }
                     localStorage.removeItem('capturedTableData');
                     localStorage.removeItem('capturedProcessData');
-                    navigateToDataCaptureFromSummary('submitted=1');
+                    window.location.href = 'datacapture.php?submitted=1';
                 }, 600);
                 return;
             }
@@ -20263,7 +20573,7 @@ async function submitSummaryData() {
                 localStorage.removeItem('capturedProcessData');
 
                 // Redirect to data capture page
-                navigateToDataCaptureFromSummary('submitted=1');
+                window.location.href = 'datacapture.php?submitted=1';
             }, 2000);
         }
 
@@ -20288,8 +20598,8 @@ async function submitSummaryData() {
     }
 }
 
-// Only upline (Supplier in UI), member, agent show "Account [name]"; other roles show account_id only.
-const ROLES_TO_SHOW_ACCOUNT_NAME = ['upline', 'supplier', 'agent', 'member', 'debtor'];
+// Only listed roles show "Account [name]"; other roles show account_id only.
+const ROLES_TO_SHOW_ACCOUNT_NAME = ['upline', 'supplier', 'partner', 'staff', 'agent', 'member', 'debtor'];
 
 // Format account display by role: strip [name] for roles not in ROLES_TO_SHOW_ACCOUNT_NAME.
 // accountList: optional array with { id, account_id, name, role }; uses window.__accountListWithRoles or __summaryAccountListCache if not provided.

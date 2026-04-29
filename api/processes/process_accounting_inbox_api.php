@@ -20,6 +20,7 @@ header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../bankprocess_maintenance/maintenance_accounting_resend_lib.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/contract_billing_addon.php';
 
 /** 统一 JSON 响应 */
@@ -77,7 +78,7 @@ function inboxBankProcessDateFieldToYmd($raw): ?string
 }
 
 /** Pro-rated cost/price/profit for partial first month: day_start to end of that month */
-function partialFirstMonthAmounts(string $dayStart, float $cost, float $price, float $profit): array
+function partialFirstMonthAmounts(string $dayStart, string $cost, string $price, string $profit): array
 {
     $norm = inboxBankProcessDateFieldToYmd($dayStart);
     $ts = $norm !== null ? strtotime($norm) : strtotime($dayStart);
@@ -90,16 +91,16 @@ function partialFirstMonthAmounts(string $dayStart, float $cost, float $price, f
     if ($daysInMonth <= 0) {
         return ['cost' => $cost, 'price' => $price, 'profit' => $profit];
     }
-    $ratio = $daysRemaining / $daysInMonth;
+    $ratio = money_div((string) $daysRemaining, (string) $daysInMonth, MONEY_CALC_SCALE);
     return [
-        'cost' => round($cost * $ratio, 2),
-        'price' => round($price * $ratio, 2),
-        'profit' => round($profit * $ratio, 2),
+        'cost' => money_mul($cost, $ratio, 2),
+        'price' => money_mul($price, $ratio, 2),
+        'profit' => money_mul($profit, $ratio, 2),
     ];
 }
 
 /** Pro-rated amounts from $startYmd (inclusive) to end of that month (inclusive). */
-function prorateToMonthEndFromStart(string $startYmd, float $cost, float $price, float $profit): array
+function prorateToMonthEndFromStart(string $startYmd, string $cost, string $price, string $profit): array
 {
     $ts = strtotime($startYmd);
     if ($ts === false) {
@@ -112,11 +113,11 @@ function prorateToMonthEndFromStart(string $startYmd, float $cost, float $price,
     }
     $daysRemaining = $daysInMonth - $dayOfMonth + 1;
     $daysRemaining = max(0, $daysRemaining);
-    $ratio = $daysRemaining / $daysInMonth;
+    $ratio = money_div((string) $daysRemaining, (string) $daysInMonth, MONEY_CALC_SCALE);
     return [
-        'cost' => round($cost * $ratio, 2),
-        'price' => round($price * $ratio, 2),
-        'profit' => round($profit * $ratio, 2),
+        'cost' => money_mul($cost, $ratio, 2),
+        'price' => money_mul($price, $ratio, 2),
+        'profit' => money_mul($profit, $ratio, 2),
     ];
 }
 
@@ -281,20 +282,20 @@ function isWithinRecurringBillingWindow(string $todayYmd, ?string $dayStartYmd, 
 }
 
 /** $fromYmd、$toYmd 均含当日；各段按当月天数比例分摊整月金额。 */
-function prorateInclusiveDateRange(string $fromYmd, string $toYmd, float $cost, float $price, float $profit): array
+function prorateInclusiveDateRange(string $fromYmd, string $toYmd, string $cost, string $price, string $profit): array
 {
     if ($fromYmd > $toYmd) {
-        return ['cost' => 0.0, 'price' => 0.0, 'profit' => 0.0];
+        return ['cost' => '0.00000000', 'price' => '0.00000000', 'profit' => '0.00000000'];
     }
     try {
         $cur = new DateTimeImmutable($fromYmd);
         $end = new DateTimeImmutable($toYmd);
     } catch (Throwable $e) {
-        return ['cost' => 0.0, 'price' => 0.0, 'profit' => 0.0];
+        return ['cost' => '0.00000000', 'price' => '0.00000000', 'profit' => '0.00000000'];
     }
-    $tc = 0.0;
-    $tp = 0.0;
-    $tf = 0.0;
+    $tc = '0.00000000';
+    $tp = '0.00000000';
+    $tf = '0.00000000';
     while ($cur <= $end) {
         $dim = (int) $cur->format('t');
         $monthEnd = $cur->modify('last day of this month');
@@ -303,17 +304,17 @@ function prorateInclusiveDateRange(string $fromYmd, string $toYmd, float $cost, 
         $d1 = (int) $chunkEnd->format('j');
         $chunkDays = $d1 - $d0 + 1;
         if ($dim > 0 && $chunkDays > 0) {
-            $ratio = $chunkDays / $dim;
-            $tc += $cost * $ratio;
-            $tp += $price * $ratio;
-            $tf += $profit * $ratio;
+            $ratio = money_div((string) $chunkDays, (string) $dim, MONEY_CALC_SCALE);
+            $tc = money_add($tc, money_mul($cost, $ratio, MONEY_CALC_SCALE), MONEY_CALC_SCALE);
+            $tp = money_add($tp, money_mul($price, $ratio, MONEY_CALC_SCALE), MONEY_CALC_SCALE);
+            $tf = money_add($tf, money_mul($profit, $ratio, MONEY_CALC_SCALE), MONEY_CALC_SCALE);
         }
         $cur = $chunkEnd->modify('+1 day');
     }
     return [
-        'cost' => round($tc, 2),
-        'price' => round($tp, 2),
-        'profit' => round($tf, 2),
+        'cost' => money_normalize($tc, 2),
+        'price' => money_normalize($tp, 2),
+        'profit' => money_normalize($tf, 2),
     ];
 }
 
@@ -423,9 +424,9 @@ function inboxAppendMonthlyNeedToday(
     string $createdYmd,
     $startTs,
     string $startDate,
-    float $cost,
-    float $price,
-    float $profit
+    string $cost,
+    string $price,
+    string $profit
 ): void {
     $prorationRatio = null;
     try {
@@ -453,9 +454,9 @@ function inboxAppendMonthlyNeedToday(
                     $price = $pr['price'];
                     $profit = $pr['profit'];
                 } else {
-                    $cost = 0.0;
-                    $price = 0.0;
-                    $profit = 0.0;
+                    $cost = '0.00000000';
+                    $price = '0.00000000';
+                    $profit = '0.00000000';
                 }
             } elseif ($createdYm === $billYm) {
                 $dueYmd = null;
@@ -815,9 +816,9 @@ try {
             if (isPartialFirstMonthAlreadyPosted($pdo, $company_id, $processId)) {
                 continue;
             }
-            $cost = (float) ($r['cost'] ?? 0);
-            $price = (float) ($r['price'] ?? 0);
-            $profit = (float) ($r['profit'] ?? 0);
+            $cost = money_normalize($r['cost'] ?? '0');
+            $price = money_normalize($r['price'] ?? '0');
+            $profit = money_normalize($r['profit'] ?? '0');
             $partialStart = $startDate;
             if ($partialStart > $firstMonthEnd) {
                 continue;
@@ -851,9 +852,9 @@ try {
             $startDate = inboxBankProcessDateFieldToYmd($dayStartRaw);
             $endDate = inboxBankProcessDateFieldToYmd($dayEndRaw);
             if ($startDate !== null && $endDate !== null && $startDate <= $endDate) {
-                $baseCost = (float) ($r['cost'] ?? 0);
-                $basePrice = (float) ($r['price'] ?? 0);
-                $baseProfit = (float) ($r['profit'] ?? 0);
+                $baseCost = money_normalize($r['cost'] ?? '0');
+                $basePrice = money_normalize($r['price'] ?? '0');
+                $baseProfit = money_normalize($r['profit'] ?? '0');
                 $tot = prorateInclusiveDateRange($startDate, $endDate, $baseCost, $basePrice, $baseProfit);
                 $needToday[] = [
                     'id' => (int) $r['id'],
@@ -884,9 +885,9 @@ try {
             $startDate = inboxBankProcessDateFieldToYmd($dayStartRaw);
             $endDate = inboxBankProcessDateFieldToYmd($dayEndRaw);
             if ($startDate !== null && $endDate !== null && $startDate <= $endDate) {
-                $baseCost = (float) ($r['cost'] ?? 0);
-                $basePrice = (float) ($r['price'] ?? 0);
-                $baseProfit = (float) ($r['profit'] ?? 0);
+                $baseCost = money_normalize($r['cost'] ?? '0');
+                $basePrice = money_normalize($r['price'] ?? '0');
+                $baseProfit = money_normalize($r['profit'] ?? '0');
                 $tot = prorateInclusiveDateRange($startDate, $endDate, $baseCost, $basePrice, $baseProfit);
                 $needToday[] = [
                     'id' => (int) $r['id'],
@@ -931,9 +932,9 @@ try {
         $createdYmd = inboxEffectiveCreatedYmdForProcess($r, $today, $startDate !== '' ? $startDate : null);
         $contract = $r['contract'] ?? null;
         $dayEnd = $r['day_end'] ?? null;
-        $baseCost = (float) ($r['cost'] ?? 0);
-        $basePrice = (float) ($r['price'] ?? 0);
-        $baseProfit = (float) ($r['profit'] ?? 0);
+        $baseCost = money_normalize($r['cost'] ?? '0');
+        $basePrice = money_normalize($r['price'] ?? '0');
+        $baseProfit = money_normalize($r['profit'] ?? '0');
 
         if ($frequency === '1st_of_every_month') {
             if (empty($dayStart)) {
@@ -1251,11 +1252,11 @@ try {
             if ($today < maxYmd($startDate, $createdYmdTail)) {
                 continue;
             }
-            $cost = (float) ($r['cost'] ?? 0);
-            $price = (float) ($r['price'] ?? 0);
-            $profit = (float) ($r['profit'] ?? 0);
+            $cost = money_normalize($r['cost'] ?? '0');
+            $price = money_normalize($r['price'] ?? '0');
+            $profit = money_normalize($r['profit'] ?? '0');
             $tail = prorateInclusiveDateRange($exclusiveEnd, $dayEndInc, $cost, $price, $profit);
-            if ($tail['cost'] <= 0 && $tail['price'] <= 0 && $tail['profit'] <= 0) {
+            if (money_cmp($tail['cost'], '0') <= 0 && money_cmp($tail['price'], '0') <= 0 && money_cmp($tail['profit'], '0') <= 0) {
                 continue;
             }
             try {
@@ -1296,9 +1297,9 @@ try {
             'country' => $r['country'] ?? '',
             'day_start' => $r['day_start'] ?? null,
             'contract' => $r['contract'] ?? '',
-            'cost' => $r['cost'] ?? 0,
-            'price' => $r['price'] ?? 0,
-            'profit' => $r['profit'] ?? 0,
+            'cost' => money_normalize($r['cost'] ?? '0'),
+            'price' => money_normalize($r['price'] ?? '0'),
+            'profit' => money_normalize($r['profit'] ?? '0'),
             'already_posted_today' => false,
             'is_partial_first_month' => false,
             'is_manual_inactive' => true,
@@ -1380,9 +1381,9 @@ try {
             $pid = (int) ($row['id'] ?? 0);
             $ds = trim((string) ($row['day_start'] ?? ''));
             $dsNorm = $ds !== '' ? (inboxBankProcessDateFieldToYmd($ds) ?? $ds) : '';
-            $c = number_format((float) ($row['cost'] ?? 0), 2, '.', '');
-            $p = number_format((float) ($row['price'] ?? 0), 2, '.', '');
-            $pr = number_format((float) ($row['profit'] ?? 0), 2, '.', '');
+            $c = money_normalize($row['cost'] ?? '0', 2);
+            $p = money_normalize($row['price'] ?? '0', 2);
+            $pr = money_normalize($row['profit'] ?? '0', 2);
             $fp = $pid . '|' . $dsNorm . '|' . $c . '|' . $p . '|' . $pr;
             if (!isset($byFingerprint[$fp]) || $rankOf($row) >= $rankOf($byFingerprint[$fp])) {
                 $byFingerprint[$fp] = $row;
@@ -1394,6 +1395,12 @@ try {
 
     if (!empty($needToday)) {
         markAlreadyPostedOnNeedToday($pdo, $needToday, $company_id, $today, $hasPeriodType);
+        foreach ($needToday as &$row) {
+            $row['cost'] = money_out($row['cost'] ?? '0');
+            $row['price'] = money_out($row['price'] ?? '0');
+            $row['profit'] = money_out($row['profit'] ?? '0');
+        }
+        unset($row);
     }
 
     jsonResponse(true, '', $needToday);

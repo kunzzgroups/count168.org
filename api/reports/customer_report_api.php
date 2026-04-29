@@ -6,8 +6,13 @@
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
+
+function reportMoneyOut($value): string {
+    return money_out($value ?? '0');
+}
 
 function resolveCompanyId(PDO $pdo): int {
     if (!isset($_SESSION['user_id'])) {
@@ -111,8 +116,8 @@ function getWinLoseByCurrency(PDO $pdo, int $accountId, int $currencyId, string 
     $stmt->execute([$accountId, $currencyId, $dateFrom, $dateTo]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return [
-        'win' => (float) ($row['win_total'] ?? 0),
-        'lose' => (float) ($row['lose_total'] ?? 0)
+        'win' => reportMoneyOut($row['win_total'] ?? '0'),
+        'lose' => reportMoneyOut($row['lose_total'] ?? '0')
     ];
 }
 
@@ -128,16 +133,16 @@ function getWinLoseNoCurrency(PDO $pdo, int $accountId, string $dateFrom, string
     $stmt->execute([$accountId, $dateFrom, $dateTo]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     return [
-        'win' => (float) ($row['win_total'] ?? 0),
-        'lose' => (float) ($row['lose_total'] ?? 0)
+        'win' => reportMoneyOut($row['win_total'] ?? '0'),
+        'lose' => reportMoneyOut($row['lose_total'] ?? '0')
     ];
 }
 
 function buildReportData(PDO $pdo, int $companyId, string $accountId, string $dateFrom, string $dateTo, bool $showAll, string $currencyFilter): array {
     $accounts = getAccountsForReport($pdo, $companyId, $accountId);
     $reportData = [];
-    $totalWin = 0.0;
-    $totalLose = 0.0;
+    $totalWin = '0.00000000';
+    $totalLose = '0.00000000';
 
     foreach ($accounts as $account) {
         $accId = (int) $account['id'];
@@ -147,11 +152,11 @@ function buildReportData(PDO $pdo, int $companyId, string $accountId, string $da
         if (!empty($currencyList)) {
             foreach ($currencyList as $cur) {
                 $wl = getWinLoseByCurrency($pdo, $accId, (int) $cur['currency_id'], $dateFrom, $dateTo);
-                if (!$showAll && $wl['win'] == 0 && $wl['lose'] == 0) {
+                if (!$showAll && money_cmp($wl['win'], '0') === 0 && money_cmp($wl['lose'], '0') === 0) {
                     continue;
                 }
-                $totalWin += $wl['win'];
-                $totalLose += $wl['lose'];
+                $totalWin = money_add($totalWin, $wl['win']);
+                $totalLose = money_add($totalLose, $wl['lose']);
                 $reportData[] = [
                     'id' => $account['id'],
                     'account_id' => $account['account_id'],
@@ -168,11 +173,11 @@ function buildReportData(PDO $pdo, int $companyId, string $accountId, string $da
                 continue;
             }
             $wl = getWinLoseNoCurrency($pdo, $accId, $dateFrom, $dateTo);
-            if (!$showAll && $wl['win'] == 0 && $wl['lose'] == 0) {
+            if (!$showAll && money_cmp($wl['win'], '0') === 0 && money_cmp($wl['lose'], '0') === 0) {
                 continue;
             }
-            $totalWin += $wl['win'];
-            $totalLose += $wl['lose'];
+            $totalWin = money_add($totalWin, $wl['win']);
+            $totalLose = money_add($totalLose, $wl['lose']);
             $reportData[] = [
                 'id' => $account['id'],
                 'account_id' => $account['account_id'],
@@ -184,7 +189,7 @@ function buildReportData(PDO $pdo, int $companyId, string $accountId, string $da
         }
     }
 
-    return [$reportData, $totalWin, $totalLose];
+    return [$reportData, reportMoneyOut($totalWin), reportMoneyOut($totalLose)];
 }
 
 function jsonResponse(bool $success, string $message, $data = null, array $extra = []): void {

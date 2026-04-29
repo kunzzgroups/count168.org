@@ -1,10 +1,22 @@
 <?php
 require_once 'config.php';
+require_once __DIR__ . '/api/includes/money_decimal.php';
 
 $success_message = '';
 $error_message = '';
 $currencies = [];
 $roles = [];
+
+function normalizeAlertAmount(?string $value): ?string {
+    $value = trim((string)($value ?? ''));
+    if ($value === '') {
+        return null;
+    }
+    if (!money_is_valid($value)) {
+        throw new Exception('Alert amount must be a valid decimal amount');
+    }
+    return money_normalize($value);
+}
 
 // 获取货币列表
 try {
@@ -75,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $payment_alert = isset($_POST['payment_alert']) && $_POST['payment_alert'] != '0' ? 1 : 0;
         $alert_day = !empty($_POST['alert_day']) ? (int)$_POST['alert_day'] : null;
         $alert_specific_date = !empty($_POST['alert_specific_date']) ? trim($_POST['alert_specific_date']) : null;
-        $alert_amount = !empty($_POST['alert_amount']) ? (float)$_POST['alert_amount'] : null;
+        $alert_amount = !empty($_POST['alert_amount']) ? normalizeAlertAmount($_POST['alert_amount']) : null;
 
         if (empty($account_id) || empty($name) || empty($role) || empty($password) || empty($currency_id)) {
             throw new Exception('请填写所有必填字段');
@@ -304,7 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-row">
                     <div class="form-group">
                         <label for="alert_amount">Alert (Amount)</label>
-                        <input type="number" id="alert_amount" name="alert_amount" step="0.01" min="0" 
+                        <input type="text" id="alert_amount" name="alert_amount" inputmode="decimal"
                                value="<?php echo isset($_POST['alert_amount']) ? htmlspecialchars($_POST['alert_amount']) : ''; ?>">
                     </div>
                 </div>

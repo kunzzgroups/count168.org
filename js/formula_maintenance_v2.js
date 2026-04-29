@@ -681,7 +681,8 @@ function loadDataCaptureList() {
                         (row.account && row.account.toUpperCase().includes(searchUpper)) ||
                         (row.account_name && row.account_name.toUpperCase().includes(searchUpper)) ||
                         (row.process && row.process.toUpperCase().includes(searchUpper)) ||
-                        (row.source && row.source.toUpperCase().includes(searchUpper))
+                        (row.source && row.source.toUpperCase().includes(searchUpper)) ||
+                        (row.source_ref && String(row.source_ref).toUpperCase().includes(searchUpper))
                     );
                 }
                 
@@ -748,6 +749,7 @@ function renderDataCaptureTable(data) {
             account: row.account || '',
             account_id: row.account_id || null,
             source: row.source || '',
+            source_ref: row.source_ref != null ? String(row.source_ref) : '',
             input_method: row.input_method || '',
             formula: row.formula || '',
             formula_edit: row.formula_edit || row.formula || '',
@@ -783,9 +785,9 @@ function renderDataCaptureTable(data) {
                 <select class="account-select" style="display: none; width: 100%; padding: 2px 4px; border: 1px solid #ddd; border-radius: 4px; font-size: clamp(9px, 0.63vw, 12px);"></select>
             </td>
             <td class="currency-cell">${toUpperDisplay(row.currency)}</td>
-            <td class="source-cell" data-original-source="${escapeHtml(row.source || '')}">
+            <td class="source-cell" data-original-source="${escapeHtml(row.source || '')}" data-source-ref="${escapeHtml(row.source_ref != null ? String(row.source_ref) : '')}">
                 <span class="source-display" title="${escapeHtml(row.source || '')}">${toUpperDisplay(row.source)}</span>
-                <input type="text" class="source-input" value="${escapeHtml(row.source || '')}" style="display: none; width: 100%; padding: 2px 4px; border: 1px solid #ddd; border-radius: 4px; font-size: clamp(9px, 0.63vw, 12px);">
+                <input type="text" class="source-input" value="${escapeHtml(row.source != null && String(row.source).trim() !== '' ? String(row.source) : '1')}" style="display: none; width: 100%; padding: 2px 4px; border: 1px solid #ddd; border-radius: 4px; font-size: clamp(9px, 0.63vw, 12px);">
             </td>
             <td>${toUpperDisplay(row.product)}</td>
             <td class="input-method-cell" data-original-input-method="${escapeHtml(row.input_method || '')}">
@@ -865,6 +867,46 @@ function toUpperDisplay(value) {
     return str ? str.toUpperCase() : '-';
 }
 
+function splitFormulaSourcePercent(rawFormula) {
+    const formula = rawFormula == null ? '' : String(rawFormula).trim();
+    if (!formula) {
+        return { base: '', sourcePercent: '' };
+    }
+
+    const lastStar = formula.lastIndexOf('*');
+    if (lastStar === -1) {
+        return { base: formula, sourcePercent: '' };
+    }
+
+    const base = formula.slice(0, lastStar).trim();
+    let rate = formula.slice(lastStar + 1).trim();
+    if (!base || !rate || rate.includes('$')) {
+        return { base: formula, sourcePercent: '' };
+    }
+
+    const wrapped = rate.match(/^\((.+)\)$/);
+    if (wrapped) {
+        rate = wrapped[1].trim();
+    }
+
+    const rateCompact = rate.replace(/[%\s]/g, '');
+    if (!rateCompact || !/^[0-9.\/()+-]+$/.test(rateCompact)) {
+        return { base: formula, sourcePercent: '' };
+    }
+
+    return { base, sourcePercent: rate };
+}
+
+function buildFormulaWithSourcePercent(rawFormula, rawSourcePercent) {
+    const { base } = splitFormulaSourcePercent(rawFormula);
+    const sourcePercent = rawSourcePercent == null ? '' : String(rawSourcePercent).trim();
+    const sourceCompact = sourcePercent.replace(/[%\s]/g, '');
+    if (!base || !sourceCompact) {
+        return base;
+    }
+    return `${base}*${sourcePercent}`;
+}
+
 // ==================== 编辑数据捕获行 ====================
 function editDataCaptureRow(rowId, editBtn) {
     const row = editBtn.closest('tr');
@@ -891,6 +933,12 @@ function editDataCaptureRow(rowId, editBtn) {
     loadAccountList(accountSelect, accountCell.getAttribute('data-original-account-id')).then(() => {
         const rowDataForEdit = JSON.parse(row.getAttribute('data-row-data') || '{}');
         formulaInput.value = rowDataForEdit.formula_edit || rowDataForEdit.formula || '';
+        sourceInput.value = rowDataForEdit.source != null && String(rowDataForEdit.source).trim() !== ''
+            ? String(rowDataForEdit.source)
+            : '1';
+        sourceInput.oninput = function() {
+            formulaInput.value = buildFormulaWithSourcePercent(formulaInput.value, sourceInput.value);
+        };
         // 显示输入框/下拉列表，隐藏显示文本
         accountDisplay.style.display = 'none';
         accountSelect.style.display = 'block';
@@ -1002,7 +1050,10 @@ function cancelEditDataCaptureRow(rowId, cancelBtn) {
     
     // 恢复原始值
     accountSelect.value = rowData.account_id || '';
-    sourceInput.value = rowData.source || '';
+    sourceInput.value = rowData.source != null && String(rowData.source).trim() !== ''
+        ? String(rowData.source)
+        : '1';
+    sourceInput.oninput = null;
     inputMethodSelect.value = rowData.input_method || '';
     formulaInput.value = rowData.formula_edit || rowData.formula || '';
     descriptionInput.value = rowData.description || '';
@@ -1072,16 +1123,19 @@ function saveDataCaptureRow(rowId, saveBtn) {
     const accountId = accountSelect.value;
     const accountText = accountSelect.options[accountSelect.selectedIndex]?.text || '';
     const sourceValue = sourceInput.value.trim();
+    const prevRow = JSON.parse(row.getAttribute('data-row-data') || '{}');
+    const sourceRef = sourceCell.getAttribute('data-source-ref') || prevRow.source_ref || '';
     const inputMethodValue = inputMethodSelect.value;
     const inputMethodText = inputMethodSelect.options[inputMethodSelect.selectedIndex]?.text || '';
-    const formulaValue = formulaInput.value.trim();
+    const formulaValue = buildFormulaWithSourcePercent(formulaInput.value.trim(), sourceValue);
+    formulaInput.value = formulaValue;
     const descriptionValue = descriptionInput.value.trim();
     
     const saveData = {
         template_id: rowId,
         account_id: accountId || null,
-        source_columns: sourceValue,
-        source_display: sourceValue,
+        source_columns: sourceRef,
+        source_display: sourceRef,
         input_method: inputMethodValue,
         formula: formulaValue,
         description: descriptionValue
@@ -1117,8 +1171,12 @@ function saveDataCaptureRow(rowId, saveBtn) {
             const edit = norm.formula_edit != null ? norm.formula_edit : formulaValue;
             // 更新显示文本
             accountDisplay.textContent = accountText ? toUpperDisplay(accountText.split(' (')[0]) : '-';
-            sourceDisplay.textContent = toUpperDisplay(sourceValue);
-            sourceDisplay.title = sourceValue || '';
+            const sumSrc = norm.source_summary_display != null ? String(norm.source_summary_display) : (prevRow.source || '');
+            const refNext = norm.source_ref != null ? String(norm.source_ref).trim() : sourceValue;
+            sourceDisplay.textContent = toUpperDisplay(sumSrc !== '' ? sumSrc : '1');
+            sourceDisplay.title = sumSrc !== '' ? sumSrc : '1';
+            sourceInput.value = refNext;
+            sourceCell.setAttribute('data-source-ref', refNext);
             inputMethodDisplay.textContent = toUpperDisplay(inputMethodValue);
             formulaDisplay.textContent = toUpperDisplay(disp);
             formulaDisplay.title = disp || '';
@@ -1154,13 +1212,17 @@ function saveDataCaptureRow(rowId, saveBtn) {
                 checkbox.style.display = 'inline-block';
                 checkbox.disabled = false;
             }
+            sourceInput.oninput = null;
             
             // 更新保存的数据
+            const sumSrcFinal = norm.source_summary_display != null ? String(norm.source_summary_display) : (prevRow.source || '');
+            const refFinal = norm.source_ref != null ? String(norm.source_ref).trim() : sourceValue;
             const newRowData = {
                 id: rowId,
                 account: accountText.split(' (')[0] || '',
                 account_id: accountId || null,
-                source: sourceValue,
+                source: sumSrcFinal !== '' ? sumSrcFinal : (prevRow.source || '1'),
+                source_ref: refFinal,
                 input_method: inputMethodValue,
                 formula: disp,
                 formula_edit: edit,

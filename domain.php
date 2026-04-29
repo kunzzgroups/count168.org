@@ -107,6 +107,8 @@ try {
         window.DOMAIN_SESSION_COMPANY_ID = <?php echo $company_id ? (int)$company_id : 'null'; ?>;
         window.DOMAIN_SESSION_COMPANY_CODE = <?php echo json_encode($company_code ?: ''); ?>;
     </script>
+    <script src="js/decimal.min.js?v=<?php echo $assetVer('js/decimal.min.js'); ?>"></script>
+    <script src="js/money-decimal.js?v=<?php echo $assetVer('js/money-decimal.js'); ?>"></script>
     <script src="js/domain.js?v=<?php echo $assetVer('js/domain.js'); ?>"></script>
     <link rel="stylesheet" href="css/global-13inch.css?v=<?php echo file_exists('css/global-13inch.css') ? filemtime('css/global-13inch.css') : time(); ?>">
 </head>
@@ -222,7 +224,7 @@ try {
                 <p class="domain-fee-edit-hint">Edit fields below support up to 2 decimal places.</p>
                 <div class="form-group">
                     <label for="domainFeePrice">Price <span class="domain-fee-decimals-hint">(edit)</span></label>
-                    <input type="number" id="domainFeePrice" class="form-group input" step="0.01" placeholder="0.00" style="width: 100%; padding: clamp(5px, 0.42vw, 8px) clamp(6px, 0.63vw, 12px); border: 1px solid #d1d5db; border-radius: clamp(4px, 0.42vw, 8px); font-size: clamp(10px, 0.83vw, 16px); box-sizing: border-box;">
+                    <input type="text" id="domainFeePrice" class="form-group input" inputmode="decimal" placeholder="0.00" style="width: 100%; padding: clamp(5px, 0.42vw, 8px) clamp(6px, 0.63vw, 12px); border: 1px solid #d1d5db; border-radius: clamp(4px, 0.42vw, 8px); font-size: clamp(10px, 0.83vw, 16px); box-sizing: border-box;">
                 </div>
                 <div class="form-actions" style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
                     <button type="button" class="btn btn-save" onclick="saveDomainFeeSettings()">Save</button>

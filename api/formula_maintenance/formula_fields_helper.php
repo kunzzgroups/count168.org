@@ -94,3 +94,41 @@ function buildFormulaEditFromRow(array $row) {
     list($base, $pct, $en) = resolveTemplateFormulaBaseAndPercent($row);
     return buildFormulaEditFromParts($base, $pct, $en);
 }
+
+/**
+ * 与 js/datacapturesummary.js 中 formatSourcePercentForDisplay 对齐，
+ * 供 Maintenance - Formula 列表「Source」列展示（与 Data Capture Summary 同源字段 source_percent）。
+ */
+function formatSourcePercentForMaintenanceList($value) {
+    if ($value === null || $value === false) {
+        return '1';
+    }
+    $valueStr = trim(str_replace('%', '', (string) $value));
+    if ($valueStr === '') {
+        return '1';
+    }
+    if (preg_match('/[+\-*\/]/', $valueStr)) {
+        if (!preg_match('/^[0-9.+\-*\/()\s]+$/', $valueStr)) {
+            return $valueStr;
+        }
+        $result = @eval('return (' . $valueStr . ');');
+        if (!is_numeric($result)) {
+            return $valueStr;
+        }
+        $num = (float) $result;
+    } else {
+        if (!is_numeric($valueStr)) {
+            return $valueStr;
+        }
+        $num = (float) $valueStr;
+    }
+    if (!is_finite($num)) {
+        return $valueStr;
+    }
+    if (abs($num - round($num)) < 1e-9) {
+        return (string) (int) round($num);
+    }
+    $s = number_format($num, 6, '.', '');
+    $s = rtrim(rtrim($s, '0'), '.');
+    return $s !== '' ? $s : '0';
+}

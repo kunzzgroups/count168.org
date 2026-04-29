@@ -8,6 +8,7 @@
 let geGroupsData = [];
 let geGroupStates = {};   // { [groupId]: { accounts:[], rows:[] } }
 let geCurrentlyExpandedId = null;
+const geReadOnlyMode = window._ownReadOnlyMode === true;
 
 function geIsApiSuccess(res) {
     return res && (res.success === true || res.status === 'success');
@@ -28,6 +29,44 @@ function geApiData(res, fallback = []) {
     if (!res) return fallback;
     if (res.data !== undefined) return res.data;
     return fallback;
+}
+
+function geWriteBlocked() {
+    if (!geReadOnlyMode) return false;
+    showToast('Read-only: only owner can modify ownership', 'error');
+    return true;
+}
+
+function gePct(value) {
+    return MoneyDecimal.toDecimal(String(value ?? '0').replace('%', ''), 0);
+}
+
+function gePctDisplay(value, scale = 2) {
+    return MoneyDecimal.formatDisplay(gePct(value), scale);
+}
+
+function gePctFixed(value, scale = 2) {
+    return MoneyDecimal.formatFixed(gePct(value), scale);
+}
+
+function gePctCmp(a, b) {
+    return gePct(a).cmp(gePct(b));
+}
+
+function gePctAdd(a, b) {
+    return gePct(a).plus(gePct(b));
+}
+
+function gePctSub(a, b) {
+    return gePct(a).minus(gePct(b));
+}
+
+function gePctClamp(value, min = '0', max = '100') {
+    return Decimal.min(Decimal.max(gePct(value), gePct(min)), gePct(max));
+}
+
+function gePctNumber(value) {
+    return gePct(value).toNumber();
 }
 
 // ── Tab Switching (called from inline onclick) ───────────────
@@ -91,8 +130,8 @@ function renderGroupCards() {
 
     geGroupsData.forEach(grp => {
         const gid = grp.group_id;
-        const alloc = parseFloat(grp.allocated_percentage) || 0;
-        const remaining = Math.max(0, 100 - alloc);
+        const alloc = gePct(grp.allocated_percentage);
+        const remaining = Decimal.max(gePct('0'), gePctSub('100', alloc));
 
         // Build card from scratch (no HTML template — keeps it self-contained)
         const card = document.createElement('div');
@@ -107,8 +146,8 @@ function renderGroupCards() {
 
         // Build company list with per-company group equity
         const companyLabels = grp.companies.map(c => {
-            const eq = parseFloat(c.group_equity) || 0;
-            return eq > 0 ? `${c.name} (${eq}%)` : c.name;
+            const eq = gePct(c.group_equity);
+            return eq.gt(0) ? `${c.name} (${gePctDisplay(eq)}%)` : c.name;
         }).join(', ');
 
         header.innerHTML = `
@@ -118,11 +157,11 @@ function renderGroupCards() {
             <div class="own-card-header-middle">
                 <div class="own-allocation-info">
                     <span class="own-allocation-label">Total Allocation</span>
-                    <span class="own-allocation-percentage" id="ge-header-percent-${gid}">${alloc}%</span>
-                    <span class="own-allocation-remaining" id="ge-header-remain-${gid}">${remaining}% Remaining</span>
+                    <span class="own-allocation-percentage" id="ge-header-percent-${gid}">${gePctDisplay(alloc)}%</span>
+                    <span class="own-allocation-remaining" id="ge-header-remain-${gid}">${gePctDisplay(remaining)}% Remaining</span>
                 </div>
                 <div class="own-progress-bar-container">
-                    <div class="own-progress-bar-fill" id="ge-header-bar-${gid}" style="width:${Math.min(alloc, 100)}%"></div>
+                    <div class="own-progress-bar-fill" id="ge-header-bar-${gid}" style="width:${gePctNumber(Decimal.min(alloc, gePct('100')))}%"></div>
                 </div>
             </div>
             <div class="own-card-header-right">
@@ -187,6 +226,10 @@ function renderGroupCards() {
             const action = e.target.closest('[data-action]')?.dataset.action;
             if (!action) return;
             e.stopPropagation();
+            if (geReadOnlyMode && ['add-row', 'confirm', 'link-partner'].includes(action)) {
+                geWriteBlocked();
+                return;
+            }
             switch (action) {
                 case 'toggle':     geToggleCard(gid); break;
                 case 'add-row':    geAddAccountRow(gid); break;
@@ -239,7 +282,7 @@ function geLoadGroupData(groupId) {
             accounts: accounts,
             rows: (ownersRes.status === 'success' ? ownersRes.data : []).map(o => ({
                 account_id: o.composite_id || o.account_id,
-                percentage: parseFloat(o.percentage),
+                percentage: gePctDisplay(o.percentage),
                 role: o.role || '',
                 user_raw_id: o.user_raw_id || null,
                 ownership_id: o.ownership_id || null,
@@ -263,7 +306,7 @@ function geCancelEdit(groupId, forceCollapse = false) {
 
     const grpIdx = geGroupsData.findIndex(g => g.group_id === groupId);
     if (grpIdx >= 0) {
-        geUpdateCardHeaderDisplay(groupId, parseFloat(geGroupsData[grpIdx].allocated_percentage) || 0);
+        geUpdateCardHeaderDisplay(groupId, geGroupsData[grpIdx].allocated_percentage || '0');
     }
 }
 
@@ -394,6 +437,15 @@ function geCreateRowElement(groupId, idx, rowData) {
     rowActions.appendChild(deleteBtn);
     div.appendChild(rowActions);
 
+    if (geReadOnlyMode) {
+        select.disabled = true;
+        input.disabled = true;
+        slider.disabled = true;
+        roCheck.disabled = true;
+        deleteBtn.style.display = 'none';
+        dragHandle.style.display = 'none';
+    }
+
     // Initialize slider gradient
     requestAnimationFrame(() => geApplySliderBackground(slider));
 
@@ -403,13 +455,15 @@ function geCreateRowElement(groupId, idx, rowData) {
 // ── Row Data Operations ──────────────────────────────────────
 
 function geAddAccountRow(groupId) {
+    if (geWriteBlocked()) return;
     geGroupStates[groupId].rows.push({
-        account_id: '', percentage: 0, role: '', user_raw_id: null, read_only: 1
+        account_id: '', percentage: '0', role: '', user_raw_id: null, read_only: 1
     });
     geRenderCardBodyRows(groupId);
 }
 
 function geRemoveRow(groupId, idx) {
+    if (geWriteBlocked()) return;
     geGroupStates[groupId].rows.splice(idx, 1);
     geRenderCardBodyRows(groupId);
 }
@@ -435,7 +489,7 @@ function geUpdateRowData(groupId, idx, field, value) {
 // ── Slider & Input Sync ──────────────────────────────────────
 
 function geUpdateInputFromSlider(groupId, idx, value) {
-    const pct = parseFloat(value) || 0;
+    const pct = gePctDisplay(value);
     document.getElementById(`ge-input-${groupId}-${idx}`).value = `${pct}%`;
     geApplySliderBackground(document.getElementById(`ge-slider-${groupId}-${idx}`));
     geGroupStates[groupId].rows[idx].percentage = pct;
@@ -443,9 +497,7 @@ function geUpdateInputFromSlider(groupId, idx, value) {
 }
 
 function geUpdateSliderFromInput(groupId, idx, value) {
-    let pct = parseFloat(value.replace('%', ''));
-    if (isNaN(pct)) pct = 0;
-    pct = Math.max(0, Math.min(100, pct));
+    const pct = gePctDisplay(gePctClamp(value));
 
     document.getElementById(`ge-slider-${groupId}-${idx}`).value = pct;
     document.getElementById(`ge-input-${groupId}-${idx}`).value = `${pct}%`;
@@ -463,27 +515,27 @@ function geApplySliderBackground(slider) {
 // ── Calculations & Display ───────────────────────────────────
 
 function geUpdateCalculations(groupId) {
-    const total = geGroupStates[groupId].rows.reduce((sum, r) => sum + (parseFloat(r.percentage) || 0), 0);
+    const total = geGroupStates[groupId].rows.reduce((sum, r) => sum.plus(gePct(r.percentage)), gePct('0'));
     geUpdateCardHeaderDisplay(groupId, total);
 
-    const remaining = 100 - total;
+    const remaining = gePctSub('100', total);
     const footerRm = document.getElementById(`ge-footer-remain-${groupId}`);
     const warningBadge = document.getElementById(`ge-warning-${groupId}`);
     const confirmBtn = document.getElementById(`ge-confirm-btn-${groupId}`);
 
-    if (total > 100) {
+    if (gePctCmp(total, '100') > 0) {
         warningBadge.style.display = 'flex';
         warningBadge.className = 'own-warning-badge own-warning-error';
         document.getElementById(`ge-warning-icon-${groupId}`).textContent = '❌';
         document.getElementById(`ge-warning-msg-${groupId}`).textContent = 'Total exceeds 100%!';
-        if (footerRm) footerRm.textContent = `${Math.abs(remaining).toFixed(2)}% Over Allocated`;
+        if (footerRm) footerRm.textContent = `${gePctFixed(remaining.abs())}% Over Allocated`;
         confirmBtn.disabled = true;
-    } else if (total < 100) {
+    } else if (gePctCmp(total, '100') < 0) {
         warningBadge.style.display = 'flex';
         warningBadge.className = 'own-warning-badge';
         document.getElementById(`ge-warning-icon-${groupId}`).textContent = '⚠️';
         document.getElementById(`ge-warning-msg-${groupId}`).textContent = 'Total is less than 100%';
-        if (footerRm) footerRm.textContent = `${remaining.toFixed(2)}% Unallocated`;
+        if (footerRm) footerRm.textContent = `${gePctFixed(remaining)}% Unallocated`;
         confirmBtn.disabled = false;
     } else {
         warningBadge.style.display = 'none';
@@ -497,27 +549,28 @@ function geUpdateCardHeaderDisplay(groupId, total) {
     const pctEl = document.getElementById(`ge-header-percent-${groupId}`);
     const barEl = document.getElementById(`ge-header-bar-${groupId}`);
 
-    if (pctEl) pctEl.textContent = `${total}%`;
+    if (pctEl) pctEl.textContent = `${gePctDisplay(total)}%`;
 
     if (remainEl) {
-        if (total > 100) {
+        if (gePctCmp(total, '100') > 0) {
             remainEl.textContent = 'Over limit!';
             remainEl.classList.add('own-over-limit');
             if (barEl) barEl.classList.add('own-bar-danger');
         } else {
-            remainEl.textContent = `${(100 - total).toFixed(2)}% Remaining`;
+            remainEl.textContent = `${gePctFixed(gePctSub('100', total))}% Remaining`;
             remainEl.classList.remove('own-over-limit');
             if (barEl) barEl.classList.remove('own-bar-danger');
         }
     }
-    if (barEl) barEl.style.width = `${Math.min(total, 100)}%`;
+    if (barEl) barEl.style.width = `${gePctNumber(Decimal.min(gePct(total), gePct('100')))}%`;
 }
 
 // ── Save / Confirm ───────────────────────────────────────────
 
 function geConfirmEdit(groupId) {
+    if (geWriteBlocked()) return;
     const rows = geGroupStates[groupId].rows;
-    let total = 0;
+    let total = gePct('0');
     let hasError = false;
 
     rows.forEach(r => {
@@ -525,10 +578,10 @@ function geConfirmEdit(groupId) {
             hasError = true;
             showToast('Please select an account for all rows.', 'error');
         }
-        total += parseFloat(r.percentage);
+        total = total.plus(gePct(r.percentage));
     });
 
-    if (total > 100) { showToast('Total percentage exceeds 100%', 'error'); return; }
+    if (gePctCmp(total, '100') > 0) { showToast('Total percentage exceeds 100%', 'error'); return; }
     if (hasError) return;
 
     const accIds = rows.map(r => r.account_id);
@@ -541,7 +594,7 @@ function geConfirmEdit(groupId) {
         group_id: groupId,
         owners: rows.map(r => ({
             account_id: r.account_id,
-            percentage: parseFloat(r.percentage),
+            percentage: gePctDisplay(r.percentage),
             read_only: r.read_only
         }))
     };
@@ -562,7 +615,7 @@ function geConfirmEdit(groupId) {
             if (geIsApiSuccess(res)) {
                 showToast(geApiMessage(res, 'Group ownership saved successfully'), 'success');
                 const grpIdx = geGroupsData.findIndex(g => g.group_id === groupId);
-                if (grpIdx >= 0) geGroupsData[grpIdx].allocated_percentage = total;
+                if (grpIdx >= 0) geGroupsData[grpIdx].allocated_percentage = gePctDisplay(total);
                 geCancelEdit(groupId, true);
             } else {
                 showToast(geApiMessage(res, 'Save failed'), 'error');
@@ -579,6 +632,7 @@ function geConfirmEdit(groupId) {
 // ── External Partner ─────────────────────────────────────────
 
 function geLinkExternalPartner(groupId, event, forceType = '') {
+    if (geWriteBlocked()) return;
     const loginIdInput = document.getElementById(`ge-partner-login-${groupId}`);
     const loginId = loginIdInput.value.trim().toUpperCase();
     if (!loginId) { showToast('Please enter a Login ID/Group ID', 'error'); return; }

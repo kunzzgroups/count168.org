@@ -838,6 +838,8 @@ if (!empty($session_company_id)) {
    
     <script src="js/date-range-picker.js?v=<?php echo time(); ?>"></script>
     <script>window.TRANSACTION_MAINTENANCE = { currentCompanyId: <?php echo json_encode($session_company_id); ?>, currentCompanyCode: <?php echo json_encode($session_company_code); ?> };</script>
+    <script src="js/decimal.min.js?v=<?php echo file_exists('js/decimal.min.js') ? filemtime('js/decimal.min.js') : time(); ?>"></script>
+    <script src="js/money-decimal.js?v=<?php echo file_exists('js/money-decimal.js') ? filemtime('js/money-decimal.js') : time(); ?>"></script>
     <script src="js/transaction_maintenance.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

@@ -103,6 +103,7 @@ let templatePermissions = [];
                     'home': 'Home',
                     'admin': 'Admin',
                     'account': 'Account',
+                    'ownership': 'Ownership',
                     'process': 'Process',
                     'datacapture': 'Data Capture',
                     'payment': 'Transaction Payment',

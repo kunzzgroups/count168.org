@@ -9,6 +9,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../includes/money_decimal.php';
 
 /**
  * Contra 审批：过滤未批准的 CONTRA（向后兼容：若无字段则不过滤）
@@ -166,7 +167,10 @@ function dashboardContraApprovedWhere(PDO $pdo, string $alias = 't'): string
         return '';
     }
     $a = $alias !== '' ? $alias . '.' : '';
-    return " AND ({$a}transaction_type <> 'CONTRA' OR {$a}approval_status = 'APPROVED')";
+    return " AND ((
+                {$a}transaction_type IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT')
+                AND {$a}approval_status = 'APPROVED'
+            ) OR {$a}transaction_type NOT IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT'))";
 }
 
 /**
@@ -182,6 +186,51 @@ function dashboardShouldExcludeClearForRole(?string $role): bool
     $role = strtoupper(trim((string) $role));
     // 与 Transaction List/search_api 口径对齐：不排除 CLEAR（EXPENSES 也要算入）
     return false;
+}
+
+function dashboardMoneyZero(): string
+{
+    return '0.00000000';
+}
+
+function dashboardMoneyAdd($a, $b, int $scale = MONEY_SCALE): string
+{
+    return money_add($a ?? '0', $b ?? '0', $scale);
+}
+
+function dashboardMoneySub($a, $b, int $scale = MONEY_SCALE): string
+{
+    return money_sub($a ?? '0', $b ?? '0', $scale);
+}
+
+function dashboardAddDailyAmount(array &$daily, string $date, $amount): void
+{
+    if ($date === '') {
+        return;
+    }
+    $daily[$date] = dashboardMoneyAdd($daily[$date] ?? '0', $amount);
+}
+
+function dashboardSumDailyAmounts(array $daily): string
+{
+    $total = dashboardMoneyZero();
+    foreach ($daily as $amount) {
+        $total = dashboardMoneyAdd($total, $amount);
+    }
+    return $total;
+}
+
+function dashboardOut($value): string
+{
+    return money_out($value ?? '0');
+}
+
+function dashboardOutMap(array $daily): array
+{
+    foreach ($daily as $date => $amount) {
+        $daily[$date] = dashboardOut($amount);
+    }
+    return $daily;
 }
 
 /**
@@ -310,16 +359,16 @@ try {
         $stmt->execute($params);
         $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $total_balance = 0;
-        $total_bf = 0;
+        $total_balance = dashboardMoneyZero();
+        $total_bf = dashboardMoneyZero();
         $daily_data = [];
 
         $account_ids = array_column($accounts, 'id');
         if (empty($account_ids)) {
             $result[strtolower($role)] = [
                 'role' => $role,
-                'total_balance' => 0,
-                'initial_balance' => 0,
+                'total_balance' => dashboardMoneyZero(),
+                'initial_balance' => dashboardMoneyZero(),
                 'daily_data' => []
             ];
             continue;
@@ -350,8 +399,8 @@ try {
                 // If the specified currency doesn't exist for this company, return empty for this role
                 $result[strtolower($role)] = [
                     'role' => $role,
-                    'total_balance' => 0,
-                    'initial_balance' => 0,
+                    'total_balance' => dashboardMoneyZero(),
+                    'initial_balance' => dashboardMoneyZero(),
                     'daily_data' => []
                 ];
                 continue;
@@ -369,7 +418,7 @@ try {
                   AND dc.capture_date < ?" . $currency_filter_dcd;
         $bf_stmt = $pdo->prepare($sql);
         $bf_stmt->execute(array_merge([$company_id, $company_id], $account_ids, [$date_from_db], $currency_params_dcd));
-        $total_bf += (float) $bf_stmt->fetchColumn();
+        $total_bf = dashboardMoneyAdd($total_bf, $bf_stmt->fetchColumn());
 
         // B. Transactions B/F (To/From)
         if ($hasTransactionCurrency) {
@@ -389,6 +438,7 @@ try {
                         WHEN transaction_type = 'LOSE' AND (description LIKE 'Process: %') THEN -amount
                         WHEN transaction_type = 'WIN' AND (description NOT LIKE 'Process: %' OR description IS NULL) THEN -amount
                         WHEN transaction_type = 'LOSE' AND (description NOT LIKE 'Process: %' OR description IS NULL) THEN amount
+                        WHEN transaction_type = 'ADJUSTMENT' THEN amount
                         ELSE 0
                     END), 0)
                     FROM transactions t
@@ -397,7 +447,7 @@ try {
                       AND t.transaction_date < ?" . $currency_filter_t_to . $clearFilter . $contraApproval;
             $bf_stmt = $pdo->prepare($sql);
             $bf_stmt->execute(array_merge([$company_id], $account_ids, [$date_from_db], $currency_params_t_to));
-            $total_bf += (float) $bf_stmt->fetchColumn();
+            $total_bf = dashboardMoneyAdd($total_bf, $bf_stmt->fetchColumn());
 
             // From Account
             $sql = "SELECT COALESCE(SUM(CASE 
@@ -414,7 +464,7 @@ try {
                       AND t.transaction_date < ?" . $currency_filter_t_from . $clearFilter . $contraApproval;
             $bf_stmt = $pdo->prepare($sql);
             $bf_stmt->execute(array_merge([$company_id], $account_ids, [$date_from_db], $currency_params_t_from));
-            $total_bf += (float) $bf_stmt->fetchColumn();
+            $total_bf = dashboardMoneyAdd($total_bf, $bf_stmt->fetchColumn());
 
             // RATE B/F from transaction_entry
             try {
@@ -433,7 +483,7 @@ try {
                               AND h.transaction_date < ?" . $currency_filter_e;
                     $bf_stmt = $pdo->prepare($sql);
                     $bf_stmt->execute(array_merge([$company_id, $company_id], $account_ids, [$date_from_db], $currency_params_e));
-                    $total_bf += (float) $bf_stmt->fetchColumn();
+                    $total_bf = dashboardMoneyAdd($total_bf, $bf_stmt->fetchColumn());
                 }
             } catch (Throwable $e) {
             }
@@ -453,7 +503,7 @@ try {
         $daily_stmt = $pdo->prepare($sql);
         $daily_stmt->execute(array_merge([$company_id, $company_id], $account_ids, [$date_from_db, $date_to_db], $currency_params_dcd));
         foreach ($daily_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $daily_data[$row['date']] = ($daily_data[$row['date']] ?? 0) + (float) $row['win_loss'];
+            dashboardAddDailyAmount($daily_data, (string) $row['date'], $row['win_loss'] ?? '0');
         }
 
         // B. Transactions Daily Cr/Dr
@@ -475,20 +525,21 @@ try {
                                WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %') THEN -t.amount
                                WHEN t.transaction_type = 'WIN' AND (t.description NOT LIKE 'Process: %' OR t.description IS NULL) THEN -t.amount
                                WHEN t.transaction_type = 'LOSE' AND (t.description NOT LIKE 'Process: %' OR t.description IS NULL) THEN t.amount
+                               WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
                                ELSE 0
                            END), 0) as cr_dr
                     FROM transactions t
                     WHERE t.company_id = ?
                       AND t.account_id IN ($ids_placeholder)
                       AND t.transaction_date BETWEEN ? AND ?
-                      AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE', 'WIN', 'LOSE')"
+                      AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE', 'WIN', 'LOSE', 'ADJUSTMENT')"
                 . $currency_filter_t_to . $clearFilter . $contraApproval . "
                     GROUP BY DATE(t.transaction_date)
                     ORDER BY DATE(t.transaction_date)";
             $daily_stmt = $pdo->prepare($sql);
             $daily_stmt->execute(array_merge([$company_id], $account_ids, [$date_from_db, $date_to_db], $currency_params_t_to));
             foreach ($daily_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $daily_data[$row['date']] = ($daily_data[$row['date']] ?? 0) + (float) $row['cr_dr'];
+                dashboardAddDailyAmount($daily_data, (string) $row['date'], $row['cr_dr'] ?? '0');
             }
 
             // From Account
@@ -513,7 +564,7 @@ try {
             $daily_stmt = $pdo->prepare($sql);
             $daily_stmt->execute(array_merge([$company_id], $account_ids, [$date_from_db, $date_to_db], $currency_params_t_from));
             foreach ($daily_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $daily_data[$row['date']] = ($daily_data[$row['date']] ?? 0) + (float) $row['cr_dr'];
+                dashboardAddDailyAmount($daily_data, (string) $row['date'], $row['cr_dr'] ?? '0');
             }
 
             // RATE daily from transaction_entry
@@ -536,7 +587,7 @@ try {
                     $daily_stmt = $pdo->prepare($sql);
                     $daily_stmt->execute(array_merge([$company_id, $company_id], $account_ids, [$date_from_db, $date_to_db], $currency_params_e));
                     foreach ($daily_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                        $daily_data[$row['date']] = ($daily_data[$row['date']] ?? 0) + (float) $row['rate_delta'];
+                        dashboardAddDailyAmount($daily_data, (string) $row['date'], $row['rate_delta'] ?? '0');
                     }
                 }
             } catch (Throwable $e) {
@@ -556,7 +607,7 @@ try {
             }
 
             // A) 调整期初：起始日前的 Share Commission 需要从 B/F 扣回
-            $adjBfSql = "SELECT COALESCE(SUM(ROUND(t.amount, 2)), 0) AS adj_total
+            $adjBfSql = "SELECT COALESCE(SUM(t.amount), 0) AS adj_total
                          FROM transactions t
                          WHERE t.company_id = ?
                            AND t.transaction_type = 'PAYMENT'
@@ -565,13 +616,13 @@ try {
                            AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'" . $profitAdjCurrencyFilter;
             $adjBfStmt = $pdo->prepare($adjBfSql);
             $adjBfStmt->execute(array_merge([$company_id], $account_ids, [$date_from_db], $profitAdjCurrencyParams));
-            $adjBf = (float) $adjBfStmt->fetchColumn();
-            if (abs($adjBf) > 0.00001) {
-                $total_bf -= $adjBf;
+            $adjBf = $adjBfStmt->fetchColumn();
+            if (money_cmp(money_abs($adjBf), '0.00001') > 0) {
+                $total_bf = dashboardMoneySub($total_bf, $adjBf);
             }
 
             // B) 调整本期：按日扣回，保证图表与 period_total 一致
-            $adjDailySql = "SELECT DATE(t.transaction_date) AS date, COALESCE(SUM(ROUND(t.amount, 2)), 0) AS adj_total
+            $adjDailySql = "SELECT DATE(t.transaction_date) AS date, COALESCE(SUM(t.amount), 0) AS adj_total
                             FROM transactions t
                             WHERE t.company_id = ?
                               AND t.transaction_type = 'PAYMENT'
@@ -587,21 +638,20 @@ try {
                 if ($d === '') {
                     continue;
                 }
-                $v = (float) ($adjRow['adj_total'] ?? 0);
-                $daily_data[$d] = ($daily_data[$d] ?? 0) - $v;
+                $daily_data[$d] = dashboardMoneySub($daily_data[$d] ?? '0', $adjRow['adj_total'] ?? '0');
             }
         }
 
         // --- 3. 计算本期总余额 ---
-        $total_period_delta = array_sum($daily_data);
-        $total_balance = $total_bf + $total_period_delta;
+        $total_period_delta = dashboardSumDailyAmounts($daily_data);
+        $total_balance = dashboardMoneyAdd($total_bf, $total_period_delta);
 
         $result[strtolower($role)] = [
             'role' => $role,
-            'total_balance' => $total_balance,
-            'initial_balance' => $total_bf,
-            'period_total' => $total_period_delta,
-            'daily_data' => $daily_data
+            'total_balance' => dashboardOut($total_balance),
+            'initial_balance' => dashboardOut($total_bf),
+            'period_total' => dashboardOut($total_period_delta),
+            'daily_data' => dashboardOutMap($daily_data)
         ];
     }
 
@@ -615,7 +665,7 @@ try {
             $rateMMSql = "
                 SELECT
                     DATE(h.transaction_date) AS date,
-                    COALESCE(SUM(ROUND(e.amount, 2)), 0) AS total
+                    COALESCE(SUM(e.amount), 0) AS total
                 FROM transaction_entry e
                 JOIN transactions h ON e.header_id = h.id
                 WHERE h.company_id = ?
@@ -639,21 +689,22 @@ try {
             $rateMMStmt->execute($rateMMParams);
 
             $rateMMDaily = [];
-            $rateMMPeriodTotal = 0;
+            $rateMMPeriodTotal = dashboardMoneyZero();
             while ($rateRow = $rateMMStmt->fetch(PDO::FETCH_ASSOC)) {
                 $d = $rateRow['date'];
-                $v = (float) $rateRow['total'];
-                $rateMMDaily[$d] = ($rateMMDaily[$d] ?? 0) + $v;
-                $rateMMPeriodTotal += $v;
+                $v = $rateRow['total'] ?? '0';
+                dashboardAddDailyAmount($rateMMDaily, (string) $d, $v);
+                $rateMMPeriodTotal = dashboardMoneyAdd($rateMMPeriodTotal, $v);
             }
 
             // 合并到 profit：period_total、daily_data、total_balance
             if (!empty($rateMMDaily)) {
                 foreach ($rateMMDaily as $d => $v) {
-                    $result['profit']['daily_data'][$d] = ($result['profit']['daily_data'][$d] ?? 0) + $v;
+                    dashboardAddDailyAmount($result['profit']['daily_data'], (string) $d, $v);
                 }
-                $result['profit']['period_total'] += $rateMMPeriodTotal;
-                $result['profit']['total_balance'] += $rateMMPeriodTotal;
+                $result['profit']['period_total'] = dashboardOut(dashboardMoneyAdd($result['profit']['period_total'] ?? '0', $rateMMPeriodTotal));
+                $result['profit']['total_balance'] = dashboardOut(dashboardMoneyAdd($result['profit']['total_balance'] ?? '0', $rateMMPeriodTotal));
+                $result['profit']['daily_data'] = dashboardOutMap($result['profit']['daily_data']);
             }
         } catch (Throwable $rateMMErr) {
             // RATE_MIDDLEMAN 查询失败不影响主数据（向后兼容）
@@ -952,7 +1003,7 @@ function calculateProfitPaymentDailyFlow(
         $date = (string) ($row['date'] ?? '');
         if ($date === '')
             continue;
-        $daily[$date] = (float) ($row['flow_amount'] ?? 0);
+        $daily[$date] = dashboardOut($row['flow_amount'] ?? '0');
     }
 
     return $daily;
@@ -965,7 +1016,7 @@ function calculateProfitPaymentDailyFlow(
  */
 function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $company_id, $has_transaction_currency = null, bool $exclude_clear = false)
 {
-    $bf = 0;
+    $bf = dashboardMoneyZero();
 
     // 1. 计算起始日期之前所有 Data Capture 的累计金额（按 Edit Formula 的 dcd.currency_id 过滤，与 Transaction 页一致）
     $sql = "SELECT COALESCE(SUM(dcd.processed_amount), 0) as total
@@ -979,7 +1030,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from]);
-    $bf += $stmt->fetchColumn();
+    $bf = dashboardMoneyAdd($bf, $stmt->fetchColumn());
 
     // 2. 计算起始日期之前所有 Cr/Dr（作为 To Account：PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM/WIN/LOSE；RATE 单独从 transaction_entry）
     if ($has_transaction_currency === null) {
@@ -1000,6 +1051,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         WHEN transaction_type = 'LOSE' AND (description LIKE 'Process: %') THEN -amount
                         WHEN transaction_type = 'WIN' AND (description NOT LIKE 'Process: %' OR description IS NULL) THEN -amount
                         WHEN transaction_type = 'LOSE' AND (description NOT LIKE 'Process: %' OR description IS NULL) THEN amount
+                        WHEN transaction_type = 'ADJUSTMENT' THEN amount
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions
@@ -1007,13 +1059,13 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   AND account_id = ?
                   AND currency_id = ?
                   AND transaction_date < ?
-                  AND transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'WIN', 'LOSE')"
+                  AND transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'WIN', 'LOSE', 'ADJUSTMENT')"
             . $clearFilter
             . dashboardContraApprovedWhere($pdo, '');
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $currency_id, $date_from]);
-        $bf += $stmt->fetchColumn();
+        $bf = dashboardMoneyAdd($bf, $stmt->fetchColumn());
 
         // 3. 计算起始日期之前所有 Cr/Dr（作为 From Account）
         $sql = "SELECT 
@@ -1036,7 +1088,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $currency_id, $date_from]);
-        $bf += $stmt->fetchColumn();
+        $bf = dashboardMoneyAdd($bf, $stmt->fetchColumn());
     }
 
     // 4. 起始日期之前的 RATE 从 transaction_entry 计算（与 Transaction Search API 一致）
@@ -1059,7 +1111,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   AND h.transaction_date < ?
             ");
             $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from]);
-            $bf += (float) $rateStmt->fetchColumn();
+            $bf = dashboardMoneyAdd($bf, $rateStmt->fetchColumn());
         }
     } catch (Throwable $e) {
         // 忽略
@@ -1076,7 +1128,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
  */
 function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from, $date_to, $company_id)
 {
-    $win_loss = 0;
+    $win_loss = dashboardMoneyZero();
 
     // 1. 日期范围内的 Data Capture（按 dcd.currency_id 过滤）
     $sql = "SELECT COALESCE(SUM(dcd.processed_amount), 0) as total
@@ -1089,7 +1141,7 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
               AND dc.capture_date BETWEEN ? AND ?";
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from, $date_to]);
-    $win_loss += $stmt->fetchColumn();
+    $win_loss = dashboardMoneyAdd($win_loss, $stmt->fetchColumn());
 
     // 2. 所有 Bank Process 的 WIN/LOSE（description 以 Process: 开头，与 Transaction 页一致）
     if (dashboardHasTransactionCurrency($pdo)) {
@@ -1100,7 +1152,16 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
                   AND (description LIKE 'Process: %')";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
-        $win_loss += $stmt->fetchColumn();
+        $win_loss = dashboardMoneyAdd($win_loss, $stmt->fetchColumn());
+
+        $sql = "SELECT COALESCE(SUM(amount), 0) as total
+                FROM transactions
+                WHERE company_id = ? AND account_id = ? AND transaction_date BETWEEN ? AND ?
+                  AND currency_id = ? AND transaction_type = 'ADJUSTMENT'"
+            . dashboardContraApprovedWhere($pdo, '');
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
+        $win_loss = dashboardMoneyAdd($win_loss, $stmt->fetchColumn());
 
         try {
             if (dashboardHasTransactionEntry($pdo)) {
@@ -1117,7 +1178,7 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
                       AND h.transaction_date BETWEEN ? AND ?
                 ");
                 $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from, $date_to]);
-                $win_loss += (float) $rateStmt->fetchColumn();
+                $win_loss = dashboardMoneyAdd($win_loss, $rateStmt->fetchColumn());
             }
         } catch (Throwable $e) {
             // 忽略
@@ -1134,7 +1195,7 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
  */
 function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $date_to, $company_id, $has_transaction_currency = null, bool $exclude_clear = false)
 {
-    $cr_dr = 0;
+    $cr_dr = dashboardMoneyZero();
     $has_transactions = false;
 
     if ($has_transaction_currency === null) {
@@ -1190,7 +1251,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
         ]);
 
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $cr_dr += (float) ($row['cr_dr'] ?? 0);
+        $cr_dr = dashboardMoneyAdd($cr_dr, $row['cr_dr'] ?? '0');
         $txn_count = (int) ($row['txn_count'] ?? 0);
         $has_transactions = $txn_count > 0;
 
@@ -1215,7 +1276,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
                       AND e.entry_type <> 'RATE_MIDDLEMAN'
                 ");
                 $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from, $date_to]);
-                $cr_dr += (float) $rateStmt->fetchColumn();
+                $cr_dr = dashboardMoneyAdd($cr_dr, $rateStmt->fetchColumn());
             }
         } catch (Throwable $e) {
             // 忽略
@@ -1243,7 +1304,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $cr_dr += (float) ($row['cr_dr'] ?? 0);
+        $cr_dr = dashboardMoneyAdd($cr_dr, $row['cr_dr'] ?? '0');
         $txn_count = (int) ($row['txn_count'] ?? 0);
         $has_transactions = $txn_count > 0;
 
@@ -1268,7 +1329,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $cr_dr += (float) ($row['cr_dr'] ?? 0);
+        $cr_dr = dashboardMoneyAdd($cr_dr, $row['cr_dr'] ?? '0');
         $txn_count += (int) ($row['txn_count'] ?? 0);
         $has_transactions = $has_transactions || $txn_count > 0;
 
@@ -1293,7 +1354,7 @@ function calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from, $d
                       AND e.entry_type <> 'RATE_MIDDLEMAN'
                 ");
                 $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from, $date_to]);
-                $cr_dr += (float) $rateStmt->fetchColumn();
+                $cr_dr = dashboardMoneyAdd($cr_dr, $rateStmt->fetchColumn());
             }
         } catch (Throwable $e) {
             // 忽略

@@ -40,7 +40,7 @@ function getCurrentUser() {
 
 function validatePermissions($permissions) {
     if (!is_array($permissions)) return false;
-    $valid = ['home', 'admin', 'account', 'process', 'datacapture', 'payment', 'report', 'maintenance'];
+    $valid = ['home', 'admin', 'account', 'ownership', 'process', 'datacapture', 'payment', 'report', 'maintenance'];
     foreach ($permissions as $p) {
         if (!in_array($p, $valid)) return false;
     }

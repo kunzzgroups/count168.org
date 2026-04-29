@@ -262,7 +262,13 @@ $assetVer = function ($file) {
     <script>
         window._ownCurrentUserId = <?php echo json_encode($_SESSION['user_id'] ?? null); ?>;
         window._ownCurrentUserType = <?php echo json_encode($_SESSION['user_type'] ?? 'owner'); ?>;
+        window._ownCurrentUserRole = <?php echo json_encode(strtolower($_SESSION['role'] ?? '')); ?>;
+        window._ownCurrentReadOnly = <?php echo json_encode((int)($_SESSION['read_only'] ?? 1)); ?>;
+        const _ownPartnershipReadOnlyBlocked = window._ownCurrentUserRole === 'partnership' && window._ownCurrentReadOnly !== 1;
+        window._ownReadOnlyMode = window._ownCurrentUserRole !== 'owner' || _ownPartnershipReadOnlyBlocked;
     </script>
+    <script src="js/decimal.min.js?v=<?php echo $assetVer('js/decimal.min.js'); ?>"></script>
+    <script src="js/money-decimal.js?v=<?php echo $assetVer('js/money-decimal.js'); ?>"></script>
     <script src="js/ownership.js?v=<?php echo $assetVer('js/ownership.js'); ?>"></script>
     <script src="js/ownership-group.js?v=<?php echo $assetVer('js/ownership-group.js'); ?>"></script>
 </body>
