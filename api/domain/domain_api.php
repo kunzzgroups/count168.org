@@ -167,7 +167,7 @@ function domainApiExecuteSchemaSql(PDO $dbPdo, string $schemaPath): void
     $sql = preg_replace('/\/\*[\s\S]*?\*\//', '', $sql);
     $sql = preg_replace('/^\s*--.*$/m', '', $sql);
 
-    $statements = explode(';', (string) $sql);
+    $statements = domainApiSplitSqlStatements((string) $sql);
     try {
         foreach ($statements as $statement) {
             $statement = trim($statement);
@@ -195,6 +195,50 @@ function domainApiExecuteSchemaSql(PDO $dbPdo, string $schemaPath): void
             // ignore
         }
     }
+}
+
+function domainApiSplitSqlStatements(string $sql): array
+{
+    $statements = [];
+    $buffer = '';
+    $inSingle = false;
+    $inDouble = false;
+    $length = strlen($sql);
+
+    for ($i = 0; $i < $length; $i++) {
+        $ch = $sql[$i];
+        $prev = $i > 0 ? $sql[$i - 1] : '';
+
+        if ($ch === "'" && !$inDouble && $prev !== '\\') {
+            $inSingle = !$inSingle;
+            $buffer .= $ch;
+            continue;
+        }
+
+        if ($ch === '"' && !$inSingle && $prev !== '\\') {
+            $inDouble = !$inDouble;
+            $buffer .= $ch;
+            continue;
+        }
+
+        if ($ch === ';' && !$inSingle && !$inDouble) {
+            $statement = trim($buffer);
+            if ($statement !== '') {
+                $statements[] = $statement;
+            }
+            $buffer = '';
+            continue;
+        }
+
+        $buffer .= $ch;
+    }
+
+    $tail = trim($buffer);
+    if ($tail !== '') {
+        $statements[] = $tail;
+    }
+
+    return $statements;
 }
 
 function domainApiIsIgnorableSchemaExecError(PDOException $e): bool
