@@ -428,13 +428,27 @@ function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType
         }
     }
 
-    if (function_exists('createPdoForDatabase')) {
-        $dbPdo = createPdoForDatabase($dbName);
-    } else {
-        global $host, $dbuser, $dbpass;
-        $dbPdo = new PDO("mysql:host=$host;dbname={$dbName};charset=utf8mb4", $dbuser, $dbpass);
-        $dbPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-        $dbPdo->exec("SET time_zone = '+08:00'");
+    try {
+        if (function_exists('createPdoForDatabase')) {
+            $dbPdo = createPdoForDatabase($dbName);
+        } else {
+            global $host, $dbuser, $dbpass;
+            $dbPdo = new PDO("mysql:host=$host;dbname={$dbName};charset=utf8mb4", $dbuser, $dbpass);
+            $dbPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $dbPdo->exec("SET time_zone = '+08:00'");
+        }
+    } catch (PDOException $e) {
+        $msg = strtolower((string) $e->getMessage());
+        if (strpos($msg, 'access denied') !== false || strpos($msg, 'unknown database') !== false) {
+            throw new RuntimeException(
+                "Target database '{$dbName}' is not ready. "
+                . "Auto-create may have failed, or DB user/password mapping is not created yet in Hostinger. "
+                . "Please ensure database, user, and privileges exist first.",
+                0,
+                $e
+            );
+        }
+        throw $e;
     }
 
     // Idempotency: explicit marker is safer than checking arbitrary existing tables.
