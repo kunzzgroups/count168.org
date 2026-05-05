@@ -2452,13 +2452,14 @@
     }
 
     function calculateTotals(rows) {
-        return rows.reduce((totals, row) => {
+        const acc = rows.reduce((totals, row) => {
             totals.bf = MoneyDecimal.add(totals.bf, row.bf || '0').toString();
             totals.win_loss = MoneyDecimal.add(totals.win_loss, winLossRowForTotal(row)).toString();
             totals.cr_dr = MoneyDecimal.add(totals.cr_dr, row.cr_dr || '0').toString();
-            totals.balance = MoneyDecimal.add(totals.balance, row.balance || '0').toString();
             return totals;
-        }, { bf: '0', win_loss: '0', cr_dr: '0', balance: '0' });
+        }, { bf: '0', win_loss: '0', cr_dr: '0' });
+        acc.balance = MoneyDecimal.add(MoneyDecimal.add(acc.bf, acc.win_loss), acc.cr_dr).toString();
+        return acc;
     }
 
     // ==================== 处理 Balance 点击事件 ====================

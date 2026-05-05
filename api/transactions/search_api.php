@@ -2336,8 +2336,11 @@ function calculateTotals($data)
         $totals['bf'] = money_add($totals['bf'], $row['bf'] ?? '0', 2);
         $totals['win_loss'] = money_add($totals['win_loss'], $row['win_loss'] ?? '0', 2);
         $totals['cr_dr'] = money_add($totals['cr_dr'], $row['cr_dr'] ?? '0', 2);
-        $totals['balance'] = money_add($totals['balance'], $row['balance'] ?? '0', 2);
     }
+
+    // Balance 合计必须与 B/F、Win/Loss、Cr/Dr 三列合计恒等（先分列累加再相加）。
+    // 若改为累加各行 balance，会与「每行 balance=截断后三列之和」在大量账户时产生分位尾差（用户见 ±0.37 等）。
+    $totals['balance'] = money_add(money_add($totals['bf'], $totals['win_loss'], 2), $totals['cr_dr'], 2);
 
     return [
         'bf' => searchMoney2($totals['bf']),
