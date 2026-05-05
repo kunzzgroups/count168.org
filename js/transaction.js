@@ -163,6 +163,12 @@
         return cleaned;
     }
 
+    function winLossFullSumRows(rows) {
+        const arr = Array.isArray(rows) ? rows : [];
+        const sum = arr.reduce((t, row) => MoneyDecimal.add(t, winLossFullForTotal(row)), MoneyDecimal.toDecimal('0'));
+        return MoneyDecimal.formatFixed(sum, 2);
+    }
+
     // ==================== Contra Inbox（Manager+） ====================
     function isContraInboxOpen() {
         const pop = document.getElementById('contraInboxPopover');
@@ -2184,11 +2190,14 @@
                 const rtWl = calculateTotals(sortedRightRows);
                 leftTotals = ltWl;
                 rightTotals = rtWl;
+                const sumBf = MoneyDecimal.add(leftTotals.bf, rightTotals.bf).toString();
+                const sumCr = MoneyDecimal.add(leftTotals.cr_dr, rightTotals.cr_dr).toString();
+                const wlGlobal = winLossFullSumRows(sortedLeftRows.concat(sortedRightRows));
                 summaryTotals = {
-                    bf: MoneyDecimal.add(leftTotals.bf, rightTotals.bf).toString(),
-                    win_loss: MoneyDecimal.add(leftTotals.win_loss, rightTotals.win_loss).toString(),
-                    cr_dr: MoneyDecimal.add(leftTotals.cr_dr, rightTotals.cr_dr).toString(),
-                    balance: MoneyDecimal.add(leftTotals.balance, rightTotals.balance).toString()
+                    bf: sumBf,
+                    win_loss: wlGlobal,
+                    cr_dr: sumCr,
+                    balance: MoneyDecimal.formatFixed(MoneyDecimal.add(MoneyDecimal.add(sumBf, wlGlobal), sumCr), 2)
                 };
             }
 
@@ -2283,14 +2292,17 @@
 
             groupedContainer.appendChild(tablesWrapper);
 
-            // 计算该 currency 的汇总
+            // 计算该 currency 的汇总（Win/Loss 对该币别全体行一次性 full 累加，避免左+右脚 -0.37）
             const leftTotals = calculateTotals(leftRows);
             const rightTotals = calculateTotals(rightRows);
+            const sumBf = MoneyDecimal.add(leftTotals.bf, rightTotals.bf).toString();
+            const sumCr = MoneyDecimal.add(leftTotals.cr_dr, rightTotals.cr_dr).toString();
+            const wlGlobal = winLossFullSumRows(leftRows.concat(rightRows));
             const currencySummary = {
-                bf: MoneyDecimal.add(leftTotals.bf, rightTotals.bf).toString(),
-                win_loss: MoneyDecimal.add(leftTotals.win_loss, rightTotals.win_loss).toString(),
-                cr_dr: MoneyDecimal.add(leftTotals.cr_dr, rightTotals.cr_dr).toString(),
-                balance: MoneyDecimal.add(leftTotals.balance, rightTotals.balance).toString()
+                bf: sumBf,
+                win_loss: wlGlobal,
+                cr_dr: sumCr,
+                balance: MoneyDecimal.formatFixed(MoneyDecimal.add(MoneyDecimal.add(sumBf, wlGlobal), sumCr), 2)
             };
 
             // 累加到总汇总

@@ -2111,7 +2111,17 @@ try {
     // 计算总和
     $left_totals = calculateTotals($left_table);
     $right_totals = calculateTotals($right_table);
+    $wl_global = '0';
+    foreach ($results as $row) {
+        $wlf = isset($row['win_loss_full']) && $row['win_loss_full'] !== '' && $row['win_loss_full'] !== null
+            ? $row['win_loss_full']
+            : ($row['win_loss'] ?? '0');
+        $wl_global = money_add($wl_global, $wlf, 8);
+    }
     $summary_totals = addMoneyFields($left_totals, $right_totals);
+    // 中间 Total 的 Win/Loss：必须对「全体账户」一次性累加 full 再取位；左表合计+右表合计仍可能差 -0.37（逐侧截断误差）。
+    $summary_totals['win_loss'] = searchMoney2($wl_global);
+    $summary_totals['balance'] = searchMoney2(money_add(money_add($summary_totals['bf'], $summary_totals['win_loss'], 2), $summary_totals['cr_dr'], 2));
     $left_table = normalizeMoneyRows($left_table);
     $right_table = normalizeMoneyRows($right_table);
 
