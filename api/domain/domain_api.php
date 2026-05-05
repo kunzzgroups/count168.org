@@ -254,8 +254,6 @@ function domainApiMarkSchemaProvisioned(PDO $dbPdo, string $schemaType): void
 
 function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType): void
 {
-    global $host, $dbuser, $dbpass;
-
     $dbName = domainApiDatabaseNameFromCompanyId($companyId);
     $schemaByType = [
         'bank' => __DIR__ . '/../../database/banks_schema.sql',
@@ -266,9 +264,14 @@ function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType
         throw new RuntimeException('Schema file not found for type: ' . $schemaType);
     }
 
-    $basePdo = new PDO("mysql:host=$host;charset=utf8mb4", $dbuser, $dbpass);
-    $basePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $basePdo->exec("SET time_zone = '+08:00'");
+    if (function_exists('createServerPdoForDatabase')) {
+        $basePdo = createServerPdoForDatabase($dbName);
+    } else {
+        global $host, $dbuser, $dbpass;
+        $basePdo = new PDO("mysql:host=$host;charset=utf8mb4", $dbuser, $dbpass);
+        $basePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $basePdo->exec("SET time_zone = '+08:00'");
+    }
     try {
         $basePdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     } catch (PDOException $e) {
@@ -279,9 +282,14 @@ function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType
         }
     }
 
-    $dbPdo = new PDO("mysql:host=$host;dbname={$dbName};charset=utf8mb4", $dbuser, $dbpass);
-    $dbPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $dbPdo->exec("SET time_zone = '+08:00'");
+    if (function_exists('createPdoForDatabase')) {
+        $dbPdo = createPdoForDatabase($dbName);
+    } else {
+        global $host, $dbuser, $dbpass;
+        $dbPdo = new PDO("mysql:host=$host;dbname={$dbName};charset=utf8mb4", $dbuser, $dbpass);
+        $dbPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $dbPdo->exec("SET time_zone = '+08:00'");
+    }
 
     // Idempotency: explicit marker is safer than checking arbitrary existing tables.
     if (domainApiSchemaAlreadyProvisioned($dbPdo, $schemaType)) {

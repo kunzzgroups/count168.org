@@ -1,8 +1,70 @@
 <?php
 $host = 'localhost';
-$dbname = 'u857194726_c168_org';
-$dbuser = 'u857194726_c168_org';
-$dbpass = 'Kunzz_c168_org'; 
+
+// 主库（系统默认连接）
+$primary_dbname = 'u857194726_c168_org';
+$primary_dbuser = 'u857194726_c168_org';
+$primary_dbpass = 'Kunzz_c168_org';
+
+// 多库连接映射：按需继续添加
+// key 必须是完整数据库名（建议小写）
+$db_connections = [
+    'u857194726_c168_org' => ['user' => 'u857194726_c168_org', 'pass' => 'Kunzz_c168_org'],
+    'u857194726_a' => ['user' => 'u857194726_a', 'pass' => 'Kunzz_c168_org'],
+];
+
+// 兼容旧代码中直接使用 $dbname/$dbuser/$dbpass 的场景
+$dbname = $primary_dbname;
+$dbuser = $primary_dbuser;
+$dbpass = $primary_dbpass;
+
+function getDbConnectionConfig(?string $databaseName = null): array
+{
+    global $host, $primary_dbname, $primary_dbuser, $primary_dbpass, $db_connections;
+
+    $normalized = strtolower(trim((string) ($databaseName ?? '')));
+    if ($normalized !== '' && isset($db_connections[$normalized])) {
+        return [
+            'host' => $host,
+            'dbname' => $normalized,
+            'dbuser' => $db_connections[$normalized]['user'],
+            'dbpass' => $db_connections[$normalized]['pass'],
+        ];
+    }
+
+    return [
+        'host' => $host,
+        'dbname' => $primary_dbname,
+        'dbuser' => $primary_dbuser,
+        'dbpass' => $primary_dbpass,
+    ];
+}
+
+function createPdoForDatabase(?string $databaseName = null): PDO
+{
+    $cfg = getDbConnectionConfig($databaseName);
+    $pdo = new PDO(
+        "mysql:host={$cfg['host']};dbname={$cfg['dbname']};charset=utf8mb4",
+        $cfg['dbuser'],
+        $cfg['dbpass']
+    );
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->exec("SET time_zone = '+08:00'");
+    return $pdo;
+}
+
+function createServerPdoForDatabase(?string $databaseName = null): PDO
+{
+    $cfg = getDbConnectionConfig($databaseName);
+    $pdo = new PDO(
+        "mysql:host={$cfg['host']};charset=utf8mb4",
+        $cfg['dbuser'],
+        $cfg['dbpass']
+    );
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->exec("SET time_zone = '+08:00'");
+    return $pdo;
+}
 
 // 设置PHP时区为马来西亚时间
 date_default_timezone_set('Asia/Kuala_Lumpur');
@@ -12,12 +74,7 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // 设置MySQL连接的时区
-    $pdo->exec("SET time_zone = '+08:00'");
-    
+    $pdo = createPdoForDatabase($primary_dbname);
 } catch(PDOException $e) {
     // 线上排障期间直接输出，避免整站 HTTP 500 无信息
     die("数据库连接失败: " . $e->getMessage());
