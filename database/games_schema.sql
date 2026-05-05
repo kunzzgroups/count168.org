@@ -8,8 +8,8 @@
 SET NAMES utf8mb4;
 SET FOREIGN_KEY_CHECKS = 0;
 
-CREATE DATABASE IF NOT EXISTS `u857194726_Games1` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `u857194726_Games1`;
+-- NOTE: Keep this schema database-agnostic.
+-- Target database is selected by application provisioning logic.
 
 -- Table structure for table `account`
 --

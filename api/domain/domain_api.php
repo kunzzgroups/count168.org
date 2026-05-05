@@ -89,6 +89,197 @@ function buildInPlaceholders(int $count): string
 }
 
 /**
+ * 仅允许公司代码映射为安全库名（字母/数字/下划线），并统一大写。
+ */
+function domainApiDatabaseNameFromCompanyId(string $companyId): string
+{
+    $normalized = strtoupper(trim($companyId));
+    if ($normalized === '') {
+        throw new InvalidArgumentException('Company ID is required for database provisioning');
+    }
+    if (!preg_match('/^[A-Z0-9_]+$/', $normalized)) {
+        throw new InvalidArgumentException('Company ID may only contain letters, numbers, and underscore for database name');
+    }
+    return $normalized;
+}
+
+/**
+ * Add Company 建库模板只允许 Bank/Games 二选一。
+ *
+ * @param mixed $permissions
+ * @return 'bank'|'games'
+ */
+function domainApiResolveSchemaTypeFromPermissions($permissions): string
+{
+    if (!is_array($permissions)) {
+        throw new InvalidArgumentException('Permission must be an array and include exactly one of Bank/Games');
+    }
+
+    $normalized = array_map(static function ($item): string {
+        return strtoupper(trim((string) $item));
+    }, $permissions);
+    $normalized = array_values(array_unique(array_filter($normalized, static function (string $v): bool {
+        return $v !== '';
+    })));
+
+    $hasBank = in_array('BANK', $normalized, true);
+    $hasGames = in_array('GAMES', $normalized, true);
+
+    if ($hasBank === $hasGames) {
+        throw new InvalidArgumentException('Permission must select exactly one of Bank or Games');
+    }
+    return $hasBank ? 'bank' : 'games';
+}
+
+function domainApiExecuteSchemaSql(PDO $dbPdo, string $schemaPath): void
+{
+    $sql = @file_get_contents($schemaPath);
+    if ($sql === false) {
+        throw new RuntimeException('Failed to read schema file: ' . basename($schemaPath));
+    }
+
+    // Remove UTF-8 BOM and common comment forms before splitting statements.
+    $sql = preg_replace('/^\xEF\xBB\xBF/', '', $sql);
+    $sql = preg_replace('/\/\*![\s\S]*?\*\//', '', $sql);
+    $sql = preg_replace('/\/\*[\s\S]*?\*\//', '', $sql);
+    $sql = preg_replace('/^\s*--.*$/m', '', $sql);
+
+    $statements = explode(';', (string) $sql);
+    try {
+        foreach ($statements as $statement) {
+            $statement = trim($statement);
+            if ($statement === '') {
+                continue;
+            }
+            // Schema files should be DB-agnostic; ignore legacy CREATE DATABASE/USE directives.
+            if (preg_match('/^CREATE\s+DATABASE\b/i', $statement) || preg_match('/^USE\b/i', $statement)) {
+                continue;
+            }
+            try {
+                $dbPdo->exec($statement);
+            } catch (PDOException $e) {
+                if (domainApiIsIgnorableSchemaExecError($e)) {
+                    continue;
+                }
+                throw $e;
+            }
+        }
+    } finally {
+        // Best effort restore for current connection even when schema fails mid-way.
+        try {
+            $dbPdo->exec('SET FOREIGN_KEY_CHECKS = 1');
+        } catch (Throwable $t) {
+            // ignore
+        }
+    }
+}
+
+function domainApiIsIgnorableSchemaExecError(PDOException $e): bool
+{
+    $code = isset($e->errorInfo[1]) ? (int) $e->errorInfo[1] : 0;
+    if (in_array($code, [1050, 1060, 1061, 1826], true)) {
+        return true;
+    }
+    $msg = strtolower((string) $e->getMessage());
+    return strpos($msg, 'already exists') !== false
+        || strpos($msg, 'duplicate key name') !== false
+        || strpos($msg, 'duplicate column name') !== false
+        || strpos($msg, 'duplicate foreign key constraint name') !== false;
+}
+
+function domainApiEnsureSchemaMetaTable(PDO $dbPdo): void
+{
+    $dbPdo->exec("
+        CREATE TABLE IF NOT EXISTS `schema_meta` (
+            `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+            `schema_type` varchar(20) NOT NULL,
+            `schema_version` varchar(50) NOT NULL DEFAULT 'v1',
+            `installed_at` datetime NOT NULL DEFAULT current_timestamp(),
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `uq_schema_meta_schema_type` (`schema_type`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+}
+
+function domainApiSchemaAlreadyProvisioned(PDO $dbPdo, string $schemaType): bool
+{
+    try {
+        $hasTable = $dbPdo->query("SHOW TABLES LIKE 'schema_meta'");
+        if (!$hasTable || $hasTable->fetch(PDO::FETCH_NUM) === false) {
+            return false;
+        }
+        $stmt = $dbPdo->prepare("SELECT COUNT(*) FROM `schema_meta` WHERE `schema_type` = ? LIMIT 1");
+        $stmt->execute([$schemaType]);
+        return ((int) $stmt->fetchColumn()) > 0;
+    } catch (Throwable $t) {
+        return false;
+    }
+}
+
+function domainApiMarkSchemaProvisioned(PDO $dbPdo, string $schemaType): void
+{
+    domainApiEnsureSchemaMetaTable($dbPdo);
+    $stmt = $dbPdo->prepare("
+        INSERT INTO `schema_meta` (`schema_type`, `schema_version`)
+        VALUES (?, 'v1')
+        ON DUPLICATE KEY UPDATE
+            `schema_version` = VALUES(`schema_version`),
+            `installed_at` = current_timestamp()
+    ");
+    $stmt->execute([$schemaType]);
+}
+
+function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType): void
+{
+    global $host, $dbuser, $dbpass;
+
+    $dbName = domainApiDatabaseNameFromCompanyId($companyId);
+    $schemaByType = [
+        'bank' => __DIR__ . '/../../database/banks_schema.sql',
+        'games' => __DIR__ . '/../../database/games_schema.sql',
+    ];
+    $schemaPath = $schemaByType[$schemaType] ?? null;
+    if ($schemaPath === null || !is_file($schemaPath)) {
+        throw new RuntimeException('Schema file not found for type: ' . $schemaType);
+    }
+
+    $basePdo = new PDO("mysql:host=$host;charset=utf8mb4", $dbuser, $dbpass);
+    $basePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $basePdo->exec("SET time_zone = '+08:00'");
+    $basePdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+    $dbPdo = new PDO("mysql:host=$host;dbname={$dbName};charset=utf8mb4", $dbuser, $dbpass);
+    $dbPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $dbPdo->exec("SET time_zone = '+08:00'");
+
+    // Idempotency: explicit marker is safer than checking arbitrary existing tables.
+    if (domainApiSchemaAlreadyProvisioned($dbPdo, $schemaType)) {
+        return;
+    }
+
+    domainApiExecuteSchemaSql($dbPdo, $schemaPath);
+    domainApiMarkSchemaProvisioned($dbPdo, $schemaType);
+}
+
+/**
+ * 仅为包含 company_id 的条目建库；group-only 条目跳过。
+ */
+function domainApiProvisionCompanyDatabasesFromRows(array $companies): void
+{
+    foreach ($companies as $company) {
+        if (!is_array($company)) {
+            continue;
+        }
+        $companyId = strtoupper(trim((string) ($company['company_id'] ?? '')));
+        if ($companyId === '') {
+            continue;
+        }
+        $schemaType = domainApiResolveSchemaTypeFromPermissions($company['permissions'] ?? null);
+        domainApiProvisionCompanyDatabase($companyId, $schemaType);
+    }
+}
+
+/**
  * 删除指定表中匹配 ID 的记录
  */
 function deleteByIds(PDO $pdo, string $table, string $column, array $ids): void
@@ -2191,6 +2382,8 @@ try {
             ensureCompanyFeeShareColumn($pdo);
             ensureDomainListFeeSettingsTable($pdo);
             ensureAccountCreatedSourceColumn($pdo);
+            $companies_data = domainApiNormalizeCompaniesPayload($companies);
+            domainApiProvisionCompanyDatabasesFromRows($companies_data);
 
             // Start transaction
             $pdo->beginTransaction();
@@ -2203,7 +2396,6 @@ try {
                 $owner_id = $pdo->lastInsertId();
                 
                 // Insert companies if any（companies 可为 JSON 字符串或已解析数组）
-                $companies_data = domainApiNormalizeCompaniesPayload($companies);
                 if (!empty($companies_data)) {
                     $stmt = $pdo->prepare("INSERT INTO company (company_id, owner_id, created_by, expiration_date, permissions, group_id, fee_share_allocations) VALUES (?, ?, ?, ?, ?, ?, ?)");
                     foreach ($companies_data as $company) {
