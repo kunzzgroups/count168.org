@@ -2,7 +2,7 @@
 // 使用统一的session检查
 require_once 'session_check.php';
 
-// 仅当公司具有 Games category 权限时才可访问此页（Bank-only 自动跳转 dashboard）
+// 仅当公司具有 Games category 权限时才可访问此页（Bank-only 自动跳转 Process List）
 $session_company_id = $_SESSION['company_id'] ?? null;
 if ($session_company_id) {
     try {
@@ -13,7 +13,7 @@ if ($session_company_id) {
         $hasGamesPermission = is_array($companyPerms) && (in_array('Games', $companyPerms) || in_array('Gambling', $companyPerms));
         $isBankOnlyCategory = is_array($companyPerms) && in_array('Bank', $companyPerms) && !$hasGamesPermission;
         if ($isBankOnlyCategory) {
-            header('Location: dashboard.php');
+            header('Location: processlist.php');
             exit;
         }
         if (!$hasGamesPermission) {
@@ -401,12 +401,12 @@ if (!empty($session_company_id)) {
                 window.SIDEBAR_COMPANY_CODE = currentCompanyCode;
             }
             if (hasGamblingFromSession === false) {
-                window.location.href = 'dashboard.php';
+                window.location.href = 'processlist.php';
                 return;
             }
             const permissions = await fetchCompanyPermissions(currentCompanyCode);
             if (isBankOnlyCategoryCompany(permissions)) {
-                window.location.href = 'dashboard.php';
+                window.location.href = 'processlist.php';
                 return;
             }
             loadProcesses();

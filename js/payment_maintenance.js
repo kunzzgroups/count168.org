@@ -158,7 +158,11 @@
                 const result = await response.json();
                 if (!result.success) {
                     console.error('更新 session 失败:', result.error);
-                    window.location.href = 'dashboard.php';
+                    if (typeof window.redirectAfterCompanySwitch === 'function') {
+                        window.redirectAfterCompanySwitch(newCompanyId);
+                    } else {
+                        window.location.href = 'dashboard.php';
+                    }
                     return;
                 }
                 if (typeof window.updateSidebarDataCaptureVisibility === 'function' && result.data) {
@@ -166,7 +170,11 @@
                 }
             } catch (error) {
                 console.error('更新 session 时出错:', error);
-                window.location.href = 'dashboard.php';
+                if (typeof window.redirectAfterCompanySwitch === 'function') {
+                    window.redirectAfterCompanySwitch(newCompanyId);
+                } else {
+                    window.location.href = 'dashboard.php';
+                }
                 return;
             }
             

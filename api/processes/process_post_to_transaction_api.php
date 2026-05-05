@@ -63,6 +63,7 @@ function insertTransactionRow(PDO $pdo, array $data): int
 /**
  * 兼容旧库里的 transactions 金额触发器（要求 amount > 0）。
  * 业务需要允许 0.00（如 Profit 被 Share 抵消），仅禁止负数。
+ * ADJUSTMENT 允许正负金额（仅禁止 0），与 submit_api / allow_adjustment_signed_amount.sql 一致。
  */
 function ensureTransactionsAllowZeroAmount(PDO $pdo): void
 {
@@ -91,7 +92,7 @@ function ensureTransactionsAllowZeroAmount(PDO $pdo): void
         $pdo->exec("DROP TRIGGER IF EXISTS `$safeName`");
     }
 
-    // 标准化为“金额不能小于 0”（允许 0.00）
+    // 非 ADJUSTMENT：金额不能小于 0（允许 0.00）；ADJUSTMENT：保留正负号，仅禁止 0
     $pdo->exec("DROP TRIGGER IF EXISTS `tr_transactions_amount_guard_bi`");
     $pdo->exec("DROP TRIGGER IF EXISTS `tr_transactions_amount_guard_bu`");
 
@@ -100,8 +101,17 @@ function ensureTransactionsAllowZeroAmount(PDO $pdo): void
         BEFORE INSERT ON `transactions`
         FOR EACH ROW
         BEGIN
-            IF NEW.amount < 0 THEN
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '金额不能小于 0';
+            IF NEW.transaction_type = 'ADJUSTMENT' THEN
+                IF NEW.amount = 0 THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ADJUSTMENT 金额不能为 0';
+                END IF;
+                IF NEW.from_account_id IS NOT NULL THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ADJUSTMENT only supports one account';
+                END IF;
+            ELSE
+                IF NEW.amount < 0 THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '金额不能小于 0';
+                END IF;
             END IF;
         END
     ");
@@ -111,8 +121,17 @@ function ensureTransactionsAllowZeroAmount(PDO $pdo): void
         BEFORE UPDATE ON `transactions`
         FOR EACH ROW
         BEGIN
-            IF NEW.amount < 0 THEN
-                SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '金额不能小于 0';
+            IF NEW.transaction_type = 'ADJUSTMENT' THEN
+                IF NEW.amount = 0 THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ADJUSTMENT 金额不能为 0';
+                END IF;
+                IF NEW.from_account_id IS NOT NULL THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'ADJUSTMENT only supports one account';
+                END IF;
+            ELSE
+                IF NEW.amount < 0 THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '金额不能小于 0';
+                END IF;
             END IF;
         END
     ");

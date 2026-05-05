@@ -13,7 +13,7 @@ if ($session_company_id) {
         $hasGamesPermission = is_array($companyPerms) && (in_array('Games', $companyPerms) || in_array('Gambling', $companyPerms));
         $isBankOnlyCategory = is_array($companyPerms) && in_array('Bank', $companyPerms) && !$hasGamesPermission;
         if ($isBankOnlyCategory) {
-            header('Location: dashboard.php');
+            header('Location: processlist.php');
             exit;
         }
         if (!$hasGamesPermission) {

@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 require_once __DIR__ . '/../bankprocess_maintenance/maintenance_accounting_resend_lib.php';
 
 /**
@@ -259,6 +260,17 @@ try {
     // (DDL inside transaction can cause implicit commit).
     bmp_ensureMaintenanceResendPendingTable($pdo);
     $pdo->beginTransaction();
+
+    $pageTagPm = '/api/payment_maintenance/delete_api.php';
+    $userTagPm = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+    foreach ($ids as $tid) {
+        $entryListStmt = $pdo->prepare('SELECT id FROM transaction_entry WHERE header_id = ?');
+        $entryListStmt->execute([(int) $tid]);
+        while ($eid = $entryListStmt->fetchColumn()) {
+            deletedLog($pdo, $userTagPm, $pageTagPm, 'transaction_entry', (string) $eid);
+        }
+        deletedLog($pdo, $userTagPm, $pageTagPm, 'transactions', (string) $tid);
+    }
 
     bmp_recordResendPendingForTransactionIds($pdo, $company_id, $ids);
     backupTransactionsToDeleted($pdo, $ids, $company_id, $deletedByUserId, $deletedByOwnerId);

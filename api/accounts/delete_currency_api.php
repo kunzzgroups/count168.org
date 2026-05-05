@@ -8,6 +8,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['success' => false, 'message' => 'Invalid request method', 'data' => null]);
@@ -279,6 +280,17 @@ try {
         jsonResponse(false, $errorMsg, null);
         exit;
     }
+
+    deletedLog(
+        $pdo,
+        '',
+        '/api/accounts/delete_currency_api.php',
+        'currency',
+        (string) $currencyId,
+        'DELETE',
+        null,
+        (string) $company_id
+    );
 
     $deleted = deleteCurrency($pdo, $currencyId, $company_id);
     if ($deleted === 0) {

@@ -426,6 +426,7 @@ if ($current_user_id && count($user_companies_all) > 0) {
 
     <script>
         window.DATACAPTURE_COMPANY_ID = <?php echo json_encode($company_id); ?>;
+        window.DATACAPTURE_USER_ROLE = <?php echo json_encode(strtolower((string)$current_user_role)); ?>;
         window.DATACAPTURE_COMPANY_CODE = <?php
             $dcCode = '';
             if (!empty($user_companies_all) && $company_id) {

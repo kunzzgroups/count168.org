@@ -6,6 +6,7 @@
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 require_once __DIR__ . '/../api_response.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -130,6 +131,11 @@ try {
                 api_error('Process has transactions', 400, ['error' => 'process_has_transactions']);
                 exit;
             }
+        }
+        $uTagProc = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+        $pTagProc = '/api/processes/delete_processes_api.php';
+        foreach ($inactiveIds as $bpid) {
+            deletedLog($pdo, $uTagProc, $pTagProc, 'bank_process', (string) $bpid);
         }
         $delPlaceholders = str_repeat('?,', count($inactiveIds) - 1) . '?';
         $stmt = $pdo->prepare("DELETE FROM bank_process WHERE id IN ($delPlaceholders) AND company_id = ? AND status = 'inactive'");

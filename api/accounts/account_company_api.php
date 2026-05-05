@@ -10,6 +10,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
 require_once __DIR__ . '/../get_companies_helper.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 /**
  * 标准 JSON 响应
@@ -165,6 +166,17 @@ function dbAddCompanyAndSyncCurrencies($pdo, $account_id, $company_id) {
  * 移除账户-公司关联；返回 [deleted_count, will_lose_access]
  */
 function dbRemoveAccountCompany($pdo, $account_id, $company_id, $current_company_id) {
+    deletedLog(
+        $pdo,
+        '',
+        '/api/accounts/account_company_api.php',
+        'account_company',
+        (string) $account_id . '_' . (string) $company_id,
+        'DELETE',
+        ['account_id' => $account_id, 'company_id' => $company_id],
+        (string) $company_id
+    );
+
     $stmt = $pdo->prepare("DELETE FROM account_company WHERE account_id = ? AND company_id = ?");
     $stmt->execute([$account_id, $company_id]);
     $deleted = $stmt->rowCount();

@@ -197,6 +197,13 @@ try {
     $company_id = null;
     $requested_company_id = isset($_POST['company_id']) ? trim($_POST['company_id']) : '';
     $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
+    // Audit / Partnership 在 read_only=1（或未设置时默认只读）时禁止写入
+    if (in_array($userRole, ['audit', 'partnership'], true)) {
+        $ro = isset($_SESSION['read_only']) ? (int) $_SESSION['read_only'] : 1;
+        if ($ro === 1) {
+            throw new Exception('只读账号无法提交交易');
+        }
+    }
 
     if ($requested_company_id !== '') {
         $requested_company_id = (int)$requested_company_id;

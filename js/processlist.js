@@ -251,8 +251,43 @@ function buildBankActionCellHtml(processId, status, hasTransactions, issueFlag) 
     }
     const disabledAttr = hasTransactions ? ' disabled' : '';
     const titleText = hasTransactions ? 'Cannot delete: process has transactions' : 'Select for deletion';
-    return actionButtons + '<input type="checkbox" class="row-checkbox bank-checkbox" data-id="' + processId + '" title="' + titleText + '"' + disabledAttr + ' onchange="updateDeleteButton(); updatePostToTransactionButton();" style="margin-left: 10px;">';
+    return actionButtons + '<input type="checkbox" class="row-checkbox bank-checkbox" data-id="' + processId + '" title="' + titleText + '"' + disabledAttr + ' onchange="onBankProcessCheckboxChange(this)" style="margin-left: 10px;">';
 }
+
+function syncBankProcessSelectAllCheckboxState() {
+    const header = document.getElementById('selectAllBankProcesses');
+    if (!header) return;
+    const boxes = Array.from(document.querySelectorAll('.bank-checkbox')).filter(function (cb) { return !cb.disabled; });
+    if (boxes.length === 0) {
+        header.checked = false;
+        header.indeterminate = false;
+        return;
+    }
+    const nChecked = boxes.filter(function (b) { return b.checked; }).length;
+    header.checked = nChecked === boxes.length;
+    header.indeterminate = nChecked > 0 && nChecked < boxes.length;
+}
+
+function onBankProcessCheckboxChange(cb) {
+    if (!cb || typeof cb.closest !== 'function') return;
+    const tr = cb.closest('tr');
+    if (!tr || !tr.hasAttribute('data-bp-bank')) return;
+    const bankVal = tr.getAttribute('data-bp-bank');
+    const ownerVal = tr.getAttribute('data-bp-owner');
+    const checked = cb.checked;
+    document.querySelectorAll('#bankTableBody tr[data-bp-bank][data-bp-owner]').forEach(function (row) {
+        if (row.getAttribute('data-bp-bank') !== bankVal) return;
+        if (row.getAttribute('data-bp-owner') !== ownerVal) return;
+        const other = row.querySelector('.bank-checkbox:not([disabled])');
+        if (other) other.checked = checked;
+    });
+    syncBankProcessSelectAllCheckboxState();
+    updateDeleteButton();
+    if (typeof updatePostToTransactionButton === 'function') {
+        updatePostToTransactionButton();
+    }
+}
+window.onBankProcessCheckboxChange = onBankProcessCheckboxChange;
 
 function syncBankFilterCheckboxes() {
     const showInactiveCheckbox = document.getElementById('showInactive');
@@ -931,6 +966,8 @@ function renderBankTable() {
             '<td class="bank-td-status">' + statusSelect + '</td>' +
             '<td>' + escapeHtml(dashIfEmpty((process.date === '0000-00-00' || !process.date) ? '' : process.date)) + '</td>' +
             '<td class="bank-td-action">' + actionCell + '</td>';
+        tr.setAttribute('data-bp-bank', String(process.bank != null ? process.bank : '').trim());
+        tr.setAttribute('data-bp-owner', String(process.supplier != null ? process.supplier : '').trim());
         tbody.appendChild(tr);
         applyBankStatusSelectAppearance(tr.querySelector('.bank-status-dropdown'), getBankStatusSelectValue(process));
     });
@@ -938,6 +975,7 @@ function renderBankTable() {
     renderPagination();
     updateSelectAllProcessesVisibility();
     updateDeleteButton();
+    syncBankProcessSelectAllCheckboxState();
     updateBankListScrollMode();
 }
 
@@ -1705,6 +1743,10 @@ function toggleSelectAllBankProcesses() {
     });
 
     updateDeleteButton();
+    syncBankProcessSelectAllCheckboxState();
+    if (typeof updatePostToTransactionButton === 'function') {
+        updatePostToTransactionButton();
+    }
 }
 
 function toggleSelectAllProcesses() {

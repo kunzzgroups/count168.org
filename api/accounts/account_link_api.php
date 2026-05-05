@@ -3,6 +3,7 @@
  * 账户关联 API：获取/建立/解除账户关联及连接类型
  */
 require_once __DIR__ . '/../../session_check.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['user_id'])) {
@@ -166,6 +167,21 @@ function linkAccountsUpsert(PDO $pdo, int $account_id_1, int $account_id_2, int 
 }
 
 function unlinkAccounts(PDO $pdo, int $account_id_1, int $account_id_2, int $company_id): void {
+    $stmt = $pdo->prepare("SELECT id FROM account_link WHERE account_id_1 = ? AND account_id_2 = ? AND company_id = ? LIMIT 1");
+    $stmt->execute([$account_id_1, $account_id_2, $company_id]);
+    $linkRow = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($linkRow && isset($linkRow['id'])) {
+        deletedLog(
+            $pdo,
+            '',
+            '/api/accounts/account_link_api.php',
+            'account_link',
+            (string) $linkRow['id'],
+            'DELETE',
+            null,
+            (string) $company_id
+        );
+    }
     $stmt = $pdo->prepare("DELETE FROM account_link WHERE account_id_1 = ? AND account_id_2 = ? AND company_id = ?");
     $stmt->execute([$account_id_1, $account_id_2, $company_id]);
 }

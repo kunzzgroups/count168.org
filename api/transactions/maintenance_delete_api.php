@@ -8,6 +8,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 try {
     if (!isset($_SESSION['company_id'])) {
@@ -171,6 +172,17 @@ try {
     );
     $logStmt = $pdo->prepare($logSql);
     $logStmt->execute($logParams);
+
+    $pageTag = '/api/transactions/maintenance_delete_api.php';
+    $userTag = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+    foreach ($validIds as $tid) {
+        $entryIdsStmt = $pdo->prepare('SELECT id FROM transaction_entry WHERE header_id = ?');
+        $entryIdsStmt->execute([(int) $tid]);
+        while ($eid = $entryIdsStmt->fetchColumn()) {
+            deletedLog($pdo, $userTag, $pageTag, 'transaction_entry', (string) $eid);
+        }
+        deletedLog($pdo, $userTag, $pageTag, 'transactions', (string) $tid);
+    }
 
     // 2) 先删除 transaction_entry（若存在），避免外键约束导致无法删除 transactions
     try {

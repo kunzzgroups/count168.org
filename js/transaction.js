@@ -153,6 +153,18 @@
         return MoneyDecimal.formatFixedHalfUp(value || '0', 2);
     }
 
+    /** 合计列 Win/Loss：每行用 win_loss_full（缺省 win_loss）四舍五入到分（ROUND_HALF_UP）再累加，与单元格显示（截断两位）可不一致 */
+    function winLossRowHalfUp2(row) {
+        const raw = row && row.win_loss_full !== undefined && row.win_loss_full !== null && String(row.win_loss_full).trim() !== ''
+            ? row.win_loss_full
+            : (row && row.win_loss != null ? row.win_loss : '0');
+        try {
+            return MoneyDecimal.formatFixedHalfUp(raw === '-' ? '0' : raw, 2);
+        } catch (_) {
+            return '0.00';
+        }
+    }
+
     // ==================== Contra Inbox（Manager+） ====================
     function isContraInboxOpen() {
         const pop = document.getElementById('contraInboxPopover');
@@ -1823,9 +1835,12 @@
     // ==================== 搜索功能 ====================
     // isInitialLoad: 首次进入页面自动搜当天数据时传 true（预留）
     // opts.silent: 为 true 时不盖掉已有表格、不显示全屏 Loading，且不弹出「搜索完成」类提示（用于 session 回放后的后台刷新）
+    // opts.forceRefresh: 为 true 时跳过「同条件 1200ms 内不重复搜 / 同条件 in-flight 不重发」，用于提交成功后必须见库内最新余额
     function searchTransactions(isInitialLoad, opts) {
         opts = opts || {};
         const silent = opts.silent === true;
+        // 提交成功后必须拉最新列表：否则与「同条件 1200ms 内不重复搜」冲突，主表会停在某次旧数据
+        const forceRefresh = opts.forceRefresh === true;
         const dateFrom = document.getElementById('date_from').value;
         const dateTo = document.getElementById('date_to').value;
         const selectedCategories = getSelectedCategories(); // 使用新的多选函数
@@ -1957,10 +1972,10 @@
             currencies: [...selectedCurrencies].sort().join(',')
         });
 
-        if (isSearchInFlight && activeSearchKey === requestKey) {
+        if (!forceRefresh && isSearchInFlight && activeSearchKey === requestKey) {
             return;
         }
-        if (!isInitialLoad && lastCompletedSearchKey === requestKey && (Date.now() - lastCompletedSearchTs) < 1200) {
+        if (!forceRefresh && !isInitialLoad && lastCompletedSearchKey === requestKey && (Date.now() - lastCompletedSearchTs) < 1200) {
             return;
         }
 
@@ -2159,15 +2174,22 @@
             fillTable('tbody_left', 'table_left', sortedLeftRows);
             fillTable('tbody_right', 'table_right', sortedRightRows);
 
-            // 优先使用后端返回的 totals，避免前端重复计算造成误差或状态不同步
+            // bf/cr_dr/balance 优先用后端 totals；Win/Loss 合计强制用逐行四舍五入（win_loss_full）再累加
             let leftTotals, rightTotals, summaryTotals;
+            const ltWl = calculateTotals(sortedLeftRows);
+            const rtWl = calculateTotals(sortedRightRows);
             if (totalsFromApi && totalsFromApi.left && totalsFromApi.right && totalsFromApi.summary) {
-                leftTotals = totalsFromApi.left;
-                rightTotals = totalsFromApi.right;
-                summaryTotals = totalsFromApi.summary;
+                leftTotals = { ...totalsFromApi.left, win_loss: ltWl.win_loss };
+                rightTotals = { ...totalsFromApi.right, win_loss: rtWl.win_loss };
+                summaryTotals = {
+                    bf: totalsFromApi.summary.bf,
+                    win_loss: MoneyDecimal.add(ltWl.win_loss, rtWl.win_loss).toString(),
+                    cr_dr: totalsFromApi.summary.cr_dr,
+                    balance: totalsFromApi.summary.balance
+                };
             } else {
-                leftTotals = calculateTotals(sortedLeftRows);
-                rightTotals = calculateTotals(sortedRightRows);
+                leftTotals = ltWl;
+                rightTotals = rtWl;
                 summaryTotals = {
                     bf: MoneyDecimal.add(leftTotals.bf, rightTotals.bf).toString(),
                     win_loss: MoneyDecimal.add(leftTotals.win_loss, rightTotals.win_loss).toString(),
@@ -2439,7 +2461,7 @@
     function calculateTotals(rows) {
         return rows.reduce((totals, row) => {
             totals.bf = MoneyDecimal.add(totals.bf, row.bf || '0').toString();
-            totals.win_loss = MoneyDecimal.add(totals.win_loss, row.win_loss || '0').toString();
+            totals.win_loss = MoneyDecimal.add(totals.win_loss, winLossRowHalfUp2(row)).toString();
             totals.cr_dr = MoneyDecimal.add(totals.cr_dr, row.cr_dr || '0').toString();
             totals.balance = MoneyDecimal.add(totals.balance, row.balance || '0').toString();
             return totals;
@@ -2807,7 +2829,7 @@
         console.log('✅ Show Name 已切换:', showName);
     }
 
-    // 未勾选 Show 0 balance 时：默认隐藏 balance≈0 的行；但若该行 B/F、Win/Loss、Cr/Dr 仍有数则保留，避免后端 Total 有汇总而明细被全部滤掉
+    // 未勾选 Show 0 balance：Balance≈0 且四列≈0 时保留条件：本期 Cr/Dr、本期非零金额 W/L，或本期 Data Capture 带 id_product 的明细（金额可为 0，与 Payment History 一致）。
     function rowPassesHideZeroBalanceFilter(showZero, row) {
         if (showZero) return true;
         const num = parseBalanceValue(row.balance);
@@ -2825,9 +2847,17 @@
                 return MoneyDecimal.toDecimal('0');
             }
         };
-        // 有真实交易记录（例如 PROFIT 0.00）时，不应被“隐藏 0 balance”吃掉。
-        const hasTxnFlag = flagToBool(row.has_win_loss_history) || flagToBool(row.has_win_loss_transactions) || flagToBool(row.has_crdr_transactions);
-        return hasTxnFlag || absVal(row.bf).gt('0.00001') || absVal(row.win_loss).gt('0.00001') || absVal(row.cr_dr).gt('0.00001');
+        const eps = '0.00001';
+        const hasAnyMoneyColumn =
+            absVal(row.bf).gt(eps) ||
+            absVal(row.win_loss).gt(eps) ||
+            absVal(row.cr_dr).gt(eps);
+        if (hasAnyMoneyColumn) return true;
+        const hasTxnFlag =
+            flagToBool(row.has_win_loss_transactions) ||
+            flagToBool(row.has_crdr_transactions) ||
+            flagToBool(row.has_period_id_product_rows);
+        return hasTxnFlag;
     }
 
     // ==================== 根据 Show 0 balance 过滤前端行并渲染 ====================
@@ -3421,7 +3451,7 @@
                     // 保持用户在 Show 0 balance 上的勾选状态，不再强制勾选
                     console.log('🔄 提交成功后立即刷新 Transaction List（保持当前 Show 0 balance 状态）');
                     if (typeof searchTransactions === 'function') {
-                        searchTransactions();
+                        searchTransactions(false, { forceRefresh: true });
                     }
                 } else {
                     isSubmittingTx = false;
@@ -3455,7 +3485,7 @@
         }
 
         // 构建 URL，仅请求当前行的账户数据（使用数字 id，避免关联账户混入）
-        let url = `/api/transactions/history_api.php?account_id=${aid}&date_from=${dateFrom}&date_to=${dateTo}`;
+        let url = `/api/transactions/history_api.php?account_id=${aid}&date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`;
         if (isVirtualCompanyRow) {
             url += `&virtual_company_code=${encodeURIComponent(virtualCompanyCode)}`;
         }
@@ -3476,9 +3506,9 @@
 
         fetch(url, {
             method: 'GET',
-            cache: 'no-cache',
+            cache: 'no-store',
             headers: {
-                'Cache-Control': 'no-cache'
+                'Cache-Control': 'no-store'
             }
         })
             .then(response => response.json())
@@ -3897,21 +3927,54 @@
 
     // ==================== 复制表格到 Excel 时保留样式 ====================
     function initExcelCopyWithStyles() {
+        function elementFromRangeNode(node) {
+            if (!node) return null;
+            return node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+        }
+
+        /** #text 没有 closest；跨左右两表选择时不劫持，交给浏览器默认复制 */
+        function rangeOwnerTable(range) {
+            const a = elementFromRangeNode(range.startContainer);
+            const b = elementFromRangeNode(range.endContainer);
+            const t1 = a && a.closest ? a.closest('table') : null;
+            const t2 = b && b.closest ? b.closest('table') : null;
+            if (t1 && t2 && t1 !== t2) return null;
+            return t1 || t2;
+        }
+
+        function isCellVisibleForExport(cell) {
+            const st = window.getComputedStyle(cell);
+            if (st.display === 'none') return false;
+            if (st.visibility === 'collapse') return false;
+            return true;
+        }
+
         // 监听复制事件
         document.addEventListener('copy', function (e) {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
 
             const range = selection.getRangeAt(0);
-            const table = range.commonAncestorContainer.closest?.('table');
+            const table = rangeOwnerTable(range);
 
             // 只处理 transaction-table 和 transaction-summary-table
             if (!table || (!table.classList.contains('transaction-table') && !table.classList.contains('transaction-summary-table'))) {
                 return;
             }
 
-            // 阻止默认复制行为
-            e.preventDefault();
+            // Payment History 弹窗内表格走浏览器默认复制，避免与主表逻辑冲突
+            if (table.closest('#historyModal')) {
+                return;
+            }
+
+            // 选区仅在单个单元格内：不劫持，否则会把同一行所有列拼成 TSV 粘贴到 Excel
+            const startEl = elementFromRangeNode(range.startContainer);
+            const endEl = elementFromRangeNode(range.endContainer);
+            const startCell = startEl && startEl.closest ? startEl.closest('td, th') : null;
+            const endCell = endEl && endEl.closest ? endEl.closest('td, th') : null;
+            if (startCell && endCell && startCell === endCell && table.contains(startCell)) {
+                return;
+            }
 
             // 获取选中的单元格
             const selectedRows = [];
@@ -3928,13 +3991,16 @@
                 ? endContainer.parentElement.closest('tr')
                 : endContainer.closest('tr');
 
+            if (startRow && !table.contains(startRow)) startRow = null;
+            if (endRow && !table.contains(endRow)) endRow = null;
+
             if (!startRow && !endRow) {
                 // 如果没有找到行，尝试从选中的单元格构建
                 const cells = table.querySelectorAll('td, th');
                 cells.forEach(cell => {
                     if (range.intersectsNode(cell)) {
                         const row = cell.closest('tr');
-                        if (row && !selectedRows.includes(row)) {
+                        if (row && table.contains(row) && !selectedRows.includes(row)) {
                             selectedRows.push(row);
                         }
                     }
@@ -3944,6 +4010,9 @@
                 const allRows = Array.from(table.querySelectorAll('tr'));
                 const startIndex = startRow ? allRows.indexOf(startRow) : 0;
                 const endIndex = endRow ? allRows.indexOf(endRow) : allRows.length - 1;
+                if (startIndex < 0 || endIndex < 0) {
+                    return;
+                }
                 const minIndex = Math.min(startIndex, endIndex);
                 const maxIndex = Math.max(startIndex, endIndex);
 
@@ -3958,12 +4027,15 @@
 
             if (selectedRows.length === 0) return;
 
+            // 仅在有可写入内容时再拦截，避免误 preventDefault 导致复制为空
+            e.preventDefault();
+
             // 构建 HTML 表格（Excel 期望的格式）
             let html = '<html><body><table style="border-collapse: collapse; font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; font-size: small;">';
 
             selectedRows.forEach(row => {
                 html += '<tr>';
-                const cells = row.querySelectorAll('td, th');
+                const cells = Array.from(row.querySelectorAll('td, th')).filter(isCellVisibleForExport);
                 cells.forEach(cell => {
                     const isHeader = cell.tagName === 'TH';
                     const isFooter = row.closest('tfoot') !== null;
@@ -4052,14 +4124,17 @@
 
             html += '</table></body></html>';
 
-            // 构建纯文本版本（作为后备）
+            // 构建纯文本版本：只含当前可见列，与 Excel 粘贴行/列一致（\r\n 为 Windows Excel 换行）
             let text = '';
             selectedRows.forEach((row, rowIndex) => {
-                const cells = row.querySelectorAll('td, th');
-                const rowText = Array.from(cells).map(cell => cell.textContent || '').join('\t');
+                const cells = Array.from(row.querySelectorAll('td, th')).filter(isCellVisibleForExport);
+                const rowText = cells.map(cell => (cell.innerText != null ? cell.innerText : (cell.textContent || ''))
+                    .replace(/\r?\n/g, ' ')
+                    .trim())
+                    .join('\t');
                 text += rowText;
                 if (rowIndex < selectedRows.length - 1) {
-                    text += '\n';
+                    text += '\r\n';
                 }
             });
 

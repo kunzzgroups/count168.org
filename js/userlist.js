@@ -60,15 +60,36 @@ const allRoles = [
     
 ];
 
-// ── Read Only Toggle 显示/隐藏（只有 Partnership 角色才显示）──
+// ── Read Only Toggle 显示/隐藏（Partnership / Audit）──
+function roleHasReadOnlyToggle(role) {
+    if (!role) return false
+    const r = role.toLowerCase()
+    return r === 'partnership' || r === 'audit'
+}
+
+/** Audit：manager 及以上可操作；Partnership：仅 owner */
+function canInteractWithReadOnlyToggle(editingRole) {
+    if (!editingRole) return false
+    const r = editingRole.toLowerCase()
+    const curLevel = roleHierarchy[currentUserRole] ?? 999
+    const managerLevel = roleHierarchy['manager'] ?? 999
+    if (r === 'audit') {
+        return curLevel <= managerLevel
+    }
+    if (r === 'partnership') {
+        return currentUserRole === 'owner'
+    }
+    return false
+}
+
 function updateReadOnlyToggleVisibility(role) {
     const wrapper = document.getElementById('readOnlyToggleWrapper');
     const readOnlyToggle = document.getElementById('readOnlyToggle');
     const readOnlyToggleLabel = document.getElementById('readOnlyToggleLabel');
     if (!wrapper) return;
-    if (role && role.toLowerCase() === 'partnership') {
+    if (role && roleHasReadOnlyToggle(role)) {
         wrapper.style.display = 'block';
-        const canToggle = currentUserRole === 'owner';
+        const canToggle = canInteractWithReadOnlyToggle(role)
         if (readOnlyToggle) {
             readOnlyToggle.disabled = !canToggle;
         }
@@ -92,8 +113,8 @@ function updateReadOnlyToggleVisibility(role) {
 function getAvailableRolesForCreation() {
     const currentLevel = roleHierarchy[currentUserRole] ?? 999;
 
-    // accountant, audit, customer service 不能开账号
-    if (currentLevel >= 4) {
+    // accountant, audit, customer service 不能开账号（supervisor 可以）
+    if (currentLevel >= 5) {
         return [];
     }
 
@@ -2293,9 +2314,9 @@ document.getElementById('userForm').addEventListener('submit', function (e) {
     }
     // 编辑模式：所有角色都可以编辑其他用户（但只能编辑 Account 和 Process Permissions）
 
-    // 添加 read_only 字段（只针对 partnership 角色）
+    // read_only：Audit 由 manager+ 提交；Partnership 仅 owner
     const roleForReadOnly = data.role || (card ? card.getAttribute('data-role') : '');
-    if (currentUserRole === 'owner' && roleForReadOnly && roleForReadOnly.toLowerCase() === 'partnership') {
+    if (roleForReadOnly && roleHasReadOnlyToggle(roleForReadOnly) && canInteractWithReadOnlyToggle(roleForReadOnly)) {
         const readOnlyToggle = document.getElementById('readOnlyToggle');
         data.read_only = (readOnlyToggle && readOnlyToggle.checked) ? 1 : 0;
     }

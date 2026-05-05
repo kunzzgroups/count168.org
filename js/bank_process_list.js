@@ -340,7 +340,7 @@ function buildBankActionCellHtml(processId, status, hasTransactions, issueFlag) 
     }
     const disabledAttr = hasTransactions ? ' disabled' : '';
     const titleText = hasTransactions ? 'Cannot delete: process has transactions' : 'Select for deletion';
-    return actionButtons + '<input type="checkbox" class="row-checkbox bank-checkbox" data-id="' + processId + '" title="' + titleText + '"' + disabledAttr + ' onchange="updateDeleteButton(); updatePostToTransactionButton();" style="margin-left: 10px;">';
+    return actionButtons + '<input type="checkbox" class="row-checkbox bank-checkbox" data-id="' + processId + '" title="' + titleText + '"' + disabledAttr + ' onchange="onBankProcessCheckboxChange(this)" style="margin-left: 10px;">';
 }
 
 function resendBankProcessAccountingDue(processId) {
@@ -972,6 +972,8 @@ function renderBankTable() {
             '<td class="bank-td-status">' + statusSelect + '</td>' +
             '<td>' + escapeHtml(dashIfEmpty((process.date === '0000-00-00' || !process.date) ? '' : process.date)) + '</td>' +
             '<td class="bank-td-action">' + actionCell + '</td>';
+        tr.setAttribute('data-bp-bank', String(process.bank != null ? process.bank : '').trim());
+        tr.setAttribute('data-bp-owner', String(process.supplier != null ? process.supplier : '').trim());
         tbody.appendChild(tr);
         applyBankStatusSelectAppearance(tr.querySelector('.bank-status-dropdown'), getBankStatusSelectValue(process));
     });
@@ -979,6 +981,9 @@ function renderBankTable() {
     renderPagination();
     updateSelectAllProcessesVisibility();
     updateDeleteButton();
+    if (typeof syncBankProcessSelectAllCheckboxState === 'function') {
+        syncBankProcessSelectAllCheckboxState();
+    }
     if (typeof updateBankListScrollMode === 'function') updateBankListScrollMode();
 }
 
@@ -1422,6 +1427,10 @@ function toggleSelectAllBankProcesses() {
     });
 
     updateDeleteButton();
+    if (typeof syncBankProcessSelectAllCheckboxState === 'function') {
+        syncBankProcessSelectAllCheckboxState();
+    }
+    updatePostToTransactionButton();
 }
 function updatePostToTransactionButton() {
     const postBtn = document.getElementById('processPostToTransactionBtn');

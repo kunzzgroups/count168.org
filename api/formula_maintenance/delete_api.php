@@ -8,6 +8,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -97,6 +98,12 @@ try {
 
     $pdo->beginTransaction();
     try {
+        $pageTag = '/api/formula_maintenance/delete_api.php';
+        $userTag = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+        foreach ($validIds as $tid) {
+            deletedLog($pdo, $userTag, $pageTag, 'data_capture_templates', (string) $tid);
+        }
+
         $placeholders = str_repeat('?,', count($validIds) - 1) . '?';
         $deleteSql = "DELETE FROM data_capture_templates WHERE id IN ($placeholders)";
         $stmt = $pdo->prepare($deleteSql);

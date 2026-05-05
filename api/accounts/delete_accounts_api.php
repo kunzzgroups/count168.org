@@ -5,6 +5,7 @@
  */
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 require_once __DIR__ . '/../api_response.php';
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -17,8 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 try {
-    if (!isset($_SESSION['user_id']) || !isset($_SESSION['company_id'])) {
-        api_error('User not logged in or company not selected', 401);
+    if (!isset($_SESSION['user_id'])) {
+        api_error('User not logged in', 401);
         exit;
     }
 
@@ -31,7 +32,15 @@ try {
         exit;
     }
 
-    $company_id = (int) $_SESSION['company_id'];
+    $company_id = (int) ($_SESSION['company_id'] ?? 0);
+    $requestedCompany = isset($input['company_id']) ? (int) $input['company_id'] : 0;
+    if ($requestedCompany > 0 && deleted_log_user_can_use_company($pdo, $requestedCompany)) {
+        $company_id = $requestedCompany;
+    }
+    if ($company_id <= 0) {
+        api_error('Company not selected', 400);
+        exit;
+    }
 
     $has_account_company_table = false;
     try {
@@ -90,6 +99,18 @@ try {
         exit;
     }
 
+    $pageTag = '/api/accounts/delete_accounts_api.php';
+    $userTag = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+    $cidLog = (string) $company_id;
+    foreach ($ids as $aid) {
+        if (deleted_log_account_has_other_company_links($pdo, $aid, $company_id)) {
+            deletedLog($pdo, $userTag, $pageTag, 'account_company', $company_id . ':' . $aid, 'DELETE', [
+                'company_id' => $company_id,
+                'account_id' => $aid,
+            ], $cidLog);
+        }
+    }
+
     $delete_ac_params = array_merge([$company_id], $ids);
     $delete_ac_stmt = $pdo->prepare("
         DELETE FROM account_company 
@@ -110,6 +131,9 @@ try {
 
     $deleted_account_count = 0;
     if (!empty($remaining_accounts)) {
+        foreach ($remaining_accounts as $raid) {
+            deletedLog($pdo, $userTag, $pageTag, 'account', (string) $raid, 'DELETE', null, $cidLog);
+        }
         $remaining_placeholders = str_repeat('?,', count($remaining_accounts) - 1) . '?';
         $delete_stmt = $pdo->prepare("
             DELETE FROM account 

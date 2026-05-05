@@ -21,11 +21,11 @@ if ($read_only === null || (!$user_id && !$ownership_id)) {
 
 try {
     if ($user_id) {
-        // Partnership user (user table) — verify role first
-        $check = $pdo->prepare("SELECT id FROM user WHERE id = ? AND role = 'Partnership'");
+        // Partnership / Audit user (user table) — verify role first
+        $check = $pdo->prepare("SELECT id FROM user WHERE id = ? AND LOWER(role) IN ('partnership', 'audit')");
         $check->execute([$user_id]);
         if (!$check->fetch()) {
-            echo json_encode(['status' => 'error', 'message' => 'Not a Partnership user']);
+            echo json_encode(['status' => 'error', 'message' => 'Not a Partnership or Audit user']);
             exit();
         }
         $stmt = $pdo->prepare("UPDATE user SET read_only = ? WHERE id = ?");

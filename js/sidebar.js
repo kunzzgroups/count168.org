@@ -84,6 +84,33 @@
         submenu.style.top = titleRect.top + 'px';
     }
 
+    function hasVisibleSubmenuItems(wrapper) {
+        if (!wrapper) return false;
+        var items = wrapper.querySelectorAll('.submenu .submenu-item');
+        if (!items || items.length === 0) return false;
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item.offsetParent !== null) return true;
+        }
+        return false;
+    }
+
+    function updateMenuWrapperSubmenuState(wrapper) {
+        if (!wrapper) return;
+        if (hasVisibleSubmenuItems(wrapper)) {
+            wrapper.classList.remove('no-submenu');
+        } else {
+            wrapper.classList.add('no-submenu');
+            var submenu = wrapper.querySelector('.submenu');
+            if (submenu) {
+                submenu.style.opacity = '0';
+                submenu.style.visibility = 'hidden';
+                submenu.style.transform = 'translateX(-10px)';
+                submenu.style.pointerEvents = 'none';
+            }
+        }
+    }
+
     function toggleAvatarOptions() {
         var options = document.getElementById('avatarOptions');
         if (!options) return;
@@ -358,6 +385,10 @@
                 reportSection.style.display = hasGambling ? '' : 'none';
             }
         }
+
+        document.querySelectorAll('.menu-item-wrapper').forEach(function (wrapper) {
+            updateMenuWrapperSubmenuState(wrapper);
+        });
     }
 
     function ensureCompanyAccessModal() {
@@ -456,6 +487,23 @@
         return true;
     }
 
+    function redirectAfterCompanySwitch(companyId, options) {
+        options = options || {};
+        var role = String(window.SIDEBAR_USER_ROLE || '').toLowerCase();
+        var isPrivileged = role === 'admin' || role === 'owner';
+        var preferDashboard = options.preferDashboard !== false;
+        if (isPrivileged && preferDashboard) {
+            window.location.href = 'dashboard.php';
+            return;
+        }
+
+        var url = new URL(window.location.href);
+        if (companyId) {
+            url.searchParams.set('company_id', companyId);
+        }
+        window.location.href = url.toString();
+    }
+
     // 暴露给 HTML onclick 和 PHP 初始化脚本
     window.closeSidebar = closeSidebar;
     window.toggleSidebar = closeSidebar;
@@ -471,6 +519,7 @@
     window.updateSidebarDataCaptureVisibility = updateSidebarDataCaptureVisibility;
     window.showCompanyAccessModal = showCompanyAccessModal;
     window.handleCompanySwitchDenied = handleCompanySwitchDenied;
+    window.redirectAfterCompanySwitch = redirectAfterCompanySwitch;
 
     function init() {
         sidebar = document.querySelector('.informationmenu');
@@ -685,11 +734,13 @@
         document.querySelectorAll('.menu-item-wrapper').forEach(function (wrapper) {
             var submenu = wrapper.querySelector('.submenu');
             if (!submenu) return;
+            updateMenuWrapperSubmenuState(wrapper);
             var hideTimeout = null;
             function clearHideTimeout() {
                 if (hideTimeout) { clearTimeout(hideTimeout); hideTimeout = null; }
             }
             function showSubmenu() {
+                if (wrapper.classList.contains('no-submenu')) return;
                 clearHideTimeout();
                 positionSubmenu(wrapper);
                 submenu.style.opacity = '1';

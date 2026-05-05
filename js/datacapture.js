@@ -16,7 +16,11 @@ function redirectToDashboardIfUnauthorizedCategory(errorMessage) {
     const normalized = errorMessage.toLowerCase();
     const isUnauthorizedCategory = normalized.includes('unauthorized category permission') || normalized.includes('games required');
     if (!isUnauthorizedCategory) return false;
-    window.location.href = buildApiUrl('dashboard.php');
+    const currentRole = String(window.DATACAPTURE_USER_ROLE || '').toLowerCase();
+    const canGoDashboard = currentRole === 'admin' || currentRole === 'owner';
+    window.location.href = canGoDashboard
+        ? buildApiUrl('dashboard.php')
+        : buildApiUrl('processlist.php');
     return true;
 }
 

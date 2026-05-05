@@ -569,6 +569,23 @@
     position: relative;
 }
 
+.menu-item-wrapper.no-submenu .section-arrow {
+    display: none;
+}
+
+.menu-item-wrapper.no-submenu .informationmenu-section-title {
+    cursor: default;
+}
+
+.menu-item-wrapper.no-submenu .informationmenu-section-title:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.menu-item-wrapper.no-submenu .informationmenu-section-title:hover::before {
+    right: -100%;
+}
+
 .informationmenu-item {
     display: flex;
     align-items: center;

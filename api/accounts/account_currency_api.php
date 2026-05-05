@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 /**
  * 标准 JSON 响应
@@ -243,6 +244,21 @@ try {
             if (dbCountAccountCurrencies($pdo, $account_id) <= 1) {
                 jsonResponse(false, '账户必须至少保留一个货币，无法删除', null, 400);
                 exit;
+            }
+            $stmtAc = $pdo->prepare('SELECT id FROM account_currency WHERE account_id = ? AND currency_id = ? LIMIT 1');
+            $stmtAc->execute([$account_id, $currency_id]);
+            $acRow = $stmtAc->fetch(PDO::FETCH_ASSOC);
+            if ($acRow && isset($acRow['id'])) {
+                deletedLog(
+                    $pdo,
+                    '',
+                    '/api/accounts/account_currency_api.php',
+                    'account_currency',
+                    (string) $acRow['id'],
+                    'DELETE',
+                    null,
+                    (string) $company_id
+                );
             }
             $deleted = dbRemoveAccountCurrency($pdo, $account_id, $currency_id);
             if ($deleted === 0) {

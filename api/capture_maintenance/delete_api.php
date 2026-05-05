@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -154,6 +155,19 @@ try {
         throw new Exception('没有找到符合条件且属于当前公司的记录');
     }
 
+    $pageTagCap = '/api/capture_maintenance/delete_api.php';
+    $userTagCap = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+    foreach ($validCaptureIds as $capId) {
+        deletedLog($pdo, $userTagCap, $pageTagCap, 'data_captures', (string) $capId);
+        $detIdsStmt = $pdo->prepare(
+            'SELECT id FROM data_capture_details WHERE capture_id = ? AND company_id = ?'
+        );
+        $detIdsStmt->execute([(int) $capId, $company_id]);
+        while ($did = $detIdsStmt->fetchColumn()) {
+            deletedLog($pdo, $userTagCap, $pageTagCap, 'data_capture_details', (string) $did);
+        }
+    }
+
     backupToDeletedLog($pdo, $company_id, $validCaptureIds, $deletedByUserId, $deletedByOwnerId);
 
     // 同步删除 submitted_processes 里对应的「已提交记录」，
@@ -185,6 +199,14 @@ try {
             $procId = isset($metaRow['process_id']) ? (int)$metaRow['process_id'] : 0;
             $capDate = $metaRow['capture_date'] ?? null;
             if ($procId > 0 && $capDate) {
+                $findSp = $pdo->prepare(
+                    'SELECT id FROM submitted_processes WHERE company_id = ? AND process_id = ?
+                     AND ((DATE(capture_date) = ?) OR (capture_date IS NULL AND DATE(date_submitted) = ?))'
+                );
+                $findSp->execute([$company_id, $procId, $capDate, $capDate]);
+                while ($sid = $findSp->fetchColumn()) {
+                    deletedLog($pdo, $userTagCap, $pageTagCap, 'submitted_processes', (string) $sid);
+                }
                 $deleteSubmittedStmt->execute([
                     $company_id,
                     $procId,

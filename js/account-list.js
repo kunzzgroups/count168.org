@@ -1680,10 +1680,19 @@ function deleteSelected() {
                 deleteBtn.textContent = 'Deleting...';
             }
             try {
+                const cid =
+                    window.ACCOUNT_LIST_COMPANY_ID !== null &&
+                    window.ACCOUNT_LIST_COMPANY_ID !== undefined &&
+                    window.ACCOUNT_LIST_COMPANY_ID !== ''
+                        ? parseInt(String(window.ACCOUNT_LIST_COMPANY_ID), 10)
+                        : 0;
                 const response = await fetch('/api/accounts/delete_accounts_api.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: idsToDelete })
+                    body: JSON.stringify({
+                        ids: idsToDelete,
+                        ...(cid > 0 ? { company_id: cid } : {})
+                    })
                 });
                 const result = await response.json();
                 if (result.success && result.data && typeof result.data.deleted === 'number') {

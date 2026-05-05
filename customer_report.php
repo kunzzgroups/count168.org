@@ -6,7 +6,7 @@ require_once 'permissions.php';
 // 获取 company_id（session_check.php已确保用户已登录）
 $company_id = $_SESSION['company_id'];
 
-// Bank-only company 进入报表时自动跳转 dashboard
+// Bank-only company 进入报表时自动跳转 Process List（与 Data Capture 一致）
 $companyPerms = null;
 try {
     $stmt = $pdo->prepare("SELECT permissions FROM company WHERE id = ?");
@@ -19,7 +19,7 @@ try {
 $hasGamesPermission = is_array($companyPerms) && (in_array('Games', $companyPerms) || in_array('Gambling', $companyPerms));
 $isBankOnlyCategory = is_array($companyPerms) && in_array('Bank', $companyPerms) && !$hasGamesPermission;
 if ($isBankOnlyCategory) {
-    header('Location: dashboard.php');
+    header('Location: processlist.php');
     exit;
 }
 

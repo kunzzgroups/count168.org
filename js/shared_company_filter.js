@@ -19,19 +19,32 @@ document.addEventListener('DOMContentLoaded', function () {
             const clickedGroup = this.getAttribute('data-group-id');
 
             if (currentSelectedGroup === clickedGroup) {
-                // 点击已选中的 Group -> 取消选中并进入空状态（与 dashboard 行为对齐）
+                // 点击已选中的 Group -> 取消选中并回到「独立公司（无 group_id）」视图
                 currentSelectedGroup = null;
                 sessionStorage.removeItem('dashboard_group_filter');
                 groupBtns.forEach(b => b.classList.remove('active'));
 
-                // 统一隐藏全部公司按钮，避免自动切换到独立公司
+                let firstIndependent = null;
                 companyBtns.forEach(cBtn => {
-                    cBtn.style.display = 'none';
+                    const cGroupId = (cBtn.getAttribute('data-group-id') || '').trim();
+                    const isIndependent = !cGroupId;
+                    cBtn.style.display = isIndependent ? '' : 'none';
                     cBtn.classList.remove('active');
+                    if (isIndependent && !firstIndependent) {
+                        firstIndependent = cBtn;
+                    }
                 });
 
-                // 通知业务层进入空筛选态
-                if (typeof window.onSharedCompanyFilterChanged === 'function') {
+                // 默认激活第一个独立公司；若没有独立公司才进入空筛选态
+                if (firstIndependent) {
+                    firstIndependent.classList.add('active');
+                    if (typeof window.onSharedCompanyFilterChanged === 'function') {
+                        window.onSharedCompanyFilterChanged(
+                            firstIndependent.getAttribute('data-company-id'),
+                            firstIndependent.getAttribute('data-company-code')
+                        );
+                    }
+                } else if (typeof window.onSharedCompanyFilterChanged === 'function') {
                     window.onSharedCompanyFilterChanged(null, null);
                 }
             } else {

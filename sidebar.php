@@ -377,6 +377,27 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
                 </div>
             <?php endif; ?>
 
+            <?php
+            // 侧栏 Deleted Log 入口：改为 true 即可恢复显示
+            $sidebarDeletedLogMenuEnabled = false;
+            $sidebarShowDeletedLog = $sidebarDeletedLogMenuEnabled && (
+                strtolower((string) $role) === 'admin'
+                || strtolower((string) $role) === 'owner'
+                || (isset($_SESSION['user_type']) && strtolower((string) $_SESSION['user_type']) === 'owner')
+            );
+            ?>
+            <?php if ($sidebarShowDeletedLog): ?>
+                <div class="informationmenu-section">
+                    <div class="informationmenu-section-title account-direct" data-page="deleted-log.php"
+                        onclick="window.location.href='deleted-log.php'">
+                        <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" />
+                        </svg>
+                        Deleted Log
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <!-- Account Section -->
             <?php if (empty($permissions) || in_array('account', $permissions)): ?>
                 <div class="informationmenu-section">
@@ -473,48 +494,55 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
             <?php endif; ?>
 
             <!-- Maintenance Section：主项始终显示；子项按用户是否勾选 maintenance + 公司 category 控制 -->
-            <?php $hasMaintenance = (empty($permissions) || in_array('maintenance', $permissions)); ?>
-            <div class="informationmenu-section">
-                <div class="menu-item-wrapper">
-                    <div class="informationmenu-section-title" data-section="maintenance">
-                        <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
-                            <path
-                                d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z" />
-                        </svg>
-                        Maintenance
-                        <span class="section-arrow">▶</span>
-                    </div>
-                    <div class="submenu" id="maintenance-submenu">
-                        <div class="submenu-content">
-                            <?php if ($companyHasGambling && $hasMaintenance): ?>
-                                <a href="capture_maintenance.php" class="submenu-item" id="maintenance-capture-link">
-                                    <span>Data Capture</span>
-                                </a>
-                            <?php endif; ?>
-                            <?php if ($companyHasGambling && $hasMaintenance): ?>
-                                <a href="transaction_maintenance.php" class="submenu-item" id="maintenance-transaction-link">
-                                    <span>Transaction</span>
-                                </a>
-                            <?php endif; ?>
-                            <?php if ($hasMaintenance): ?>
-                                <a href="payment_maintenance.php" class="submenu-item">
-                                    <span>Payment</span>
-                                </a>
-                            <?php endif; ?>
-                            <?php if ($companyHasGambling): ?>
-                                <a href="formula_maintenance.php" class="submenu-item" id="maintenance-formula-link">
-                                    <span>Formula</span>
-                                </a>
-                            <?php endif; ?>
-                            <?php if ($hasMaintenance): ?>
-                                <a href="bankprocess_maintenance.php" class="submenu-item" id="maintenance-process-link"<?php echo $companyHasBank ? '' : ' style="display:none;"'; ?>>
-                                    <span>Process</span>
-                                </a>
-                            <?php endif; ?>
+            <?php
+            $hasMaintenance = (empty($permissions) || in_array('maintenance', $permissions));
+            $isSupervisorRole = (strtolower((string)$role) === 'supervisor');
+            // Supervisor 在 Games 公司下，即使未勾选 maintenance，也保留 Maintenance（仅显示 Games 相关项）
+            $showMaintenanceSection = $hasMaintenance || ($isSupervisorRole && $companyHasGambling);
+            ?>
+            <?php if ($showMaintenanceSection): ?>
+                <div class="informationmenu-section">
+                    <div class="menu-item-wrapper">
+                        <div class="informationmenu-section-title" data-section="maintenance">
+                            <svg class="section-icon" fill="currentColor" viewBox="0 0 24 24">
+                                <path
+                                    d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z" />
+                            </svg>
+                            Maintenance
+                            <span class="section-arrow">▶</span>
+                        </div>
+                        <div class="submenu" id="maintenance-submenu">
+                            <div class="submenu-content">
+                                <?php if ($companyHasGambling && $hasMaintenance): ?>
+                                    <a href="capture_maintenance.php" class="submenu-item" id="maintenance-capture-link">
+                                        <span>Data Capture</span>
+                                    </a>
+                                <?php endif; ?>
+                                <?php if ($companyHasGambling): ?>
+                                    <a href="transaction_maintenance.php" class="submenu-item" id="maintenance-transaction-link">
+                                        <span>Transaction</span>
+                                    </a>
+                                <?php endif; ?>
+                                <?php if ($hasMaintenance): ?>
+                                    <a href="payment_maintenance.php" class="submenu-item">
+                                        <span>Payment</span>
+                                    </a>
+                                <?php endif; ?>
+                                <?php if ($companyHasGambling): ?>
+                                    <a href="formula_maintenance.php" class="submenu-item" id="maintenance-formula-link">
+                                        <span>Formula</span>
+                                    </a>
+                                <?php endif; ?>
+                                <?php if ($hasMaintenance): ?>
+                                    <a href="bankprocess_maintenance.php" class="submenu-item" id="maintenance-process-link"<?php echo $companyHasBank ? '' : ' style="display:none;"'; ?>>
+                                        <span>Process</span>
+                                    </a>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
+            <?php endif; ?>
         <?php endif; ?>
     </div>
 
@@ -566,6 +594,7 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
     window.SIDEBAR_COMPANY_HAS_GAMBLING = <?php echo $companyHasGambling ? 'true' : 'false'; ?>;
     window.SIDEBAR_COMPANY_HAS_BANK = <?php echo $companyHasBank ? 'true' : 'false'; ?>;
     window.SIDEBAR_COMPANY_CODE = <?php echo json_encode($currentCompanyCode); ?>;
+    window.SIDEBAR_USER_ROLE = <?php echo json_encode(strtolower((string) $role)); ?>;
     (function () {
         if (typeof updateExpirationCountdown === 'function') {
             if (window.SIDEBAR_EXPIRATION_DATE) {
@@ -579,39 +608,126 @@ $companyHasBank = !empty($companyCategories) && in_array('Bank', $companyCategor
     })();
 </script>
 <script>
-    // B2B Cross-Account Sharing & Partnership: Partner Read-Only Mode
-    window.isExternalView = <?php echo (isset($_SESSION['is_external_view']) && $_SESSION['is_external_view']) || (isset($_SESSION['role']) && strtolower($_SESSION['role']) === 'partnership' && (!isset($_SESSION['read_only']) || $_SESSION['read_only'] == 1)) ? 'true' : 'false'; ?>;
+    <?php
+    $sidebarRole = isset($_SESSION['role']) ? strtolower((string) $_SESSION['role']) : '';
+    $sidebarRo = isset($_SESSION['read_only']) ? (int) $_SESSION['read_only'] : null;
+    $sidebarRoLocked = ($sidebarRo === null || $sidebarRo === 1);
+    $isExtSession = isset($_SESSION['is_external_view']) && $_SESSION['is_external_view'];
+    $isPartnershipRo = ($sidebarRole === 'partnership' && $sidebarRoLocked);
+    $isAuditRo = ($sidebarRole === 'audit' && $sidebarRoLocked);
+    $isGlobalReadOnlyUi = $isExtSession || $isPartnershipRo || $isAuditRo;
+    // Partnership / 外部视图：沿用旧逻辑隐藏部分侧栏；Audit 只读不隐藏侧栏（按权限进入各页），仅全站控件只读
+    $applySidebarHide = $isExtSession || $isPartnershipRo;
+    ?>
+    // Partnership read_only、Audit read_only、外部视图：全站只读（与旧脚本兼容）
+    window.isExternalView = <?php echo $isGlobalReadOnlyUi ? 'true' : 'false'; ?>;
 
     if (window.isExternalView) {
         document.addEventListener('DOMContentLoaded', () => {
-            console.log("External Partner Mode Active: Read-Only");
+            document.body.classList.add('session-readonly-ui');
+            console.log('Read-only session: view-only UI');
 
-            // Hide non-view categories
-            const hideCategories = ['Admin', 'Account', 'Process', 'Data Capture', 'Transaction Payment', 'Maintenance'];
-
-            document.querySelectorAll('.informationmenu-menu a.informationmenu-btn, .informationmenu-menu div.informationmenu-btn').forEach(btn => {
-                const textSpan = btn.querySelector('.btn-text');
-                if (textSpan) {
-                    const text = textSpan.textContent.trim();
-                    if (hideCategories.includes(text)) {
-                        btn.style.display = 'none';
-                    }
-                }
-            });
-
-            // Visually disable action buttons
-            const observeDOM = new MutationObserver(() => {
-                document.querySelectorAll('button:not(.fc-button):not([data-readonly-processed]), input[type="submit"]:not([data-readonly-processed]), input[type="button"]:not([data-readonly-processed])').forEach(b => {
-                    const t = b.textContent.toLowerCase() + (b.value || '').toLowerCase();
-                    if (t.includes('add') || t.includes('save') || t.includes('delete') || t.includes('update') || t.includes('confirm') || t.includes('upload') || b.querySelector('svg:not(.view-icon)')) {
-                        b.style.pointerEvents = 'none';
-                        b.style.opacity = '0.4';
-                        b.title = 'Read-Only Partner Mode';
-                        b.setAttribute('data-readonly-processed', 'true');
+            <?php if ($applySidebarHide): ?>
+            (function applySidebarHideForPartner() {
+                const hideCategories = ['Admin', 'Account', 'Process', 'Data Capture', 'Transaction Payment', 'Maintenance'];
+                document.querySelectorAll('.informationmenu .informationmenu-section').forEach((section) => {
+                    const titleEl = section.querySelector('.informationmenu-section-title');
+                    if (!titleEl) return;
+                    const normalized = (titleEl.textContent || '').replace(/\s+/g, ' ').trim();
+                    for (let i = 0; i < hideCategories.length; i++) {
+                        if (normalized.indexOf(hideCategories[i]) !== -1) {
+                            section.style.display = 'none';
+                            return;
+                        }
                     }
                 });
-            });
-            observeDOM.observe(document.body, { childList: true, subtree: true });
+            })();
+            <?php endif; ?>
+
+            (function applyGlobalReadOnlyLocks() {
+                function isExempt(el) {
+                    if (!el || el.nodeType !== 1) return true;
+                    if (el.getAttribute && el.getAttribute('data-readonly-exempt') === '1') return true;
+                    if (el.closest && el.closest('.informationmenu')) return true;
+                    if (el.closest && el.closest('.informationmenu-footer')) return true;
+                    if (el.closest && (el.closest('#notificationPanel') || el.closest('.notification-panel') || el.closest('#notificationOverlay'))) return true;
+                    if (el.classList && el.classList.contains('logout-btn')) return true;
+                    if (el.closest && el.closest('.logout-btn')) return true;
+                    if (el.closest && el.closest('.fc-button')) return true;
+                    // Capture Date 日历浮层挂在 section 外（#calendar-popup），须单独豁免才能选日期查资料
+                    if (el.closest && el.closest('#calendar-popup')) return true;
+                    if (el.closest && el.closest('.calendar-popup')) return true;
+                    if (el.closest && el.closest('.flatpickr-calendar')) return true;
+                    // 筛选/查询区：允许改条件浏览（非落库「资料」）
+                    if (el.closest && el.closest('.transaction-search-section')) return true;
+                    if (el.closest && el.closest('.transaction-bottom-filters')) return true;
+                    if (el.closest && el.closest('[class*="company-filter"]')) return true;
+                    if (el.closest && el.closest('.shared-company-wrapper')) return true;
+                    if (el.closest && el.closest('.shared-group-wrapper')) return true;
+                    if (el.closest && el.closest('[data-readonly-filter-area="1"]')) return true;
+                    // 仅查看收件箱：保留打开/刷新；禁止 Approve/Reject
+                    if (el.closest && el.closest('#contraInboxWrap')) {
+                        if (el.classList && (el.classList.contains('contra-inbox-approve') || el.classList.contains('contra-inbox-reject'))) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    if (el.id === 'modal_close' || (el.classList && el.classList.contains('transaction-modal-close'))) return true;
+                    return false;
+                }
+
+                function lockOne(el) {
+                    if (isExempt(el)) return;
+                    const tag = (el.tagName || '').toLowerCase();
+                    const type = (el.type || '').toLowerCase();
+                    if (type === 'hidden') return;
+                    if (tag === 'a') return;
+                    if (el.dataset && el.dataset.readonlyLocked === '1') return;
+
+                    if (tag === 'button' || type === 'submit' || type === 'button') {
+                        el.disabled = true;
+                        el.style.pointerEvents = 'none';
+                        el.style.opacity = '0.5';
+                        el.title = el.title || 'Read-only mode';
+                        el.dataset.readonlyLocked = '1';
+                        return;
+                    }
+                    if (tag === 'select') {
+                        el.disabled = true;
+                        el.dataset.readonlyLocked = '1';
+                        return;
+                    }
+                    if (tag === 'textarea') {
+                        el.readOnly = true;
+                        el.dataset.readonlyLocked = '1';
+                        return;
+                    }
+                    if (tag === 'input') {
+                        if (type === 'checkbox' || type === 'radio') {
+                            el.disabled = true;
+                        } else {
+                            el.readOnly = true;
+                        }
+                        el.dataset.readonlyLocked = '1';
+                    }
+                }
+
+                function scan(root) {
+                    root.querySelectorAll('input, select, textarea, button').forEach(lockOne);
+                }
+
+                scan(document.body);
+                const mo = new MutationObserver((mutations) => {
+                    mutations.forEach((m) => {
+                        m.addedNodes.forEach((n) => {
+                            if (n.nodeType !== 1) return;
+                            if (n.matches && n.matches('input, select, textarea, button')) lockOne(n);
+                            if (n.querySelectorAll) scan(n);
+                        });
+                    });
+                });
+                mo.observe(document.body, { childList: true, subtree: true });
+            })();
         });
     }
 </script>

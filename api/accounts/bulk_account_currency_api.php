@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -158,6 +159,23 @@ try {
                     // 但批量操作时验证这个比较复杂，可以选择直接删除，或提前验证
                     // 根据之前的 account_currency_api 逻辑，账户至少要有1个currency
                     // 为了简化，这里不做最小1个的强制拦截，因为如果他们能在 UI 直接取消的话。如果需要可以加校验。
+                    foreach ($valid_unlinked_ids as $acc_id_unlink) {
+                        $stAc = $pdo->prepare('SELECT id FROM account_currency WHERE account_id = ? AND currency_id = ? LIMIT 1');
+                        $stAc->execute([$acc_id_unlink, $currency_id]);
+                        $acRow = $stAc->fetch(PDO::FETCH_ASSOC);
+                        if ($acRow && isset($acRow['id'])) {
+                            deletedLog(
+                                $pdo,
+                                '',
+                                '/api/accounts/bulk_account_currency_api.php',
+                                'account_currency',
+                                (string) $acRow['id'],
+                                'DELETE',
+                                null,
+                                (string) $company_id
+                            );
+                        }
+                    }
                     $delPlaceholders = str_repeat('?,', count($valid_unlinked_ids) - 1) . '?';
                     $delParams = array_merge([$currency_id], $valid_unlinked_ids);
                     $stmt = $pdo->prepare("DELETE FROM account_currency WHERE currency_id = ? AND account_id IN ($delPlaceholders)");

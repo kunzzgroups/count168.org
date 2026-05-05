@@ -22,6 +22,7 @@ $processListHidePermissionFilter = PROCESSLIST_HIDE_PERMISSION_FILTER;
 
 // Σ╜┐τö¿τ╗ƒΣ╕ÇτÜäsessionµúÇµƒÑ
 require_once 'session_check.php';
+require_once __DIR__ . '/includes/deleted_log.php';
 require_once __DIR__ . '/bank_process_list.php';
 
 // σñäτÉåσêáΘÖñΦ»╖µ▒é∩╝êσÅ¬σàüΦ«╕σêáΘÖñinactiveτè╢µÇüτÜäΦ┐¢τ¿ï∩╝ë
@@ -79,6 +80,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ids'])) {
                         header('Location: ' . $processListPageFile . '?error=process_has_transactions');
                         exit;
                     }
+                }
+                $uTagPl = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+                $pTagPl = $processListPageFile;
+                foreach ($inactiveIds as $bpid) {
+                    deletedLog($pdo, $uTagPl, $pTagPl, 'bank_process', (string) $bpid);
                 }
                 $delPlaceholders = str_repeat('?,', count($inactiveIds) - 1) . '?';
                 $stmt = $pdo->prepare("DELETE FROM bank_process WHERE id IN ($delPlaceholders) AND company_id = ? AND status = 'inactive'");
@@ -141,6 +147,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['ids'])) {
                 }
             }
 
+            $uTagPlGames = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? '');
+            $pTagPlGames = $processListPageFile;
+            foreach ($processIds as $procDelId) {
+                deletedLog($pdo, $uTagPlGames, $pTagPlGames, 'process', (string) $procDelId);
+            }
             $deletePlaceholders = str_repeat('?,', count($processIds) - 1) . '?';
             $stmt = $pdo->prepare("DELETE FROM process WHERE id IN ($deletePlaceholders) AND status = 'inactive'");
             $stmt->execute($processIds);

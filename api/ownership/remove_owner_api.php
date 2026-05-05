@@ -1,6 +1,7 @@
 <?php
 require_once '../../session_check.php';
 require_once '../../config.php';
+require_once __DIR__ . '/../../includes/deleted_log.php';
 
 header('Content-Type: application/json');
 
@@ -22,6 +23,13 @@ if (!$ownership_id) {
 }
 
 try {
+    deletedLog(
+        $pdo,
+        (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? ''),
+        basename(__FILE__),
+        'company_ownership',
+        (string) $ownership_id
+    );
     $stmt = $pdo->prepare("DELETE FROM company_ownership WHERE id = ?");
     $stmt->execute([$ownership_id]);
 
