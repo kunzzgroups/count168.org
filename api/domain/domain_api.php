@@ -269,7 +269,15 @@ function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType
     $basePdo = new PDO("mysql:host=$host;charset=utf8mb4", $dbuser, $dbpass);
     $basePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $basePdo->exec("SET time_zone = '+08:00'");
-    $basePdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    try {
+        $basePdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    } catch (PDOException $e) {
+        // Shared hosting may deny CREATE DATABASE.
+        // If denied, continue and try provisioning into an already existing database.
+        if (!domainApiIsIgnorableProvisioningError($e)) {
+            throw $e;
+        }
+    }
 
     $dbPdo = new PDO("mysql:host=$host;dbname={$dbName};charset=utf8mb4", $dbuser, $dbpass);
     $dbPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -298,14 +306,7 @@ function domainApiProvisionCompanyDatabasesFromRows(array $companies): void
             continue;
         }
         $schemaType = domainApiResolveSchemaTypeFromPermissions($company['permissions'] ?? null);
-        try {
-            domainApiProvisionCompanyDatabase($companyId, $schemaType);
-        } catch (PDOException $e) {
-            // Shared hosting often blocks CREATE DATABASE; do not block owner/domain creation.
-            if (!domainApiIsIgnorableProvisioningError($e)) {
-                throw $e;
-            }
-        }
+        domainApiProvisionCompanyDatabase($companyId, $schemaType);
     }
 }
 
