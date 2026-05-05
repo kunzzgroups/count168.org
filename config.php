@@ -1,8 +1,20 @@
 <?php
 $host = 'localhost';
-$dbname = 'u857194726_c168_org';
-$dbuser = 'u857194726_c168_org';
-$dbpass = 'Kunzz_c168_org';
+$dbname = 'u857194726_count168_site';
+$dbuser = 'u857194726_count168_site';
+$dbpass = 'Kunzz_c168';
+
+$dbname = 'u857194726_Games';
+$dbuser = 'u857194726_Games';
+$dbpass = 'Kunzz_c168';
+
+$dbname = 'u857194726_Banks';
+$dbuser = 'u857194726_Banks';
+$dbpass = 'Kunzz_c168';   
+
+$dbname = 'u857194726_C168';
+$dbuser = 'u857194726_C168';
+$dbpass = 'Kunzz_c168'; 
 
 // 设置PHP时区为马来西亚时间
 date_default_timezone_set('Asia/Kuala_Lumpur');
