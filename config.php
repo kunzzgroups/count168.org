@@ -11,6 +11,7 @@ $primary_dbpass = 'Kunzz_c168_org';
 $db_connections = [
     'u857194726_c168_org' => ['user' => 'u857194726_c168_org', 'pass' => 'Kunzz_c168_org'],
     'u857194726_a' => ['user' => 'u857194726_a', 'pass' => 'Kunzz_c168_org'],
+    'u857194726_b' => ['user' => 'u857194726_b', 'pass' => 'Kunzz_c168_org'],
 ];
 
 // 兼容旧代码中直接使用 $dbname/$dbuser/$dbpass 的场景
