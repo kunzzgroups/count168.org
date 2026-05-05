@@ -172,12 +172,12 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
     $dbPassword = 'Kunzz_c168_org';
     $hostOverride = trim((string) ($_SERVER['HOSTINGER_VHOST'] ?? ''));
     $detectedHost = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
-    $vhost = $hostOverride !== '' ? $hostOverride : ($detectedHost !== '' ? $detectedHost : 'count168.org');
+    $vhost = $hostOverride !== '' ? $hostOverride : ($detectedHost !== '' ? $detectedHost : 'count168.com');
 
-    if ($apiToken === '' || $apiToken === 'k56McvyXP4eHks4fAGfYLyfTcod4Ia6xZDBOE77Wb62535d6') {
+    if ($apiToken === '') {
         throw new RuntimeException('Hostinger API token is required in domain_api.php');
     }
-    if ($dbPassword === '' || $dbPassword === 'Kunzz_c168_org') {
+    if ($dbPassword === '') {
         throw new RuntimeException('Hostinger DB password is required in domain_api.php');
     }
 
