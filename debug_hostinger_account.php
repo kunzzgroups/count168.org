@@ -4,9 +4,18 @@ require_once __DIR__ . '/config.php';
 header('Content-Type: application/json; charset=utf-8');
 
 try {
+    $secretPath = __DIR__ . '/secret_config.php';
+    $tokenFromEnv = (string) (getenv('HOSTINGER_API_TOKEN') ?: '');
+    $accountFromEnv = (string) (getenv('HOSTINGER_ACCOUNT_ID') ?: '');
+
     $token = trim((string) (getenv('HOSTINGER_API_TOKEN') ?: ''));
     if ($token === '') {
-        throw new RuntimeException('HOSTINGER_API_TOKEN is empty. Fill secret_config.php first.');
+        throw new RuntimeException(
+            'HOSTINGER_API_TOKEN is empty. '
+            . 'secret_exists=' . (is_file($secretPath) ? 'yes' : 'no')
+            . ', token_len=' . strlen($tokenFromEnv)
+            . ', account_len=' . strlen($accountFromEnv)
+        );
     }
 
     if (!function_exists('curl_init')) {
