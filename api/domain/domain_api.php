@@ -190,6 +190,16 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
         return true;
     }
 
+    // Hostinger API/Cloudflare temporary outage fallback:
+    // allow flow to continue so provisioning can still work for manually created DBs.
+    $isGatewayOutage = ($status === 530)
+        || strpos($msg, 'error code: 1016') !== false
+        || strpos($msg, 'origin dns error') !== false
+        || strpos($msg, 'cloudflare') !== false;
+    if ($isGatewayOutage) {
+        return false;
+    }
+
     throw new RuntimeException(
         'Hostinger API create database failed'
         . ($status > 0 ? " (HTTP {$status})" : '')
