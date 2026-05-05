@@ -176,7 +176,7 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
     }
     $hostOverride = trim((string) ($_SERVER['HOSTINGER_VHOST'] ?? ''));
     $detectedHost = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
-    $vhost = $hostOverride !== '' ? $hostOverride : ($detectedHost !== '' ? $detectedHost : 'count168.com');
+    $vhost = $hostOverride !== '' ? $hostOverride : ($detectedHost !== '' ? $detectedHost : 'count168.org');
 
     if ($apiToken === '') {
         throw new RuntimeException('Hostinger API token is required in domain_api.php');
