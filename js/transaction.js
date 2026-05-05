@@ -2171,20 +2171,16 @@
             fillTable('tbody_left', 'table_left', sortedLeftRows);
             fillTable('tbody_right', 'table_right', sortedRightRows);
 
-            // bf/cr_dr/balance 优先用后端 totals；Win/Loss 与后端一致累加行内 win_loss（与表格列相同）
-            let leftTotals, rightTotals, summaryTotals;
-            const ltWl = calculateTotals(sortedLeftRows);
-            const rtWl = calculateTotals(sortedRightRows);
+            let leftTotals;
+            let rightTotals;
+            let summaryTotals;
             if (totalsFromApi && totalsFromApi.left && totalsFromApi.right && totalsFromApi.summary) {
-                leftTotals = { ...totalsFromApi.left, win_loss: ltWl.win_loss };
-                rightTotals = { ...totalsFromApi.right, win_loss: rtWl.win_loss };
-                summaryTotals = {
-                    bf: totalsFromApi.summary.bf,
-                    win_loss: MoneyDecimal.add(ltWl.win_loss, rtWl.win_loss).toString(),
-                    cr_dr: totalsFromApi.summary.cr_dr,
-                    balance: totalsFromApi.summary.balance
-                };
+                leftTotals = totalsFromApi.left;
+                rightTotals = totalsFromApi.right;
+                summaryTotals = totalsFromApi.summary;
             } else {
+                const ltWl = calculateTotals(sortedLeftRows);
+                const rtWl = calculateTotals(sortedRightRows);
                 leftTotals = ltWl;
                 rightTotals = rtWl;
                 summaryTotals = {
@@ -2911,8 +2907,12 @@
         filteredLeft = filteredLeft.filter(filterFn);
         filteredRight = filteredRight.filter(filterFn);
 
-        // 合计必须与当前表格可见行一致（Show 0 balance / Show Payment Only 等过滤后）
-        renderTables(filteredLeft, filteredRight);
+        // 可见行与本次搜索原始行一致时，底部合计用后端 totals（与 PHP money_add 链一致）；部分隐藏行时仅累加可见行，底部可能非零属预期。
+        const fullRowset =
+            filteredLeft.length === rawLeft.length &&
+            filteredRight.length === rawRight.length;
+        const totalsFromApi = (fullRowset && lastSearchData.totals) ? lastSearchData.totals : null;
+        renderTables(filteredLeft, filteredRight, totalsFromApi);
     }
 
     // ==================== 处理复选框变化（改为前端重新渲染） ====================
