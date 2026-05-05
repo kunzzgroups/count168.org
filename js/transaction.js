@@ -153,16 +153,13 @@
         return MoneyDecimal.formatFixedHalfUp(value || '0', 2);
     }
 
-    /** 合计列 Win/Loss：每行用 win_loss_full（缺省 win_loss）四舍五入到分（ROUND_HALF_UP）再累加，与单元格显示（截断两位）可不一致 */
-    function winLossRowHalfUp2(row) {
-        const raw = row && row.win_loss_full !== undefined && row.win_loss_full !== null && String(row.win_loss_full).trim() !== ''
-            ? row.win_loss_full
-            : (row && row.win_loss != null ? row.win_loss : '0');
-        try {
-            return MoneyDecimal.formatFixedHalfUp(raw === '-' ? '0' : raw, 2);
-        } catch (_) {
-            return '0.00';
-        }
+    /** Win/Loss 列合计：与单元格一致累加 search_api 下发的 trunc2 两位 win_loss，与后端 calculateTotals 一致，避免与 win_loss_full 逐行 half-up 造成轧差尾差（如 -0.37）。 */
+    function winLossRowForTotal(row) {
+        const v = row && row.win_loss;
+        if (v === '-' || v === null || v === undefined) return '0';
+        const cleaned = String(v).replace(/,/g, '').trim();
+        if (cleaned === '' || cleaned === '-') return '0';
+        return cleaned;
     }
 
     // ==================== Contra Inbox（Manager+） ====================
@@ -2174,7 +2171,7 @@
             fillTable('tbody_left', 'table_left', sortedLeftRows);
             fillTable('tbody_right', 'table_right', sortedRightRows);
 
-            // bf/cr_dr/balance 优先用后端 totals；Win/Loss 合计强制用逐行四舍五入（win_loss_full）再累加
+            // bf/cr_dr/balance 优先用后端 totals；Win/Loss 与后端一致累加行内 win_loss（与表格列相同）
             let leftTotals, rightTotals, summaryTotals;
             const ltWl = calculateTotals(sortedLeftRows);
             const rtWl = calculateTotals(sortedRightRows);
@@ -2461,7 +2458,7 @@
     function calculateTotals(rows) {
         return rows.reduce((totals, row) => {
             totals.bf = MoneyDecimal.add(totals.bf, row.bf || '0').toString();
-            totals.win_loss = MoneyDecimal.add(totals.win_loss, winLossRowHalfUp2(row)).toString();
+            totals.win_loss = MoneyDecimal.add(totals.win_loss, winLossRowForTotal(row)).toString();
             totals.cr_dr = MoneyDecimal.add(totals.cr_dr, row.cr_dr || '0').toString();
             totals.balance = MoneyDecimal.add(totals.balance, row.balance || '0').toString();
             return totals;
