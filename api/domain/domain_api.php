@@ -167,12 +167,23 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
 
     // Per current Hostinger setup, {account} uses hosting username.
     $account = 'u857194726';
-    $apiToken = 'hapi_D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2';
-    if ($apiToken === '' || $apiToken === 'hapi_D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2') {
-        hostingerCreateDatabase($account, $dbName, $apiToken);
+    $apiToken = 'D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2';
+    $dbUser = $dbName;
+    $dbPassword = 'Kunzz_c168_org';
+    $vhost = 'count168.org';
+
+    if ($apiToken === '' || $apiToken === 'D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2') {
+        throw new RuntimeException('Hostinger API token is required in domain_api.php');
+    }
+    if ($dbPassword === '' || $dbPassword === 'Kunzz_c168_org') {
+        throw new RuntimeException('Hostinger DB password is required in domain_api.php');
     }
 
-    $apiResult = hostingerCreateDatabase($account, $dbName, $apiToken);
+    $apiResult = hostingerCreateDatabase($account, $dbName, $apiToken, [
+        'user' => $dbUser,
+        'password' => $dbPassword,
+        'vhost' => $vhost,
+    ]);
     $status = (int) ($apiResult['status'] ?? 0);
     $ok = (bool) ($apiResult['ok'] ?? false);
     $payload = $apiResult['data'] ?? null;

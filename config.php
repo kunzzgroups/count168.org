@@ -74,7 +74,7 @@ function createServerPdoForDatabase(?string $databaseName = null): PDO
  * Usage:
  *   $res = hostingerCreateDatabase('YOUR_ACCOUNT_ID', 'u857194726_test');
  */
-function hostingerCreateDatabase(string $account, string $databaseName, ?string $apiToken = null): array
+function hostingerCreateDatabase(string $account, string $databaseName, ?string $apiToken = null, array $extraPayload = []): array
 {
     $account = trim($account);
     $databaseName = trim($databaseName);
@@ -96,8 +96,17 @@ function hostingerCreateDatabase(string $account, string $databaseName, ?string 
         throw new RuntimeException('cURL extension is required for Hostinger API calls');
     }
 
-    $url = 'https://api.hostinger.com/api/hapi/v1/accounts/' . rawurlencode($account) . '/databases';
-    $payload = json_encode(['name' => $databaseName], JSON_UNESCAPED_UNICODE);
+    $url = 'https://hpanel.hostinger.com/api/hapi/v1/accounts/' . rawurlencode($account) . '/databases';
+    $requestPayload = ['name' => $databaseName];
+    foreach (['user', 'password', 'vhost'] as $key) {
+        if (isset($extraPayload[$key])) {
+            $val = trim((string) $extraPayload[$key]);
+            if ($val !== '') {
+                $requestPayload[$key] = $val;
+            }
+        }
+    }
+    $payload = json_encode($requestPayload, JSON_UNESCAPED_UNICODE);
     if ($payload === false) {
         throw new RuntimeException('Failed to encode Hostinger API payload');
     }
