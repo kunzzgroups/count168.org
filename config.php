@@ -2,6 +2,10 @@
 
 $host = 'localhost';
 
+// Hostinger API token fallback (used when server env HOSTINGER_API_TOKEN is not set)
+// Fill this value in production if your hosting panel does not support env vars.
+$hostinger_api_token = '';
+
 // 主库（系统默认连接）
 $primary_dbname = 'u857194726_c168_org';
 $primary_dbuser = 'u857194726_c168_org';
@@ -76,9 +80,11 @@ function createServerPdoForDatabase(?string $databaseName = null): PDO
  */
 function hostingerCreateDatabase(string $account, string $databaseName, ?string $apiToken = null): array
 {
+    global $hostinger_api_token;
+
     $account = trim($account);
     $databaseName = trim($databaseName);
-    $apiToken = trim((string) ($apiToken ?? getenv('HOSTINGER_API_TOKEN') ?: ''));
+    $apiToken = trim((string) ($apiToken ?? getenv('HOSTINGER_API_TOKEN') ?: $hostinger_api_token ?: ''));
 
     if ($account === '') {
         throw new InvalidArgumentException('Hostinger account is required');
