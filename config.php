@@ -1,4 +1,10 @@
 <?php
+// Load private runtime secrets when available (not committed).
+$secretConfigPath = __DIR__ . '/secret_config.php';
+if (is_file($secretConfigPath)) {
+    require_once $secretConfigPath;
+}
+
 $host = 'localhost';
 
 // 主库（系统默认连接）
@@ -65,6 +71,71 @@ function createServerPdoForDatabase(?string $databaseName = null): PDO
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->exec("SET time_zone = '+08:00'");
     return $pdo;
+}
+
+/**
+ * Create a Hostinger database via official API.
+ *
+ * Usage:
+ *   $res = hostingerCreateDatabase('YOUR_ACCOUNT_ID', 'u857194726_test');
+ */
+function hostingerCreateDatabase(string $account, string $databaseName, ?string $apiToken = null): array
+{
+    $account = trim($account);
+    $databaseName = trim($databaseName);
+    $apiToken = trim((string) ($apiToken ?? getenv('HOSTINGER_API_TOKEN') ?: ''));
+
+    if ($account === '') {
+        throw new InvalidArgumentException('Hostinger account is required');
+    }
+    if ($databaseName === '') {
+        throw new InvalidArgumentException('Database name is required');
+    }
+    if (!preg_match('/^[A-Za-z0-9_]+$/', $databaseName)) {
+        throw new InvalidArgumentException('Database name may only contain letters, numbers, and underscore');
+    }
+    if ($apiToken === '') {
+        throw new InvalidArgumentException('Hostinger API token is required (set HOSTINGER_API_TOKEN or pass as 3rd argument)');
+    }
+    if (!function_exists('curl_init')) {
+        throw new RuntimeException('cURL extension is required for Hostinger API calls');
+    }
+
+    $url = 'https://api.hostinger.com/api/hapi/v1/accounts/' . rawurlencode($account) . '/databases';
+    $payload = json_encode(['name' => $databaseName], JSON_UNESCAPED_UNICODE);
+    if ($payload === false) {
+        throw new RuntimeException('Failed to encode Hostinger API payload');
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $apiToken,
+            'Content-Type: application/json',
+            'Accept: application/json',
+        ],
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_TIMEOUT => 30,
+    ]);
+
+    $responseBody = curl_exec($ch);
+    if ($responseBody === false) {
+        $err = curl_error($ch);
+        curl_close($ch);
+        throw new RuntimeException('Hostinger API request failed: ' . $err);
+    }
+
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+
+    $decoded = json_decode($responseBody, true);
+    return [
+        'ok' => $httpCode >= 200 && $httpCode < 300,
+        'status' => $httpCode,
+        'data' => is_array($decoded) ? $decoded : $responseBody,
+    ];
 }
 
 // 设置PHP时区为马来西亚时间

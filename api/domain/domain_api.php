@@ -126,6 +126,75 @@ function domainApiIsIgnorableProvisioningError(PDOException $e): bool
     );
 }
 
+function domainApiExtractErrorMessageFromApiPayload($payload): string
+{
+    if (is_string($payload)) {
+        return trim($payload);
+    }
+    if (!is_array($payload)) {
+        return '';
+    }
+    foreach (['message', 'error', 'detail', 'title'] as $key) {
+        if (isset($payload[$key]) && is_string($payload[$key]) && trim($payload[$key]) !== '') {
+            return trim($payload[$key]);
+        }
+    }
+    if (isset($payload['errors']) && is_array($payload['errors'])) {
+        $flat = [];
+        foreach ($payload['errors'] as $item) {
+            if (is_string($item) && trim($item) !== '') {
+                $flat[] = trim($item);
+            } elseif (is_array($item)) {
+                foreach ($item as $v) {
+                    if (is_string($v) && trim($v) !== '') {
+                        $flat[] = trim($v);
+                    }
+                }
+            }
+        }
+        if (!empty($flat)) {
+            return implode('; ', array_unique($flat));
+        }
+    }
+    return '';
+}
+
+function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
+{
+    if (!function_exists('hostingerCreateDatabase')) {
+        return false;
+    }
+
+    $account = trim((string) (getenv('HOSTINGER_ACCOUNT_ID') ?: ''));
+    if ($account === '') {
+        return false;
+    }
+
+    $apiResult = hostingerCreateDatabase($account, $dbName);
+    $status = (int) ($apiResult['status'] ?? 0);
+    $ok = (bool) ($apiResult['ok'] ?? false);
+    $payload = $apiResult['data'] ?? null;
+
+    if ($ok) {
+        return true;
+    }
+
+    $msg = strtolower(domainApiExtractErrorMessageFromApiPayload($payload));
+    $alreadyExists = ($status === 409)
+        || strpos($msg, 'already exists') !== false
+        || strpos($msg, 'must be unique') !== false
+        || strpos($msg, 'has already been taken') !== false;
+    if ($alreadyExists) {
+        return true;
+    }
+
+    throw new RuntimeException(
+        'Hostinger API create database failed'
+        . ($status > 0 ? " (HTTP {$status})" : '')
+        . ($msg !== '' ? ': ' . $msg : '')
+    );
+}
+
 /**
  * Add Company 建库模板只允许 Bank/Games 二选一。
  *
@@ -307,6 +376,10 @@ function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType
     if ($schemaPath === null || !is_file($schemaPath)) {
         throw new RuntimeException('Schema file not found for type: ' . $schemaType);
     }
+
+    // Prefer official Hostinger API auto-provision when configured.
+    // Requires HOSTINGER_ACCOUNT_ID + HOSTINGER_API_TOKEN in runtime environment.
+    domainApiTryCreateDatabaseViaHostingerApi($dbName);
 
     if (function_exists('createServerPdoForDatabase')) {
         $basePdo = createServerPdoForDatabase($dbName);
