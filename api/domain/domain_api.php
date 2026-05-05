@@ -165,10 +165,8 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
         return false;
     }
 
-    $account = trim((string) (getenv('HOSTINGER_ACCOUNT_ID') ?: ''));
-    if ($account === '') {
-        return false;
-    }
+    // Per current Hostinger setup, {account} uses hosting username.
+    $account = 'u857194726';
 
     $apiResult = hostingerCreateDatabase($account, $dbName);
     $status = (int) ($apiResult['status'] ?? 0);

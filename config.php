@@ -1,9 +1,4 @@
 <?php
-// Load private runtime secrets when available (not committed).
-$secretConfigPath = __DIR__ . '/secret_config.php';
-if (is_file($secretConfigPath)) {
-    require_once $secretConfigPath;
-}
 
 $host = 'localhost';
 
