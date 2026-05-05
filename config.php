@@ -19,8 +19,8 @@ try {
     $pdo->exec("SET time_zone = '+08:00'");
     
 } catch(PDOException $e) {
-    // 抛出异常而不是直接 die，让调用者可以处理
-    throw new PDOException("数据库连接失败: " . $e->getMessage());
+    // 线上排障期间直接输出，避免整站 HTTP 500 无信息
+    die("数据库连接失败: " . $e->getMessage());
 }
 
 // SMTP 发信（必填才能发到 Gmail）：填好后重置密码邮件走 SMTP，否则用 mail() 易失败
