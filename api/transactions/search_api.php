@@ -1887,18 +1887,29 @@ try {
         $has_crdr_transactions = $cr_dr_result['has_transactions'];
 
         // Layer 2 过滤：(账户 + 货币) 组合级别。两者互相对称：
-        // 情况A：仅 Show Win/Loss Only —— 跳过该货币“本期没有任何 Win/Loss 相关记录”的行
+        // 情况A：仅 Show Win/Loss Only —— 默认只关心有 W/L 动账的户；但若该户 B/F、W/L、Cr/Dr 任一项非零，
+        // 仍须保留，否则对轧账户被整行隐藏会导致底部 Total「漏水」（例：仅缺 B/F -1.40 / Balance 不轧平）。
         if ($show_capture_only && !$show_inactive) {
             if (!$has_win_loss_transactions) {
-                continue;
+                $bf_z = trunc2($bf);
+                $wl_z = trunc2($win_loss);
+                $cr_z = trunc2($cr_dr);
+                if (!searchMoneyNonZero($bf_z) && !searchMoneyNonZero($wl_z) && !searchMoneyNonZero($cr_z)) {
+                    continue;
+                }
             }
         }
-        // 情况B：仅 Show Payment Only —— 跳过该货币没有 PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM 的行
+        // 情况B：仅 Show Payment Only —— 无本期 Cr/Dr 动账时，若三栏金额全零再跳过；否则保留以轧平 Total。
         // 注意：$has_crdr_transactions 已在 calculateCrDrByCurrency 中修正，
         // 不再受 RATE 分录（transaction_entry）count 污染。
         if ($show_inactive && !$show_capture_only) {
             if (!$has_crdr_transactions) {
-                continue;
+                $bf_z = trunc2($bf);
+                $wl_z = trunc2($win_loss);
+                $cr_z = trunc2($cr_dr);
+                if (!searchMoneyNonZero($bf_z) && !searchMoneyNonZero($wl_z) && !searchMoneyNonZero($cr_z)) {
+                    continue;
+                }
             }
         }
 
