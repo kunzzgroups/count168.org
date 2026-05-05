@@ -2331,12 +2331,20 @@ function calculateCrDr($pdo, $account_id, $date_from, $date_to)
 function calculateTotals($data)
 {
     $totals = ['bf' => '0', 'win_loss' => '0', 'cr_dr' => '0', 'balance' => '0'];
+    $win_loss_accum = '0';
 
     foreach ($data as $row) {
         $totals['bf'] = money_add($totals['bf'], $row['bf'] ?? '0', 2);
-        $totals['win_loss'] = money_add($totals['win_loss'], $row['win_loss'] ?? '0', 2);
+        // Win/Loss：逐行 trunc2 再累加会在大户数下无法与对侧完全轧平（如左 165724.15 右 -165724.52 → -0.37）。
+        // 与行内口径一致：先按 win_loss_full（8 位）累加，再统一 searchMoney2。
+        $wl_full = isset($row['win_loss_full']) && $row['win_loss_full'] !== '' && $row['win_loss_full'] !== null
+            ? $row['win_loss_full']
+            : ($row['win_loss'] ?? '0');
+        $win_loss_accum = money_add($win_loss_accum, $wl_full, 8);
         $totals['cr_dr'] = money_add($totals['cr_dr'], $row['cr_dr'] ?? '0', 2);
     }
+
+    $totals['win_loss'] = searchMoney2($win_loss_accum);
 
     // Balance 合计必须与 B/F、Win/Loss、Cr/Dr 三列合计恒等（先分列累加再相加）。
     // 若改为累加各行 balance，会与「每行 balance=截断后三列之和」在大量账户时产生分位尾差（用户见 ±0.37 等）。

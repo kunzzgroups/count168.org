@@ -153,11 +153,12 @@
         return MoneyDecimal.formatFixedHalfUp(value || '0', 2);
     }
 
-    /** Win/Loss 列合计：与单元格一致累加 search_api 下发的 trunc2 两位 win_loss，与后端 calculateTotals 一致，避免与 win_loss_full 逐行 half-up 造成轧差尾差（如 -0.37）。 */
-    function winLossRowForTotal(row) {
-        const v = row && row.win_loss;
-        if (v === '-' || v === null || v === undefined) return '0';
-        const cleaned = String(v).replace(/,/g, '').trim();
+    /** Win/Loss 合计累加用 win_loss_full（与 search_api calculateTotals 一致），再 ROUND_DOWN 到 2 位；勿逐行 trunc2 累加，否则左右脚轧差（如 -0.37）。 */
+    function winLossFullForTotal(row) {
+        const raw = row && row.win_loss_full !== undefined && row.win_loss_full !== null && String(row.win_loss_full).trim() !== ''
+            ? row.win_loss_full
+            : (row && row.win_loss != null && row.win_loss !== '-' ? row.win_loss : '0');
+        const cleaned = String(raw).replace(/,/g, '').trim();
         if (cleaned === '' || cleaned === '-') return '0';
         return cleaned;
     }
@@ -2454,11 +2455,15 @@
     function calculateTotals(rows) {
         const acc = rows.reduce((totals, row) => {
             totals.bf = MoneyDecimal.add(totals.bf, row.bf || '0').toString();
-            totals.win_loss = MoneyDecimal.add(totals.win_loss, winLossRowForTotal(row)).toString();
+            totals.win_loss = MoneyDecimal.add(totals.win_loss, winLossFullForTotal(row)).toString();
             totals.cr_dr = MoneyDecimal.add(totals.cr_dr, row.cr_dr || '0').toString();
             return totals;
         }, { bf: '0', win_loss: '0', cr_dr: '0' });
-        acc.balance = MoneyDecimal.add(MoneyDecimal.add(acc.bf, acc.win_loss), acc.cr_dr).toString();
+        acc.win_loss = MoneyDecimal.formatFixed(acc.win_loss, 2);
+        acc.balance = MoneyDecimal.formatFixed(
+            MoneyDecimal.add(MoneyDecimal.add(acc.bf, acc.win_loss), acc.cr_dr),
+            2
+        );
         return acc;
     }
 
