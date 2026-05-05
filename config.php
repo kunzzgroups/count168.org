@@ -96,7 +96,7 @@ function hostingerCreateDatabase(string $account, string $databaseName, ?string 
         throw new RuntimeException('cURL extension is required for Hostinger API calls');
     }
 
-    $url = 'https://hpanel.hostinger.com/api/hapi/v1/accounts/' . rawurlencode($account) . '/databases';
+    $url = 'https://api.hostinger.com/api/hapi/v1/accounts/' . rawurlencode($account) . '/databases';
     $requestPayload = ['name' => $databaseName];
     foreach (['user', 'password', 'vhost'] as $key) {
         if (isset($extraPayload[$key])) {
