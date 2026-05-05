@@ -167,12 +167,12 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
 
     // Per current Hostinger setup, {account} uses hosting username.
     $account = 'u857194726';
-    $apiToken = 'D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2';
+    $apiToken = 'u7FhDc64BM1XgJ639AQp6wRcXcYNRJqW43CWQOWs45c89430';
     $dbUser = $dbName;
     $dbPassword = 'Kunzz_c168_org';
     $vhost = 'count168.org';
 
-    if ($apiToken === '' || $apiToken === 'D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2') {
+    if ($apiToken === '' || $apiToken === 'u7FhDc64BM1XgJ639AQp6wRcXcYNRJqW43CWQOWs45c89430') {
         throw new RuntimeException('Hostinger API token is required in domain_api.php');
     }
     if ($dbPassword === '' || $dbPassword === 'Kunzz_c168_org') {
