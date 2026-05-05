@@ -169,7 +169,7 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
     $account = 'u857194726';
     $apiToken = 'hapi_D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2';
     if ($apiToken === '' || $apiToken === 'hapi_D2omedtsLavxGDf9mVyeD2G3LEQYTBUU4Na8JUzT308d5ae2') {
-        throw new RuntimeException('Hostinger API token is required in domain_api.php');
+        throw new RuntimeException('TOKEN_LEN=' . strlen($apiToken) . ', TOKEN_HEAD=' . substr($apiToken, 0, 6));
     }
 
     $apiResult = hostingerCreateDatabase($account, $dbName, $apiToken);
