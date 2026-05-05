@@ -168,8 +168,12 @@ function domainApiTryCreateDatabaseViaHostingerApi(string $dbName): bool
     // Per current Hostinger setup, {account} uses hosting username.
     $account = 'u857194726';
     $apiToken = 'k56McvyXP4eHks4fAGfYLyfTcod4Ia6xZDBOE77Wb62535d6';
-    $dbUser = $dbName;
-    $dbPassword = 'Kunzz_c168_org';
+    $connCfg = function_exists('getDbConnectionConfig') ? getDbConnectionConfig($dbName) : null;
+    $dbUser = is_array($connCfg) ? trim((string) ($connCfg['dbuser'] ?? '')) : '';
+    $dbPassword = is_array($connCfg) ? trim((string) ($connCfg['dbpass'] ?? '')) : '';
+    if ($dbUser === '') {
+        $dbUser = $dbName;
+    }
     $hostOverride = trim((string) ($_SERVER['HOSTINGER_VHOST'] ?? ''));
     $detectedHost = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
     $vhost = $hostOverride !== '' ? $hostOverride : ($detectedHost !== '' ? $detectedHost : 'count168.com');
