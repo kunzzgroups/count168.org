@@ -93,6 +93,8 @@ function buildInPlaceholders(int $count): string
  */
 function domainApiDatabaseNameFromCompanyId(string $companyId): string
 {
+    global $dbname;
+
     $normalized = strtoupper(trim($companyId));
     if ($normalized === '') {
         throw new InvalidArgumentException('Company ID is required for database provisioning');
@@ -100,7 +102,28 @@ function domainApiDatabaseNameFromCompanyId(string $companyId): string
     if (!preg_match('/^[A-Z0-9_]+$/', $normalized)) {
         throw new InvalidArgumentException('Company ID may only contain letters, numbers, and underscore for database name');
     }
-    return $normalized;
+
+    // Shared-hosting safe default: reuse current DB account prefix (e.g. u857194726_XXX).
+    $currentDb = trim((string) ($dbname ?? ''));
+    if ($currentDb !== '' && preg_match('/^([a-zA-Z0-9]+)_/', $currentDb, $m)) {
+        return strtolower($m[1] . '_' . $normalized);
+    }
+
+    return strtolower($normalized);
+}
+
+function domainApiIsIgnorableProvisioningError(PDOException $e): bool
+{
+    $msg = strtolower(trim($e->getMessage()));
+    if ($msg === '') {
+        return false;
+    }
+    return (
+        strpos($msg, 'access denied') !== false ||
+        strpos($msg, 'create command denied') !== false ||
+        strpos($msg, 'unknown database') !== false ||
+        strpos($msg, 'not allowed') !== false
+    );
 }
 
 /**
@@ -275,7 +298,14 @@ function domainApiProvisionCompanyDatabasesFromRows(array $companies): void
             continue;
         }
         $schemaType = domainApiResolveSchemaTypeFromPermissions($company['permissions'] ?? null);
-        domainApiProvisionCompanyDatabase($companyId, $schemaType);
+        try {
+            domainApiProvisionCompanyDatabase($companyId, $schemaType);
+        } catch (PDOException $e) {
+            // Shared hosting often blocks CREATE DATABASE; do not block owner/domain creation.
+            if (!domainApiIsIgnorableProvisioningError($e)) {
+                throw $e;
+            }
+        }
     }
 }
 
