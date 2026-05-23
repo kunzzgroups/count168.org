@@ -2,6 +2,7 @@ import {
   getClipboardPlainText,
   isTypingModeCell,
   resolvePasteCell,
+  resolvePastePlainTextForStructuredParsers,
 } from "./dataCaptureClipboard.js";
 import {
   autoDetectCaptureTypeFromPaste,
@@ -149,8 +150,17 @@ export function handleCellPasteEvent(e) {
 
   e.preventDefault();
 
-  const pastedData = getClipboardPlainText(e);
+  const canParseCitibet = (text) => Boolean(parseCitibetPasteData(text, "CITIBET")?.dataMatrix?.length);
+  const pastedData = resolvePastePlainTextForStructuredParsers(e, canParseCitibet);
   const clipboard = e.clipboardData || window.clipboardData;
+
+  // Structured CITIBET layout must win over raw Text/Format paste (same as manual 3.CITIBET).
+  const citibetParsed = parseCitibetPasteData(pastedData, "CITIBET");
+  if (citibetParsed?.dataMatrix?.length) {
+    applyCaptureType("CITIBET");
+    if (handleCitibetPaste(e, pastedData, cell, "CITIBET", citibetParsed)) return;
+  }
+
   applyCaptureType(autoDetectCaptureTypeFromPaste(pastedData, clipboard));
 
   const captureType = getCaptureType();
@@ -171,9 +181,11 @@ export function handleCellPasteEvent(e) {
     if (handleTextModePaste(e, pastedData, cell)) return;
   }
 
-  const citibetParsed = parseCitibetPasteData(pastedData, captureType);
-  if (citibetParsed) {
-    if (handleCitibetPaste(e, pastedData, cell, captureType, citibetParsed)) return;
+  if (captureType === "CITIBET") {
+    const fallbackCitibet = parseCitibetPasteData(pastedData, "CITIBET");
+    if (fallbackCitibet && handleCitibetPaste(e, pastedData, cell, "CITIBET", fallbackCitibet)) {
+      return;
+    }
   }
 
   invokeGenericPasteFallback(e, pastedData);

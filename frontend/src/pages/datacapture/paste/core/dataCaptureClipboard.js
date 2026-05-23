@@ -126,3 +126,38 @@ export function measureHtmlTable(table) {
   if (maxCols === 0) return null;
   return { allRows: Array.from(allRows), maxCols };
 }
+
+/** Flatten an HTML table to tab-separated plain text (for structured paste parsers). */
+export function htmlTableToTabPlainText(html) {
+  if (!html || typeof html !== "string" || !/<table\b/i.test(html)) return "";
+
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  const table = temp.querySelector("table");
+  if (!table) return "";
+
+  const lines = [];
+  table.querySelectorAll("tr").forEach((tr) => {
+    const cells = tr.querySelectorAll("td, th");
+    if (!cells.length) return;
+    lines.push(Array.from(cells).map((cell) => (cell.textContent || "").trim()).join("\t"));
+  });
+
+  return lines.join("\n");
+}
+
+/**
+ * Prefer plain text; when CITIBET only parses from HTML table rows, use that TSV instead.
+ */
+export function resolvePastePlainTextForStructuredParsers(e, canParse) {
+  const plain = getClipboardPlainText(e);
+  if (plain && canParse(plain)) return plain;
+
+  const html = getClipboardHtml(e);
+  if (html) {
+    const fromHtml = htmlTableToTabPlainText(html);
+    if (fromHtml && canParse(fromHtml)) return fromHtml;
+  }
+
+  return plain;
+}

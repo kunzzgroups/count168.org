@@ -63,18 +63,14 @@ export function pastedHtmlLooksFormatted(html) {
 export function pastedPlainTextLooksCitibet(pastedData) {
   if (!pastedData || typeof pastedData !== "string") return false;
 
-  if (parseCitibetMajorPaymentReport(pastedData)) return true;
   if (parseCitibetPaymentReport(pastedData)) return true;
+  if (parseCitibetMajorPaymentReport(pastedData)) return true;
 
   const lower = pastedData.toLowerCase();
-  const hasCitibetMarkers =
+  return (
     (lower.includes("overall") && lower.includes("my earnings")) ||
-    pastedPlainTextLooksCitibetReport(pastedData) ||
-    (/\bmajor\b/i.test(pastedData) &&
-      (lower.includes("overall") || lower.includes("my earnings") || lower.includes("upline payment")));
-
-  if (!hasCitibetMarkers) return false;
-  return Boolean(parseCitibetFormatBasedPaste(pastedData));
+    pastedPlainTextLooksCitibetReport(pastedData)
+  );
 }
 
 /**
@@ -167,19 +163,28 @@ export function autoDetectCaptureTypeFromPaste(pastedData, clipboard = null) {
 
 export function parseCitibetPasteData(pastedData, captureType) {
   const isCitibetMode = captureType === "CITIBET";
-  let usedMajorParser = false;
 
   if (isCitibetMode) {
+    // Payment parser first — produces the MAJOR-column layout shown in the CITIBET grid.
+    const paymentParsed = parseCitibetPaymentReport(pastedData);
+    if (paymentParsed) {
+      return { ...paymentParsed, usedMajorParser: false };
+    }
+
     const majorParsed = parseCitibetMajorPaymentReport(pastedData);
-    usedMajorParser = Boolean(majorParsed);
-    let parsed = majorParsed || parseCitibetPaymentReport(pastedData);
-    if (!parsed && pastedPlainTextLooksCitibetReport(pastedData)) {
-      parsed = parseCitibetFormatBasedPaste(pastedData);
+    if (majorParsed) {
+      return { ...majorParsed, usedMajorParser: true };
     }
-    if (!parsed) {
-      parsed = parseCitibetFormatBasedPaste(pastedData);
+
+    // Raw tab split only for full Upline/Downline report copies; never for partial Overall blocks.
+    if (pastedPlainTextLooksCitibetReport(pastedData)) {
+      const formatParsed = parseCitibetFormatBasedPaste(pastedData);
+      if (formatParsed) {
+        return { ...formatParsed, usedMajorParser: false };
+      }
     }
-    return parsed ? { ...parsed, usedMajorParser } : null;
+
+    return null;
   }
 
   const parsed = parseCitibetPaymentReport(pastedData);
