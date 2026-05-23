@@ -9,6 +9,14 @@ function captureTypeLabel(opt, t) {
   return opt;
 }
 
+function captureTypeCssKey(opt) {
+  if (opt === "1.Text") return "text";
+  if (opt === "2.Format") return "format";
+  if (opt === "CITIBET") return "citibet";
+  if (opt === "4.RETURN") return "return";
+  return "text";
+}
+
 /**
  * Bottom section: capture type, grid, submit.
  */
@@ -17,27 +25,36 @@ export default function DataCaptureTableSection({
   captureType,
   citibetMode = false,
   formatGridReady = false,
+  tableHasData = false,
   onCaptureTypeChange,
   submitDisabled = true,
   onSubmit,
   onReset,
 }) {
-  const showFormatPasteHint = captureType === "2.Format" && !formatGridReady;
+  const showFormatPasteHint = captureType === "2.Format" && !formatGridReady && tableHasData;
+  const showTypeBadge = tableHasData;
 
   return (
     <div className="bottom-section">
       <div className={`excel-table-container${citibetMode ? " citibet-mode" : ""}`}>
-        <div className="excel-table-header">
-          <span>{t("dataCaptureTable")}</span>
-          {showFormatPasteHint ? (
-            <span className="dc-format-paste-hint" style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>
-              {t("pasteFormattedTableHint")}
-            </span>
-          ) : null}
+        <div className="excel-table-header dc-table-header-bar">
+          <div className="dc-table-header-main">
+            <span className="dc-table-header-title">{t("dataCaptureTable")}</span>
+            {showTypeBadge ? (
+              <span
+                className={`dc-capture-type-badge dc-capture-type-badge--${captureTypeCssKey(captureType)}`}
+                aria-live="polite"
+              >
+                {captureTypeLabel(captureType, t)}
+              </span>
+            ) : (
+              <span className="dc-capture-type-hint">{t("captureTypeAutoDetectHint")}</span>
+            )}
+            {showFormatPasteHint ? (
+              <span className="dc-format-paste-hint">{t("pasteFormattedTableHint")}</span>
+            ) : null}
+          </div>
           <div className="dc-table-header-controls">
-            <span className="dc-capture-type-badge" aria-live="polite">
-              {captureTypeLabel(captureType, t)}
-            </span>
             <select
               id="dataCaptureTypeSelector"
               className="data-capture-type-selector data-capture-type-selector--sr-only"

@@ -8,6 +8,7 @@ import {
 import {
   autoDetectCaptureTypeFromPaste,
   parseCitibetPasteData,
+  pastedPlainTextLooksCitibet,
   pastedPlainTextLooksReturn,
 } from "./dataCapturePasteDetect.js";
 import { buildReturnPasteDataMatrix } from "./dataCaptureApiReturnParsers.js";
@@ -154,9 +155,11 @@ export function handleCellPasteEvent(e) {
   e.preventDefault();
 
   const canParseCitibet = (text) => Boolean(parseCitibetPasteData(text, "CITIBET")?.dataMatrix?.length);
-  const canParseReturn = (text) => Boolean(buildReturnPasteDataMatrix(text)?.dataMatrix?.length);
-  const pastedData = resolvePastePlainTextForStructuredParsers(e, (text) =>
-    canParseCitibet(text) || canParseReturn(text),
+  const canParseReturn = (text) =>
+    pastedPlainTextLooksReturn(text) && Boolean(buildReturnPasteDataMatrix(text)?.dataMatrix?.length);
+  const pastedData = resolvePastePlainTextForStructuredParsers(
+    e,
+    (text) => canParseCitibet(text) || canParseReturn(text),
   );
   const clipboard = e.clipboardData || window.clipboardData;
 
@@ -167,8 +170,12 @@ export function handleCellPasteEvent(e) {
     if (handleCitibetPaste(e, pastedData, cell, "CITIBET", citibetParsed)) return;
   }
 
-  const returnPlain = resolveReturnPastePlainText(e, canParseReturn);
-  if (pastedPlainTextLooksReturn(returnPlain) && canParseReturn(returnPlain)) {
+  const returnPlain = resolveReturnPastePlainText(e, (text) => canParseReturn(text));
+  if (
+    !pastedPlainTextLooksCitibet(returnPlain) &&
+    pastedPlainTextLooksReturn(returnPlain) &&
+    canParseReturn(returnPlain)
+  ) {
     applyCaptureType("4.RETURN");
     if (handle4ReturnPaste(e, returnPlain)) return;
   }
