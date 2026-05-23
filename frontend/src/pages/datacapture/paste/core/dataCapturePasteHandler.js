@@ -6,7 +6,6 @@ import {
 import {
   autoDetectCaptureTypeFromPaste,
   parseCitibetPasteData,
-  shouldExitCitibetMode,
 } from "./dataCapturePasteDetect.js";
 import { handleCitibetPaste } from "../vendors/dataCaptureCitibetPaste.js";
 import { handleTextModePaste } from "./dataCaptureTextPaste.js";
@@ -151,12 +150,8 @@ export function handleCellPasteEvent(e) {
   e.preventDefault();
 
   const pastedData = getClipboardPlainText(e);
-  const detected = autoDetectCaptureTypeFromPaste(pastedData);
-  if (detected) {
-    applyCaptureType(detected);
-  } else if (shouldExitCitibetMode(pastedData, getCaptureType())) {
-    applyCaptureType("1.Text");
-  }
+  const clipboard = e.clipboardData || window.clipboardData;
+  applyCaptureType(autoDetectCaptureTypeFromPaste(pastedData, clipboard));
 
   const captureType = getCaptureType();
 

@@ -35,12 +35,16 @@ export default function DataCaptureTableSection({
             </span>
           ) : null}
           <div className="dc-table-header-controls">
+            <span className="dc-capture-type-badge" aria-live="polite">
+              {captureTypeLabel(captureType, t)}
+            </span>
             <select
               id="dataCaptureTypeSelector"
-              className="data-capture-type-selector"
+              className="data-capture-type-selector data-capture-type-selector--sr-only"
               value={captureType}
               onChange={onCaptureTypeChange}
               aria-label={t("captureFormatAria")}
+              tabIndex={-1}
             >
               {CAPTURE_TYPE_OPTIONS.map((opt) => (
                 <option key={opt} value={opt}>
