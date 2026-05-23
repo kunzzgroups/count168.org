@@ -511,3 +511,114 @@ export function parseApiReturnFormat(pastedData) {
 
     return null;
 }
+
+/** Cells that should never be treated as RETURN formula columns. */
+export function isPlainReturnDataCell(cell) {
+    const c = String(cell ?? "").trim();
+    if (!c || c === "-") return true;
+
+    if (/^\d{2}[/\-]\d{2}[/\-]\d{4}$/.test(c) || /^\d{4}[/\-]\d{2}[/\-]\d{2}$/.test(c)) {
+        return true;
+    }
+
+    const numeric = c.replace(/,/g, "");
+    if (/^-?\d+(?:\.\d+)?$/.test(numeric)) return true;
+
+    // Short IDs such as JDAB5, DT8851 (no colon).
+    if (/^[A-Za-z0-9_-]+$/.test(c) && !c.includes(":")) return true;
+
+    return false;
+}
+
+/** Expand one formula cell — supports multi-line cells (SBOBET : ... / WWBET : ...). */
+export function expandReturnFormulaCell(cell) {
+    const raw = String(cell ?? "").trim();
+    if (!raw || !raw.includes(":")) return null;
+
+    const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const expanded = [];
+
+    for (const line of lines) {
+        if (!line.includes(":")) continue;
+
+        const parsed = parseApiReturnFormat(line);
+        if (parsed?.columns?.length) {
+            expanded.push(...parsed.columns);
+            continue;
+        }
+
+        const colonIdx = line.indexOf(":");
+        const label = line.slice(0, colonIdx).trim();
+        const expr = line.slice(colonIdx + 1).trim();
+        const nums = extractReturnExpressionTokens(expr);
+        if (label) expanded.push(label);
+        if (nums.length) expanded.push(...nums);
+    }
+
+    return expanded.length ? expanded : null;
+}
+
+/** Split every RETURN formula column in a tab row (right-to-left so indices stay valid). */
+export function processReturnRowCells(cells) {
+    if (!Array.isArray(cells)) return cells;
+
+    for (let colIndex = cells.length - 1; colIndex >= 0; colIndex -= 1) {
+        const cell = cells[colIndex] ?? "";
+        if (isPlainReturnDataCell(cell)) continue;
+        if (!isReturnFormulaLikeCell(cell)) continue;
+
+        const expanded = expandReturnFormulaCell(cell);
+        if (!expanded?.length) continue;
+
+        cells.splice(colIndex, 1, ...expanded);
+    }
+
+    return cells;
+}
+
+/** Build a 2D matrix for RETURN paste (expand formulas only for API-style single-line rows). */
+export function buildReturnPasteDataMatrix(pastedData) {
+    if (!pastedData || typeof pastedData !== "string") return null;
+
+    const normalized = pastedData.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const lines = normalized.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+    if (!lines.length) return null;
+
+    const hasTabSeparator = lines.some((line) => line.includes("\t"));
+    const dataMatrix = [];
+    let maxCols = 0;
+
+    for (const line of lines) {
+        let cells;
+
+        if (hasTabSeparator) {
+            if (!line.includes("\t")) {
+                dataMatrix.push([line]);
+                maxCols = Math.max(maxCols, 1);
+                continue;
+            }
+            cells = line.split("\t").map((c) => c.trim());
+        } else {
+            const tableParsed = parseApiReturnTableFormat(line);
+            cells = tableParsed?.columns ?? smartSplitPreservingDates(line);
+        }
+
+        if (!cells?.length) continue;
+
+        processReturnRowCells(cells);
+        dataMatrix.push(cells);
+        maxCols = Math.max(maxCols, cells.length);
+    }
+
+    if (!dataMatrix.length || maxCols === 0) return null;
+
+    dataMatrix.forEach((row) => {
+        while (row.length < maxCols) row.push("");
+    });
+
+    return {
+        dataMatrix,
+        maxRows: dataMatrix.length,
+        maxCols,
+    };
+}

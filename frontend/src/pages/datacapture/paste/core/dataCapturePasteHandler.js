@@ -3,11 +3,14 @@ import {
   isTypingModeCell,
   resolvePasteCell,
   resolvePastePlainTextForStructuredParsers,
+  resolveReturnPastePlainText,
 } from "./dataCaptureClipboard.js";
 import {
   autoDetectCaptureTypeFromPaste,
   parseCitibetPasteData,
+  pastedPlainTextLooksReturn,
 } from "./dataCapturePasteDetect.js";
+import { buildReturnPasteDataMatrix } from "./dataCaptureApiReturnParsers.js";
 import { handleCitibetPaste } from "../vendors/dataCaptureCitibetPaste.js";
 import { handleTextModePaste } from "./dataCaptureTextPaste.js";
 import { handleFormatCellPaste } from "./dataCaptureFormatPasteHandler.js";
@@ -151,7 +154,10 @@ export function handleCellPasteEvent(e) {
   e.preventDefault();
 
   const canParseCitibet = (text) => Boolean(parseCitibetPasteData(text, "CITIBET")?.dataMatrix?.length);
-  const pastedData = resolvePastePlainTextForStructuredParsers(e, canParseCitibet);
+  const canParseReturn = (text) => Boolean(buildReturnPasteDataMatrix(text)?.dataMatrix?.length);
+  const pastedData = resolvePastePlainTextForStructuredParsers(e, (text) =>
+    canParseCitibet(text) || canParseReturn(text),
+  );
   const clipboard = e.clipboardData || window.clipboardData;
 
   // Structured CITIBET layout must win over raw Text/Format paste (same as manual 3.CITIBET).
@@ -159,6 +165,12 @@ export function handleCellPasteEvent(e) {
   if (citibetParsed?.dataMatrix?.length) {
     applyCaptureType("CITIBET");
     if (handleCitibetPaste(e, pastedData, cell, "CITIBET", citibetParsed)) return;
+  }
+
+  const returnPlain = resolveReturnPastePlainText(e, canParseReturn);
+  if (pastedPlainTextLooksReturn(returnPlain) && canParseReturn(returnPlain)) {
+    applyCaptureType("4.RETURN");
+    if (handle4ReturnPaste(e, returnPlain)) return;
   }
 
   applyCaptureType(autoDetectCaptureTypeFromPaste(pastedData, clipboard));

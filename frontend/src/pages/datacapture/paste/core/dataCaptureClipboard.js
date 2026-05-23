@@ -136,18 +136,29 @@ export function htmlTableToTabPlainText(html) {
   const table = temp.querySelector("table");
   if (!table) return "";
 
+  const cellPlainText = (cell) => {
+    const inner = cell.innerHTML || "";
+    if (/<br\b/i.test(inner)) {
+      return inner
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .trim();
+    }
+    return (cell.textContent || "").trim();
+  };
+
   const lines = [];
   table.querySelectorAll("tr").forEach((tr) => {
     const cells = tr.querySelectorAll("td, th");
     if (!cells.length) return;
-    lines.push(Array.from(cells).map((cell) => (cell.textContent || "").trim()).join("\t"));
+    lines.push(Array.from(cells).map(cellPlainText).join("\t"));
   });
 
   return lines.join("\n");
 }
 
 /**
- * Prefer plain text; when CITIBET only parses from HTML table rows, use that TSV instead.
+ * Prefer plain text; when RETURN/CITIBET only parses from HTML table rows, use that TSV instead.
  */
 export function resolvePastePlainTextForStructuredParsers(e, canParse) {
   const plain = getClipboardPlainText(e);
@@ -160,4 +171,8 @@ export function resolvePastePlainTextForStructuredParsers(e, canParse) {
   }
 
   return plain;
+}
+
+export function resolveReturnPastePlainText(e, canParseReturn) {
+  return resolvePastePlainTextForStructuredParsers(e, canParseReturn);
 }
