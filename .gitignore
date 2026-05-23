@@ -1,4 +1,5 @@
 config.local.php
+secret_config.php
 node_modules/
 frontend/node_modules/
 .env
