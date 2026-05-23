@@ -50,83 +50,21 @@ export function copySelectedCells() {
   });
 }
 
-function resolvePasteAnchorCell() {
-  const selected = getSelectedCells()[0];
-  if (selected?.contentEditable === "true" && selected.closest("#dataTable")) {
-    return selected;
-  }
-
-  const active = document.activeElement;
-  if (
-    active?.contentEditable === "true" &&
-    active.closest("#dataTable")
-  ) {
-    return active;
-  }
-
-  const tableBody = document.getElementById("tableBody");
-  const firstRow = tableBody?.children[0];
-  return firstRow?.children[1] ?? null;
-}
-
-async function readClipboardForPaste() {
-  if (navigator.clipboard?.read) {
-    try {
-      const items = await navigator.clipboard.read();
-      let text = "";
-      let html = "";
-      for (const item of items) {
-        if (item.types.includes("text/plain")) {
-          text = await (await item.getType("text/plain")).text();
-        }
-        if (item.types.includes("text/html")) {
-          html = await (await item.getType("text/html")).text();
-        }
-      }
-      return { text, html };
-    } catch {
-      /* fall through to readText */
-    }
-  }
-
-  const text = await navigator.clipboard.readText();
-  return { text, html: "" };
-}
-
 export function pasteToSelectedCells() {
-  const anchorCell = resolvePasteAnchorCell();
-  if (!anchorCell) return;
+  const firstCell = getSelectedCells()[0];
+  if (!firstCell) return;
 
-  if (getSelectedCellCount() === 0) {
-    window.__DC_SET_TABLE_ACTIVE__?.(true);
-    window.__DC_SET_ACTIVE_CELL_WITHOUT_FOCUS__?.(anchorCell);
-    registerSelectedCell(anchorCell);
-    anchorCell.classList.add("multi-selected");
-  }
-
-  readClipboardForPaste()
-    .then(({ text, html }) => {
-      const mockEvent = {
-        preventDefault() {},
-        stopPropagation() {},
-        clipboardData: {
-          types: html ? ["text/plain", "text/html"] : ["text/plain"],
-          getData(type) {
-            if (type === "text/html") return html;
-            if (type === "text/plain" || type === "text" || type === "Text") {
-              return text;
-            }
-            return "";
-          },
-        },
-        target: anchorCell,
-      };
-      window.__DC_HANDLE_CELL_PASTE__?.(mockEvent);
-    })
-    .catch((err) => {
-      console.error("Failed to read from clipboard:", err);
-      window.showNotification?.("Failed to access clipboard", "danger");
-    });
+  navigator.clipboard.readText().then((text) => {
+    const mockEvent = {
+      preventDefault() {},
+      clipboardData: { getData: () => text },
+      target: firstCell,
+    };
+    window.__DC_HANDLE_CELL_PASTE__?.(mockEvent);
+  }).catch((err) => {
+    console.error("Failed to read from clipboard:", err);
+    window.showNotification?.("Failed to access clipboard", "danger");
+  });
 
   hideContextMenu();
 }

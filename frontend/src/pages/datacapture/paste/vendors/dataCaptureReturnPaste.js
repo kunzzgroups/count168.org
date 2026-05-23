@@ -1,88 +1,14 @@
 /** API_RETURN & 4.RETURN paste. */
 import {
-  buildReturnPasteDataMatrix,
   extractReturnExpressionTokens,
   isReturnFormulaLikeCell,
   parseApiReturnFormat,
   parseApiReturnTableFormat,
-  processReturnRowCells,
   smartSplitPreservingDates,
 } from "../core/dataCaptureApiReturnParsers.js";
-import { getClipboardHtml, htmlTableToTabPlainText } from "../core/dataCaptureClipboard.js";
 
 
 import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
-
-function applyReturnMatrixToGrid(e, { dataMatrix, maxCols }) {
-  const startCell = e.target;
-  const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-  const startCol = 0;
-
-  const currentRows = document.querySelectorAll("#tableBody tr").length;
-  const currentCols = document.querySelectorAll("#tableHeader th").length - 1;
-  const requiredRows = startRow + dataMatrix.length;
-  const requiredCols = startCol + maxCols;
-
-  if (requiredRows > currentRows || requiredCols > currentCols) {
-    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-    const targetCols = Math.max(currentCols, requiredCols);
-    ensurePasteGrid(targetRows, targetCols);
-  }
-
-  const tableBody = document.getElementById("tableBody");
-  const currentPasteChanges = [];
-  let successCount = 0;
-
-  dataMatrix.forEach((rowData, rowIndex) => {
-    const actualRowIndex = startRow + rowIndex;
-    const tableRow = tableBody.children[actualRowIndex];
-    if (!tableRow) return;
-
-    rowData.forEach((cellData, colIndex) => {
-      const actualColIndex = startCol + colIndex;
-      const cell = tableRow.children[actualColIndex + 1];
-      if (!cell || cell.contentEditable !== "true") return;
-
-      const trimmedData = (cellData || "").trim();
-      currentPasteChanges.push({
-        row: actualRowIndex,
-        col: actualColIndex,
-        oldValue: cell.textContent,
-        newValue: trimmedData,
-      });
-
-      cell.textContent = trimmedData;
-      if (trimmedData) successCount += 1;
-    });
-  });
-
-  window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
-  if (successCount > 0) {
-    window.showNotification?.(
-      `成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)! 按 Ctrl+Z 可撤销`,
-      "success",
-    );
-    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
-    return true;
-  }
-
-  return false;
-}
-
-function resolveReturnPasteData(e, pastedData) {
-  if (pastedData?.includes("\t")) return pastedData;
-
-  try {
-    const html = getClipboardHtml(e);
-    const fromHtml = htmlTableToTabPlainText(html);
-    if (fromHtml?.includes("\t")) return fromHtml;
-  } catch {
-    /* ignore */
-  }
-
-  return pastedData;
-}
 
 /** @returns {boolean} */
 export function handleApiReturnPaste(e, pastedData) {
@@ -503,22 +429,84 @@ export function handleApiReturnPaste(e, pastedData) {
 /** @returns {boolean} */
 export function handle4ReturnPaste(e, pastedData) {
         console.log('4.RETURN format detected, processing paste data...');
-
-        const resolvedData = resolveReturnPasteData(e, pastedData);
-        const built = buildReturnPasteDataMatrix(resolvedData);
-        if (built?.dataMatrix?.length) {
-            console.log('4.RETURN: Applied structured matrix parser');
-            return applyReturnMatrixToGrid(e, built);
-        }
-
-        console.log('4.RETURN: Structured parser fallback, sample:', String(pastedData).substring(0, 500));
+        console.log('Pasted data sample (first 500 chars):', pastedData.substring(0, 500));
 
         // 4.RETURN 专用：提取公式中的 token（见 extractReturnExpressionTokens）
         const extractReturnTokens = extractReturnExpressionTokens;
 
         // 4.RETURN：一行内已由 Tab 分列后的单元格数组（就地修改）：去尾冒号、按需展开公式列
-        function processReturnRowTabCells(cells) {
-            processReturnRowCells(cells);
+        function processReturnRowTabCells(cells, lineNo) {
+            const lineTag = `Line ${lineNo}`;
+            for (let colIndex = 0; colIndex < cells.length; colIndex++) {
+                if (cells[colIndex] && cells[colIndex].endsWith(':') && !cells[colIndex].includes('(')) {
+                    cells[colIndex] = cells[colIndex].slice(0, -1);
+                }
+            }
+            for (let colIndex = 0; colIndex < cells.length; colIndex++) {
+                const cell = cells[colIndex] || '';
+                const isDate = /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(cell) ||
+                    /^\d{4}[-/]\d{2}[-/]\d{2}$/.test(cell);
+                if (isDate) {
+                    continue;
+                }
+
+                const hasFormula = isReturnFormulaLikeCell(cell);
+
+                if (hasFormula) {
+                    console.log(`4.RETURN: ${lineTag}, Column ${colIndex} contains formula:`, cell);
+                    let parsedFormula = null;
+
+                    if (cell.includes(':')) {
+                        console.log(`4.RETURN: ${lineTag}, Column ${colIndex} has colon, calling parseApiReturnFormat...`);
+                        parsedFormula = parseApiReturnFormat(cell);
+                        console.log('4.RETURN: parseApiReturnFormat result:', parsedFormula);
+                    } else {
+                        console.log(`4.RETURN: ${lineTag}, Column ${colIndex} no colon, extracting numbers directly...`);
+                        const numbers = extractReturnTokens(cell);
+                        if (numbers.length > 0) parsedFormula = { columns: numbers };
+                    }
+
+                    if (parsedFormula && parsedFormula.columns && parsedFormula.columns.length > 0) {
+                        console.log(`4.RETURN: ${lineTag}, Column ${colIndex} formula parsed successfully:`, parsedFormula.columns);
+                        const parsedColumns = parsedFormula.columns;
+
+                        let label = '';
+                        let numbersToInsert = [];
+
+                        if (parsedColumns.length > 0) {
+                            const firstElement = parsedColumns[0];
+                            if (firstElement && !/^-?\d+\.?\d*$/.test(firstElement)) {
+                                label = firstElement.replace(':', '');
+                                numbersToInsert = parsedColumns.slice(1);
+                                console.log(`4.RETURN: ${lineTag}, Column ${colIndex} has label:`, label, 'numbers:', numbersToInsert);
+                            } else {
+                                numbersToInsert = parsedColumns;
+                                console.log(`4.RETURN: ${lineTag}, Column ${colIndex} no label, numbers:`, numbersToInsert);
+                            }
+                        }
+
+                        if (label) {
+                            cells[colIndex] = label;
+                        } else {
+                            cells[colIndex] = '';
+                        }
+
+                        if (numbersToInsert.length > 0) {
+                            console.log(`4.RETURN: ${lineTag}, Inserting ${numbersToInsert.length} numbers after column ${colIndex}`);
+                            if (!label) {
+                                cells.splice(colIndex, 1, ...numbersToInsert);
+                            } else {
+                                cells.splice(colIndex + 1, 0, ...numbersToInsert);
+                            }
+                            console.log(`4.RETURN: ${lineTag}, After insertion, cells:`, cells);
+                        }
+
+                        break;
+                    } else {
+                        console.log(`4.RETURN: ${lineTag}, Column ${colIndex} formula parsing failed or returned empty`);
+                    }
+                }
+            }
         }
 
         // 检查是否是多行数据
@@ -544,7 +532,7 @@ export function handle4ReturnPaste(e, pastedData) {
                         const cells = line.split('\t').map(c => c.trim());
                         console.log(`4.RETURN: Line ${i + 1} split into ${cells.length} columns`);
 
-                        processReturnRowTabCells(cells);
+                        processReturnRowTabCells(cells, i + 1);
 
                         dataMatrix.push(cells);
                         maxCols = Math.max(maxCols, cells.length);
@@ -759,7 +747,7 @@ export function handle4ReturnPaste(e, pastedData) {
             if (singleNormalized.includes('\t')) {
                 const cells = singleNormalized.split('\t').map(c => c.trim());
                 console.log('4.RETURN: Single-line tab split into', cells.length, 'columns');
-                processReturnRowTabCells(cells);
+                processReturnRowTabCells(cells, 1);
                 apiReturnParsed = {
                     columns: cells,
                     columnCount: cells.length
@@ -787,7 +775,7 @@ export function handle4ReturnPaste(e, pastedData) {
                             }
                         }
 
-                        processReturnRowTabCells(columns);
+                        processReturnRowTabCells(columns, 1);
 
                         if (columns.length > 0) {
                             apiReturnParsed = {

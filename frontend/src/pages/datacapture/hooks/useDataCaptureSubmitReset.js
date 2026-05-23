@@ -5,7 +5,7 @@ import {
   shouldRestoreFromUrl,
   stripRestoreParamFromUrl,
 } from "../lib/dataCaptureStorage.js";
-import { captureTableDataFromDom, tableSnapshotHasData } from "../lib/dataCaptureTableSnapshot.js";
+import { captureTableDataFromDom } from "../lib/dataCaptureTableSnapshot.js";
 import {
   getActiveDescriptions,
   isSubmitReady,
@@ -49,14 +49,12 @@ export function useDataCaptureSubmitReset({
   t,
 }) {
   const [submitDisabled, setSubmitDisabled] = useState(true);
-  const [tableHasData, setTableHasData] = useState(false);
   const restoreInFlightRef = useRef(false);
   const captureTypeRef = useRef(captureType);
   captureTypeRef.current = captureType;
 
   const recomputeSubmitState = useCallback(() => {
     const tableData = captureTableDataFromDom(captureType);
-    setTableHasData(tableSnapshotHasData(tableData));
     const ready = isSubmitReady({
       selectedProcess: form.selectedProcess,
       descriptions: window.selectedDescriptions || [],
@@ -258,7 +256,6 @@ export function useDataCaptureSubmitReset({
 
   return {
     submitDisabled,
-    tableHasData,
     submit,
     reset,
     restoreFromStorage,

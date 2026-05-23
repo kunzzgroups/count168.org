@@ -7,7 +7,6 @@ import {
   formatBankProcessContractLabel,
   bankProcessContractBadgeKey,
   formatBankMoneyFixed2,
-  formatBankWithTypeDisplay,
   isValidBankMoneyInput,
 } from "../lib/bankProcessHelpers.js";
 import BankProcessStatusControl from "./BankProcessStatusControl.jsx";
@@ -104,8 +103,39 @@ export default function BankProcessTable({
 
   const bankColClass = (key) => `bank-col bank-col-${key}`;
 
+  /** <1600px：名称类最多两行（Bank 用 bank-cell-display 固定两行，不在此列） */
+  const bankNameWrapKeys = new Set(["supplier", "owner"]);
+  /** <1600px：金额/日期/短码强制单行 */
+  const bankSingleLineKeys = new Set([
+    "no",
+    "ccy",
+    "contract",
+    "insurance",
+    "customer",
+    "cost",
+    "price",
+    "profit",
+    "date",
+  ]);
+
   const cellClass = (key, extra = "") =>
-    `card-item bank-virtual-cell ${bankColClass(key)}${extra ? ` ${extra}` : ""}`;
+    `card-item bank-virtual-cell ${bankColClass(key)}${
+      bankNameWrapKeys.has(key) ? " bank-virtual-cell--wrap" : ""
+    }${bankSingleLineKeys.has(key) ? " bank-virtual-cell--single-line" : ""}${extra ? ` ${extra}` : ""}`;
+
+  const renderBankCell = (bank, type) => {
+    const b = String(bank ?? "").trim();
+    const t = String(type ?? "").trim();
+    if (!b && !t) return "-";
+    if (!b) return t ? `(${t})` : "-";
+    if (!t) return b;
+    return (
+      <span className="bank-cell-display bank-cell-display--typed">
+        <span className="bank-cell-display__name">{b}</span>
+        <span className="bank-cell-display__type">({t})</span>
+      </span>
+    );
+  };
 
   const bankHeaderDefs = [
     { key: "no", labelText: t("no"), sortable: true },
@@ -143,25 +173,39 @@ export default function BankProcessTable({
     });
   }
 
-  const renderSortableHeader = (h) => (
-    <div
-      key={h.key}
-      className={`header-item bank-header bank-virtual-th header-item--with-sort-icon header-sortable ${bankColClass(h.key)}`}
-      role="columnheader"
-      onClick={() => onSort(h.key)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onSort(h.key);
-        }
-      }}
-    >
-      <span className="header-item__label bank-virtual-th__label">{h.labelText}</span>
-      <BankSortIcon column={h.key} sortColumn={sortColumn} sortDirection={sortDirection} />
-    </div>
-  );
+  const renderSortableHeader = (h) => {
+    const isActive = sortColumn === h.key;
+    const ariaSort = !isActive ? "none" : sortDirection === "asc" ? "ascending" : "descending";
+    const sortHint = isActive
+      ? sortDirection === "asc"
+        ? " (↑)"
+        : " (↓)"
+      : " (↕)";
+
+    return (
+      <div
+        key={h.key}
+        className={`header-item bank-header bank-virtual-th header-item--with-sort-icon header-sortable ${bankColClass(h.key)}`}
+        role="columnheader"
+        aria-sort={ariaSort}
+        title={`${h.labelText}${sortHint}`}
+        onClick={() => onSort(h.key)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSort(h.key);
+          }
+        }}
+      >
+        <span className="header-item__label bank-virtual-th__label">{h.labelText}</span>
+        <BankSortIcon column={h.key} sortColumn={sortColumn} sortDirection={sortDirection} />
+      </div>
+    );
+  };
 
   const tableShellClass = `bank-virtual-table${showSelectColumn ? " bank-virtual-table--select-col" : ""}`;
+  /** Last N visible rows: status menu opens upward to avoid pagination/footer overlap. */
+  const STATUS_MENU_UP_LAST_ROWS = 3;
 
   return (
     <div
@@ -221,7 +265,7 @@ export default function BankProcessTable({
                   <div className={cellClass("no")}>{(showAll ? i : (currentPage - 1) * PAGE_SIZE + i) + 1}</div>
                   <div className={cellClass("supplier")}>{r.card_lower || "-"}</div>
                   <div className={cellClass("ccy")}>{r.country || "-"}</div>
-                  <div className={cellClass("bank")}>{formatBankWithTypeDisplay(r.bank, r.type)}</div>
+                  <div className={cellClass("bank")}>{renderBankCell(r.bank, r.type)}</div>
                   <div className={cellClass("owner")}>{r.supplier || "-"}</div>
                   <div className={cellClass("contract", "bank-contract-cell")}>
                     {renderBankContract(r.contract, r.day_start || r.date, r.day_end, lang)}
@@ -234,6 +278,7 @@ export default function BankProcessTable({
                   <div className={cellClass("status", "bank-status-cell")}>
                     <BankProcessStatusControl
                       row={r}
+                      openMenuUp={pageRows.length > 0 && i >= pageRows.length - STATUS_MENU_UP_LAST_ROWS}
                       lang={lang}
                       notify={notify}
                       buildApiUrl={buildApiUrl}
