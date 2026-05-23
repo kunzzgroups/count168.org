@@ -7,9 +7,9 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../includes/c168_domain_access.php';
-require_once __DIR__ . '/../../includes/deleted_log.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../c168/c168_domain_access.php';
+require_once __DIR__ . '/../deleted_log/deleted_log.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {

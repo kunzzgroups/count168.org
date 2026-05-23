@@ -1,7 +1,8 @@
 <?php
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../api_response.php';
 
 header('Content-Type: application/json');
@@ -57,6 +58,10 @@ try {
     $id = (int)($_POST['id'] ?? 0);
     if ($id <= 0) {
         api_error('无效的流程ID', 400);
+        exit;
+    }
+    if (is_partnership_audit_read_only_active($pdo)) {
+        api_error('只读账号无法执行此操作', 403);
         exit;
     }
     $permission = trim($_POST['permission'] ?? '');

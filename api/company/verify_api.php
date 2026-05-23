@@ -7,7 +7,7 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -21,7 +21,7 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
 }
 
 function getCompanyByCode(PDO $pdo, $company_id) {
-    $stmt = $pdo->prepare("SELECT id, company_name FROM company WHERE UPPER(company_id) = UPPER(?) OR UPPER(group_id) = UPPER(?) LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, name FROM company WHERE UPPER(company_id) = UPPER(?) OR UPPER(group_id) = UPPER(?) LIMIT 1");
     $stmt->execute([$company_id, $company_id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
@@ -45,7 +45,7 @@ try {
 
     $company = getCompanyByCode($pdo, $company_id);
     if ($company) {
-        jsonResponse(true, '公司ID有效', ['company_name' => $company['company_name']]);
+        jsonResponse(true, '公司ID有效', ['company_name' => $company['name'] ?? '']);
     } else {
         jsonResponse(false, '公司ID不存在', null, 404);
     }

@@ -7,7 +7,7 @@
 // 此 API 需要写入 session（切换公司），不能让 session_check.php 提前关闭锁
 define('SESSION_KEEP_OPEN', true);
 
-require_once __DIR__ . '/../../session_check.php';
+require_once __DIR__ . '/../../includes/session_check.php';
 
 header('Content-Type: application/json');
 

@@ -1,0 +1,782 @@
+import React from "react";
+import { createPortal } from "react-dom";
+import AccountModal from "../../components/AccountModal.jsx";
+import { accountModalOverlayZIndex, processNotificationAboveAccountZIndex, processNotificationZIndex } from "../../components/ProcessModalPortal.jsx";
+import "../../../public/css/processCSS.css";
+import "../../../public/css/processlist.css";
+import "../../../public/css/accountCSS.css";
+import "../../../public/css/account-list.css";
+import "../../../public/css/userlist.css";
+import "../../../public/css/date-range-picker.css";
+import ProcessDeleteConfirmModal from "../processlist/components/ProcessDeleteConfirmModal.jsx";
+import AddProcessIcon from "../processlist/components/AddProcessIcon.jsx";
+import BankProcessTable from "./components/BankProcessTable.jsx";
+import BankProcessFormModal from "./components/BankProcessFormModal.jsx";
+import CountrySelectionModal from "./components/CountrySelectionModal.jsx";
+import BankSelectionModal from "./components/BankSelectionModal.jsx";
+import ProfitSharingModal from "./components/ProfitSharingModal.jsx";
+import { BankNoteModal, BankRemarkModal } from "./components/bankProcessTextModals.jsx";
+import AccountingDueModal from "./components/AccountingDueModal.jsx";
+import ResendModal from "./components/ResendModal.jsx";
+import PageContentLoader from "../../components/PageContentLoader.jsx";
+import { bankProcessFrequencyNormalized } from "./lib/bankProcessHelpers.js";
+import { useBankProcessListPage } from "./hooks/useBankProcessListPage.js";
+
+export default function BankProcessListPage() {
+  const {
+    navigate,
+    location,
+    resolveLang,
+    lang,
+    setLang,
+    bpLocale,
+    t,
+    apiMsg,
+    tAccount,
+    handleDatePickerChange,
+    cssReady,
+    loading,
+    setLoading,
+    tableLoading,
+    setTableLoading,
+    companies,
+    setCompanies,
+    companyId,
+    setCompanyId,
+    groupFilterKind,
+    setGroupFilterKind,
+    switchingCompany,
+    setSwitchingCompany,
+    rows,
+    setRows,
+    currentPage,
+    setCurrentPage,
+    selectedIds,
+    setSelectedIds,
+    search,
+    setSearch,
+    showAll,
+    setShowAll,
+    showInactive,
+    setShowInactive,
+    showOfficial,
+    setShowOfficial,
+    showEInvoice,
+    setShowEInvoice,
+    showBlock,
+    setShowBlock,
+    deleteConfirmOpen,
+    setDeleteConfirmOpen,
+    deleteSubmitting,
+    setDeleteSubmitting,
+    dateFrom,
+    setDateFrom,
+    dateTo,
+    setDateTo,
+    toast,
+    setToast,
+    accounts,
+    setAccounts,
+    modalOpen,
+    setModalOpen,
+    editMode,
+    setEditMode,
+    form,
+    setForm,
+    accountingOpen,
+    setAccountingOpen,
+    accountingRows,
+    setAccountingRows,
+    accountingLoading,
+    setAccountingLoading,
+    accountingSelected,
+    setAccountingSelected,
+    accountingDeleteSelected,
+    setAccountingDeleteSelected,
+    resendModalOpen,
+    setResendModalOpen,
+    resendTarget,
+    setResendTarget,
+    resendDayStart,
+    setResendDayStart,
+    resendDayEnd,
+    setResendDayEnd,
+    resendFrequency,
+    setResendFrequency,
+    resendInlineError,
+    setResendInlineError,
+    sortColumn,
+    sortDirection,
+    remarkModalOpen,
+    setRemarkModalOpen,
+    remarkDraft,
+    setRemarkDraft,
+    remarkRow,
+    setRemarkRow,
+    countriesList,
+    setCountriesList,
+    banksList,
+    setBanksList,
+    countryModalOpen,
+    setCountryModalOpen,
+    bankModalOpen,
+    setBankModalOpen,
+    countrySearch,
+    setCountrySearch,
+    bankSearch,
+    setBankSearch,
+    newCountryName,
+    setNewCountryName,
+    newBankName,
+    setNewBankName,
+    selectedCountryChips,
+    setSelectedCountryChips,
+    selectedBankChips,
+    setSelectedBankChips,
+    selectedBanksByCountry,
+    setSelectedBanksByCountry,
+    profitShareModalOpen,
+    setProfitShareModalOpen,
+    profitShareRows,
+    setProfitShareRows,
+    bankFormNote,
+    setBankFormNote,
+    addAccountModalOpen,
+    setAddAccountModalOpen,
+    accountPlusTarget,
+    setAccountPlusTarget,
+    accountModalIsEditMode,
+    setAccountModalIsEditMode,
+    rolesList,
+    setRolesList,
+    accountModalCurrencies,
+    setAccountModalCurrencies,
+    accountModalForm,
+    setAccountModalForm,
+    accountModalSelectedCurrencyIds,
+    setAccountModalSelectedCurrencyIds,
+    accountModalSelectedCompanyIds,
+    setAccountModalSelectedCompanyIds,
+    accountModalInitialCurrencyIds,
+    setAccountModalInitialCurrencyIds,
+    accountModalCurrencyInput,
+    setAccountModalCurrencyInput,
+    currencyListOrdered,
+    setCurrencyListOrdered,
+    currencyFilterCode,
+    setCurrencyFilterCode,
+    currencyPillDisplayOrder,
+    setCurrencyPillDisplayOrder,
+    skipNextCurrencyPillClickRef,
+    toastTimerRef,
+    listAbortRef,
+    skipNextBankFetchRef,
+    bankDatePickerInitRef,
+    contractSyncKeysRef,
+    seedContractSyncKeys,
+    notify,
+    accountModalOrderedRoles,
+    getAccountIdForPlusTarget,
+    loadAccountModalSelectionMeta,
+    resetAccountModalToAdd,
+    closeAccountModal,
+    fetchAccountDetailJson,
+    createAccountModalCurrency,
+    removeAccountModalCurrency,
+    submitAccountModal,
+    loadCurrencyMeta,
+    syncUrl,
+    fetchRows,
+    loadAccountingInbox,
+    resetForm,
+    onSwitchCompany,
+    openAdd,
+    persistSelectedCountries,
+    persistSelectedBanksByCountry,
+    submitNewCountry,
+    submitNewBank,
+    removeAvailableCountry,
+    removeAvailableBank,
+    openProfitShareModal,
+    confirmProfitShareModal,
+    handleAccountModalSuccess,
+    openAddAccountForField,
+    openEdit,
+    submitForm,
+    postAccountingToTransaction,
+    dismissAccountingRows,
+    saveRemarkModal,
+    resendAccountingDue,
+    deleteSelected,
+    confirmDeleteProcesses,
+    allCompanyButtons,
+    groupIds,
+    selectedCompany,
+    selectedGroupKey,
+    companyButtons,
+    handlePickGroup,
+    handlePickAllGroups,
+    sortedRows,
+    handleBankTableSort,
+    rowCountryCodes,
+    baseCurrencyPills,
+    currencyPillCodes,
+    persistOrderedCompanyCurrencies,
+    onCurrencyPillDrop,
+    visibleRows,
+    totalPages,
+    pageRows,
+    PAGE_SIZE,
+  } = useBankProcessListPage();
+
+
+  if (loading || !cssReady) return <PageContentLoader />;
+
+  return (
+    <div className="container">
+      <div className="content">
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", marginBottom: 0, flexWrap: "wrap", gap: 12 }}>
+          <div className="bank-process-header-left">
+            <h1 className="page-title">{t("bankProcessList")}</h1>
+            <AccountingDueModal
+              isOpen={accountingOpen}
+              setOpen={setAccountingOpen}
+              accountingRows={accountingRows}
+              accountingLoading={accountingLoading}
+              accountingSelected={accountingSelected}
+              setAccountingSelected={setAccountingSelected}
+              accountingDeleteSelected={accountingDeleteSelected}
+              setAccountingDeleteSelected={setAccountingDeleteSelected}
+              onPostToTransaction={postAccountingToTransaction}
+              onDismissRows={dismissAccountingRows}
+              loadAccountingInbox={loadAccountingInbox}
+              lang={lang}
+              t={t}
+            />
+          </div>
+        </div>
+        <div className="action-buttons-container">
+          <div className="action-buttons">
+            <div className="bank-process-toolbar-main">
+              <div className="bank-process-toolbar-top-row">
+                <div className="action-controls-row bank-process-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div className="process-list-date-filter transaction-date-range-group" id="processListDateFilter" style={{ display: "inline-flex" }}>
+                    <div
+                      className="date-range-picker"
+                      id="date-range-picker"
+                      role="button"
+                      tabIndex={0}
+                      data-drp-hide-presets="true"
+                      aria-label={t("selectDateRange")}
+                    >
+                      <i className="fas fa-calendar-alt" aria-hidden="true" />
+                      {/* Text is driven by MaintenanceDateRangePicker (must not set React children or they overwrite picker + stale i18n). */}
+                      <span id="date-range-display" aria-live="polite" />
+                      <button type="button" className="process-list-date-clear" id="processListDateClearBtn" title={t("clearDateRange")} aria-label={t("clearDateRange")} style={{ display: "none" }}>&times;</button>
+                      <i className="fas fa-chevron-down transaction-date-range-chevron" aria-hidden="true" />
+                    </div>
+                    <input type="hidden" id="date_from" defaultValue="" />
+                    <input type="hidden" id="date_to" defaultValue="" />
+                  </div>
+                  <div className="search-container userlist-search-bar">
+                    <span className="userlist-search-bar__icon" aria-hidden="true">
+                      <svg fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                      </svg>
+                    </span>
+                    <input
+                      type="text"
+                      className="search-input userlist-search-input"
+                      placeholder={t("search")}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="user-toolbar-actions-right" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                  <button type="button" className="btn btn-delete" id="processDeleteSelectedBtn" disabled={!selectedIds.size} title={t("delete")} onClick={deleteSelected}>{t("delete")}</button>
+                  <button type="button" className="btn btn-add" onClick={openAdd}>
+                    <AddProcessIcon />
+                    {t("addProcess")}
+                  </button>
+                </div>
+              </div>
+              <div className="userlist-filter-chips userlist-filter-chips--bank-process" role="group">
+                <button
+                  type="button"
+                  className={`user-filter-chip${showInactive && !showAll ? " is-selected" : ""}`}
+                  aria-pressed={showInactive && !showAll}
+                  onClick={() => {
+                    if (showInactive && !showAll) setShowInactive(false);
+                    else {
+                      setShowInactive(true);
+                      setShowAll(false);
+                    }
+                  }}
+                >
+                  <span className="user-filter-chip__dot" aria-hidden>
+                    {showInactive && !showAll ? (
+                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 12l4 4 8-8" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="user-filter-chip__label">{t("showInactive")}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`user-filter-chip${showAll ? " is-selected" : ""}`}
+                  aria-pressed={showAll}
+                  onClick={() => {
+                    if (showAll) setShowAll(false);
+                    else {
+                      setShowAll(true);
+                      setShowInactive(false);
+                      setShowOfficial(false);
+                      setShowEInvoice(false);
+                      setShowBlock(false);
+                    }
+                  }}
+                >
+                  <span className="user-filter-chip__dot" aria-hidden>
+                    {showAll ? (
+                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 12l4 4 8-8" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="user-filter-chip__label">{t("showAll")}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`user-filter-chip${showOfficial ? " is-selected" : ""}`}
+                  aria-pressed={showOfficial}
+                  onClick={() => {
+                    if (showOfficial) setShowOfficial(false);
+                    else {
+                      setShowOfficial(true);
+                      setShowAll(false);
+                    }
+                  }}
+                >
+                  <span className="user-filter-chip__dot" aria-hidden>
+                    {showOfficial ? (
+                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 12l4 4 8-8" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="user-filter-chip__label">{t("showOfficial")}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`user-filter-chip${showEInvoice ? " is-selected" : ""}`}
+                  aria-pressed={showEInvoice}
+                  onClick={() => {
+                    if (showEInvoice) setShowEInvoice(false);
+                    else {
+                      setShowEInvoice(true);
+                      setShowAll(false);
+                    }
+                  }}
+                >
+                  <span className="user-filter-chip__dot" aria-hidden>
+                    {showEInvoice ? (
+                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 12l4 4 8-8" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="user-filter-chip__label">{t("showEInvoice")}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`user-filter-chip${showBlock ? " is-selected" : ""}`}
+                  aria-pressed={showBlock}
+                  onClick={() => {
+                    if (showBlock) setShowBlock(false);
+                    else {
+                      setShowBlock(true);
+                      setShowAll(false);
+                    }
+                  }}
+                >
+                  <span className="user-filter-chip__dot" aria-hidden>
+                    {showBlock ? (
+                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 12l4 4 8-8" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="user-filter-chip__label">{t("showBlock")}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="user-gc-inline-panel">
+            {groupIds.length > 0 && (
+              <div className="user-gc-inline-row">
+                <span className="user-gc-inline-label">{t("groupId")}</span>
+                <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
+                  <div className="user-gc-segment-group" role="group" aria-label={t("groupId")}>
+                    <button
+                      type="button"
+                      className={`user-gc-segment${groupFilterKind === "all" ? " is-on" : ""}`}
+                      onClick={handlePickAllGroups}
+                    >
+                      {t("groupFilterAll")}
+                    </button>
+                    {groupIds.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        className={`user-gc-segment${groupFilterKind === "follow" && g === selectedGroupKey ? " is-on" : ""}`}
+                        onClick={() => handlePickGroup(g)}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div className="user-gc-inline-row">
+              <span className="user-gc-inline-label">{t("company")}</span>
+              <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
+                <div className="user-gc-segment-group" role="group" aria-label={t("company")}>
+                  {companyButtons.map((c) => {
+                    const active = Number(c.id) === Number(companyId);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        className={`user-gc-segment${active ? " is-on" : ""}`}
+                        onClick={() => {
+                          if (switchingCompany) return;
+                          if (!active) void onSwitchCompany(c);
+                        }}
+                      >
+                        {String(c.company_id || "").toUpperCase()}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            {currencyPillCodes.length > 0 && (
+              <div className="user-gc-inline-row">
+                <span className="user-gc-inline-label">{t("currency")}</span>
+                <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
+                  <div className="user-gc-segment-group" role="group" aria-label={t("currency")}>
+                    <button
+                      type="button"
+                      className={`user-gc-segment${!currencyFilterCode ? " is-on" : ""}`}
+                      onClick={() => setCurrencyFilterCode("")}
+                    >
+                      {t("groupFilterAll")}
+                    </button>
+                    {currencyPillCodes.map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        draggable
+                        title={t("currencyDragHint")}
+                        className={`user-gc-segment user-gc-segment--draggable-pill${currencyFilterCode === code ? " is-on" : ""}`}
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData("text/plain", code);
+                          e.dataTransfer.effectAllowed = "move";
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => { void onCurrencyPillDrop(e, code); }}
+                        onClick={() => {
+                          if (skipNextCurrencyPillClickRef.current) {
+                            skipNextCurrencyPillClickRef.current = false;
+                            return;
+                          }
+                          setCurrencyFilterCode(code);
+                        }}
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="bank-process-list-body">
+        <div className="bank-process-list-scroll-region" role="region" aria-label={t("bankProcessList")}>
+          <BankProcessTable
+            tableLoading={tableLoading}
+            showAll={showAll}
+            showSelectColumn={showInactive || showAll || showOfficial || showEInvoice || showBlock}
+            pageRows={pageRows}
+            currentPage={currentPage}
+            PAGE_SIZE={PAGE_SIZE}
+            selectedIds={selectedIds}
+            setSelectedIds={setSelectedIds}
+            showHeaderSelectAll={showInactive || showOfficial || showEInvoice || showBlock}
+            notify={notify}
+            fetchRows={fetchRows}
+            loadAccountingInbox={loadAccountingInbox}
+            openEdit={openEdit}
+            openRemarkModal={(row) => {
+              setRemarkRow(row);
+              setRemarkDraft(String(row.remark || ""));
+              setRemarkModalOpen(true);
+            }}
+            openResendModal={(row) => {
+              setResendInlineError("");
+              setResendTarget(row);
+              setResendDayStart(String(row.day_start || row.date || "").slice(0, 10));
+              const seedFq = bankProcessFrequencyNormalized(row.day_start_frequency);
+              setResendFrequency(seedFq);
+              setResendDayEnd(seedFq === "once" ? "" : String(row.day_end || "").slice(0, 10));
+              setResendModalOpen(true);
+            }}
+            sortColumn={sortColumn}
+            sortDirection={sortDirection}
+            onSort={handleBankTableSort}
+            lang={lang}
+            t={t}
+          />
+        </div>
+        {!showAll && (
+          <div className="pagination-container bank-process-pagination">
+            <button type="button" className="pagination-btn" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+              ◀
+            </button>
+            <span className="pagination-info">{t("pageOf", { current: currentPage, total: totalPages })}</span>
+            <button
+              type="button"
+              className="pagination-btn"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              ▶
+            </button>
+          </div>
+        )}
+        </div>
+      </div>
+
+      {modalOpen && (
+        <BankProcessFormModal
+          editMode={editMode} form={form} setForm={setForm} accounts={accounts}
+          countriesList={selectedCountryChips}
+          banksList={selectedBanksByCountry[String(form.country || "").trim()] || []}
+          onClose={() => setModalOpen(false)} onSubmit={submitForm}
+          onOpenCountryModal={() => {
+            setSelectedCountryChips((prev) => {
+              const set = new Set(prev);
+              const cur = String(form.country || "").trim().toUpperCase();
+              if (cur) set.add(cur);
+              return [...set].sort((a, b) => a.localeCompare(b));
+            });
+            setCountrySearch("");
+            setNewCountryName("");
+            setCountryModalOpen(true);
+          }}
+          onOpenBankModal={() => {
+            const country = String(form.country || "").trim();
+            if (!country) {
+              notify(t("pleaseSelectCountryFirst"), "warning");
+              return;
+            }
+            const banks = [...(selectedBanksByCountry[country] || [])];
+            const cur = String(form.bank || "").trim();
+            if (cur && !banks.includes(cur)) banks.push(cur);
+            setSelectedBankChips(banks);
+            setBankSearch("");
+            setNewBankName("");
+            setBankModalOpen(true);
+          }}
+          onOpenProfitShareModal={openProfitShareModal}
+          onOpenBankFormNoteModal={(kind) => setBankFormNote({ kind, draft: kind === "sop" ? String(form.sop || "") : String(form.remark || "") })}
+          onOpenAddAccountForField={openAddAccountForField}
+          lang={lang}
+          t={t}
+        />
+      )}
+
+      {countryModalOpen && (
+        <CountrySelectionModal
+          countriesList={countriesList} selectedCountryChips={selectedCountryChips} setSelectedCountryChips={setSelectedCountryChips}
+          countrySearch={countrySearch} setCountrySearch={setCountrySearch} newCountryName={newCountryName} setNewCountryName={setNewCountryName}
+          onSubmitNewCountry={submitNewCountry} onRemoveAvailableCountry={removeAvailableCountry}
+          onConfirm={(codes) => {
+            const ordered = [];
+            const seen = new Set();
+            for (const c of codes || []) {
+              const u = String(c || "").trim().toUpperCase();
+              if (!u || seen.has(u)) continue;
+              seen.add(u);
+              ordered.push(u);
+            }
+            if (!ordered.length) return;
+            setSelectedCountryChips(ordered);
+            void persistSelectedCountries(ordered);
+            setForm((f) => {
+              const cur = String(f.country || "").trim().toUpperCase();
+              const nextCountry = ordered.includes(cur) ? f.country : ordered[0];
+              const countryChanged =
+                String(nextCountry || "").trim().toUpperCase() !== cur;
+              return { ...f, country: nextCountry, bank: countryChanged ? "" : f.bank };
+            });
+            setCountryModalOpen(false);
+          }}
+          onClose={() => setCountryModalOpen(false)} notify={notify}
+          t={t}
+        />
+      )}
+
+      {bankModalOpen && (
+        <BankSelectionModal
+          banksList={banksList} selectedBankChips={selectedBankChips} setSelectedBankChips={setSelectedBankChips}
+          bankSearch={bankSearch} setBankSearch={setBankSearch} newBankName={newBankName} setNewBankName={setNewBankName}
+          onSubmitNewBank={submitNewBank} onRemoveAvailableBank={removeAvailableBank}
+          onConfirm={(banks) => {
+            const country = String(form.country || "").trim();
+            if (!country) return;
+            const ordered = [];
+            const seen = new Set();
+            for (const b of banks || []) {
+              const u = String(b || "").trim().toUpperCase();
+              if (!u || seen.has(u)) continue;
+              seen.add(u);
+              ordered.push(u);
+            }
+            if (!ordered.length) return;
+            const nextMap = { ...selectedBanksByCountry, [country]: ordered };
+            setSelectedBanksByCountry(nextMap);
+            setSelectedBankChips(ordered);
+            void persistSelectedBanksByCountry(nextMap);
+            setForm((f) => {
+              const cur = String(f.bank || "").trim().toUpperCase();
+              const nextBank = ordered.includes(cur) ? f.bank : ordered[0];
+              return { ...f, bank: nextBank };
+            });
+            setBankModalOpen(false);
+          }}
+          onClose={() => setBankModalOpen(false)} notify={notify}
+          t={t}
+        />
+      )}
+
+      {profitShareModalOpen && (
+        <ProfitSharingModal
+          profitShareRows={profitShareRows} setProfitShareRows={setProfitShareRows} accounts={accounts}
+          onConfirm={confirmProfitShareModal} onClose={() => setProfitShareModalOpen(false)}
+          onOpenAddAccountForField={openAddAccountForField}
+          t={t}
+        />
+      )}
+
+      <BankNoteModal
+        bankFormNote={bankFormNote} setBankFormNote={setBankFormNote}
+        onSave={() => {
+          if (bankFormNote) {
+            const { kind, draft } = bankFormNote;
+            if (kind === "sop") setForm((f) => ({ ...f, sop: draft })); else setForm((f) => ({ ...f, remark: draft }));
+            setBankFormNote(null);
+          }
+        }}
+        t={t}
+      />
+
+      {resendModalOpen && (
+        <ResendModal
+          resendTarget={resendTarget} resendDayStart={resendDayStart}
+          resendDayEnd={resendDayEnd} resendFrequency={resendFrequency} setResendFrequency={setResendFrequency}
+          resendInlineError={resendInlineError} setResendInlineError={setResendInlineError}
+          onResend={resendAccountingDue} onClose={() => setResendModalOpen(false)}
+          t={t}
+        />
+      )}
+
+      {remarkModalOpen && (
+        <BankRemarkModal remarkDraft={remarkDraft} setRemarkDraft={setRemarkDraft} onSave={saveRemarkModal} onClose={() => setRemarkModalOpen(false)} t={t} />
+      )}
+
+      <ProcessDeleteConfirmModal
+        open={deleteConfirmOpen}
+        count={selectedIds.size}
+        deleting={deleteSubmitting}
+        onCancel={() => setDeleteConfirmOpen(false)}
+        onConfirm={confirmDeleteProcesses}
+        t={t}
+      />
+
+      <AccountModal
+        open={addAccountModalOpen}
+        portalToBody
+        overlayZIndex={accountModalOverlayZIndex}
+        title={accountModalIsEditMode ? tAccount("editAccount") : tAccount("addAccount")}
+        isEditMode={accountModalIsEditMode}
+        form={accountModalForm}
+        setForm={setAccountModalForm}
+        orderedRoles={accountModalOrderedRoles}
+        currencies={accountModalCurrencies}
+        companies={companies}
+        selectedCurrencyIds={accountModalSelectedCurrencyIds}
+        setSelectedCurrencyIds={setAccountModalSelectedCurrencyIds}
+        selectedCompanyIds={accountModalSelectedCompanyIds}
+        setSelectedCompanyIds={setAccountModalSelectedCompanyIds}
+        currencyInput={accountModalCurrencyInput}
+        setCurrencyInput={setAccountModalCurrencyInput}
+        onCreateCurrency={createAccountModalCurrency}
+        onRemoveCurrency={removeAccountModalCurrency}
+        onSubmit={submitAccountModal}
+        onClose={closeAccountModal}
+        t={tAccount}
+      />
+      <div className="calendar-popup calendar-popup--transaction-range calendar-popup--no-presets" id="calendar-popup" style={{ display: "none" }}>
+        <div className="transaction-calendar-panel">
+          <div className="calendar-header">
+            <button type="button" className="calendar-nav-btn" onClick={(e) => { e.stopPropagation(); window.changeMonth?.(-1); }}><i className="fas fa-chevron-left" /></button>
+            <div className="calendar-month-year" onClick={(e) => e.stopPropagation()} role="presentation">
+              <button type="button" id="calendar-month-select" className="calendar-month-trigger" aria-label="Month">
+                {bpLocale.monthsShort[new Date().getMonth()]}
+              </button>
+              <button type="button" id="calendar-year-select" className="calendar-year-trigger" aria-label="Year">
+                {String(new Date().getFullYear())}
+              </button>
+            </div>
+            <button type="button" className="calendar-nav-btn" onClick={(e) => { e.stopPropagation(); window.changeMonth?.(1); }}><i className="fas fa-chevron-right" /></button>
+          </div>
+          <div className="calendar-weekdays">
+            {bpLocale.weekdaysShort.map((d) => (
+              <div key={d} className="calendar-weekday">
+                {d}
+              </div>
+            ))}
+          </div>
+          <div className="calendar-days" id="calendar-days" />
+          <div className="calendar-popup-clear-wrap" id="calendar-popup-clear-wrap" style={{ display: "none" }} aria-hidden="true">
+            <button type="button" className="calendar-popup-clear-btn" id="calendar-popup-clear-btn">
+              {t("clearDate")}
+            </button>
+          </div>
+        </div>
+      </div>
+      {toast && typeof document !== "undefined" && document.body
+        ? createPortal(
+            <div
+              className="process-notification-container"
+              style={{
+                zIndex: addAccountModalOpen ? processNotificationAboveAccountZIndex : processNotificationZIndex,
+              }}
+            >
+              <div className={`process-notification process-notification-${toast.type === "danger" ? "danger" : (toast.type === "warning" ? "warning" : "success")} show`}>
+                {toast.message}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+    </div>
+  );
+}
+

@@ -1,8 +1,8 @@
 <?php
 session_start();
 // session_write_close() 将在 session 写入（回填 company_code）完成后调用
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../includes/c168_domain_access.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../c168/c168_domain_access.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 
 header('Content-Type: application/json');
@@ -16,7 +16,7 @@ $data = json_decode($json, true);
 $action = $data['action'] ?? '';
 
 // 检查用户是否已登录（对于需要权限的操作）
-if (in_array($action, ['create', 'update', 'delete', 'get_domain_fee_settings', 'save_domain_fee_settings', 'get_company_share_settings', 'save_company_share_settings'], true)) {
+if (in_array($action, ['list', 'create', 'update', 'delete', 'validate_domain_code', 'get_domain_fee_settings', 'save_domain_fee_settings', 'get_company_share_settings', 'save_company_share_settings'], true)) {
     if (!isset($_SESSION['user_id'])) {
         http_response_code(401);
         echo json_encode(['success' => false, 'message' => 'User not logged in', 'data' => null]);
@@ -86,227 +86,6 @@ function fetchIds(PDO $pdo, string $sql, array $params = []): array
 function buildInPlaceholders(int $count): string
 {
     return implode(',', array_fill(0, $count, '?'));
-}
-
-/**
- * 仅允许公司代码映射为安全库名（字母/数字/下划线），并统一大写。
- */
-function domainApiDatabaseNameFromCompanyId(string $companyId): string
-{
-    global $dbname;
-
-    $normalized = strtoupper(trim($companyId));
-    if ($normalized === '') {
-        throw new InvalidArgumentException('Company ID is required for database provisioning');
-    }
-    if (!preg_match('/^[A-Z0-9_]+$/', $normalized)) {
-        throw new InvalidArgumentException('Company ID may only contain letters, numbers, and underscore for database name');
-    }
-
-    // Shared-hosting safe default: reuse current DB account prefix (e.g. u857194726_XXX).
-    $currentDb = trim((string) ($dbname ?? ''));
-    if ($currentDb !== '' && preg_match('/^([a-zA-Z0-9]+)_/', $currentDb, $m)) {
-        return strtolower($m[1] . '_' . $normalized);
-    }
-
-    return strtolower($normalized);
-}
-
-function domainApiIsIgnorableProvisioningError(PDOException $e): bool
-{
-    $msg = strtolower(trim($e->getMessage()));
-    if ($msg === '') {
-        return false;
-    }
-    return (
-        strpos($msg, 'access denied') !== false ||
-        strpos($msg, 'create command denied') !== false ||
-        strpos($msg, 'unknown database') !== false ||
-        strpos($msg, 'not allowed') !== false
-    );
-}
-
-/**
- * Add Company 建库模板只允许 Bank/Games 二选一。
- *
- * @param mixed $permissions
- * @return 'bank'|'games'
- */
-function domainApiResolveSchemaTypeFromPermissions($permissions): string
-{
-    if (!is_array($permissions)) {
-        throw new InvalidArgumentException('Permission must be an array and include exactly one of Bank/Games');
-    }
-
-    $normalized = array_map(static function ($item): string {
-        return strtoupper(trim((string) $item));
-    }, $permissions);
-    $normalized = array_values(array_unique(array_filter($normalized, static function (string $v): bool {
-        return $v !== '';
-    })));
-
-    $hasBank = in_array('BANK', $normalized, true);
-    $hasGames = in_array('GAMES', $normalized, true);
-
-    if ($hasBank === $hasGames) {
-        throw new InvalidArgumentException('Permission must select exactly one of Bank or Games');
-    }
-    return $hasBank ? 'bank' : 'games';
-}
-
-function domainApiExecuteSchemaSql(PDO $dbPdo, string $schemaPath): void
-{
-    $sql = @file_get_contents($schemaPath);
-    if ($sql === false) {
-        throw new RuntimeException('Failed to read schema file: ' . basename($schemaPath));
-    }
-
-    // Remove UTF-8 BOM and common comment forms before splitting statements.
-    $sql = preg_replace('/^\xEF\xBB\xBF/', '', $sql);
-    $sql = preg_replace('/\/\*![\s\S]*?\*\//', '', $sql);
-    $sql = preg_replace('/\/\*[\s\S]*?\*\//', '', $sql);
-    $sql = preg_replace('/^\s*--.*$/m', '', $sql);
-
-    $statements = explode(';', (string) $sql);
-    try {
-        foreach ($statements as $statement) {
-            $statement = trim($statement);
-            if ($statement === '') {
-                continue;
-            }
-            // Schema files should be DB-agnostic; ignore legacy CREATE DATABASE/USE directives.
-            if (preg_match('/^CREATE\s+DATABASE\b/i', $statement) || preg_match('/^USE\b/i', $statement)) {
-                continue;
-            }
-            try {
-                $dbPdo->exec($statement);
-            } catch (PDOException $e) {
-                if (domainApiIsIgnorableSchemaExecError($e)) {
-                    continue;
-                }
-                throw $e;
-            }
-        }
-    } finally {
-        // Best effort restore for current connection even when schema fails mid-way.
-        try {
-            $dbPdo->exec('SET FOREIGN_KEY_CHECKS = 1');
-        } catch (Throwable $t) {
-            // ignore
-        }
-    }
-}
-
-function domainApiIsIgnorableSchemaExecError(PDOException $e): bool
-{
-    $code = isset($e->errorInfo[1]) ? (int) $e->errorInfo[1] : 0;
-    if (in_array($code, [1050, 1060, 1061, 1826], true)) {
-        return true;
-    }
-    $msg = strtolower((string) $e->getMessage());
-    return strpos($msg, 'already exists') !== false
-        || strpos($msg, 'duplicate key name') !== false
-        || strpos($msg, 'duplicate column name') !== false
-        || strpos($msg, 'duplicate foreign key constraint name') !== false;
-}
-
-function domainApiEnsureSchemaMetaTable(PDO $dbPdo): void
-{
-    $dbPdo->exec("
-        CREATE TABLE IF NOT EXISTS `schema_meta` (
-            `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
-            `schema_type` varchar(20) NOT NULL,
-            `schema_version` varchar(50) NOT NULL DEFAULT 'v1',
-            `installed_at` datetime NOT NULL DEFAULT current_timestamp(),
-            PRIMARY KEY (`id`),
-            UNIQUE KEY `uq_schema_meta_schema_type` (`schema_type`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
-}
-
-function domainApiSchemaAlreadyProvisioned(PDO $dbPdo, string $schemaType): bool
-{
-    try {
-        $hasTable = $dbPdo->query("SHOW TABLES LIKE 'schema_meta'");
-        if (!$hasTable || $hasTable->fetch(PDO::FETCH_NUM) === false) {
-            return false;
-        }
-        $stmt = $dbPdo->prepare("SELECT COUNT(*) FROM `schema_meta` WHERE `schema_type` = ? LIMIT 1");
-        $stmt->execute([$schemaType]);
-        return ((int) $stmt->fetchColumn()) > 0;
-    } catch (Throwable $t) {
-        return false;
-    }
-}
-
-function domainApiMarkSchemaProvisioned(PDO $dbPdo, string $schemaType): void
-{
-    domainApiEnsureSchemaMetaTable($dbPdo);
-    $stmt = $dbPdo->prepare("
-        INSERT INTO `schema_meta` (`schema_type`, `schema_version`)
-        VALUES (?, 'v1')
-        ON DUPLICATE KEY UPDATE
-            `schema_version` = VALUES(`schema_version`),
-            `installed_at` = current_timestamp()
-    ");
-    $stmt->execute([$schemaType]);
-}
-
-function domainApiProvisionCompanyDatabase(string $companyId, string $schemaType): void
-{
-    global $host, $dbuser, $dbpass;
-
-    $dbName = domainApiDatabaseNameFromCompanyId($companyId);
-    $schemaByType = [
-        'bank' => __DIR__ . '/../../database/banks_schema.sql',
-        'games' => __DIR__ . '/../../database/games_schema.sql',
-    ];
-    $schemaPath = $schemaByType[$schemaType] ?? null;
-    if ($schemaPath === null || !is_file($schemaPath)) {
-        throw new RuntimeException('Schema file not found for type: ' . $schemaType);
-    }
-
-    $basePdo = new PDO("mysql:host=$host;charset=utf8mb4", $dbuser, $dbpass);
-    $basePdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $basePdo->exec("SET time_zone = '+08:00'");
-    $basePdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbName}` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-
-    $dbPdo = new PDO("mysql:host=$host;dbname={$dbName};charset=utf8mb4", $dbuser, $dbpass);
-    $dbPdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $dbPdo->exec("SET time_zone = '+08:00'");
-
-    // Idempotency: explicit marker is safer than checking arbitrary existing tables.
-    if (domainApiSchemaAlreadyProvisioned($dbPdo, $schemaType)) {
-        return;
-    }
-
-    domainApiExecuteSchemaSql($dbPdo, $schemaPath);
-    domainApiMarkSchemaProvisioned($dbPdo, $schemaType);
-}
-
-/**
- * 仅为包含 company_id 的条目建库；group-only 条目跳过。
- */
-function domainApiProvisionCompanyDatabasesFromRows(array $companies): void
-{
-    foreach ($companies as $company) {
-        if (!is_array($company)) {
-            continue;
-        }
-        $companyId = strtoupper(trim((string) ($company['company_id'] ?? '')));
-        if ($companyId === '') {
-            continue;
-        }
-        $schemaType = domainApiResolveSchemaTypeFromPermissions($company['permissions'] ?? null);
-        try {
-            domainApiProvisionCompanyDatabase($companyId, $schemaType);
-        } catch (PDOException $e) {
-            // Shared hosting often blocks CREATE DATABASE; do not block owner/domain creation.
-            if (!domainApiIsIgnorableProvisioningError($e)) {
-                throw $e;
-            }
-        }
-    }
 }
 
 /**
@@ -1948,6 +1727,141 @@ function domainApiNormalizeCompaniesPayload($companies): array {
     return $out;
 }
 
+/**
+ * Group ID 与 Company ID 不得使用相同代码（同一 owner 提交的 companies payload）
+ */
+function domainApiValidateGroupCompanyIdMutualExclusivity(array $rows): ?string
+{
+    $companyKeys = [];
+    $groupKeys = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $cid = strtoupper(trim((string) ($row['company_id'] ?? '')));
+        $gidRaw = $row['group_id'] ?? null;
+        $gid = ($gidRaw !== null && trim((string) $gidRaw) !== '') ? strtoupper(trim((string) $gidRaw)) : '';
+        if ($cid !== '') {
+            $companyKeys[$cid] = true;
+        }
+        if ($gid !== '') {
+            $groupKeys[$gid] = true;
+        }
+    }
+    foreach (array_keys($companyKeys) as $code) {
+        if (isset($groupKeys[$code])) {
+            return 'Group ID and Company ID cannot use the same code: ' . $code;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * 同一笔保存里：company_id 不得重复；无 company_id 的「仅组」占位行其 group_id 不得重复。
+ * 多家公司可共用同一 group_id（正常分组），不计为重复。
+ */
+function domainApiValidateCompanyGroupCodesUniqueWithinPayload(array $rows): ?string
+{
+    $seenCompany = [];
+    $seenGroupOnly = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $cid = strtoupper(trim((string) ($row['company_id'] ?? '')));
+        $gidRaw = $row['group_id'] ?? null;
+        $gid = ($gidRaw !== null && trim((string) $gidRaw) !== '') ? strtoupper(trim((string) $gidRaw)) : '';
+        if ($cid !== '') {
+            if (isset($seenCompany[$cid])) {
+                return 'Duplicate Company ID in this form: "' . $cid . '". Each Company ID must be unique.';
+            }
+            $seenCompany[$cid] = true;
+            continue;
+        }
+        if ($gid !== '') {
+            if (isset($seenGroupOnly[$gid])) {
+                return 'Duplicate group-only entry in this form: "' . $gid . '".';
+            }
+            $seenGroupOnly[$gid] = true;
+        }
+    }
+    return null;
+}
+
+/**
+ * 全局唯一：payload 中出现的每个非空代码（任一行的 company_id 或 group_id）在数据库中不可再出现在
+ * 任意 owner 的 company 行上（company_id 与 group_id 同一命名空间）。
+ * create：与全库比对；update：传入 $excludeOwnerId，排除该 owner 当前已有 company 行，便于整单重存而不误报「与自身冲突」。
+ *
+ * （须与 domainApiValidateGroupCompanyIdMutualExclusivity、domainApiValidateCompanyGroupCodesUniqueWithinPayload 配合。）
+ */
+function domainApiValidateCrossOwnerCompanyGroupExclusivity(PDO $pdo, array $rows, ?int $excludeOwnerId): ?string
+{
+    $codesSet = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $cid = strtoupper(trim((string) ($row['company_id'] ?? '')));
+        $gidRaw = $row['group_id'] ?? null;
+        $gid = ($gidRaw !== null && trim((string) $gidRaw) !== '') ? strtoupper(trim((string) $gidRaw)) : '';
+        if ($cid !== '') {
+            $codesSet[$cid] = true;
+        }
+        if ($gid !== '') {
+            $codesSet[$gid] = true;
+        }
+    }
+    if ($codesSet === []) {
+        return null;
+    }
+    $codes = array_keys($codesSet);
+    $in = implode(',', array_fill(0, count($codes), '?'));
+
+    /*
+     * 与 owner_id <> ? 等价，但语义为「不排除其它 owner」，只排除本条 domain 正要覆盖的旧行，
+     * 避免误解为可按 owner 分立命名空间。
+     */
+    $excludeBranchClause = '';
+    $excludeRepeatParams = [];
+    if ($excludeOwnerId !== null && (int) $excludeOwnerId > 0) {
+        $excludeBranchClause = ' id NOT IN (SELECT id FROM company WHERE owner_id = ?) AND ';
+        $excludeRepeatParams[] = (int) $excludeOwnerId;
+    }
+
+    $sql = 'SELECT z.v FROM ('
+        . ' SELECT UPPER(TRIM(CAST(company_id AS CHAR))) AS v FROM company WHERE ' . $excludeBranchClause
+        . " company_id IS NOT NULL AND TRIM(CAST(company_id AS CHAR)) <> ''"
+        . " AND UPPER(TRIM(CAST(company_id AS CHAR))) IN ($in)"
+        . ' UNION'
+        . ' SELECT UPPER(TRIM(CAST(group_id AS CHAR))) AS v FROM company WHERE ' . $excludeBranchClause
+        . " group_id IS NOT NULL AND TRIM(CAST(group_id AS CHAR)) <> ''"
+        . " AND UPPER(TRIM(CAST(group_id AS CHAR))) IN ($in)"
+        . ' ) AS z WHERE z.v <> \'\' LIMIT 1';
+
+    try {
+        $stmt = $pdo->prepare($sql);
+        if ($excludeOwnerId !== null && (int) $excludeOwnerId > 0) {
+            $execParams = array_merge($excludeRepeatParams, $codes, $excludeRepeatParams, $codes);
+            $stmt->execute($execParams);
+        } else {
+            $stmt->execute(array_merge($codes, $codes));
+        }
+    } catch (PDOException $e) {
+        error_log('[domain_api] domainApiValidateCrossOwnerCompanyGroupExclusivity: ' . $e->getMessage());
+        return 'Could not verify company/group code availability. Please try again.';
+    }
+
+    $hit = $stmt->fetchColumn();
+    if ($hit === false || $hit === null || trim((string) $hit) === '') {
+        return null;
+    }
+    $code = strtoupper(trim((string) $hit));
+
+    return 'This ID "' . $code . '" is already in use by another domain (not allowed). Choose a different Company ID or Group ID.';
+}
+
 function domainApiExtractProvisionCompanyIds($companies): array {
     $ids = [];
     foreach (domainApiNormalizeCompaniesPayload($companies) as $row) {
@@ -2379,6 +2293,42 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
 
 try {
     switch($action) {
+        case 'list':
+            if (!$hasC168Context || !$canUseC168DomainActions) {
+                jsonResponse(false, 'Forbidden', null, 403);
+                exit;
+            }
+            try {
+                $stmt = $pdo->query("
+                    SELECT 
+                        o.id,
+                        o.owner_code,
+                        o.name,
+                        o.email,
+                        o.created_by,
+                        o.created_at,
+                        GROUP_CONCAT(DISTINCT NULLIF(TRIM(c.group_id), '') ORDER BY c.group_id SEPARATOR ', ') as group_ids,
+                        GROUP_CONCAT(NULLIF(TRIM(c.company_id), '') ORDER BY c.company_id SEPARATOR ', ') as companies
+                    FROM owner o
+                    LEFT JOIN company c ON o.id = c.owner_id
+                    GROUP BY o.id
+                    ORDER BY o.owner_code ASC
+                ");
+                $domains = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                foreach ($domains as &$domain) {
+                    $stmt2 = $pdo->prepare("SELECT company_id, expiration_date FROM company WHERE owner_id = ? ORDER BY company_id");
+                    $stmt2->execute([$domain['id']]);
+                    $domain['companies_full'] = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+                }
+                unset($domain);
+
+                jsonResponse(true, 'OK', ['domains' => $domains]);
+            } catch (Exception $e) {
+                jsonResponse(false, 'Error: ' . $e->getMessage(), null);
+            }
+            break;
+
         case 'create':
             if (!$hasC168Context || !$canUseC168DomainActions) {
                 jsonResponse(false, 'Forbidden', null, 403);
@@ -2403,6 +2353,25 @@ try {
                 echo json_encode(['success' => false, 'message' => 'Secondary password must be exactly 6 digits', 'data' => null]);
                 exit;
             }
+
+            $companies_data = domainApiNormalizeCompaniesPayload($companies);
+            $overlapErr = domainApiValidateGroupCompanyIdMutualExclusivity($companies_data);
+            if ($overlapErr !== null) {
+                echo json_encode(['success' => false, 'message' => $overlapErr, 'data' => null]);
+                exit;
+            }
+
+            $dupInPayloadErr = domainApiValidateCompanyGroupCodesUniqueWithinPayload($companies_data);
+            if ($dupInPayloadErr !== null) {
+                echo json_encode(['success' => false, 'message' => $dupInPayloadErr, 'data' => null]);
+                exit;
+            }
+
+            $crossOwnerErr = domainApiValidateCrossOwnerCompanyGroupExclusivity($pdo, $companies_data, null);
+            if ($crossOwnerErr !== null) {
+                echo json_encode(['success' => false, 'message' => $crossOwnerErr, 'data' => null]);
+                exit;
+            }
             
             // Hash passwords
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
@@ -2412,8 +2381,6 @@ try {
             ensureCompanyFeeShareColumn($pdo);
             ensureDomainListFeeSettingsTable($pdo);
             ensureAccountCreatedSourceColumn($pdo);
-            $companies_data = domainApiNormalizeCompaniesPayload($companies);
-            domainApiProvisionCompanyDatabasesFromRows($companies_data);
 
             // Start transaction
             $pdo->beginTransaction();
@@ -2500,6 +2467,25 @@ try {
                     exit;
                 }
             }
+
+            $companies_data = domainApiNormalizeCompaniesPayload($companies);
+            $overlapErr = domainApiValidateGroupCompanyIdMutualExclusivity($companies_data);
+            if ($overlapErr !== null) {
+                echo json_encode(['success' => false, 'message' => $overlapErr, 'data' => null]);
+                exit;
+            }
+
+            $dupInPayloadErr = domainApiValidateCompanyGroupCodesUniqueWithinPayload($companies_data);
+            if ($dupInPayloadErr !== null) {
+                echo json_encode(['success' => false, 'message' => $dupInPayloadErr, 'data' => null]);
+                exit;
+            }
+
+            $crossOwnerErr = domainApiValidateCrossOwnerCompanyGroupExclusivity($pdo, $companies_data, (int) $id);
+            if ($crossOwnerErr !== null) {
+                echo json_encode(['success' => false, 'message' => $crossOwnerErr, 'data' => null]);
+                exit;
+            }
             
             // DDL 在 MySQL 中会隐式提交并结束当前事务，须在 beginTransaction 之前执行
             ensureCompanyFeeShareColumn($pdo);
@@ -2548,7 +2534,7 @@ try {
                 
                 // Get new company IDs from input（companies 可为 JSON 字符串或已解析数组）
                 $new_companies_data = [];
-                foreach (domainApiNormalizeCompaniesPayload($companies) as $company) {
+                foreach ($companies_data as $company) {
                     $company_id = strtoupper(trim((string) ($company['company_id'] ?? '')));
                     $group_id = !empty($company['group_id']) ? strtoupper(trim((string) $company['group_id'])) : null;
                     if (!empty($company_id) || !empty($group_id)) {
@@ -2929,6 +2915,36 @@ try {
                 }
                 throw $e;
             }
+            break;
+
+        /*
+         * 添加 Group / Company 前校验：编码在整张 company 表上唯一（任一行的 company_id 或 group_id 视为同一命名空间）。
+         * exclude_owner_id：编辑某 domain 时传入当前 owner.id，跳过其已有 company 行，避免与「尚未保存的旧行」误判冲突。
+         * 新建 domain：不传或为 0，与全库比对。
+         */
+        case 'validate_domain_code':
+            if (!$hasC168Context || !$canUseC168DomainActions) {
+                jsonResponse(false, 'Forbidden', null, 403);
+                exit;
+            }
+            $rawCode = (string) ($data['code'] ?? '');
+            $code = strtoupper(trim($rawCode));
+            $excludeRaw = $data['exclude_owner_id'] ?? null;
+            $excludeOwnerId = ($excludeRaw !== null && $excludeRaw !== '' && (int) $excludeRaw > 0)
+                ? (int) $excludeRaw
+                : null;
+            if ($code === '') {
+                jsonResponse(false, 'Code is required', ['available' => false], 400);
+                exit;
+            }
+            // 单列即可：校验逻辑会把 code 拿去匹配库中 company_id 与 group_id 两列
+            $pseudoRows = [['company_id' => $code, 'group_id' => null]];
+            $err = domainApiValidateCrossOwnerCompanyGroupExclusivity($pdo, $pseudoRows, $excludeOwnerId);
+            if ($err !== null) {
+                jsonResponse(false, $err, ['available' => false, 'code' => $code], 200);
+                exit;
+            }
+            jsonResponse(true, 'OK', ['available' => true, 'code' => $code]);
             break;
             
         case 'get_companies':

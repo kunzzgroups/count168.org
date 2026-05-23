@@ -3,7 +3,7 @@
  * 账户列表 API：按公司、搜索、状态与权限返回账户列表
  */
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行

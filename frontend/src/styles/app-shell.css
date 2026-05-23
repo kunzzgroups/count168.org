@@ -1,0 +1,75 @@
+/*
+ * =============================================================================
+ * SPA authenticated shell — single pipeline (import only from main.jsx).
+ * Order matters: tokens → dashboard chrome → laptop density → sidebar.
+ * Do not re-<link> these files in index.html; feature routes inject extra CSS only.
+ * =============================================================================
+ */
+@import "./globals.css";
+@import "../../public/css/dashboard.css";
+@import "../../public/css/global-13inch.css";
+@import "../../public/css/sidebar.css";
+
+/* --- Shared loading surfaces (session boot + in-layout page boot) --- */
+@keyframes ec-shell-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ec-app-boot-loading,
+.ec-page-content-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  font-family: Inter, "Segoe UI", sans-serif;
+  color: #334155;
+}
+
+.ec-app-boot-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  min-height: 100vh;
+  background-color: #e9f1ff;
+  background-image:
+    radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 48%),
+    radial-gradient(circle at 70% 15%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 45%),
+    radial-gradient(circle at 40% 70%, rgba(206, 232, 255, 0.55) 0%, rgba(255, 255, 255, 0) 60%),
+    radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%),
+    linear-gradient(145deg, #97bffc 0%, #aecffa 40%, #f9fbff 100%);
+  background-blend-mode: screen, screen, multiply, screen, normal;
+}
+
+.ec-page-content-loader {
+  min-height: min(72vh, calc(100vh - 120px));
+  width: 100%;
+  padding: 48px 24px;
+  box-sizing: border-box;
+}
+
+.ec-app-boot-loading__spinner,
+.ec-page-content-loader__spinner {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid #e2e8f0;
+  border-top-color: #3b82f6;
+  animation: ec-shell-spin 0.75s linear infinite;
+}
+
+.ec-app-boot-loading__label,
+.ec-page-content-loader__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ec-app-boot-loading__spinner,
+  .ec-page-content-loader__spinner {
+    animation: none;
+    border-top-color: #3b82f6;
+  }
+}

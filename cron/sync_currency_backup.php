@@ -9,7 +9,7 @@ if (php_sapi_name() !== 'cli') {
     exit('Forbidden');
 }
 
-require_once dirname(__DIR__) . '/config.php';
+require_once dirname(__DIR__) . '/includes/config.php';
 
 $sqlDelete = 'DELETE FROM currency_backup';
 $sqlInsert = <<<'SQL'

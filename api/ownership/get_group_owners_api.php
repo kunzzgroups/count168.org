@@ -3,8 +3,8 @@
  * Group Earnings API — Get ownership rows for a specific group
  * GET ?group_id=AP
  */
-require_once '../../session_check.php';
-require_once '../../config.php';
+require_once '../../includes/session_check.php';
+require_once '../../includes/config.php';
 require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');

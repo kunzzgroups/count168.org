@@ -17,7 +17,7 @@ session_start();
 header('Content-Type: application/json');
 
 try {
-    require_once __DIR__ . '/../../config.php';
+    require_once __DIR__ . '/../../includes/config.php';
     require_once __DIR__ . '/../includes/money_decimal.php';
 } catch (Throwable $e) {
     http_response_code(500);
@@ -122,6 +122,18 @@ function submitTrunc2($value): string
 }
 
 /**
+ * 交易入库金额统一按高精度保存（默认 8 位），避免用户输入 6 位小数时被提前截断。
+ * 展示口径（2 位）应在前端或响应格式化阶段处理，不影响数据库原值。
+ */
+function submitStoreAmount($value, int $scale = 8): string
+{
+    if ($value === null || trim((string)$value) === '') {
+        return money_normalize('0', $scale);
+    }
+    return money_normalize($value ?? '0', $scale);
+}
+
+/**
  * RATE 专用：四舍五入到2位小数（half-up），其他交易类型继续使用 submitTrunc2。
  */
 function submitRateRound2($value): string
@@ -137,6 +149,15 @@ function submitRateRound2($value): string
     }
 
     return money_normalize(bcadd($normalized, $adjustment, MONEY_CALC_SCALE), 2);
+}
+
+function submitDecimalPlaces($value): int
+{
+    $clean = money_clean($value);
+    if ($clean === '' || strpos($clean, '.') === false) {
+        return 0;
+    }
+    return strlen(rtrim(substr(strrchr($clean, '.'), 1), " \t\n\r\0\x0B"));
 }
 
 /**
@@ -256,7 +277,7 @@ try {
     $transaction_type = trim($_POST['transaction_type'] ?? '');
     $account_id = (int)($_POST['account_id'] ?? 0);
     $from_account_id = !empty($_POST['from_account_id']) ? (int)$_POST['from_account_id'] : null;
-    $amount = submitTrunc2($_POST['amount'] ?? '0');
+    $amount = submitStoreAmount($_POST['amount'] ?? '0', 8);
     $transaction_date = trim($_POST['transaction_date'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $sms = trim($_POST['sms'] ?? '');
@@ -518,7 +539,11 @@ try {
             
             $transaction_ids = [];
             
-            $rate_exchange_rate = money_normalize($_POST['rate_exchange_rate'] ?? '0');
+            $rawRateExchangeRate = $_POST['rate_exchange_rate'] ?? '0';
+            if (submitDecimalPlaces($rawRateExchangeRate) > 8) {
+                throw new Exception('Exchange Rate 小数位最多 8 位');
+            }
+            $rate_exchange_rate = money_normalize($rawRateExchangeRate);
             if (money_cmp($rate_exchange_rate, '0') <= 0) {
                 throw new Exception('Exchange Rate 必须大于 0');
             }
@@ -535,6 +560,10 @@ try {
             $rate_middleman_account_id = !empty($_POST['rate_middleman_account_id']) ? (int)$_POST['rate_middleman_account_id'] : null;
             $rate_middleman_amount = !empty($_POST['rate_middleman_amount']) ? submitRateRound2($_POST['rate_middleman_amount']) : null;
             $rate_middleman_description = trim($_POST['rate_middleman_description'] ?? '');
+            $rawRateMiddlemanRate = $_POST['rate_middleman_rate'] ?? null;
+            if ($rawRateMiddlemanRate !== null && trim((string)$rawRateMiddlemanRate) !== '' && submitDecimalPlaces($rawRateMiddlemanRate) > 8) {
+                throw new Exception('Middle-Man rate 小数位最多 8 位');
+            }
             $rate_middleman_rate = !empty($_POST['rate_middleman_rate']) ? money_normalize($_POST['rate_middleman_rate']) : null;
             $rate_middleman_currency = trim($_POST['rate_middleman_currency'] ?? $rate_transfer_to_currency ?: $rate_to_currency ?: $rate_from_currency);
             
@@ -950,7 +979,7 @@ try {
             // 非 RATE 类型的原有逻辑
             // ADJUSTMENT 需要保留正负号；其他交易类型仍统一保存正数。
             if (!$is_adjustment) {
-                $amount = submitTrunc2(abs($amount));
+                $amount = submitStoreAmount(money_abs($amount, 8), 8);
             }
             
             // WIN/LOSE（含前端 PROFIT）：按单条记录保存（To + From + Amount），不再自动生成相反类型第二条

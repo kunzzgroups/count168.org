@@ -2,19 +2,24 @@
 /**
  * Process Post to Transaction API
  * 将选中的 Bank Process 的 Buy Price / Sell Price / Profit 分别记入 Supplier / Customer / Company 账户（Transaction 页面显示）
- * 支持 period_types[]：partial_first_month = 首月按比例（day_start 到月底），monthly = 按 frequency=monthly 的「对日对月」服务区间比例（与 Inbox 一致），day_end_tail = day_end 超出合同自然结束日的尾段按比例，
+ * 支持 period_types[]：partial_first_month = 首月按比例（day_start 到月底），monthly = 按 frequency=monthly 的「对日对月」服务区间比例（与 Inbox 一致）；frequency=1st_of_every_month 的 monthly 且 day_end_monthly_cap_enabled=ON 时，若 day_end 落在该账单自然月内则该期按「月初～day_end」比例（与 Inbox 一致）。day_end_tail = 尾段 prorateInclusiveDateRange（1st+cap 列 ON 时为 max(exclusiveEnd, day_end 月首)～day_end；否则 exclusiveEnd～day_end 且需 day_end≥exclusiveEnd；1st+cap OFF 不入账尾段），
  * resend_consolidated_range = 仅 Resend 弹窗同时填 day_start+day_end 时：按自然月切段 [day_start, day_end] 合并为一笔（与 Inbox 一致）。
- * 仅处理 status = 'active' 的 process。
+ * 入账请求仅针对当前公司下选中的 Bank Process；Frequency=once 且 period_type=once_one_off 入账成功后，将该 process 的 status 置为 inactive（Accounting Due 的 Dismiss 不写 status）。
  */
 
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../bankprocess_maintenance/maintenance_accounting_resend_lib.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/../includes/ensure_bank_process_day_end_monthly_cap_column.php';
 require_once __DIR__ . '/contract_billing_addon.php';
+
+if (isset($pdo) && $pdo instanceof PDO) {
+    ensureBankProcessDayEndMonthlyCapEnabledColumn($pdo);
+}
 
 /** 统一 JSON 响应 */
 function jsonResponse(bool $success, string $message = '', $data = null): void
@@ -311,7 +316,34 @@ function billingContractExclusiveEndYmdFirstOfMonth(string $dayStartYmd, int $te
             return $start->modify("+{$termMonths} months")->format('Y-m-d');
         }
         $firstAnchor = $start->modify('first day of next month');
-        return $firstAnchor->modify('+' . ($termMonths - 1) . ' months')->format('Y-m-d');
+        return $firstAnchor->modify("+{$termMonths} months")->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * monthly + day_start 非1号：起租当月不计入合同 N 个月；exclusive = 次月起首应付日 + N 月（与 process_accounting_inbox_api 一致）。
+ */
+function billingContractExclusiveEndYmdMonthlyAfterPartialFirst(string $dayStartYmd, int $termMonths): ?string
+{
+    if ($termMonths < 1) {
+        return null;
+    }
+    try {
+        $start = new DateTimeImmutable($dayStartYmd);
+        if ((int) $start->format('j') === 1) {
+            return billingContractExclusiveEndYmd($dayStartYmd, $termMonths);
+        }
+        $nextMo = $start->modify('first day of next month');
+        $y = (int) $nextMo->format('Y');
+        $mo = (int) $nextMo->format('n');
+        $dueDay = (int) $start->format('j');
+        $last = (int) date('t', mktime(0, 0, 0, $mo, 1, $y));
+        $d = min(max(1, $dueDay), $last);
+        $firstContractDue = sprintf('%04d-%02d-%02d', $y, $mo, $d);
+
+        return (new DateTimeImmutable($firstContractDue))->modify("+{$termMonths} months")->format('Y-m-d');
     } catch (Throwable $e) {
         return null;
     }
@@ -327,7 +359,7 @@ function txnAnchorMonthCapAfterPartialFirst(?string $contract, int $startDayOfMo
     if ($term === null || $term < 1) {
         return null;
     }
-    return max(0, $term - 1);
+    return max(0, $term);
 }
 
 function contractExclusiveEndYmdForFrequency(string $startYmd, ?string $contract, string $frequency): ?string
@@ -337,7 +369,7 @@ function contractExclusiveEndYmdForFrequency(string $startYmd, ?string $contract
         return null;
     }
     if ($frequency === 'monthly') {
-        return billingContractExclusiveEndYmd($startYmd, $term);
+        return billingContractExclusiveEndYmdMonthlyAfterPartialFirst($startYmd, $term);
     }
     return billingContractExclusiveEndYmdFirstOfMonth($startYmd, $term);
 }
@@ -376,6 +408,40 @@ function prorateInclusiveDateRange(string $fromYmd, string $toYmd, string $cost,
         'price' => txnTrunc2($tp),
         'profit' => txnTrunc2($tf),
     ];
+}
+
+/** 与 process_accounting_inbox_api::inboxTryDayEndMonthlyCapAmounts1stOfMonth 一致（入账端） */
+function txnTryDayEndMonthlyCapAmounts1stOfMonth(array $p, bool $hasCol, string $frequency, int $billYear, int $billMonth): ?array
+{
+    if (!$hasCol || $frequency !== '1st_of_every_month') {
+        return null;
+    }
+    if (function_exists('bmp_shouldSkipDayEndMonthlyCapForResendCrossMonthRange') && bmp_shouldSkipDayEndMonthlyCapForResendCrossMonthRange($p)) {
+        return null;
+    }
+    $raw = $p['day_end_monthly_cap_enabled'] ?? null;
+    $on = in_array((string) $raw, ['1', 'true', 'TRUE'], true) || $raw === 1 || $raw === true;
+    if (!$on) {
+        return null;
+    }
+    $dayEndYmd = bankProcessDateFieldToYmd($p['day_end'] ?? null);
+    if ($dayEndYmd === null || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dayEndYmd)) {
+        return null;
+    }
+    $tsM = mktime(0, 0, 0, $billMonth, 1, $billYear);
+    if ($tsM === false) {
+        return null;
+    }
+    $monthFirst = sprintf('%04d-%02d-01', $billYear, $billMonth);
+    $monthLast = date('Y-m-t', $tsM);
+    if ($dayEndYmd < $monthFirst || $dayEndYmd > $monthLast) {
+        return null;
+    }
+    $bc = money_normalize($p['cost'] ?? '0');
+    $bpAmt = money_normalize($p['price'] ?? '0');
+    $bf = money_normalize($p['profit'] ?? '0');
+
+    return prorateInclusiveDateRange($monthFirst, $dayEndYmd, $bc, $bpAmt, $bf);
 }
 
 /** 某月第 N 日（不超过该月最后一天） */
@@ -646,7 +712,7 @@ function inferOpenMonthlyBillingMonthYn(PDO $pdo, int $companyId, array $r, stri
             }
             $startYm = (new DateTimeImmutable($startDate))->format('Y-m');
             $term = getBillingTermMonthsFromContract($contract);
-            $exclusiveEnd = ($term !== null && $term >= 1) ? billingContractExclusiveEndYmd($startDate, $term) : null;
+            $exclusiveEnd = ($term !== null && $term >= 1) ? billingContractExclusiveEndYmdMonthlyAfterPartialFirst($startDate, $term) : null;
             while ($iter <= $endCap) {
                 $y = (int) $iter->format('Y');
                 $mo = (int) $iter->format('n');
@@ -698,11 +764,13 @@ function fetchBankProcessesByIds(PDO $pdo, array $ids, int $companyId): array
     $hasIssueFlagColumn = tableHasColumn($pdo, 'bank_process', 'issue_flag');
     $hasFlagColumn = tableHasColumn($pdo, 'bank_process', 'flag');
     $hasResendRelax = tableHasColumn($pdo, 'bank_process', 'accounting_resend_relax_created_floor');
+    $hasDayEndTailCol = tableHasColumn($pdo, 'bank_process', 'day_end_monthly_cap_enabled');
     $hasSchedCols = bmp_bankProcessHasResendScheduleColumns($pdo);
     $issueFlagSql = getBankProcessIssueFlagSql('bp', $hasIssueFlagColumn, $hasFlagColumn);
     $sql = "SELECT bp.id, bp.name, bp.bank, bp.country, bp.cost, bp.price, bp.profit, bp.day_start, bp.day_end, bp.contract, bp.status,
             bp.dts_created" . ($hasFrequency ? ", bp.day_start_frequency" : "") .
         ($hasResendRelax ? ", bp.accounting_resend_relax_created_floor" : "") .
+        ($hasDayEndTailCol ? ", bp.day_end_monthly_cap_enabled" : "") .
         ($hasSchedCols ? ", bp.accounting_resend_schedule_day_start, bp.accounting_resend_schedule_day_end, bp.accounting_resend_schedule_frequency" : "") . ",
             bp.card_merchant_id, bp.customer_id, bp.profit_account_id, bp.company_id, bp.profit_sharing, c.owner_id
             FROM bank_process bp
@@ -933,7 +1001,7 @@ try {
     $pairs = [];
     foreach ($ids as $i => $id) {
         $pt = isset($periodTypes[$i]) ? trim($periodTypes[$i]) : 'monthly';
-        if ($pt !== 'partial_first_month' && $pt !== 'manual_inactive' && $pt !== 'day_end_tail' && $pt !== 'resend_consolidated_range') {
+        if ($pt !== 'partial_first_month' && $pt !== 'manual_inactive' && $pt !== 'day_end_tail' && $pt !== 'resend_consolidated_range' && $pt !== 'once_one_off') {
             $pt = 'monthly';
         }
         $pairs[] = [
@@ -1001,6 +1069,7 @@ try {
     $has_source_bank_process_period_type = tableHasColumn($pdo, 'transactions', 'source_bank_process_period_type');
     $has_period_type = tableHasColumn($pdo, 'process_accounting_posted', 'period_type');
     $has_resend_relax_col = tableHasColumn($pdo, 'bank_process', 'accounting_resend_relax_created_floor');
+    $has_day_end_tail_switch_col = tableHasColumn($pdo, 'bank_process', 'day_end_monthly_cap_enabled');
     $fallbackDate = date('Y-m-d');
     $createdCount = 0;
     $skippedFutureMonthlyDueCount = 0;
@@ -1013,6 +1082,7 @@ try {
         }
         $skipCurrentPair = false;
         $monthlyProrationPsRatio = null;
+        $dayEndTailAnchorYmd = null;
         $periodType = trim((string) ($pair['period_type'] ?? 'monthly'));
         $cost = money_normalize($p['cost'] ?? '0');
         $price = money_normalize($p['price'] ?? '0');
@@ -1075,6 +1145,13 @@ try {
             $price = $partial['price'];
             $profit = $partial['profit'];
         } elseif ($periodType === 'day_end_tail' && $dayStartYmd) {
+            if ($has_day_end_tail_switch_col && $frequency === '1st_of_every_month') {
+                $raw = $p['day_end_monthly_cap_enabled'] ?? null;
+                $tailOn = in_array((string) $raw, ['1', 'true', 'TRUE'], true) || $raw === 1 || $raw === true;
+                if (!$tailOn) {
+                    continue;
+                }
+            }
             $dayEndRaw = $p['day_end'] ?? null;
             if ($dayEndRaw === null || trim((string) $dayEndRaw) === '' || strtotime((string) $dayEndRaw) === false) {
                 continue;
@@ -1085,13 +1162,31 @@ try {
             }
             $exclusiveEnd = contractExclusiveEndYmdForFrequency($dayStartYmd, $p['contract'] ?? null, $frequency);
             $dayEndInc = date('Y-m-d', strtotime((string) $dayEndRaw));
-            if ($exclusiveEnd === null || $dayEndInc < $exclusiveEnd) {
+            if ($exclusiveEnd === null) {
                 continue;
             }
+            $useSwitchGatedTail = ($frequency === '1st_of_every_month' && $has_day_end_tail_switch_col);
+            if ($useSwitchGatedTail) {
+                try {
+                    $monthFirst = (new DateTimeImmutable($dayEndInc))->modify('first day of this month')->format('Y-m-d');
+                } catch (Throwable $e) {
+                    continue;
+                }
+                $tailFrom = max($exclusiveEnd, $monthFirst);
+                if ($tailFrom > $dayEndInc) {
+                    continue;
+                }
+            } else {
+                if ($dayEndInc < $exclusiveEnd) {
+                    continue;
+                }
+                $tailFrom = $exclusiveEnd;
+            }
+            $dayEndTailAnchorYmd = $tailFrom;
             if ($fallbackDate < maxYmd($dayStartYmd, $createdYmd)) {
                 continue;
             }
-            $tail = prorateInclusiveDateRange($exclusiveEnd, $dayEndInc, $cost, $price, $profit);
+            $tail = prorateInclusiveDateRange($tailFrom, $dayEndInc, $cost, $price, $profit);
             $cost = $tail['cost'];
             $price = $tail['price'];
             $profit = $tail['profit'];
@@ -1170,6 +1265,29 @@ try {
             }
         }
 
+        // 1st_of_every_month + Day end 旁开关 ON：day_end 落在该账单自然月内时按「月初～day_end」比例（与 Inbox 一致）。
+        if ($periodType === 'monthly' && $frequency === '1st_of_every_month' && $has_day_end_tail_switch_col
+            && $resolvedMonthlyBm !== '' && preg_match('/^(\d{4})-(\d{1,2})$/', $resolvedMonthlyBm, $mCapPost)) {
+            $capPost = txnTryDayEndMonthlyCapAmounts1stOfMonth(
+                $p,
+                $has_day_end_tail_switch_col,
+                $frequency,
+                (int) $mCapPost[1],
+                (int) $mCapPost[2]
+            );
+            if ($capPost !== null) {
+                $cost = $capPost['cost'];
+                $price = $capPost['price'];
+                $profit = $capPost['profit'];
+                $fpPs = money_normalize($p['profit'] ?? '0');
+                if (money_cmp($fpPs, '0') > 0) {
+                    $monthlyProrationPsRatio = money_div($profit, $fpPs, MONEY_CALC_SCALE);
+                } else {
+                    $monthlyProrationPsRatio = null;
+                }
+            }
+        }
+
         // 1+1/1+2/1+3：active 期间统一按 1 个月价格入账；仅 manual_inactive 才按赔付月数放大。
         if ($periodType === 'manual_inactive') {
             $mult = getManualInactiveMultiplierFromContract($p['contract'] ?? null);
@@ -1220,17 +1338,24 @@ try {
             $transactionDate = $fallbackDate;
             $postedDateForInbox = $fallbackDate;
         } elseif ($periodType === 'day_end_tail' && $dayStartYmd) {
-            // day_end_tail：交易归属日应落在尾段起始日（通常是合同自然结束次日；1st 频率下即该月1号），
-            // 这样 Payment History 会显示在正确账期（例如 4/1-4/15 挂在 4/1）。
-            // PAP.posted_date 仍用合同自然结束次日，保持 Inbox 去重口径。
-            $term = getBillingTermMonthsFromContract($p['contract'] ?? null);
-            if ($term !== null && $term >= 1) {
-                $exclusiveEnd = contractExclusiveEndYmdForFrequency($dayStartYmd, $p['contract'] ?? null, $frequency);
-                if ($exclusiveEnd !== null) {
-                    $transactionDate = $exclusiveEnd;
-                    $postedDateForInbox = $exclusiveEnd;
+            // day_end_tail：归属日与 posted 锚点用尾段起点（1st+cap ON 时可能与 exclusiveEnd 相同或为 day_end 月首 max）
+            if ($dayEndTailAnchorYmd !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dayEndTailAnchorYmd)) {
+                $transactionDate = $dayEndTailAnchorYmd;
+                $postedDateForInbox = $dayEndTailAnchorYmd;
+            } else {
+                $term = getBillingTermMonthsFromContract($p['contract'] ?? null);
+                if ($term !== null && $term >= 1) {
+                    $exclusiveEnd = contractExclusiveEndYmdForFrequency($dayStartYmd, $p['contract'] ?? null, $frequency);
+                    if ($exclusiveEnd !== null) {
+                        $transactionDate = $exclusiveEnd;
+                        $postedDateForInbox = $exclusiveEnd;
+                    }
                 }
             }
+        } elseif ($periodType === 'once_one_off') {
+            // 一次性合同：不按应付日限制；归属日与 Inbox 去重锚点用 day_start，缺失则用今日
+            $transactionDate = ($dayStartYmd !== null && $dayStartYmd !== '') ? $dayStartYmd : $fallbackDate;
+            $postedDateForInbox = $transactionDate;
         } elseif ($periodType === 'monthly') {
             // monthly：Payment History 归档日固定为该期应付日（dueYmd），
             // 非 resend 场景未到应付日不允许提前入账；resend 维持可回补旧期能力。
@@ -1286,7 +1411,7 @@ try {
             }
         }
 
-        $suffix = $periodType === 'partial_first_month' ? ' (partial first month)' : ($periodType === 'day_end_tail' ? ' (day end tail)' : ($periodType === 'resend_consolidated_range' ? ' (resend consolidated)' : ''));
+        $suffix = $periodType === 'partial_first_month' ? ' (partial first month)' : ($periodType === 'day_end_tail' ? ' (day end tail)' : ($periodType === 'resend_consolidated_range' ? ' (resend consolidated)' : ($periodType === 'once_one_off' ? ' (once)' : '')));
         $resendEndMarker = '';
         if ($periodType === 'resend_consolidated_range') {
             $endRawForMarker = $p['day_end'] ?? null;
@@ -1337,6 +1462,8 @@ try {
             }
         } elseif ($monthlyProrationPsRatio !== null) {
             $psRatio = $monthlyProrationPsRatio;
+        } elseif ($periodType === 'once_one_off') {
+            $psRatio = '1.0000000000000000';
         } elseif ($periodType === 'day_end_tail' || $periodType === 'resend_consolidated_range') {
             $fp = money_normalize($p['profit'] ?? '0');
             $psRatio = money_cmp($fp, '0') > 0 ? money_div($profit, $fp, MONEY_CALC_SCALE) : '0.0000000000000000';
@@ -1355,7 +1482,10 @@ try {
                 }
             }
         }
-        $companyProfit = money_sub($profit, $totalPs, 2);
+        // bank_process.profit：新版前端存「净毛利」(sell−buy−已扣 PS)，旧版/JS 存「毛利」(sell−buy)。
+        // 公司 Profit 必须以本笔入账的 sell/buy 差额为毛利再扣 PS；若用 profit 再减 PS，净毛利会重复扣除分成（Once 等场景 Win/Loss 与 Description 不符）。
+        $grossProfitForTxn = money_sub($price, $cost, 2);
+        $companyProfit = money_sub($grossProfitForTxn, $totalPs, 2);
         if (money_cmp(money_abs($companyProfit), '0.00001') < 0) {
             $companyProfit = '0.00000000';
         }
@@ -1382,6 +1512,14 @@ try {
         }
 
         recordProcessAccountingPosted($pdo, $companyId, (int) $p['id'], $postedDateForInbox, $periodType, $has_period_type);
+
+        if ($periodType === 'once_one_off' && $frequency === 'once' && trim((string) ($p['status'] ?? '')) === 'active') {
+            $updOnceInactive = $pdo->prepare(
+                "UPDATE bank_process SET status = 'inactive', dts_modified = NOW() WHERE id = ? AND company_id = ? AND status = 'active'"
+            );
+            $updOnceInactive->execute([(int) $p['id'], $companyId]);
+            $p['status'] = 'inactive';
+        }
 
         if ($periodType === 'resend_consolidated_range' && $has_period_type && $dayStartYmd) {
             $endRawPost = $p['day_end'] ?? null;

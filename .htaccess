@@ -2,22 +2,22 @@
 # 这些配置允许提交大量数据，解决 post_max_size 限制问题
 
 # 设置 POST 数据最大大小（必须足够大以容纳所有数据）
-# php_value post_max_size 64M
+php_value post_max_size 64M
 
 # 设置文件上传最大大小（应该小于或等于 post_max_size）
-# php_value upload_max_filesize 64M
+php_value upload_max_filesize 64M
 
 # 设置最大输入变量数量（避免大量表单字段被截断）
-# php_value max_input_vars 5000
+php_value max_input_vars 5000
 
 # 设置最大输入时间（秒）- 允许服务器有足够时间处理大量数据
-# php_value max_input_time 300
+php_value max_input_time 300
 
 # 设置最大执行时间（秒）- 允许脚本有足够时间处理数据
-# php_value max_execution_time 300
+php_value max_execution_time 300
 
 # 设置内存限制（确保有足够内存处理大量数据）
-# php_value memory_limit 256M
+php_value memory_limit 256M
 
 # 注意：
 # 1. 这些配置需要服务器支持在 .htaccess 中设置 PHP 配置
@@ -25,3 +25,61 @@
 # 3. 如果这些设置不生效，可能需要通过 php.ini 或服务器配置来设置
 # 4. 修改后可能需要等待几分钟让配置生效
 
+RewriteEngine On
+
+# Root -> SPA login
+RewriteRule ^$ /login [R=302,L,NC]
+
+# Legacy PHP URLs -> clean URLs
+RewriteRule ^index\.php$ /login [R=302,L,NC]
+RewriteRule ^dashboard\.php$ /dashboard [R=302,L,NC]
+RewriteRule ^domain\.php$ /domain [R=302,L,NC]
+RewriteRule ^announcement\.php$ /announcement [R=302,L,NC]
+RewriteRule ^account-list\.php$ /account-list [R=302,L,NC]
+RewriteRule ^add-account\.php$ /add-account [R=302,L,NC]
+RewriteRule ^processlist\.php$ /process-list [R=302,L,NC]
+RewriteRule ^games_process_list\.php$ /games-process-list [R=302,L,NC]
+RewriteRule ^bank_process_list\.php$ /bank-process-list [R=302,L,NC]
+RewriteRule ^userlist\.php$ /userlist [R=302,L,NC]
+RewriteRule ^useraccess\.php$ /useraccess [R=302,L,NC]
+RewriteRule ^deleted-log\.php$ /deleted-log [R=302,L,NC,QSA]
+RewriteRule ^deleted_log\.php$ /deleted-log [R=302,L,NC,QSA]
+RewriteRule ^ownership\.php$ /ownership [R=302,L,NC]
+RewriteRule ^transaction\.php$ /transaction [R=302,L,NC]
+RewriteRule ^customer_report\.php$ /customer-report [R=302,L,NC]
+RewriteRule ^domain_report\.php$ /domain-report [R=302,L,NC]
+RewriteRule ^capture_maintenance\.php$ /capture-maintenance [R=302,L,NC]
+RewriteRule ^transaction_maintenance\.php$ /transaction-maintenance [R=302,L,NC]
+RewriteRule ^formula_maintenance\.php$ /formula-maintenance [R=302,L,NC]
+RewriteRule ^bankprocess_maintenance\.php$ /bankprocess-maintenance [R=302,L,NC]
+RewriteRule ^payment_maintenance\.php$ /payment-maintenance [R=302,L,NC]
+RewriteRule ^customer_report$ /customer-report [R=302,L,NC]
+RewriteRule ^domain_report$ /domain-report [R=302,L,NC]
+RewriteRule ^capture_maintenance$ /capture-maintenance [R=302,L,NC]
+RewriteRule ^transaction_maintenance$ /transaction-maintenance [R=302,L,NC]
+RewriteRule ^formula_maintenance$ /formula-maintenance [R=302,L,NC]
+RewriteRule ^bankprocess_maintenance$ /bankprocess-maintenance [R=302,L,NC]
+RewriteRule ^payment_maintenance$ /payment-maintenance [R=302,L,NC]
+RewriteRule ^owner_secondary_password\.php$ /owner-secondary-password [R=302,L,NC]
+RewriteRule ^user_secondary_password\.php$ /user-secondary-password [R=302,L,NC]
+RewriteRule ^reset-password\.php$ /reset-password [R=302,L,NC]
+RewriteRule ^api/users/user_secondary_password\.php$ /user-secondary-password [R=302,L,NC]
+RewriteRule ^member\.php$ /member [R=302,L,NC]
+RewriteRule ^datacapture\.php$ /datacapture [R=302,L,NC,QSA]
+RewriteRule ^datacapturesummary\.php$ /datacapturesummary [R=302,L,NC,QSA]
+RewriteRule ^domainapi\.php$ /api/domain/domain_api.php [L,NC,QSA]
+
+# Clean URLs for pages still rendered by PHP
+RewriteRule ^datacapture$ /frontend/dist/index.html [L,NC,QSA]
+RewriteRule ^datacapturesummary$ /frontend/dist/index.html [L,NC,QSA]
+RewriteRule ^transaction$ /frontend/dist/index.html [L,NC,QSA]
+RewriteRule ^transcation$ /transaction [R=302,L,NC]
+RewriteRule ^logout$ /api/session/logout_api.php [L,NC,QSA]
+
+# Existing files/directories are served normally
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# SPA routes handled by React app build
+RewriteRule ^(login|member|reset-password|dashboard|domain|announcement|account-list|add-account|process-list|games-process-list|bank-process-list|userlist|useraccess|ownership|owner-secondary-password|user-secondary-password|datacapture|datacapturesummary|transaction|customer-report|domain-report|capture-maintenance|transaction-maintenance|formula-maintenance|bankprocess-maintenance|payment-maintenance|deleted-log)$ /frontend/dist/index.html [L,NC]

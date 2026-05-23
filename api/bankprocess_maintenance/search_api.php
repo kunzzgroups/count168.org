@@ -8,7 +8,7 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../transactions/bank_process_bill_display.php';
 
 /**
@@ -360,6 +360,8 @@ function rowToItem(array $row) {
             $periodType = isset($row['period_type']) ? trim((string) $row['period_type']) : '';
             if ($periodType === 'partial_first_month') {
                 $description = bankProcessProRatedFirstMonthDescription($row);
+            } elseif ($periodType === 'once_one_off') {
+                $description = bankProcessOnceOneOffHistoryDescription($row);
             } else {
                 if ($periodType === 'day_end_tail') {
                     $description = 'Day end tail bill';

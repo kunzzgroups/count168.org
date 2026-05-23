@@ -1,0 +1,43 @@
+import { useLayoutEffect } from "react";
+import {
+  clearFormatStyles,
+  getFormatGridReady,
+  setFormatGridReady,
+  toggleTableDisplayForFormat,
+} from "../format/dataCaptureFormat.js";
+import { getFormatPreviewHtml } from "../format/dataCaptureFormat.js";
+
+/**
+ * Phase 5g: 2.Format display toggling + format grid ready bridges.
+ */
+export function useDataCaptureFormatDisplay() {
+  useLayoutEffect(() => {
+    if (readInitialFormatReady()) {
+      setFormatGridReady(true);
+    }
+
+    window.__DC_TOGGLE_FORMAT_DISPLAY__ = toggleTableDisplayForFormat;
+    window.__DC_CLEAR_FORMAT_STYLES__ = clearFormatStyles;
+    window.__DC_SET_FORMAT_GRID_READY__ = setFormatGridReady;
+    window.__DC_GET_FORMAT_GRID_READY__ = getFormatGridReady;
+
+    return () => {
+      if (window.__DC_TOGGLE_FORMAT_DISPLAY__ === toggleTableDisplayForFormat) {
+        delete window.__DC_TOGGLE_FORMAT_DISPLAY__;
+      }
+      if (window.__DC_CLEAR_FORMAT_STYLES__ === clearFormatStyles) {
+        delete window.__DC_CLEAR_FORMAT_STYLES__;
+      }
+      if (window.__DC_SET_FORMAT_GRID_READY__ === setFormatGridReady) {
+        delete window.__DC_SET_FORMAT_GRID_READY__;
+      }
+      if (window.__DC_GET_FORMAT_GRID_READY__ === getFormatGridReady) {
+        delete window.__DC_GET_FORMAT_GRID_READY__;
+      }
+    };
+  }, []);
+}
+
+function readInitialFormatReady() {
+  return Boolean(getFormatPreviewHtml());
+}

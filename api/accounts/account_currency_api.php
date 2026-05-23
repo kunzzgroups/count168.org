@@ -8,8 +8,8 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../includes/deleted_log.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../deleted_log/deleted_log.php';
 
 /**
  * 标准 JSON 响应
@@ -77,6 +77,15 @@ function resolveCompanyId($pdo) {
 /**
  * 获取账户关联的货币列表（当前公司）
  */
+function accountCurrencyTableExists(PDO $pdo): bool {
+    try {
+        $st = $pdo->query("SHOW TABLES LIKE 'account_currency'");
+        return $st && $st->rowCount() > 0;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
 function dbGetAccountCurrencies($pdo, $account_id, $company_id) {
     $sql = "SELECT ac.id, ac.account_id, ac.currency_id, c.code AS currency_code
             FROM account_currency ac
@@ -86,6 +95,43 @@ function dbGetAccountCurrencies($pdo, $account_id, $company_id) {
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$account_id, $company_id]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+/**
+ * Member Win/Loss 等：返回账户在当前公司下拥有的全部币别（含无 account_currency 行时的 account.currency_id 兜底）
+ */
+function dbGetAccountOwnedCurrenciesResolved(PDO $pdo, int $account_id, int $company_id): array {
+    if (accountCurrencyTableExists($pdo)) {
+        $rows = dbGetAccountCurrencies($pdo, $account_id, $company_id);
+        if (!empty($rows)) {
+            return $rows;
+        }
+    }
+    try {
+        $check = $pdo->query("SHOW COLUMNS FROM account LIKE 'currency_id'");
+        if ($check && $check->rowCount() > 0) {
+            $stmt = $pdo->prepare("
+                SELECT c.id AS currency_id, c.code AS currency_code
+                FROM account a
+                INNER JOIN currency c ON a.currency_id = c.id
+                WHERE a.id = ? AND c.company_id = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$account_id, $company_id]);
+            $one = $stmt->fetch(PDO::FETCH_ASSOC);
+            if ($one && !empty($one['currency_code'])) {
+                return [[
+                    'id' => null,
+                    'account_id' => $account_id,
+                    'currency_id' => (int) $one['currency_id'],
+                    'currency_code' => $one['currency_code'],
+                ]];
+            }
+        }
+    } catch (PDOException $e) {
+        // ignore
+    }
+    return [];
 }
 
 /**
@@ -179,7 +225,7 @@ try {
                 jsonResponse(false, '账户不存在或无权限访问', null, 403);
                 exit;
             }
-            $currencies = dbGetAccountCurrencies($pdo, $account_id, $company_id);
+            $currencies = dbGetAccountOwnedCurrenciesResolved($pdo, $account_id, $company_id);
             jsonResponse(true, '', $currencies);
             exit;
         }
@@ -195,6 +241,70 @@ try {
                     'is_linked' => in_array($c['id'], $linked_ids)
                 ];
             }, $all);
+            jsonResponse(true, '', $result);
+            exit;
+        }
+
+        /**
+         * Member Win/Loss：批量返回多个账户在当前公司拥有的币别；member 仅能查关联闭包内账户。
+         * GET account_ids=1,2,3
+         */
+        if ($action === 'get_batch_account_currencies') {
+            if (!isset($_SESSION['user_id'])) {
+                jsonResponse(false, '请先登录', null, 401);
+                exit;
+            }
+            $raw = isset($_GET['account_ids']) ? trim((string) $_GET['account_ids']) : '';
+            $parts = $raw !== '' ? preg_split('/\s*,\s*/', $raw) : [];
+            $ids = [];
+            foreach ($parts as $p) {
+                $n = (int) $p;
+                if ($n > 0 && !in_array($n, $ids, true)) {
+                    $ids[] = $n;
+                }
+            }
+            if ($ids === []) {
+                jsonResponse(false, 'account_ids 参数无效', null, 400);
+                exit;
+            }
+            require_once __DIR__ . '/../includes/member_linked_closure.php';
+            $userType = strtolower((string) ($_SESSION['user_type'] ?? ''));
+            $allowedMap = null;
+            if ($userType === 'member') {
+                $loginId = member_session_canonical_account_id();
+                if ($loginId <= 0) {
+                    jsonResponse(false, '无法识别会话', null, 403);
+                    exit;
+                }
+                $allowed = member_linked_member_closure_ids($pdo, $loginId, (int) $company_id);
+                $allowedMap = [];
+                foreach ($allowed as $x) {
+                    $allowedMap[(int) $x] = true;
+                }
+            }
+            $result = [];
+            foreach ($ids as $aid) {
+                if ($allowedMap !== null && empty($allowedMap[$aid])) {
+                    continue;
+                }
+                if (!dbAccountBelongsToCompany($pdo, $aid, (int) $company_id)) {
+                    continue;
+                }
+                $rows = dbGetAccountOwnedCurrenciesResolved($pdo, $aid, (int) $company_id);
+                $clist = [];
+                foreach ($rows as $r) {
+                    $clist[] = [
+                        'currency_id' => isset($r['currency_id']) ? (int) $r['currency_id'] : (isset($r['id']) ? (int) $r['id'] : 0),
+                        'currency_code' => isset($r['currency_code'])
+                            ? strtoupper(trim((string) $r['currency_code']))
+                            : '',
+                    ];
+                }
+                $result[] = [
+                    'account_id' => $aid,
+                    'currencies' => $clist,
+                ];
+            }
             jsonResponse(true, '', $result);
             exit;
         }

@@ -40,7 +40,7 @@ function billingContractExclusiveEndYmd(string $dayStartYmd, int $termMonths): ?
     }
 }
 
-/** 1st-of-month + day_start 非1号：首自然月为 partial 尾段；次月1号起至多 (N-1) 个整月账，截止日 = 次月1号 + (N-1) 月（如 3 MONTHS → 尾段+4月+5月）。 */
+/** 1st-of-month + day_start 非1号：起租当月 partial 不计入合同 N 个月；exclusive = 次月1号 + N 月。1号起租与 billingContractExclusiveEndYmd 同。 */
 function billingContractExclusiveEndYmdFirstOfMonth(string $dayStartYmd, int $termMonths): ?string
 {
     if ($termMonths < 1) {
@@ -52,7 +52,32 @@ function billingContractExclusiveEndYmdFirstOfMonth(string $dayStartYmd, int $te
             return $start->modify("+{$termMonths} months")->format('Y-m-d');
         }
         $firstAnchor = $start->modify('first day of next month');
-        return $firstAnchor->modify('+' . ($termMonths - 1) . ' months')->format('Y-m-d');
+        return $firstAnchor->modify("+{$termMonths} months")->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** monthly + 非1号：次月起首应付日 + N 月 exclusive（与 inbox / post 一致）。 */
+function billingContractExclusiveEndYmdMonthlyAfterPartialFirst(string $dayStartYmd, int $termMonths): ?string
+{
+    if ($termMonths < 1) {
+        return null;
+    }
+    try {
+        $start = new DateTimeImmutable($dayStartYmd);
+        if ((int) $start->format('j') === 1) {
+            return billingContractExclusiveEndYmd($dayStartYmd, $termMonths);
+        }
+        $nextMo = $start->modify('first day of next month');
+        $y = (int) $nextMo->format('Y');
+        $mo = (int) $nextMo->format('n');
+        $dueDay = (int) $start->format('j');
+        $last = (int) date('t', mktime(0, 0, 0, $mo, 1, $y));
+        $d = min(max(1, $dueDay), $last);
+        $firstContractDue = sprintf('%04d-%02d-%02d', $y, $mo, $d);
+
+        return (new DateTimeImmutable($firstContractDue))->modify("+{$termMonths} months")->format('Y-m-d');
     } catch (Throwable $e) {
         return null;
     }
@@ -65,7 +90,7 @@ function contractExclusiveEndYmdForFrequency(string $startYmd, ?string $contract
         return null;
     }
     if ($frequency === 'monthly') {
-        return billingContractExclusiveEndYmd($startYmd, $term);
+        return billingContractExclusiveEndYmdMonthlyAfterPartialFirst($startYmd, $term);
     }
     return billingContractExclusiveEndYmdFirstOfMonth($startYmd, $term);
 }
@@ -92,7 +117,7 @@ function generateMonthlyBillingDueDates(string $dayStartYmd, int $termMonths): a
 
 /**
  * Whether $todayYmd may still show Accounting Due for this process (contract + optional day_end).
- * day_end 为最后一天计入（可与 process_accounting_inbox_api 一致）；$frequency monthly 用 day_start+N 月，否则用 1st 锚点规则。
+ * day_end 为最后一天计入（可与 process_accounting_inbox_api 一致）；monthly / 1st 均用 contractExclusiveEndYmdForFrequency（非 1 号起租当月不计入 N）。
  */
 function isWithinRecurringBillingWindow(
     string $todayYmd,

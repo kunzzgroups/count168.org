@@ -125,7 +125,7 @@ if (!function_exists('bmp_mergeResendScheduleIntoBankProcessRowForAccounting')) 
             $row['accounting_resend_consolidated_range'] = 1;
         }
         $fq = isset($row['accounting_resend_schedule_frequency']) ? strtolower(trim((string) $row['accounting_resend_schedule_frequency'])) : '';
-        if ($fq === 'monthly' || $fq === '1st_of_every_month') {
+        if ($fq === 'monthly' || $fq === '1st_of_every_month' || $fq === 'once') {
             $row['day_start_frequency'] = $fq;
         }
         if (!$hadScheduleStart && !empty($row['accounting_resend_relax_created_floor'])
@@ -147,10 +147,74 @@ if (!function_exists('bmp_normalizePeriodType')) {
     function bmp_normalizePeriodType(?string $raw): string
     {
         $t = strtolower(trim((string) $raw));
-        if ($t === 'partial_first_month' || $t === 'manual_inactive' || $t === 'day_end_tail' || $t === 'resend_consolidated_range') {
+        if ($t === 'partial_first_month' || $t === 'manual_inactive' || $t === 'day_end_tail' || $t === 'resend_consolidated_range' || $t === 'once_one_off') {
             return $t;
         }
         return 'monthly';
+    }
+}
+
+/**
+ * 与 process_accounting_inbox_api / process_post 一致：优先 d/m/Y，避免原始 day_start 被 strtotime 误解析，
+ * 导致 dismiss 写入的 posted_date 与 Inbox 判定锚点不一致（Resend 合并行删后仍显示）。
+ */
+if (!function_exists('bmp_bankProcessDateFieldToYmd')) {
+    function bmp_bankProcessDateFieldToYmd($raw): ?string
+    {
+        if ($raw === null) {
+            return null;
+        }
+        $s = trim((string) $raw);
+        if ($s === '') {
+            return null;
+        }
+        if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})/', $s, $m)) {
+            $y = (int) $m[1];
+            $mo = (int) $m[2];
+            $d = (int) $m[3];
+            if ($mo >= 1 && $mo <= 12 && $d >= 1 && $d <= 31 && checkdate($mo, $d, $y)) {
+                return sprintf('%04d-%02d-%02d', $y, $mo, $d);
+            }
+        }
+        if (preg_match('#^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$#', $s, $m)) {
+            $d = (int) $m[1];
+            $mo = (int) $m[2];
+            $y = (int) $m[3];
+            if ($mo >= 1 && $mo <= 12 && $d >= 1 && $d <= 31 && checkdate($mo, $d, $y)) {
+                return sprintf('%04d-%02d-%02d', $y, $mo, $d);
+            }
+        }
+        $dateStr = str_replace('/', '-', $s);
+        if (preg_match('/^\d{1,2}-\d{1,2}$/', $dateStr)) {
+            $dateStr .= '-' . date('Y');
+        }
+        $ts = strtotime($dateStr);
+
+        return $ts !== false ? date('Y-m-d', $ts) : null;
+    }
+}
+
+/**
+ * Resend（accounting_resend_relax_created_floor）且合并后的 day_start / day_end 跨自然月时：
+ * 勿再对其中某一整月单独套用「月初～day_end」按月截断，否则会多出下一月的 Accounting Due / Transaction，
+ * 与「单笔合并区间」或用户预期的单日总价冲突。
+ */
+if (!function_exists('bmp_shouldSkipDayEndMonthlyCapForResendCrossMonthRange')) {
+    function bmp_shouldSkipDayEndMonthlyCapForResendCrossMonthRange(array $row): bool
+    {
+        if (empty($row['accounting_resend_relax_created_floor'])) {
+            return false;
+        }
+        $ds = bmp_bankProcessDateFieldToYmd($row['day_start'] ?? null);
+        $de = bmp_bankProcessDateFieldToYmd($row['day_end'] ?? null);
+        if ($ds === null || $de === null || $ds > $de) {
+            return false;
+        }
+        try {
+            return (new DateTimeImmutable($ds))->format('Y-m') !== (new DateTimeImmutable($de))->format('Y-m');
+        } catch (Throwable $e) {
+            return false;
+        }
     }
 }
 

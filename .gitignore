@@ -1,0 +1,9 @@
+config.local.php
+node_modules/
+frontend/node_modules/
+.env
+.env.local
+
+# database: regenerable import intermediates
+database/generated/*.sql
+!database/generated/.gitkeep

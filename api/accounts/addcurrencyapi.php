@@ -3,8 +3,9 @@
  * 添加账户 API
  */
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -176,6 +177,11 @@ try {
     }
     if (!isset($_SESSION['user_id'])) {
         throw new Exception('用户未登录');
+    }
+
+    if (is_partnership_audit_read_only_active($pdo)) {
+        jsonResponse(false, '只读账号无法添加账户', null);
+        exit;
     }
 
     $company_id = null;

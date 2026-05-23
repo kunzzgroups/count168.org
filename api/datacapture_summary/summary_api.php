@@ -12,7 +12,7 @@ if (PHP_VERSION_ID >= 70300) {
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 
 // Helper function to convert PHP ini size values to bytes
@@ -304,6 +304,9 @@ function computeTemplateKey(array $row): string {
         $accountId = trim((string)($row['account_id'] ?? ''));
         if ($baseKey !== '') {
             $key = $accountId !== '' ? $baseKey . '_' . $accountId : $baseKey;
+            if ($subOrder !== '') {
+                $key .= '_so' . $subOrder;
+            }
             return substr($key, 0, 250);
         }
 
@@ -337,19 +340,49 @@ function summary_money_value(array $row, string $key, string $default = '0'): st
 ensureTemplateSchema($pdo);
 
 /**
+ * 获取与当前 process 处于同一 copy/sync 组的其它流程（双向）。
+ * 规则：
+ * - 若当前是子流程（sync_source_process_id 有值），锚点为其源流程；
+ * - 若当前是源流程（存在子流程指向它），锚点为自己；
+ * - 同步目标为：源流程 + 全部同源子流程，排除当前流程自身。
+ */
+function getLinkedProcessTargets(PDO $pdo, int $processId, int $companyId): array
+{
+    $currentStmt = $pdo->prepare("
+        SELECT id, process_id, sync_source_process_id
+        FROM process
+        WHERE id = ? AND company_id = ?
+        LIMIT 1
+    ");
+    $currentStmt->execute([$processId, $companyId]);
+    $current = $currentStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$current) {
+        return [];
+    }
+
+    $anchorId = !empty($current['sync_source_process_id'])
+        ? (int)$current['sync_source_process_id']
+        : (int)$current['id'];
+
+    $targetStmt = $pdo->prepare("
+        SELECT id, process_id
+        FROM process
+        WHERE company_id = ?
+          AND (id = ? OR sync_source_process_id = ?)
+          AND id <> ?
+    ");
+    $targetStmt->execute([$companyId, $anchorId, $anchorId, $processId]);
+
+    return $targetStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+/**
  * 同步 Formula 到所有关联的 Multi-use Processes
  * 当源 Process 的 Formula 更新时，自动同步到所有 sync_source_process_id 指向该源 Process 的 Processes
  */
 function syncFormulaToMultiUseProcesses(PDO $pdo, int $sourceProcessId, array $templateData, int $companyId) {
     try {
-        // 查找所有 sync_source_process_id 指向当前源 Process 的 Processes
-        $stmt = $pdo->prepare("
-            SELECT id, process_id 
-            FROM process 
-            WHERE sync_source_process_id = ? AND company_id = ?
-        ");
-        $stmt->execute([$sourceProcessId, $companyId]);
-        $syncedProcesses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $syncedProcesses = getLinkedProcessTargets($pdo, $sourceProcessId, $companyId);
         
         if (empty($syncedProcesses)) {
             return; // 没有需要同步的 Processes
@@ -496,12 +529,7 @@ function syncFormulaToMultiUseProcesses(PDO $pdo, int $sourceProcessId, array $t
  */
 function syncDeleteTemplateToMultiUseProcesses(PDO $pdo, int $sourceProcessId, string $idProduct, $accountId, string $productType, $formulaVariant, $subOrder, int $companyId) {
     try {
-        $stmt = $pdo->prepare("
-            SELECT id, process_id FROM process 
-            WHERE sync_source_process_id = ? AND company_id = ?
-        ");
-        $stmt->execute([$sourceProcessId, $companyId]);
-        $syncedProcesses = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $syncedProcesses = getLinkedProcessTargets($pdo, $sourceProcessId, $companyId);
         if (empty($syncedProcesses)) {
             return;
         }
@@ -588,6 +616,27 @@ function saveTemplateRow(PDO $pdo, array $row, int $companyId) {
     
     // Determine formula_variant: if provided, use it; otherwise find the next available variant
     $formulaVariant = isset($row['formula_variant']) && $row['formula_variant'] !== null && $row['formula_variant'] !== '' ? (int)$row['formula_variant'] : null;
+
+    $rowIndexForHierarchy = isset($row['row_index']) && $row['row_index'] !== null && $row['row_index'] !== ''
+        ? (int)$row['row_index']
+        : null;
+
+    // Sub：按 parent_id_product 层级定位已有行，避免 template_unique 不含 parent 时重复 INSERT
+    if ($productType === 'sub' && $templateId === null && $parentIdProduct) {
+        $hierarchyHit = findSubTemplateByHierarchy(
+            $pdo,
+            $companyId,
+            $hasProcessId ? $processId : null,
+            (string)$parentIdProduct,
+            (int)$row['account_id'],
+            $rowIndexForHierarchy,
+            $subOrder
+        );
+        if ($hierarchyHit) {
+            $templateId = (int)$hierarchyHit['id'];
+            $formulaVariant = (int)$hierarchyHit['formula_variant'];
+        }
+    }
     
     // 如果提供了 template_id，直接使用它来查找现有模板并获取 formula_variant
     if ($templateId !== null) {
@@ -1425,7 +1474,199 @@ function resolveAccountDisplayInTemplates(PDO $pdo, int $companyId, array &$temp
 }
 
 /**
+ * 层级唯一键：parent_id_product + account_id + row_index + sub_order（不含 formula_variant，避免同账户重复行）。
+ */
+function subTemplateHierarchyKey(array $sub): string {
+    $parent = trim((string)($sub['parent_id_product'] ?? ''));
+    $accountId = (int)($sub['account_id'] ?? 0);
+    $rowIndex = isset($sub['row_index']) && $sub['row_index'] !== null && $sub['row_index'] !== ''
+        ? (int)$sub['row_index']
+        : -1;
+    $subOrder = isset($sub['sub_order']) && $sub['sub_order'] !== null && $sub['sub_order'] !== ''
+        ? (string)(float)$sub['sub_order']
+        : '0';
+    return strtolower($parent) . '|' . $accountId . '|' . $rowIndex . '|' . $subOrder;
+}
+
+/**
+ * 同一 parent + account + row_index + sub_order 只保留一条；DB 优先于 account_link 继承副本。
+ */
+function dedupeTemplateGroupSubs(array $subs): array {
+    if (count($subs) <= 1) {
+        return $subs;
+    }
+    $byKey = [];
+    foreach ($subs as $sub) {
+        if (!is_array($sub)) {
+            continue;
+        }
+        $key = subTemplateHierarchyKey($sub);
+        if (!isset($byKey[$key])) {
+            $byKey[$key] = $sub;
+            continue;
+        }
+        $byKey[$key] = pickPreferredSubTemplateRow($byKey[$key], $sub);
+    }
+    return array_values($byKey);
+}
+
+function pickPreferredSubTemplateRow(array $existing, array $candidate): array {
+    $existingInherited = !empty($existing['inherited_from_account_link'])
+        || (isset($existing['id']) && is_string($existing['id']) && strpos((string)$existing['id'], 'inherit_') === 0);
+    $candidateInherited = !empty($candidate['inherited_from_account_link'])
+        || (isset($candidate['id']) && is_string($candidate['id']) && strpos((string)$candidate['id'], 'inherit_') === 0);
+    if ($existingInherited && !$candidateInherited) {
+        return $candidate;
+    }
+    if ($candidateInherited && !$existingInherited) {
+        return $existing;
+    }
+    $existingId = isset($existing['id']) && is_numeric($existing['id']) ? (int)$existing['id'] : 0;
+    $candidateId = isset($candidate['id']) && is_numeric($candidate['id']) ? (int)$candidate['id'] : 0;
+    if ($candidateId > $existingId) {
+        return $candidate;
+    }
+    if ($existingId > $candidateId) {
+        return $existing;
+    }
+    $existingUpdated = $existing['updated_at'] ?? '';
+    $candidateUpdated = $candidate['updated_at'] ?? '';
+    return ($candidateUpdated > $existingUpdated) ? $candidate : $existing;
+}
+
+/**
+ * 按精确 parent_id_product 分组 subs，供 Summary 单次套用（避免多 template key 重复 iterate）。
+ */
+function buildSubsByParentForApi(array $templates): array {
+    $byParent = [];
+    foreach ($templates as $group) {
+        if (empty($group['subs']) || !is_array($group['subs'])) {
+            continue;
+        }
+        foreach ($group['subs'] as $sub) {
+            if (!is_array($sub)) {
+                continue;
+            }
+            $parent = trim((string)($sub['parent_id_product'] ?? ''));
+            if ($parent === '') {
+                continue;
+            }
+            if (!isset($byParent[$parent])) {
+                $byParent[$parent] = [];
+            }
+            $byParent[$parent][] = $sub;
+        }
+    }
+    foreach ($byParent as $parent => $subs) {
+        $byParent[$parent] = dedupeTemplateGroupSubs($subs);
+    }
+    return $byParent;
+}
+
+/**
+ * Debug: 统计 API 层 sub 数量，确认重复发生在哪一层。
+ */
+function buildTemplateFetchDiagnostics(array $templates, array $subsByParent, array $rawRows = []): array {
+    $subsPerParent = [];
+    $totalSubsInGroups = 0;
+    foreach ($templates as $key => $group) {
+        $count = is_array($group['subs'] ?? null) ? count($group['subs']) : 0;
+        $totalSubsInGroups += $count;
+        if ($count > 0) {
+            $subsPerParent[$key] = $count;
+        }
+    }
+    $subsPerParentExact = [];
+    $totalSubsExact = 0;
+    foreach ($subsByParent as $parent => $subs) {
+        $c = count($subs);
+        $totalSubsExact += $c;
+        $subsPerParentExact[$parent] = $c;
+    }
+    $rawSubCount = 0;
+    $rawSubDupes = [];
+    if (!empty($rawRows)) {
+        $seen = [];
+        foreach ($rawRows as $row) {
+            if (($row['product_type'] ?? '') !== 'sub') {
+                continue;
+            }
+            $rawSubCount++;
+            $k = subTemplateHierarchyKey($row);
+            if (!isset($seen[$k])) {
+                $seen[$k] = [];
+            }
+            $seen[$k][] = (int)($row['id'] ?? 0);
+        }
+        foreach ($seen as $k => $ids) {
+            if (count($ids) > 1) {
+                $rawSubDupes[$k] = $ids;
+            }
+        }
+    }
+    return [
+        'sql_sub_row_count' => $rawSubCount,
+        'sql_duplicate_hierarchy_keys' => $rawSubDupes,
+        'grouped_sub_count_by_template_key' => $subsPerParent,
+        'total_subs_inside_template_groups' => $totalSubsInGroups,
+        'subs_by_parent_exact' => $subsPerParentExact,
+        'total_subs_after_dedupe' => $totalSubsExact,
+    ];
+}
+
+/**
+ * 按 parent_id_product + account_id + row_index (+ sub_order) 查找已保存的 sub 模板，防止重复 INSERT。
+ */
+function findSubTemplateByHierarchy(
+    PDO $pdo,
+    int $companyId,
+    ?int $processId,
+    string $parentIdProduct,
+    int $accountId,
+    ?int $rowIndex,
+    ?float $subOrder
+): ?array {
+    $parentIdProduct = trim($parentIdProduct);
+    if ($parentIdProduct === '' || $accountId <= 0) {
+        return null;
+    }
+    $sql = "
+        SELECT id, formula_variant
+        FROM data_capture_templates
+        WHERE company_id = :company_id
+          AND product_type = 'sub'
+          AND TRIM(COALESCE(parent_id_product, '')) = :parent_id_product
+          AND account_id = :account_id
+    ";
+    $params = [
+        ':company_id' => $companyId,
+        ':parent_id_product' => $parentIdProduct,
+        ':account_id' => $accountId,
+    ];
+    if ($processId !== null && $processId > 0) {
+        $sql .= " AND process_id = :process_id";
+        $params[':process_id'] = $processId;
+    } else {
+        $sql .= " AND (process_id IS NULL OR process_id = 0)";
+    }
+    if ($rowIndex !== null && $rowIndex >= 0 && $rowIndex < 999999) {
+        $sql .= " AND row_index = :row_index";
+        $params[':row_index'] = $rowIndex;
+    }
+    if ($subOrder !== null) {
+        $sql .= " AND (COALESCE(sub_order, 0) = COALESCE(:sub_order, 0))";
+        $params[':sub_order'] = $subOrder;
+    }
+    $sql .= " ORDER BY id DESC LIMIT 1";
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
  * 把 Main Acc 的 Formula 动态派生一份给 Sub Acc，通过 account_link 表中的 unidirectional 映射。
+ * Summary 页面不再调用：仅使用 data_capture_templates 中带 parent_id_product 的显式 sub 记录。
  */
 function inheritFormulasToSubAccounts(PDO $pdo, int $companyId, array $templates): array {
     try {
@@ -1482,32 +1723,53 @@ function inheritFormulasToSubAccounts(PDO $pdo, int $companyId, array $templates
             }
         }
 
-        // 遍历当前的模板，如果有 Main Acc 的模板，复制并塞入 Sub Acc
+        // 把 Main Acc 公式派生到 Sub Acc：写入 subs（勿写入 allMains，否则前端会按 main 套用并可能与已有 sub 模板重复）
         foreach ($templates as $mainKey => $templateGroup) {
             $allMains = $templateGroup['allMains'] ?? [];
-            $newMains = $allMains;
+            if (!isset($templates[$mainKey]['subs']) || !is_array($templates[$mainKey]['subs'])) {
+                $templates[$mainKey]['subs'] = [];
+            }
             $addedForSubAcc = [];
 
             foreach ($allMains as $t) {
                 $accId = (int)$t['account_id'];
-                if (isset($inheritanceMap[$accId])) {
-                    foreach ($inheritanceMap[$accId] as $subAccId) {
-                        $subT = $t;
-                        $subT['account_id'] = $subAccId;
-                        $subT['account_display'] = $subAccountDisplayMap[$subAccId] ?? $t['account_display'];
-                        // 为了避免前端 JS 防止重复 ID，这里打个标记
-                        $subT['id'] = $t['id'] . '_' . $subAccId; 
-                        
-                        // 防止同一个模板被插入多次
-                        $dedupKey = $subAccId . '_' . ($t['process_id'] ?? 0) . '_' . ($t['id_product'] ?? '') . '_' . ($t['row_index'] ?? '') . '_' . ($t['formula_variant'] ?? 0);
-                        if (!isset($addedForSubAcc[$dedupKey])) {
-                            $newMains[] = $subT;
-                            $addedForSubAcc[$dedupKey] = true;
+                if (!isset($inheritanceMap[$accId])) {
+                    continue;
+                }
+                $parentIdProduct = trim((string)($t['id_product'] ?? $mainKey));
+                foreach ($inheritanceMap[$accId] as $subAccId) {
+                    $dedupKey = $subAccId . '_' . ($t['process_id'] ?? 0) . '_' . $parentIdProduct . '_' . ($t['row_index'] ?? '') . '_' . ($t['formula_variant'] ?? 0);
+                    if (isset($addedForSubAcc[$dedupKey])) {
+                        continue;
+                    }
+
+                    // 若已存在同 parent + account 的 sub 模板（含 DB 保存项），不再注入继承副本
+                    $alreadyInSubs = false;
+                    foreach ($templates[$mainKey]['subs'] as $existingSub) {
+                        if ((int)($existingSub['account_id'] ?? 0) === (int)$subAccId
+                            && trim((string)($existingSub['parent_id_product'] ?? '')) === $parentIdProduct) {
+                            $alreadyInSubs = true;
+                            break;
                         }
                     }
+                    if ($alreadyInSubs) {
+                        $addedForSubAcc[$dedupKey] = true;
+                        continue;
+                    }
+
+                    $subT = $t;
+                    $subT['product_type'] = 'sub';
+                    $subT['account_id'] = $subAccId;
+                    $subT['account_display'] = $subAccountDisplayMap[$subAccId] ?? $t['account_display'];
+                    $subT['parent_id_product'] = $parentIdProduct;
+                    $subT['inherited_from_account_link'] = true;
+                    // 合成 id 仅供去重；前端按 subs 路径套用，不以 allMains 处理
+                    $subT['id'] = 'inherit_' . (int)($t['id'] ?? 0) . '_' . (int)$subAccId;
+
+                    $templates[$mainKey]['subs'][] = $subT;
+                    $addedForSubAcc[$dedupKey] = true;
                 }
             }
-            $templates[$mainKey]['allMains'] = $newMains;
         }
     } catch (Exception $e) {
         error_log('inheritFormulasToSubAccounts Error: ' . $e->getMessage());
@@ -1516,7 +1778,7 @@ function inheritFormulasToSubAccounts(PDO $pdo, int $companyId, array $templates
     return $templates;
 }
 
-function fetchTemplates(PDO $pdo, array $ids, ?int $processId = null) {
+function fetchTemplates(PDO $pdo, array $ids, ?int $processId = null, ?array &$rawSubRowsOut = null) {
     if (empty($ids) || $processId === null || $processId <= 0) {
         return [];
     }
@@ -1614,6 +1876,15 @@ function fetchTemplates(PDO $pdo, array $ids, ?int $processId = null) {
     $params = array_merge([$companyId, $processId], $lowerIds, $lowerIds, $lowerIds, $lowerIds, $lowerIds, $lowerIds);
     $stmt->execute($params);
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if ($rawSubRowsOut !== null) {
+        $rawSubRowsOut = [];
+        foreach ($results as $row) {
+            if (($row['product_type'] ?? '') === 'sub') {
+                $rawSubRowsOut[] = $row;
+            }
+        }
+    }
 
     $templates = [];
     foreach ($results as $row) {
@@ -1727,8 +1998,13 @@ function fetchTemplates(PDO $pdo, array $ids, ?int $processId = null) {
         }
     }
 
-    if (isset($companyId) && $companyId > 0) {
-        $templates = inheritFormulasToSubAccounts($pdo, (int)$companyId, $templates);
+    // Summary 只使用 DB 中显式保存的 sub（含 parent_id_product），不再注入 account_link 虚拟继承行。
+    // inheritFormulasToSubAccounts 曾导致「DB 一条 + inherit 一条」刷新后重复显示。
+
+    foreach ($templates as $mainKey => $group) {
+        if (!empty($group['subs']) && is_array($group['subs'])) {
+            $templates[$mainKey]['subs'] = dedupeTemplateGroupSubs($group['subs']);
+        }
     }
 
     return $templates;
@@ -2163,10 +2439,14 @@ if ($action === 'templates') {
         $ids = [];
         $processId = null;
         $captureId = null;
+        $payload = [];
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $jsonData = file_get_contents('php://input');
             $payload = json_decode($jsonData, true);
+            if (!is_array($payload)) {
+                $payload = [];
+            }
             if (isset($payload['idProducts']) && is_array($payload['idProducts'])) {
                 $ids = array_values(array_filter(array_map('trim', $payload['idProducts'])));
             }
@@ -2214,7 +2494,8 @@ if ($action === 'templates') {
 
         // 在 Data Capture 选择的 Process 下设置的 formula 只在该 Process 显示；若该 Process 有 sync 到其他 Process 则同步显示
         // Summary 的 formula 仅来自 Maintenance（data_capture_templates）；Process 在 Maintenance 无记录则不显示 formula
-        $templates = fetchTemplates($pdo, $ids, $processId);
+        $rawSubRowsFromSql = [];
+        $templates = fetchTemplates($pdo, $ids, $processId, $rawSubRowsFromSql);
 
         if ($captureId !== null && $captureId > 0 && $company_id) {
             $templates = mergeDetailOnlyTemplates($pdo, (int)$company_id, $captureId, $ids, $templates);
@@ -2225,10 +2506,24 @@ if ($action === 'templates') {
             resolveAccountDisplayInTemplates($pdo, (int)$company_id, $templates);
         }
 
-        echo json_encode([
+        $subsByParent = buildSubsByParentForApi($templates);
+        $debug = false;
+        if (isset($payload['debug']) && ($payload['debug'] === true || $payload['debug'] === 1 || $payload['debug'] === '1')) {
+            $debug = true;
+        } elseif (isset($_GET['debug']) && ($_GET['debug'] === '1' || $_GET['debug'] === 'true')) {
+            $debug = true;
+        }
+
+        $response = [
             'success' => true,
             'templates' => $templates,
-        ]);
+            'subsByParent' => $subsByParent,
+        ];
+        if ($debug) {
+            $response['diagnostics'] = buildTemplateFetchDiagnostics($templates, $subsByParent, $rawSubRowsFromSql);
+        }
+
+        echo json_encode($response);
     } catch (Exception $e) {
         error_log('Template Fetch Error: ' . $e->getMessage());
         echo json_encode([

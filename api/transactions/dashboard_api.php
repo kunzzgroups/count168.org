@@ -7,8 +7,8 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/permissions.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 
 /**
@@ -188,6 +188,16 @@ function dashboardShouldExcludeClearForRole(?string $role): bool
     return false;
 }
 
+/**
+ * 手动 PROFIT（Transaction Payment → WIN/LOSE，非 Bank Process / 赔款）描述条件。
+ * 与 search_api.php txn_win_lose bulk 一致。
+ */
+function dashboardManualProfitDescSql(string $alias = 't'): string
+{
+    $d = $alias !== '' ? $alias . '.' : '';
+    return "(({$d}description NOT LIKE 'Process: %' AND {$d}description NOT LIKE 'Inactive Compensation %' AND {$d}description NOT LIKE 'Compensation %') OR {$d}description IS NULL)";
+}
+
 function dashboardMoneyZero(): string
 {
     return '0.00000000';
@@ -342,12 +352,12 @@ try {
     foreach ($roles as $role) {
         $excludeClear = dashboardShouldExcludeClearForRole($role);
         // 获取该角色的所有账户
+        // 与 Transaction List 一致：含 inactive 账户（期内仍可能有 WIN/LOSE / PAYMENT）
         $sql = "SELECT DISTINCT a.id, a.account_id, a.name, a.role
                 FROM account a
                 INNER JOIN account_company ac ON a.id = ac.account_id
                 WHERE ac.company_id = ?
-                  AND UPPER(a.role) = ?
-                  AND a.status = 'active'";
+                  AND UPPER(TRIM(COALESCE(a.role, ''))) = ?";
 
         // 应用权限过滤
         list($sql, $params) = filterAccountsByPermissions($pdo, $sql, [], $company_id);
@@ -436,8 +446,8 @@ try {
                         WHEN transaction_type = 'PAYMENT' THEN -amount
                         WHEN transaction_type = 'WIN' AND (description LIKE 'Process: %') THEN amount
                         WHEN transaction_type = 'LOSE' AND (description LIKE 'Process: %') THEN -amount
-                        WHEN transaction_type = 'WIN' AND (description NOT LIKE 'Process: %' OR description IS NULL) THEN -amount
-                        WHEN transaction_type = 'LOSE' AND (description NOT LIKE 'Process: %' OR description IS NULL) THEN amount
+                        WHEN transaction_type = 'WIN' AND " . dashboardManualProfitDescSql('t') . " THEN -amount
+                        WHEN transaction_type = 'LOSE' AND " . dashboardManualProfitDescSql('t') . " THEN amount
                         WHEN transaction_type = 'ADJUSTMENT' THEN amount
                         ELSE 0
                     END), 0)
@@ -449,13 +459,15 @@ try {
             $bf_stmt->execute(array_merge([$company_id], $account_ids, [$date_from_db], $currency_params_t_to));
             $total_bf = dashboardMoneyAdd($total_bf, $bf_stmt->fetchColumn());
 
-            // From Account
+            // From Account（含手动 PROFIT WIN/LOSE，与 search_api from 侧一致）
             $sql = "SELECT COALESCE(SUM(CASE 
                         WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM', 'CLEAR') THEN amount
                         WHEN transaction_type = 'CONTRA' THEN amount
                         WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN 0
                         WHEN transaction_type = 'PAYMENT' AND sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
                         WHEN transaction_type = 'PAYMENT' AND (sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -amount
+                        WHEN transaction_type = 'WIN' AND " . dashboardManualProfitDescSql('t') . " THEN amount
+                        WHEN transaction_type = 'LOSE' AND " . dashboardManualProfitDescSql('t') . " THEN -amount
                         ELSE 0
                     END), 0)
                     FROM transactions t
@@ -523,8 +535,8 @@ try {
                                WHEN transaction_type = 'PAYMENT' THEN -t.amount
                                WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %') THEN t.amount
                                WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %') THEN -t.amount
-                               WHEN t.transaction_type = 'WIN' AND (t.description NOT LIKE 'Process: %' OR t.description IS NULL) THEN -t.amount
-                               WHEN t.transaction_type = 'LOSE' AND (t.description NOT LIKE 'Process: %' OR t.description IS NULL) THEN t.amount
+                               WHEN t.transaction_type = 'WIN' AND " . dashboardManualProfitDescSql('t') . " THEN -t.amount
+                               WHEN t.transaction_type = 'LOSE' AND " . dashboardManualProfitDescSql('t') . " THEN t.amount
                                WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
                                ELSE 0
                            END), 0) as cr_dr
@@ -542,7 +554,7 @@ try {
                 dashboardAddDailyAmount($daily_data, (string) $row['date'], $row['cr_dr'] ?? '0');
             }
 
-            // From Account
+            // From Account（含手动 PROFIT WIN/LOSE）
             $sql = "SELECT DATE(t.transaction_date) as date,
                            COALESCE(SUM(CASE 
                                WHEN transaction_type = 'CONTRA' THEN t.amount
@@ -551,13 +563,15 @@ try {
                                WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
                                WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
                                WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM', 'RATE') THEN t.amount
+                               WHEN t.transaction_type = 'WIN' AND " . dashboardManualProfitDescSql('t') . " THEN t.amount
+                               WHEN t.transaction_type = 'LOSE' AND " . dashboardManualProfitDescSql('t') . " THEN -t.amount
                                ELSE 0
                            END), 0) as cr_dr
                     FROM transactions t
                     WHERE t.company_id = ?
                       AND t.from_account_id IN ($ids_placeholder)
                       AND t.transaction_date BETWEEN ? AND ?
-                      AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE')"
+                      AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE', 'WIN', 'LOSE')"
                 . $currency_filter_t_from . $clearFilter . $contraApproval . "
                     GROUP BY DATE(t.transaction_date)
                     ORDER BY DATE(t.transaction_date)";
@@ -1150,6 +1164,33 @@ function calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from,
                 WHERE company_id = ? AND account_id = ? AND transaction_date BETWEEN ? AND ?
                   AND currency_id = ? AND transaction_type IN ('WIN', 'LOSE')
                   AND (description LIKE 'Process: %')";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
+        $win_loss = dashboardMoneyAdd($win_loss, $stmt->fetchColumn());
+
+        // 3. 手动 PROFIT（WIN/LOSE，与 Transaction List calculateWinLossByCurrency 一致）
+        $manualDesc = dashboardManualProfitDescSql('t');
+        $sql = "SELECT COALESCE(SUM(CASE
+                    WHEN t.transaction_type = 'WIN' AND {$manualDesc} THEN -t.amount
+                    WHEN t.transaction_type = 'LOSE' AND {$manualDesc} THEN t.amount
+                    ELSE 0 END), 0) as total
+                FROM transactions t
+                WHERE t.company_id = ? AND t.account_id = ? AND t.transaction_date BETWEEN ? AND ?
+                  AND t.currency_id = ? AND t.transaction_type IN ('WIN', 'LOSE')"
+            . dashboardContraApprovedWhere($pdo, 't');
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
+        $win_loss = dashboardMoneyAdd($win_loss, $stmt->fetchColumn());
+
+        $sql = "SELECT COALESCE(SUM(CASE
+                    WHEN t.transaction_type = 'WIN' AND {$manualDesc} THEN t.amount
+                    WHEN t.transaction_type = 'LOSE' AND {$manualDesc} THEN -t.amount
+                    ELSE 0 END), 0) as total
+                FROM transactions t
+                WHERE t.company_id = ? AND t.from_account_id = ? AND t.transaction_date BETWEEN ? AND ?
+                  AND t.currency_id = ? AND t.transaction_type IN ('WIN', 'LOSE')
+                  AND t.from_account_id IS NOT NULL"
+            . dashboardContraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $account_id, $date_from, $date_to, $currency_id]);
         $win_loss = dashboardMoneyAdd($win_loss, $stmt->fetchColumn());

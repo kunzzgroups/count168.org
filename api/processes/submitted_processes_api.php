@@ -1,6 +1,7 @@
 <?php
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/permissions.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 
 // 开启 session
 if (session_status() === PHP_SESSION_NONE) {
@@ -638,6 +639,11 @@ function saveSubmission($user_id)
     global $pdo, $company_id;
 
     try {
+        if (is_partnership_audit_read_only_active($pdo)) {
+            echo json_encode(['success' => false, 'error' => '只读账号无法执行此操作']);
+            return;
+        }
+
         // 获取POST数据
         $process_id = $_POST['process_id'] ?? '';
         $date_submitted = $_POST['date_submitted'] ?? date('Y-m-d');

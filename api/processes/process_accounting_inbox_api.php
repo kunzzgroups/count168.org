@@ -8,9 +8,13 @@
  * - 同上 Resend 标记期间：regular monthly 段对「截至今日所有未结清账期」逐月各列一行（含 1st of Every Month 与 Monthly prepaid），便于一次勾选、按 billing_month 多笔入账；非 Resend 流程仍只展示下一笔待结清账期。
  * - Day start 为当月1号且与创建同月：仍自 day_start 当日起可入账（与上条后续整月不同）。
  * - 非1号 day_start：首月按比例从 day_start 起算；若创建日晚于该自然月末则整段跳过（旧数据不拿）；出现日 max(day_start, 创建日)。
+ * - 合同 N 个月（N MONTHS，active）：起租自然月单独首段/首月不计入 N；N 个月从「次月」起计——1st 为次月起连续 N 个自然月 1 号锚点，monthly 为次月起首应付日起连续 N 期；与入账、process_post 合同边界一致。
+ * - Bank 表单 Day end 仅由前端 contractBillingEndYmdForBankForm 自动填（1 号起租=起租+N 月；非 1 号=起租+N 月再减一天）；入账与 isWithinRecurringBillingWindow 仍以本文件 PHP 为准。
  * - Monthly = 每月 day_start 日为应付日；一期金额为「上一应付日到本期应付前一日」按日历天比例（例如 3/13 应付则服务 2/13–3/12），不按自然月末截断。
  * - 逾期未入账：若仅在「算账日当天」才显示，用户错过后列表会空白；改为「已过应付日且该自然月尚未 monthly 入账/跳过」则一直显示到该月结清。
- * - 填写 day_end 且长于合同自然结束：多一笔 day_end_tail（例 1st + 非1号 day_start：自然结束次日到 day_end 按当月天数比例）。
+ * - day_end_tail（1st_of_every_month + 有 day_end_monthly_cap_enabled 列且开关 ON）：尾段区间为 max(合同 exclusiveEnd, day_end 所在月 1 号)～day_end（含），与 prorateInclusiveDateRange 旧算法一致；$today 达 tail 起点即入列。开关 OFF 时不排尾段。
+ * - 同上开关 ON 时，每一期 regular monthly（1st_of_every_month）若 day_end 落在该账单自然月内，该期金额按「该月 1 号～day_end」自然天比例折算（非仅合同尾段）；开关 OFF 则该期仍为整自然月价。
+ * - 无 day_end_monthly_cap_enabled 列或非 1st 频率：仍为「day_end ≥ exclusiveEnd」时 exclusiveEnd～day_end 尾段（与旧版一致）；无列时仍排尾段。
  * - Resend 弹窗同时填 day_start 与 day_end（仅 relax 暂存）：Accounting Due 只列一行，金额按自然月切段 [day_start, day_end] 合并（与 process_post 的 resend_consolidated_range 一致）；不影响非 Resend 的 addprocess。
  */
 
@@ -18,10 +22,15 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../bankprocess_maintenance/maintenance_accounting_resend_lib.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/../includes/ensure_bank_process_day_end_monthly_cap_column.php';
 require_once __DIR__ . '/contract_billing_addon.php';
+
+if (isset($pdo) && $pdo instanceof PDO) {
+    ensureBankProcessDayEndMonthlyCapEnabledColumn($pdo);
+}
 
 /** 统一 JSON 响应 */
 function jsonResponse(bool $success, string $message = '', $data = null): void
@@ -46,35 +55,7 @@ function tableHasColumn(PDO $pdo, string $table, string $column): bool
  */
 function inboxBankProcessDateFieldToYmd($raw): ?string
 {
-    if ($raw === null) {
-        return null;
-    }
-    $s = trim((string) $raw);
-    if ($s === '') {
-        return null;
-    }
-    if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})/', $s, $m)) {
-        $y = (int) $m[1];
-        $mo = (int) $m[2];
-        $d = (int) $m[3];
-        if ($mo >= 1 && $mo <= 12 && $d >= 1 && $d <= 31 && checkdate($mo, $d, $y)) {
-            return sprintf('%04d-%02d-%02d', $y, $mo, $d);
-        }
-    }
-    if (preg_match('#^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$#', $s, $m)) {
-        $d = (int) $m[1];
-        $mo = (int) $m[2];
-        $y = (int) $m[3];
-        if ($mo >= 1 && $mo <= 12 && $d >= 1 && $d <= 31 && checkdate($mo, $d, $y)) {
-            return sprintf('%04d-%02d-%02d', $y, $mo, $d);
-        }
-    }
-    $dateStr = str_replace('/', '-', $s);
-    if (preg_match('/^\d{1,2}-\d{1,2}$/', $dateStr)) {
-        $dateStr .= '-' . date('Y');
-    }
-    $ts = strtotime($dateStr);
-    return $ts !== false ? date('Y-m-d', $ts) : null;
+    return bmp_bankProcessDateFieldToYmd($raw);
 }
 
 /** Pro-rated cost/price/profit for partial first month: day_start to end of that month */
@@ -164,7 +145,7 @@ function getBillingTermMonthsFromContract(?string $contract): ?int
 }
 
 /**
- * 1st of Every Month + day_start 非1号：次月1号起的「整月」锚点月份个数上限 = max(0, N-1)。用于防止 exclusiveEnd 未命中时多出一期（如第4笔6月账）。
+ * 1st of Every Month + day_start 非1号：次月1号起的「整月」锚点月份个数上限 = N（起租当月 partial 不计入合同 N 个月）。
  */
 function inboxAnchorMonthCapAfterPartialFirst(?string $contract, int $startDayOfMonth): ?int
 {
@@ -175,7 +156,7 @@ function inboxAnchorMonthCapAfterPartialFirst(?string $contract, int $startDayOf
     if ($term === null || $term < 1) {
         return null;
     }
-    return max(0, $term - 1);
+    return max(0, $term);
 }
 
 function billingContractExclusiveEndYmd(string $dayStartYmd, int $termMonths): ?string
@@ -191,8 +172,8 @@ function billingContractExclusiveEndYmd(string $dayStartYmd, int $termMonths): ?
 }
 
 /**
- * 每月1号算账 + day_start 非1号：首自然月走 partial_first_month，其后从「次月1号」起至多 (N-1) 个整月账（N 为合同月数，如 3 MONTHS → 尾段+4月+5月共3笔）。
- * 截止日 firstAnchor+(N-1) 月（与 billing_schedule 一致）。day_start 在1号时与 billingContractExclusiveEndYmd 相同。
+ * 每月1号算账 + day_start 非1号：首自然月 partial 不计入合同 N 个月；合同 N 个月从「次月1号」起连续 N 个整月锚点，exclusive = firstAnchor + N 月。
+ * day_start 在1号时与 billingContractExclusiveEndYmd 从当月起计 N 月相同。
  */
 function billingContractExclusiveEndYmdFirstOfMonth(string $dayStartYmd, int $termMonths): ?string
 {
@@ -205,7 +186,35 @@ function billingContractExclusiveEndYmdFirstOfMonth(string $dayStartYmd, int $te
             return $start->modify("+{$termMonths} months")->format('Y-m-d');
         }
         $firstAnchor = $start->modify('first day of next month');
-        return $firstAnchor->modify('+' . ($termMonths - 1) . ' months')->format('Y-m-d');
+        return $firstAnchor->modify("+{$termMonths} months")->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * monthly + day_start 非1号：起租当月单独账单不计入合同 N 个月；N 个月从「次月起第一个应付日」起计，exclusive = 该应付日 + N 月。
+ * day_start 在1号时与 billingContractExclusiveEndYmd 相同。
+ */
+function billingContractExclusiveEndYmdMonthlyAfterPartialFirst(string $dayStartYmd, int $termMonths): ?string
+{
+    if ($termMonths < 1) {
+        return null;
+    }
+    try {
+        $start = new DateTimeImmutable($dayStartYmd);
+        if ((int) $start->format('j') === 1) {
+            return billingContractExclusiveEndYmd($dayStartYmd, $termMonths);
+        }
+        $nextMo = $start->modify('first day of next month');
+        $y = (int) $nextMo->format('Y');
+        $mo = (int) $nextMo->format('n');
+        $dueDay = (int) $start->format('j');
+        $last = (int) date('t', mktime(0, 0, 0, $mo, 1, $y));
+        $d = min(max(1, $dueDay), $last);
+        $firstContractDue = sprintf('%04d-%02d-%02d', $y, $mo, $d);
+
+        return (new DateTimeImmutable($firstContractDue))->modify("+{$termMonths} months")->format('Y-m-d');
     } catch (Throwable $e) {
         return null;
     }
@@ -218,7 +227,7 @@ function contractExclusiveEndYmdForFrequency(string $startYmd, ?string $contract
         return null;
     }
     if ($frequency === 'monthly') {
-        return billingContractExclusiveEndYmd($startYmd, $term);
+        return billingContractExclusiveEndYmdMonthlyAfterPartialFirst($startYmd, $term);
     }
     return billingContractExclusiveEndYmdFirstOfMonth($startYmd, $term);
 }
@@ -327,24 +336,37 @@ function isDayEndTailAlreadyPosted(PDO $pdo, int $companyId, int $processId): bo
 
 function isResendConsolidatedAlreadyPosted(PDO $pdo, int $companyId, int $processId, ?string $anchorYmd = null): bool
 {
-    if ($anchorYmd !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorYmd)) {
-        $stmt = $pdo->prepare(
+    try {
+        if ($anchorYmd !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorYmd)) {
+            // 使用 DATE(posted_date)：列可能为 DATETIME，与 dismiss 写入的 Y-m-d 锚点须一致，否则已 *_skipped 仍出现在 Accounting Due。
+            $stmt = $pdo->prepare(
+                "SELECT 1 FROM process_accounting_posted WHERE company_id = ? AND process_id = ?
+                 AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped')
+                 AND DATE(posted_date) = ? LIMIT 1"
+            );
+            $stmt->execute([$companyId, $processId, $anchorYmd]);
+            if ((bool) $stmt->fetch()) {
+                return true;
+            }
+        }
+        // 兜底：历史数据/旧逻辑可能让 consolidated 的 posted_date 与当前锚点不一致，
+        // 但同 process 只要已有 consolidated(_skipped) 即视为该期已处理，避免 Delete 后残留。
+        $stmtAny = $pdo->prepare(
             "SELECT 1 FROM process_accounting_posted WHERE company_id = ? AND process_id = ?
-             AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped')
-             AND posted_date = ? LIMIT 1"
+             AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped') LIMIT 1"
         );
-        $stmt->execute([$companyId, $processId, $anchorYmd]);
-        return (bool) $stmt->fetch();
+        $stmtAny->execute([$companyId, $processId]);
+        return (bool) $stmtAny->fetch();
+    } catch (Throwable $e) {
+        // 兼容极旧库（无 period_type）：退化为同 process 同锚点日期存在 posted 即视为已处理。
+        if ($anchorYmd !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorYmd)) {
+            return hasLegacyPostedOnDate($pdo, $companyId, $processId, $anchorYmd);
+        }
+        return false;
     }
-    $stmt = $pdo->prepare(
-        "SELECT 1 FROM process_accounting_posted WHERE company_id = ? AND process_id = ?
-         AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped') LIMIT 1"
-    );
-    $stmt->execute([$companyId, $processId]);
-    return (bool) $stmt->fetch();
 }
 
-function isBillingCompleteBeforeDayEndTail(PDO $pdo, int $companyId, int $processId, string $exclusiveEndYmd, string $startDate, int $startDayOfMonth, bool $hasPeriodType, ?string $createdYmd = null): bool
+function isBillingCompleteBeforeDayEndTail(PDO $pdo, int $companyId, int $processId, string $exclusiveEndYmd, string $startDate, int $startDayOfMonth, bool $hasPeriodType, ?string $createdYmd = null, ?string $frequency = null): bool
 {
     if (!$hasPeriodType) {
         return true;
@@ -356,9 +378,14 @@ function isBillingCompleteBeforeDayEndTail(PDO $pdo, int $companyId, int $proces
         if ($createdYmd !== null && $createdYmd !== '' && $createdYmd > $lastInclusive->format('Y-m-d')) {
             return true;
         }
-        $y = (int) $lastInclusive->format('Y');
-        $mo = (int) $lastInclusive->format('n');
-        $lastYm = $lastInclusive->format('Y-n');
+        $freq = ($frequency === 'monthly') ? 'monthly' : '1st_of_every_month';
+        // monthly 的 exclusive 为「最后一期应付日 +1 月」；最后一期入账锚点自然月 = exclusive 前推一月（与 -1 day 的日历月可能不一致）。
+        $ref = ($freq === 'monthly')
+            ? (new DateTimeImmutable($exclusiveEndYmd))->modify('-1 month')
+            : $lastInclusive;
+        $y = (int) $ref->format('Y');
+        $mo = (int) $ref->format('n');
+        $lastYm = $ref->format('Y-n');
         $startYm = (new DateTimeImmutable($startDate))->format('Y-n');
         if ($startDayOfMonth !== 1 && $startYm === $lastYm) {
             return isPartialFirstMonthAlreadyPosted($pdo, $companyId, $processId);
@@ -411,6 +438,47 @@ function inboxUniqueSortedBillingMonths(array $months): array
     return $months;
 }
 
+/** Day end 旁开关：有库列且 frequency=1st_of_every_month 时 OFF 不排尾段；无列或非 1st 不按此开关过滤。无列时 1st 仍走旧尾段条件。 */
+function inboxDayEndTailSwitchOn(bool $hasDayEndMonthlyCapCol, array $row): bool
+{
+    if (!$hasDayEndMonthlyCapCol) {
+        return true;
+    }
+    $enabledRaw = $row['day_end_monthly_cap_enabled'] ?? null;
+    return in_array((string) $enabledRaw, ['1', 'true', 'TRUE'], true) || $enabledRaw === 1 || $enabledRaw === true;
+}
+
+/**
+ * 1st_of_every_month + Day end 旁开关 ON：若 day_end 落在账单自然月 $billYear-$billMonth 内，则该期按 prorateInclusiveDateRange(月初, day_end) 用 process 整月价折算；否则返回 null（保持调用方已有金额）。
+ */
+function inboxTryDayEndMonthlyCapAmounts1stOfMonth(array $r, bool $hasDayEndMonthlyCapCol, string $frequency, int $billYear, int $billMonth): ?array
+{
+    if (!$hasDayEndMonthlyCapCol || $frequency !== '1st_of_every_month' || !inboxDayEndTailSwitchOn($hasDayEndMonthlyCapCol, $r)) {
+        return null;
+    }
+    if (function_exists('bmp_shouldSkipDayEndMonthlyCapForResendCrossMonthRange') && bmp_shouldSkipDayEndMonthlyCapForResendCrossMonthRange($r)) {
+        return null;
+    }
+    $dayEndYmd = inboxBankProcessDateFieldToYmd($r['day_end'] ?? null);
+    if ($dayEndYmd === null || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dayEndYmd)) {
+        return null;
+    }
+    $tsM = mktime(0, 0, 0, $billMonth, 1, $billYear);
+    if ($tsM === false) {
+        return null;
+    }
+    $monthFirst = sprintf('%04d-%02d-01', $billYear, $billMonth);
+    $monthLast = date('Y-m-t', $tsM);
+    if ($dayEndYmd < $monthFirst || $dayEndYmd > $monthLast) {
+        return null;
+    }
+    $bc = money_normalize($r['cost'] ?? '0');
+    $bp = money_normalize($r['price'] ?? '0');
+    $bf = money_normalize($r['profit'] ?? '0');
+
+    return prorateInclusiveDateRange($monthFirst, $dayEndYmd, $bc, $bp, $bf);
+}
+
 /**
  * 追加一条 monthly 型 Accounting Due 行。frequency=monthly 时按「对日对月」服务区间比例（与 process_post 一致），不使用自然月末截断。
  *
@@ -426,7 +494,8 @@ function inboxAppendMonthlyNeedToday(
     string $startDate,
     string $cost,
     string $price,
-    string $profit
+    string $profit,
+    bool $hasDayEndMonthlyCapCol = false
 ): void {
     $prorationRatio = null;
     try {
@@ -482,6 +551,14 @@ function inboxAppendMonthlyNeedToday(
     } catch (Throwable $e) {
         // keep base amounts
     }
+    if ($monthlyBillingMonth !== '' && preg_match('/^(\d{4})-(\d{1,2})$/', (string) $monthlyBillingMonth, $mmCap)) {
+        $capTry = inboxTryDayEndMonthlyCapAmounts1stOfMonth($r, $hasDayEndMonthlyCapCol, $frequency, (int) $mmCap[1], (int) $mmCap[2]);
+        if ($capTry !== null) {
+            $cost = $capTry['cost'];
+            $price = $capTry['price'];
+            $profit = $capTry['profit'];
+        }
+    }
     $needToday[] = [
         'id' => (int) $r['id'],
         'name' => $r['name'] ?? '',
@@ -507,6 +584,20 @@ function hasMonthlyPostedOrSkippedInCalendarMonth(PDO $pdo, int $companyId, int 
     return (bool) $stmt->fetch();
 }
 
+/** Frequency=once：一次性入账已执行或已从 Due 移除（跳过）后不再出现在 Accounting Due */
+function inbox_isOnceOneOffAlreadyHandled(PDO $pdo, int $companyId, int $processId): bool
+{
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT 1 FROM process_accounting_posted WHERE company_id = ? AND process_id = ? AND period_type IN ('once_one_off','once_one_off_skipped') LIMIT 1"
+        );
+        $stmt->execute([$companyId, $processId]);
+        return (bool) $stmt->fetch();
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
 /** 某月第 N 日（不超过该月最后一天） */
 function calendarMonthDueYmd(int $year, int $month, int $dueDay): string
 {
@@ -516,7 +607,7 @@ function calendarMonthDueYmd(int $year, int $month, int $dueDay): string
 }
 
 /** 获取当前公司下可用于 Accounting Inbox 的 active Bank Process 列表 */
-function fetchActiveBankProcessesForInbox(PDO $pdo, int $companyId, bool $hasFrequency, bool $hasResendRelaxCol): array
+function fetchActiveBankProcessesForInbox(PDO $pdo, int $companyId, bool $hasFrequency, bool $hasResendRelaxCol, bool $hasDayEndMonthlyCapCol): array
 {
     bmp_ensureBankProcessAccountingResendScheduleColumns($pdo);
     $hasSchedCols = bmp_bankProcessHasResendScheduleColumns($pdo);
@@ -524,6 +615,7 @@ function fetchActiveBankProcessesForInbox(PDO $pdo, int $companyId, bool $hasFre
             bp.card_merchant_id, bp.customer_id, bp.profit_account_id, bp.day_start, bp.day_end, bp.contract, bp.dts_created" .
         ($hasFrequency ? ", bp.day_start_frequency" : "") .
         ($hasResendRelaxCol ? ", bp.accounting_resend_relax_created_floor" : "") .
+        ($hasDayEndMonthlyCapCol ? ", bp.day_end_monthly_cap_enabled" : "") .
         ($hasSchedCols ? ", bp.accounting_resend_schedule_day_start, bp.accounting_resend_schedule_day_end, bp.accounting_resend_schedule_frequency" : "") . "
             FROM bank_process bp
             WHERE bp.company_id = ? AND bp.status = 'active'
@@ -670,6 +762,10 @@ function markAlreadyPostedOnNeedToday(PDO $pdo, array &$needToday, int $companyI
                     $item['already_posted_today'] = false;
                     continue;
                 }
+                if (!empty($item['is_once_one_off'])) {
+                    $item['already_posted_today'] = inbox_isOnceOneOffAlreadyHandled($pdo, $companyId, (int) $item['id']);
+                    continue;
+                }
                 if (!empty($item['is_partial_first_month'])) {
                     $item['already_posted_today'] = in_array((int) $item['id'], $partialPostedIds, true);
                     continue;
@@ -710,14 +806,20 @@ function markAlreadyPostedOnNeedToday(PDO $pdo, array &$needToday, int $companyI
                     $item['already_posted_today'] = false;
                     continue;
                 }
+                if (!empty($item['is_once_one_off'])) {
+                    $item['already_posted_today'] = inbox_isOnceOneOffAlreadyHandled($pdo, $companyId, (int) $item['id']);
+                    continue;
+                }
                 if (!empty($item['is_resend_consolidated_range'])) {
-                    $processId = (int) ($item['id'] ?? 0);
                     $anchorRaw = isset($item['day_start']) ? trim((string) $item['day_start']) : '';
                     $anchorYmd = $anchorRaw !== '' ? inboxBankProcessDateFieldToYmd($anchorRaw) : null;
-                    if ($processId > 0 && $anchorYmd !== null) {
-                        $item['already_posted_today'] = hasLegacyPostedOnDate($pdo, $companyId, $processId, $anchorYmd);
-                        continue;
-                    }
+                    $item['already_posted_today'] = isResendConsolidatedAlreadyPosted(
+                        $pdo,
+                        $companyId,
+                        (int) ($item['id'] ?? 0),
+                        $anchorYmd
+                    );
+                    continue;
                 }
                 if (!empty($item['monthly_billing_month'])
                     && preg_match('/^(\d{4})-(\d{1,2})$/', (string) $item['monthly_billing_month'], $m)) {
@@ -753,7 +855,7 @@ try {
     }
 
     $today = date('Y-m-d');
-    //$today = '2026-06-01';
+    //$today = '2026-08-05';
 
     $hasFrequency = hasBankProcessFrequencyColumn($pdo);
     $hasIssueFlagColumn = tableHasColumn($pdo, 'bank_process', 'issue_flag');
@@ -765,8 +867,9 @@ try {
         // ignore
     }
     $hasResendRelaxCol = tableHasColumn($pdo, 'bank_process', 'accounting_resend_relax_created_floor');
+    $hasDayEndMonthlyCapCol = tableHasColumn($pdo, 'bank_process', 'day_end_monthly_cap_enabled');
 
-    $rows = fetchActiveBankProcessesForInbox($pdo, $company_id, $hasFrequency, $hasResendRelaxCol);
+    $rows = fetchActiveBankProcessesForInbox($pdo, $company_id, $hasFrequency, $hasResendRelaxCol, $hasDayEndMonthlyCapCol);
     $needToday = [];
 
     // 1) Partial first month
@@ -936,6 +1039,33 @@ try {
         $basePrice = money_normalize($r['price'] ?? '0');
         $baseProfit = money_normalize($r['profit'] ?? '0');
 
+        // Frequency=once：单笔全流程入账；不按应付日/创建日过滤，始终出现在 Accounting Due（入账或 Delete 跳过后即消失）
+        if ($frequency === 'once') {
+            if (!$hasFrequency) {
+                continue;
+            }
+            $processIdOnce = (int) $r['id'];
+            if (inbox_isOnceOneOffAlreadyHandled($pdo, $company_id, $processIdOnce)) {
+                continue;
+            }
+            $needToday[] = [
+                'id' => $processIdOnce,
+                'name' => ($r['name'] ?? '') ?: ($r['bank'] ?? ''),
+                'bank' => $r['bank'] ?? '',
+                'country' => $r['country'] ?? '',
+                'day_start' => $dayStart,
+                'contract' => 'ONCE',
+                'cost' => $baseCost,
+                'price' => $basePrice,
+                'profit' => $baseProfit,
+                'already_posted_today' => false,
+                'is_partial_first_month' => false,
+                'is_manual_inactive' => false,
+                'is_once_one_off' => true,
+            ];
+            continue;
+        }
+
         if ($frequency === '1st_of_every_month') {
             if (empty($dayStart)) {
                 continue;
@@ -968,6 +1098,25 @@ try {
                 $mc = $pr['cost'];
                 $mp = $pr['price'];
                 $mf = $pr['profit'];
+                if ($hasDayEndMonthlyCapCol && $startDate !== '') {
+                    try {
+                        $dtCap0 = new DateTimeImmutable($startDate);
+                        $cap0 = inboxTryDayEndMonthlyCapAmounts1stOfMonth(
+                            $r,
+                            $hasDayEndMonthlyCapCol,
+                            '1st_of_every_month',
+                            (int) $dtCap0->format('Y'),
+                            (int) $dtCap0->format('n')
+                        );
+                        if ($cap0 !== null) {
+                            $mc = $cap0['cost'];
+                            $mp = $cap0['price'];
+                            $mf = $cap0['profit'];
+                        }
+                    } catch (Throwable $e) {
+                        // keep prorated first-month amounts
+                    }
+                }
                 if ($resendMulti) {
                     $queuedMonthlyBillingMonths[] = (string) $monthlyBillingMonth;
                 } else {
@@ -1070,7 +1219,8 @@ try {
                         $startDate,
                         $baseCost,
                         $basePrice,
-                        $baseProfit
+                        $baseProfit,
+                        $hasDayEndMonthlyCapCol
                     );
                 }
                 continue;
@@ -1113,7 +1263,7 @@ try {
                     }
                     $startYm = (new DateTimeImmutable($startDate))->format('Y-m');
                     $term = getBillingTermMonthsFromContract($contract);
-                    $exclusiveEnd = ($term !== null && $term >= 1) ? billingContractExclusiveEndYmd($startDate, $term) : null;
+                    $exclusiveEnd = ($term !== null && $term >= 1) ? billingContractExclusiveEndYmdMonthlyAfterPartialFirst($startDate, $term) : null;
                     while ($iter <= $endCap) {
                         $y = (int) $iter->format('Y');
                         $mo = (int) $iter->format('n');
@@ -1169,7 +1319,8 @@ try {
                         $startDate,
                         $baseCost,
                         $basePrice,
-                        $baseProfit
+                        $baseProfit,
+                        $hasDayEndMonthlyCapCol
                     );
                 }
                 continue;
@@ -1187,12 +1338,13 @@ try {
                 $startDate,
                 $baseCost,
                 $basePrice,
-                $baseProfit
+                $baseProfit,
+                $hasDayEndMonthlyCapCol
             );
         }
     }
 
-    // 2b) 填写了 day_end 且长于合同自然结束日：多一笔尾段按比例（例：自然结束 6/1、day_end 6/3 → 6/1–6/3）
+    // 2b) day_end 尾段：1st + cap 列且开关 ON 时为 max(exclusiveEnd, day_end 月首)～day_end；否则仍为 exclusiveEnd～day_end 且需 day_end≥exclusiveEnd。1st + cap 列且 OFF 不排尾段。
     if ($hasPeriodType) {
         foreach ($rows as $r) {
             if (!empty($r['accounting_resend_consolidated_range'])) {
@@ -1211,6 +1363,9 @@ try {
                 continue;
             }
             $frequency = $hasFrequency ? ($r['day_start_frequency'] ?? '1st_of_every_month') : '1st_of_every_month';
+            if ($frequency === '1st_of_every_month' && $hasDayEndMonthlyCapCol && !inboxDayEndTailSwitchOn($hasDayEndMonthlyCapCol, $r)) {
+                continue;
+            }
             $dayEndRaw = $r['day_end'] ?? null;
             if ($dayEndRaw === null || trim((string) $dayEndRaw) === '' || strtotime((string) $dayEndRaw) === false) {
                 continue;
@@ -1230,8 +1385,27 @@ try {
                 continue;
             }
             $exclusiveEnd = contractExclusiveEndYmdForFrequency($startDate, $contract, $frequency);
-            if ($exclusiveEnd === null || $dayEndInc < $exclusiveEnd) {
+            if ($exclusiveEnd === null) {
                 continue;
+            }
+            $useSwitchGatedTail = ($frequency === '1st_of_every_month' && $hasDayEndMonthlyCapCol && inboxDayEndTailSwitchOn($hasDayEndMonthlyCapCol, $r));
+            if ($useSwitchGatedTail) {
+                try {
+                    $monthFirst = (new DateTimeImmutable($dayEndInc))->modify('first day of this month')->format('Y-m-d');
+                } catch (Throwable $e) {
+                    continue;
+                }
+                $tailFrom = max($exclusiveEnd, $monthFirst);
+                if ($tailFrom > $dayEndInc) {
+                    continue;
+                }
+                $todayGate = $tailFrom;
+            } else {
+                if ($dayEndInc < $exclusiveEnd) {
+                    continue;
+                }
+                $tailFrom = $exclusiveEnd;
+                $todayGate = $exclusiveEnd;
             }
             $processId = (int) $r['id'];
             if (isDayEndTailAlreadyPosted($pdo, $company_id, $processId)) {
@@ -1240,10 +1414,10 @@ try {
             $startTsNorm = strtotime($startDate);
             $startDayOfMonth = $startTsNorm !== false ? (int) date('j', $startTsNorm) : 1;
             $createdYmdTail = inboxEffectiveCreatedYmdForProcess($r, $today, $startDate);
-            if (!isBillingCompleteBeforeDayEndTail($pdo, $company_id, $processId, $exclusiveEnd, $startDate, $startDayOfMonth, $hasPeriodType, $createdYmdTail)) {
+            if (!isBillingCompleteBeforeDayEndTail($pdo, $company_id, $processId, $exclusiveEnd, $startDate, $startDayOfMonth, $hasPeriodType, $createdYmdTail, $frequency)) {
                 continue;
             }
-            if ($today < $exclusiveEnd) {
+            if ($today < $todayGate) {
                 continue;
             }
             if (!isWithinRecurringBillingWindow($today, $dayStart, $contract, $r['day_end'] ?? null, $frequency, !empty($r['accounting_resend_relax_created_floor']), !empty($r['accounting_resend_single_period_from_schedule']))) {
@@ -1255,12 +1429,12 @@ try {
             $cost = money_normalize($r['cost'] ?? '0');
             $price = money_normalize($r['price'] ?? '0');
             $profit = money_normalize($r['profit'] ?? '0');
-            $tail = prorateInclusiveDateRange($exclusiveEnd, $dayEndInc, $cost, $price, $profit);
+            $tail = prorateInclusiveDateRange($tailFrom, $dayEndInc, $cost, $price, $profit);
             if (money_cmp($tail['cost'], '0') <= 0 && money_cmp($tail['price'], '0') <= 0 && money_cmp($tail['profit'], '0') <= 0) {
                 continue;
             }
             try {
-                $bm = (new DateTimeImmutable($exclusiveEnd))->format('Y-n');
+                $bm = (new DateTimeImmutable($tailFrom))->format('Y-n');
             } catch (Throwable $e) {
                 continue;
             }
@@ -1310,6 +1484,7 @@ try {
     // 这里仅对“同 process + 同账期 + 同 period_type”去重；并且特殊账期优先于普通 monthly。
     if (!empty($needToday)) {
         $rankOf = static function (array $item): int {
+            if (!empty($item['is_once_one_off'])) return 6;
             if (!empty($item['is_resend_consolidated_range'])) return 5;
             if (!empty($item['is_day_end_tail'])) return 4;
             if (!empty($item['is_partial_first_month'])) return 3;
@@ -1331,6 +1506,7 @@ try {
             return $bm;
         };
         $typeOf = static function (array $item): string {
+            if (!empty($item['is_once_one_off'])) return 'once_one_off';
             if (!empty($item['is_resend_consolidated_range'])) return 'resend_consolidated_range';
             if (!empty($item['is_day_end_tail'])) return 'day_end_tail';
             if (!empty($item['is_partial_first_month'])) return 'partial_first_month';
@@ -1401,6 +1577,10 @@ try {
             $row['profit'] = money_out($row['profit'] ?? '0');
         }
         unset($row);
+        // 已入账或已从 Due 移除（*_skipped）的行不再返回给弹窗，避免 Resend 后 Delete 仍显示「残留」一行
+        $needToday = array_values(array_filter($needToday, static function (array $row): bool {
+            return empty($row['already_posted_today']);
+        }));
     }
 
     jsonResponse(true, '', $needToday);

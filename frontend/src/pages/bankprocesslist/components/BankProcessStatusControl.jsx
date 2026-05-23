@@ -1,0 +1,172 @@
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { translateBankProcessApiMessage } from "../../../translateFile/pages/bankProcessTranslate.js";
+import { deriveBankProcessUiStatus, normalizeBankIssueFlag, normalizeBankProcessStatus } from "../lib/bankProcessHelpers.js";
+
+const STATUS_LABEL_KEYS = {
+  ACTIVE: "statusActive",
+  INACTIVE: "statusInactive",
+  OFFICIAL: "statusOfficial",
+  E_INVOICE: "statusEInvoice",
+  BLOCK: "statusBlock",
+};
+
+function statusLabel(t, key) {
+  return t(STATUS_LABEL_KEYS[key] || key);
+}
+
+export default function BankProcessStatusControl({ row, onUpdated, notify: doNotify, buildApiUrl: apiUrl, t, lang }) {
+  const apiMsg = (json) =>
+    translateBankProcessApiMessage(
+      lang,
+      {
+        message: json?.message ?? json?.error,
+        errorCode: json?.data && typeof json.data === "object" && !Array.isArray(json.data) ? json.data.error : undefined,
+      },
+      t("statusUpdateFailed")
+    );
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, minWidth: 118 });
+  const wrapRef = useRef(null);
+  const buttonRef = useRef(null);
+  const menuRef = useRef(null);
+  const ui = deriveBankProcessUiStatus(row);
+  const pillClass = `bank-status-button is-${ui.toLowerCase().replace(/_/g, "-")}`;
+
+  useEffect(() => {
+    if (!open) return;
+    const updateMenuPos = () => {
+      const btn = buttonRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      setMenuPos({
+        top: Math.round(rect.bottom + 6),
+        left: Math.round(rect.left),
+        minWidth: Math.max(118, Math.round(rect.width)),
+      });
+    };
+
+    updateMenuPos();
+    const onDoc = (e) => {
+      const target = e.target;
+      const clickedInsideTrigger = !!(wrapRef.current && wrapRef.current.contains(target));
+      const clickedInsideMenu = !!(menuRef.current && menuRef.current.contains(target));
+      if (!clickedInsideTrigger && !clickedInsideMenu) setOpen(false);
+    };
+    const onScroll = () => updateMenuPos();
+    document.addEventListener("mousedown", onDoc);
+    window.addEventListener("resize", updateMenuPos);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("resize", updateMenuPos);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [open]);
+
+  const postIssueFlag = async (id, issueFlag) => {
+    const fd = new FormData();
+    fd.append("id", String(id));
+    fd.append("issue_flag", issueFlag);
+    const res = await fetch(apiUrl("api/processes/update_bank_issue_flag_api.php"), { method: "POST", body: fd, credentials: "include" });
+    return res.json();
+  };
+
+  const postToggle = async (id) => {
+    const fd = new FormData();
+    fd.append("id", String(id));
+    fd.append("permission", "Bank");
+    const res = await fetch(apiUrl("api/processes/toggle_process_status_api.php"), { method: "POST", body: fd, credentials: "include" });
+    return res.json();
+  };
+
+  const apply = async (target) => {
+    const id = row.id;
+    const st = normalizeBankProcessStatus(row?.status);
+    const hasFlag = !!normalizeBankIssueFlag(row.issue_flag);
+    try {
+      if (target === "ACTIVE") {
+        if (hasFlag) {
+          const j = await postIssueFlag(id, "");
+          if (!j.success) return doNotify(apiMsg(j), "danger");
+        }
+        if (st !== "active") {
+          const j = await postToggle(id);
+          if (!j.success) return doNotify(apiMsg(j), "danger");
+        }
+      } else if (target === "INACTIVE") {
+        if (hasFlag) {
+          const j = await postIssueFlag(id, "");
+          if (!j.success) return doNotify(apiMsg(j), "danger");
+        }
+        if (st === "active") {
+          const j = await postToggle(id);
+          if (!j.success) return doNotify(apiMsg(j), "danger");
+        }
+      } else if (target === "OFFICIAL") {
+        const j = await postIssueFlag(id, "official");
+        if (!j.success) return doNotify(apiMsg(j), "danger");
+      } else if (target === "E_INVOICE") {
+        const j = await postIssueFlag(id, "e_invoice");
+        if (!j.success) return doNotify(apiMsg(j), "danger");
+      } else if (target === "BLOCK") {
+        const j = await postIssueFlag(id, "block");
+        if (!j.success) return doNotify(apiMsg(j), "danger");
+      }
+      doNotify(t("statusUpdated"), "success");
+      onUpdated();
+      setOpen(false);
+    } catch {
+      doNotify(t("statusUpdateFailed"), "danger");
+    }
+  };
+
+  const options = ["ACTIVE", "INACTIVE", "OFFICIAL", "E_INVOICE", "BLOCK"];
+  const label = statusLabel(t, ui);
+
+  return (
+    <div className={`bank-status-dropdown${open ? " open" : ""}`} ref={wrapRef}>
+      <button ref={buttonRef} type="button" className={`${pillClass}${open ? " open" : ""}`} onClick={() => setOpen((o) => !o)}>
+        {label}
+      </button>
+      {open
+        ? createPortal(
+            <div
+              ref={menuRef}
+              className="bank-status-menu bank-status-menu-floating"
+              role="listbox"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "stretch",
+                whiteSpace: "normal",
+                position: "fixed",
+                top: menuPos.top,
+                left: menuPos.left,
+                minWidth: menuPos.minWidth,
+                zIndex: 10020,
+              }}
+            >
+              {options.map((opt) => {
+                const optLabel = statusLabel(t, opt);
+                const cur = ui === opt;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={`bank-status-option${cur ? " selected" : ""}`}
+                    onClick={() => void apply(opt)}
+                    data-value={opt.toLowerCase()}
+                    style={{ display: "block", width: "100%" }}
+                  >
+                    {optLabel}
+                  </button>
+                );
+              })}
+            </div>,
+            document.body
+          )
+        : null}
+    </div>
+  );
+}

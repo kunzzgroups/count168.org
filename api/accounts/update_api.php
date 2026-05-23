@@ -6,7 +6,8 @@
 
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 
 header('Content-Type: application/json');
@@ -41,6 +42,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 try {
     if (!isset($_SESSION['company_id'])) {
         throw new Exception('用户未登录或缺少公司信息');
+    }
+    if (is_partnership_audit_read_only_active($pdo)) {
+        throw new Exception('只读账号无法修改账户');
     }
     $company_id = $_SESSION['company_id'];
 

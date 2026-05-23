@@ -2,8 +2,9 @@
 /**
  * 账户关联 API：获取/建立/解除账户关联及连接类型
  */
-require_once __DIR__ . '/../../session_check.php';
-require_once __DIR__ . '/../../includes/deleted_log.php';
+require_once __DIR__ . '/../../includes/session_check.php';
+require_once __DIR__ . '/../deleted_log/deleted_log.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 header('Content-Type: application/json');
 
 if (!isset($_SESSION['user_id'])) {
@@ -41,6 +42,9 @@ if ($isDirectRequest) {
                 break;
 
             case 'link_accounts':
+                if (is_partnership_audit_read_only_active($pdo)) {
+                    throw new Exception('只读账号无法修改账户关联');
+                }
                 $input = json_decode(file_get_contents('php://input'), true) ?: [];
                 $account_id_1 = isset($input['account_id_1']) ? (int)$input['account_id_1'] : 0;
                 $account_id_2 = isset($input['account_id_2']) ? (int)$input['account_id_2'] : 0;
@@ -73,6 +77,9 @@ if ($isDirectRequest) {
                 break;
 
             case 'unlink_accounts':
+                if (is_partnership_audit_read_only_active($pdo)) {
+                    throw new Exception('只读账号无法修改账户关联');
+                }
                 $input = json_decode(file_get_contents('php://input'), true) ?: [];
                 $account_id_1 = isset($input['account_id_1']) ? (int)$input['account_id_1'] : 0;
                 $account_id_2 = isset($input['account_id_2']) ? (int)$input['account_id_2'] : 0;
@@ -113,6 +120,9 @@ if ($isDirectRequest) {
                 break;
 
             case 'update_link_type':
+                if (is_partnership_audit_read_only_active($pdo)) {
+                    throw new Exception('只读账号无法修改账户关联');
+                }
                 $input = json_decode(file_get_contents('php://input'), true) ?: [];
                 $account_id_1 = isset($input['account_id_1']) ? (int)$input['account_id_1'] : 0;
                 $account_id_2 = isset($input['account_id_2']) ? (int)$input['account_id_2'] : 0;

@@ -4,7 +4,8 @@
  * 路径: api/accounts/create_currency_api.php
  */
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -38,6 +39,12 @@ try {
     if (!isset($_SESSION['user_id'])) {
         http_response_code(401);
         jsonOut(false, '用户未登录', null);
+        exit;
+    }
+
+    if (is_partnership_audit_read_only_active($pdo)) {
+        http_response_code(403);
+        jsonOut(false, '只读账号无法创建币种', null);
         exit;
     }
 

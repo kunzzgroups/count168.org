@@ -34,7 +34,7 @@ function showNotification(message, type = 'success') {
 
 function formatAmount(amount) {
     const value = MoneyDecimal.cmp(MoneyDecimal.abs(amount || '0'), '0.005') < 0 ? '0' : (amount || '0');
-    return MoneyDecimal.formatFixed(value, 2);
+    return MoneyDecimal.formatFixedHalfUp(value, 2);
 }
 
 function reportAdd(a, b) {
@@ -81,7 +81,7 @@ function isBankOnlyCategoryCompany(permissions) {
     return hasBank && !hasGames;
 }
 
-// Company filtering is now handled by SSR includes/company_filter.php
+// Company filtering: React sharedCompanyFilter.js (legacy SSR was api/company/company_filter.php)
 async function switchCompany(companyId, companyCode) {
     // 先更新 session
     try {

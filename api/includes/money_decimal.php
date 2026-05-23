@@ -113,4 +113,40 @@ function money_abs($value, int $scale = MONEY_SCALE): string
     $s = money_normalize($value, $scale);
     return strpos($s, '-') === 0 ? substr($s, 1) : $s;
 }
+
+/**
+ * 四舍五入（HALF_UP，远离零的 .5）到指定小数位；用于金额展示口径。
+ */
+function money_round_half_up($value, int $scale = 2): string
+{
+    money_require_bc();
+    if (!money_is_valid($value)) {
+        throw new InvalidArgumentException('Invalid money value');
+    }
+    $innerScale = max(16, $scale + 8);
+    $v = money_normalize($value, $innerScale);
+    if (bccomp($v, '0', $innerScale) === 0) {
+        return bcadd('0', '0', $scale);
+    }
+
+    $negative = bccomp($v, '0', $innerScale) < 0;
+    $abs = $negative ? substr($v, 1) : $v;
+
+    $factor = bcpow('10', (string) $scale, 0);
+    $shifted = bcmul($abs, $factor, $scale + 8);
+    $intTrunc = bcadd($shifted, '0', 0);
+    $fraction = bcsub($shifted, $intTrunc, $scale + 8);
+
+    $roundedInt = $intTrunc;
+    if (bccomp($fraction, '0.5', $scale + 8) >= 0) {
+        $roundedInt = bcadd($intTrunc, '1', 0);
+    }
+
+    $resultAbs = bcdiv($roundedInt, $factor, $scale);
+    $out = ($negative ? '-' : '') . money_normalize($resultAbs, $scale);
+    if (preg_match('/^-0(?:\.0+)?$/', $out)) {
+        return bcadd('0', '0', $scale);
+    }
+    return $out;
+}
 ?>

@@ -12,7 +12,7 @@ if (php_sapi_name() !== 'cli') {
     exit('Forbidden');
 }
 
-require_once dirname(__DIR__) . '/config.php';
+require_once dirname(__DIR__) . '/includes/config.php';
 
 if ($pdo->query("SHOW TABLES LIKE 'company_ownership'")->rowCount() < 1) {
     fwrite(STDERR, '[' . date('c') . "] sync_company_ownership_backup: skip, company_ownership missing\n");

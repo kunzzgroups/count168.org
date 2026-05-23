@@ -11,7 +11,7 @@ if (php_sapi_name() !== 'cli') {
     exit('Forbidden');
 }
 
-require_once dirname(__DIR__) . '/config.php';
+require_once dirname(__DIR__) . '/includes/config.php';
 
 if ($pdo->query("SHOW TABLES LIKE 'data_capture_submit_queue'")->rowCount() < 1) {
     fwrite(STDERR, '[' . date('c') . "] sync_data_capture_submit_queue_backup: skip, data_capture_submit_queue missing\n");

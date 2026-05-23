@@ -6,7 +6,8 @@
 
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../api_response.php';
 
 header('Content-Type: application/json');
@@ -35,6 +36,10 @@ function updateAccountStatus(PDO $pdo, string $newStatus, int $accountId): void 
 try {
     if (!isset($_SESSION['company_id'])) {
         api_error('用户未登录或缺少公司信息', 401);
+        exit;
+    }
+    if (is_partnership_audit_read_only_active($pdo)) {
+        api_error('只读账号无法修改账户状态', 403);
         exit;
     }
     $companyId = (int)$_SESSION['company_id'];

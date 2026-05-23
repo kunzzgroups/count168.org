@@ -1,0 +1,585 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { removeOtherMaintenanceStylesheets } from "../../../utils/maintenance/maintenanceStylesheets.js";
+import { injectStylesheet } from "../../../utils/core/injectStylesheet.js";
+import { ensureMaintenanceDateRangePicker } from "../../../utils/date/dateRangePicker.js";
+import { notifyCompanySessionUpdated } from "../../../utils/company/companySessionEvents.js";
+import { useMaintenanceGroupCompanyFilter } from "../shared/useMaintenanceGroupCompanyFilter.js";
+import "../../../../public/css/accountCSS.css";
+import "../../../../public/css/userlist.css";
+import "../../../../public/css/maintenance_unified_filters.css";
+import "../../../../public/css/date-range-picker.css";
+import "../../../../public/css/customer_report.css";
+import "../../../../public/css/report-outlined-fields.css";
+import "../../../../public/css/bankprocess_maintenance.css";
+import "../../../../public/css/maintenance_notifications.css";
+import BankprocessMaintenanceFilters from "./components/BankprocessMaintenanceFilters.jsx";
+import BankprocessMaintenanceTable from "./components/BankprocessMaintenanceTable.jsx";
+import MaintenanceDeleteConfirmModal from "../shared/MaintenanceDeleteConfirmModal.jsx";
+import PageContentLoader from "../../../components/PageContentLoader.jsx";
+import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
+import {
+  deleteBankprocessData,
+  fetchCompanyCurrencies,
+  fetchCompanyPermissions,
+  formatDmy,
+  searchBankprocessData,
+  updateSessionCompany,
+} from "./bankprocessMaintenanceLogic.js";
+import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
+import { getMaintenanceText, MAINTENANCE_I18N } from "../../../translateFile/pages/maintenanceTranslate.js";
+
+/** Dedupe empty-result toast (Strict Mode remount + back-to-back searches with same filters). */
+const bankprocessNoDataToastKeys = new Set();
+const MAX_NO_DATA_TOAST_KEYS = 64;
+
+function consumeNoDataToastDedupeKey(key) {
+  if (!key || bankprocessNoDataToastKeys.has(key)) return false;
+  bankprocessNoDataToastKeys.add(key);
+  while (bankprocessNoDataToastKeys.size > MAX_NO_DATA_TOAST_KEYS) {
+    const first = bankprocessNoDataToastKeys.values().next().value;
+    bankprocessNoDataToastKeys.delete(first);
+  }
+  return true;
+}
+
+export default function BankprocessMaintenancePage() {
+  const navigate = useNavigate();
+  const { me, sessionReady } = useAuthSession();
+  const lang = useLoginLang();
+  const m = useMemo(() => MAINTENANCE_I18N[lang] || MAINTENANCE_I18N.en, [lang]);
+  const t = useCallback((key, params) => getMaintenanceText(lang, key, params), [lang]);
+  const [bootLoading, setBootLoading] = useState(true);
+  const [companies, setCompanies] = useState([]);
+  const [companyId, setCompanyId] = useState(null);
+  const [companyCode, setCompanyCode] = useState("");
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+  const [selectedPermission, setSelectedPermission] = useState("");
+  const [currencies, setCurrencies] = useState([]);
+  /** true = omit currency API param — all company currencies */
+  const [allCurrenciesSelected, setAllCurrenciesSelected] = useState(false);
+  const [selectedCurrencies, setSelectedCurrencies] = useState([]);
+  const [currenciesReady, setCurrenciesReady] = useState(false);
+  const [query, setQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [rows, setRows] = useState([]);
+  const [bankprocessListEpoch, setBankprocessListEpoch] = useState(0);
+  const [bankprocessDataSourceCompanyId, setBankprocessDataSourceCompanyId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [datePickerScriptReady, setDatePickerScriptReady] = useState(false);
+  const today = useMemo(() => formatDmy(new Date()), []);
+  const currentCompanyIdRef = useRef(null);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const initialBankprocessSearchDoneRef = useRef(false);
+  const searchSeqRef = useRef(0);
+  const searchAbortRef = useRef(null);
+
+  const pageTitle = useMemo(
+    () => t("pageTitleBankProcess", { category: selectedPermission || m.bankProcessCategoryFallback }),
+    [t, selectedPermission, m.bankProcessCategoryFallback]
+  );
+
+  const notify = useCallback((message, type = "success") => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => {
+      if (prev.some(t => t.message === message)) return prev;
+      const next = [...prev, { id, message, type }];
+      return next.length > 2 ? next.slice(1) : next;
+    });
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((item) => item.id !== id));
+    }, 2000);
+  }, []);
+
+  useEffect(() => {
+    document.body.classList.remove("bg", "account-page", "announcement-page", "datacapture-page", "transaction-page");
+    document.body.classList.add("dashboard-page", "maintenance-page");
+    setDateFrom(today);
+    setDateTo(today);
+
+    // Force native page scrolling for maintenance screens even if legacy CSS locks viewport.
+    const targets = [document.documentElement, document.body, document.getElementById("root")].filter(Boolean);
+    const originalStyles = targets.map((el) => ({
+      el,
+      overflow: el.style.getPropertyValue("overflow"),
+      overflowPriority: el.style.getPropertyPriority("overflow"),
+      overflowY: el.style.getPropertyValue("overflow-y"),
+      overflowYPriority: el.style.getPropertyPriority("overflow-y"),
+      overflowX: el.style.getPropertyValue("overflow-x"),
+      overflowXPriority: el.style.getPropertyPriority("overflow-x"),
+      height: el.style.getPropertyValue("height"),
+      heightPriority: el.style.getPropertyPriority("height"),
+      minHeight: el.style.getPropertyValue("min-height"),
+      minHeightPriority: el.style.getPropertyPriority("min-height"),
+      maxHeight: el.style.getPropertyValue("max-height"),
+      maxHeightPriority: el.style.getPropertyPriority("max-height"),
+    }));
+
+    targets.forEach((el) => {
+      el.style.setProperty("overflow", "auto", "important");
+      el.style.setProperty("overflow-y", "auto", "important");
+      el.style.setProperty("overflow-x", "hidden", "important");
+      el.style.setProperty("height", "auto", "important");
+      el.style.setProperty("min-height", "100vh", "important");
+      el.style.setProperty("max-height", "none", "important");
+    });
+
+    const setup = async () => {
+      removeOtherMaintenanceStylesheets("bankprocess_maintenance.css");
+      const links = [
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap",
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css",
+      ];
+      await Promise.all(links.map((href) => injectStylesheet(href, { promoteToEnd: true }).catch(() => null)));
+    };
+
+    setup().catch(() => null);
+    return () => {
+      originalStyles.forEach((item) => {
+        const { el } = item;
+        if (item.overflow) el.style.setProperty("overflow", item.overflow, item.overflowPriority);
+        else el.style.removeProperty("overflow");
+        if (item.overflowY) el.style.setProperty("overflow-y", item.overflowY, item.overflowYPriority);
+        else el.style.removeProperty("overflow-y");
+        if (item.overflowX) el.style.setProperty("overflow-x", item.overflowX, item.overflowXPriority);
+        else el.style.removeProperty("overflow-x");
+        if (item.height) el.style.setProperty("height", item.height, item.heightPriority);
+        else el.style.removeProperty("height");
+        if (item.minHeight) el.style.setProperty("min-height", item.minHeight, item.minHeightPriority);
+        else el.style.removeProperty("min-height");
+        if (item.maxHeight) el.style.setProperty("max-height", item.maxHeight, item.maxHeightPriority);
+        else el.style.removeProperty("max-height");
+      });
+      document.body.classList.remove("maintenance-page");
+    };
+  }, [today]);
+
+  useEffect(() => {
+    if (bootLoading || !me) return;
+    window.MaintenanceDateRangePicker?.setLocaleStrings?.({
+      placeholder: t("selectDateRange"),
+      selectEndDateHint: t("selectEndDate"),
+      monthLabels: m.monthsShort,
+    });
+  }, [bootLoading, me, lang, t, m]);
+
+  useEffect(() => {
+    if (!sessionReady || !me) return;
+
+    let cancelled = false;
+    setBootLoading(true);
+    (async () => {
+      try {
+        const compRes = await fetch(buildApiUrl("api/transactions/get_owner_companies_api.php?all=1"), { credentials: "include" });
+
+        const compJson = await compRes.json();
+        const compRows = Array.isArray(compJson?.data) ? compJson.data.filter((c) => c.company_id) : [];
+
+        const user = me;
+        if (String(user.user_type || "").toLowerCase() === "member") {
+          window.location.assign(new URL("/member", window.location.origin).href);
+          return;
+        }
+        const userPerms = Array.isArray(user.permissions) ? user.permissions : [];
+        const hasFull = userPerms.length === 0;
+        const canMaintenance = hasFull || userPerms.includes("maintenance");
+        if (!canMaintenance || !user.company_has_bank) {
+          navigate("/dashboard", { replace: true });
+          return;
+        }
+
+        setCompanies(compRows);
+
+        let initialCompanyId = user.company_id ? Number(user.company_id) : (compRows[0]?.id ? Number(compRows[0].id) : null);
+        if (initialCompanyId && !compRows.some((c) => Number(c.id) === Number(initialCompanyId))) {
+          initialCompanyId = compRows[0]?.id ? Number(compRows[0].id) : null;
+        }
+        setCompanyId(initialCompanyId);
+        currentCompanyIdRef.current = initialCompanyId;
+        const currentComp = compRows.find((c) => Number(c.id) === Number(initialCompanyId));
+        setCompanyCode(currentComp?.company_id || "");
+        const code = currentComp?.company_id || "";
+
+        // Fetch initial metadata here to ensure the first query starts with the correct selectedPermission
+        const [perms, currencyList] = await Promise.all([
+          fetchCompanyPermissions(code),
+          fetchCompanyCurrencies(initialCompanyId).catch(() => [])
+        ]);
+
+        setPermissions(perms);
+        const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
+        if (savedPerm && perms.includes(savedPerm)) setSelectedPermission(savedPerm);
+        else setSelectedPermission(perms[0] || "");
+
+        setCurrencies(currencyList);
+        if (currencyList.length === 0) {
+          setAllCurrenciesSelected(true);
+          setSelectedCurrencies([]);
+        } else {
+          setAllCurrenciesSelected(false);
+          const myr = currencyList.find((x) => x.code === "MYR");
+          const pick = myr?.code || currencyList[0]?.code;
+          setSelectedCurrencies(pick ? [pick] : []);
+        }
+        setCurrenciesReady(true);
+
+        const savedGroup = sessionStorage.getItem("dashboard_group_filter");
+        const groups = [...new Set(compRows.filter((c) => c.group_id).map((c) => String(c.group_id).toUpperCase().trim()))].sort();
+        let selGroup = null;
+        if (savedGroup && groups.includes(savedGroup) && currentComp?.group_id && String(currentComp.group_id).toUpperCase().trim() === savedGroup) {
+          selGroup = savedGroup;
+        } else if (currentComp?.group_id) {
+          selGroup = String(currentComp.group_id).toUpperCase().trim();
+        }
+        setSelectedGroup(selGroup);
+        if (selGroup) {
+          sessionStorage.setItem("dashboard_group_filter", selGroup);
+        } else {
+          sessionStorage.removeItem("dashboard_group_filter");
+        }
+      } catch {
+        if (!cancelled) navigate("/login", { replace: true });
+      } finally {
+        if (!cancelled) setBootLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionReady, navigate, me]);
+
+  useEffect(() => {
+    if (bootLoading || !companyId || !companyCode) return;
+    let cancelled = false;
+    setCurrenciesReady(false);
+    (async () => {
+      const perms = await fetchCompanyPermissions(companyCode);
+      if (cancelled) return;
+      setPermissions(perms);
+      const saved = localStorage.getItem(`selectedPermission_${companyCode}`);
+      if (saved && perms.includes(saved)) setSelectedPermission(saved);
+      else setSelectedPermission(perms[0] || "");
+
+      const currencyList = await fetchCompanyCurrencies(companyId).catch(() => []);
+      if (cancelled) return;
+      setCurrencies(currencyList);
+      if (currencyList.length === 0) {
+        setAllCurrenciesSelected(true);
+        setSelectedCurrencies([]);
+      } else {
+        setAllCurrenciesSelected(false);
+        const myr = currencyList.find((x) => x.code === "MYR");
+        const pick = myr?.code || currencyList[0]?.code;
+        setSelectedCurrencies(pick ? [pick] : []);
+      }
+      setCurrenciesReady(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [bootLoading, companyId, companyCode]);
+
+  /** 与 Payment Maintenance 一致：筛选变更自动查询；seq + abort 避免重复 toast */
+  const performSearch = useCallback(async () => {
+    if (!dateFrom || !dateTo) {
+      notify(t("pleaseSelectDateRange"), "error");
+      return;
+    }
+    if (!companyId) return;
+    if (!currenciesReady) return;
+    if (!allCurrenciesSelected && selectedCurrencies.length === 0) return;
+
+    const searchCompanyId = Number(companyId);
+    const quietRefresh = initialBankprocessSearchDoneRef.current;
+
+    searchAbortRef.current?.abort();
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    const seq = ++searchSeqRef.current;
+
+    if (!quietRefresh) setLoading(true);
+    setSelectedIds([]);
+
+    const currencyKey = allCurrenciesSelected ? "ALL" : selectedCurrencies.slice().sort().join(",");
+
+    try {
+      const data = await searchBankprocessData({
+        dateFrom,
+        dateTo,
+        companyId,
+        currencyCodes: selectedCurrencies,
+        allCurrencies: allCurrenciesSelected,
+        query,
+        signal: controller.signal,
+      });
+      if (seq !== searchSeqRef.current) return;
+      if (searchCompanyId !== Number(currentCompanyIdRef.current)) return;
+
+      setBankprocessListEpoch((e) => e + 1);
+      setRows(data);
+      setBankprocessDataSourceCompanyId(searchCompanyId);
+      setHasSearched(true);
+      setConfirmDelete(false);
+      if (!quietRefresh) {
+        if (data.length > 0) {
+          notify(t("foundRecords", { n: data.length }), "success");
+        } else {
+          const dedupeKey = `${searchCompanyId}|${dateFrom}|${dateTo}|${currencyKey}|${selectedPermission}|${query}|empty`;
+          if (consumeNoDataToastDedupeKey(dedupeKey)) {
+            notify(t("noDataAdjustSearch"), "info");
+          }
+        }
+      }
+    } catch (err) {
+      if (err?.name === "AbortError" || seq !== searchSeqRef.current) return;
+      if (searchCompanyId !== Number(currentCompanyIdRef.current)) return;
+      setBankprocessListEpoch((e) => e + 1);
+      setRows([]);
+      setBankprocessDataSourceCompanyId(null);
+      setHasSearched(true);
+      notify(err.message || t("searchFailed"), "error");
+    } finally {
+      if (searchAbortRef.current === controller) {
+        searchAbortRef.current = null;
+      }
+      if (seq === searchSeqRef.current) {
+        initialBankprocessSearchDoneRef.current = true;
+        setLoading(false);
+      }
+    }
+  }, [
+    dateFrom,
+    dateTo,
+    companyId,
+    currenciesReady,
+    allCurrenciesSelected,
+    selectedCurrencies,
+    selectedPermission,
+    query,
+    notify,
+    t,
+  ]);
+
+  useEffect(() => {
+    if (bootLoading || !companyId || !dateFrom || !dateTo || !currenciesReady) return;
+    if (!allCurrenciesSelected && selectedCurrencies.length === 0) return;
+    const h = setTimeout(() => {
+      void performSearch();
+    }, 0);
+    return () => clearTimeout(h);
+  }, [
+    bootLoading,
+    companyId,
+    currenciesReady,
+    allCurrenciesSelected,
+    selectedCurrencies,
+    dateFrom,
+    dateTo,
+    selectedPermission,
+    query,
+    performSearch,
+  ]);
+
+  useEffect(
+    () => () => {
+      searchAbortRef.current?.abort();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!selectedPermission || !companyCode) return;
+    localStorage.setItem(`selectedPermission_${companyCode}`, selectedPermission);
+  }, [selectedPermission, companyCode]);
+
+  const followGroupRef = useRef(() => {});
+
+  const handleSwitchCompany = useCallback(async (targetCompany) => {
+    if (!targetCompany?.id) return;
+    const nextId = Number(targetCompany.id);
+    if (nextId === Number(currentCompanyIdRef.current)) return;
+    try {
+      await updateSessionCompany(nextId);
+      const newGroup = targetCompany.group_id
+        ? String(targetCompany.group_id).toUpperCase().trim()
+        : null;
+      setCompanyId(nextId);
+      setCompanyCode(targetCompany.company_id || "");
+      setSelectedGroup(newGroup);
+      if (newGroup) sessionStorage.setItem("dashboard_group_filter", newGroup);
+      else sessionStorage.removeItem("dashboard_group_filter");
+      currentCompanyIdRef.current = nextId;
+      followGroupRef.current();
+      notifyCompanySessionUpdated();
+      notify(t("switchedTo", { company: targetCompany.company_id }), "success");
+    } catch (err) {
+      notify(err.message || t("switchFailed"), "error");
+    }
+  }, [notify, t]);
+
+  const {
+    groupFilterKind,
+    snapGroupIds: groupedIdsFromHook,
+    visibleCompanies,
+    handlePickAllGroups,
+    handleGroupClick: onGroupClick,
+    followCurrentCompanyGroup,
+  } = useMaintenanceGroupCompanyFilter({
+    companies,
+    companyId,
+    selectedGroup,
+    setSelectedGroup,
+    switchCompany: handleSwitchCompany,
+  });
+
+  followGroupRef.current = followCurrentCompanyGroup;
+
+  const groupedIds = groupedIdsFromHook;
+
+  const toggleBankprocessCurrency = useCallback((code) => {
+    if (!code) return;
+    setAllCurrenciesSelected(false);
+    setSelectedCurrencies((prev) => {
+      const has = prev.includes(code);
+      if (has) {
+        const next = prev.filter((c) => c !== code);
+        return next.length > 0 ? next : prev;
+      }
+      return [...prev, code];
+    });
+  }, []);
+
+  const selectAllBankprocessCurrencies = useCallback(() => {
+    setAllCurrenciesSelected(true);
+    setSelectedCurrencies([]);
+  }, []);
+
+  const selectableRows = useMemo(
+    () => rows.filter((r) => !(r.is_deleted === 1 || r.is_deleted === "1" || r.is_deleted === true)),
+    [rows]
+  );
+
+  const selectAll = selectableRows.length > 0 && selectedIds.length === selectableRows.length;
+
+  const onToggleSelectAll = useCallback(() => {
+    setSelectedIds((prev) => {
+      const selectable = rowsRef.current.filter(
+        (r) => !(r.is_deleted === 1 || r.is_deleted === "1" || r.is_deleted === true),
+      );
+      if (prev.length === selectable.length && selectable.length > 0) return [];
+      return selectable.map((r) => r.transaction_id);
+    });
+  }, []);
+
+  const onToggleRow = (transactionId) => {
+    setSelectedIds((prev) => (prev.includes(transactionId) ? prev.filter((id) => id !== transactionId) : [...prev, transactionId]));
+  };
+
+  const onDelete = async () => {
+    if (selectedIds.length === 0) {
+      notify(t("pleaseSelectOneRecord"), "error");
+      return;
+    }
+    setIsDeleteModalOpen(true);
+  };
+
+  const onConfirmDelete = async () => {
+    setIsDeleteModalOpen(false);
+    try {
+      const result = await deleteBankprocessData(selectedIds);
+      try {
+        const ts = String(Date.now());
+        localStorage.setItem("count168_tx_invalidate_ts", ts);
+        window.dispatchEvent(new CustomEvent("tx-data-changed", { detail: { ts, source: "bankprocess_maintenance_delete" } }));
+      } catch {
+        // ignore
+      }
+      notify(t("successfullyDeletedBankProcessN", { n: selectedIds.length }), "success");
+      setSelectedIds([]);
+      setConfirmDelete(false);
+      void performSearch();
+    } catch (err) {
+      notify(err.message || t("deleteFailed"), "error");
+    }
+  };
+
+  if (bootLoading || !me) return <PageContentLoader />;
+
+  return (
+    <div className="bankprocess-maintenance-page-root container">
+      <BankprocessMaintenanceFilters
+        permissions={permissions}
+        selectedPermission={selectedPermission}
+        setSelectedPermission={setSelectedPermission}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        setDateFrom={setDateFrom}
+        setDateTo={setDateTo}
+        today={today}
+        query={query}
+        setQuery={setQuery}
+        onSearch={performSearch}
+        groupedIds={groupedIds}
+        groupFilterKind={groupFilterKind}
+        selectedGroup={selectedGroup}
+        onGroupClick={onGroupClick}
+        onPickAllGroups={handlePickAllGroups}
+        companies={companies}
+        visibleCompanies={visibleCompanies}
+        companyId={companyId}
+        handleSwitchCompany={handleSwitchCompany}
+        currencies={currencies}
+        allCurrenciesSelected={allCurrenciesSelected}
+        selectedCurrencies={selectedCurrencies}
+        onCurrencyToggle={toggleBankprocessCurrency}
+        onCurrencySelectAll={selectAllBankprocessCurrencies}
+        confirmDelete={confirmDelete}
+        setConfirmDelete={setConfirmDelete}
+        selectedIds={selectedIds}
+        onDelete={onDelete}
+        pageTitle={pageTitle}
+        m={m}
+      />
+
+      <BankprocessMaintenanceTable
+        key={bankprocessDataSourceCompanyId ?? companyId ?? "no-company"}
+        loading={loading}
+        rows={rows}
+        hasSearched={hasSearched}
+        listEpoch={bankprocessListEpoch}
+        rowKeyCompanyId={bankprocessDataSourceCompanyId ?? companyId}
+        selectedIds={selectedIds}
+        onToggleRow={onToggleRow}
+        selectAll={selectAll}
+        onToggleSelectAll={onToggleSelectAll}
+        m={m}
+      />
+
+      <div id="notificationContainer" className="maintenance-notification-container">
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`maintenance-notification maintenance-notification-${toast.type} show`}>
+            {toast.message}
+          </div>
+        ))}
+      </div>
+
+      <MaintenanceDeleteConfirmModal
+        isOpen={isDeleteModalOpen}
+        onClose={() => setIsDeleteModalOpen(false)}
+        onConfirm={onConfirmDelete}
+        count={selectedIds.length}
+        messageKey="deleteConfirmBankProcess"
+        t={t}
+      />
+    </div>
+  );
+}

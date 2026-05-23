@@ -16,8 +16,9 @@ header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
 header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
 header('X-Count168-History-Sort: calendar');
-require_once __DIR__ . '/../../config.php';
+require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/../includes/member_linked_closure.php';
 require_once __DIR__ . '/bank_process_bill_display.php';
 require_once __DIR__ . '/dcd_processed_quant.php';
 
@@ -47,32 +48,30 @@ function historyContraApprovedWhere(PDO $pdo, string $alias = 't'): string
 }
 
 /**
- * 截断到2位小数（不四舍五入）
+ * 统计口径统一 6 位小数（展示仍在输出阶段按 2 位）。
  */
 function historyTrunc2($value): string
 {
     if ($value === null || trim((string)$value) === '') {
-        return money_normalize('0', 2);
+        return money_normalize('0', 6);
     }
-    return money_normalize($value ?? '0', 2);
+    return money_normalize($value ?? '0', 6);
 }
 
 /**
- * Data Capture 的 processed_amount 与前端 js/datacapturesummary.js roundProcessedAmountTo2Decimals 对齐：
- * 向 0 截断到 2 位 + 1e-9/-1e-9 纠偏，避免库内浮点 -40.799999… 在 Payment History 被 historyTrunc2 显示成 -40.79。
- * 仅用于 data_capture 行，其它交易类型仍用 historyTrunc2。
+ * Data Capture 统计值统一按 6 位小数参与算法。
  */
 function historyDataCaptureProcessed2($value): string
 {
     if ($value === null || trim((string)$value) === '') {
-        return money_normalize('0', 2);
+        return money_normalize('0', 6);
     }
-    return money_normalize($value ?? '0', 2);
+    return money_normalize($value ?? '0', 6);
 }
 
 function historyFormat2($value): string
 {
-    return historyTrunc2($value);
+    return money_round_half_up($value ?? '0', 2);
 }
 
 /**
@@ -82,9 +81,9 @@ function historyFormat2($value): string
 function historyFormatExactCents2($value): string
 {
     if ($value === null || trim((string)$value) === '') {
-        return money_normalize('0', 2);
+        return money_round_half_up('0', 2);
     }
-    return money_normalize($value ?? '0', 2);
+    return money_round_half_up($value ?? '0', 2);
 }
 
 function historyNeg($value): string
@@ -98,6 +97,14 @@ function historyDisplayDecimal($value, int $scale = 6): string
         return '';
     }
     return money_out($value, $scale);
+}
+
+function historyFormatRateMax6($value): string
+{
+    if ($value === null || trim((string) $value) === '') {
+        return '';
+    }
+    return historyDisplayDecimal($value, 6);
 }
 
 /** Payment History：业务日 Y-m-d，按日历旧→新排序（与 Date 列同一业务含义） */
@@ -231,6 +238,25 @@ function mapEntryTypeToProduct($entryType)
 }
 
 /**
+ * Payment History：同一笔 RATE（同一 header）下，展示顺序固定为 FROM 侧先于 TO 侧，
+ * 避免同一账户多行分录仅因 e.id 交错而出现「先 To 后 From」与对手账不一致。
+ */
+function historyRateLegSortGroup(?string $entryType): int
+{
+    $t = trim((string) ($entryType ?? ''));
+    if (in_array($t, ['RATE_FIRST_FROM', 'RATE_TRANSFER_FROM'], true)) {
+        return 0;
+    }
+    if (in_array($t, ['RATE_FIRST_TO', 'RATE_TRANSFER_TO'], true)) {
+        return 1;
+    }
+    if ($t === 'RATE_MIDDLEMAN' || $t === 'RATE_FEE') {
+        return 2;
+    }
+    return 3;
+}
+
+/**
  * 移除描述末尾的 "(Rate: xxx)" 后缀（大小写不敏感）
  */
 function stripTrailingRateSuffix(string $description): string
@@ -253,6 +279,9 @@ function formatExchangeRateDescription(string $description, ?string $fromCurrenc
     $rateText = $rateOverride !== null && $rateOverride !== ''
         ? trim((string) $rateOverride)
         : trim($matches[3]);
+    if ($rateText !== '' && money_is_valid($rateText)) {
+        $rateText = historyFormatRateMax6($rateText);
+    }
 
     $formatted = 'EXCH RATE ' . $rateText;
     if (!empty($fromCurrencyCode) && !empty($toCurrencyCode)) {
@@ -1002,8 +1031,8 @@ try {
                 throw new Exception('无权访问该公司');
             }
         } elseif ($userType === 'member') {
-            // member 用户可以访问通过 account_company 关联的公司
-            $memberAccountId = (int) $_SESSION['user_id'];
+            // member：公司以登录账号的 account_company 为准
+            $memberAccountId = member_session_canonical_account_id();
             $stmt = $pdo->prepare("
                 SELECT 1 
                 FROM account_company ac
@@ -1212,6 +1241,13 @@ try {
     } catch (Throwable $e) {
         $has_resend_schedule_day_end = false;
     }
+    $has_day_end_monthly_cap_enabled = false;
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM bank_process LIKE 'day_end_monthly_cap_enabled'");
+        $has_day_end_monthly_cap_enabled = $stmt->rowCount() > 0;
+    } catch (Throwable $e) {
+        $has_day_end_monthly_cap_enabled = false;
+    }
 
     $sql = "SELECT 
                 t.id,
@@ -1241,7 +1277,8 @@ try {
     if ($has_source_bank_process_id) {
         $bpFrequencySql = $has_day_start_frequency ? "bp_t.day_start_frequency" : "''";
         $bpResendDayEndSql = $has_resend_schedule_day_end ? "bp_t.accounting_resend_schedule_day_end" : "''";
-        $sql .= ", t.source_bank_process_id, a_cm_t.name as card_owner_name, bp_t.name as bank_process_name, bp_t.bank as bank_name, {$bpFrequencySql} as bp_frequency, bp_t.profit as process_profit, bp_t.cost as process_cost, bp_t.price as process_price, bp_t.card_merchant_id, bp_t.customer_id, bp_t.profit_account_id, bp_t.profit_sharing as process_profit_sharing, bp_t.day_start AS bp_day_start, bp_t.day_end AS bp_day_end, {$bpResendDayEndSql} AS bp_resend_day_end, bp_t.dts_created AS bp_dts_created";
+        $bpDayEndCapSql = $has_day_end_monthly_cap_enabled ? 'bp_t.day_end_monthly_cap_enabled' : '0';
+        $sql .= ", t.source_bank_process_id, a_cm_t.name as card_owner_name, bp_t.name as bank_process_name, bp_t.bank as bank_name, {$bpFrequencySql} as bp_frequency, bp_t.profit as process_profit, bp_t.cost as process_cost, bp_t.price as process_price, bp_t.card_merchant_id, bp_t.customer_id, bp_t.profit_account_id, bp_t.profit_sharing as process_profit_sharing, bp_t.day_start AS bp_day_start, bp_t.day_end AS bp_day_end, {$bpResendDayEndSql} AS bp_resend_day_end, bp_t.dts_created AS bp_dts_created, {$bpDayEndCapSql} AS bp_day_end_monthly_cap_enabled";
         // 每笔交易单独存 period_type 时优先用列，否则用 pap 子查询（避免同一天 monthly/inactive 互相覆盖）
         if ($has_source_bank_process_period_type) {
             $sql .= ", t.source_bank_process_period_type AS period_type";
@@ -1503,9 +1540,12 @@ try {
 
         if ($capture['product_type'] === 'sub' && !empty($capture['id_product_sub'])) {
             $product = $capture['id_product_sub'];
-            // 获取对应的 description_sub
+            // 获取对应的描述：优先 description_sub；若为空则回退到 description_main，
+            // 兼容历史数据（旧版前端把 sub 行的描述误写进 description_main 字段的情况）。
             if (!empty($capture['description_sub'])) {
                 $productDescription = $capture['description_sub'];
+            } elseif (!empty($capture['description_main'])) {
+                $productDescription = $capture['description_main'];
             }
         } elseif (!empty($capture['id_product_main'])) {
             $product = $capture['id_product_main'];
@@ -1802,6 +1842,8 @@ try {
             } else {
                 if ($periodType === 'partial_first_month') {
                     $description = bankProcessProRatedFirstMonthDescription($t);
+                } elseif ($periodType === 'once_one_off') {
+                    $description = bankProcessOnceOneOffHistoryDescription($t);
                 } else {
                     if ($periodType === 'day_end_tail') {
                         // 统一 day_end 展示文案：Prorated(... | n days)@Monthly（不带 DayEnd 前缀）
@@ -1858,35 +1900,44 @@ try {
                     // 合同内整月账单（period_type=monthly）统一展示 Full Month 文案：
                     // - day_start_frequency = monthly
                     // - day_start_frequency = 1st_of_every_month（首月 partial 后的第2/3笔整月）
+                    // - 例外：1st + day_end 月内截断开关 ON 且 day_end 早于月末 → Prorated 文案（与入账比例一致）
                     if ($isBankProcessTransaction
                         && ($periodType === 'monthly' || $periodType === '')
                         && in_array($bpFreq, ['monthly', '1st_of_every_month', ''], true)
                         && $txnDay <= 1) {
-                        $monthLabel = '';
-                        $monthTs = strtotime((string) ($t['transaction_date'] ?? ''));
-                        if ($monthTs !== false) {
-                            $monthNo = (int) date('n', $monthTs);
-                            $yearNo = (int) date('Y', $monthTs);
-                            $monthMap = [
-                                1 => 'JAN',
-                                2 => 'FEB',
-                                3 => 'MAC',
-                                4 => 'APR',
-                                5 => 'MAY',
-                                6 => 'JUN',
-                                7 => 'JUL',
-                                8 => 'AUG',
-                                9 => 'SEP',
-                                10 => 'OCT',
-                                11 => 'NOV',
-                                12 => 'DEC',
-                            ];
-                            $monthShort = $monthMap[$monthNo] ?? strtoupper(date('M', $monthTs));
-                            $monthLabel = $monthShort . '/' . $yearNo;
+                        $capHistDesc = null;
+                        if (in_array($bpFreq, ['1st_of_every_month', ''], true)) {
+                            $capHistDesc = bankProcessMonthlyDayEndCapHistoryDescription($t);
                         }
-                        $description = $monthLabel !== ''
-                            ? ('Full Month (' . $monthLabel . ') @Monthly')
-                            : 'Full Month @Monthly';
+                        if ($capHistDesc !== null) {
+                            $description = $capHistDesc;
+                        } else {
+                            $monthLabel = '';
+                            $monthTs = strtotime((string) ($t['transaction_date'] ?? ''));
+                            if ($monthTs !== false) {
+                                $monthNo = (int) date('n', $monthTs);
+                                $yearNo = (int) date('Y', $monthTs);
+                                $monthMap = [
+                                    1 => 'JAN',
+                                    2 => 'FEB',
+                                    3 => 'MAC',
+                                    4 => 'APR',
+                                    5 => 'MAY',
+                                    6 => 'JUN',
+                                    7 => 'JUL',
+                                    8 => 'AUG',
+                                    9 => 'SEP',
+                                    10 => 'OCT',
+                                    11 => 'NOV',
+                                    12 => 'DEC',
+                                ];
+                                $monthShort = $monthMap[$monthNo] ?? strtoupper(date('M', $monthTs));
+                                $monthLabel = $monthShort . '/' . $yearNo;
+                            }
+                            $description = $monthLabel !== ''
+                                ? ('Full Month (' . $monthLabel . ') @Monthly')
+                                : 'Full Month @Monthly';
+                        }
                     }
                     $billAmount = money_out($amt, 2);
                     if (stripos((string) $description, 'Pro-rated(') === 0
@@ -2234,8 +2285,8 @@ try {
             if ($exchangeRate !== null && $middlemanRate !== null) {
                 $netRate = money_sub($exchangeRate, $middlemanRate, 8);
                 if (money_cmp($netRate, '0') > 0) {
-                    // 保留最多 4 位小数，并去掉多余的 0
-                    $displayRateForSuffix = money_out($netRate, 4);
+                    // 保留最多 6 位小数，并去掉多余的 0
+                    $displayRateForSuffix = money_out($netRate, 6);
                 }
             }
         }
@@ -2306,39 +2357,70 @@ try {
         ];
     }
 
-    // 先按业务日历日升序（旧在上、新在下），同日再按 order_ts / 加入序
+    // 先按业务日历日升序（旧在上、新在下），同日再按 order_ts；同一 RATE header 下同秒则 FROM 先于 TO，否则按加入序
     usort($events, function ($a, $b) {
         $da = $a['sort_date_ymd'] ?? '9999-12-31';
         $db = $b['sort_date_ymd'] ?? '9999-12-31';
         if ($da !== $db) {
             return $da <=> $db;
         }
-        if (($a['order_ts'] ?? 0) === ($b['order_ts'] ?? 0)) {
-            return ($a['order_index'] ?? 0) <=> ($b['order_index'] ?? 0);
+        $tsA = (int) ($a['order_ts'] ?? 0);
+        $tsB = (int) ($b['order_ts'] ?? 0);
+        if ($tsA !== $tsB) {
+            return $tsA <=> $tsB;
         }
-        return ($a['order_ts'] ?? 0) <=> ($b['order_ts'] ?? 0);
+        $aRate = ($a['transaction_type'] ?? '') === 'RATE';
+        $bRate = ($b['transaction_type'] ?? '') === 'RATE';
+        if ($aRate && $bRate) {
+            $idA = $a['transaction_id'] ?? null;
+            $idB = $b['transaction_id'] ?? null;
+            if ($idA !== null && $idA !== '' && (string) $idA === (string) $idB) {
+                $legA = historyRateLegSortGroup($a['entry_type'] ?? null);
+                $legB = historyRateLegSortGroup($b['entry_type'] ?? null);
+                if ($legA !== $legB) {
+                    return $legA <=> $legB;
+                }
+            }
+        }
+        return ($a['order_index'] ?? 0) <=> ($b['order_index'] ?? 0);
     });
 
     // 按货币分别累计余额，避免多币别时 Balance 列显示成「所有币别总和」（Member Win/Loss 每行应显示该币别 running balance）
     $balance_by_currency = [];
-    if ($bfCurrency !== null && $bfCurrency !== '') {
-        // 与逐行累加一致：先量化 B/F，避免 round 后仍带 IEEE 尾差再被 historyTrunc2 错成少 0.01
-        $balance_by_currency[$bfCurrency] = money_normalize($bf, 2);
+    // 未指定 currency 时：B/F 按 bf_per_currency 多行展示，running balance 必须为每个币别分别带入对应 opening，否则会只见第一币别 B/F（其余从 0 累加）
+    if (is_array($bf_per_currency) && count($bf_per_currency) > 0) {
+        foreach ($bf_per_currency as $code => $bfAmt) {
+            $ck = trim((string) $code);
+            if ($ck === '') {
+                continue;
+            }
+            $balance_by_currency[$ck] = money_normalize($bfAmt, 6);
+        }
+    } elseif ($bfCurrency !== null && $bfCurrency !== '') {
+        // 指定单一 currency 或 legacy 单笔 B/F：累加用更高精度（8dp）保存，展示时再统一 HALF_UP 到 2dp
+        $balance_by_currency[$bfCurrency] = money_normalize($bf, 6);
     }
 
     foreach ($events as $event) {
         $displayCurrency = $event['currency'] ?? $bfCurrency;
         $curKey = ($displayCurrency !== null && (string) $displayCurrency !== '') ? (string) $displayCurrency : '-';
         if (!isset($balance_by_currency[$curKey])) {
-            $balance_by_currency[$curKey] = '0';
+            $balance_by_currency[$curKey] = money_normalize('0', 6);
         }
+
         $rawWl = $event['win_loss'] ?? '0';
-        $eventWinLoss = (($event['row_type'] ?? '') === 'data_capture')
-            ? historyDataCaptureProcessed2($rawWl)
-            : historyTrunc2($rawWl);
-        $eventCrDr = historyTrunc2($event['cr_dr'] ?? '0');
-        $balance_by_currency[$curKey] = historyTrunc2(
-            money_add(money_add($balance_by_currency[$curKey], $eventWinLoss, 8), $eventCrDr, 8)
+        $rawCrDr = $event['cr_dr'] ?? '0';
+        $wlForCalc = ($rawWl === '-' || trim((string) $rawWl) === '') ? '0' : $rawWl;
+        $crdrForCalc = ($rawCrDr === '-' || trim((string) $rawCrDr) === '') ? '0' : $rawCrDr;
+
+        // 保留 8 位用于 running balance 计算；展示再 HALF_UP 到 2 位
+        $eventWinLoss = money_normalize($wlForCalc, 6);
+        $eventCrDr = money_normalize($crdrForCalc, 6);
+
+        $balance_by_currency[$curKey] = money_add(
+            money_add($balance_by_currency[$curKey], $eventWinLoss, 6),
+            $eventCrDr,
+            6
         );
         $row_balance = $balance_by_currency[$curKey];
 
@@ -2373,22 +2455,47 @@ try {
                         $finalDescription = 'Markup';
                     }
                 } else {
-                    // 汇率兑换本身：显示 Currency Exchange (FROM amount > TO) Rate x
+                    // 汇率兑换本身：Currency Exchange (FROM amount > TO)；Rate 按分录类型区分（Member）
+                    // - RATE_FIRST_FROM / RATE_FIRST_TO：不展示 Rate
+                    // - RATE_TRANSFER_FROM（第二币种 Select To）：原始 exchange_rate
+                    // - RATE_TRANSFER_TO（第二币种 Select From）：exchange_rate - middleman_rate（净汇率，无效则回退原始）
                     $fromCode = $event['from_currency_code'] ?? null;
                     $toCode = $event['to_currency_code'] ?? null;
                     $fromAmount = $event['rate_from_amount'] ?? null;
                     $exchangeRate = $event['exchange_rate'] ?? null;
+                    $middlemanRate = $event['rate_middleman_rate'] ?? null;
+
+                    $rateForSuffix = null;
+                    if (!in_array($entryType, ['RATE_FIRST_FROM', 'RATE_FIRST_TO'], true)) {
+                        if ($entryType === 'RATE_TRANSFER_TO') {
+                            $displayNet = null;
+                            if ($exchangeRate !== null && $exchangeRate !== ''
+                                && $middlemanRate !== null && (string) $middlemanRate !== '') {
+                                $netRate = money_sub($exchangeRate, $middlemanRate, 8);
+                                if (money_cmp($netRate, '0') > 0) {
+                                    $displayNet = money_out($netRate, 6);
+                                }
+                            }
+                            $rateForSuffix = ($displayNet !== null && $displayNet !== '')
+                                ? $displayNet
+                                : (($exchangeRate !== null && $exchangeRate !== '') ? $exchangeRate : null);
+                        } else {
+                            // RATE_TRANSFER_FROM、RATE_FEE 等：与原先一致，使用原始汇率
+                            $rateForSuffix = ($exchangeRate !== null && $exchangeRate !== '') ? $exchangeRate : null;
+                        }
+                    }
+
                     if ($fromCode && $toCode) {
                         $finalDescription = 'Currency Exchange (' . $fromCode;
                         if ($fromAmount !== null && $fromAmount !== '') {
-                        $formattedAmount = historyDisplayDecimal($fromAmount, 6);
+                            $formattedAmount = historyDisplayDecimal($fromAmount, 6);
                             if ($formattedAmount !== '') {
                                 $finalDescription .= ' ' . $formattedAmount;
                             }
                         }
                         $finalDescription .= ' > ' . $toCode . ')';
-                        if ($exchangeRate !== null && $exchangeRate !== '') {
-                        $formattedRate = historyDisplayDecimal($exchangeRate, 6);
+                        if ($rateForSuffix !== null && $rateForSuffix !== '') {
+                            $formattedRate = historyDisplayDecimal($rateForSuffix, 6);
                             if ($formattedRate !== '') {
                                 $finalDescription .= ' Rate ' . $formattedRate;
                             }
@@ -2419,9 +2526,10 @@ try {
             'currency' => $displayCurrency,
             'percent' => $event['percent'] ?? '-',
             'rate' => $event['rate'] ?? '-',
-            'win_loss' => money_cmp($eventWinLoss, '0') !== 0 ? historyFormatExactCents2($eventWinLoss) : '0.00',
-            'cr_dr' => money_cmp($eventCrDr, '0') !== 0 ? historyFormatExactCents2($eventCrDr) : '0.00',
-            'balance' => historyFormatExactCents2($row_balance),
+            // Payment History 展示口径：2dp 且 HALF_UP（四舍五入）；仅影响展示，不改变后端计算/数据库精度
+            'win_loss' => money_cmp($eventWinLoss, '0') !== 0 ? money_round_half_up($eventWinLoss, 2) : '0.00',
+            'cr_dr' => money_cmp($eventCrDr, '0') !== 0 ? money_round_half_up($eventCrDr, 2) : '0.00',
+            'balance' => money_round_half_up($row_balance, 2),
             'description' => $finalDescription,
             'sms' => $event['sms'],
             'remark' => $event['remark'] ?? null,

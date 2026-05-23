@@ -1,0 +1,112 @@
+import { useEffect } from "react";
+import { TX_LIST_INVALIDATE_LS_KEY, TX_DATA_CHANGED_EVENT, buildTxListSessionKey } from "../lib/transactionPaymentLogic.js";
+import { clearTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
+
+export function useTransactionSync({
+  filterSnapshot,
+  effectiveDateFrom,
+  effectiveDateTo,
+  selectedCategories,
+  searchState,
+  showAllCurrencies,
+  selectedCurrencies,
+  lastSearchCommitMsRef,
+  runSearch,
+  setHistory,
+  loading,
+  forbidden,
+  canApproveContra,
+  refreshContraInboxBadge,
+}) {
+  useEffect(() => {
+    let retryTimer = null;
+    const queueRetry = () => {
+      if (retryTimer) return;
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        refreshFromInvalidate();
+      }, 650);
+    };
+
+    const refreshFromInvalidate = () => {
+      const invalidateTs = parseInt(localStorage.getItem(TX_LIST_INVALIDATE_LS_KEY) || "0", 10) || 0;
+      if (!invalidateTs || invalidateTs <= lastSearchCommitMsRef.current) return;
+      if (!effectiveDateFrom || !effectiveDateTo) {
+        queueRetry();
+        return;
+      }
+      if (!showAllCurrencies && selectedCurrencies.length === 0) {
+        queueRetry();
+        return;
+      }
+      setHistory((h) => (h.open ? { ...h, open: false } : h));
+      clearTxSearchCache();
+      try {
+        const key = buildTxListSessionKey({
+          companyId: filterSnapshot?.companyId,
+          dateFrom: effectiveDateFrom,
+          dateTo: effectiveDateTo,
+          selectedCategories,
+          showInactive: searchState.showPaymentOnly,
+          showCaptureOnly: searchState.showCaptureOnly,
+          hideZeroBalance: !searchState.showZeroBalance,
+          showAllCurrencies,
+          selectedCurrencies,
+        });
+        if (key) sessionStorage.removeItem(key);
+      } catch {
+        /* ignore */
+      }
+      void runSearch?.({ silent: true });
+    };
+
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshFromInvalidate();
+    };
+    const onStorage = (e) => {
+      if (!e || e.key !== TX_LIST_INVALIDATE_LS_KEY) return;
+      refreshFromInvalidate();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(TX_DATA_CHANGED_EVENT, refreshFromInvalidate);
+    const poll = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      refreshFromInvalidate();
+    }, 5000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(TX_DATA_CHANGED_EVENT, refreshFromInvalidate);
+      clearInterval(poll);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
+  }, [
+    filterSnapshot?.companyId,
+    effectiveDateFrom,
+    effectiveDateTo,
+    selectedCategories,
+    searchState.showPaymentOnly,
+    searchState.showCaptureOnly,
+    searchState.showZeroBalance,
+    showAllCurrencies,
+    selectedCurrencies,
+    lastSearchCommitMsRef,
+    runSearch,
+    setHistory,
+  ]);
+
+  useEffect(() => {
+    if (loading || forbidden || !canApproveContra || !filterSnapshot?.companyId) return;
+
+    const pollContra = async () => {
+      if (document.visibilityState !== "visible") return;
+      await refreshContraInboxBadge?.(filterSnapshot.companyId);
+    };
+
+    const interval = setInterval(pollContra, 20000);
+    pollContra(); // initial
+    return () => clearInterval(interval);
+  }, [loading, forbidden, canApproveContra, filterSnapshot?.companyId, refreshContraInboxBadge]);
+}

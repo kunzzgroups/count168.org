@@ -1,7 +1,9 @@
 <?php
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../permissions.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/permissions.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/../includes/ensure_bank_process_day_end_monthly_cap_column.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -25,8 +27,13 @@ function jsonResponse(bool $success, string $message = '', $data = null): void
 
 function bankProcessHasColumn(PDO $pdo, string $column): bool
 {
-    static $cache = [];
-    if (array_key_exists($column, $cache)) return $cache[$column];
+    $cache = &$GLOBALS['__bank_process_column_exists_cache'];
+    if (!is_array($cache)) {
+        $cache = [];
+    }
+    if (array_key_exists($column, $cache)) {
+        return $cache[$column];
+    }
     try {
         $stmt = $pdo->prepare("SHOW COLUMNS FROM bank_process LIKE ?");
         $stmt->execute([$column]);
@@ -163,6 +170,51 @@ function checkCompanyAccess(PDO $pdo, int $requestedCompanyId): bool
 }
 
 /**
+ * 获取与指定 process 同组的其它流程（双向）。
+ * 组规则：
+ * - 若当前是 copy_from 子流程，则锚点为其 sync_source_process_id；
+ * - 否则锚点为当前流程 id；
+ * - 组成员为：锚点本身 + 所有 sync_source_process_id=锚点 的流程，排除当前流程。
+ */
+function getLinkedProcessIdsForSync(PDO $pdo, int $companyId, int $processId): array
+{
+    $currentStmt = $pdo->prepare("
+        SELECT id, sync_source_process_id
+        FROM process
+        WHERE id = ? AND company_id = ?
+        LIMIT 1
+    ");
+    $currentStmt->execute([$processId, $companyId]);
+    $current = $currentStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$current) {
+        return [];
+    }
+
+    $anchorId = !empty($current['sync_source_process_id'])
+        ? (int)$current['sync_source_process_id']
+        : (int)$current['id'];
+
+    $targetsStmt = $pdo->prepare("
+        SELECT id
+        FROM process
+        WHERE company_id = ?
+          AND (id = ? OR sync_source_process_id = ?)
+          AND id <> ?
+    ");
+    $targetsStmt->execute([$companyId, $anchorId, $anchorId, $processId]);
+    $rows = $targetsStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $ids = [];
+    foreach ($rows as $row) {
+        $pid = isset($row['id']) ? (int)$row['id'] : 0;
+        if ($pid > 0) {
+            $ids[] = $pid;
+        }
+    }
+    return array_values(array_unique($ids));
+}
+
+/**
  * Parse profit_sharing text like "STAFF - 50, AA - 10.5" and return total amount.
  */
 function parseProfitSharingTotal(?string $profitSharing): string
@@ -197,7 +249,7 @@ if ($req_company_id) {
     // Actions that are strictly for 'Bank' category
     $bankOnlyActions = [
         'get_banks_by_country', 'get_countries', 'add_country', 'remove_country',
-        'save_country_banks', 'get_selected_countries', 'save_selected_countries', 
+        'save_country_banks', 'remove_bank', 'get_selected_countries', 'save_selected_countries',
         'get_selected_banks', 'save_selected_banks', 'update_bank_process'
     ];
 
@@ -217,6 +269,10 @@ if ($req_company_id) {
     }
 }
 // --- END DATA-LEVEL CATEGORY PERMISSION VALIDATION ---
+
+if (isset($pdo) && $pdo instanceof PDO) {
+    ensureBankProcessDayEndMonthlyCapEnabledColumn($pdo);
+}
 
 switch ($action) {
     case 'get_process':
@@ -239,6 +295,9 @@ switch ($action) {
         break;
     case 'save_country_banks':
         saveCountryBanks();
+        break;
+    case 'remove_bank':
+        removeBank();
         break;
     case 'get_selected_countries':
         getSelectedCountries();
@@ -495,6 +554,11 @@ function updateProcess() {
     global $pdo;
     
     try {
+        if (is_partnership_audit_read_only_active($pdo)) {
+            jsonResponse(false, '只读账号无法执行此操作', null);
+            return;
+        }
+
         // Bank 类别：更新 bank_process 表
         if (isset($_POST['permission']) && $_POST['permission'] === 'Bank') {
             updateBankProcess();
@@ -546,6 +610,9 @@ function updateProcess() {
         $pdo->beginTransaction();
         
         try {
+            $targetProcessId = (int)$id;
+            $linkedProcessIds = getLinkedProcessIdsForSync($pdo, (int)$currentCompanyId, $targetProcessId);
+
             // 检查是否是 owner 登录
             $isOwner = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner';
             $modifiedByType = 'user';
@@ -591,8 +658,40 @@ function updateProcess() {
                 $id,
                 $currentCompanyId
             ]);
+
+            if (!empty($linkedProcessIds)) {
+                $syncSql = "UPDATE process SET
+                                currency_id = ?,
+                                remove_word = ?,
+                                replace_word_from = ?,
+                                replace_word_to = ?,
+                                remark = ?,
+                                status = ?,
+                                dts_modified = NOW(),
+                                modified_by = ?,
+                                modified_by_type = ?,
+                                modified_by_owner_id = ?
+                            WHERE id = ? AND company_id = ?";
+                $syncStmt = $pdo->prepare($syncSql);
+                foreach ($linkedProcessIds as $linkedId) {
+                    $syncStmt->execute([
+                        $currencyId,
+                        $removeWord,
+                        $replaceWordFrom,
+                        $replaceWordTo,
+                        $remark,
+                        $status,
+                        $currentUserId,
+                        $modifiedByType,
+                        $modifiedByOwnerId,
+                        $linkedId,
+                        $currentCompanyId
+                    ]);
+                }
+            }
             
             // 处理选中的描述 - 只取第一个描述
+            $descriptionId = null;
             if (!empty($selectedDescriptions)) {
                 $selectedDescriptionsArray = json_decode($selectedDescriptions, true);
                 if (is_array($selectedDescriptionsArray) && !empty($selectedDescriptionsArray)) {
@@ -609,26 +708,51 @@ function updateProcess() {
                         $updateDescSql = "UPDATE process SET description_id = ? WHERE id = ?";
                         $stmt = $pdo->prepare($updateDescSql);
                         $stmt->execute([$descriptionId, $id]);
+
+                        if (!empty($linkedProcessIds)) {
+                            $updateLinkedDescSql = "UPDATE process SET description_id = ? WHERE id = ? AND company_id = ?";
+                            $updateLinkedDescStmt = $pdo->prepare($updateLinkedDescSql);
+                            foreach ($linkedProcessIds as $linkedId) {
+                                $updateLinkedDescStmt->execute([$descriptionId, $linkedId, $currentCompanyId]);
+                            }
+                        }
                     }
                 }
             }
             
             // 更新day关联
             // 先删除现有的day关联
+            $dayIds = !empty($dayUse) ? array_filter(array_map('trim', explode(',', $dayUse))) : [];
             $deleteDaySql = "DELETE FROM process_day WHERE process_id = ?";
             $stmt = $pdo->prepare($deleteDaySql);
             $stmt->execute([$id]);
             
             // 添加新的day关联
-            if (!empty($dayUse)) {
-                $dayIds = explode(',', $dayUse);
+            if (!empty($dayIds)) {
                 $insertDaySql = "INSERT INTO process_day (process_id, day_id) VALUES (?, ?)";
                 $stmt = $pdo->prepare($insertDaySql);
                 
                 foreach ($dayIds as $dayId) {
-                    $dayId = trim($dayId);
                     if (!empty($dayId)) {
                         $stmt->execute([$id, $dayId]);
+                    }
+                }
+            }
+
+            if (!empty($linkedProcessIds)) {
+                $deleteLinkedDayStmt = $pdo->prepare("DELETE FROM process_day WHERE process_id = ?");
+                $insertLinkedDayStmt = null;
+                if (!empty($dayIds)) {
+                    $insertLinkedDayStmt = $pdo->prepare("INSERT INTO process_day (process_id, day_id) VALUES (?, ?)");
+                }
+                foreach ($linkedProcessIds as $linkedId) {
+                    $deleteLinkedDayStmt->execute([$linkedId]);
+                    if ($insertLinkedDayStmt) {
+                        foreach ($dayIds as $dayId) {
+                            if (!empty($dayId)) {
+                                $insertLinkedDayStmt->execute([$linkedId, $dayId]);
+                            }
+                        }
                     }
                 }
             }
@@ -708,6 +832,8 @@ function getBankProcesses() {
         $hasIssueFlagColumn = bankProcessHasColumn($pdo, 'issue_flag');
         $hasFlagColumn = bankProcessHasColumn($pdo, 'flag');
         $hasAnyIssueFlagColumn = $hasIssueFlagColumn || $hasFlagColumn;
+        $hasDayEndMonthlyCapColumn = bankProcessHasColumn($pdo, 'day_end_monthly_cap_enabled');
+        $dayEndMonthlyCapSelect = $hasDayEndMonthlyCapColumn ? "bp.day_end_monthly_cap_enabled" : "0 AS day_end_monthly_cap_enabled";
         $hasTxnSubquery = $hasSourceBankProcessId
             ? "(SELECT COUNT(*) FROM transactions t WHERE t.source_bank_process_id = bp.id AND t.company_id = bp.company_id)"
             : "(SELECT COUNT(*) FROM process_accounting_posted pap WHERE pap.process_id = bp.id AND pap.company_id = bp.company_id)";
@@ -751,6 +877,7 @@ function getBankProcesses() {
                     bp.day_start,
                     bp.day_start_frequency,
                     bp.day_end,
+                    $dayEndMonthlyCapSelect,
                     bp.status,
                     $issueFlagSelect,
                     bp.dts_modified,
@@ -850,6 +977,7 @@ function getBankProcesses() {
                 'day_start' => $r['day_start'] ?? null,
                 'day_start_frequency' => $r['day_start_frequency'] ?? '1st_of_every_month',
                 'day_end' => $r['day_end'] ?? null,
+                'day_end_monthly_cap_enabled' => ((int)($r['day_end_monthly_cap_enabled'] ?? 0)) === 1 ? '1' : '0',
                 'has_transactions' => ((int)($r['has_transactions'] ?? 0)) > 0,
                 'maintenance_resend_pending' => ((int) ($r['maintenance_resend_pending'] ?? 0)) === 1,
                 'resend_today_day_start_locked' => ((int) ($r['resend_today_day_start_locked'] ?? 0)) === 1,
@@ -880,15 +1008,17 @@ function getBankProcess() {
             return;
         }
         $hasSopColumn = bankProcessHasColumn($pdo, 'sop');
+        $hasDayEndTailSwitchCol = bankProcessHasColumn($pdo, 'day_end_monthly_cap_enabled');
         $hasIssueFlagColumn = bankProcessHasColumn($pdo, 'issue_flag');
         $hasFlagColumn = bankProcessHasColumn($pdo, 'flag');
         $hasAnyIssueFlagColumn = $hasIssueFlagColumn || $hasFlagColumn;
         $sopSelect = $hasSopColumn ? "bp.sop" : "NULL AS sop";
         $issueFlagSelect = $hasAnyIssueFlagColumn ? getBankProcessIssueFlagSql('bp', $hasIssueFlagColumn, $hasFlagColumn) . " AS issue_flag" : "NULL AS issue_flag";
+        $dayEndMonthlyCapSelect = $hasDayEndTailSwitchCol ? "bp.day_end_monthly_cap_enabled" : "0 AS day_end_monthly_cap_enabled";
         $stmt = $pdo->prepare("SELECT 
                 bp.id, bp.country, bp.bank, bp.type, bp.name,
                 bp.card_merchant_id, bp.customer_id, bp.profit_account_id, bp.contract, bp.insurance, bp.remark, $sopSelect,
-                bp.cost, bp.price, bp.profit, bp.profit_sharing, bp.day_start, bp.day_start_frequency, bp.day_end, bp.status, $issueFlagSelect,
+                bp.cost, bp.price, bp.profit, bp.profit_sharing, bp.day_start, bp.day_start_frequency, bp.day_end, $dayEndMonthlyCapSelect, bp.status, $issueFlagSelect,
                 bp.dts_modified, bp.dts_created,
                 a_cm.account_id as card_merchant_account_id, a_cm.name as card_merchant_name, a_cust.account_id as customer_account, a_cust.name as customer_name,
                 a_pa.account_id as profit_account_account_id, a_pa.name as profit_account_name
@@ -930,6 +1060,7 @@ function getBankProcess() {
             'day_start' => $process['day_start'],
             'day_start_frequency' => $process['day_start_frequency'] ?? '1st_of_every_month',
             'day_end' => $process['day_end'] ?? null,
+            'day_end_monthly_cap_enabled' => ((int)($process['day_end_monthly_cap_enabled'] ?? 0)) === 1 ? '1' : '0',
             'status' => $process['status'],
             'issue_flag' => normalizeBankIssueFlagValue($process['issue_flag'] ?? null),
             'dts_modified' => $process['dts_modified'],
@@ -980,10 +1111,13 @@ function updateBankProcess() {
         $price = money_optional($_POST['price'] ?? null);
         $profit = money_optional($_POST['profit'] ?? null);
         $profit_sharing = $_POST['profit_sharing'] ?? null;
-        $day_start = isset($_POST['day_start']) ? trim((string)$_POST['day_start']) : '';
-        $day_end = isset($_POST['day_end']) ? trim((string)$_POST['day_end']) : '';
-        $day_start_frequency = isset($_POST['day_start_frequency']) ? trim((string)$_POST['day_start_frequency']) : '1st_of_every_month';
-        if ($day_start_frequency !== 'monthly') {
+        $day_start_raw = $_POST['day_start'] ?? '';
+        $day_start = trim((string)(is_array($day_start_raw) ? (string)end($day_start_raw) : $day_start_raw));
+        $day_end_raw = $_POST['day_end'] ?? '';
+        $day_end = trim((string)(is_array($day_end_raw) ? (string)end($day_end_raw) : $day_end_raw));
+        $day_start_frequency_raw = $_POST['day_start_frequency'] ?? '1st_of_every_month';
+        $day_start_frequency = trim((string)(is_array($day_start_frequency_raw) ? (string)end($day_start_frequency_raw) : $day_start_frequency_raw));
+        if (!in_array($day_start_frequency, ['monthly', 'once', '1st_of_every_month'], true)) {
             $day_start_frequency = '1st_of_every_month';
         }
         if ($day_start === '') {
@@ -991,6 +1125,14 @@ function updateBankProcess() {
         }
         if ($day_end === '') {
             $day_end = null;
+        }
+        $day_end_cap_raw = $_POST['day_end_monthly_cap_enabled'] ?? null;
+        if (is_array($day_end_cap_raw)) {
+            $day_end_cap_raw = end($day_end_cap_raw);
+        }
+        $dayEndMonthlyCapEnabled = $day_end_cap_raw !== null && trim((string)$day_end_cap_raw) === '1';
+        if ($day_start_frequency !== '1st_of_every_month' || $day_end === null) {
+            $dayEndMonthlyCapEnabled = false;
         }
         $status = $_POST['status'] ?? 'active';
         if (!in_array($status, ['active', 'inactive', 'waiting'], true)) {
@@ -1001,6 +1143,7 @@ function updateBankProcess() {
         $modifiedByOwnerId = $isOwner ? ($_SESSION['owner_id'] ?? null) : null;
         $currentUserId = $isOwner ? null : getCurrentUserId($pdo);
         $hasSopColumn = bankProcessHasColumn($pdo, 'sop');
+        $hasDayEndTailSwitchCol = bankProcessHasColumn($pdo, 'day_end_monthly_cap_enabled');
         $sql = "UPDATE bank_process SET 
             country=?, bank=?, type=?, name=?, card_merchant_id=?, customer_id=?, profit_account_id=?,
             contract=?, insurance=?, ";
@@ -1012,12 +1155,23 @@ function updateBankProcess() {
             $sql .= "sop=?, ";
             $params[] = $sop;
         }
-        $sql .= "remark=?, cost=?, price=?, profit=?, profit_sharing=?, day_start=?, day_end=?, day_start_frequency=?, status=?,
+        $sql .= "remark=?, cost=?, price=?, profit=?, profit_sharing=?, day_start=?, day_end=?, day_start_frequency=?";
+        if ($hasDayEndTailSwitchCol) {
+            $sql .= ", day_end_monthly_cap_enabled=?";
+        }
+        $sql .= ", status=?,
             dts_modified=NOW(), modified_by=?, modified_by_type=?, modified_by_owner_id=?
             WHERE id=? AND company_id=?";
         array_push(
             $params,
-            $remark, $cost, $price, $profit, $profit_sharing, $day_start, $day_end, $day_start_frequency, $status,
+            $remark, $cost, $price, $profit, $profit_sharing, $day_start, $day_end, $day_start_frequency
+        );
+        if ($hasDayEndTailSwitchCol) {
+            $params[] = $dayEndMonthlyCapEnabled ? 1 : 0;
+        }
+        array_push(
+            $params,
+            $status,
             $currentUserId, $modifiedByType, $modifiedByOwnerId, $id, $currentCompanyId
         );
         $stmt = $pdo->prepare($sql);
@@ -1135,6 +1289,40 @@ function removeCountry() {
         jsonResponse(true, 'Removed', ['deleted' => (int) $stmt->rowCount()]);
     } catch (Exception $e) {
         error_log("removeCountry: " . $e->getMessage());
+        jsonResponse(false, $e->getMessage(), null);
+    }
+}
+
+/**
+ * Remove a bank row from country_bank for the given company and country.
+ */
+function removeBank() {
+    global $pdo;
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        jsonResponse(false, 'Method not allowed', null);
+        return;
+    }
+    try {
+        $companyId = isset($_POST['company_id']) && $_POST['company_id'] !== '' ? (int)$_POST['company_id'] : ($_SESSION['company_id'] ?? null);
+        if (!$companyId) {
+            jsonResponse(false, 'Company not found', null);
+            return;
+        }
+        if (!checkCompanyAccess($pdo, $companyId)) {
+            jsonResponse(false, '无权限访问该公司', null);
+            return;
+        }
+        $country = isset($_POST['country']) ? trim((string)$_POST['country']) : '';
+        $bank = isset($_POST['bank']) ? trim((string)$_POST['bank']) : '';
+        if ($country === '' || $bank === '') {
+            jsonResponse(false, 'Country and bank are required', null);
+            return;
+        }
+        $stmt = $pdo->prepare("DELETE FROM country_bank WHERE company_id = ? AND country = ? AND bank = ?");
+        $stmt->execute([$companyId, $country, $bank]);
+        jsonResponse(true, 'Removed', ['deleted' => (int) $stmt->rowCount()]);
+    } catch (Exception $e) {
+        error_log("removeBank: " . $e->getMessage());
         jsonResponse(false, $e->getMessage(), null);
     }
 }

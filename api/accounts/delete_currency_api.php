@@ -7,8 +7,8 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
-require_once __DIR__ . '/../../config.php';
-require_once __DIR__ . '/../../includes/deleted_log.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../deleted_log/deleted_log.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['success' => false, 'message' => 'Invalid request method', 'data' => null]);
@@ -65,6 +65,100 @@ function countAccountCurrencyUsageWithoutCompany(PDO $pdo, int $currencyId): int
     $stmt = $pdo->prepare("SELECT COUNT(DISTINCT account_id) FROM account_currency WHERE currency_id = ?");
     $stmt->execute([$currencyId]);
     return (int)$stmt->fetchColumn();
+}
+
+/**
+ * 返回正在使用该货币的账户（name + account_id），按 name 排序。
+ * @return array<int, array{id: int, name: string, account_id: string}>
+ */
+function getAccountsUsingCurrency(PDO $pdo, int $currencyId, int $companyId, string $currencyCode): array {
+    $accounts = [];
+
+    if (tableExists($pdo, 'account_currency')) {
+        $hasLegacyCurrencyId = columnExists($pdo, 'account', 'currency_id');
+        $hasAccountCompany = tableExists($pdo, 'account_company');
+        if ($hasAccountCompany) {
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT a.id, a.name, a.account_id
+                FROM account_currency ac
+                INNER JOIN account a ON a.id = ac.account_id
+                INNER JOIN account_company acc ON a.id = acc.account_id
+                WHERE ac.currency_id = ? AND acc.company_id = ?
+                ORDER BY a.name ASC, a.account_id ASC
+            ");
+            $stmt->execute([$currencyId, $companyId]);
+            $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            if ($hasLegacyCurrencyId) {
+                $stmt = $pdo->prepare("
+                    SELECT DISTINCT a.id, a.name, a.account_id
+                    FROM account a
+                    INNER JOIN account_company acc ON a.id = acc.account_id
+                    WHERE a.currency_id = ? AND acc.company_id = ?
+                    ORDER BY a.name ASC, a.account_id ASC
+                ");
+                $stmt->execute([$currencyId, $companyId]);
+                $seenIds = [];
+                foreach ($accounts as $row) {
+                    $seenIds[(int)($row['id'] ?? 0)] = true;
+                }
+                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $aid = (int)($row['id'] ?? 0);
+                    if ($aid > 0 && !isset($seenIds[$aid])) {
+                        $accounts[] = $row;
+                        $seenIds[$aid] = true;
+                    }
+                }
+                usort($accounts, function ($a, $b) {
+                    $cmp = strcmp((string)($a['name'] ?? ''), (string)($b['name'] ?? ''));
+                    return $cmp !== 0 ? $cmp : strcmp((string)($a['account_id'] ?? ''), (string)($b['account_id'] ?? ''));
+                });
+            }
+        } else {
+            $stmt = $pdo->prepare("
+                SELECT DISTINCT a.id, a.name, a.account_id
+                FROM account_currency ac
+                INNER JOIN account a ON a.id = ac.account_id
+                WHERE ac.currency_id = ?
+                ORDER BY a.name ASC, a.account_id ASC
+            ");
+            $stmt->execute([$currencyId]);
+            $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        }
+    } else {
+        try {
+            if (tableExists($pdo, 'account_company') && columnExists($pdo, 'account', 'currency')) {
+                $stmt = $pdo->prepare("
+                    SELECT DISTINCT a.id, a.name, a.account_id
+                    FROM account a
+                    INNER JOIN account_company ac ON a.id = ac.account_id
+                    WHERE a.currency = ? AND ac.company_id = ?
+                    ORDER BY a.name ASC, a.account_id ASC
+                ");
+                $stmt->execute([$currencyCode, $companyId]);
+                $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } elseif (columnExists($pdo, 'account', 'currency') && columnExists($pdo, 'account', 'company_id')) {
+                $stmt = $pdo->prepare("
+                    SELECT DISTINCT a.id, a.name, a.account_id
+                    FROM account a
+                    WHERE a.currency = ? AND a.company_id = ?
+                    ORDER BY a.name ASC, a.account_id ASC
+                ");
+                $stmt->execute([$currencyCode, $companyId]);
+                $accounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            }
+        } catch (PDOException $e) { /* ignore */ }
+    }
+
+    $normalized = [];
+    foreach ($accounts as $row) {
+        $normalized[] = [
+            'id' => (int)($row['id'] ?? 0),
+            'name' => (string)($row['name'] ?? ''),
+            'account_id' => (string)($row['account_id'] ?? ''),
+        ];
+    }
+    return $normalized;
 }
 
 function countAccountUsageLegacyByCode(PDO $pdo, string $currencyCode, int $companyId): int {
@@ -273,11 +367,27 @@ try {
     }
 
     if (!empty($usageMessages)) {
-        $errorMsg = 'Cannot delete currency that is being used by: ' . implode(', ', $usageMessages);
+        $accountsInUse = getAccountsUsingCurrency($pdo, $currencyId, $company_id, $currency['code']);
+        $responseData = ['accounts_in_use' => $accountsInUse];
+
+        if (!empty($accountsInUse)) {
+            $accountLabels = array_map(function ($acc) {
+                $name = trim((string)($acc['name'] ?? ''));
+                $code = trim((string)($acc['account_id'] ?? ''));
+                if ($name !== '' && $code !== '') {
+                    return $name . ' (' . $code . ')';
+                }
+                return $name !== '' ? $name : $code;
+            }, $accountsInUse);
+            $errorMsg = 'Cannot delete currency. The following accounts are using it: ' . implode(', ', $accountLabels);
+        } else {
+            $errorMsg = 'Cannot delete currency that is being used by: ' . implode(', ', $usageMessages);
+        }
+
         if (!empty($debugInfo)) {
             $errorMsg .= ' [Debug: ' . implode(', ', $debugInfo) . ']';
         }
-        jsonResponse(false, $errorMsg, null);
+        jsonResponse(false, $errorMsg, $responseData);
         exit;
     }
 

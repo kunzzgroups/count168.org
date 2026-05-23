@@ -2488,7 +2488,7 @@ function loadCurrencies() {
     }
     return Promise.all([
         fetch(buildApiUrl(`api/transactions/get_company_currencies_api.php?company_id=${window.companyId}`)).then(res => res.json()),
-        fetch(`api/transactions/user_currency_order_api.php?_t=${Date.now()}`).then(res => res.json()).catch(() => null)
+        fetch(`api/transactions/user_currency_order_api.php?_t=${Date.now()}&company_id=${encodeURIComponent(String(window.companyId))}`).then(res => res.json()).catch(() => null)
     ])
         .then(([data, orderData]) => {
             const wrapper = document.getElementById('currency-buttons-wrapper');
@@ -2496,7 +2496,7 @@ function loadCurrencies() {
             if (!wrapper || !container) return;
             container.innerHTML = '';
             if (data && data.success && data.data && data.data.length > 0) {
-                // 应用保存的拖动顺序（数据库优先，如果没有再尝试 localStorage，Transaction 页拖动也会互相同步 localStorage）
+                // 应用保存的拖动顺序：仅当前公司（DB + 该公司 localStorage）
                 const savedOrderKey = 'dashboard_currency_order_' + (window.companyId || 0);
                 let orderedData = [...data.data];
                 try {
@@ -2504,7 +2504,7 @@ function loadCurrencies() {
                     if (orderData && orderData.success && Array.isArray(orderData.data?.order) && orderData.data.order.length > 0) {
                         saved = JSON.stringify(orderData.data.order);
                     } else {
-                        saved = localStorage.getItem(savedOrderKey) || localStorage.getItem('dashboard_currency_order_global');
+                        saved = localStorage.getItem(savedOrderKey);
                     }
                     if (saved) {
                         const order = JSON.parse(saved);
@@ -2608,19 +2608,16 @@ function initDashboardCurrencyDragDrop() {
             .filter((code, idx, arr) => arr.indexOf(code) === idx);
         try {
             const cid = window.companyId || 0;
+            if (!cid) return;
             const key = 'dashboard_currency_order_' + cid;
             const serialized = JSON.stringify(newOrder);
             localStorage.setItem(key, serialized);
-            localStorage.setItem('dashboard_currency_order_global', serialized);
-            // 与 Transaction 列表共用同公司顺序，避免另一页拖动后全局 key 与 Dashboard 预期不一致
             localStorage.setItem('transaction_currency_order_' + cid, serialized);
-            localStorage.setItem('transaction_currency_order_global', serialized);
 
-            // 同时永久保存到数据库
             fetch('api/transactions/user_currency_order_api.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order: newOrder })
+                body: JSON.stringify({ company_id: cid, order: newOrder })
             }).catch(err => console.error('Failed to save currency order to DB:', err));
         } catch (err) { /* ignore */ }
         const first = newOrder[0];

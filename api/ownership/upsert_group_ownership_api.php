@@ -6,8 +6,8 @@
  * Inserts or updates a single group_ownership row.
  * Used by Account Ownership tab when a group entry is saved.
  */
-require_once '../../session_check.php';
-require_once '../../config.php';
+require_once '../../includes/session_check.php';
+require_once '../../includes/config.php';
 require_once '../includes/money_decimal.php';
 
 header('Content-Type: application/json');

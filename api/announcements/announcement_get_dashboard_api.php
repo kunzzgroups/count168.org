@@ -15,7 +15,7 @@ function sendJson(bool $success, string $message, $data = null): void {
 }
 
 try {
-    $configPaths = [__DIR__ . '/../../config.php', __DIR__ . '/../../../config.php'];
+    $configPaths = [__DIR__ . '/../../includes/config.php', dirname(__DIR__, 3) . '/includes/config.php'];
     foreach ($configPaths as $path) {
         if (is_file($path)) {
             require_once $path;

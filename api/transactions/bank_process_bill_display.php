@@ -107,6 +107,68 @@ function bankProcessResolveDisplayValueByAccount(array $t): string
 }
 
 /**
+ * Payment History / Maintenance：Frequency=once 入账行描述（与首月 partial 一致：每行只展示本条对应的金额）。
+ * - Supplier(card_merchant)：ONCE (DD/MM/YYYY) @ buy
+ * - Customer：ONCE (DD/MM/YYYY) @ sell
+ * - Company profit：ONCE (DD/MM/YYYY)（不在 Description 重复金额，与 Win/Loss 列一致）
+ * - Profit sharing 账户：ONCE (DD/MM/YYYY) @ 该账号分摊额
+ *
+ * @param array $t 需含 account_id、card_merchant_id、customer_id、profit_account_id、process_*；transaction_date 优先，否则 bp_day_start
+ */
+function bankProcessOnceOneOffHistoryDescription(array $t): string
+{
+    $dmy = '';
+    $td = trim((string) ($t['transaction_date'] ?? ''));
+    if ($td !== '' && stripos($td, '0000-00-00') !== 0) {
+        if (preg_match('#^\d{1,2}/\d{1,2}/\d{4}$#', $td)) {
+            $dmy = $td;
+        } elseif (preg_match('/^(\d{4})-(\d{2})-(\d{2})/', $td, $m)) {
+            $ts = strtotime($m[1] . '-' . $m[2] . '-' . $m[3]);
+            if ($ts !== false) {
+                $dmy = date('d/m/Y', $ts);
+            }
+        } else {
+            $ts = strtotime(str_replace('/', '-', $td));
+            if ($ts !== false) {
+                $dmy = date('d/m/Y', $ts);
+            }
+        }
+    }
+    if ($dmy === '') {
+        $ymd = bankProcessParseDayStartToYmd($t['bp_day_start'] ?? null);
+        if ($ymd !== null) {
+            $ts = strtotime($ymd);
+            if ($ts !== false) {
+                $dmy = date('d/m/Y', $ts);
+            }
+        }
+    }
+    if ($dmy === '') {
+        $dmy = date('d/m/Y');
+    }
+    $prefix = 'ONCE (' . $dmy . ')';
+    $txAccountId = (int) ($t['account_id'] ?? 0);
+    $cardMerchantId = (int) ($t['card_merchant_id'] ?? 0);
+    $customerId = (int) ($t['customer_id'] ?? 0);
+    $profitAccountId = (int) ($t['profit_account_id'] ?? 0);
+
+    if ($txAccountId > 0 && $txAccountId === $cardMerchantId) {
+        return $prefix . ' @ ' . bankProcessBillFormatTripartNumber($t['process_cost'] ?? '0');
+    }
+    if ($txAccountId > 0 && $txAccountId === $customerId) {
+        return $prefix . ' @ ' . bankProcessBillFormatTripartNumber(money_abs($t['process_price'] ?? '0', 2));
+    }
+    if ($txAccountId > 0 && $txAccountId === $profitAccountId) {
+        return $prefix . ' @ ' . bankProcessBillFormatTripartNumber($t['process_profit'] ?? '0');
+    }
+    $psAmount = bankProcessProfitSharingOriginalAmountByAccount($t);
+    if ($psAmount !== null) {
+        return $prefix . ' @ ' . bankProcessBillFormatTripartNumber($psAmount);
+    }
+    return $prefix;
+}
+
+/**
  * 首月比例账单描述：Pro-rated(dd/mm - dd/mm)@monthly <对应账单价格>
  * 仅显示当前这条记录对应的价格：
  * - Supplier(card_merchant): buy price
@@ -208,4 +270,62 @@ function bankProcessDayEndProratedDescription(array $t, bool $withPrefix = true)
     $prefix = $withPrefix ? 'DayEnd - Prorated(' : 'Prorated(';
     $value = bankProcessResolveDisplayValueByAccount($t);
     return $prefix . $startDm . ' - ' . $endDm . ' | ' . $daysCount . " days)@Monthly {$value}";
+}
+
+/**
+ * 1st_of_every_month + Day end 开关 ON：day_end 落在 transaction_date 所在自然月且早于月末时，展示为 Prorated(月初-day_end|天数)@Monthly；否则 null（走 Full Month 等既有分支）。
+ */
+function bankProcessMonthlyDayEndCapHistoryDescription(array $t): ?string
+{
+    $capRaw = $t['bp_day_end_monthly_cap_enabled'] ?? null;
+    $capOn = in_array((string) $capRaw, ['1', 'true', 'TRUE'], true) || $capRaw === 1 || $capRaw === true;
+    if (!$capOn) {
+        return null;
+    }
+    $freq = strtolower(trim((string) ($t['bp_frequency'] ?? '')));
+    if (!in_array($freq, ['1st_of_every_month', ''], true)) {
+        return null;
+    }
+    $txnRaw = trim((string) ($t['transaction_date'] ?? ''));
+    $txnYmd = null;
+    if ($txnRaw !== '') {
+        if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $txnRaw, $mx)) {
+            $txnYmd = $mx[1];
+        } else {
+            $ts0 = strtotime(str_replace('/', '-', $txnRaw));
+            if ($ts0 !== false) {
+                $txnYmd = date('Y-m-d', $ts0);
+            }
+        }
+    }
+    if ($txnYmd === null || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $txnYmd)) {
+        return null;
+    }
+    $tsTxn = strtotime($txnYmd . ' 12:00:00');
+    if ($tsTxn === false) {
+        return null;
+    }
+    $monthFirst = date('Y-m-01', $tsTxn);
+    $monthLast = date('Y-m-t', $tsTxn);
+    $endYmd = bankProcessParseDayStartToYmd($t['bp_day_end'] ?? null);
+    if ($endYmd === null || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $endYmd)) {
+        return null;
+    }
+    if ($endYmd < $monthFirst || $endYmd > $monthLast || $endYmd >= $monthLast) {
+        return null;
+    }
+    $tsStart = strtotime($monthFirst . ' 12:00:00');
+    $tsEnd = strtotime($endYmd . ' 12:00:00');
+    if ($tsStart === false || $tsEnd === false) {
+        return null;
+    }
+    $startDm = date('j/n', $tsStart);
+    $endDm = date('j/n', $tsEnd);
+    $daysCount = (int) floor(($tsEnd - $tsStart) / 86400) + 1;
+    if ($daysCount < 1) {
+        $daysCount = 1;
+    }
+    $value = bankProcessResolveDisplayValueByAccount($t);
+
+    return 'Prorated(' . $startDm . ' - ' . $endDm . ' | ' . $daysCount . " days)@Monthly {$value}";
 }
