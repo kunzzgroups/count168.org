@@ -1,5 +1,4 @@
 import {
-  isReturnFormulaLikeCell,
   parseApiReturnFormat,
   parseApiReturnTableFormat,
 } from "./dataCaptureApiReturnParsers.js";
@@ -60,9 +59,61 @@ export function pastedHtmlLooksFormatted(html) {
   return false;
 }
 
+/** Citibet payment report markers (Overall / My Earnings / Major rows). */
+export function pastedPlainTextLooksCitibet(pastedData) {
+  if (!pastedData || typeof pastedData !== "string") return false;
+
+  if (parseCitibetMajorPaymentReport(pastedData)) return true;
+  if (parseCitibetPaymentReport(pastedData)) return true;
+
+  const lower = pastedData.toLowerCase();
+  const hasCitibetMarkers =
+    (lower.includes("overall") && lower.includes("my earnings")) ||
+    pastedPlainTextLooksCitibetReport(pastedData) ||
+    (/\bmajor\b/i.test(pastedData) &&
+      (lower.includes("overall") || lower.includes("my earnings") || lower.includes("upline payment")));
+
+  if (!hasCitibetMarkers) return false;
+  return Boolean(parseCitibetFormatBasedPaste(pastedData));
+}
+
+/**
+ * Strict RETURN formula cell check for auto-detect only.
+ * Avoids false positives from CITIBET labels like "MY EARNINGS (RINGGIT MALAYSIA (RM))".
+ */
+function isAutoDetectReturnFormulaCell(raw) {
+  const cell = String(raw || "").trim();
+  if (!cell || !/\d/.test(cell)) return false;
+
+  const lower = cell.toLowerCase();
+  if (/^(overall|major|minor)$/i.test(cell)) return false;
+  if (lower.includes("my earnings")) return false;
+  if (/^total\b/i.test(cell)) return false;
+
+  if (parseApiReturnFormat(cell)) return true;
+
+  const hasColon = cell.includes(":");
+  const hasParens = cell.includes("(") || cell.includes(")");
+  const hasMathOps = /[+\-*/]/.test(cell);
+
+  if (hasColon) {
+    const afterColon = cell.substring(cell.indexOf(":") + 1).trim();
+    if (afterColon && /\d/.test(afterColon) && (afterColon.includes("(") || hasMathOps)) {
+      return true;
+    }
+  }
+
+  if (hasParens && hasMathOps && /\d\s*[+\-*/]\s*\d/.test(cell.replace(/\s+/g, " "))) {
+    return true;
+  }
+
+  return false;
+}
+
 /** RETURN rows contain formula-like description cells (colon + numbers / operators). */
 export function pastedPlainTextLooksReturn(pastedData) {
   if (!pastedData || typeof pastedData !== "string") return false;
+  if (pastedPlainTextLooksCitibet(pastedData)) return false;
 
   const normalized = pastedData.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const lines = normalized
@@ -75,6 +126,7 @@ export function pastedPlainTextLooksReturn(pastedData) {
   if (lines.length === 1) {
     if (parseApiReturnTableFormat(pastedData)) return true;
     if (parseApiReturnFormat(lines[0])) return true;
+    return false;
   }
 
   const hasTabSeparator = lines.some((line) => line.includes("\t"));
@@ -89,7 +141,7 @@ export function pastedPlainTextLooksReturn(pastedData) {
     for (const cell of cells) {
       if (!cell) continue;
       dataCells += 1;
-      if (isReturnFormulaLikeCell(cell)) formulaCells += 1;
+      if (isAutoDetectReturnFormulaCell(cell)) formulaCells += 1;
     }
   }
 
@@ -103,10 +155,7 @@ export function pastedPlainTextLooksReturn(pastedData) {
 export function autoDetectCaptureTypeFromPaste(pastedData, clipboard = null) {
   if (!pastedData || typeof pastedData !== "string") return "1.Text";
 
-  if (parseCitibetMajorPaymentReport(pastedData)) return "CITIBET";
-  if (pastedPlainTextLooksCitibetReport(pastedData) && parseCitibetPaymentReport(pastedData)) {
-    return "CITIBET";
-  }
+  if (pastedPlainTextLooksCitibet(pastedData)) return "CITIBET";
 
   if (pastedPlainTextLooksReturn(pastedData)) return "4.RETURN";
 
@@ -127,6 +176,9 @@ export function parseCitibetPasteData(pastedData, captureType) {
     if (!parsed && pastedPlainTextLooksCitibetReport(pastedData)) {
       parsed = parseCitibetFormatBasedPaste(pastedData);
     }
+    if (!parsed) {
+      parsed = parseCitibetFormatBasedPaste(pastedData);
+    }
     return parsed ? { ...parsed, usedMajorParser } : null;
   }
 
@@ -136,9 +188,5 @@ export function parseCitibetPasteData(pastedData, captureType) {
 
 export function shouldExitCitibetMode(pastedData, captureType) {
   if (captureType !== "CITIBET") return false;
-  const stillCitibet =
-    parseCitibetMajorPaymentReport(pastedData) ||
-    parseCitibetPaymentReport(pastedData) ||
-    (pastedPlainTextLooksCitibetReport(pastedData) && parseCitibetFormatBasedPaste(pastedData));
-  return !stillCitibet;
+  return !pastedPlainTextLooksCitibet(pastedData);
 }
