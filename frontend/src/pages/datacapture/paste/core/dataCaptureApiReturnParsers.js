@@ -527,18 +527,48 @@ export function isPlainReturnDataCell(cell) {
     // Short IDs such as JDAB5, DT8851 (no colon).
     if (/^[A-Za-z0-9_-]+$/.test(c) && !c.includes(":")) return true;
 
+    // Settlement / API labels without numeric formula after colon.
+    if (/^(payment settlement|mega888 api)$/i.test(c)) return true;
+
     return false;
 }
 
-/** Expand one formula cell — supports multi-line cells (SBOBET : ... / WWBET : ...). */
-export function expandReturnFormulaCell(cell) {
+/** RETURN transaction grid uses 10 data columns; empty cells display as "-". */
+export const RETURN_TABLE_COL_COUNT = 10;
+
+export function formatReturnDisplayCell(value) {
+    const t = String(value ?? "").trim();
+    return t === "" ? "-" : t;
+}
+
+/** Rightmost `LABEL : expression` column in a payment row (usually col 7 before split). */
+export function findReturnFormulaColumnIndex(cells) {
+    if (!Array.isArray(cells)) return -1;
+
+    for (let i = cells.length - 1; i >= 0; i -= 1) {
+        const c = String(cells[i] ?? "").trim();
+        if (!c || c === "-") continue;
+        if (!c.includes(":")) continue;
+        if (isPlainReturnDataCell(c)) continue;
+        if (!isReturnFormulaLikeCell(c)) continue;
+        // Require a letter label before colon (ALIBABA, KING855, SBOBET…)
+        if (!/^[A-Za-z][A-Za-z0-9_ ]*\s*:/.test(c)) continue;
+        return i;
+    }
+
+    return -1;
+}
+
+/** Expand one formula cell — first formula block only when multiple lines in one cell. */
+export function expandReturnFormulaCell(cell, { firstBlockOnly = false } = {}) {
     const raw = String(cell ?? "").trim();
     if (!raw || !raw.includes(":")) return null;
 
     const lines = raw.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const linesToParse = firstBlockOnly ? lines.slice(0, 1) : lines;
     const expanded = [];
 
-    for (const line of lines) {
+    for (const line of linesToParse) {
         if (!line.includes(":")) continue;
 
         const parsed = parseApiReturnFormat(line);
@@ -558,22 +588,26 @@ export function expandReturnFormulaCell(cell) {
     return expanded.length ? expanded : null;
 }
 
-/** Split every RETURN formula column in a tab row (right-to-left so indices stay valid). */
+/** Split the RETURN formula column only (preserve cols 1–6 layout). */
 export function processReturnRowCells(cells) {
     if (!Array.isArray(cells)) return cells;
 
-    for (let colIndex = cells.length - 1; colIndex >= 0; colIndex -= 1) {
-        const cell = cells[colIndex] ?? "";
-        if (isPlainReturnDataCell(cell)) continue;
-        if (!isReturnFormulaLikeCell(cell)) continue;
+    const formulaIdx = findReturnFormulaColumnIndex(cells);
+    if (formulaIdx < 0) return cells;
 
-        const expanded = expandReturnFormulaCell(cell);
-        if (!expanded?.length) continue;
+    const expanded = expandReturnFormulaCell(cells[formulaIdx], { firstBlockOnly: true });
+    if (!expanded?.length) return cells;
 
-        cells.splice(colIndex, 1, ...expanded);
-    }
-
+    cells.splice(formulaIdx, 1, ...expanded);
     return cells;
+}
+
+/** Pad RETURN rows to at least 10 columns; blanks become "-". */
+export function normalizeReturnTableRow(cells) {
+    const row = Array.isArray(cells) ? [...cells] : [];
+    const targetCols = Math.max(RETURN_TABLE_COL_COUNT, row.length);
+    while (row.length < targetCols) row.push("");
+    return row.map(formatReturnDisplayCell);
 }
 
 /** Build a 2D matrix for RETURN paste (expand formulas only for API-style single-line rows). */
@@ -606,19 +640,16 @@ export function buildReturnPasteDataMatrix(pastedData) {
         if (!cells?.length) continue;
 
         processReturnRowCells(cells);
-        dataMatrix.push(cells);
-        maxCols = Math.max(maxCols, cells.length);
+        const normalizedRow = normalizeReturnTableRow(cells);
+        dataMatrix.push(normalizedRow);
+        maxCols = Math.max(maxCols, normalizedRow.length);
     }
 
     if (!dataMatrix.length || maxCols === 0) return null;
 
-    dataMatrix.forEach((row) => {
-        while (row.length < maxCols) row.push("");
-    });
-
     return {
         dataMatrix,
         maxRows: dataMatrix.length,
-        maxCols,
+        maxCols: Math.max(RETURN_TABLE_COL_COUNT, maxCols),
     };
 }
