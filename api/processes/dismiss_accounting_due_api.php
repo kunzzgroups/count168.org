@@ -186,6 +186,7 @@ try {
     $today = date('Y-m-d');
     
     $inserted = 0;
+    $processIdsForPrune = [];
     bmp_ensureMaintenanceResendPendingTable($pdo);
     ensureAccountingDueDismissedTable($pdo);
     $insPap = $pdo->prepare("INSERT IGNORE INTO process_accounting_posted (company_id, process_id, posted_date, period_type) VALUES (?, ?, ?, ?)");
@@ -319,6 +320,15 @@ try {
             $ptNorm = bmp_normalizePeriodType($periodType);
             $insRp->execute([$companyId, $processId, $papId, $ptNorm, $postDate]);
         }
+        $anchorYmd = bmp_normalizeSqlDateYmd($postDate);
+        if ($anchorYmd !== null) {
+            bmp_clearAccountingResendDailyGuardForDayStart($pdo, $companyId, $processId, $anchorYmd);
+            $processIdsForPrune[$processId] = true;
+        }
+    }
+
+    foreach (array_keys($processIdsForPrune) as $pid) {
+        bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $companyId, (int) $pid);
     }
 
     jsonResponse(true, $inserted === 1 ? '已从待入账列表移除 1 条' : '已从待入账列表移除 ' . $inserted . ' 条', ['dismissed' => $inserted]);

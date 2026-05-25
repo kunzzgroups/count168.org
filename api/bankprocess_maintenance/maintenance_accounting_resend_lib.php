@@ -517,7 +517,7 @@ if (!function_exists('bmp_accountingResendDailyGuardHasLiveEvidence')) {
 if (!function_exists('bmp_accountingResendIsLockedToday')) {
     /**
      * 当日是否禁止再次 Resend：须同时满足 guard_date=今天 且 Maintenance 仍有对应锚日交易。
-     * Resend 本身不写 guard；Accounting Due Delete 不写交易 → 不锁。
+     * Resend 本身不写 guard；Accounting Due Delete 会清除当日 guard → 可再 Resend。
      * 次日 guard_date 不匹配 → 可再 Resend（即使昨日交易仍在库中）。
      */
     function bmp_accountingResendIsLockedToday(
@@ -571,6 +571,31 @@ if (!function_exists('bmp_recordAccountingResendDailyGuardOnTransactionPost')) {
         } catch (PDOException $e) {
             // ignore duplicate same day
         }
+    }
+}
+
+if (!function_exists('bmp_clearAccountingResendDailyGuardForDayStart')) {
+    /**
+     * 从 Accounting Due 移除（Delete）后清除当日 guard，使同日可再次 Resend。
+     * 不删除 Maintenance 交易；仅去掉「今日已 Post」的 Resend 锁。
+     */
+    function bmp_clearAccountingResendDailyGuardForDayStart(
+        PDO $pdo,
+        int $companyId,
+        int $bankProcessId,
+        string $resendDayStartYmd
+    ): void {
+        $ymd = bmp_normalizeSqlDateYmd($resendDayStartYmd);
+        if ($ymd === null) {
+            return;
+        }
+        bmp_ensureAccountingResendDailyGuardTable($pdo);
+        $del = $pdo->prepare(
+            "DELETE FROM bank_process_accounting_resend_daily_guard
+             WHERE company_id = ? AND bank_process_id = ?
+               AND resend_day_start = ? AND guard_date = CURDATE()"
+        );
+        $del->execute([$companyId, $bankProcessId, $ymd]);
     }
 }
 
