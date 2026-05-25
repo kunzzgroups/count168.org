@@ -66,14 +66,9 @@ export function validateDataCaptureForm({
   if (!currencyId) {
     return { ok: false, message: "Please select a currency" };
   }
-  const normalizedType = normalizeCaptureType(captureType) || "1.Text";
-  const needsTableData =
-    isCitibetCaptureType(normalizedType) ||
-    normalizedType === "1.Text" ||
-    normalizedType === "2.Format" ||
-    normalizedType === "4.RETURN";
-
-  if (needsTableData && !tableSnapshotHasData(tableData)) {
+  // Match legacy PHP: only CITIBET blocks Submit until the grid has data.
+  // 2.Format table checks run at submit time (after prepareFormatSubmitSnapshot).
+  if (isCitibetCaptureType(captureType) && !tableSnapshotHasData(tableData)) {
     return { ok: false, message: "Please enter data in the table" };
   }
   return { ok: true };

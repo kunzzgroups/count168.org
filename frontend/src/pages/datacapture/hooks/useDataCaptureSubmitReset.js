@@ -5,7 +5,7 @@ import {
   shouldRestoreFromUrl,
   stripRestoreParamFromUrl,
 } from "../lib/dataCaptureStorage.js";
-import { captureTableDataFromDom } from "../lib/dataCaptureTableSnapshot.js";
+import { captureTableDataFromDom, tableSnapshotHasData } from "../lib/dataCaptureTableSnapshot.js";
 import {
   getActiveDescriptions,
   isSubmitReady,
@@ -55,17 +55,29 @@ export function useDataCaptureSubmitReset({
   captureTypeRef.current = captureType;
 
   const recomputeSubmitState = useCallback(() => {
-    const tableData = captureTableDataFromDom(captureType);
+    const activeCaptureType = captureTypeRef.current;
+    const tableData = captureTableDataFromDom(activeCaptureType);
+
+    if (
+      activeCaptureType === "2.Format" &&
+      tableSnapshotHasData(tableData) &&
+      typeof window.__DC_GET_FORMAT_GRID_READY__ === "function" &&
+      !window.__DC_GET_FORMAT_GRID_READY__()
+    ) {
+      window.__DC_SET_FORMAT_GRID_READY__?.(true);
+      window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
+    }
+
     const ready = isSubmitReady({
       selectedProcess: form.selectedProcess,
       descriptions: window.selectedDescriptions || [],
       descriptionDisplay: form.descriptionDisplay,
       currencyId: form.currencyId,
-      captureType,
+      captureType: activeCaptureType,
       tableData,
     });
     setSubmitDisabled(!ready);
-  }, [form.selectedProcess, form.currencyId, form.descriptionDisplay, captureType]);
+  }, [form.selectedProcess, form.currencyId, form.descriptionDisplay]);
 
   useEffect(() => {
     recomputeSubmitState();
@@ -113,10 +125,6 @@ export function useDataCaptureSubmitReset({
     }
 
     const activeCaptureType = captureTypeRef.current;
-    if (activeCaptureType === "2.Format" && !prepareFormatSubmitSnapshot(activeCaptureType)) {
-      pushDataCaptureNotification(t("pleaseEnterTableData"), "danger");
-      return;
-    }
 
     const tableData = captureTableDataFromDom(activeCaptureType);
     const validation = validateDataCaptureForm({
@@ -132,11 +140,19 @@ export function useDataCaptureSubmitReset({
       return;
     }
 
+    if (activeCaptureType === "2.Format") {
+      prepareFormatSubmitSnapshot(activeCaptureType);
+    }
+
     convertTableFormatOnSubmit(activeCaptureType);
 
     try {
       const processData = buildProcessCapturePayload(form, activeCaptureType, form.currencies);
       const finalTableData = captureTableDataFromDom(activeCaptureType);
+      if (activeCaptureType === "2.Format" && !tableSnapshotHasData(finalTableData)) {
+        pushDataCaptureNotification(t("pleaseEnterTableData"), "danger");
+        return;
+      }
       saveCaptureSession(finalTableData, processData, activeCaptureType);
 
       markSummaryFreshNavigation();
