@@ -1380,8 +1380,10 @@ export function useBankProcessListPage() {
       const json = await res.json();
       if (!res.ok || !json.success) return notify(apiMsg(json, "deleteDueFailed"), "danger");
       notify(apiMsg(json, "removedFromDue"));
+      await loadAccountingInbox();
+      await fetchRows();
+      if (resendModalOpen) void refreshResendConfirmLock();
       notifyTransactionDataChanged("bank-process-list-react");
-      loadAccountingInbox(); fetchRows();
     } catch { notify(t("deleteDueFailed"), "danger"); }
   };
 
