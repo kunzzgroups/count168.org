@@ -23,12 +23,10 @@ export default function DataCaptureTableSection({
   onReset,
 }) {
   const formatPasteMode = captureType === "2.Format" && !formatGridReady;
-  const formatAppendMode = captureType === "2.Format" && formatGridReady;
   const containerClass = [
     "excel-table-container",
     citibetMode ? "citibet-mode" : "",
     formatPasteMode ? "format-paste-mode" : "",
-    formatAppendMode ? "format-append-mode" : "",
   ]
     .filter(Boolean)
     .join(" ");

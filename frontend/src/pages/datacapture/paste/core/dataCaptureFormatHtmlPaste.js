@@ -9,8 +9,7 @@ import {
 
 import { ensurePasteGrid } from './dataCapturePasteApply.js';
 
-export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
-    const { startRow = 0 } = options;
+export function parseAndFillHtmlTableForFormat(htmlString) {
     try {
         // 在解析前先检查原始HTML是否包含<br>标签
         // Check if original HTML contains <br> tags before parsing
@@ -107,7 +106,7 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
             }
         });
 
-        const requiredRows = startRow + actualRequiredRows;
+        const requiredRows = actualRequiredRows;
         const requiredCols = Math.max(maxCols, currentCols);
 
         if (requiredRows > currentRows || requiredCols > currentCols) {
@@ -122,8 +121,8 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
         const currentPasteChanges = [];
         let successCount = 0;
 
-        // 处理表头行：填充到tableHeader（追加粘贴时跳过，避免覆盖已有列头）
-        if (headerRows.length > 0 && headerRow && startRow === 0) {
+        // 处理表头行：填充到tableHeader
+        if (headerRows.length > 0 && headerRow) {
             const firstHeaderRow = headerRows[0];
             const headerCells = firstHeaderRow.querySelectorAll('th, td');
             let currentCol = 0;
@@ -230,8 +229,8 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
         // 处理数据行：填充到tableBody
         // 使用实际行索引（考虑拆分后的行）
         // Use actual row index (considering split rows)
-        let actualRowIndex = startRow;
-        console.log(`Format: Starting to process ${dataRows.length} data rows from row ${startRow}`);
+        let actualRowIndex = 0;
+        console.log(`Format: Starting to process ${dataRows.length} data rows`);
         dataRows.forEach((sourceRow, sourceRowIndex) => {
             let tableRow = tableBody.children[actualRowIndex];
             if (!tableRow) {

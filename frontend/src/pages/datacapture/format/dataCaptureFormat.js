@@ -149,29 +149,13 @@ export function toggleTableDisplayForFormat() {
 
     if (getFormatGridReady()) {
       if (dataTable) dataTable.style.display = "table";
-      if (pasteAreaFormat) {
-        pasteAreaFormat.style.display = "block";
-        if (!pasteAreaFormat.textContent?.trim()) {
-          pasteAreaFormat.innerHTML = "";
-        }
-        pasteAreaFormat.setAttribute(
-          "data-placeholder",
-          "在此粘贴追加行（支持 Excel/Sheets 表格格式）..."
-        );
-        setTimeout(() => {
-          pasteAreaFormat.focus();
-        }, 100);
-      }
+      if (pasteAreaFormat) pasteAreaFormat.style.display = "none";
       if (tablePreviewFormat) tablePreviewFormat.style.display = "none";
     } else {
       if (dataTable) dataTable.style.display = "none";
       if (pasteAreaFormat) {
         pasteAreaFormat.style.display = "block";
         pasteAreaFormat.innerHTML = "";
-        pasteAreaFormat.setAttribute(
-          "data-placeholder",
-          "在此直接粘贴整张表格（支持Excel/Sheets复制的表格格式）..."
-        );
         setTimeout(() => {
           pasteAreaFormat.focus();
         }, 100);
