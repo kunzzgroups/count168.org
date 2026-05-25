@@ -141,8 +141,19 @@ function invokeGenericPasteFallback(e, pastedData) {
  */
 export function handleCellPasteEvent(e) {
   const cell = resolvePasteCell(e.target);
+  const captureType = getCaptureType();
+  const typingMode = isTypingModeCell(cell);
 
-  if (isTypingModeCell(cell)) {
+  if (captureType === "2.Format" && typingMode) {
+    const pastedData = getClipboardPlainText(e);
+    if (handleFormatCellPaste(e, pastedData, cell)) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    return;
+  }
+
+  if (typingMode) {
     e.preventDefault();
     e.stopPropagation();
     return;
@@ -154,11 +165,9 @@ export function handleCellPasteEvent(e) {
   const detected = autoDetectCaptureTypeFromPaste(pastedData);
   if (detected) {
     applyCaptureType(detected);
-  } else if (shouldExitCitibetMode(pastedData, getCaptureType())) {
+  } else if (shouldExitCitibetMode(pastedData, captureType)) {
     applyCaptureType("1.Text");
   }
-
-  const captureType = getCaptureType();
 
   if (captureType === "2.Format") {
     if (handleFormatCellPaste(e, pastedData, cell)) return;

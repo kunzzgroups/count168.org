@@ -123,18 +123,19 @@ export function handleCellKeydown(e) {
     // 获取单元格元素（支持文本节点和元素节点）
     const row = cell.parentNode;
     const table = row.parentNode;
-
-    // 在编辑模式（typing mode）下，阻止 Ctrl+V 粘贴
     const hasFocus = document.activeElement === cell;
+
+    // 2.Format 允许 Ctrl+V 触发 paste 事件，以便在下一行继续粘贴表格
     if (hasFocus && (e.ctrlKey || e.metaKey) && key === 'v') {
-        e.preventDefault();
-        e.stopPropagation();
+        if (!isFormatCaptureType()) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         return;
     }
 
     // 处理 Backspace 和 Delete 键
     if (e.key === 'Backspace' || e.key === 'Delete') {
-        const hasFocus = document.activeElement === cell;
         const hasContent = cell.textContent.trim() !== '';
 
         // 获取当前光标位置（仅对 Backspace 有效）
@@ -218,11 +219,13 @@ export function handleCellKeydown(e) {
 
         case 'Enter':
             if (isFormatCaptureType()) {
-                // 2.Format: Enter 单元格内换行；Shift+Enter 进入下一行
+                // 2.Format: Enter 单元格内换行；Shift+Enter 预备下一行并聚焦粘贴区
                 if (!e.shiftKey) return;
-            } else if (e.shiftKey) {
-                return;
+                e.preventDefault();
+                window.__DC_PREPARE_FORMAT_NEXT_ROW_PASTE__?.(cell);
+                break;
             }
+            if (e.shiftKey) return;
             e.preventDefault();
             moveToNextRowFromCell(cell);
             break;

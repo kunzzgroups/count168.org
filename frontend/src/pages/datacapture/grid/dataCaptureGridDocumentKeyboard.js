@@ -2,10 +2,7 @@
  * Document-level grid keyboard shortcuts — extracted from js/datacapture.js.
  * Re-run: node frontend/scripts/extract-grid-document-keyboard.mjs
  */
-import {
-  focusFormatGridAppendCell,
-  moveToNextRowFromCell,
-} from "./dataCaptureGridCellKeydown.js";
+import { prepareFormatNextRowPaste } from "../paste/core/dataCaptureFormatPasteHandler.js";
 
 function isTableActive() {
   return window.__DC_GET_TABLE_ACTIVE__?.() ?? false;
@@ -170,12 +167,15 @@ const key = (e.key || '').toLowerCase();
         const captureType = window.__DC_GET_CAPTURE_TYPE__?.() || '1.Text';
         if (captureType !== '2.Format') {
             // non-Format modes handled in cell keydown
-        } else if (activeElement?.id === 'pasteAreaFormat') {
+        } else {
             e.preventDefault();
-            focusFormatGridAppendCell(1);
-        } else if (!isEditingCell && getSelectedCellCount() > 0) {
-            e.preventDefault();
-            moveToNextRowFromCell(getSelectedCells()[0]);
+            if (activeElement?.id === 'pasteAreaFormat') {
+                prepareFormatNextRowPaste(null);
+            } else if (isEditingCell && activeElement?.closest?.('#dataTable')) {
+                prepareFormatNextRowPaste(activeElement);
+            } else if (!isEditingCell && getSelectedCellCount() > 0) {
+                prepareFormatNextRowPaste(getSelectedCells()[0]);
+            }
         }
     } else if (e.key.startsWith('Arrow')) {
         // Arrow key navigation: switch cells like Excel

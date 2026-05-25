@@ -74,7 +74,64 @@ export function findFormatAppendStartRow() {
   return lastDataRow + 1;
 }
 
+/** Row index reserved by Shift+Enter for the next table paste. */
+let formatPendingPasteStartRow = null;
+
+export function clearFormatPendingPasteStartRow() {
+  formatPendingPasteStartRow = null;
+}
+
+function resolveNextFormatPasteRow(fromCell) {
+  if (fromCell?.contentEditable === "true") {
+    const row = fromCell.parentNode;
+    const table = row?.parentNode;
+    if (table) {
+      const currentRowIndex = Array.from(table.children).indexOf(row);
+      if (currentRowIndex >= 0) return currentRowIndex + 1;
+    }
+  }
+  return findFormatAppendStartRow();
+}
+
+/** Shift+Enter: mark next row and focus paste area so user can paste more table data. */
+export function prepareFormatNextRowPaste(fromCell = null) {
+  if (!isFormatMode()) return false;
+
+  let nextRow = resolveNextFormatPasteRow(fromCell);
+  const tableBody = document.getElementById("tableBody");
+  if (!tableBody) return false;
+
+  while (nextRow >= tableBody.children.length && tableBody.children.length < 702) {
+    const added = window.__DC_ADD_NEW_ROW__?.();
+    if (added == null) break;
+    nextRow = added;
+  }
+
+  if (nextRow >= tableBody.children.length) return false;
+
+  formatPendingPasteStartRow = nextRow;
+
+  const targetRow = tableBody.children[nextRow];
+  const targetCell = targetRow?.children[1];
+  if (targetCell?.contentEditable === "true") {
+    window.__DC_SET_ACTIVE_CELL_WITHOUT_FOCUS__?.(targetCell);
+  }
+
+  const pasteAreaFormat = document.getElementById("pasteAreaFormat");
+  if (pasteAreaFormat) {
+    pasteAreaFormat.innerHTML = "";
+    pasteAreaFormat.style.display = "block";
+    setTimeout(() => pasteAreaFormat.focus(), 0);
+  }
+
+  window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
+  return true;
+}
+
 export function resolveFormatPasteStartRow(anchorCell) {
+  if (formatPendingPasteStartRow != null) {
+    return formatPendingPasteStartRow;
+  }
   if (anchorCell) {
     const { startRow } = resolvePasteAnchor(anchorCell);
     return startRow >= 0 ? startRow : 0;
@@ -115,6 +172,7 @@ export function processFormatTableHtml(html, { area = null, anchorCell = null, s
   });
 
   if (filled) {
+    clearFormatPendingPasteStartRow();
     syncFormatPreviewFromGrid();
   } else if (resolvedStartRow === 0) {
     renderFormatPreview(previewFragment || sanitized);
@@ -184,13 +242,20 @@ export function handleFormatPasteAreaEvent(e) {
   }, 0);
 }
 
+function shouldSkipGlobalFormatPaste(target) {
+  if (!target) return true;
+  if (target.closest?.("#dataTable")) return false;
+  if (target.closest?.("#pasteAreaFormat")) return false;
+  return isEditableFormField(target);
+}
+
 /**
  * Global bubble-phase intercept: route table paste to format pipeline
  * instead of letting <table> land elsewhere on the page.
  */
 export function handleGlobalFormatPaste(e) {
   if (!isFormatMode()) return;
-  if (isEditableFormField(e.target)) return;
+  if (shouldSkipGlobalFormatPaste(e.target)) return;
 
   const clipboard = e.clipboardData || window.clipboardData;
   if (!clipboard || !clipboardLooksLikeTable(clipboard)) return;
@@ -198,21 +263,26 @@ export function handleGlobalFormatPaste(e) {
   e.preventDefault();
   e.stopPropagation();
 
+  const gridCell = e.target?.closest?.("#dataTable td[contenteditable='true']");
+  const pasteAreaFormat = document.getElementById("pasteAreaFormat");
   const { html, text } = readClipboard(clipboard);
   const appendMode = gridHasFormatData();
+  const pasteOptions = {
+    area: e.target?.closest?.("#pasteAreaFormat") ? pasteAreaFormat : null,
+    anchorCell: gridCell || null,
+  };
 
   if (appendMode) {
     if (html && /<table\b/i.test(html)) {
-      processFormatTableHtml(html);
+      processFormatTableHtml(html, pasteOptions);
       return;
     }
     if (text && text.includes("\t")) {
-      processFormatTsv(text);
+      processFormatTsv(text, pasteOptions);
     }
     return;
   }
 
-  const pasteAreaFormat = document.getElementById("pasteAreaFormat");
   const dataTable = document.getElementById("dataTable");
   if (dataTable) dataTable.style.display = "none";
   if (pasteAreaFormat) {
