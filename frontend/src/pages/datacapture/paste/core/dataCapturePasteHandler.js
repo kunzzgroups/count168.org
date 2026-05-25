@@ -1,8 +1,10 @@
 import {
   getClipboardPlainText,
-  isTypingModeCell,
+  isGridPasteBlockedTarget,
+  clipboardLooksLikeGridPaste,
   resolvePasteCell,
 } from "./dataCaptureClipboard.js";
+import { getDefaultPasteAnchorCell } from "./dataCapturePasteApply.js";
 import {
   autoDetectCaptureTypeFromPaste,
   parseCitibetPasteData,
@@ -137,16 +139,33 @@ function invokeGenericPasteFallback(e, pastedData) {
 }
 
 /**
+ * Global paste for 1.Text / CITIBET / 4.RETURN etc. when focus is outside the grid.
+ */
+export function handleGlobalGridPaste(e) {
+  const captureType = getCaptureType();
+  if (captureType === "2.Format") return;
+  if (isGridPasteBlockedTarget(e.target)) return;
+  if (e.target?.closest?.("#dataTable")) return;
+  if (e.defaultPrevented) return;
+
+  const clipboard = e.clipboardData || window.clipboardData;
+  if (!clipboard || !clipboardLooksLikeGridPaste(clipboard)) return;
+
+  const anchorCell = getDefaultPasteAnchorCell();
+  if (!anchorCell) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  window.__DC_SET_TABLE_ACTIVE__?.(true);
+  handleCellPasteEvent({ ...e, target: anchorCell, currentTarget: anchorCell });
+}
+
+/**
  * Full paste orchestrator — all formats in React.
  */
 export function handleCellPasteEvent(e) {
   const cell = resolvePasteCell(e.target);
-
-  if (isTypingModeCell(cell)) {
-    e.preventDefault();
-    e.stopPropagation();
-    return;
-  }
 
   e.preventDefault();
 

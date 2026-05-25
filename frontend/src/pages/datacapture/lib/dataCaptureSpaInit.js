@@ -6,6 +6,7 @@ import {
   shouldRestoreFromUrl,
   stripSearchParamsFromUrl,
 } from "./dataCaptureStorage.js";
+import { clearStaleFormatPreviewForFreshEntry } from "../format/dataCaptureFormat.js";
 import { DEFAULT_GRID_COLS, DEFAULT_GRID_ROWS } from "../grid/dataCaptureGridMeta.js";
 import { readInitialCaptureType } from "./dataCaptureFormRules.js";
 
@@ -16,6 +17,8 @@ export async function initDataCaptureSpaPage() {
   const urlParams = new URLSearchParams(window.location.search);
   const shouldRestore = shouldRestoreFromUrl();
   const alreadyInit = dcFormGate.dataset.dcPageInit === "1";
+
+  clearStaleFormatPreviewForFreshEntry(shouldRestore);
 
   // One-time setup (grid shell, submitted list). Restore may re-run when SPA re-inits
   // after company metadata loads — do not gate the whole function on dcPageInit.

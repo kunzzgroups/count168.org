@@ -1,10 +1,10 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   parseCitibetFormatBasedPaste,
   parseCitibetMajorPaymentReport,
   parseCitibetPaymentReport,
 } from "../paste/vendors/dataCaptureCitibetParsers.js";
-import { handleCellPasteEvent } from "../paste/core/dataCapturePasteHandler.js";
+import { handleCellPasteEvent, handleGlobalGridPaste } from "../paste/core/dataCapturePasteHandler.js";
 import { handleGenericPaste } from "../paste/core/dataCaptureGenericPaste.js";
 import { parseAndFillHtmlTableForText } from "../paste/core/dataCaptureTextHtmlPaste.js";
 import { detectHtmlTableInClipboard } from "../paste/core/dataCaptureClipboard.js";
@@ -45,5 +45,11 @@ export function useDataCapturePaste() {
       delete window.__DC_HANDLE_GENERIC_PASTE__;
       delete window.__DC_PARSE_GENERIC_HTML__;
     };
+  }, []);
+
+  useEffect(() => {
+    const onGlobalPaste = (e) => handleGlobalGridPaste(e);
+    document.addEventListener("paste", onGlobalPaste);
+    return () => document.removeEventListener("paste", onGlobalPaste);
   }, []);
 }

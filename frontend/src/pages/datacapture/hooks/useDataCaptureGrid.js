@@ -33,11 +33,15 @@ export function useDataCaptureGrid(scriptsReady) {
     if (dataTable && dataTable.style.display === "none") {
       const captureType =
         typeof window.__DC_GET_CAPTURE_TYPE__ === "function" ? window.__DC_GET_CAPTURE_TYPE__() : "";
-      const formatReady =
-        typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
-          ? window.__DC_GET_FORMAT_GRID_READY__()
-          : false;
-      if (captureType !== "2.Format" || formatReady) {
+      if (captureType !== "2.Format") {
+        const formatReady =
+          typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
+            ? window.__DC_GET_FORMAT_GRID_READY__()
+            : false;
+        if (formatReady) {
+          dataTable.style.display = "table";
+        }
+      } else {
         dataTable.style.display = "table";
       }
     }
@@ -68,12 +72,16 @@ export function useDataCaptureGrid(scriptsReady) {
       if (dataTable && dataTable.style.display === "none") {
         const captureType =
           typeof window.__DC_GET_CAPTURE_TYPE__ === "function" ? window.__DC_GET_CAPTURE_TYPE__() : "";
-        const formatReady =
-          typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
-            ? window.__DC_GET_FORMAT_GRID_READY__()
-            : false;
-        if (captureType !== "2.Format" || formatReady) {
+        if (captureType === "2.Format") {
           dataTable.style.display = "table";
+        } else {
+          const formatReady =
+            typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
+              ? window.__DC_GET_FORMAT_GRID_READY__()
+              : false;
+          if (formatReady) {
+            dataTable.style.display = "table";
+          }
         }
       }
 

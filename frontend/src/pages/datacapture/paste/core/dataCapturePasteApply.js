@@ -1,9 +1,33 @@
 import { MAX_GRID_ROWS } from "../../grid/dataCaptureGridMeta.js";
+import { readGridDimensions } from "../../grid/dataCaptureGridSnapshot.js";
+import { insertColumnAt, insertRowAt } from "../../grid/dataCaptureGridRowColumnCrud.js";
 
 /** Shared grid helpers for paste modules (no legacy script required). */
 export function ensurePasteGrid(rows, cols) {
-  if (typeof window.__DC_INITIALIZE_TABLE__ === "function") {
-    window.__DC_INITIALIZE_TABLE__(rows, cols);
+  const targetRows = Math.max(1, Math.min(Number(rows) || 1, MAX_GRID_ROWS));
+  const targetCols = Math.max(1, Number(cols) || 1);
+  const { rows: currentRows, cols: currentCols } = readGridDimensions();
+
+  if (currentRows === 0 || currentCols === 0) {
+    window.__DC_INITIALIZE_TABLE__?.(targetRows, targetCols);
+    return;
+  }
+
+  if (targetRows <= currentRows && targetCols <= currentCols) return;
+
+  const hasExistingData = findLastFilledGridRow() >= 0;
+
+  if (!hasExistingData) {
+    window.__DC_INITIALIZE_TABLE__?.(targetRows, targetCols);
+    return;
+  }
+
+  for (let colIndex = currentCols; colIndex < targetCols; colIndex += 1) {
+    insertColumnAt(colIndex);
+  }
+
+  for (let rowIndex = currentRows; rowIndex < targetRows; rowIndex += 1) {
+    insertRowAt(rowIndex);
   }
 }
 
@@ -28,6 +52,86 @@ export function resolvePasteAnchor(cell) {
     startRow: startRow >= 0 ? startRow : 0,
     startCol: Number.isFinite(startCol) ? startCol : 0,
   };
+}
+
+/** Last tbody row index that has any editable cell content. */
+export function findLastFilledGridRow() {
+  const tableBody = document.getElementById("tableBody");
+  if (!tableBody) return -1;
+
+  const rows = Array.from(tableBody.children);
+  for (let rowIndex = rows.length - 1; rowIndex >= 0; rowIndex -= 1) {
+    const hasData = Array.from(rows[rowIndex].querySelectorAll('td[contenteditable="true"]')).some(
+      (cell) => String(cell.textContent || "").trim() !== ""
+    );
+    if (hasData) return rowIndex;
+  }
+  return -1;
+}
+
+/** Active/selected grid cell used as 2.Format paste anchor, if any. */
+export function getFormatPasteAnchorCell() {
+  const active = document.activeElement;
+  if (active?.contentEditable === "true" && active.closest("#dataTable")) {
+    return active;
+  }
+
+  const selected = window.__DC_GET_SELECTED_CELLS__?.()?.[0];
+  if (selected?.contentEditable === "true" && selected.closest("#dataTable")) {
+    return selected;
+  }
+
+  return null;
+}
+
+/** Selected/active grid cell, else first editable cell (row A, col 1). */
+export function getDefaultPasteAnchorCell() {
+  const anchor = getFormatPasteAnchorCell();
+  if (anchor) return anchor;
+
+  const tableBody = document.getElementById("tableBody");
+  const firstRow = tableBody?.children?.[0];
+  const firstCell = firstRow?.querySelector?.('td[contenteditable="true"]');
+  return firstCell || null;
+}
+
+/** Whether a tbody row has any non-empty editable cell. */
+export function rowHasEditableData(rowEl) {
+  if (!rowEl) return false;
+  return Array.from(rowEl.querySelectorAll('td[contenteditable="true"]')).some(
+    (cell) => String(cell.textContent || "").trim() !== ""
+  );
+}
+
+/**
+ * 2.Format paste start row.
+ * When grid already has data, append after the last filled row unless the anchor
+ * sits on an empty row below all existing data.
+ */
+export function resolveFormatPasteStartRow(anchorCell = null) {
+  const lastFilled = findLastFilledGridRow();
+  const appendRow = lastFilled >= 0 ? lastFilled + 1 : 0;
+
+  const cell = anchorCell || getFormatPasteAnchorCell();
+  if (!cell?.closest?.("#tableBody")) {
+    return appendRow;
+  }
+
+  const anchorRow = resolvePasteAnchor(cell).startRow;
+  if (lastFilled < 0) {
+    return anchorRow;
+  }
+
+  if (anchorRow > lastFilled) {
+    return anchorRow;
+  }
+
+  const anchorRowEl = cell.closest("tr");
+  if (anchorRowEl && !rowHasEditableData(anchorRowEl) && anchorRow >= appendRow) {
+    return anchorRow;
+  }
+
+  return appendRow;
 }
 
 export function ensureGridFits(startRow, startCol, matrixRows, matrixCols) {

@@ -1,10 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { getFormatPreviewHtml } from "../format/dataCaptureFormat.js";
+import { getFormatPreviewHtml, shouldRestoreFormatFromPreview } from "../format/dataCaptureFormat.js";
 import {
   isCitibetCaptureType,
   normalizeCaptureType,
   readInitialCaptureType,
 } from "../lib/dataCaptureFormRules.js";
+import { domGridHasEditableData } from "../lib/dataCaptureTableSnapshot.js";
 
 /**
  * Phase 2: Capture type switching + 2.Format view orchestration in React.
@@ -14,6 +15,7 @@ export function useDataCaptureCaptureType() {
   const [captureType, setCaptureType] = useState(readInitialCaptureType);
   const [formatGridReady, setFormatGridReady] = useState(() => {
     if (readInitialCaptureType() !== "2.Format") return false;
+    if (!shouldRestoreFormatFromPreview()) return false;
     return Boolean(getFormatPreviewHtml());
   });
 
@@ -42,24 +44,21 @@ export function useDataCaptureCaptureType() {
           ? window.__DC_GET_FORMAT_GRID_READY__()
           : false;
 
-      if (previewHtml) {
-        if (legacyReady) {
-          window.__DC_RENDER_FORMAT_PREVIEW__?.(previewHtml);
+      if (domGridHasEditableData()) {
+        window.__DC_SYNC_FORMAT_PREVIEW_FROM_DOM__?.();
+        window.__DC_SET_FORMAT_GRID_READY__?.(true);
+        setFormatGridReady(true);
+      } else if (previewHtml && shouldRestoreFormatFromPreview()) {
+        const filled =
+          typeof window.__DC_PARSE_HTML_FORMAT__ === "function"
+            ? window.__DC_PARSE_HTML_FORMAT__(previewHtml)
+            : false;
+        if (filled || legacyReady) {
           window.__DC_SET_FORMAT_GRID_READY__?.(true);
           setFormatGridReady(true);
         } else {
-          const filled =
-            typeof window.__DC_PARSE_HTML_FORMAT__ === "function"
-              ? window.__DC_PARSE_HTML_FORMAT__(previewHtml)
-              : false;
-          if (filled) {
-            window.__DC_RENDER_FORMAT_PREVIEW__?.(previewHtml);
-            window.__DC_SET_FORMAT_GRID_READY__?.(true);
-            setFormatGridReady(true);
-          } else {
-            window.__DC_SET_FORMAT_GRID_READY__?.(false);
-            setFormatGridReady(false);
-          }
+          window.__DC_SET_FORMAT_GRID_READY__?.(false);
+          setFormatGridReady(false);
         }
       } else if (legacyReady) {
         setFormatGridReady(true);

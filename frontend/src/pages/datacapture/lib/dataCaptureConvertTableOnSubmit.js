@@ -3,6 +3,7 @@
  * Re-run: node frontend/scripts/extract-convert-table-submit.mjs
  */
 import { getRowLabel } from "../grid/dataCaptureGridMeta.js";
+import { ensurePasteGrid } from "../paste/core/dataCapturePasteApply.js";
 
 function resolveCaptureType(captureType) {
   if (captureType) return captureType;
@@ -11,11 +12,7 @@ function resolveCaptureType(captureType) {
 }
 
 function ensureSubmitGrid(rows, cols) {
-  if (typeof window.__DC_INITIALIZE_TABLE__ === "function") {
-    window.__DC_INITIALIZE_TABLE__(rows, cols);
-  } else if (typeof window.__DC_LEGACY_BUILD_TABLE__ === "function") {
-    window.__DC_LEGACY_BUILD_TABLE__(rows, cols);
-  }
+  ensurePasteGrid(rows, cols);
 }
 
 function bindLegacyGridCell(cell) {

@@ -1356,6 +1356,7 @@ body.datacapture-page .bottom-section .form-actions {
     min-height: 0;
     height: auto;
     scrollbar-gutter: stable;
+    position: relative;
 }
 
 body.datacapture-page .excel-table-container {

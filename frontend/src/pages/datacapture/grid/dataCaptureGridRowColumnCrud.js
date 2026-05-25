@@ -349,4 +349,20 @@ export function insertRowBelow() {
   hideContextMenu();
 }
 
+/** Append a row at the bottom (keyboard Tab/Enter). Returns new row index. */
+export function appendGridRow() {
+  const tableBody = document.getElementById("tableBody");
+  if (!tableBody) return null;
+  const rowIndex = tableBody.children.length;
+  insertRowAt(rowIndex);
+  return rowIndex;
+}
+
+/** Append a column at the right edge. Returns new column index. */
+export function appendGridColumn() {
+  const currentCols = document.querySelectorAll("#tableHeader th").length - 1;
+  insertColumnAt(currentCols);
+  return currentCols;
+}
+
 export { insertColumnAt, insertRowAt };

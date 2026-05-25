@@ -28,7 +28,7 @@ export function useSummaryCaptureBootstrap({ companyId, searchParams, enabled })
   const captureSession = useMemo(() => {
     if (!enabled) return null;
     return readCaptureSessionFromStorage();
-  }, [enabled, freshFromCapture, searchParams]);
+  }, [enabled]);
 
   const transformed = useMemo(() => {
     if (!captureSession) return null;

@@ -5,7 +5,12 @@ import {
   shouldRestoreFromUrl,
   stripRestoreParamFromUrl,
 } from "../lib/dataCaptureStorage.js";
-import { captureTableDataFromDom, tableSnapshotHasData } from "../lib/dataCaptureTableSnapshot.js";
+import {
+  captureTableDataFromDom,
+  pickRicherTableSnapshot,
+  tableSnapshotHasData,
+  trimSnapshotToFilledRows,
+} from "../lib/dataCaptureTableSnapshot.js";
 import {
   getActiveDescriptions,
   isSubmitReady,
@@ -144,11 +149,20 @@ export function useDataCaptureSubmitReset({
       prepareFormatSubmitSnapshot(activeCaptureType);
     }
 
+    const formatSnapshotBeforeConvert =
+      activeCaptureType === "2.Format"
+        ? trimSnapshotToFilledRows(captureTableDataFromDom(activeCaptureType))
+        : null;
+
     convertTableFormatOnSubmit(activeCaptureType);
 
     try {
       const processData = buildProcessCapturePayload(form, activeCaptureType, form.currencies);
-      const finalTableData = captureTableDataFromDom(activeCaptureType);
+      const capturedAfterConvert = captureTableDataFromDom(activeCaptureType);
+      const finalTableData =
+        activeCaptureType === "2.Format" && formatSnapshotBeforeConvert
+          ? pickRicherTableSnapshot(formatSnapshotBeforeConvert, capturedAfterConvert)
+          : capturedAfterConvert;
       if (activeCaptureType === "2.Format" && !tableSnapshotHasData(finalTableData)) {
         pushDataCaptureNotification(t("pleaseEnterTableData"), "danger");
         return;

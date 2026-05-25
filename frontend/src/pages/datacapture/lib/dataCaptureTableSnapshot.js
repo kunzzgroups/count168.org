@@ -156,9 +156,50 @@ export function captureTableDataFromDom(captureType) {
 
 export function tableSnapshotHasData(tableData) {
   if (!tableData?.rows?.length) return false;
-  return tableData.rows.some((row) =>
-    row.some((cell) => cell.type === "data" && String(cell.value || "").trim() !== "")
-  );
+  return tableData.rows.some((row) => rowHasSnapshotData(row));
+}
+
+function rowHasSnapshotData(rowData) {
+  return rowData.some((cell) => cell.type === "data" && String(cell.value || "").trim() !== "");
+}
+
+/** Count tbody rows that contain at least one non-empty data cell. */
+export function countFilledSnapshotRows(tableData) {
+  if (!tableData?.rows?.length) return 0;
+  return tableData.rows.filter((row) => rowHasSnapshotData(row)).length;
+}
+
+/** Last row index (inclusive) with any data cell content. */
+export function findLastFilledSnapshotRowIndex(tableData) {
+  if (!tableData?.rows?.length) return -1;
+  for (let i = tableData.rows.length - 1; i >= 0; i -= 1) {
+    if (rowHasSnapshotData(tableData.rows[i])) return i;
+  }
+  return -1;
+}
+
+/** Drop trailing empty rows; keep rowCount aligned with saved rows. */
+export function trimSnapshotToFilledRows(tableData) {
+  if (!tableData?.rows?.length) return tableData;
+  const lastFilled = findLastFilledSnapshotRowIndex(tableData);
+  if (lastFilled < 0) return tableData;
+
+  const rows = tableData.rows.slice(0, lastFilled + 1);
+  return {
+    ...tableData,
+    rows,
+    rowCount: rows.length,
+  };
+}
+
+/** Prefer the snapshot that contains more filled data rows. */
+export function pickRicherTableSnapshot(primary, secondary) {
+  const a = primary || { rows: [] };
+  const b = secondary || { rows: [] };
+  const aFilled = countFilledSnapshotRows(a);
+  const bFilled = countFilledSnapshotRows(b);
+  if (bFilled > aFilled) return trimSnapshotToFilledRows(b);
+  return trimSnapshotToFilledRows(a);
 }
 
 /** DOM column index for a snapshot data cell (children[0] is row header). */

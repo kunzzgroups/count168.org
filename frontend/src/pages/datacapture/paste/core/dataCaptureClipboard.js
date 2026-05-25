@@ -9,6 +9,40 @@ export function isTypingModeCell(cell) {
   return Boolean(cell && document.activeElement === cell);
 }
 
+/** True when paste should stay on form fields, not the capture grid. */
+export function isGridPasteBlockedTarget(el) {
+  if (!el) return false;
+  if (el.closest("#dataTable")) return false;
+  if (el.id === "pasteAreaFormat") return false;
+  const tag = (el.tagName || "").toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
+}
+
+export function clipboardLooksLikeGridPaste(clipboard) {
+  if (!clipboard) return false;
+  try {
+    const types = clipboard.types ? Array.from(clipboard.types) : [];
+    if (types.length > 0 && !types.includes("text/plain") && !types.includes("text/html")) {
+      return false;
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    const html = clipboard.getData?.("text/html") || "";
+    if (html && /<table\b/i.test(html)) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    const text = clipboard.getData?.("text/plain") || "";
+    if (text && text.includes("\t") && (text.includes("\n") || text.includes("\r"))) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
 export function getClipboardPlainText(e) {
   const clipboard = e.clipboardData || window.clipboardData;
   const getData = (type) => {
