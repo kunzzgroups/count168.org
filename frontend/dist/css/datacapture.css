@@ -1398,6 +1398,24 @@ body.datacapture-page .excel-table-container {
     min-height: min(42vh, 360px);
 }
 
+/* 2.Format 已有数据：表格在上，下方保留追加粘贴区 */
+.excel-table-container.format-append-mode {
+    display: flex;
+    flex-direction: column;
+}
+
+.excel-table-container.format-append-mode #dataTable {
+    flex: 0 1 auto;
+}
+
+.excel-table-container.format-append-mode #pasteAreaFormat {
+    display: block !important;
+    flex: 0 0 auto;
+    min-height: 72px;
+    max-height: min(28vh, 220px);
+    border-top: 1px solid #d0d7de;
+}
+
 /* 2.Format模式：可粘贴整张表格的区域（contenteditable） */
 .paste-area-format {
     width: 100%;

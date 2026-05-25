@@ -6,6 +6,13 @@ import {
   sanitizePastedHTML,
   tsvToHtmlTable,
 } from "./dataCaptureFormatPreview.js";
+import { getFormatGridReady, setFormatPreviewHtml } from "../../format/dataCaptureFormat.js";
+import {
+  buildFormatPreviewHtmlFromTableSnapshot,
+  captureTableDataFromDom,
+  domGridHasEditableData,
+} from "../../lib/dataCaptureTableSnapshot.js";
+import { resolvePasteAnchor } from "./dataCapturePasteApply.js";
 
 function getCaptureType() {
   if (typeof window.__DC_GET_CAPTURE_TYPE__ === "function") {
@@ -43,6 +50,49 @@ function markFormatGridReady(ready) {
   window.__DC_SET_FORMAT_GRID_READY__?.(ready);
 }
 
+function gridHasFormatData() {
+  if (typeof window.__DC_GET_FORMAT_GRID_READY__ === "function" && window.__DC_GET_FORMAT_GRID_READY__()) {
+    return true;
+  }
+  return getFormatGridReady() || domGridHasEditableData();
+}
+
+/** First empty row after the last row that contains pasted data. */
+export function findFormatAppendStartRow() {
+  const tableBody = document.getElementById("tableBody");
+  if (!tableBody) return 0;
+
+  let lastDataRow = -1;
+  for (let i = 0; i < tableBody.children.length; i += 1) {
+    const row = tableBody.children[i];
+    const hasData = Array.from(row.querySelectorAll('td[contenteditable="true"]')).some((cell) =>
+      String(cell.textContent || "").trim()
+    );
+    if (hasData) lastDataRow = i;
+  }
+
+  return lastDataRow + 1;
+}
+
+export function resolveFormatPasteStartRow(anchorCell) {
+  if (anchorCell) {
+    const { startRow } = resolvePasteAnchor(anchorCell);
+    return startRow >= 0 ? startRow : 0;
+  }
+  if (gridHasFormatData()) {
+    return findFormatAppendStartRow();
+  }
+  return 0;
+}
+
+function syncFormatPreviewFromGrid() {
+  const snapshot = captureTableDataFromDom("2.Format");
+  const mergedHtml = buildFormatPreviewHtmlFromTableSnapshot(snapshot);
+  if (!mergedHtml) return;
+  renderFormatPreview(mergedHtml);
+  setFormatPreviewHtml(mergedHtml);
+}
+
 function afterFormatPasteFilled(filled, area) {
   if (!filled) return false;
   markFormatGridReady(true);
@@ -53,23 +103,30 @@ function afterFormatPasteFilled(filled, area) {
 }
 
 /** Process HTML/TSV clipboard content into preview + editable grid. */
-export function processFormatTableHtml(html, { area = null } = {}) {
+export function processFormatTableHtml(html, { area = null, anchorCell = null, startRow = null } = {}) {
   if (!html) return false;
   const previewFragment = buildFormatPreviewFragmentFromClipboardHtml(html);
   const sanitized = sanitizePastedHTML(html);
   if (!previewFragment && !sanitized) return false;
 
-  renderFormatPreview(previewFragment || sanitized);
-  const filled = parseAndFillHtmlTableForFormat(sanitized || previewFragment);
+  const resolvedStartRow = startRow != null ? startRow : resolveFormatPasteStartRow(anchorCell);
+  const filled = parseAndFillHtmlTableForFormat(sanitized || previewFragment, {
+    startRow: resolvedStartRow,
+  });
+
+  if (filled) {
+    syncFormatPreviewFromGrid();
+  } else if (resolvedStartRow === 0) {
+    renderFormatPreview(previewFragment || sanitized);
+  }
+
   return afterFormatPasteFilled(filled, area);
 }
 
-export function processFormatTsv(text, { area = null } = {}) {
+export function processFormatTsv(text, { area = null, anchorCell = null, startRow = null } = {}) {
   if (!text || !text.includes("\t")) return false;
   const tableHtml = tsvToHtmlTable(text);
-  renderFormatPreview(tableHtml);
-  const filled = parseAndFillHtmlTableForFormat(tableHtml);
-  return afterFormatPasteFilled(filled, area);
+  return processFormatTableHtml(tableHtml, { area, anchorCell, startRow });
 }
 
 function readClipboard(clipboard) {
@@ -141,6 +198,20 @@ export function handleGlobalFormatPaste(e) {
   e.preventDefault();
   e.stopPropagation();
 
+  const { html, text } = readClipboard(clipboard);
+  const appendMode = gridHasFormatData();
+
+  if (appendMode) {
+    if (html && /<table\b/i.test(html)) {
+      processFormatTableHtml(html);
+      return;
+    }
+    if (text && text.includes("\t")) {
+      processFormatTsv(text);
+    }
+    return;
+  }
+
   const pasteAreaFormat = document.getElementById("pasteAreaFormat");
   const dataTable = document.getElementById("dataTable");
   if (dataTable) dataTable.style.display = "none";
@@ -148,8 +219,6 @@ export function handleGlobalFormatPaste(e) {
     pasteAreaFormat.style.display = "block";
     placeCaretAtEnd(pasteAreaFormat);
   }
-
-  const { html, text } = readClipboard(clipboard);
 
   if (html && /<table\b/i.test(html)) {
     processFormatTableHtml(html, { area: pasteAreaFormat });
@@ -162,19 +231,19 @@ export function handleGlobalFormatPaste(e) {
 }
 
 /** Legacy-compatible entry used by handleFormatPasteFromClipboard. */
-export function handleFormatPasteFromClipboard(clipboard, fallbackHTML) {
+export function handleFormatPasteFromClipboard(clipboard, fallbackHTML, options = {}) {
   if (!isFormatMode() || !clipboard) return false;
 
   const { html, text } = readClipboard(clipboard);
   const htmlToUse = html && /<table\b/i.test(html) ? html : fallbackHTML || "";
 
   if (htmlToUse && /<table\b/i.test(htmlToUse)) {
-    setTimeout(() => processFormatTableHtml(htmlToUse), 10);
+    setTimeout(() => processFormatTableHtml(htmlToUse, options), 10);
     return true;
   }
 
   if (text && text.includes("\t")) {
-    setTimeout(() => processFormatTsv(text), 10);
+    setTimeout(() => processFormatTsv(text, options), 10);
     return true;
   }
 
@@ -185,9 +254,11 @@ export function handleFormatPasteFromClipboard(clipboard, fallbackHTML) {
  * Phase 4e: 2.Format grid cell paste — route table HTML/TSV through format pipeline
  * instead of the full legacy paste body.
  */
-export function handleFormatCellPaste(e, pastedData) {
+export function handleFormatCellPaste(e, pastedData, anchorCell) {
+  const options = { anchorCell };
+
   const clipboard = e.clipboardData || window.clipboardData;
-  if (clipboard && handleFormatPasteFromClipboard(clipboard)) {
+  if (clipboard && handleFormatPasteFromClipboard(clipboard, null, options)) {
     return true;
   }
 
@@ -200,11 +271,11 @@ export function handleFormatCellPaste(e, pastedData) {
   })();
 
   if (html && /<table\b/i.test(html)) {
-    return processFormatTableHtml(html);
+    return processFormatTableHtml(html, options);
   }
 
   if (pastedData && pastedData.includes("\t")) {
-    return processFormatTsv(pastedData);
+    return processFormatTsv(pastedData, options);
   }
 
   return false;

@@ -161,7 +161,7 @@ export function handleCellPasteEvent(e) {
   const captureType = getCaptureType();
 
   if (captureType === "2.Format") {
-    if (handleFormatCellPaste(e, pastedData)) return;
+    if (handleFormatCellPaste(e, pastedData, cell)) return;
     invokeGenericPasteFallback(e, pastedData);
     return;
   }
