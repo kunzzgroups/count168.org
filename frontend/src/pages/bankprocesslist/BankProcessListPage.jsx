@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import AccountModal from "../../components/AccountModal.jsx";
 import { accountModalOverlayZIndex, processNotificationAboveAccountZIndex, processNotificationZIndex } from "../../components/ProcessModalPortal.jsx";
@@ -11,6 +11,7 @@ import "../../../public/css/date-range-picker.css";
 import ProcessDeleteConfirmModal from "../processlist/components/ProcessDeleteConfirmModal.jsx";
 import AddProcessIcon from "../processlist/components/AddProcessIcon.jsx";
 import BankProcessTable from "./components/BankProcessTable.jsx";
+import BankProcessFilterChips from "./components/BankProcessFilterChips.jsx";
 import BankProcessFormModal from "./components/BankProcessFormModal.jsx";
 import CountrySelectionModal from "./components/CountrySelectionModal.jsx";
 import BankSelectionModal from "./components/BankSelectionModal.jsx";
@@ -190,6 +191,7 @@ export default function BankProcessListPage() {
     loadCurrencyMeta,
     syncUrl,
     fetchRows,
+    handleBankStatusUpdated,
     loadAccountingInbox,
     resetForm,
     onSwitchCompany,
@@ -232,6 +234,19 @@ export default function BankProcessListPage() {
     PAGE_SIZE,
   } = useBankProcessListPage();
 
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const filterToolbarRef = useRef(null);
+  const hasActiveFilters = showInactive || showAll || showOfficial || showEInvoice || showBlock;
+
+  useEffect(() => {
+    if (!filterPanelOpen) return undefined;
+    const onDoc = (e) => {
+      if (filterToolbarRef.current?.contains(e.target)) return;
+      setFilterPanelOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [filterPanelOpen]);
 
   if (loading || !cssReady) return <PageContentLoader />;
 
@@ -240,7 +255,6 @@ export default function BankProcessListPage() {
       <div className="content">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", marginBottom: 0, flexWrap: "wrap", gap: 12 }}>
           <div className="bank-process-header-left">
-            <h1 className="page-title">{t("bankProcessList")}</h1>
             <AccountingDueModal
               isOpen={accountingOpen}
               setOpen={setAccountingOpen}
@@ -262,7 +276,7 @@ export default function BankProcessListPage() {
           <div className="action-buttons">
             <div className="bank-process-toolbar-main">
               <div className="bank-process-toolbar-top-row">
-                <div className="action-controls-row bank-process-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div className="action-controls-row bank-process-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div className="process-list-date-filter transaction-date-range-group" id="processListDateFilter" style={{ display: "inline-flex" }}>
                     <div
                       className="date-range-picker"
@@ -295,6 +309,36 @@ export default function BankProcessListPage() {
                       onChange={(e) => setSearch(e.target.value)}
                     />
                   </div>
+                  <div ref={filterToolbarRef} className="bank-process-filter-toolbar-slot">
+                    <button
+                      type="button"
+                      className={`bank-process-filter-toggle${filterPanelOpen ? " is-open" : ""}${hasActiveFilters ? " has-active-filters" : ""}`}
+                      aria-expanded={filterPanelOpen}
+                      aria-controls="bank-process-filter-panel"
+                      onClick={() => setFilterPanelOpen((open) => !open)}
+                    >
+                      <i className="fas fa-filter" aria-hidden="true" />
+                      <span>{t("filter")}</span>
+                    </button>
+                    <div
+                      id="bank-process-filter-panel"
+                      className={`bank-process-filter-panel${filterPanelOpen ? " is-open" : ""}`}
+                    >
+                      <BankProcessFilterChips
+                        t={t}
+                        showInactive={showInactive}
+                        setShowInactive={setShowInactive}
+                        showAll={showAll}
+                        setShowAll={setShowAll}
+                        showOfficial={showOfficial}
+                        setShowOfficial={setShowOfficial}
+                        showEInvoice={showEInvoice}
+                        setShowEInvoice={setShowEInvoice}
+                        showBlock={showBlock}
+                        setShowBlock={setShowBlock}
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="user-toolbar-actions-right" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
                   <button type="button" className="btn btn-delete" id="processDeleteSelectedBtn" disabled={!selectedIds.size} title={t("delete")} onClick={deleteSelected}>{t("delete")}</button>
@@ -303,116 +347,6 @@ export default function BankProcessListPage() {
                     {t("addProcess")}
                   </button>
                 </div>
-              </div>
-              <div className="userlist-filter-chips userlist-filter-chips--bank-process" role="group">
-                <button
-                  type="button"
-                  className={`user-filter-chip${showInactive && !showAll ? " is-selected" : ""}`}
-                  aria-pressed={showInactive && !showAll}
-                  onClick={() => {
-                    if (showInactive && !showAll) setShowInactive(false);
-                    else {
-                      setShowInactive(true);
-                      setShowAll(false);
-                    }
-                  }}
-                >
-                  <span className="user-filter-chip__dot" aria-hidden>
-                    {showInactive && !showAll ? (
-                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 12l4 4 8-8" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span className="user-filter-chip__label">{t("showInactive")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`user-filter-chip${showAll ? " is-selected" : ""}`}
-                  aria-pressed={showAll}
-                  onClick={() => {
-                    if (showAll) setShowAll(false);
-                    else {
-                      setShowAll(true);
-                      setShowInactive(false);
-                      setShowOfficial(false);
-                      setShowEInvoice(false);
-                      setShowBlock(false);
-                    }
-                  }}
-                >
-                  <span className="user-filter-chip__dot" aria-hidden>
-                    {showAll ? (
-                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 12l4 4 8-8" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span className="user-filter-chip__label">{t("showAll")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`user-filter-chip${showOfficial ? " is-selected" : ""}`}
-                  aria-pressed={showOfficial}
-                  onClick={() => {
-                    if (showOfficial) setShowOfficial(false);
-                    else {
-                      setShowOfficial(true);
-                      setShowAll(false);
-                    }
-                  }}
-                >
-                  <span className="user-filter-chip__dot" aria-hidden>
-                    {showOfficial ? (
-                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 12l4 4 8-8" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span className="user-filter-chip__label">{t("showOfficial")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`user-filter-chip${showEInvoice ? " is-selected" : ""}`}
-                  aria-pressed={showEInvoice}
-                  onClick={() => {
-                    if (showEInvoice) setShowEInvoice(false);
-                    else {
-                      setShowEInvoice(true);
-                      setShowAll(false);
-                    }
-                  }}
-                >
-                  <span className="user-filter-chip__dot" aria-hidden>
-                    {showEInvoice ? (
-                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 12l4 4 8-8" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span className="user-filter-chip__label">{t("showEInvoice")}</span>
-                </button>
-                <button
-                  type="button"
-                  className={`user-filter-chip${showBlock ? " is-selected" : ""}`}
-                  aria-pressed={showBlock}
-                  onClick={() => {
-                    if (showBlock) setShowBlock(false);
-                    else {
-                      setShowBlock(true);
-                      setShowAll(false);
-                    }
-                  }}
-                >
-                  <span className="user-filter-chip__dot" aria-hidden>
-                    {showBlock ? (
-                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 12l4 4 8-8" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span className="user-filter-chip__label">{t("showBlock")}</span>
-                </button>
               </div>
             </div>
           </div>
@@ -523,6 +457,7 @@ export default function BankProcessListPage() {
             showHeaderSelectAll={showInactive || showOfficial || showEInvoice || showBlock}
             notify={notify}
             fetchRows={fetchRows}
+            onBankStatusUpdated={handleBankStatusUpdated}
             loadAccountingInbox={loadAccountingInbox}
             openEdit={openEdit}
             openRemarkModal={(row) => {

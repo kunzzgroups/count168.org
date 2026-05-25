@@ -1055,7 +1055,6 @@ export default function ProcessListPage() {
   return (
     <div className="container">
       <div className="content" style={showAll ? { height: "auto", overflow: "visible" } : undefined}>
-        <h1 className="page-title">{t("pageTitle")}</h1>
         <div className="action-buttons-container">
           <div className="action-buttons">
             <div className="action-controls-row" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

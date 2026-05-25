@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { toUpperDisplay } from "../formulaMaintenanceLogic.js";
+import { toUpperDisplay, syncEditFormSourcePercent } from "../formulaMaintenanceLogic.js";
 import { assetUrl } from "../../../../utils/core/apiUrl.js";
 
 const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
@@ -59,8 +59,8 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
           <input
             type="text"
             className="source-input"
-            value={editForm.source_columns}
-            onChange={(e) => patchForm("source_columns", e.target.value)}
+            value={editForm.source_percent ?? ""}
+            onChange={(e) => onEditFormChange((prev) => syncEditFormSourcePercent(prev, e.target.value))}
           />
         ) : (
           <span className="formula-cell-clamp-2 source-display" title={row.source}>

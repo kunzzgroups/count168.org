@@ -128,9 +128,14 @@ export default function DomainPage() {
       .then((r) => r.json())
       .then((res) => {
         if (res.success && res.data) {
-          const p2 = formatDomainFeeDisplay2(res.data.price);
-          setFeeInlineSummary(p2 !== "—" ? t("feeSummary", { price: p2 }) : "");
-          setDomainFeePrice(Number(res.data.price) || 0);
+          const g = formatDomainFeeDisplay2(res.data.group_price ?? res.data.price);
+          const c = formatDomainFeeDisplay2(res.data.company_price ?? res.data.price);
+          if (g !== "—" && c !== "—") {
+            setFeeInlineSummary(t("feeInlineSummary", { group: g, company: c }));
+          } else {
+            setFeeInlineSummary("");
+          }
+          setDomainFeePrice(Number(res.data.company_price ?? res.data.price) || 0);
         }
       })
       .catch(() => {});
@@ -259,7 +264,6 @@ export default function DomainPage() {
   return (
     <>
       <div className="container domain-react-page">
-        <h1>{t("domainList")}</h1>
         {loadError && (
           <div style={{ marginBottom: 10, color: "#b91c1c", fontWeight: 600 }}>{loadError}</div>
         )}
@@ -474,9 +478,14 @@ export default function DomainPage() {
           lang={lang}
           onClose={() => setFeeModal(false)}
           onFeeSaved={(data) => {
-            const p2 = formatDomainFeeDisplay2(data.price);
-            setFeeInlineSummary(p2 !== "—" ? t("feeSummary", { price: p2 }) : "");
-            setDomainFeePrice(Number(data.price) || 0);
+            const g = formatDomainFeeDisplay2(data.group_price ?? data.price);
+            const c = formatDomainFeeDisplay2(data.company_price ?? data.price);
+            if (g !== "—" && c !== "—") {
+              setFeeInlineSummary(t("feeInlineSummary", { group: g, company: c }));
+            } else {
+              setFeeInlineSummary("");
+            }
+            setDomainFeePrice(Number(data.company_price ?? data.price) || 0);
           }}
         />
       )}

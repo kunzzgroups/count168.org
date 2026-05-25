@@ -31,3 +31,20 @@
     pointer-events: auto;
   }
 }
+
+/* 认证区各页主容器顶边距（与 --layout-page-top-gap 一致） */
+body.ec-auth-shell .dashboard-container,
+body.ec-auth-shell.user-page .container,
+body.ec-auth-shell.account-page .container,
+body.ec-auth-shell.transaction-page .transaction-container,
+body.ec-auth-shell.maintenance-page .container,
+body.ec-auth-shell.process-page .container,
+body.ec-auth-shell.report-page .container,
+body.datacapture-page .container,
+body.datacapture-summary-page .container,
+body.ec-auth-shell.domain-page .container,
+body.ec-auth-shell.ownership-page .own-container,
+body.announcement-page .container.announcement-page-container,
+body.member-winloss-page .transaction-container {
+  padding-top: var(--layout-page-top-gap);
+}

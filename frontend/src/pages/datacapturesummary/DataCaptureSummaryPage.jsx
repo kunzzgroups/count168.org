@@ -58,7 +58,6 @@ class SummaryPageErrorBoundary extends Component {
       const lang = localStorage.getItem("login_lang") === "zh" ? "zh" : "en";
       return (
         <div className="container">
-          <h1>{getDataCaptureSummaryText(lang, "pageTitle")}</h1>
           <p role="alert" style={{ color: "#b91c1c", padding: "12px 0" }}>
             {getDataCaptureSummaryText(lang, "loadPageFailed")}
           </p>
@@ -353,8 +352,6 @@ function DataCaptureSummaryPageInner() {
 
   return (
     <div className="container">
-      <h1>{t("pageTitle")}</h1>
-
       {showPageBootOverlay ? (
         <div
           className="loading-container"
@@ -421,6 +418,7 @@ function DataCaptureSummaryPageInner() {
       <SummarySubmitBar
         t={t}
         submitting={pageActions.submitting}
+        refreshing={pageActions.refreshing || dataPopulating}
         onSubmit={pageActions.handleSubmitSummary}
         onBack={pageActions.handleBack}
         onRefresh={pageActions.handleRefresh}

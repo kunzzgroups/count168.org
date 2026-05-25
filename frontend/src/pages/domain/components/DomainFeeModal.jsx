@@ -1,23 +1,28 @@
 import { useState, useEffect } from "react";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { showDomainAlert } from "./DomainNotification.jsx";
-import { formatDomainFeeEdit2 } from "../domainHelpers.js";
+import { formatDomainFeeEdit2, DEFAULT_DOMAIN_FEE_PRICE } from "../domainHelpers.js";
 import { getDomainText } from "../../../translateFile/pages/domainTranslate.js";
 import DomainModalPortal from "./DomainModalPortal.jsx";
 
 /**
- * Fee Settings Modal — Price setting for domain list
+ * Fee Settings Modal — Group / Company price for domain list
  * Props:
  *   onClose()
- *   onFeeSaved(data) — called after successful save with { price }
+ *   onFeeSaved(data) — called after successful save with { price, group_price, company_price }
  */
 /** Overlay z：与 DomainFormModal 同源内联写法，防止生产包 Tailwind arbitrary 失效时整块遮罩掉到侧栏下层，表现为「点了 Price 无反应」 */
 const FEE_MODAL_OVERLAY_Z = 2147482998;
 
+function resolveFeeEditValue(raw) {
+  const formatted = formatDomainFeeEdit2(raw);
+  return formatted !== "" ? formatted : DEFAULT_DOMAIN_FEE_PRICE;
+}
+
 export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
   const t = (key, params) => getDomainText(lang, key, params);
-  const [price, setPrice] = useState("");
-  const [summary, setSummary] = useState("");
+  const [groupPrice, setGroupPrice] = useState(DEFAULT_DOMAIN_FEE_PRICE);
+  const [companyPrice, setCompanyPrice] = useState(DEFAULT_DOMAIN_FEE_PRICE);
 
   useEffect(() => {
     fetch(buildApiUrl("api/domain/domain_api.php"), {
@@ -29,9 +34,8 @@ export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
       .then((r) => r.json())
       .then((res) => {
         if (res.success && res.data) {
-          const p2 = formatDomainFeeEdit2(res.data.price);
-          setSummary(t("feeSummary", { price: p2 }));
-          setPrice(formatDomainFeeEdit2(res.data.price));
+          setGroupPrice(resolveFeeEditValue(res.data.group_price ?? res.data.price));
+          setCompanyPrice(resolveFeeEditValue(res.data.company_price ?? res.data.price));
         } else {
           showDomainAlert(res.message || t("couldNotLoadSettings"), "danger");
         }
@@ -44,7 +48,11 @@ export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
       cache: "no-cache",
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save_domain_fee_settings", price }),
+      body: JSON.stringify({
+        action: "save_domain_fee_settings",
+        group_price: groupPrice,
+        company_price: companyPrice,
+      }),
     })
       .then((r) => r.json())
       .then((res) => {
@@ -86,21 +94,33 @@ export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
           <p className="domain-fee-description">
             {t("priceDescription")}
           </p>
-          <div id="domainFeeSummaryDisplay" className="domain-fee-summary-display" aria-live="polite"
-            dangerouslySetInnerHTML={{ __html: summary }} />
           <p className="domain-fee-edit-hint">{t("editFieldHint")}</p>
           <div className="form-group">
-            <label htmlFor="domainFeePrice">
-              {t("price")} <span className="domain-fee-decimals-hint">({t("editWord")})</span>
+            <label htmlFor="domainFeeGroupPrice">
+              {t("groupPrice")}
             </label>
             <input
               type="number"
-              id="domainFeePrice"
+              id="domainFeeGroupPrice"
               className="form-group-input"
               step="0.01"
               placeholder={t("pricePlaceholder")}
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
+              value={groupPrice}
+              onChange={(e) => setGroupPrice(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="domainFeeCompanyPrice">
+              {t("companyPrice")}
+            </label>
+            <input
+              type="number"
+              id="domainFeeCompanyPrice"
+              className="form-group-input"
+              step="0.01"
+              placeholder={t("pricePlaceholder")}
+              value={companyPrice}
+              onChange={(e) => setCompanyPrice(e.target.value)}
             />
           </div>
           <div className="form-actions">

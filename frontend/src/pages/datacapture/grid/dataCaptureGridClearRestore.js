@@ -7,13 +7,14 @@ import {
   clearEditableGridCells,
   populateGridFromSnapshot,
 } from "./dataCaptureGridSnapshot.js";
-import { clearFormatPreviewHtml, setFormatPreviewHtml } from "../format/dataCaptureFormat.js";
 import {
+  clearFormatPreviewHtml,
   clearFormatStyles,
   setFormatGridReady,
+  setFormatPreviewHtml,
+  showFormatEditableGrid,
   toggleTableDisplayForFormat,
 } from "../format/dataCaptureFormat.js";
-import { renderFormatPreview } from "../paste/core/dataCaptureFormatPreview.js";
 import { normalizeCaptureType } from "../lib/dataCaptureFormRules.js";
 import {
   buildFormatPreviewHtmlFromTableSnapshot,
@@ -72,7 +73,7 @@ export function clearCaptureTableForReset() {
     tablePreviewFormat.style.display = "none";
   }
 
-  renderFormatPreview("");
+  showFormatEditableGrid();
 
   const captureType = window.__DC_GET_CAPTURE_TYPE__?.() || "1.Text";
   if (captureType === "2.Format") {
@@ -156,8 +157,8 @@ export async function restoreCaptureTableFromData(tableData, savedType) {
         const html = buildFormatPreviewHtmlFromTableSnapshot(tableData);
         if (html) {
           setFormatPreviewHtml(html);
-          renderFormatPreview(html);
         }
+        showFormatEditableGrid();
       } catch {
         /* ignore */
       }

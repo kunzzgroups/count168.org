@@ -3,6 +3,7 @@ import { assetUrl } from "../../../utils/core/apiUrl.js";
 export default function SummarySubmitBar({
   t,
   submitting = false,
+  refreshing = false,
   onSubmit,
   onBack,
   onRefresh,
@@ -21,7 +22,14 @@ export default function SummarySubmitBar({
       <button type="button" className="btn btn-cancel" onClick={onBack}>
         {t("back")}
       </button>
-      <button type="button" className="btn btn-refresh" onClick={onRefresh} title={t("refreshPage")}>
+      <button
+        type="button"
+        className="btn btn-refresh"
+        onClick={onRefresh}
+        title={t("refreshPage")}
+        disabled={refreshing}
+        aria-busy={refreshing || undefined}
+      >
         <img
           src={assetUrl("images/refresh.svg")}
           alt={t("refresh")}

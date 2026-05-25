@@ -137,23 +137,22 @@ export default function TransactionPaymentPage() {
     refreshContraInboxBadge: ui.refreshContraInboxBadge,
   });
 
-  useLayoutEffect(() => {
-    document.body.classList.remove(...ROUTE_BODY_CLASSES_TO_CLEAR);
+  const applyTransactionBodyClasses = useCallback(() => {
+    document.body.classList.remove(...ROUTE_BODY_CLASSES_TO_CLEAR, "bg");
     document.body.classList.add("dashboard-page", "transaction-page");
+  }, []);
+
+  useLayoutEffect(() => {
+    applyTransactionBodyClasses();
     return () => {
       document.body.classList.remove("transaction-page", "page-ready");
     };
-  }, []);
+  }, [applyTransactionBodyClasses]);
 
-  /** Re-apply after stale passive cleanups (e.g. Home dashboard useEffect unmount) that run after our layout effect. */
+  /** Re-apply after company switch or stale passive cleanups (e.g. Home dashboard unmount re-adds `bg`). */
   useEffect(() => {
-    document.body.classList.add("transaction-page");
-  }, []);
-
-  /** Runs after previous route's `useEffect` cleanup (User/Account used to re-add `bg`). `body.bg::before` blocks clicks site-wide. */
-  useEffect(() => {
-    document.body.classList.remove("bg");
-  }, []);
+    applyTransactionBodyClasses();
+  }, [applyTransactionBodyClasses, filterSnapshot?.companyId]);
 
   useEffect(() => {
     return installTransactionExcelCopy();

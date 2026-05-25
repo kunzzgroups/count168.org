@@ -40,6 +40,9 @@ export function clearSummaryCaptureRoundStorage() {
   try {
     for (const key of SUMMARY_CAPTURE_STORAGE_KEYS) {
       localStorage.removeItem(key);
+      if (key === "capturedFormatPreviewHtml" || key === "captured655PreviewHtml") {
+        sessionStorage.removeItem(key);
+      }
     }
   } catch {
     /* ignore */

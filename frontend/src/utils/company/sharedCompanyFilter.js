@@ -5,6 +5,36 @@
 
 export const DASHBOARD_GROUP_FILTER_KEY = "dashboard_group_filter";
 
+/** In-memory cache so report/maintenance remounts do not re-block on companies API. */
+let ownerCompaniesCache = null;
+let ownerCompaniesInflight = null;
+
+export function getCachedOwnerCompanies() {
+  return ownerCompaniesCache;
+}
+
+export function setCachedOwnerCompanies(rows) {
+  ownerCompaniesCache = Array.isArray(rows) ? rows : null;
+}
+
+/** @param {() => Promise<object[]>} fetcher */
+export async function loadOwnerCompaniesCached(fetcher) {
+  if (ownerCompaniesCache) return ownerCompaniesCache;
+  if (!ownerCompaniesInflight) {
+    ownerCompaniesInflight = fetcher()
+      .then((rows) => {
+        ownerCompaniesCache = rows;
+        ownerCompaniesInflight = null;
+        return rows;
+      })
+      .catch((err) => {
+        ownerCompaniesInflight = null;
+        throw err;
+      });
+  }
+  return ownerCompaniesInflight;
+}
+
 /**
  * Normalize keys from `get_owner_companies_api` (and any proxy) so `company_id` / `group_id`
  * match Account List and Maintenance pages — otherwise Transaction filters stay empty.

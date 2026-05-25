@@ -268,7 +268,6 @@ export default function TransactionHeader({
   return (
     <div className="transaction-header-bar">
       <div className="transaction-header-left">
-        <h1 className="transaction-title">{m.transactionList}</h1>
         {canApproveContra && (
           <div className={`contra-inbox-wrap${isOpen ? " contra-inbox-wrap--open" : ""}`} id="contraInboxWrap">
             <button

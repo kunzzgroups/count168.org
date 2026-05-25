@@ -30,7 +30,6 @@ export default function OwnershipPage() {
   return (
     <>
       <div className="own-container">
-        <h1 className="own-page-title">{t("accountOwnership")}</h1>
         <div className="own-tab-bar">
           <button
             type="button"

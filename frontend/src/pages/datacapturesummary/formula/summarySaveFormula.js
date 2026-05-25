@@ -7,6 +7,7 @@ import {
   calculateFormulaResultFromExpression,
   evaluateFormulaExpression,
 } from "./summaryFormulaReference.js";
+import { applyTemplateFormulaSaveFields } from "../../../shared/formula/index.js";
 
 function call(name, ...args) {
   const fn = window[name];
@@ -726,10 +727,26 @@ export function saveFormula() {
             isSubIdProduct: isSubForTemplate
         });
 
-        // Override last_source_value with formulaValue to ensure correct source expression is saved
-        // This is important because formulaValue is the user's original expression (e.g., "9+5")
-        // and should be preserved exactly as entered, not recalculated from Data Capture Table
-        rowData.last_source_value = formulaValue || '';
+        applyTemplateFormulaSaveFields(rowData, targetRow, {
+            processValue,
+            accountValue,
+            accountId,
+            currencyValue,
+            currencyName,
+            columnsDisplay,
+            clickedColumnsDisplay,
+            sourcePercentValue,
+            sourcePercentEnableValue,
+            formulaDisplay,
+            formulaValue,
+            processedAmount,
+            inputMethodValue,
+            enableValue,
+            descriptionValue,
+            isSubIdProduct: isSubForTemplate,
+            sourcePercent: sourcePercentValue,
+            lastSourceValue: formulaDisplay,
+        });
 
         // 二次校验：Currency、Formula 任一项空则绝不调用 saveTemplateAsync
         const hasCurrencyForSave = (rowData.currency_id != null && String(rowData.currency_id).trim() !== '');

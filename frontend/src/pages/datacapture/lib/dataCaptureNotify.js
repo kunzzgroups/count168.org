@@ -2,16 +2,23 @@
  * Shows a Data Capture toast. Uses React host when available (`__DC_PUSH_NOTIFICATION__`),
  * otherwise falls back to the same DOM behavior as `showNotification` in `js/datacapture.js`.
  */
+import { translateDataCaptureNotification } from "../../../translateFile/pages/dataCaptureTranslate.js";
+
+function resolveNotificationLang() {
+  return localStorage.getItem("login_lang") === "zh" ? "zh" : "en";
+}
+
 export function pushDataCaptureNotification(message, type = "success") {
+  const localized = translateDataCaptureNotification(resolveNotificationLang(), message);
   if (typeof window.__DC_PUSH_NOTIFICATION__ === "function") {
-    window.__DC_PUSH_NOTIFICATION__(message, type);
+    window.__DC_PUSH_NOTIFICATION__(localized, type);
     return;
   }
 
   const container = document.getElementById("processNotificationContainer");
   if (!container) {
     console.error("Notification container not found");
-    window.alert(message);
+    window.alert(localized);
     return;
   }
 
@@ -28,7 +35,7 @@ export function pushDataCaptureNotification(message, type = "success") {
 
   const notification = document.createElement("div");
   notification.className = `process-notification process-notification-${type}`;
-  notification.textContent = message;
+  notification.textContent = localized;
   container.appendChild(notification);
 
   setTimeout(() => {

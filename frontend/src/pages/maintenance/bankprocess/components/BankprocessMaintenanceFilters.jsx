@@ -6,6 +6,7 @@ import {
 } from "../../shared/maintenanceDateHelpers.js";
 import ReportDatePicker from "../../../report/common/ReportDatePicker.jsx";
 import ReportGcFilterPanel from "../../../report/shared/ReportGcFilterPanel.jsx";
+import { normalizeMaintenanceSearchInput } from "../../shared/maintenanceSearchInput.js";
 
 export default function BankprocessMaintenanceFilters({
   permissions,
@@ -37,16 +38,14 @@ export default function BankprocessMaintenanceFilters({
   setConfirmDelete,
   selectedIds,
   onDelete,
-  pageTitle,
   m,
 }) {
   const periodPresets = useMemo(() => buildMaintenancePeriodPresets(m), [m]);
 
   return (
     <>
+      {permissions.length > 1 ? (
       <div className="maintenance-header">
-        <h1 id="maintenance-page-title">{pageTitle}</h1>
-        {permissions.length > 1 && (
           <div id="bankprocess-permission-filter" className="maintenance-permission-filter-header">
             <span className="maintenance-company-label">{m.category}</span>
             <div id="bankprocess-permission-buttons" className="maintenance-company-buttons">
@@ -62,8 +61,8 @@ export default function BankprocessMaintenanceFilters({
               ))}
             </div>
           </div>
-        )}
       </div>
+      ) : null}
 
       <div className="customer-report-filter-container">
         <div className="customer-report-filters">
@@ -104,7 +103,8 @@ export default function BankprocessMaintenanceFilters({
                     autoComplete="off"
                     value={query}
                     aria-labelledby="bankprocess-maint-search-legend"
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e) => setQuery(normalizeMaintenanceSearchInput(e.target.value))}
+                    style={{ textTransform: "uppercase" }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();

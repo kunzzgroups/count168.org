@@ -32,6 +32,8 @@ import {
   insertColumnRight,
   insertRowAbove,
   insertRowBelow,
+  appendGridRow,
+  appendGridColumn,
 } from "../grid/dataCaptureGridRowColumnCrud.js";
 import {
   clearSelectedCells,
@@ -104,6 +106,8 @@ export function useDataCaptureGridInteraction(scriptsReady) {
     window.__DC_INSERT_ROW_BELOW__ = insertRowBelow;
     window.__DC_DELETE_ROW__ = deleteRow;
     window.__DC_CLEAR_ROW__ = clearRow;
+    window.__DC_ADD_NEW_ROW__ = appendGridRow;
+    window.__DC_ADD_NEW_COLUMN__ = appendGridColumn;
     window.insertColumnLeft = insertColumnLeft;
     window.insertColumnRight = insertColumnRight;
     window.deleteColumn = deleteColumn;
@@ -175,6 +179,8 @@ export function useDataCaptureGridInteraction(scriptsReady) {
       delete window.__DC_INSERT_ROW_BELOW__;
       delete window.__DC_DELETE_ROW__;
       delete window.__DC_CLEAR_ROW__;
+      if (window.__DC_ADD_NEW_ROW__ === appendGridRow) delete window.__DC_ADD_NEW_ROW__;
+      if (window.__DC_ADD_NEW_COLUMN__ === appendGridColumn) delete window.__DC_ADD_NEW_COLUMN__;
       if (window.insertColumnLeft === insertColumnLeft) delete window.insertColumnLeft;
       if (window.insertColumnRight === insertColumnRight) delete window.insertColumnRight;
       if (window.deleteColumn === deleteColumn) delete window.deleteColumn;

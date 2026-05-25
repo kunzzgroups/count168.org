@@ -1,7 +1,11 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { translateBankProcessApiMessage } from "../../../translateFile/pages/bankProcessTranslate.js";
-import { deriveBankProcessUiStatus, normalizeBankIssueFlag, normalizeBankProcessStatus } from "../lib/bankProcessHelpers.js";
+import {
+  deriveBankProcessUiStatus,
+  normalizeBankIssueFlag,
+  normalizeBankProcessStatus,
+} from "../lib/bankProcessHelpers.js";
 
 const STATUS_LABEL_KEYS = {
   ACTIVE: "statusActive",
@@ -105,44 +109,56 @@ export default function BankProcessStatusControl({
     return res.json();
   };
 
+  const [pending, setPending] = useState(false);
+
   const apply = async (target) => {
+    if (pending) return;
     const id = row.id;
     const st = normalizeBankProcessStatus(row?.status);
     const hasFlag = !!normalizeBankIssueFlag(row.issue_flag);
+    const prevUi = deriveBankProcessUiStatus(row);
+    setPending(true);
+    onUpdated(target, { backgroundSync: false });
+    const fail = (message, tone = "danger") => {
+      onUpdated(prevUi, { backgroundSync: false });
+      doNotify(message, tone);
+    };
     try {
       if (target === "ACTIVE") {
         if (hasFlag) {
           const j = await postIssueFlag(id, "");
-          if (!j.success) return doNotify(apiMsg(j), "danger");
+          if (!j.success) return fail(apiMsg(j));
         }
         if (st !== "active") {
           const j = await postToggle(id);
-          if (!j.success) return doNotify(apiMsg(j), "danger");
+          if (!j.success) return fail(apiMsg(j));
         }
       } else if (target === "INACTIVE") {
         if (hasFlag) {
           const j = await postIssueFlag(id, "");
-          if (!j.success) return doNotify(apiMsg(j), "danger");
+          if (!j.success) return fail(apiMsg(j));
         }
         if (st === "active") {
           const j = await postToggle(id);
-          if (!j.success) return doNotify(apiMsg(j), "danger");
+          if (!j.success) return fail(apiMsg(j));
         }
       } else if (target === "OFFICIAL") {
         const j = await postIssueFlag(id, "official");
-        if (!j.success) return doNotify(apiMsg(j), "danger");
+        if (!j.success) return fail(apiMsg(j));
       } else if (target === "E_INVOICE") {
         const j = await postIssueFlag(id, "e_invoice");
-        if (!j.success) return doNotify(apiMsg(j), "danger");
+        if (!j.success) return fail(apiMsg(j));
       } else if (target === "BLOCK") {
         const j = await postIssueFlag(id, "block");
-        if (!j.success) return doNotify(apiMsg(j), "danger");
+        if (!j.success) return fail(apiMsg(j));
       }
       doNotify(t("statusUpdated"), "success");
-      onUpdated();
+      onUpdated(target, { backgroundSync: true });
       setOpen(false);
     } catch {
-      doNotify(t("statusUpdateFailed"), "danger");
+      fail(t("statusUpdateFailed"));
+    } finally {
+      setPending(false);
     }
   };
 
@@ -151,7 +167,14 @@ export default function BankProcessStatusControl({
 
   return (
     <div className={`bank-status-dropdown${open ? " open" : ""}`} ref={wrapRef}>
-      <button ref={buttonRef} type="button" className={`${pillClass}${open ? " open" : ""}`} onClick={() => setOpen((o) => !o)}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className={`${pillClass}${open ? " open" : ""}${pending ? " is-pending" : ""}`}
+        disabled={pending}
+        aria-busy={pending}
+        onClick={() => setOpen((o) => !o)}
+      >
         {label}
       </button>
       {open
@@ -181,6 +204,7 @@ export default function BankProcessStatusControl({
                     key={opt}
                     type="button"
                     className={`bank-status-option${cur ? " selected" : ""}`}
+                    disabled={pending}
                     onClick={() => void apply(opt)}
                     data-value={opt.toLowerCase()}
                     style={{ display: "block", width: "100%" }}

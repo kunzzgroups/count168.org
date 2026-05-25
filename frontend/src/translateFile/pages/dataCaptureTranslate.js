@@ -82,6 +82,21 @@ export const DATA_CAPTURE_I18N = {
     groupAria: "Group ID",
     companyAria: "Company",
     captureFormatAria: "Data capture format",
+    pasteSuccessExcel:
+      "Successfully pasted {count} cells ({rows} rows × {cols} columns). Excel format preserved.",
+    pasteSuccessUndo:
+      "Successfully pasted {count} cells ({rows} rows × {cols} columns). Press Ctrl+Z to undo.",
+    pasteSuccessFormatTable:
+      "Successfully pasted table ({headerRows} header rows, {dataRows} data rows × {cols} columns). Full structure preserved.",
+    pasteSuccessGeneric:
+      "Successfully pasted {count} cells ({rows} rows × {cols} columns).",
+    pasteSuccessPrefixGeneric:
+      "{prefix}: successfully pasted {count} cells ({rows} rows × {cols} columns).",
+    pasteSuccessPrefixPdf:
+      "{prefix}: successfully pasted {count} cells ({rows} rows × {cols} columns). PDF format preserved.",
+    pasteSuccessPrefixRows:
+      "{prefix}: successfully pasted {rows} rows × {cols} columns.",
+    pasteFailedClipboard: "Failed to access clipboard",
   },
   zh: {
     pageTitle: "数据采集",
@@ -164,6 +179,21 @@ export const DATA_CAPTURE_I18N = {
     groupAria: "集团",
     companyAria: "公司",
     captureFormatAria: "数据采集格式",
+    pasteSuccessExcel:
+      "成功粘贴 {count} 个单元格 ({rows} 行 x {cols} 列)，已保持Excel原始格式!",
+    pasteSuccessUndo:
+      "成功粘贴 {count} 个单元格 ({rows} 行 x {cols} 列)! 按 Ctrl+Z 可撤销",
+    pasteSuccessFormatTable:
+      "成功粘贴表格 ({headerRows} 个表头行, {dataRows} 个数据行 x {cols} 列)，已保持完整表格结构!",
+    pasteSuccessGeneric:
+      "成功粘贴 {count} 个单元格 ({rows} 行 x {cols} 列)!",
+    pasteSuccessPrefixGeneric:
+      "{prefix}：成功粘贴 {count} 个单元格 ({rows} 行 x {cols} 列)!",
+    pasteSuccessPrefixPdf:
+      "{prefix}：成功粘贴 {count} 个单元格 ({rows} 行 x {cols} 列)，已保持PDF原始格式!",
+    pasteSuccessPrefixRows:
+      "{prefix}：成功粘贴 {rows} 行 x {cols} 列数据!",
+    pasteFailedClipboard: "无法访问剪贴板",
   },
 };
 
@@ -189,4 +219,46 @@ export function translateDataCaptureMessage(lang, message) {
   };
   const key = map[raw];
   return key ? getDataCaptureText(lang, key) : raw;
+}
+
+/** Localize legacy paste toasts (still emitted as Chinese strings from paste modules). */
+export function translateDataCaptureNotification(lang, message) {
+  const locale = lang === "zh" ? "zh" : "en";
+  const raw = String(message || "").trim();
+  if (!raw) return raw;
+
+  const t = (key, params) => getDataCaptureText(locale, key, params);
+
+  if (raw === "Failed to access clipboard") {
+    return t("pasteFailedClipboard");
+  }
+
+  let m = raw.match(/^成功粘贴 (\d+) 个单元格 \((\d+) 行 x (\d+) 列\)，已保持Excel原始格式!$/);
+  if (m) return t("pasteSuccessExcel", { count: m[1], rows: m[2], cols: m[3] });
+
+  m = raw.match(/^成功粘贴 (\d+) 个单元格 \((\d+) 行 x (\d+) 列\)! 按 Ctrl\+Z 可撤销$/);
+  if (m) return t("pasteSuccessUndo", { count: m[1], rows: m[2], cols: m[3] });
+
+  m = raw.match(/^成功粘贴表格 \((\d+) 个表头行, (\d+) 个数据行 x (\d+) 列\)，已保持完整表格结构!$/);
+  if (m) return t("pasteSuccessFormatTable", { headerRows: m[1], dataRows: m[2], cols: m[3] });
+
+  m = raw.match(/^成功粘贴 (\d+) 个单元格 \((\d+) 行 x (\d+) 列\)!$/);
+  if (m) return t("pasteSuccessGeneric", { count: m[1], rows: m[2], cols: m[3] });
+
+  m = raw.match(/^(.+?)：成功粘贴 (\d+) 个单元格 \((\d+) 行 x (\d+) 列\)，已保持PDF原始格式!$/);
+  if (m) return t("pasteSuccessPrefixPdf", { prefix: m[1], count: m[2], rows: m[3], cols: m[4] });
+
+  m = raw.match(/^(.+?)：成功粘贴 (\d+) 个单元格 \((\d+) 行 x (\d+) 列\)，已保持PDF原始格式!$/);
+  if (m) return t("pasteSuccessPrefixPdf", { prefix: m[1], count: m[2], rows: m[3], cols: m[4] });
+
+  m = raw.match(/^(.+?)：成功粘贴 (\d+) 个单元格 \((\d+) 行 x (\d+) 列\)，已保持表格行格式!$/);
+  if (m) return t("pasteSuccessPrefixGeneric", { prefix: m[1], count: m[2], rows: m[3], cols: m[4] });
+
+  m = raw.match(/^(.+?)：成功粘贴 (\d+) 个单元格 \((\d+) 行 x (\d+) 列\)!$/);
+  if (m) return t("pasteSuccessPrefixGeneric", { prefix: m[1], count: m[2], rows: m[3], cols: m[4] });
+
+  m = raw.match(/^(.+?)：成功粘贴 (\d+) 行 x (\d+) 列数据!$/);
+  if (m) return t("pasteSuccessPrefixRows", { prefix: m[1], rows: m[2], cols: m[3] });
+
+  return raw;
 }

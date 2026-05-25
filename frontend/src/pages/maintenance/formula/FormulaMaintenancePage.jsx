@@ -34,7 +34,6 @@ import {
 import FormulaMaintenanceFilters from "./components/FormulaMaintenanceFilters.jsx";
 import FormulaMaintenanceTable from "./components/FormulaMaintenanceTable.jsx";
 import MaintenanceDeleteConfirmModal from "../shared/MaintenanceDeleteConfirmModal.jsx";
-import PageContentLoader from "../../../components/PageContentLoader.jsx";
 import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
 
 export default function FormulaMaintenancePage() {
@@ -637,7 +636,12 @@ export default function FormulaMaintenancePage() {
       const payload = {
         template_id: id,
         company_id: companyId,
-        ...editForm,
+        account_id: editForm.account_id,
+        source_columns: editForm.source_ref ?? "",
+        source_percent: editForm.source_percent ?? "",
+        input_method: editForm.input_method ?? "",
+        formula: editForm.formula ?? "",
+        description: editForm.description ?? "",
       };
       const serverData = await updateFormulaTemplate(payload);
       notify(t("updateSuccessful"), "success");
@@ -660,13 +664,12 @@ export default function FormulaMaintenancePage() {
     setScrollRestoreRowId(null);
   }, []);
 
-  if (bootLoading || !me) return <PageContentLoader />;
+  const tableLoading = loading || bootLoading;
 
   return (
     <div className="formula-maintenance-page-root container">
+      {permissions.length > 1 ? (
       <div className="maintenance-header">
-        <h1 id="maintenance-page-title">{m.pageTitleFormula}</h1>
-        {permissions.length > 1 && (
           <div id="maintenance-permission-filter" className="maintenance-permission-filter-header">
             <span className="maintenance-company-label">{m.category}</span>
             <div id="maintenance-permission-buttons" className="maintenance-company-buttons">
@@ -682,8 +685,8 @@ export default function FormulaMaintenancePage() {
               ))}
             </div>
           </div>
-        )}
       </div>
+      ) : null}
 
       <FormulaMaintenanceFilters 
         processes={processes}
@@ -715,7 +718,7 @@ export default function FormulaMaintenancePage() {
         )}
       <FormulaMaintenanceTable
         data={formulaData}
-        loading={loading}
+        loading={tableLoading}
         listSyncing={listSyncing}
         listHydrating={listHydrating}
         totalRowCount={totalRowCount}

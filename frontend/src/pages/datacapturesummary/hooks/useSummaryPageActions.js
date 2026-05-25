@@ -19,10 +19,13 @@ export function useSummaryPageActions({ companyId, scriptsReady, mutationsBlocke
   const navigate = useNavigate();
   const rateSelectAllRef = useRef(null);
   const handleRefreshRef = useRef(async () => {});
+  const refreshInFlightRef = useRef(false);
+  const refreshGenerationRef = useRef(0);
 
   const [rateInput, setRateInput] = useState("");
   const [rateSelectAllLabel, setRateSelectAllLabel] = useState(() => t("selectAll"));
   const [deleteCount, setDeleteCount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     setRateSelectAllLabel(t("selectAll"));
@@ -103,21 +106,38 @@ export function useSummaryPageActions({ companyId, scriptsReady, mutationsBlocke
   }, [navigateBack]);
 
   const handleRefresh = useCallback(async () => {
-    // Save draft Rate/Formula before reload so Refresh retains edits prior to final Submit.
-    saveSummaryRefreshState();
-    if (
-      window.__SUMMARY_REACT_TABLE__ &&
-      typeof window.__SUMMARY_REACT_ON_TABLE_READY__ === "function"
-    ) {
-      try {
-        window.__SUMMARY_REACT_SET_POPULATING__?.(true);
-        await window.__SUMMARY_REACT_ON_TABLE_READY__({ reset: true });
-        return;
-      } catch (error) {
-        console.warn("Soft summary refresh failed, falling back to reload:", error);
-      }
+    if (refreshInFlightRef.current || window.__SUMMARY_POPULATE_IN_FLIGHT__ || window.__SUMMARY_REFRESH_IN_FLIGHT__) {
+      return;
     }
-    window.location.reload();
+
+    refreshInFlightRef.current = true;
+    window.__SUMMARY_REFRESH_IN_FLIGHT__ = true;
+    const refreshGen = refreshGenerationRef.current + 1;
+    refreshGenerationRef.current = refreshGen;
+    window.__summaryRefreshGeneration__ = refreshGen;
+    setRefreshing(true);
+
+    try {
+      // Save draft Rate/Formula before reload so Refresh retains edits prior to final Submit.
+      saveSummaryRefreshState();
+      if (
+        window.__SUMMARY_REACT_TABLE__ &&
+        typeof window.__SUMMARY_REACT_ON_TABLE_READY__ === "function"
+      ) {
+        try {
+          window.__SUMMARY_REACT_SET_POPULATING__?.(true);
+          await window.__SUMMARY_REACT_ON_TABLE_READY__({ reset: true, refreshGen });
+          return;
+        } catch (error) {
+          console.warn("Soft summary refresh failed, falling back to reload:", error);
+        }
+      }
+      window.location.reload();
+    } finally {
+      refreshInFlightRef.current = false;
+      window.__SUMMARY_REFRESH_IN_FLIGHT__ = false;
+      setRefreshing(false);
+    }
   }, []);
 
   handleRefreshRef.current = handleRefresh;
@@ -152,6 +172,7 @@ export function useSummaryPageActions({ companyId, scriptsReady, mutationsBlocke
     deleteCount,
     deleteDisabled: deleteCount <= 0,
     submitting: isSubmitting,
+    refreshing,
     handleBack,
     handleRefresh,
     handleRateBatchSubmit,

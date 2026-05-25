@@ -207,6 +207,9 @@ export function companyToDomainPayloadEntry(c) {
 
 // ===================== Display Helpers =====================
 
+/** Domain Price 弹窗未配置时的默认金额 */
+export const DEFAULT_DOMAIN_FEE_PRICE = "2400";
+
 /** 固定两位小数展示 */
 export function formatDomainFeeDisplay2(val) {
   if (val === null || val === undefined || val === "") return "—";

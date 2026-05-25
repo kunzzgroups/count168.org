@@ -183,7 +183,6 @@ export default function AnnouncementPage() {
     <>
       <div className="container announcement-page-container">
         <div className="page-header">
-          <h1>{t("pageTitle")}</h1>
           <div className="page-tabs">
             <button type="button" className={`page-tab${activeTab === "announcement" ? " active" : ""}`} onClick={() => setActiveTab("announcement")}>{t("announcementTab")}</button>
             <button type="button" className={`page-tab${activeTab === "maintenance" ? " active" : ""}`} onClick={() => setActiveTab("maintenance")}>{t("maintenanceTab")}</button>

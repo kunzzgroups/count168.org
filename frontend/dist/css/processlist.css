@@ -1077,13 +1077,6 @@
     margin-top: var(--text-page-title-mt) !important;
 }
 
-.bank-process-header-left > .page-title {
-    margin: 0 !important;
-    padding: 0;
-    line-height: 1;
-    align-self: center;
-}
-
 /* Accounting Due inbox trigger + popover (Contra Inbox design language) */
 .process-accounting-inbox-wrap {
     position: relative;

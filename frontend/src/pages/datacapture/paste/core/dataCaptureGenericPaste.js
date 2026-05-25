@@ -11,6 +11,7 @@ import {
   parseExcelFormatPaymentReport,
 } from "./dataCapturePaymentParsers.js";
 import { formatNumberToTwoDecimals } from "./dataCapturePasteMoneyUtils.js";
+import { parsePastedData } from "./dataCaptureParsePastedData.js";
 
 
 

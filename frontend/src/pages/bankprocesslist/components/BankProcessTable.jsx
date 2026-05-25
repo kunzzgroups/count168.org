@@ -3,10 +3,10 @@ import { assetUrl, buildApiUrl } from "../../../utils/core/apiUrl.js";
 import {
   canShowBankResend,
   normalizeBankProcessStatus,
-  notifyTransactionDataChanged,
   formatBankProcessContractLabel,
   bankProcessContractBadgeKey,
   formatBankMoneyFixed2,
+  formatBankWithTypeDisplay,
   isValidBankMoneyInput,
 } from "../lib/bankProcessHelpers.js";
 import BankProcessStatusControl from "./BankProcessStatusControl.jsx";
@@ -75,8 +75,7 @@ export default function BankProcessTable({
   selectedIds,
   setSelectedIds,
   notify,
-  fetchRows,
-  loadAccountingInbox,
+  onBankStatusUpdated,
   openEdit,
   openRemarkModal,
   openResendModal,
@@ -104,8 +103,8 @@ export default function BankProcessTable({
 
   const bankColClass = (key) => `bank-col bank-col-${key}`;
 
-  /** <1600px：名称类最多两行（Bank 用 bank-cell-display 固定两行，不在此列） */
-  const bankNameWrapKeys = new Set(["supplier", "owner"]);
+  /** <1700px：Bank / Card Owner 最多两行（Bank 有 type 时用 bank-cell-display 两行，无 type 时靠 --wrap） */
+  const bankNameWrapKeys = new Set(["bank", "owner"]);
   /** <1600px：金额/日期/短码强制单行 */
   const bankSingleLineKeys = new Set([
     "no",
@@ -127,11 +126,11 @@ export default function BankProcessTable({
   const renderBankCell = (bank, type) => {
     const b = String(bank ?? "").trim();
     const t = String(type ?? "").trim();
-    if (!b && !t) return "-";
-    if (!b) return t ? `(${t})` : "-";
-    if (!t) return b;
+    const display = formatBankWithTypeDisplay(bank, type);
+    if (display === "-") return "-";
+    if (!t) return display;
     return (
-      <span className="bank-cell-display bank-cell-display--typed">
+      <span className="bank-cell-display bank-cell-display--typed" title={display}>
         <span className="bank-cell-display__name">{b}</span>
         <span className="bank-cell-display__type">({t})</span>
       </span>
@@ -205,6 +204,13 @@ export default function BankProcessTable({
   };
 
   const tableShellClass = `bank-virtual-table${showSelectColumn ? " bank-virtual-table--select-col" : ""}`;
+  /** <1700px：超过此行数时列表区固定高度并纵向滚动，避免行与行文字重叠 */
+  const BANK_LIST_SCROLL_CAP_ROWS = 9;
+  const capListScroll =
+    !tableLoading && pageRows.length > BANK_LIST_SCROLL_CAP_ROWS;
+  const scrollClipClass = `bank-virtual-scroll-clip${
+    capListScroll ? " bank-virtual-scroll-clip--cap-rows" : ""
+  }`;
   /** Last N visible rows: status menu opens upward to avoid pagination/footer overlap. */
   const STATUS_MENU_UP_LAST_ROWS = 3;
 
@@ -247,10 +253,10 @@ export default function BankProcessTable({
               })}
             </div>
           </div>
-          <div className="bank-virtual-scroll-clip">
+          <div className={scrollClipClass}>
             <div className="bank-virtual-scroll-shell">
             <div className="process-cards bank-mode bank-virtual-scroll">
-            {tableLoading && (
+            {tableLoading && pageRows.length === 0 && (
               <div className="process-card bank-virtual-data-row bank-virtual-data-row--message">
                 <div className="card-item bank-virtual-cell bank-virtual-cell--message">{t("loadData")}</div>
               </div>
@@ -260,7 +266,7 @@ export default function BankProcessTable({
                 <div className="card-item bank-virtual-cell bank-virtual-cell--message">{t("noProcessDataFound")}</div>
               </div>
             )}
-            {!tableLoading &&
+            {pageRows.length > 0 &&
               pageRows.map((r, i) => (
                 <div key={r.id} className="process-card bank-virtual-data-row">
                   <div className={cellClass("no")}>{(showAll ? i : (currentPage - 1) * PAGE_SIZE + i) + 1}</div>
@@ -284,11 +290,7 @@ export default function BankProcessTable({
                       notify={notify}
                       buildApiUrl={buildApiUrl}
                       t={t}
-                      onUpdated={() => {
-                        notifyTransactionDataChanged("bank-process-list-react");
-                        void fetchRows();
-                        void loadAccountingInbox?.({ silent: true });
-                      }}
+                      onUpdated={(target, opts) => onBankStatusUpdated?.(r, target, opts)}
                     />
                   </div>
                   <div className={cellClass("date")}>{r.date || "-"}</div>

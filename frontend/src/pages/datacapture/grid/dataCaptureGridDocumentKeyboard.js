@@ -262,15 +262,22 @@ const key = (e.key || '').toLowerCase();
             }
         }
         return;
-    } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        // If cell is being edited, let cell's keyboard event handler handle it
-        // Otherwise, clear selected cells (maintain Excel behavior)
+    } else if (e.key === 'Delete') {
+        if (getSelectedCellCount() > 0) {
+            e.preventDefault();
+            getSelectedCells().forEach((cell) => {
+                if (cell?.contentEditable === 'true') {
+                    cell.textContent = '';
+                }
+            });
+            recomputeSubmitState();
+        }
+    } else if (e.key === 'Backspace') {
         if (!isEditingCell && getSelectedCellCount() > 0) {
             e.preventDefault();
             getSelectedCells().forEach(cell => {
                 cell.textContent = '';
             });
-            // Update submit button state after clearing cells
             recomputeSubmitState();
         }
     } else if (e.ctrlKey && key === 'a') {
@@ -286,8 +293,7 @@ const key = (e.key || '').toLowerCase();
             copySelectedCells();
         }
     } else if (e.ctrlKey && key === 'v') {
-        // Ctrl+V paste to selected cells (unless cell is being edited)
-        if (!isEditingCell) {
+        if (!isEditingCell && getSelectedCellCount() > 0) {
             e.preventDefault();
             pasteToSelectedCells();
         }

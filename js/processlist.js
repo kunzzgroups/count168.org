@@ -2147,7 +2147,7 @@ async function refreshBankResendConfirmButtonState() {
         if (backendLocked) {
             confirmBtn.disabled = true;
             confirmBtn.textContent = 'Resend';
-            confirmBtn.title = 'A transaction was already posted for this Day start today. Delete it from Bank Process Maintenance before resending.';
+            confirmBtn.title = 'Today for this Day start has already been resent and related maintenance data still exists. Please choose another date.';
             return;
         }
         confirmBtn.disabled = false;
@@ -2159,7 +2159,7 @@ async function refreshBankResendConfirmButtonState() {
         if (quickLocked) {
             confirmBtn.disabled = true;
             confirmBtn.textContent = 'Resend';
-            confirmBtn.title = 'A transaction was already posted for this Day start today. Delete it from Bank Process Maintenance before resending.';
+            confirmBtn.title = 'Today for this Day start has already been resent. Please choose another date.';
         } else {
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Resend';
@@ -2329,7 +2329,7 @@ async function confirmBankResendFromModal() {
     }
     if (backendLocked) {
         if (typeof showNotification === 'function') {
-            showNotification('This process already has a transaction posted for this Day start today. Delete it from Bank Process Maintenance before resending.', 'warning');
+            showNotification('This process has already been resent for this Day start today. Please select another Day start.', 'warning');
         }
         void refreshBankResendConfirmButtonState();
         return;

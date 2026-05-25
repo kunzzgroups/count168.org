@@ -1,0 +1,110 @@
+/* ==========================================================================
+   Dashboard scrollbars — match maintenance virtual list (12px, gray track).
+   Loaded via app-shell.css for all authenticated routes (body.dashboard-page).
+   ========================================================================== */
+
+:root {
+    --dash-scrollbar-size: 12px;
+    --dash-scrollbar-track: #ececec;
+    --dash-scrollbar-thumb: #4b5563;
+    --dash-scrollbar-thumb-hover: #374151;
+    --dash-scrollbar-thumb-active: #1f2937;
+    --dash-scrollbar-thumb-border: 1px solid #ececec;
+    --dash-scrollbar-radius: 10px;
+    --dash-scrollbar-track-margin: 6px 0;
+}
+
+/* Firefox */
+html:has(body.dashboard-page),
+body.dashboard-page,
+body.dashboard-page #root,
+body.dashboard-page * {
+    scrollbar-width: auto;
+    scrollbar-color: var(--dash-scrollbar-thumb) var(--dash-scrollbar-track);
+}
+
+/* WebKit — page + all nested scroll containers */
+html:has(body.dashboard-page)::-webkit-scrollbar,
+body.dashboard-page::-webkit-scrollbar,
+body.dashboard-page #root::-webkit-scrollbar,
+body.dashboard-page *::-webkit-scrollbar {
+    width: var(--dash-scrollbar-size) !important;
+    height: var(--dash-scrollbar-size) !important;
+}
+
+html:has(body.dashboard-page)::-webkit-scrollbar-button,
+body.dashboard-page::-webkit-scrollbar-button,
+body.dashboard-page #root::-webkit-scrollbar-button,
+body.dashboard-page *::-webkit-scrollbar-button,
+html:has(body.dashboard-page)::-webkit-scrollbar-button:single-button,
+body.dashboard-page::-webkit-scrollbar-button:single-button,
+body.dashboard-page *::-webkit-scrollbar-button:single-button,
+html:has(body.dashboard-page)::-webkit-scrollbar-button:vertical:decrement,
+html:has(body.dashboard-page)::-webkit-scrollbar-button:vertical:increment,
+body.dashboard-page::-webkit-scrollbar-button:vertical:decrement,
+body.dashboard-page::-webkit-scrollbar-button:vertical:increment,
+body.dashboard-page *::-webkit-scrollbar-button:vertical:decrement,
+body.dashboard-page *::-webkit-scrollbar-button:vertical:increment {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+html:has(body.dashboard-page)::-webkit-scrollbar-track,
+body.dashboard-page::-webkit-scrollbar-track,
+body.dashboard-page #root::-webkit-scrollbar-track,
+body.dashboard-page *::-webkit-scrollbar-track {
+    background: var(--dash-scrollbar-track) !important;
+    border-radius: var(--dash-scrollbar-radius) !important;
+}
+
+html:has(body.dashboard-page)::-webkit-scrollbar-thumb,
+body.dashboard-page::-webkit-scrollbar-thumb,
+body.dashboard-page #root::-webkit-scrollbar-thumb,
+body.dashboard-page *::-webkit-scrollbar-thumb {
+    background: var(--dash-scrollbar-thumb) !important;
+    border-radius: var(--dash-scrollbar-radius) !important;
+    border: var(--dash-scrollbar-thumb-border) !important;
+    min-height: 48px;
+}
+
+html:has(body.dashboard-page)::-webkit-scrollbar-thumb:hover,
+body.dashboard-page::-webkit-scrollbar-thumb:hover,
+body.dashboard-page #root::-webkit-scrollbar-thumb:hover,
+body.dashboard-page *::-webkit-scrollbar-thumb:hover {
+    background: var(--dash-scrollbar-thumb-hover) !important;
+}
+
+html:has(body.dashboard-page)::-webkit-scrollbar-thumb:active,
+body.dashboard-page::-webkit-scrollbar-thumb:active,
+body.dashboard-page #root::-webkit-scrollbar-thumb:active,
+body.dashboard-page *::-webkit-scrollbar-thumb:active {
+    background: var(--dash-scrollbar-thumb-active) !important;
+}
+
+html:has(body.dashboard-page)::-webkit-scrollbar-corner,
+body.dashboard-page::-webkit-scrollbar-corner,
+body.dashboard-page #root::-webkit-scrollbar-corner,
+body.dashboard-page *::-webkit-scrollbar-corner {
+    background: var(--dash-scrollbar-track);
+}
+
+/* Virtual / table list areas — stable gutter like maintenance */
+body.dashboard-page .maintenance-virtual-scroll,
+body.dashboard-page .maintenance-virtual-scroll--body,
+body.dashboard-page .dashboard-scroll {
+    scrollbar-gutter: stable;
+}
+
+body.dashboard-page .maintenance-virtual-scroll::-webkit-scrollbar-track,
+body.dashboard-page .maintenance-virtual-scroll--body::-webkit-scrollbar-track,
+body.dashboard-page .dashboard-scroll::-webkit-scrollbar-track {
+    margin: var(--dash-scrollbar-track-margin);
+}
+
+/* Process bank virtual list — restore visible scrollbar (legacy CSS hid it) */
+body.dashboard-page .bank-virtual-scroll,
+body.dashboard-page .bank-virtual-scroll-clip {
+    scrollbar-width: auto !important;
+    -ms-overflow-style: auto !important;
+}

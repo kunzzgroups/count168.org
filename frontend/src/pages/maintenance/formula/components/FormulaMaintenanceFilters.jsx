@@ -1,5 +1,6 @@
 import ProcessSelect from "../../shared/ProcessSelect.jsx";
 import ReportGcFilterPanel from "../../../report/shared/ReportGcFilterPanel.jsx";
+import { normalizeMaintenanceSearchInput } from "../../shared/maintenanceSearchInput.js";
 
 export default function FormulaMaintenanceFilters({
   processes,
@@ -76,8 +77,8 @@ export default function FormulaMaintenanceFilters({
                   placeholder={m.searchFormulaPlaceholder}
                   value={searchFilter}
                   aria-labelledby="formula-maint-search-legend"
-                  onChange={(e) => setSearchFilter(e.target.value)}
-                  style={{ paddingLeft: "30px", width: "100%", border: "none", outline: "none", background: "transparent", minHeight: "38px" }}
+                  onChange={(e) => setSearchFilter(normalizeMaintenanceSearchInput(e.target.value))}
+                  style={{ paddingLeft: "30px", width: "100%", border: "none", outline: "none", background: "transparent", minHeight: "38px", textTransform: "uppercase" }}
                 />
               </div>
             </div>

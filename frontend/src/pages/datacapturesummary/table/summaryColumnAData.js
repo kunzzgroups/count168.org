@@ -52,6 +52,7 @@ export function buildColumnAEntries(tableData) {
     if (rowData.length <= 1 || rowData[1]?.type !== "data") return;
 
     const cellValue = rowData[1].value || "";
+    if (!cellValue.trim()) return;
 
     if (rowIndex === 3 && cellValue.trim() !== "") {
       const split = split655RowDEntries(cellValue);

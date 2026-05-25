@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --scd-background: #e9f1ff;
     --scd-foreground: #334155;
     --scd-card: #ffffff;
@@ -153,36 +153,13 @@ body.dashboard-page {
 .dashboard-container {
     max-width: none;
     margin: 0;
-    padding: 0 clamp(12px, 1.5vw, 40px) clamp(8px, 1vw, 12px) var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) clamp(12px, 1.5vw, 40px) clamp(8px, 1vw, 12px) var(--layout-main-offset);
     width: 100%;
     height: 100vh;
     box-sizing: border-box;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-}
-
-.dashboard-title {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
-    flex-shrink: 0;
-}
-
-/* —— 頁首：僅標題（日期已移至 Filters 工具列） */
-.dashboard-page-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 12px 20px;
-    flex-shrink: 0;
-    margin-bottom: clamp(4px, 0.4vw, 8px);
 }
 
 .dashboard-date-range-bar {
@@ -294,7 +271,7 @@ body.dashboard-page {
 .transaction-company-filter {
     display: none;
     align-items: center;
-    gap: clamp(8px, 0.83vw, 16px);
+    gap: var(--user-gc-inline-pills-gap, 4px);
     flex-wrap: wrap;
     margin-top: clamp(8px, 1vw, 10px);
 }
@@ -313,7 +290,7 @@ body.dashboard-page {
 .transaction-company-buttons {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     align-items: center;
 }
 
@@ -391,7 +368,7 @@ body.dashboard-page {
 body.dashboard-page .dashboard-filter-date-row {
     display: grid;
     grid-template-columns: var(--user-gc-inline-label-w, 9rem) auto;
-    column-gap: 14px;
+    column-gap: var(--user-gc-inline-column-gap, 4px);
     align-items: center;
     padding: 10px 20px;
     margin: 0;
@@ -439,13 +416,13 @@ body.dashboard-page.transaction-page .dashboard-filter-date-row .report-outlined
     max-width: 100%;
 }
 
-/* Group / Company / Currency：沿用 userlist.css 中 body.dashboard-page .user-gc-inline-panel（12px 20px 14px / row-gap 10px） */
+/* Group / Company / Currency：间距见 --user-gc-inline-*-gap（4px） */
 body.dashboard-page.transaction-page .dashboard-filter-panel .transaction-bottom-filters .user-gc-inline-panel,
 body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-panel {
     display: grid;
     grid-template-columns: var(--user-gc-inline-label-w, 9rem) 1fr;
-    column-gap: 14px;
-    row-gap: 10px;
+    column-gap: var(--user-gc-inline-column-gap, 4px);
+    row-gap: var(--user-gc-inline-row-gap, 4px);
     align-items: center;
     padding: 12px 20px 14px;
     border-top: 1px solid rgba(15, 23, 42, 0.06);
@@ -871,7 +848,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .kpi-card-head-label {
     font-size: clamp(13px, 0.95vw, 15px);
-    font-weight: 500;
+    font-weight: 700;
     color: #6b7280;
     font-family: var(--font-heading-page);
     letter-spacing: 0.01em;
@@ -1762,7 +1739,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     .dashboard-container {
         padding-left: var(--layout-main-offset);
         padding-right: 20px;
-        padding-top: 0;
+        padding-top: var(--layout-page-top-gap);
         padding-bottom: 16px;
         max-width: 100vw;
 
@@ -1798,7 +1775,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
     .transaction-company-buttons {
         flex-wrap: wrap;
-        gap: 6px;
+        gap: var(--user-gc-inline-pills-gap, 4px);
     }
 
     .dashboard-kpi-grid {
@@ -1878,7 +1855,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
         flex-direction: column;
         padding-left: var(--layout-main-offset);
         padding-right: 20px;
-        padding-top: 0;
+        padding-top: var(--layout-page-top-gap);
         padding-bottom: 16px;
     }
 
@@ -1909,7 +1886,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     }
 
     .transaction-company-buttons {
-        gap: 4px;
+        gap: var(--user-gc-inline-pills-gap, 4px);
     }
 
     .dashboard-kpi-grid {

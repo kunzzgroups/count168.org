@@ -1,4 +1,5 @@
 import { validateSummaryRowsCurrencyFormula } from "./summarySubmitRowValidation.js";
+import { removeTrailingSourcePercentExpression } from "../../../shared/formula/index.js";
 
 /** Collect summary table DOM rows into API payload objects. */
 export function collectSummarySubmitRowsFromTable(rows, parsedProcessData) {
@@ -263,8 +264,8 @@ export function collectSummarySubmitRowsFromTable(rows, parsedProcessData) {
     // 否则会把用户手动改成 0 的金额又改回公式计算值。
     const sourcePercentForSend = sourcePercent || '1';
     const isSourceOne = Math.abs(parseFloat(sourcePercentForSend) - 1) < 0.0001;
-    const formulaToSend = (isSourceOne && formula && typeof window.removeTrailingSourcePercentExpression === 'function')
-        ? window.removeTrailingSourcePercentExpression?.(formula)
+    const formulaToSend = (isSourceOne && formula)
+        ? removeTrailingSourcePercentExpression(formula)
         : formula;
     if (!hasDisplayAmount && isSourceOne && formulaToSend && formulaToSend.trim() !== '') {
         try {

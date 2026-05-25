@@ -23,7 +23,6 @@ import {
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
 import { getMaintenanceText, MAINTENANCE_I18N } from "../../../translateFile/pages/maintenanceTranslate.js";
 import { usePartnershipAuditWriteGuard } from "../../../utils/audit/usePartnershipAuditWriteGuard.js";
-import PageContentLoader from "../../../components/PageContentLoader.jsx";
 import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
 
 // Componentss
@@ -510,13 +509,12 @@ export default function CaptureMaintenancePage() {
     }
   };
 
-  if (bootLoading || !sessionReady || !me || !cssReady) return <PageContentLoader />;
+  const tableLoading = loading || bootLoading || !cssReady;
 
   return (
     <div className="container">
+      {permissions.length > 1 ? (
       <div className="maintenance-header">
-        <h1 id="maintenance-page-title">{m.pageTitleDataCapture}</h1>
-        {permissions.length > 1 && (
           <div id="maintenance-permission-filter" className="maintenance-permission-filter-header">
             <span className="maintenance-company-label">{m.category}</span>
             <div id="maintenance-permission-buttons" className="maintenance-company-buttons">
@@ -532,8 +530,8 @@ export default function CaptureMaintenancePage() {
               ))}
             </div>
           </div>
-        )}
       </div>
+      ) : null}
 
       {/* Scope table CSS: other maintenance pages share .maintenance-* and win in bundle order */}
       <div className="capture-maintenance-page-root">
@@ -572,7 +570,7 @@ export default function CaptureMaintenancePage() {
             data={captureData}
             listEpoch={captureListEpoch}
             rowKeyCompanyId={captureDataSourceCompanyId ?? companyId}
-            loading={loading}
+            loading={tableLoading}
             listSyncing={listSyncing}
             selectedIds={selectedIds}
             toggleSelect={toggleSelect}

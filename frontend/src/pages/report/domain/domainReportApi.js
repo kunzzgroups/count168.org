@@ -28,12 +28,13 @@ export async function fetchDomainReport(
   return json;
 }
 
-export async function fetchProcesses(companyId) {
+export async function fetchProcesses(companyId, options = {}) {
+  const { signal } = options;
   const params = new URLSearchParams();
   params.append("action", "processes");
   if (companyId) params.append("company_id", companyId);
   const url = buildApiUrl(`api/reports/domain_report_api.php?${params.toString()}`);
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { credentials: "include", signal });
   const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || json.error || "Failed to load processes");

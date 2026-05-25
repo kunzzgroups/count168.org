@@ -32,7 +32,7 @@ body.ownership-page {
 .own-container {
     max-width: none;
     margin: 0;
-    padding: 1px 40px 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) 40px 20px var(--layout-main-offset);
     width: 100%;
     min-height: 100vh;
     box-sizing: border-box;
@@ -40,19 +40,6 @@ body.ownership-page {
     color: var(--color-body-strong);
     display: flex;
     flex-direction: column;
-}
-
-.own-page-title {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    margin-bottom: var(--text-page-title-mb);
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
-    flex-shrink: 0;
 }
 
 /* Separator Line extending beyond container */

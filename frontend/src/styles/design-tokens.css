@@ -26,7 +26,13 @@
   --sidebar-menu-text: #ffffff;
 
   /* 基础侧边栏布局 */
-  --sidebar-lock-width: clamp(160px, 12.98vw, 235px);
+  --sidebar-icon-gap: clamp(0.55rem, 0.5rem + 0.08vw, 0.75rem);
+  /* 菜单文字区：以 “Transaction Payment” 两行显示为基准 */
+  --sidebar-menu-text-track: clamp(8.25rem, 7.85rem + 0.55vw, 9.75rem);
+  --sidebar-menu-trailing-gap: clamp(0.35rem, 0.32rem + 0.06vw, 0.48rem);
+  --sidebar-menu-arrow-gap: 0.15rem;
+  --sidebar-menu-arrow-size: 0.65rem;
+  --sidebar-lock-width: clamp(180px, calc((var(--sidebar-menu-pad-x) * 2) + var(--sidebar-icon-size) + var(--sidebar-icon-gap) + var(--sidebar-menu-text-track) + var(--sidebar-menu-arrow-gap) + var(--sidebar-menu-arrow-size) + var(--sidebar-menu-trailing-gap)), 218px);
   --sidebar-logo-height: clamp(2.8rem, 2.67rem + 0.2vw, 3.6rem);
   --sidebar-avatar-lock: clamp(3.2rem, 4.09rem + 0.18vw, 4rem);
 
@@ -41,11 +47,11 @@
 
   /* 图标与菜单字体 */
   --sidebar-icon-size: clamp(1.4rem, 1.35rem + 0.09vw, 1.8rem);
-  --sidebar-menu-font: clamp(1.3rem, 1.35rem + 0.08vw, 1.6rem);
+  --sidebar-menu-font: clamp(1.3rem, 1.35rem + .08vw, 1.6rem);
 
   /* 菜单内边距 (Padding) */  
   --sidebar-menu-pad-y: clamp(0.95rem, 0.92rem + 0.05vw, 1.2rem);
-  --sidebar-menu-pad-x: clamp(1.3rem, 1.25rem + 0.08vw, 1.6rem);
+  --sidebar-menu-pad-x: clamp(0.7rem, 0.68rem + 0.06vw, 0.95rem);
   --sidebar-submenu-pad-y: clamp(0.6rem, 0.57rem + 0.05vw, 0.8rem);
 
   /* 头部内边距 (Header Padding) */
@@ -57,6 +63,8 @@
   --layout-sidebar-width: var(--sidebar-lock-width);
   --layout-main-gap: var(--space-gap);
   --layout-main-offset: calc(var(--layout-sidebar-width) + var(--layout-main-gap));
+  /* 各业务页主容器顶边距（去掉页面 h1 标题后的统一留白） */
+  --layout-page-top-gap: 10px;
 
   /* --- 品牌 / 文本色（列表页与 dashboard 壳层对齐，供 var 消重）--- */
   --color-page-bg: #e9f1ff;
@@ -67,6 +75,13 @@
   --color-border: #e5e7eb;
   --color-border-muted: #d0d7de;
   --color-muted-fg: #6b7280;
+
+  /* Group / Company / Currency 药丸按钮内边距（全站统一） */
+  --user-gc-segment-padding: 4px clamp(10px, 1.2vw, 18px);
+  /* Group / Company / Currency 展示间距：标签列↔胶囊、行间距、胶囊组间距（全站 4px） */
+  --user-gc-inline-column-gap: 4px;
+  --user-gc-inline-row-gap: 4px;
+  --user-gc-inline-pills-gap: 4px;
 
   /* --- 语义色 --- */
   --color-primary: #3b82f6;
@@ -401,7 +416,7 @@
   }
 
   body.ec-auth-shell {
-    --layout-sidebar-width: 16.5rem;
+    --layout-sidebar-width: var(--sidebar-lock-width);
     --layout-main-gap: 1.2rem;
     --layout-main-offset: calc(var(--layout-sidebar-width) + var(--layout-main-gap));
   }

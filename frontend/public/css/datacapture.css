@@ -57,7 +57,7 @@ body.datacapture-page #root {
 body.datacapture-page .container {
     max-width: none;
     margin: 0;
-    padding: 1px clamp(24px, 2.2vw, 36px) 12px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) clamp(24px, 2.2vw, 36px) 12px var(--layout-main-offset);
     width: 100%;
     height: 100vh;
     height: 100dvh;
@@ -139,17 +139,6 @@ body.datacapture-page .dc-page-toolbar {
     gap: 16px;
     margin: 8px 0 10px;
     min-width: 0;
-}
-
-body.datacapture-page h1 {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
 }
 
 .top-section {
@@ -258,7 +247,7 @@ body.datacapture-page .form-container .user-gc-inline-panel.dc-data-capture-gc-p
     padding: 0 0 6px;
     margin: 0 0 4px;
     border-top: none;
-    row-gap: 8px;
+    row-gap: var(--user-gc-inline-row-gap, 4px);
 }
 
 body.datacapture-page .process-form .dc-form-two-col {
@@ -1356,6 +1345,7 @@ body.datacapture-page .bottom-section .form-actions {
     min-height: 0;
     height: auto;
     scrollbar-gutter: stable;
+    position: relative;
 }
 
 body.datacapture-page .excel-table-container {

@@ -25,7 +25,7 @@ body.dashboard-page.report-page {
 body.dashboard-page.report-page .container {
     max-width: none;
     margin: 0;
-    padding: 1px clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
     width: 100%;
     box-sizing: border-box;
 }
@@ -282,10 +282,6 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     margin-bottom: clamp(16px, 1.35vw, 26px);
 }
 
-.account-page-title {
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-}
 
 
 

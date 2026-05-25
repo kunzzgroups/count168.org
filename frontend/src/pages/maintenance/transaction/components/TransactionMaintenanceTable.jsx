@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useProgressiveScrollExtent } from "../../shared/useProgressiveScrollExtent.js";
 import { formatAmount } from "../transactionMaintenanceLogic.js";
 import MaintenanceCreatedAtDisplay from "../../shared/MaintenanceCreatedAtDisplay.jsx";
 
@@ -166,6 +167,16 @@ export default function TransactionMaintenanceTable({
     rowVirtualizer.measure();
   }, [rows, rowVirtualizer]);
 
+  const vItems = rowVirtualizer.getVirtualItems();
+  const totalH = rowVirtualizer.getTotalSize();
+  const { displayTotalH } = useProgressiveScrollExtent({
+    scrollRef,
+    actualTotalH: totalH,
+    rowCount: rows.length,
+    rowHeightEstimate: ROW_HEIGHT,
+    resetDeps: [rows],
+  });
+
   if (rows.length === 0 && (showSkeleton || statusMessage)) {
     const label = statusMessage || m.loading;
     return (
@@ -191,8 +202,6 @@ export default function TransactionMaintenanceTable({
     );
   }
 
-  const vItems = rowVirtualizer.getVirtualItems();
-  const totalH = rowVirtualizer.getTotalSize();
   const showBlueBar = showSkeleton || Boolean(isPlaceholderData);
 
   return (
@@ -202,7 +211,7 @@ export default function TransactionMaintenanceTable({
         <VirtualTableHeader m={m} />
         <div ref={scrollRef} className="maintenance-virtual-scroll maintenance-virtual-scroll--body" tabIndex={0}>
           {rows.length > 0 ? (
-            <div className="maintenance-virtual-spacer" style={{ height: totalH, position: "relative", width: "100%" }}>
+            <div className="maintenance-virtual-spacer" style={{ height: displayTotalH, position: "relative", width: "100%" }}>
               {vItems.map((virtualRow) => {
                 const row = rows[virtualRow.index];
                 return (

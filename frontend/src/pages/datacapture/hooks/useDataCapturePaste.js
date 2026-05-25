@@ -1,11 +1,12 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   parseCitibetFormatBasedPaste,
   parseCitibetMajorPaymentReport,
   parseCitibetPaymentReport,
 } from "../paste/vendors/dataCaptureCitibetParsers.js";
-import { handleCellPasteEvent } from "../paste/core/dataCapturePasteHandler.js";
+import { handleCellPasteEvent, handleGlobalGridPaste } from "../paste/core/dataCapturePasteHandler.js";
 import { handleGenericPaste } from "../paste/core/dataCaptureGenericPaste.js";
+import { parsePastedData } from "../paste/core/dataCaptureParsePastedData.js";
 import { parseAndFillHtmlTableForText } from "../paste/core/dataCaptureTextHtmlPaste.js";
 import { detectHtmlTableInClipboard } from "../paste/core/dataCaptureClipboard.js";
 import { parseAndFillHtmlTableForWbet,
@@ -32,6 +33,7 @@ export function useDataCapturePaste() {
     window.__DC_PARSE_HTML_WBET_API__ = parseAndFillHtmlTableForWbetApi;
     window.__DC_HANDLE_GENERIC_PASTE__ = handleGenericPaste;
     window.__DC_PARSE_GENERIC_HTML__ = parseAndFillHTMLTable;
+    window.parsePastedData = parsePastedData;
 
     return () => {
       delete window.__DC_HANDLE_CELL_PASTE__;
@@ -44,6 +46,13 @@ export function useDataCapturePaste() {
       delete window.__DC_PARSE_HTML_WBET_API__;
       delete window.__DC_HANDLE_GENERIC_PASTE__;
       delete window.__DC_PARSE_GENERIC_HTML__;
+      delete window.parsePastedData;
     };
+  }, []);
+
+  useEffect(() => {
+    const onGlobalPaste = (e) => handleGlobalGridPaste(e);
+    document.addEventListener("paste", onGlobalPaste);
+    return () => document.removeEventListener("paste", onGlobalPaste);
   }, []);
 }

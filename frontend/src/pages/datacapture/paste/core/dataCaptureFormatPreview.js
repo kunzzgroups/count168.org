@@ -352,9 +352,9 @@ export function renderFormatPreview(tableHtml) {
     const safeTable = tableHtml ? String(tableHtml) : '';
     console.log('Format: renderFormatPreview called, tableHtml length:', safeTable.length);
 
-    // Cache preview HTML for restore/back flow
+    // Cache preview HTML for restore/back flow (sessionStorage via dataCaptureFormat)
     try {
-        localStorage.setItem('capturedFormatPreviewHtml', safeTable);
+        setFormatPreviewHtml(safeTable);
     } catch (_) { }
 
     const docHtml = `<!doctype html>

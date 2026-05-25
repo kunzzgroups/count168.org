@@ -20,7 +20,7 @@
         .container {
             max-width: none;
             margin: 0;
-            padding: 1px 40px 20px var(--layout-main-offset);
+            padding: var(--layout-page-top-gap) 40px 20px var(--layout-main-offset);
             width: 100%;
             min-height: 100vh !important;
             height: auto !important;
@@ -772,7 +772,7 @@
         /* Responsive Design */
         @media (max-width: 768px) {
             .container {
-                padding: 1px 20px 20px var(--layout-main-offset);
+                padding: var(--layout-page-top-gap) 20px 20px var(--layout-main-offset);
             }
             
             .edit-formula-form-container .form-layout {

@@ -34,7 +34,7 @@ body.dashboard-page.maintenance-page {
     max-width: none;
     margin: 0;
     /* 与 Domain/Customer Report、Transaction 主区一致：左侧 sidebar 留白 + 右侧响应式边距 */
-    padding: 1px clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
     width: 100%;
     min-height: 100vh;
     height: auto;
@@ -49,19 +49,8 @@ body.dashboard-page.maintenance-page {
     gap: 16px;
 }
 
-#maintenance-page-title {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
-}
-
 .maintenance-toggle-dropdown {
-    margin-top: 55px;
+    margin-top: 0;
 }
 
 .restaurant-selector {

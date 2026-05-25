@@ -17,6 +17,7 @@ import {
   parseRowDateMs,
   isBankResendDayStartBackendErrorMessage,
   notifyTransactionDataChanged,
+  bankProcessStatusTargetPatch,
   isBankCategoryCompany,
   parseProfitSharingToRows,
   serializeProfitSharingRows,
@@ -866,12 +867,15 @@ export function useBankProcessListPage() {
 
   // Bank list always fetches the full dataset, then filters client-side
   // (matches legacy bank_process_list.js: prevents stale issue_flag/inactive splits).
-  const fetchRows = useCallback(async () => {
+  const fetchRows = useCallback(async (opts = {}) => {
     if (!companyId) return;
+    const silent = !!opts.silent;
+    const preservePage = !!opts.preservePage;
+    const preserveSelection = !!opts.preserveSelection;
     listAbortRef.current?.abort();
     const ac = new AbortController();
     listAbortRef.current = ac;
-    setTableLoading(true);
+    if (!silent) setTableLoading(true);
     try {
       const url = new URL(buildApiUrl("api/processes/processlist_api.php"));
       url.searchParams.set("permission", "Bank");
@@ -883,14 +887,14 @@ export function useBankProcessListPage() {
       if (ac.signal.aborted) return;
       if (!res.ok || !json.success) return notify(apiMsg(json, "failedLoadBankProcesses"), "danger");
       setRows(normalizeRows(json.data));
-      setSelectedIds(new Set());
-      setCurrentPage(1);
+      if (!preserveSelection) setSelectedIds(new Set());
+      if (!preservePage) setCurrentPage(1);
       syncUrl();
     } catch {
       if (ac.signal.aborted) return;
       notify(t("failedLoadBankProcesses"), "danger");
     } finally {
-      if (!ac.signal.aborted) setTableLoading(false);
+      if (!ac.signal.aborted && !silent) setTableLoading(false);
     }
   }, [companyId, search, notify, syncUrl]);
 
@@ -954,6 +958,23 @@ export function useBankProcessListPage() {
     }
   }, [companyId]);
 
+  const handleBankStatusUpdated = useCallback(
+    (row, target, opts = {}) => {
+      const id = row?.id;
+      if (id == null) return;
+      const backgroundSync = opts.backgroundSync !== false;
+      const patch = bankProcessStatusTargetPatch(row, target);
+      setRows((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, ...patch } : r))
+      );
+      if (!backgroundSync) return;
+      notifyTransactionDataChanged("bank-process-list-react-status");
+      void fetchRows({ silent: true, preservePage: true, preserveSelection: true });
+      void loadAccountingInbox({ silent: true });
+    },
+    [fetchRows, loadAccountingInbox]
+  );
+
   // Badge count uses accountingRows; fetch inbox whenever company is ready so the badge is not stuck at 0 until the modal is opened.
   useEffect(() => {
     if (!companyId || loading) return;
@@ -962,8 +983,18 @@ export function useBankProcessListPage() {
 
   // Items can become due when the clock passes a billing boundary; refresh periodically and when the tab becomes visible again.
   useEffect(() => {
-    const onTxChanged = () => {
-      void fetchRows();
+    const onTxChanged = (e) => {
+      const source = e?.detail?.source || "";
+      if (source === "bank-process-list-react-status") {
+        if (resendModalOpen) void refreshResendConfirmLock();
+        return;
+      }
+      const isLocalBank = String(source).startsWith("bank-process-list-react");
+      void fetchRows({
+        silent: isLocalBank,
+        preservePage: isLocalBank,
+        preserveSelection: isLocalBank,
+      });
       if (resendModalOpen) void refreshResendConfirmLock();
     };
     window.addEventListener("tx-data-changed", onTxChanged);
@@ -1821,6 +1852,7 @@ export function useBankProcessListPage() {
     loadCurrencyMeta,
     syncUrl,
     fetchRows,
+    handleBankStatusUpdated,
     loadAccountingInbox,
     resetForm,
     onSwitchCompany,
