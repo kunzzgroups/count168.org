@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect } from "react";
 import { handleDocumentGridKeydown } from "../grid/dataCaptureGridDocumentKeyboard.js";
 import { handleDocumentGridOutsideClick } from "../grid/dataCaptureGridOutsideClick.js";
 import { attachGridMouseDelegation } from "../grid/dataCaptureGridMouseDelegation.js";
-import { handleCellKeydown } from "../grid/dataCaptureGridCellKeydown.js";
+import { handleCellKeydown, focusFormatGridAppendCell } from "../grid/dataCaptureGridCellKeydown.js";
 import { handleCellClick } from "../grid/dataCaptureGridCellClick.js";
 import {
   moveCaretToClickPosition,
@@ -79,6 +79,7 @@ export function useDataCaptureGridInteraction(scriptsReady) {
     window.__DC_HANDLE_CELL_CLICK_REACT__ = handleCellClick;
     window.__DC_HANDLE_CELL_CLICK__ = handleCellClick;
     window.__DC_HANDLE_CELL_KEYDOWN_REACT__ = handleCellKeydown;
+    window.__DC_FOCUS_FORMAT_GRID_APPEND__ = focusFormatGridAppendCell;
     window.__DC_SET_ACTIVE_CELL__ = setActiveCell;
     window.__DC_SET_ACTIVE_CELL_WITHOUT_FOCUS__ = setActiveCellWithoutFocus;
     window.__DC_MOVE_CARET_TO_END__ = moveCaretToEnd;
@@ -153,6 +154,7 @@ export function useDataCaptureGridInteraction(scriptsReady) {
       delete window.__DC_HANDLE_CELL_CLICK_REACT__;
       if (window.__DC_HANDLE_CELL_CLICK__ === handleCellClick) delete window.__DC_HANDLE_CELL_CLICK__;
       delete window.__DC_HANDLE_CELL_KEYDOWN_REACT__;
+      delete window.__DC_FOCUS_FORMAT_GRID_APPEND__;
       delete window.__DC_SHOW_CONTEXT_MENU_REACT__;
       delete window.__DC_SHOW_COLUMN_CONTEXT_MENU_REACT__;
       delete window.__DC_SHOW_ROW_CONTEXT_MENU_REACT__;

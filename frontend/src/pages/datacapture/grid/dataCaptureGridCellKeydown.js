@@ -32,6 +32,72 @@ function addNewRow() {
   return window.__DC_ADD_NEW_ROW__?.() ?? null;
 }
 
+function isFormatCaptureType() {
+  return (window.__DC_GET_CAPTURE_TYPE__?.() || "1.Text") === "2.Format";
+}
+
+/** Move focus to the same column on the next row (add row if needed). */
+export function moveToNextRowFromCell(cell) {
+  if (!cell || cell.contentEditable !== "true") return false;
+
+  const row = cell.parentNode;
+  const table = row?.parentNode;
+  if (!table) return false;
+
+  const currentRowIndex = Array.from(table.children).indexOf(row);
+  const currentCellIndex = Array.from(row.children).indexOf(cell);
+  const nextRow = table.children[currentRowIndex + 1];
+
+  if (nextRow) {
+    const nextRowCell = nextRow.children[currentCellIndex];
+    if (nextRowCell?.contentEditable === "true") {
+      setActiveCell(nextRowCell);
+      return true;
+    }
+    return false;
+  }
+
+  if (table.children.length >= 702) return false;
+
+  const newRowIndex = addNewRow();
+  if (newRowIndex == null) return false;
+
+  const newRow = table.children[newRowIndex];
+  const newCell = newRow?.children[currentCellIndex];
+  if (newCell?.contentEditable === "true") {
+    setActiveCell(newCell);
+    return true;
+  }
+  return false;
+}
+
+/** Focus the first editable data cell on the next append row (2.Format). */
+export function focusFormatGridAppendCell(preferredColIndex = 1) {
+  const tableBody = document.getElementById("tableBody");
+  if (!tableBody) return false;
+
+  let lastDataRow = -1;
+  for (let i = 0; i < tableBody.children.length; i += 1) {
+    const row = tableBody.children[i];
+    const hasData = Array.from(row.querySelectorAll('td[contenteditable="true"]')).some((c) =>
+      String(c.textContent || "").trim()
+    );
+    if (hasData) lastDataRow = i;
+  }
+
+  const rowIndex = lastDataRow + 1;
+  const row = tableBody.children[rowIndex];
+  if (!row) return false;
+
+  const colIndex = preferredColIndex >= 1 ? preferredColIndex : 1;
+  const cell = row.children[colIndex];
+  if (cell?.contentEditable === "true") {
+    setActiveCell(cell);
+    return true;
+  }
+  return false;
+}
+
 export function handleCellKeydown(e) {
   const raw = e.target;
   const cell =
@@ -151,33 +217,14 @@ export function handleCellKeydown(e) {
             break;
 
         case 'Enter':
-            e.preventDefault();
-            const currentRowIndex = Array.from(table.children).indexOf(row);
-            const currentCellIndex = Array.from(row.children).indexOf(cell);
-            const nextRow = table.children[currentRowIndex + 1];
-            if (nextRow) {
-                const nextRowCell = nextRow.children[currentCellIndex];
-                if (nextRowCell && nextRowCell.contentEditable === 'true') {
-                    setActiveCell(nextRowCell);
-                }
-            } else {
-                // 如果到达最后一行，添加新行（但限制最大行数）
-                const currentRows = table.children.length;
-                if (currentRows < 702) { // 限制最大702行 (ZZ)
-                    // Use addNewRow function instead of initializeTable to preserve existing data
-                    const newRowIndex = addNewRow();
-                    if (newRowIndex !== null) {
-                        // 聚焦到新行的相同列
-                        const newRow = table.children[newRowIndex];
-                        if (newRow) {
-                            const newCell = newRow.children[currentCellIndex];
-                            if (newCell && newCell.contentEditable === 'true') {
-                                setActiveCell(newCell);
-                            }
-                        }
-                    }
-                }
+            if (isFormatCaptureType()) {
+                // 2.Format: Enter 单元格内换行；Shift+Enter 进入下一行
+                if (!e.shiftKey) return;
+            } else if (e.shiftKey) {
+                return;
             }
+            e.preventDefault();
+            moveToNextRowFromCell(cell);
             break;
 
         case 'ArrowUp':

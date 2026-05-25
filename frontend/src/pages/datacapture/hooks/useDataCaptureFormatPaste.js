@@ -43,13 +43,21 @@ export function useDataCaptureFormatPaste() {
     if (!area) return undefined;
 
     const onAreaPaste = (e) => handleFormatPasteAreaEvent(e);
+    const onAreaKeyDown = (e) => {
+      if (e.key !== "Enter" || !e.shiftKey) return;
+      if ((window.__DC_GET_CAPTURE_TYPE__?.() || "1.Text") !== "2.Format") return;
+      e.preventDefault();
+      window.__DC_FOCUS_FORMAT_GRID_APPEND__?.(1);
+    };
     area.addEventListener("paste", onAreaPaste);
+    area.addEventListener("keydown", onAreaKeyDown);
 
     const onGlobalPaste = (e) => handleGlobalFormatPaste(e);
     document.addEventListener("paste", onGlobalPaste);
 
     return () => {
       area.removeEventListener("paste", onAreaPaste);
+      area.removeEventListener("keydown", onAreaKeyDown);
       document.removeEventListener("paste", onGlobalPaste);
     };
   }, []);
