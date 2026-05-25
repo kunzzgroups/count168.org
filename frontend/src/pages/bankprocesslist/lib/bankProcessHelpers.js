@@ -1,4 +1,5 @@
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
+import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 
 export const PAGE_SIZE = 20;
 
@@ -327,8 +328,62 @@ export function isBankResendDayStartBackendErrorMessage(text) {
     s.includes("不可与今天相同") ||
     s.includes("Day start cannot be today") ||
     s.includes("Resend 所填 Day start") ||
-    s.includes("same calendar date as the current contract Day start")
+    s.includes("same calendar date as the current contract Day start") ||
+    s.includes("already has a transaction posted") ||
+    s.includes("Duplicate resends are not allowed")
   );
+}
+
+/** @param {string} raw d/m/Y or Y-m-d */
+export function normalizeBankResendDayStartYmd(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmy) {
+    const dd = String(parseInt(dmy[1], 10)).padStart(2, "0");
+    const mm = String(parseInt(dmy[2], 10)).padStart(2, "0");
+    return `${dmy[3]}-${mm}-${dd}`;
+  }
+  return "";
+}
+
+/** @param {{ resend_guard_day_starts_today?: string }} row */
+export function isBankResendScheduleLockedToday(row, dayStartRaw) {
+  if (!row) return false;
+  const ymd = normalizeBankResendDayStartYmd(dayStartRaw);
+  if (!ymd) return false;
+  const csv = String(row.resend_guard_day_starts_today || "").trim();
+  if (csv) {
+    const locked = new Set(
+      csv
+        .split(",")
+        .map((item) => normalizeBankResendDayStartYmd(item))
+        .filter(Boolean)
+    );
+    return locked.has(ymd);
+  }
+  return !!row.resend_today_day_start_locked;
+}
+
+export async function checkBankResendLockFromBackend(processId, dayStartRaw) {
+  const dayStartYmd = normalizeBankResendDayStartYmd(dayStartRaw);
+  if (!processId || !dayStartYmd) return false;
+  const res = await fetch(buildApiUrl("api/bankprocess_maintenance/resend_accounting_due_api.php"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      bank_process_id: processId,
+      mode: "check_daystart_lock",
+      day_start: dayStartYmd,
+    }),
+  });
+  const json = await res.json();
+  if (!res.ok || !json?.success) {
+    throw new Error(json?.message || "Check failed");
+  }
+  return !!(json.data && json.data.locked);
 }
 
 export function notifyTransactionDataChanged(sourceTag) {

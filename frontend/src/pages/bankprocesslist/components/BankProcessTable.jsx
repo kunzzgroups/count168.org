@@ -80,6 +80,7 @@ export default function BankProcessTable({
   openEdit,
   openRemarkModal,
   openResendModal,
+  isBankResendScheduleLockedToday,
   sortColumn,
   sortDirection,
   onSort,
@@ -322,7 +323,16 @@ export default function BankProcessTable({
                               type="button"
                               className="bank-resend-btn"
                               aria-label={t("resendToAccountingDue")}
-                              title={t("resend")}
+                              title={
+                                typeof isBankResendScheduleLockedToday === "function" &&
+                                isBankResendScheduleLockedToday(r, r.day_start || r.date)
+                                  ? t("resendLockedPostedToday")
+                                  : t("resend")
+                              }
+                              disabled={
+                                typeof isBankResendScheduleLockedToday === "function" &&
+                                isBankResendScheduleLockedToday(r, r.day_start || r.date)
+                              }
                               onClick={() => openResendModal(r)}
                               style={{ marginLeft: 6 }}
                             >

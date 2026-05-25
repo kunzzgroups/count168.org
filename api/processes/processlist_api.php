@@ -840,16 +840,41 @@ function getBankProcesses() {
         $resendPendingSelect = $hasResendPendingTable
             ? "(EXISTS (SELECT 1 FROM bank_process_maintenance_resend_pending rp WHERE rp.company_id = bp.company_id AND rp.bank_process_id = bp.id)) AS maintenance_resend_pending"
             : "0 AS maintenance_resend_pending";
-        $resendTodayDayStartLockedSelect = $hasResendDailyGuardTable
-            ? "(EXISTS (SELECT 1 FROM bank_process_accounting_resend_daily_guard rg WHERE rg.company_id = bp.company_id AND rg.bank_process_id = bp.id AND rg.resend_day_start = CURDATE() AND rg.guard_date = CURDATE())) AS resend_today_day_start_locked"
-            : "0 AS resend_today_day_start_locked";
-        $resendGuardDayStartsTodaySelect = $hasResendDailyGuardTable
+        $resendTodayDayStartLockedSelect = $hasResendDailyGuardTable && $hasSourceBankProcessId
+            ? "(EXISTS (
+                SELECT 1 FROM bank_process_accounting_resend_daily_guard rg
+                INNER JOIN transactions t ON t.source_bank_process_id = bp.id
+                  AND DATE(t.transaction_date) = rg.resend_day_start
+                INNER JOIN account a ON t.account_id = a.id
+                INNER JOIN account_company ac ON a.id = ac.account_id AND ac.company_id = bp.company_id
+                WHERE rg.company_id = bp.company_id
+                  AND rg.bank_process_id = bp.id
+                  AND rg.guard_date = CURDATE()
+                LIMIT 1
+              )) AS resend_today_day_start_locked"
+            : ($hasResendDailyGuardTable
+                ? "(EXISTS (SELECT 1 FROM bank_process_accounting_resend_daily_guard rg WHERE rg.company_id = bp.company_id AND rg.bank_process_id = bp.id AND rg.guard_date = CURDATE())) AS resend_today_day_start_locked"
+                : "0 AS resend_today_day_start_locked");
+        $resendGuardDayStartsTodaySelect = $hasResendDailyGuardTable && $hasSourceBankProcessId
             ? "(SELECT GROUP_CONCAT(DISTINCT DATE_FORMAT(rg2.resend_day_start, '%Y-%m-%d') ORDER BY rg2.resend_day_start SEPARATOR ',')
                 FROM bank_process_accounting_resend_daily_guard rg2
                WHERE rg2.company_id = bp.company_id
                  AND rg2.bank_process_id = bp.id
-                 AND rg2.guard_date = CURDATE()) AS resend_guard_day_starts_today"
-            : "'' AS resend_guard_day_starts_today";
+                 AND rg2.guard_date = CURDATE()
+                 AND EXISTS (
+                   SELECT 1 FROM transactions t2
+                   INNER JOIN account a2 ON t2.account_id = a2.id
+                   INNER JOIN account_company ac2 ON a2.id = ac2.account_id AND ac2.company_id = bp.company_id
+                   WHERE t2.source_bank_process_id = bp.id
+                     AND DATE(t2.transaction_date) = rg2.resend_day_start
+                 )) AS resend_guard_day_starts_today"
+            : ($hasResendDailyGuardTable
+                ? "(SELECT GROUP_CONCAT(DISTINCT DATE_FORMAT(rg2.resend_day_start, '%Y-%m-%d') ORDER BY rg2.resend_day_start SEPARATOR ',')
+                    FROM bank_process_accounting_resend_daily_guard rg2
+                   WHERE rg2.company_id = bp.company_id
+                     AND rg2.bank_process_id = bp.id
+                     AND rg2.guard_date = CURDATE()) AS resend_guard_day_starts_today"
+                : "'' AS resend_guard_day_starts_today");
         $issueFlagSql = getBankProcessIssueFlagSql('bp', $hasIssueFlagColumn, $hasFlagColumn);
         $issueFlagSelect = $hasAnyIssueFlagColumn ? $issueFlagSql . " AS issue_flag" : "NULL AS issue_flag";
         $normalizedIssueFlagSql = $hasAnyIssueFlagColumn

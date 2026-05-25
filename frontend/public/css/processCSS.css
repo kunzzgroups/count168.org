@@ -2869,8 +2869,9 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
 
 .process-page .bank-resend-btn:disabled,
 .process-page .bank-resent-btn:disabled {
-    opacity: 0.55;
-    cursor: wait;
+    opacity: 0.45;
+    cursor: not-allowed;
+    color: #9ca3af;
 }
 
 .process-page .bank-resend-btn svg,
@@ -5015,9 +5016,10 @@ body.process-page > .process-modal {
 }
 
 .process-btn-resend:disabled {
-    opacity: 0.75;
-    cursor: wait;
+    opacity: 0.55;
+    cursor: not-allowed;
     transform: none;
+    filter: grayscale(0.35);
 }
 
 /* Resend to Accounting Due — layout & form panel */

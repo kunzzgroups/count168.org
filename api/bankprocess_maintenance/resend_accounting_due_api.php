@@ -109,19 +109,9 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
     ], JSON_UNESCAPED_UNICODE);
 }
 
-function bank_resend_hasSameDayRecord(PDO $pdo, int $companyId, int $bankProcessId, string $dayStartYmd): bool
+function bank_resend_isLockedToday(PDO $pdo, int $companyId, int $bankProcessId, string $dayStartYmd): bool
 {
-    $stmt = $pdo->prepare(
-        "SELECT 1
-         FROM bank_process_accounting_resend_daily_guard
-         WHERE company_id = ?
-           AND bank_process_id = ?
-           AND resend_day_start = ?
-           AND guard_date = CURDATE()
-         LIMIT 1"
-    );
-    $stmt->execute([$companyId, $bankProcessId, $dayStartYmd]);
-    return (bool) $stmt->fetchColumn();
+    return bmp_accountingResendIsLockedToday($pdo, $companyId, $bankProcessId, $dayStartYmd);
 }
 
 /** @return string|null */
@@ -174,7 +164,7 @@ try {
         }
         bmp_ensureAccountingResendDailyGuardTable($pdo);
         bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $company_id, $bankProcessId);
-        $locked = bank_resend_hasSameDayRecord($pdo, $company_id, $bankProcessId, $dayStartYmd);
+        $locked = bank_resend_isLockedToday($pdo, $company_id, $bankProcessId, $dayStartYmd);
         jsonResponse(true, '', [
             'locked' => $locked,
             'day_start' => $dayStartYmd,
@@ -240,8 +230,8 @@ try {
     if ($effectiveDayStartYmd === null) {
         throw new Exception('无法识别 Day start，Resend 仅支持按 Day start 当月补单月记录。');
     }
-    if (bank_resend_hasSameDayRecord($pdo, $company_id, $bankProcessId, $effectiveDayStartYmd)) {
-        throw new Exception('This process has already been resent for this Day start today. Duplicate resends are not allowed.');
+    if (bank_resend_isLockedToday($pdo, $company_id, $bankProcessId, $effectiveDayStartYmd)) {
+        throw new Exception('This process already has a transaction posted for this Day start today. Delete it from Bank Process Maintenance before resending.');
     }
 
     $pdo->beginTransaction();
@@ -278,6 +268,14 @@ try {
                )"
         );
         $delMonthPap->execute([$company_id, $bankProcessId, $newDayStart, $newDayEnd, $startYmInt, $endYmInt]);
+        // Due Delete 留下的 consolidated *_skipped（锚日可能不在区间内）须一并清除，否则 Inbox 仍视为已处理。
+        $delAnchorConsolidated = $pdo->prepare(
+            "DELETE FROM process_accounting_posted
+             WHERE company_id = ? AND process_id = ?
+               AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped')
+               AND DATE(posted_date) = ?"
+        );
+        $delAnchorConsolidated->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
     } else {
         // 仅清除 day_start 所在月份的 posted 标记，避免一次 Resend 把整合同期都补回。
         // 兜底：
@@ -292,6 +290,13 @@ try {
                )"
         );
         $delMonthPap->execute([$company_id, $bankProcessId, $targetYear, $targetMonth]);
+        $delAnchorConsolidated = $pdo->prepare(
+            "DELETE FROM process_accounting_posted
+             WHERE company_id = ? AND process_id = ?
+               AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped')
+               AND DATE(posted_date) = ?"
+        );
+        $delAnchorConsolidated->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
     }
     $removedPap = $delMonthPap->rowCount();
 
@@ -341,20 +346,6 @@ try {
         );
         $flg->execute([$bankProcessId, $company_id]);
     }
-    $insGuard = $pdo->prepare(
-        "INSERT INTO bank_process_accounting_resend_daily_guard
-         (company_id, bank_process_id, resend_day_start, guard_date)
-         VALUES (?, ?, ?, CURDATE())"
-    );
-    try {
-        $insGuard->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
-    } catch (PDOException $e) {
-        if ((string) $e->getCode() === '23000') {
-            throw new Exception('This process has already been resent for this Day start today. Duplicate resends are not allowed.');
-        }
-        throw $e;
-    }
-
     $pdo->commit();
     jsonResponse(true, 'Done: This process can appear in Accounting Due again.', [
         'bank_process_id' => $bankProcessId,
