@@ -8,7 +8,6 @@ export function handleCitibetPaste(e, pastedData, anchorCell, captureType, prePa
 
   const { dataMatrix, maxRows, maxCols, usedMajorParser } = parsed;
   const { successCount } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
-    startColOverride: 0,
     uppercaseValues: true,
   });
 

@@ -55,19 +55,6 @@ function pasteToSelectedCells() {
   window.pasteToSelectedCells?.();
 }
 
-function shouldPasteToGrid(activeElement) {
-  if (!document.body.classList.contains("datacapture-page")) return false;
-  if (!activeElement || activeElement === document.body) return true;
-
-  const tag = activeElement.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return false;
-  if (activeElement.closest(".custom-select-search")) return false;
-  if (activeElement.closest("#capture_process_dropdown")) return false;
-  if (activeElement.closest("#pasteAreaFormat")) return false;
-
-  return true;
-}
-
 export function handleDocumentGridKeydown(e) {
 const key = (e.key || '').toLowerCase();
     // Check if cell is being edited (cell has focus)
@@ -76,22 +63,18 @@ const key = (e.key || '').toLowerCase();
         activeElement.contentEditable === 'true' &&
         activeElement.closest('#dataTable');
 
-    // If table is not active, only allow Ctrl+Z undo and Ctrl+V paste
+    // If table is not active, only allow Ctrl+Z undo, ignore other table-related keyboard events
     if (!isTableActive() && !isEditingCell) {
+        // Allow Ctrl+Z undo even when table is not active (for paste history)
         if ((e.ctrlKey || e.metaKey) && key === 'z' && !e.shiftKey) {
+            // Check if there's paste history to undo
             if (hasPasteHistory()) {
                 e.preventDefault();
                 undoLastPaste();
             }
             return;
         }
-        if ((e.ctrlKey || e.metaKey) && key === 'v') {
-            if (shouldPasteToGrid(activeElement)) {
-                e.preventDefault();
-                pasteToSelectedCells();
-            }
-            return;
-        }
+        // Ignore all other table-related keyboard events when table is not active
         return;
     }
 
@@ -302,7 +285,8 @@ const key = (e.key || '').toLowerCase();
             e.preventDefault();
             copySelectedCells();
         }
-    } else if ((e.ctrlKey || e.metaKey) && key === 'v') {
+    } else if (e.ctrlKey && key === 'v') {
+        // Ctrl+V paste to selected cells (unless cell is being edited)
         if (!isEditingCell) {
             e.preventDefault();
             pasteToSelectedCells();

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { translateBankProcessApiMessage } from "../../../translateFile/pages/bankProcessTranslate.js";
 import { deriveBankProcessUiStatus, normalizeBankIssueFlag, normalizeBankProcessStatus } from "../lib/bankProcessHelpers.js";
@@ -15,7 +15,18 @@ function statusLabel(t, key) {
   return t(STATUS_LABEL_KEYS[key] || key);
 }
 
-export default function BankProcessStatusControl({ row, onUpdated, notify: doNotify, buildApiUrl: apiUrl, t, lang }) {
+const MENU_GAP = 6;
+
+export default function BankProcessStatusControl({
+  row,
+  onUpdated,
+  notify: doNotify,
+  buildApiUrl: apiUrl,
+  t,
+  lang,
+  /** When true, menu opens above the pill (used for last rows near table footer). */
+  openMenuUp = false,
+}) {
   const apiMsg = (json) =>
     translateBankProcessApiMessage(
       lang,
@@ -26,42 +37,56 @@ export default function BankProcessStatusControl({ row, onUpdated, notify: doNot
       t("statusUpdateFailed")
     );
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, minWidth: 118 });
+  const [menuPos, setMenuPos] = useState({ top: 0, bottom: null, left: 0, minWidth: 118 });
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
   const ui = deriveBankProcessUiStatus(row);
   const pillClass = `bank-status-button is-${ui.toLowerCase().replace(/_/g, "-")}`;
 
-  useEffect(() => {
-    if (!open) return;
-    const updateMenuPos = () => {
-      const btn = buttonRef.current;
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
+  const updateMenuPos = () => {
+    const btn = buttonRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    if (openMenuUp) {
       setMenuPos({
-        top: Math.round(rect.bottom + 6),
+        top: null,
+        bottom: Math.round(window.innerHeight - rect.top + MENU_GAP),
         left: Math.round(rect.left),
         minWidth: Math.max(118, Math.round(rect.width)),
       });
-    };
+    } else {
+      setMenuPos({
+        top: Math.round(rect.bottom + MENU_GAP),
+        bottom: null,
+        left: Math.round(rect.left),
+        minWidth: Math.max(118, Math.round(rect.width)),
+      });
+    }
+  };
 
+  useLayoutEffect(() => {
+    if (!open) return undefined;
     updateMenuPos();
+    const onReflow = () => updateMenuPos();
+    window.addEventListener("resize", onReflow);
+    window.addEventListener("scroll", onReflow, true);
+    return () => {
+      window.removeEventListener("resize", onReflow);
+      window.removeEventListener("scroll", onReflow, true);
+    };
+  }, [open, openMenuUp]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const onDoc = (e) => {
       const target = e.target;
       const clickedInsideTrigger = !!(wrapRef.current && wrapRef.current.contains(target));
       const clickedInsideMenu = !!(menuRef.current && menuRef.current.contains(target));
       if (!clickedInsideTrigger && !clickedInsideMenu) setOpen(false);
     };
-    const onScroll = () => updateMenuPos();
     document.addEventListener("mousedown", onDoc);
-    window.addEventListener("resize", updateMenuPos);
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      window.removeEventListener("resize", updateMenuPos);
-      window.removeEventListener("scroll", onScroll, true);
-    };
+    return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
   const postIssueFlag = async (id, issueFlag) => {
@@ -133,7 +158,7 @@ export default function BankProcessStatusControl({ row, onUpdated, notify: doNot
         ? createPortal(
             <div
               ref={menuRef}
-              className="bank-status-menu bank-status-menu-floating"
+              className={`bank-status-menu bank-status-menu-floating${openMenuUp ? " bank-status-menu-floating--up" : ""}`}
               role="listbox"
               style={{
                 display: "flex",
@@ -141,7 +166,8 @@ export default function BankProcessStatusControl({ row, onUpdated, notify: doNot
                 alignItems: "stretch",
                 whiteSpace: "normal",
                 position: "fixed",
-                top: menuPos.top,
+                top: openMenuUp ? "auto" : menuPos.top,
+                bottom: openMenuUp ? menuPos.bottom : "auto",
                 left: menuPos.left,
                 minWidth: menuPos.minWidth,
                 zIndex: 10020,

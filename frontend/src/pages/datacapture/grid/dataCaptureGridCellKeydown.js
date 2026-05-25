@@ -58,11 +58,11 @@ export function handleCellKeydown(e) {
     const row = cell.parentNode;
     const table = row.parentNode;
 
+    // 在编辑模式（typing mode）下，阻止 Ctrl+V 粘贴
     const hasFocus = document.activeElement === cell;
     if (hasFocus && (e.ctrlKey || e.metaKey) && key === 'v') {
         e.preventDefault();
         e.stopPropagation();
-        window.pasteToSelectedCells?.();
         return;
     }
 
