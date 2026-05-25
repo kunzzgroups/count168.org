@@ -349,14 +349,8 @@ function isResendConsolidatedAlreadyPosted(PDO $pdo, int $companyId, int $proces
                 return true;
             }
         }
-        // 兜底：历史数据/旧逻辑可能让 consolidated 的 posted_date 与当前锚点不一致，
-        // 但同 process 只要已有 consolidated(_skipped) 即视为该期已处理，避免 Delete 后残留。
-        $stmtAny = $pdo->prepare(
-            "SELECT 1 FROM process_accounting_posted WHERE company_id = ? AND process_id = ?
-             AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped') LIMIT 1"
-        );
-        $stmtAny->execute([$companyId, $processId]);
-        return (bool) $stmtAny->fetch();
+        // 仅按当前锚日判断；Due Delete 的 *_skipped 若锚点一致由 Resend 清除，不在此兜底整 process 封死。
+        return false;
     } catch (Throwable $e) {
         // 兼容极旧库（无 period_type）：退化为同 process 同锚点日期存在 posted 即视为已处理。
         if ($anchorYmd !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorYmd)) {

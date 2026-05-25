@@ -32,6 +32,9 @@ import {
   filterBankPickAccounts,
   sortBankProcessTableRows,
   accountingDuePeriodType,
+  checkBankResendLockFromBackend,
+  isBankResendScheduleLockedToday,
+  normalizeBankResendDayStartYmd,
 } from "../lib/bankProcessHelpers.js";
 import { dedupeCompanyRowsForSwitcher } from "../../processlist/processListHelpers.js";
 import { prefetchGamesProcessListPayload } from "../../processlist/processRoutePrefetch.js";
@@ -145,6 +148,9 @@ export function useBankProcessListPage() {
   const [resendDayEnd, setResendDayEnd] = useState("");
   const [resendFrequency, setResendFrequency] = useState("1st_of_every_month");
   const [resendInlineError, setResendInlineError] = useState("");
+  const [resendConfirmDisabled, setResendConfirmDisabled] = useState(false);
+  const [resendLockChecking, setResendLockChecking] = useState(false);
+  const resendLockCheckSeqRef = useRef(0);
 
   const [sortColumn, setSortColumn] = useState("supplier");
   const [sortDirection, setSortDirection] = useState("asc");
@@ -807,6 +813,39 @@ export function useBankProcessListPage() {
     setResendDayEnd("");
   }, [resendModalOpen, resendFrequency]);
 
+  const refreshResendConfirmLock = useCallback(async () => {
+    const id = resendTarget?.id;
+    const dayStartYmd = normalizeBankResendDayStartYmd(resendDayStart);
+    if (!resendModalOpen || !id || !dayStartYmd) {
+      setResendConfirmDisabled(false);
+      setResendLockChecking(false);
+      return;
+    }
+    const quickLocked = isBankResendScheduleLockedToday(resendTarget, resendDayStart);
+    const seq = ++resendLockCheckSeqRef.current;
+    setResendLockChecking(true);
+    setResendConfirmDisabled(true);
+    try {
+      const backendLocked = await checkBankResendLockFromBackend(id, resendDayStart);
+      if (seq !== resendLockCheckSeqRef.current) return;
+      setResendConfirmDisabled(backendLocked);
+    } catch {
+      if (seq !== resendLockCheckSeqRef.current) return;
+      setResendConfirmDisabled(quickLocked);
+    } finally {
+      if (seq === resendLockCheckSeqRef.current) setResendLockChecking(false);
+    }
+  }, [resendModalOpen, resendTarget, resendDayStart]);
+
+  useEffect(() => {
+    if (!resendModalOpen) {
+      setResendConfirmDisabled(false);
+      setResendLockChecking(false);
+      return;
+    }
+    void refreshResendConfirmLock();
+  }, [resendModalOpen, resendDayStart, resendDayEnd, resendTarget?.id, refreshResendConfirmLock]);
+
   const syncUrl = useCallback(() => {
     const url = new URL(window.location.href);
     if (companyId) url.searchParams.set("company_id", String(companyId));
@@ -922,6 +961,15 @@ export function useBankProcessListPage() {
   }, [companyId, loading, loadAccountingInbox]);
 
   // Items can become due when the clock passes a billing boundary; refresh periodically and when the tab becomes visible again.
+  useEffect(() => {
+    const onTxChanged = () => {
+      void fetchRows();
+      if (resendModalOpen) void refreshResendConfirmLock();
+    };
+    window.addEventListener("tx-data-changed", onTxChanged);
+    return () => window.removeEventListener("tx-data-changed", onTxChanged);
+  }, [fetchRows, resendModalOpen, refreshResendConfirmLock]);
+
   useEffect(() => {
     if (!companyId || loading) return;
     const tick = () => {
@@ -1391,6 +1439,7 @@ export function useBankProcessListPage() {
       notify(apiMsg(json, "resendSuccessful"));
       notifyTransactionDataChanged("bank-process-list-react");
       void loadAccountingInbox({ silent: true });
+      void fetchRows();
       setResendModalOpen(false); setResendTarget(null);
     } catch { notify(t("resendFailed"), "danger"); }
   };
@@ -1685,6 +1734,9 @@ export function useBankProcessListPage() {
     setResendFrequency,
     resendInlineError,
     setResendInlineError,
+    resendConfirmDisabled,
+    resendLockChecking,
+    isBankResendScheduleLockedToday,
     sortColumn,
     sortDirection,
     remarkModalOpen,

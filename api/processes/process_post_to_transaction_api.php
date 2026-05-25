@@ -1081,6 +1081,7 @@ try {
             continue;
         }
         $skipCurrentPair = false;
+        $pairPostedTxn = false;
         $monthlyProrationPsRatio = null;
         $dayEndTailAnchorYmd = null;
         $periodType = trim((string) ($pair['period_type'] ?? 'monthly'));
@@ -1434,6 +1435,7 @@ try {
                 : ("Process: Buy Price for $processLabel" . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
+            $pairPostedTxn = true;
         }
         // Sell Price → Customer：用 LOSE + 正数 amount，Win/Loss 计算时按 -amount 显示在右边「-」侧（Customer 要还钱）；Cost/Profit/Profit Sharing 用 WIN + 正数显示在左边「+」侧
         if (!empty($p['customer_id']) && money_cmp($price, '0') > 0) {
@@ -1446,6 +1448,7 @@ try {
                 : ("Process: Sell Price for $processLabel" . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
+            $pairPostedTxn = true;
         }
         // Profit：先扣 Profit Sharing 再入 Company；Profit Sharing 每笔入对应 account（均记 Win/Loss）
         // 1st of every month 首月按比例时，Profit Sharing 金额也按「剩余天数/当月天数」折算，再分给各 account
@@ -1499,6 +1502,7 @@ try {
                 : ("Process: Profit for $processLabel" . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
+            $pairPostedTxn = true;
         }
         foreach ($profitSharingResolved as $ps) {
             $txn = $baseTxn;
@@ -1509,9 +1513,17 @@ try {
                 : ("Process: Profit Sharing for $processLabel (" . $ps['account_text'] . ' ' . money_out($ps['amount'], 2) . ')' . $suffix . $resendEndMarker);
             insertTransactionRow($pdo, $txn);
             $createdCount++;
+            $pairPostedTxn = true;
         }
 
         recordProcessAccountingPosted($pdo, $companyId, (int) $p['id'], $postedDateForInbox, $periodType, $has_period_type);
+
+        if ($has_source_bank_process_id && $pairPostedTxn) {
+            $anchorForGuard = bankProcessDateFieldToYmd($transactionDate);
+            if ($anchorForGuard !== null && $anchorForGuard !== '') {
+                bmp_recordAccountingResendDailyGuardOnTransactionPost($pdo, $companyId, (int) $p['id'], $anchorForGuard);
+            }
+        }
 
         if ($periodType === 'once_one_off' && $frequency === 'once' && trim((string) ($p['status'] ?? '')) === 'active') {
             $updOnceInactive = $pdo->prepare(

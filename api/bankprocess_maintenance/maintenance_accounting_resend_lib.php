@@ -487,8 +487,8 @@ if (!function_exists('bmp_normalizeSqlDateYmd')) {
 
 if (!function_exists('bmp_accountingResendDailyGuardHasLiveEvidence')) {
     /**
-     * 仍视为「该次 Resend 锚日下的补单结果尚在」：仅看与 resend_day_start 同一天的入账行
-     * （与 Maintenance 按 transaction_date 筛选一致）。不再用「当日任意该 process 交易」以免删单后仍误拦。
+     * 该 process 在 Maintenance 是否仍有对应锚日（transaction_date）的入账交易。
+     * Accounting Due Delete（*_skipped）不算；仅成功 Post to Transaction 后会有行。
      */
     function bmp_accountingResendDailyGuardHasLiveEvidence(
         PDO $pdo,
@@ -511,6 +511,66 @@ if (!function_exists('bmp_accountingResendDailyGuardHasLiveEvidence')) {
         );
         $stmt->execute([$companyId, $bankProcessId, $resendDayStartYmd]);
         return (bool) $stmt->fetchColumn();
+    }
+}
+
+if (!function_exists('bmp_accountingResendIsLockedToday')) {
+    /**
+     * 当日是否禁止再次 Resend：须同时满足 guard_date=今天 且 Maintenance 仍有对应锚日交易。
+     * Resend 本身不写 guard；Accounting Due Delete 不写交易 → 不锁。
+     * 次日 guard_date 不匹配 → 可再 Resend（即使昨日交易仍在库中）。
+     */
+    function bmp_accountingResendIsLockedToday(
+        PDO $pdo,
+        int $companyId,
+        int $bankProcessId,
+        string $resendDayStartYmd
+    ): bool {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $resendDayStartYmd)) {
+            return false;
+        }
+        bmp_ensureAccountingResendDailyGuardTable($pdo);
+        bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $companyId, $bankProcessId);
+        $stmt = $pdo->prepare(
+            "SELECT 1
+             FROM bank_process_accounting_resend_daily_guard
+             WHERE company_id = ?
+               AND bank_process_id = ?
+               AND resend_day_start = ?
+               AND guard_date = CURDATE()
+             LIMIT 1"
+        );
+        $stmt->execute([$companyId, $bankProcessId, $resendDayStartYmd]);
+        if (!(bool) $stmt->fetchColumn()) {
+            return false;
+        }
+
+        return bmp_accountingResendDailyGuardHasLiveEvidence($pdo, $companyId, $bankProcessId, $resendDayStartYmd);
+    }
+}
+
+if (!function_exists('bmp_recordAccountingResendDailyGuardOnTransactionPost')) {
+    /** Bank Process 成功 Post to Transaction 后写入当日 guard（锚日 = transaction_date）。 */
+    function bmp_recordAccountingResendDailyGuardOnTransactionPost(
+        PDO $pdo,
+        int $companyId,
+        int $bankProcessId,
+        string $resendDayStartYmd
+    ): void {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $resendDayStartYmd)) {
+            return;
+        }
+        bmp_ensureAccountingResendDailyGuardTable($pdo);
+        $ins = $pdo->prepare(
+            "INSERT IGNORE INTO bank_process_accounting_resend_daily_guard
+             (company_id, bank_process_id, resend_day_start, guard_date)
+             VALUES (?, ?, ?, CURDATE())"
+        );
+        try {
+            $ins->execute([$companyId, $bankProcessId, $resendDayStartYmd]);
+        } catch (PDOException $e) {
+            // ignore duplicate same day
+        }
     }
 }
 
