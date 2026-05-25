@@ -13,8 +13,12 @@ import {
   setFormatGridReady,
   toggleTableDisplayForFormat,
 } from "../format/dataCaptureFormat.js";
-import { escapeHtml, renderFormatPreview } from "../paste/core/dataCaptureFormatPreview.js";
+import { renderFormatPreview } from "../paste/core/dataCaptureFormatPreview.js";
 import { normalizeCaptureType } from "../lib/dataCaptureFormRules.js";
+import {
+  buildFormatPreviewHtmlFromTableSnapshot,
+  snapshotDataCellDomIndex,
+} from "../lib/dataCaptureTableSnapshot.js";
 
 function rebuildDefaultColumnHeaders(headerRow) {
   headerRow.innerHTML = "<th></th>";
@@ -113,8 +117,10 @@ export async function restoreCaptureTableFromData(tableData, savedType) {
       if (!tableRow) return;
 
       rowData.forEach((cellData, colIndex) => {
-        if (cellData.type !== "data" || colIndex <= 0) return;
-        const cell = tableRow.children[colIndex];
+        if (cellData.type !== "data") return;
+        const domColIndex = snapshotDataCellDomIndex(cellData, colIndex);
+        if (domColIndex == null) return;
+        const cell = tableRow.children[domColIndex];
         if (!cell || cell.contentEditable !== "true") return;
 
         cell.removeAttribute("colspan");
@@ -122,7 +128,7 @@ export async function restoreCaptureTableFromData(tableData, savedType) {
         if (cellData.colspan && cellData.colspan > 1) {
           cell.setAttribute("colspan", String(cellData.colspan));
           for (let i = 1; i < cellData.colspan; i += 1) {
-            const hiddenCellIndex = colIndex + i;
+            const hiddenCellIndex = domColIndex + i;
             if (tableRow.children[hiddenCellIndex]) {
               tableRow.children[hiddenCellIndex].style.display = "none";
             }
@@ -147,18 +153,11 @@ export async function restoreCaptureTableFromData(tableData, savedType) {
     if (hasData) {
       setFormatGridReady(true);
       try {
-        let html = '<table border="1" cellspacing="0" cellpadding="2"><tbody>';
-        tableData.rows.forEach((rowData) => {
-          html += "<tr>";
-          rowData.forEach((cell) => {
-            const v = cell && typeof cell.value !== "undefined" ? cell.value : "";
-            html += `<td>${escapeHtml(v)}</td>`;
-          });
-          html += "</tr>";
-        });
-        html += "</tbody></table>";
-        setFormatPreviewHtml(html);
-        renderFormatPreview(html);
+        const html = buildFormatPreviewHtmlFromTableSnapshot(tableData);
+        if (html) {
+          setFormatPreviewHtml(html);
+          renderFormatPreview(html);
+        }
       } catch {
         /* ignore */
       }

@@ -160,3 +160,37 @@ export function tableSnapshotHasData(tableData) {
     row.some((cell) => cell.type === "data" && String(cell.value || "").trim() !== "")
   );
 }
+
+/** DOM column index for a snapshot data cell (children[0] is row header). */
+export function snapshotDataCellDomIndex(cellData, rowDataIndex) {
+  if (cellData?.type !== "data") return null;
+  if (typeof cellData.col === "number") return cellData.col + 1;
+  return rowDataIndex >= 1 ? rowDataIndex : null;
+}
+
+/** Build 2.Format preview HTML from snapshot — data cells only, no row labels. */
+export function buildFormatPreviewHtmlFromTableSnapshot(tableData) {
+  if (!tableData?.rows?.length) return "";
+
+  let html = '<table border="1" cellspacing="0" cellpadding="2"><tbody>';
+  tableData.rows.forEach((rowData) => {
+    html += "<tr>";
+    rowData.forEach((cell) => {
+      if (cell.type !== "data") return;
+      const v =
+        cell.value != null ? String(cell.value) : "";
+      html += `<td>${v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`;
+    });
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  return html;
+}
+
+export function domGridHasEditableData() {
+  const tableBody = document.getElementById("tableBody");
+  if (!tableBody) return false;
+  return Array.from(tableBody.querySelectorAll('td[contenteditable="true"]')).some((cell) =>
+    String(cell.textContent || "").trim()
+  );
+}

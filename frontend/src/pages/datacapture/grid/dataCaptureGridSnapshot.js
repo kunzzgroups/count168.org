@@ -1,6 +1,7 @@
 /**
  * Read / write grid cell values from the DOM table (#dataTable).
  */
+import { snapshotDataCellDomIndex } from "../lib/dataCaptureTableSnapshot.js";
 
 export function readGridDimensions() {
   const tableBody = document.getElementById("tableBody");
@@ -36,9 +37,12 @@ export function populateGridFromSnapshot(tableData) {
     if (!tableRow) return;
 
     rowData.forEach((cellData, colIndex) => {
-      if (cellData.type !== "data" || colIndex <= 0) return;
+      if (cellData.type !== "data") return;
 
-      const cell = tableRow.children[colIndex];
+      const domColIndex = snapshotDataCellDomIndex(cellData, colIndex);
+      if (domColIndex == null) return;
+
+      const cell = tableRow.children[domColIndex];
       if (!cell || cell.contentEditable !== "true") return;
 
       cell.removeAttribute("colspan");
@@ -47,7 +51,7 @@ export function populateGridFromSnapshot(tableData) {
       if (cellData.colspan && cellData.colspan > 1) {
         cell.setAttribute("colspan", String(cellData.colspan));
         for (let i = 1; i < cellData.colspan; i += 1) {
-          const hidden = tableRow.children[colIndex + i];
+          const hidden = tableRow.children[domColIndex + i];
           if (hidden) hidden.style.display = "none";
         }
       }

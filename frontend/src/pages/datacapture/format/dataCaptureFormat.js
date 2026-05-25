@@ -2,6 +2,7 @@
  * 2.Format — preview storage, grid-ready flag, table visibility + style cleanup.
  */
 import { renderFormatPreview } from "../paste/core/dataCaptureFormatPreview.js";
+import { domGridHasEditableData } from "../lib/dataCaptureTableSnapshot.js";
 
 export const FORMAT_PREVIEW_HTML_KEY = "capturedFormatPreviewHtml";
 export const FORMAT_PREVIEW_HTML_KEY_LEGACY = "captured655PreviewHtml";
@@ -87,6 +88,12 @@ export function clearFormatStyles() {
 
 function restoreFormatGridFromPreviewHtml(previewHtml) {
   if (!previewHtml || getFormatGridReady()) return getFormatGridReady();
+
+  if (domGridHasEditableData()) {
+    renderFormatPreview(previewHtml);
+    setFormatGridReady(true);
+    return true;
+  }
 
   const filled =
     typeof window.__DC_PARSE_HTML_FORMAT__ === "function"
