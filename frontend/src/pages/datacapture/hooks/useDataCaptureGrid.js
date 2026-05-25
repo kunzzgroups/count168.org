@@ -31,7 +31,15 @@ export function useDataCaptureGrid(scriptsReady) {
 
     const dataTable = document.getElementById("dataTable");
     if (dataTable && dataTable.style.display === "none") {
-      dataTable.style.display = "table";
+      const captureType =
+        typeof window.__DC_GET_CAPTURE_TYPE__ === "function" ? window.__DC_GET_CAPTURE_TYPE__() : "";
+      const formatReady =
+        typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
+          ? window.__DC_GET_FORMAT_GRID_READY__()
+          : false;
+      if (captureType !== "2.Format" || formatReady) {
+        dataTable.style.display = "table";
+      }
     }
 
     window.__DC_TOGGLE_FORMAT_DISPLAY__?.();

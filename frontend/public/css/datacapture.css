@@ -1382,6 +1382,22 @@ body.datacapture-page .excel-table-container {
     outline: none;
 }
 
+/* 2.Format 未粘贴前：隐藏网格，显示粘贴区（与 count168.com 一致） */
+.excel-table-container.format-paste-mode {
+    display: flex;
+    flex-direction: column;
+}
+
+.excel-table-container.format-paste-mode #dataTable {
+    display: none !important;
+}
+
+.excel-table-container.format-paste-mode #pasteAreaFormat {
+    display: block !important;
+    flex: 1 1 auto;
+    min-height: min(42vh, 360px);
+}
+
 /* 2.Format模式：可粘贴整张表格的区域（contenteditable） */
 .paste-area-format {
     width: 100%;

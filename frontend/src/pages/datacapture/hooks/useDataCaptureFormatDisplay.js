@@ -2,10 +2,11 @@ import { useLayoutEffect } from "react";
 import {
   clearFormatStyles,
   getFormatGridReady,
+  getFormatPreviewHtml,
   setFormatGridReady,
   toggleTableDisplayForFormat,
 } from "../format/dataCaptureFormat.js";
-import { getFormatPreviewHtml } from "../format/dataCaptureFormat.js";
+import { readInitialCaptureType } from "../lib/dataCaptureFormRules.js";
 
 /**
  * Phase 5g: 2.Format display toggling + format grid ready bridges.
@@ -39,5 +40,6 @@ export function useDataCaptureFormatDisplay() {
 }
 
 function readInitialFormatReady() {
+  if (readInitialCaptureType() !== "2.Format") return false;
   return Boolean(getFormatPreviewHtml());
 }

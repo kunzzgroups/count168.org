@@ -27,6 +27,7 @@ export function useDataCaptureCaptureType() {
     const previous = captureTypeRef.current;
 
     setCaptureType(t);
+    captureTypeRef.current = t;
 
     const container = document.querySelector(".excel-table-container");
     if (container) {
@@ -80,6 +81,7 @@ export function useDataCaptureCaptureType() {
     window.__DC_ON_CAPTURE_TYPE_APPLIED__ = (t) => {
       const s = normalizeCaptureType(t) || "1.Text";
       setCaptureType(s);
+      captureTypeRef.current = s;
     };
 
     return () => {
@@ -89,6 +91,10 @@ export function useDataCaptureCaptureType() {
       delete window.__DC_ON_CAPTURE_TYPE_APPLIED__;
     };
   }, []);
+
+  useLayoutEffect(() => {
+    window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
+  }, [captureType, formatGridReady]);
 
   return {
     captureType,
