@@ -9,7 +9,6 @@ import {
   handleFormatPasteAreaEvent,
   handleFormatPasteFromClipboard,
   handleGlobalFormatPaste,
-  prepareFormatNextRowPaste,
   processFormatTableHtml,
   processFormatTsv,
 } from "../paste/core/dataCaptureFormatPasteHandler.js";
@@ -26,7 +25,6 @@ export function useDataCaptureFormatPaste() {
     window.__DC_PROCESS_FORMAT_HTML__ = processFormatTableHtml;
     window.__DC_PROCESS_FORMAT_TSV__ = processFormatTsv;
     window.__DC_HANDLE_FORMAT_CLIPBOARD__ = handleFormatPasteFromClipboard;
-    window.__DC_PREPARE_FORMAT_NEXT_ROW_PASTE__ = prepareFormatNextRowPaste;
     window.__DC_INIT_FORMAT_PASTE__ = () => {};
 
     return () => {
@@ -36,7 +34,6 @@ export function useDataCaptureFormatPaste() {
       delete window.__DC_PROCESS_FORMAT_HTML__;
       delete window.__DC_PROCESS_FORMAT_TSV__;
       delete window.__DC_HANDLE_FORMAT_CLIPBOARD__;
-      delete window.__DC_PREPARE_FORMAT_NEXT_ROW_PASTE__;
       delete window.__DC_INIT_FORMAT_PASTE__;
     };
   }, []);
@@ -46,21 +43,13 @@ export function useDataCaptureFormatPaste() {
     if (!area) return undefined;
 
     const onAreaPaste = (e) => handleFormatPasteAreaEvent(e);
-    const onAreaKeyDown = (e) => {
-      if (e.key !== "Enter" || !e.shiftKey) return;
-      if ((window.__DC_GET_CAPTURE_TYPE__?.() || "1.Text") !== "2.Format") return;
-      e.preventDefault();
-      prepareFormatNextRowPaste(null);
-    };
     area.addEventListener("paste", onAreaPaste);
-    area.addEventListener("keydown", onAreaKeyDown);
 
     const onGlobalPaste = (e) => handleGlobalFormatPaste(e);
     document.addEventListener("paste", onGlobalPaste);
 
     return () => {
       area.removeEventListener("paste", onAreaPaste);
-      area.removeEventListener("keydown", onAreaKeyDown);
       document.removeEventListener("paste", onGlobalPaste);
     };
   }, []);

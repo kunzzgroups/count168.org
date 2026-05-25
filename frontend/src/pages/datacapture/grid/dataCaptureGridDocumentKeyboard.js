@@ -2,7 +2,6 @@
  * Document-level grid keyboard shortcuts — extracted from js/datacapture.js.
  * Re-run: node frontend/scripts/extract-grid-document-keyboard.mjs
  */
-import { prepareFormatNextRowPaste } from "../paste/core/dataCaptureFormatPasteHandler.js";
 
 function isTableActive() {
   return window.__DC_GET_TABLE_ACTIVE__?.() ?? false;
@@ -163,20 +162,6 @@ const key = (e.key || '').toLowerCase();
 
     if (e.key === 'Escape') {
         clearAllSelections();
-    } else if (e.key === 'Enter' && e.shiftKey) {
-        const captureType = window.__DC_GET_CAPTURE_TYPE__?.() || '1.Text';
-        if (captureType !== '2.Format') {
-            // non-Format modes handled in cell keydown
-        } else {
-            e.preventDefault();
-            if (activeElement?.id === 'pasteAreaFormat') {
-                prepareFormatNextRowPaste(null);
-            } else if (isEditingCell && activeElement?.closest?.('#dataTable')) {
-                prepareFormatNextRowPaste(activeElement);
-            } else if (!isEditingCell && getSelectedCellCount() > 0) {
-                prepareFormatNextRowPaste(getSelectedCells()[0]);
-            }
-        }
     } else if (e.key.startsWith('Arrow')) {
         // Arrow key navigation: switch cells like Excel
         // If cell is being edited, let handleCellKeydown handle it (it will prevent event propagation)

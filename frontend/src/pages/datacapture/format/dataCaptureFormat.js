@@ -156,7 +156,7 @@ export function toggleTableDisplayForFormat() {
         }
         pasteAreaFormat.setAttribute(
           "data-placeholder",
-          "Shift+Enter 跳到下一行；在此粘贴下一段表格数据..."
+          "在此粘贴追加行（支持 Excel/Sheets 表格格式）..."
         );
         setTimeout(() => {
           pasteAreaFormat.focus();
