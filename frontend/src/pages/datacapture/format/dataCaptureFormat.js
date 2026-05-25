@@ -85,6 +85,48 @@ export function clearFormatStyles() {
   }
 }
 
+function restoreFormatGridFromPreviewHtml(previewHtml) {
+  if (!previewHtml || getFormatGridReady()) return getFormatGridReady();
+
+  const filled =
+    typeof window.__DC_PARSE_HTML_FORMAT__ === "function"
+      ? window.__DC_PARSE_HTML_FORMAT__(previewHtml)
+      : false;
+
+  if (filled) {
+    renderFormatPreview(previewHtml);
+    setFormatGridReady(true);
+    return true;
+  }
+
+  return false;
+}
+
+/** Ensure 2.Format grid is filled and visible before submit snapshot. */
+export function prepareFormatSubmitSnapshot(captureType) {
+  const type = window.__DC_GET_CAPTURE_TYPE__?.() || captureType || "1.Text";
+  if (type !== "2.Format") return true;
+
+  const dataTable = document.getElementById("dataTable");
+  if (dataTable) dataTable.style.display = "table";
+
+  if (getFormatGridReady()) return true;
+
+  const pasteArea = document.getElementById("pasteAreaFormat");
+  const pasteHtml = pasteArea?.innerHTML || "";
+  if (pasteHtml && /<table\b/i.test(pasteHtml)) {
+    const processed = window.__DC_PROCESS_FORMAT_HTML__?.(pasteHtml, { area: pasteArea });
+    if (processed) return true;
+  }
+
+  const previewHtml = getFormatPreviewHtml();
+  if (previewHtml) {
+    return restoreFormatGridFromPreviewHtml(previewHtml);
+  }
+
+  return false;
+}
+
 export function toggleTableDisplayForFormat() {
   const dataTable = document.getElementById("dataTable");
   const tablePreviewFormat = document.getElementById("tablePreviewFormat");
@@ -92,14 +134,13 @@ export function toggleTableDisplayForFormat() {
   const captureType = window.__DC_GET_CAPTURE_TYPE__?.() || "1.Text";
 
   if (captureType === "2.Format") {
-    let previewHtml = getFormatPreviewHtml();
+    const previewHtml = getFormatPreviewHtml();
 
     if (previewHtml && !getFormatGridReady()) {
-      renderFormatPreview(previewHtml);
-      setFormatGridReady(true);
+      restoreFormatGridFromPreviewHtml(previewHtml);
     }
 
-    if (getFormatGridReady() || previewHtml) {
+    if (getFormatGridReady()) {
       if (dataTable) dataTable.style.display = "table";
       if (pasteAreaFormat) pasteAreaFormat.style.display = "none";
       if (tablePreviewFormat) tablePreviewFormat.style.display = "none";

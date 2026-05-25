@@ -43,9 +43,18 @@ export function useDataCaptureCaptureType() {
           : false;
 
       if (previewHtml) {
-        window.__DC_RENDER_FORMAT_PREVIEW__?.(previewHtml);
-        window.__DC_SET_FORMAT_GRID_READY__?.(true);
-        setFormatGridReady(true);
+        const filled =
+          typeof window.__DC_PARSE_HTML_FORMAT__ === "function"
+            ? window.__DC_PARSE_HTML_FORMAT__(previewHtml)
+            : false;
+        if (filled) {
+          window.__DC_RENDER_FORMAT_PREVIEW__?.(previewHtml);
+          window.__DC_SET_FORMAT_GRID_READY__?.(true);
+          setFormatGridReady(true);
+        } else {
+          window.__DC_SET_FORMAT_GRID_READY__?.(false);
+          setFormatGridReady(false);
+        }
       } else if (legacyReady) {
         setFormatGridReady(true);
       } else {

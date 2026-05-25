@@ -66,7 +66,14 @@ export function validateDataCaptureForm({
   if (!currencyId) {
     return { ok: false, message: "Please select a currency" };
   }
-  if (isCitibetCaptureType(captureType) && !tableSnapshotHasData(tableData)) {
+  const normalizedType = normalizeCaptureType(captureType) || "1.Text";
+  const needsTableData =
+    isCitibetCaptureType(normalizedType) ||
+    normalizedType === "1.Text" ||
+    normalizedType === "2.Format" ||
+    normalizedType === "4.RETURN";
+
+  if (needsTableData && !tableSnapshotHasData(tableData)) {
     return { ok: false, message: "Please enter data in the table" };
   }
   return { ok: true };

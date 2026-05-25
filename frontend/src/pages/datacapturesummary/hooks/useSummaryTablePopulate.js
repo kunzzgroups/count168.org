@@ -12,7 +12,7 @@ import {
   showSummaryTableChrome,
 } from "./useSummaryTableBridge.js";
 
-const MAX_POPULATE_ATTEMPTS = 4;
+const MAX_POPULATE_ATTEMPTS = 2;
 
 let populateInFlight = false;
 

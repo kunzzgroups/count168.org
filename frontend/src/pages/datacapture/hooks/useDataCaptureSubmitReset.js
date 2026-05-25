@@ -13,6 +13,7 @@ import {
 } from "../lib/dataCaptureFormRules.js";
 import { fetchProcessDetail } from "../lib/dataCaptureApi.js";
 import { convertTableFormatOnSubmit } from "../lib/dataCaptureConvertTableOnSubmit.js";
+import { prepareFormatSubmitSnapshot } from "../format/dataCaptureFormat.js";
 import { buildSpaPath } from "../../../utils/core/apiUrl.js";
 import { pushDataCaptureNotification } from "../lib/dataCaptureNotify.js";
 import { translateDataCaptureMessage } from "../../../translateFile/pages/dataCaptureTranslate.js";
@@ -110,13 +111,20 @@ export function useDataCaptureSubmitReset({
       pushDataCaptureNotification(t("readOnlyBlocked"), "danger");
       return;
     }
-    const tableData = captureTableDataFromDom(captureType);
+
+    const activeCaptureType = captureTypeRef.current;
+    if (activeCaptureType === "2.Format" && !prepareFormatSubmitSnapshot(activeCaptureType)) {
+      pushDataCaptureNotification(t("pleaseEnterTableData"), "danger");
+      return;
+    }
+
+    const tableData = captureTableDataFromDom(activeCaptureType);
     const validation = validateDataCaptureForm({
       selectedProcess: form.selectedProcess,
       descriptions: window.selectedDescriptions || [],
       descriptionDisplay: form.descriptionDisplay,
       currencyId: form.currencyId,
-      captureType,
+      captureType: activeCaptureType,
       tableData,
     });
     if (!validation.ok) {
@@ -124,12 +132,12 @@ export function useDataCaptureSubmitReset({
       return;
     }
 
-    convertTableFormatOnSubmit(captureType);
+    convertTableFormatOnSubmit(activeCaptureType);
 
     try {
-      const processData = buildProcessCapturePayload(form, captureType, form.currencies);
-      const finalTableData = captureTableDataFromDom(captureType);
-      saveCaptureSession(finalTableData, processData, captureType);
+      const processData = buildProcessCapturePayload(form, activeCaptureType, form.currencies);
+      const finalTableData = captureTableDataFromDom(activeCaptureType);
+      saveCaptureSession(finalTableData, processData, activeCaptureType);
 
       markSummaryFreshNavigation();
       if (typeof navigate === "function") {

@@ -1,11 +1,75 @@
 import { convertBracketedToNegative } from "./dataCaptureBracket.js";
 import { normalizeStoredCaptureType } from "./dataCaptureStorage.js";
 
+const FORMAT_LABEL_FIRST_COLUMNS = new Set(["AGENT", "PLAYER", "MEMBER", "USER"]);
+
+function resolveSnapshotCaptureType(captureType) {
+  return (
+    normalizeStoredCaptureType(captureType) ||
+    normalizeStoredCaptureType(window.__DC_GET_CAPTURE_TYPE__?.()) ||
+    "1.Text"
+  );
+}
+
+function readEditableCellValue(cell) {
+  if (!cell) return "";
+  const text = (cell.textContent || cell.innerText || "").trim();
+  if (text) return text;
+  const html = cell.innerHTML || "";
+  if (!html.includes("<")) return "";
+  const temp = document.createElement("div");
+  temp.innerHTML = html;
+  return (temp.textContent || temp.innerText || "").trim();
+}
+
+function isPlaceholderIdColumn(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return true;
+  if (/^\d{1,2}$/.test(trimmed)) return true;
+  return FORMAT_LABEL_FIRST_COLUMNS.has(trimmed.toUpperCase());
+}
+
+function swapRowDataCells(a, b) {
+  const tempValue = a.value;
+  a.value = b.value;
+  b.value = tempValue;
+  const tempColspan = a.colspan;
+  a.colspan = b.colspan;
+  b.colspan = tempColspan;
+  const tempCol = a.col;
+  a.col = b.col;
+  b.col = tempCol;
+}
+
+/** Move first real id product into column A for Text / Format / Return rows. */
+function normalizeIdProductColumnForRow(rowData, captureType, rowIndex) {
+  if (!["1.Text", "2.Format", "4.RETURN"].includes(captureType) || rowData.length <= 1) {
+    return;
+  }
+
+  const firstDataCell = rowData[1];
+  if (firstDataCell?.type !== "data") return;
+
+  if (isPlaceholderIdColumn(firstDataCell.value)) {
+    for (let i = 2; i < rowData.length; i += 1) {
+      const cell = rowData[i];
+      if (cell?.type !== "data") continue;
+      const candidate = String(cell.value || "").trim();
+      if (!candidate || FORMAT_LABEL_FIRST_COLUMNS.has(candidate.toUpperCase())) continue;
+      swapRowDataCells(firstDataCell, cell);
+      console.log(
+        `${captureType}: Row ${rowIndex} - adjusted id product from column ${cell.col + 1} (value: "${candidate}") to first column`
+      );
+      return;
+    }
+  }
+}
+
 /**
  * Reads the Excel grid DOM for submit / restore snapshots.
  */
 export function captureTableDataFromDom(captureType) {
-  const currentDataCaptureType = normalizeStoredCaptureType(captureType);
+  const currentDataCaptureType = resolveSnapshotCaptureType(captureType);
   const table = document.getElementById("dataTable");
   const tableData = {
     headers: [],
@@ -41,9 +105,12 @@ export function captureTableDataFromDom(captureType) {
         rowData.push({ type: "header", value: cell.textContent });
         return;
       }
-      if (cell.style.display === "none") return;
 
-      let cellValue = convertBracketedToNegative((cell.textContent || "").toUpperCase());
+      const hidden = cell.style.display === "none";
+      const rawValue = readEditableCellValue(cell);
+      if (hidden && !rawValue) return;
+
+      let cellValue = convertBracketedToNegative(rawValue.toUpperCase());
       const colspan = parseInt(cell.getAttribute("colspan") || "1", 10);
 
       rowData.push({
@@ -54,37 +121,7 @@ export function captureTableDataFromDom(captureType) {
       });
     });
 
-    if (
-      (currentDataCaptureType === "1.Text" ||
-        currentDataCaptureType === "2.Format" ||
-        currentDataCaptureType === "4.RETURN") &&
-      rowData.length > 1
-    ) {
-      const firstDataCell = rowData[1];
-      if (firstDataCell?.type === "data" && (firstDataCell.value || "").trim() === "") {
-        for (let i = 2; i < rowData.length; i += 1) {
-          const cell = rowData[i];
-          if (cell?.type === "data" && (cell.value || "").trim() !== "") {
-            const firstValue = firstDataCell.value;
-            const targetValue = cell.value;
-            firstDataCell.value = targetValue;
-            cell.value = firstValue;
-            const firstColspan = firstDataCell.colspan;
-            const targetColspan = cell.colspan;
-            firstDataCell.colspan = targetColspan;
-            cell.colspan = firstColspan;
-            const firstCol = firstDataCell.col;
-            const targetCol = cell.col;
-            firstDataCell.col = targetCol;
-            cell.col = firstCol;
-            console.log(
-              `${currentDataCaptureType}: Row ${rowIndex} - adjusted id product from column ${targetCol + 1} (value: "${targetValue}") to first column`
-            );
-            break;
-          }
-        }
-      }
-    }
+    normalizeIdProductColumnForRow(rowData, currentDataCaptureType, rowIndex);
 
     const dataCols = rowData.length - 1;
     if (dataCols > maxDataCols) maxDataCols = dataCols;

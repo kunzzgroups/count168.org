@@ -1,7 +1,7 @@
 import { pushSummaryNotification } from "../lib/summaryNotify.js";
 import { stripSummarySuccessParamFromUrl } from "../lib/summaryStorage.js";
 
-const PREPOPULATE_READY_TIMEOUT_MS = 6000;
+const PREPOPULATE_READY_TIMEOUT_MS = 4000;
 const PREPOPULATE_POLL_MS = 16;
 
 function resolveSummaryProcessId() {
