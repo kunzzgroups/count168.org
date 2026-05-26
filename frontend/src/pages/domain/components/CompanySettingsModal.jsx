@@ -117,13 +117,11 @@ export default function CompanySettingsModal({
       setExpDisplay(company.expiration_date ? formatDate(company.expiration_date) : t("notSet"));
       return;
     }
-    const base = company.isExtending
-      ? company.originalExpirationDate || null
-      : startDate || new Date().toISOString().split("T")[0];
+    const base = startDate || new Date().toISOString().split("T")[0];
     const exp = calculateExpirationDate(period, base);
     setExpDisplay(formatDate(exp));
     setCompany((prev) => ({ ...prev, expiration_date: exp, selectedPeriod: period }));
-  }, [period, startDate, company.expiration_date, company.isExtending, company.originalExpirationDate, t]);
+  }, [period, startDate, company.expiration_date, t]);
 
   function togglePermission(val) {
     if (SINGLE_CATEGORY_MODE) {
@@ -166,9 +164,7 @@ export default function CompanySettingsModal({
 
     let expDate = company.expiration_date || null;
     if (period) {
-      const base = company.isExtending
-        ? company.originalExpirationDate || null
-        : startDate || new Date().toISOString().split("T")[0];
+      const base = startDate || new Date().toISOString().split("T")[0];
       expDate = calculateExpirationDate(period, base);
     }
 
@@ -333,11 +329,10 @@ export default function CompanySettingsModal({
                     type="date"
                     id="expDateStartDate"
                     value={startDate}
-                    disabled={company.isExtending}
                     onChange={(e) => setStartDate(e.target.value)}
                   />
-                  <small id="expDateStartDateHelp" className={`company-settings-start-hint${company.isExtending ? " company-settings-start-hint--warn" : ""}`}>
-                    {company.isExtending ? t("cannotModifyStartDateWhenExtending") : t("selectStartDateHint")}
+                  <small id="expDateStartDateHelp" className="company-settings-start-hint">
+                    {t("selectStartDateHint")}
                   </small>
                 </div>
                 <div className="form-group company-settings-field-half company-settings-field-half--period">
