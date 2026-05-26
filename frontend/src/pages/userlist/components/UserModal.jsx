@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { accountCompanyPickerZIndex, accountModalOverlayZIndex } from "../../../components/ProcessModalPortal.jsx";
+import { sanitizeEmailInput } from "../../../utils/input/emailValidation.js";
 
 /** Inline so first paint is 3-column even if extracted CSS applies one frame late */
 const modalBodyStyle = {
@@ -438,7 +439,7 @@ export default function UserModal({
                     required
                     disabled={fieldLocks.email || pageReadOnlyLock}
                     value={form.email}
-                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value.toLowerCase() }))}
+                    onChange={(e) => setForm((f) => ({ ...f, email: sanitizeEmailInput(e.target.value) }))}
                   />
                 </div>
                 {(currentUserRole === "admin" || currentUserRole === "owner") && (

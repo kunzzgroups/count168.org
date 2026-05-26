@@ -10,9 +10,9 @@ import {
   ensureCompanyFeeShare,
   companyToDomainPayloadEntry,
   forceUppercaseValue,
-  forceLowercaseValue,
   forceNumericValue,
 } from "../domainHelpers.js";
+import { sanitizeEmailInput, validateEmailFormat } from "../../../utils/input/emailValidation.js";
 import { getDomainText } from "../../../translateFile/pages/domainTranslate.js";
 import DomainModalPortal from "./DomainModalPortal.jsx";
 
@@ -284,8 +284,9 @@ export default function DomainFormModal({
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!email.toLowerCase().endsWith("@gmail.com")) {
-      toastDanger(t("onlyGmailAllowed"));
+    const emailCheck = validateEmailFormat(email);
+    if (!emailCheck.valid) {
+      toastDanger(t("invalidEmailFormat"));
       return;
     }
     const overlap = findGroupCompanyCodeOverlap(tempGroups, tempCompanies);
@@ -297,7 +298,7 @@ export default function DomainFormModal({
       action: isEditMode ? "update" : "create",
       owner_code: ownerCode,
       name,
-      email,
+      email: emailCheck.email,
       companies: JSON.stringify(buildCompaniesPayload()),
     };
     if (!isEditMode || password) data.password = password;
@@ -515,10 +516,15 @@ export default function DomainFormModal({
                   <div className="dfm-field">
                     <label htmlFor="df_email">{t("email")} *</label>
                     <input
-                      type="email" id="df_email" required className="min-h-[42px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-[15px] focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
-                      pattern=".*@gmail\.com$"
+                      type="text"
+                      id="df_email"
+                      inputMode="email"
+                      autoComplete="email"
+                      spellCheck={false}
+                      required
+                      className="min-h-[42px] w-full rounded-lg border border-gray-300 px-3.5 py-2.5 text-[15px] focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
                       value={email}
-                      onChange={(e) => setEmail(forceLowercaseValue(e.target.value))}
+                      onChange={(e) => setEmail(sanitizeEmailInput(e.target.value))}
                     />
                   </div>
                   <div className="dfm-field">

@@ -9,6 +9,7 @@ header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/email_validation.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 
 session_start();
@@ -171,7 +172,7 @@ function userlistFriendlyDbError(Throwable $e): string
 }
 
 // Validate required fields for create/update
-function validateUserData($data, $isUpdate = false) {
+function validateUserData(&$data, $isUpdate = false) {
     $required = ['login_id', 'name', 'email', 'role', 'status'];
     if (!$isUpdate) {
         $required[] = 'password';
@@ -183,10 +184,11 @@ function validateUserData($data, $isUpdate = false) {
         }
     }
     
-    // Validate email format
-    if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+    $emailResult = validate_email_format($data['email']);
+    if (!$emailResult['valid']) {
         return "Invalid email format";
     }
+    $data['email'] = $emailResult['email'];
     
     // Validate role
     $validRoles = ['owner', 'partnership', 'admin', 'manager', 'supervisor', 'accountant', 'audit', 'customer service', 'company'];
@@ -265,10 +267,11 @@ try {
                 }
             }
             
-            // Validate email format
-            if (!filter_var($input['email'], FILTER_VALIDATE_EMAIL)) {
+            $emailResult = validate_email_format($input['email']);
+            if (!$emailResult['valid']) {
                 sendResponse(false, "Invalid email format");
             }
+            $input['email'] = $emailResult['email'];
             
             // Validate role
             $validRoles = ['partnership', 'admin', 'manager', 'supervisor', 'accountant', 'audit', 'customer service', 'company'];
@@ -503,12 +506,12 @@ try {
                 }
                 
                 if (isset($input['email'])) {
-                    // Validate email format
-                    if (!filter_var($input['email'], FILTER_VALIDATE_EMAIL)) {
+                    $emailResult = validate_email_format($input['email']);
+                    if (!$emailResult['valid']) {
                         sendResponse(false, "Invalid email format");
                     }
                     $updateFields[] = "email = ?";
-                    $updateValues[] = $input['email'];
+                    $updateValues[] = $emailResult['email'];
                 }
                 
                 if (isset($input['status'])) {

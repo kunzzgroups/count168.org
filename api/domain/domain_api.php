@@ -2,6 +2,7 @@
 session_start();
 // session_write_close() 将在 session 写入（回填 company_code）完成后调用
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/email_validation.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 
@@ -2347,6 +2348,13 @@ try {
                 echo json_encode(['success' => false, 'message' => 'All fields are required', 'data' => null]);
                 exit;
             }
+
+            $emailResult = validate_email_format($email);
+            if (!$emailResult['valid']) {
+                echo json_encode(['success' => false, 'message' => 'Invalid email format', 'data' => null]);
+                exit;
+            }
+            $email = $emailResult['email'];
             
             // 验证二级密码：必须是6位数字
             if (!preg_match('/^\d{6}$/', $secondary_password)) {
@@ -2453,6 +2461,13 @@ try {
                 echo json_encode(['success' => false, 'message' => 'Required fields are missing', 'data' => null]);
                 exit;
             }
+
+            $emailResult = validate_email_format($email);
+            if (!$emailResult['valid']) {
+                echo json_encode(['success' => false, 'message' => 'Invalid email format', 'data' => null]);
+                exit;
+            }
+            $email = $emailResult['email'];
             
             // 如果提供了二级密码，验证格式（只有C168的owner/admin可以修改）
             if (!empty($secondary_password)) {

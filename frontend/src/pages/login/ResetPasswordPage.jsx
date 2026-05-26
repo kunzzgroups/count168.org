@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RESET_PASSWORD_I18N } from "../../translateFile/auth/authTranslate.js";
 import { useAuthBackground } from "./useAuthBackground.js";
-import { sendResetTac, submitResetPassword } from "./resetPassword.js";
+import { sanitizeEmailInput, validateEmailFormat } from "../../utils/input/emailValidation.js";
 
 function AlertModal({ open, title, message, confirmText, onClose }) {
   useEffect(() => {
@@ -99,14 +99,14 @@ export default function ResetPasswordPage() {
 
   const onSendTac = async () => {
     const normalizedCompanyId = companyId.toUpperCase().trim();
-    const trimmedEmail = email.trim();
+    const emailCheck = validateEmailFormat(email);
 
     if (!normalizedCompanyId) {
       showModal(i18n.notice, i18n.companyIdFirst);
       return;
     }
-    if (!trimmedEmail) {
-      showModal(i18n.notice, i18n.emailFirst);
+    if (!emailCheck.valid) {
+      showModal(i18n.notice, email.trim() ? i18n.invalidEmailFormat : i18n.emailFirst);
       return;
     }
 
@@ -114,7 +114,7 @@ export default function ResetPasswordPage() {
     try {
       const data = await sendResetTac({
         companyId: normalizedCompanyId,
-        email: trimmedEmail,
+        email: emailCheck.email,
       });
 
       if (data.success) {
@@ -148,7 +148,7 @@ export default function ResetPasswordPage() {
     }
 
     const normalizedCompanyId = companyId.toUpperCase().trim();
-    const trimmedEmail = email.trim();
+    const emailCheck = validateEmailFormat(email);
     const trimmedTac = tac.trim();
 
     if (!trimmedTac) {
@@ -156,8 +156,11 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (!normalizedCompanyId || !trimmedEmail) {
-      showModal(i18n.notice, i18n.companyEmailRequired);
+    if (!normalizedCompanyId || !emailCheck.valid) {
+      showModal(
+        i18n.notice,
+        !normalizedCompanyId ? i18n.companyIdFirst : email.trim() ? i18n.invalidEmailFormat : i18n.emailFirst
+      );
       return;
     }
 
@@ -165,7 +168,7 @@ export default function ResetPasswordPage() {
     try {
       const data = await submitResetPassword({
         companyId: normalizedCompanyId,
-        email: trimmedEmail,
+        email: emailCheck.email,
         tac: trimmedTac,
         newPassword,
       });
@@ -210,10 +213,13 @@ export default function ResetPasswordPage() {
               <div className="input-group">
                 <i className="fas fa-envelope input-icon" />
                 <input
-                  type="email"
+                  type="text"
+                  inputMode="email"
+                  autoComplete="email"
+                  spellCheck={false}
                   placeholder={i18n.emailPlaceholder}
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event) => setEmail(sanitizeEmailInput(event.target.value))}
                   required
                 />
               </div>

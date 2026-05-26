@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/email_validation.php';
 
 /**
  * 通过 SMTP (SSL 465) 发送邮件，支持 Gmail
@@ -86,8 +87,15 @@ try {
         exit;
     }
 
+    $emailResult = validate_email_format($email);
+    if (!$emailResult['valid']) {
+        echo json_encode(['success' => false, 'message' => 'Invalid email format']);
+        exit;
+    }
+
     $company_id_upper = strtoupper($company_id_raw);
-    $email_lower = strtolower($email);
+    $email = $emailResult['email'];
+    $email_lower = $email;
 
     // 1) 检查是否为普通用户（支持 Company ID 或 Group ID）
     $stmt = $pdo->prepare("

@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/email_validation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['success' => false, 'message' => 'Method not allowed']);
@@ -32,8 +33,15 @@ try {
         exit;
     }
 
+    $emailResult = validate_email_format($email);
+    if (!$emailResult['valid']) {
+        echo json_encode(['success' => false, 'message' => 'Invalid email format']);
+        exit;
+    }
+
     $company_id_upper = strtoupper($company_id_raw);
-    $email_lower = strtolower($email);
+    $email = $emailResult['email'];
+    $email_lower = $email;
 
     // 1) 尝试验证普通用户的 TAC（支持 Company ID 或 Group ID）
     $stmt = $pdo->prepare("

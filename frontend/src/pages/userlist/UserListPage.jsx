@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { notifyCompanySessionUpdated } from "../../utils/company/companySessionEvents.js";
 import { isPartnershipAuditReadOnlyLocked } from "../../utils/audit/partnershipAuditReadOnly.js";
 import { assetUrl, buildApiUrl } from "../../utils/core/apiUrl.js";
-import PageContentLoader from "../../components/PageContentLoader.jsx";
+import { validateEmailFormat } from "../../utils/input/emailValidation.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
@@ -683,9 +683,11 @@ export default function UserListPage() {
     }
     if (isUserModalPageReadOnlyLock(isEditMode, editingRow, form.role, form.read_only, currentUserId)) return;
     if (!isEditMode && !form.password.trim()) { notify(t("passwordRequired"), "danger"); return; }
+    const emailCheck = validateEmailFormat(form.email);
+    if (!emailCheck.valid) { notify(t("apiInvalidEmail"), "danger"); return; }
     const accountPerms = Array.from(selectedAccountIds).map(id => { const a = modalAccounts.find(x => Number(x.id) === Number(id)); return { id: Number(id), account_id: a?.account_id || "" }; });
     const processPerms = Array.from(selectedProcessIds).map(id => { const p = modalProcesses.find(x => Number(x.id) === Number(id)); return { id: Number(id), process_id: p?.process_id || "", description: p?.description || "" }; });
-    let payload = { action: isEditMode ? "update" : "create", id: form.id || undefined, login_id: form.login_id.trim(), name: form.name.trim(), email: form.email.trim().toLowerCase(), role: form.role, status: form.status };
+    let payload = { action: isEditMode ? "update" : "create", id: form.id || undefined, login_id: form.login_id.trim(), name: form.name.trim(), email: emailCheck.email, role: form.role, status: form.status };
     if (form.password.trim()) payload.password = form.password;
     const allowSecondaryPassword = isC168Company || !!editingRow?.is_owner_shadow;
     if (allowSecondaryPassword && form.secondary_password.trim()) {
