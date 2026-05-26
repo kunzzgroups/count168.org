@@ -29,7 +29,7 @@ body.user-page:not(.user-page--show-all) {
 .user-page .container {
     max-width: none;
     margin: 0;
-    padding: 1px 40px 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) 40px 20px var(--layout-main-offset);
     width: 100%;
     height: 100vh;
     /* 添加这行 */
@@ -280,17 +280,6 @@ body.user-page.user-page--show-all .user-cards {
     overflow-y: visible;
 }
 
-.user-page h1 {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
-}
-
 .action-buttons-container {
     margin-top: 20px;
     background-color: #ffffff;
@@ -323,12 +312,13 @@ body.process-page .user-gc-inline-panel,
 body.report-page .user-gc-inline-panel,
 body.datacapture-page .user-gc-inline-panel,
 body.member-winloss-page .user-gc-inline-panel,
-body.dashboard-page .user-gc-inline-panel {
+body.dashboard-page .user-gc-inline-panel,
+body.transaction-page .user-gc-inline-panel {
     display: grid;
     /* 首列固定宽度：各行「胶囊」起始位置一致（避免仅 min-width + auto 时观感不齐） */
     grid-template-columns: var(--user-gc-inline-label-w, 9rem) 1fr;
-    column-gap: 14px;
-    row-gap: 10px;
+    column-gap: var(--user-gc-inline-column-gap, 4px);
+    row-gap: var(--user-gc-inline-row-gap, 4px);
     align-items: center;
     padding: 12px 20px 14px;
     border-top: 1px solid rgba(15, 23, 42, 0.06);
@@ -342,7 +332,8 @@ body.process-page .user-gc-inline-row,
 body.report-page .user-gc-inline-row,
 body.datacapture-page .user-gc-inline-row,
 body.member-winloss-page .user-gc-inline-row,
-body.dashboard-page .user-gc-inline-row {
+body.dashboard-page .user-gc-inline-row,
+body.transaction-page .user-gc-inline-row {
     display: contents;
 }
 
@@ -372,7 +363,8 @@ body.lang-zh.process-page .user-gc-inline-panel,
 body.lang-zh.report-page .user-gc-inline-panel,
 body.lang-zh.datacapture-page .user-gc-inline-panel,
 body.lang-zh.member-winloss-page .user-gc-inline-panel,
-body.lang-zh.dashboard-page .user-gc-inline-panel {
+body.lang-zh.dashboard-page .user-gc-inline-panel,
+body.lang-zh.transaction-page .user-gc-inline-panel {
     --user-gc-inline-label-w: 6.75rem;
 }
 
@@ -383,11 +375,12 @@ body.process-page .user-gc-inline-pills,
 body.report-page .user-gc-inline-pills,
 body.datacapture-page .user-gc-inline-pills,
 body.member-winloss-page .user-gc-inline-pills,
-body.dashboard-page .user-gc-inline-pills {
+body.dashboard-page .user-gc-inline-pills,
+body.transaction-page .user-gc-inline-pills {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     flex: 1 1 0;
     min-width: 0;
 }
@@ -399,10 +392,11 @@ body.process-page .user-gc-inline-pills--segment-scroll,
 body.report-page .user-gc-inline-pills--segment-scroll,
 body.datacapture-page .user-gc-inline-pills--segment-scroll,
 body.member-winloss-page .user-gc-inline-pills--segment-scroll,
-body.dashboard-page .user-gc-inline-pills--segment-scroll {
+body.dashboard-page .user-gc-inline-pills--segment-scroll,
+body.transaction-page .user-gc-inline-pills--segment-scroll {
     flex-wrap: nowrap;
     overflow-x: auto;
-    gap: 0;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     padding-bottom: 2px;
     -webkit-overflow-scrolling: touch;
 }
@@ -434,9 +428,15 @@ body.process-page .user-gc-segment,
 body.report-page .user-gc-segment,
 body.datacapture-page .user-gc-segment,
 body.member-winloss-page .user-gc-segment,
-body.dashboard-page .user-gc-segment {
+body.dashboard-page .user-gc-segment,
+body.transaction-page .user-gc-segment,
+body.domain-page .user-gc-segment,
+body.ownership-page .user-gc-segment,
+body.announcement-page .user-gc-segment,
+body.datacapture-summary-page .user-gc-segment,
+body.ec-auth-shell .user-gc-segment {
     margin: 0;
-    padding: 8px clamp(10px, 1.2vw, 18px);
+    padding: var(--user-gc-segment-padding);
     border: none;
     border-right: 1px solid var(--color-border, #e5e7eb);
     background: var(--color-surface, #ffffff);
@@ -2540,6 +2540,21 @@ body.process-page .search-container.userlist-search-bar {
     overflow: hidden;
 }
 
+/* Bank Process 顶栏搜索宽度（processCSS !important 在宽/窄屏会再覆盖） */
+body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
+    width: clamp(200px, 18vw, 280px);
+    max-width: clamp(200px, 18vw, 280px);
+}
+
+@media (max-width: 1699px) {
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
+        width: clamp(96px, 8vw, 140px) !important;
+        max-width: clamp(96px, 8vw, 140px) !important;
+        flex: 0 0 auto !important;
+    }
+}
+
 body.user-page .userlist-search-bar__icon,
 body.account-page .userlist-search-bar__icon,
 body.process-page .userlist-search-bar__icon {
@@ -2742,34 +2757,75 @@ body.process-page .userlist-filter-chips .user-filter-chip:nth-child(2) {
     justify-content: flex-start;
 }
 
-/* Bank Process：5 颗 filter chip 独立第二行，按较长英文预留宽度 */
+/* Bank Process：5 颗 filter chip 与 Search 同一行（紧凑 padding 便于塞入） */
 body.process-page.process-page--bank .userlist-filter-chips--bank-process {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
 }
 
 body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip {
     justify-content: flex-start;
+    padding: 4px 10px 4px 4px;
+    gap: 6px;
+    font-size: clamp(11px, 0.72vw, 13px);
+    flex-shrink: 0;
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip__dot {
+    width: 16px;
+    height: 16px;
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip__check {
+    width: 10px;
+    height: 10px;
 }
 
 body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(1) {
-    min-width: 8.25rem;
-}
-
-body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(2) {
     min-width: 6.75rem;
 }
 
+body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(2) {
+    min-width: 5.5rem;
+}
+
 body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(3) {
-    min-width: 7.5rem;
+    min-width: 6.25rem;
 }
 
 body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(4) {
-    min-width: 8.75rem;
+    min-width: 7rem;
 }
 
 body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(5) {
-    min-width: 7.75rem;
+    min-width: 6.25rem;
+}
+
+@media (min-width: 1700px) {
+    body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip {
+        padding: 4px 14px 4px 4px;
+        font-size: clamp(12px, 0.78vw, 14px);
+    }
+
+    body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(1) {
+        min-width: 8.25rem;
+    }
+
+    body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(2) {
+        min-width: 6.75rem;
+    }
+
+    body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(3) {
+        min-width: 7.5rem;
+    }
+
+    body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(4) {
+        min-width: 8.75rem;
+    }
+
+    body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip:nth-child(5) {
+        min-width: 7.5rem;
+    }
 }
 
 /* Checkbox section */
@@ -3282,7 +3338,7 @@ body.ec-auth-shell.user-page .user-card .card-item--select {
 .transaction-company-buttons {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     align-items: center;
 }
 

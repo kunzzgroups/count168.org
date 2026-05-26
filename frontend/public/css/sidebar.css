@@ -578,12 +578,14 @@
 }
 
 .informationmenu-section-title {
-    padding: 12px 16px;
+    padding: var(--sidebar-menu-pad-y, 0.95rem) var(--sidebar-menu-pad-x, 0.85rem);
     font-size: 16px;
     font-weight: 600;
     color: white;
     cursor: pointer;
-    display: flex;
+    display: grid;
+    grid-template-columns: var(--sidebar-icon-size, 18px) minmax(0, 1fr);
+    column-gap: var(--sidebar-icon-gap, 0.65rem);
     align-items: center;
     justify-content: flex-start;
     transition: all 0.3s ease;
@@ -594,6 +596,13 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     min-width: 0;
+}
+
+.informationmenu-section-title:has(.section-arrow) {
+    grid-template-columns:
+        var(--sidebar-icon-size, 18px)
+        var(--sidebar-menu-text-track, 8rem)
+        auto;
 }
 
 .informationmenu-section-title::before {
@@ -660,10 +669,27 @@
 }
 
 .section-arrow {
+    grid-column: 8;
     font-size: 10px;
     transition: transform 0.3s ease;
-    margin-left: auto;
+    margin-left: var(--sidebar-menu-arrow-gap, 0.12rem);
+    flex-shrink: 0;
+    align-self: center;
     color: rgba(255, 255, 255, 0.8);
+}
+
+.informationmenu-section--transaction-payment {
+    margin-bottom: 0.4rem;
+}
+
+.informationmenu-section--transaction-payment .informationmenu-section-title {
+    align-items: flex-start;
+    padding-top: calc(var(--sidebar-menu-pad-y, 0.95rem) - 0.05rem);
+    padding-bottom: calc(var(--sidebar-menu-pad-y, 0.95rem) - 0.05rem);
+}
+
+.informationmenu-section--transaction-payment .section-icon {
+    margin-top: 0.12rem;
 }
 
 .account-arrow {
@@ -684,9 +710,10 @@
 }
 
 .section-icon {
-    width: 18px;
-    height: 18px;
-    margin-right: 10px;
+    grid-column: 1;
+    width: var(--sidebar-icon-size, 18px);
+    height: var(--sidebar-icon-size, 18px);
+    margin-right: 0;
     vertical-align: middle;
     flex-shrink: 0;
     object-fit: contain;
@@ -851,15 +878,20 @@
 .informationmenu-footer {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     justify-content: center;
-    padding: 25px;
+    padding: 16px clamp(8px, 0.68rem, 12px) 18px;
     border-top: none;
     background: rgba(255, 255, 255, 0);
     margin-top: auto;
     flex-shrink: 0;
     backdrop-filter: blur(10px);
-    gap: 0px;
+    gap: 0;
+    box-sizing: border-box;
+}
+
+.informationmenu-footer .logout-btn {
+    align-self: center;
 }
 
 /* 滚动条样式 */
@@ -1263,16 +1295,19 @@
 
 /* 公司到期倒计时样式 */
 .company-expiration-countdown {
-    padding: clamp(4px, 0.42vw, 6px) clamp(6px, 0.63vw, 10px);
-    margin-bottom: clamp(6px, 0.52vw, 10px);
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    margin-bottom: 8px;
     background: rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.2);
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: clamp(4px, 0.42vw, 6px);
-    transition: all 0.3s ease;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 8px;
+    transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .company-expiration-countdown.expired {
@@ -1291,10 +1326,11 @@
 }
 
 .expiration-icon {
-    width: clamp(10px, 0.83vw, 15px);
-    height: clamp(10px, 0.83vw, 15px);
+    width: 14px;
+    height: 14px;
     flex-shrink: 0;
     color: white;
+    margin-top: 1px;
 }
 
 .company-expiration-countdown.expired .expiration-icon,
@@ -1305,27 +1341,31 @@
 
 .expiration-content {
     display: flex;
-    align-items: baseline;
-    gap: clamp(3px, 0.31vw, 4px);
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    flex: 1;
+    min-width: 0;
 }
 
 .expiration-label {
-    font-size: clamp(6px, 0.625vw, 10px);
+    font-size: clamp(9px, 0.72vw, 11px);
     font-weight: 700;
     color: #ffffff;
     margin: 0;
-    line-height: 1.3;
+    line-height: 1.2;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .expiration-countdown-text {
-    font-size: clamp(6px, 0.625vw, 10px);
+    font-size: clamp(9px, 0.72vw, 11px);
     font-weight: 600;
     color: #ffffff;
     margin: 0;
-    line-height: 1.3;
+    line-height: 1.35;
+    text-align: left;
+    overflow-wrap: normal;
+    word-break: normal;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
@@ -1394,7 +1434,7 @@ body.ec-auth-shell .informationmenu .sidebar-lang-option {
 body.ec-auth-shell .informationmenu .section-icon {
     width: var(--sidebar-icon-size, 1.8rem) !important;
     height: var(--sidebar-icon-size, 1.8rem) !important;
-    margin-right: 1rem !important;
+    margin-right: 0 !important;
 }
 
 body.ec-auth-shell .informationmenu .informationmenu-section-title {
@@ -1455,7 +1495,7 @@ body.ec-auth-shell .informationmenu .submenu-item {
     body.ec-auth-shell .informationmenu .section-icon {
         width: 1.6rem !important;
         height: 1.6rem !important;
-        margin-right: 0.8rem !important;
+        margin-right: 0 !important;
     }
 
     body.ec-auth-shell .informationmenu .informationmenu-section-title {
@@ -1558,8 +1598,28 @@ body.ec-auth-shell .informationmenu .submenu-item {
 }
 
 .sidebar-menu-label {
-    flex: 1;
+    grid-column: 2;
+    flex: unset;
     min-width: 0;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.informationmenu-section--transaction-payment .sidebar-menu-label {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+}
+
+.informationmenu-section-title:has(.section-arrow) .sidebar-menu-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 @media (max-width: 1280px) {
@@ -1587,41 +1647,31 @@ body.ec-auth-shell .informationmenu .submenu-item {
         z-index: 1001;
     }
 
-    /* Expanded tablet: allow long labels (e.g. Transaction Payment) to wrap */
+    /* Expanded tablet: only Transaction Payment wraps; other labels stay single-line */
     .informationmenu:not(.is-collapsed) .informationmenu-section-title {
-        white-space: normal;
         text-overflow: clip;
         overflow: visible;
         line-height: 1.25;
-        align-items: flex-start;
+        align-items: center;
         font-size: 13px;
         padding-top: 10px;
         padding-bottom: 10px;
     }
 
-    .informationmenu:not(.is-collapsed) .sidebar-menu-label {
-        white-space: normal;
-        text-overflow: clip;
-        overflow: visible;
-        overflow-wrap: break-word;
-        word-break: normal;
-        line-height: 1.25;
+    .informationmenu:not(.is-collapsed) .informationmenu-section--transaction-payment .informationmenu-section-title {
+        align-items: flex-start;
     }
 
     body.ec-auth-shell .informationmenu:not(.is-collapsed) .informationmenu-section-title {
         font-size: 1.25rem !important;
         padding: 0.85rem 1rem !important;
-        white-space: normal !important;
         text-overflow: clip !important;
         overflow: visible !important;
-        align-items: flex-start !important;
+        align-items: center !important;
     }
 
-    body.ec-auth-shell .informationmenu:not(.is-collapsed) .sidebar-menu-label {
-        white-space: normal !important;
-        text-overflow: clip !important;
-        overflow: visible !important;
-        overflow-wrap: break-word !important;
+    body.ec-auth-shell .informationmenu:not(.is-collapsed) .informationmenu-section--transaction-payment .informationmenu-section-title {
+        align-items: flex-start !important;
     }
 
     /* Icon-only collapsed sidebar */
@@ -1675,6 +1725,8 @@ body.ec-auth-shell .informationmenu .submenu-item {
     }
 
     .informationmenu.is-collapsed .informationmenu-section-title {
+        display: flex;
+        grid-template-columns: unset;
         justify-content: center;
         padding: 10px 0;
         border-radius: 12px;
@@ -1790,23 +1842,17 @@ body.ec-auth-shell .informationmenu .submenu-item {
     }
 }
 
-/* Laptop (1281px–1440px): fluid sidebar — long labels (e.g. Transaction Payment) need wrap + breathing room */
+/* Laptop (1281px–1440px): Transaction Payment may wrap; arrows stay on text track */
 @media screen and (min-width: 1281px) and (max-width: 1440px) {
     .informationmenu .informationmenu-section-title {
-        white-space: normal;
         text-overflow: clip;
         overflow: visible;
         line-height: 1.3;
-        align-items: flex-start;
+        align-items: center;
     }
 
-    .informationmenu .sidebar-menu-label {
-        white-space: normal;
-        text-overflow: clip;
-        overflow: visible;
-        overflow-wrap: break-word;
-        word-break: normal;
-        line-height: 1.3;
+    .informationmenu .informationmenu-section--transaction-payment .informationmenu-section-title {
+        align-items: flex-start;
     }
 
     .informationmenu-content > .informationmenu-section + .informationmenu-section {
@@ -1814,20 +1860,16 @@ body.ec-auth-shell .informationmenu .submenu-item {
     }
 
     body.ec-auth-shell .informationmenu .informationmenu-section-title {
-        white-space: normal !important;
         text-overflow: clip !important;
         overflow: visible !important;
-        align-items: flex-start !important;
+        align-items: center !important;
         line-height: 1.3 !important;
         padding-top: 0.85rem !important;
         padding-bottom: 0.85rem !important;
     }
 
-    body.ec-auth-shell .informationmenu .sidebar-menu-label {
-        white-space: normal !important;
-        text-overflow: clip !important;
-        overflow: visible !important;
-        overflow-wrap: break-word !important;
+    body.ec-auth-shell .informationmenu .informationmenu-section--transaction-payment .informationmenu-section-title {
+        align-items: flex-start !important;
     }
 }
 

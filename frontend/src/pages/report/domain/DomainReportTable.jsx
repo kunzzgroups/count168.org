@@ -14,7 +14,7 @@ function rowKey(item, idx) {
   return `${p}|${d}|${c}|${g}|${co}|${idx}`;
 }
 
-export default function DomainReportTable({ reportData, loading, reportSyncing = false, error, t }) {
+export default function DomainReportTable({ reportData, reportSyncing = false, error, t }) {
   const tableHeader = (
     <div className="domain-report-table-header">
       <div>{t("colProcess")}</div>
@@ -59,14 +59,18 @@ export default function DomainReportTable({ reportData, loading, reportSyncing =
     );
   }
 
-  if (loading && reportData == null) {
-    return renderEmpty(t("loading"));
-  }
-
   const isEmpty = !reportData?.data?.length;
   if (isEmpty) {
-    const busy = loading || reportSyncing;
-    return renderEmpty(busy ? t("updatingReport") : t("noDataFound"));
+    const awaitingData = reportData == null && !error;
+    if (awaitingData || reportSyncing) {
+      return (
+        <div className="domain-report-list-container">
+          {tableHeader}
+          <div className="domain-report-cards" />
+        </div>
+      );
+    }
+    return renderEmpty(t("noDataFound"));
   }
 
   const data = reportData.data;

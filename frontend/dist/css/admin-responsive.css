@@ -67,12 +67,6 @@
   }
 
 
-  /* 1024×768：字号略小于 global-13inch，减少 Login ID / Status / Email 等被省略 */
-  body.user-page h1,
-  body.user-page .content > h1 {
-    font-size: clamp(1.35rem, 2vw, 1.55rem) !important;
-  }
-
   body.user-page .informationmenu .informationmenu-section-title {
     font-size: 1.15rem !important;
     padding: 0.55rem 0.85rem !important;

@@ -30,16 +30,6 @@ body::before {
     max-height: calc(100vh - 40px);
     overflow-y: auto;
 }
-h1 {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
-}
 .content-wrapper {
     margin-top: clamp(18px, 1.15vw, 22px);
     display: flex;

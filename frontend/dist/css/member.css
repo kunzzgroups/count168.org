@@ -19,20 +19,10 @@
 .transaction-page .transaction-container {
     max-width: none;
     margin: 0;
-    padding: 1px clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
     width: 100%;
     min-height: 100vh;
     box-sizing: border-box;
-}
-.transaction-page .transaction-title {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
 }
 .transaction-page .transaction-main-content {
     display: flex;
@@ -1261,8 +1251,8 @@ body.lang-zh.member-winloss-page .member-dash-col-filters .member-winloss-gc-pan
 body.member-winloss-page .member-dash-col-filters .user-gc-inline-panel.member-winloss-gc-panel {
     display: grid;
     grid-template-columns: var(--member-winloss-label-w, 5.75rem) minmax(0, 1fr);
-    column-gap: 10px;
-    row-gap: 22px;
+    column-gap: var(--user-gc-inline-column-gap, 4px);
+    row-gap: var(--user-gc-inline-row-gap, 4px);
     /* start：多行 Currency 时标签与首行（All 所在行）顶对齐；勿用 center 否则标签会相对整列垂直居中而偏低 */
     align-items: start;
     /* 勿用 padding:0 覆盖 .member-winloss-gc-panel 的顶内边距，否则 Account 会贴顶部分割线 */
@@ -1278,7 +1268,7 @@ body.member-winloss-page .member-dash-col-filters .user-gc-inline-panel.member-w
 
 /* Account 与 Currency 之间再拉开一些，Currency 整块下移 */
 body.member-winloss-page #member_currency_filter {
-    margin-top: 10px;
+    margin-top: 0;
 }
 
 /* Account / Currency：标签右对齐 + 与选项条统一间距（display:contents 行无法用 row gap） */
@@ -1296,7 +1286,7 @@ body.member-winloss-page #member_account_buttons.member-winloss-account-pills {
     align-self: stretch;
     overflow-x: hidden;
     overflow-y: visible;
-    gap: 6px;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -1313,7 +1303,7 @@ body.member-winloss-page #member_currency_buttons.member-winloss-currency-pills 
     align-self: stretch;
     overflow-x: auto;
     overflow-y: visible;
-    gap: 6px;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -1361,7 +1351,7 @@ body.member-winloss-page #member_currency_buttons .member-winloss-currency-segme
 }
 
 body.member-winloss-page #member_account_buttons .member-winloss-account-segments .user-gc-segment {
-    padding: 5px clamp(8px, 0.85vw, 12px);
+    padding: var(--user-gc-segment-padding, 4px clamp(10px, 1.2vw, 18px));
     box-sizing: border-box;
     min-height: clamp(28px, 1.85vw, 32px);
     width: auto;
@@ -1385,7 +1375,7 @@ body.member-winloss-page #member_account_buttons .member-winloss-account-segment
 }
 
 body.member-winloss-page #member_currency_buttons .member-winloss-currency-segments .user-gc-segment {
-    padding: 5px 8px;
+    padding: var(--user-gc-segment-padding, 4px clamp(10px, 1.2vw, 18px));
     box-sizing: border-box;
     min-height: clamp(28px, 1.85vw, 32px);
     min-width: 0;

@@ -25,10 +25,11 @@ export function isBankOnlyCategoryCompany(permissions) {
   return hasBank && !hasGames;
 }
 
-export async function fetchCurrencies(companyId) {
+export async function fetchCurrencies(companyId, options = {}) {
+  const { signal } = options;
   let url = buildApiUrl("api/transactions/get_company_currencies_api.php");
   if (companyId) url += `?company_id=${companyId}`;
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { credentials: "include", signal });
   const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || json.error || "Failed to load currencies");

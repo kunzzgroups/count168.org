@@ -30,11 +30,12 @@ export async function fetchCustomerReport(
   return json;
 }
 
-export async function fetchAccounts(companyId) {
+export async function fetchAccounts(companyId, options = {}) {
+  const { signal } = options;
   const params = new URLSearchParams();
   if (companyId) params.append("company_id", companyId);
   const url = buildApiUrl(`api/transactions/get_accounts_api.php?${params.toString()}`);
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, { credentials: "include", signal });
   const json = await res.json();
   if (!res.ok || !json.success) {
     throw new Error(json.message || json.error || "Failed to load accounts");

@@ -75,6 +75,7 @@ function fetchFormulaListRaw(PDO $pdo, int $companyId, string $search, string $p
                 dct.formula_operators,
                 dct.source_percent,
                 dct.enable_source_percent,
+                dct.last_source_value,
                 dct.description,
                 p.process_id AS process_code,
                 p.description_id,
@@ -128,10 +129,10 @@ function mapRowsToDisplay(array $rows) {
     $displayRowsByKey = [];
     foreach ($rows as $row) {
         $sourceRef = $row['columns_display'] ?? $row['source_columns'] ?? '';
-        // Source 列与 Data Capture Summary 一致：展示 source_percent（列引用仍放在 source_ref 供保存）
-        $sourceDisplay = formatSourcePercentForMaintenanceList($row['source_percent'] ?? null);
-        // 列表展示：$5 * (0.18)；编辑框用 $5*0.18（与 update 解析一致）
-        $formulaDisplayParen = buildFormulaDisplayParenFromRow($row);
+        // Source / Formula：与 shared/formula resolveTemplateFormulaBaseAndPercent 一致
+        list($resolvedBase, $resolvedSource, $resolvedEnable) = resolveTemplateFormulaBaseAndPercent($row);
+        $sourceDisplay = formatSourcePercentForMaintenanceList($resolvedSource);
+        $formulaDisplayParen = buildFormulaDisplayParenFromParts($resolvedBase, $resolvedSource, $resolvedEnable);
         $formulaEdit = buildFormulaEditFromRow($row);
         $processCode = $row['process_code'] ?? '';
         $descriptionName = $row['description_name'] ?? '';
@@ -163,50 +164,53 @@ function mapRowsToDisplay(array $rows) {
         $dedupKey = implode('|', $keyParts);
 
         $currentId = isset($row['id']) ? (int)$row['id'] : 0;
+        $currentScore = scoreTemplateRowForMaintenanceDedup($row);
+        $entry = [
+            'id' => $currentId,
+            'process' => $processDisplay,
+            'account' => $accountDisplay,
+            'account_id' => $row['account_id'],
+            'account_name' => $row['account_name'] ?? '',
+            'currency' => $currencyDisplay,
+            'source' => $sourceDisplay,
+            'source_ref' => is_string($sourceRef) ? trim($sourceRef) : trim((string) $sourceRef),
+            'product' => $product,
+            'input_method' => $inputMethod,
+            'formula' => $formulaDisplayParen,
+            'formula_edit' => $formulaEdit,
+            'description' => $description,
+            'product_type' => $productType,
+            '_score' => $currentScore,
+        ];
+
         if (!isset($displayRowsByKey[$dedupKey])) {
-            $displayRowsByKey[$dedupKey] = [
-                'id' => $currentId,
-                'process' => $processDisplay,
-                'account' => $accountDisplay,
-                'account_id' => $row['account_id'],
-                'account_name' => $row['account_name'] ?? '',
-                'currency' => $currencyDisplay,
-                'source' => $sourceDisplay,
-                'source_ref' => is_string($sourceRef) ? trim($sourceRef) : trim((string) $sourceRef),
-                'product' => $product,
-                'input_method' => $inputMethod,
-                'formula' => $formulaDisplayParen,
-                'formula_edit' => $formulaEdit,
-                'description' => $description,
-                'product_type' => $productType
-            ];
+            $displayRowsByKey[$dedupKey] = ['entry' => $entry, 'raw' => $row];
         } else {
-            // 同一个界面组合只保留最新一条，避免历史重复记录在列表中多占一行
-            $existingId = (int)$displayRowsByKey[$dedupKey]['id'];
-            if ($currentId > $existingId) {
-                $displayRowsByKey[$dedupKey]['id'] = $currentId;
-                $displayRowsByKey[$dedupKey]['formula'] = $formulaDisplayParen;
-                $displayRowsByKey[$dedupKey]['formula_edit'] = $formulaEdit;
-                $displayRowsByKey[$dedupKey]['source'] = $sourceDisplay;
-                $displayRowsByKey[$dedupKey]['source_ref'] = is_string($sourceRef) ? trim($sourceRef) : trim((string) $sourceRef);
-                $displayRowsByKey[$dedupKey]['input_method'] = $inputMethod;
-                $displayRowsByKey[$dedupKey]['description'] = $description;
-                $displayRowsByKey[$dedupKey]['account'] = $accountDisplay;
-                $displayRowsByKey[$dedupKey]['account_id'] = $row['account_id'];
-                $displayRowsByKey[$dedupKey]['account_name'] = $row['account_name'] ?? '';
-                $displayRowsByKey[$dedupKey]['currency'] = $currencyDisplay;
-                $displayRowsByKey[$dedupKey]['product'] = $product;
+            $existingScore = (int)($displayRowsByKey[$dedupKey]['entry']['_score'] ?? 0);
+            $existingId = (int)$displayRowsByKey[$dedupKey]['entry']['id'];
+            $shouldReplace = $currentScore > $existingScore
+                || ($currentScore === $existingScore && $currentId > $existingId);
+            if ($shouldReplace) {
+                $displayRowsByKey[$dedupKey] = ['entry' => $entry, 'raw' => $row];
             }
         }
     }
 
-    // 重新生成顺序号 no
+    $rawById = [];
     $data = [];
+    foreach ($displayRowsByKey as $item) {
+        $entry = $item['entry'];
+        unset($entry['_score']);
+        $rawById[(int)$entry['id']] = $item['raw'];
+        $data[] = $entry;
+    }
+
+    $data = applyPeerRowCoefficientInferencePhp($data, $rawById);
+
     $no = 1;
-    foreach ($displayRowsByKey as $row) {
-        $row['no'] = $no++;
-        $row['id'] = (int)$row['id'];
-        $data[] = $row;
+    foreach ($data as $idx => $row) {
+        $data[$idx]['no'] = $no++;
+        $data[$idx]['id'] = (int)$row['id'];
     }
     return $data;
 }

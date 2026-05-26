@@ -23,7 +23,7 @@ body.process-page {
 .process-page .container {
     max-width: none;
     margin: 0;
-    padding: 0px 40px 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) 40px 20px var(--layout-main-offset);
     width: 100%;
     height: 100vh;
     box-sizing: border-box;
@@ -39,17 +39,6 @@ body.process-page {
 
 .process-page .page-header {
     display: none;
-}
-
-.process-page .page-title {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
-    font-family: var(--font-heading-page);
 }
 
 /* Search Section */
@@ -860,6 +849,11 @@ body.process-page {
 /* Bank Process List：表头固定，数据区在视口内纵向滚动（分页固定右下角） */
 .process-page.process-page--bank {
     --bank-process-scroll-max: 100%;
+    --bank-list-scroll-min-visible-rows: 2;
+    --bank-list-data-row-estimate: var(--bank-list-cell-min-height);
+    --bank-list-scroll-body-min-height: calc(
+        var(--bank-list-scroll-min-visible-rows) * var(--bank-list-data-row-estimate)
+    );
     --bank-list-scrollbar-width: 5px;
     --bank-list-scrollbar-gutter: 6px;
     --bank-list-scrollbar-thumb: #6b7280;
@@ -925,12 +919,13 @@ body.process-page {
 }
 
 .process-page.process-page--bank .bank-process-list-scroll-region .process-table-wrapper.bank-process-table-region {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
     height: 100%;
     max-height: 100%;
     width: 100%;
     align-self: stretch;
+    overflow: hidden;
 }
 
 /* Bank 标题行字号与间距与 Games 完全统一（由 processlist.php 标题行的 inline margin-top/bottom: 20px 控制，此处不再 override） */
@@ -994,13 +989,12 @@ body.process-page {
 .process-page.process-page--bank .bank-virtual-table {
     display: flex;
     flex-direction: column;
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
     height: 100%;
     width: 100%;
     max-width: 100%;
-    overflow-x: hidden;
-    overflow-y: hidden;
+    overflow: hidden;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -1011,9 +1005,10 @@ body.process-page {
     display: grid;
     grid-template-columns: var(--bank-virtual-grid-active);
     grid-template-rows: auto minmax(0, 1fr);
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
     height: 100%;
+    overflow: hidden;
     box-sizing: border-box;
 }
 
@@ -1060,11 +1055,12 @@ body.process-page {
     grid-column: 1 / -1;
     grid-row: 2;
     align-self: stretch;
-    min-height: 0;
+    flex: 1 1 0;
+    min-height: var(--bank-list-scroll-body-min-height);
     max-height: 100%;
     display: grid;
     grid-template-columns: subgrid;
-    grid-template-rows: minmax(0, 1fr);
+    grid-template-rows: auto;
     align-content: start;
     overflow-x: hidden;
     overflow-y: auto;
@@ -1076,8 +1072,6 @@ body.process-page {
     max-width: 100%;
     margin-right: 0;
     padding-right: 0;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
     scroll-padding-bottom: 8px;
 }
 
@@ -1087,10 +1081,14 @@ body.process-page {
 
 .process-page.process-page--bank .bank-virtual-scroll.process-cards {
     grid-column: 1 / -1;
+    grid-row: 1;
+    align-self: start;
     display: grid;
     grid-template-columns: subgrid;
     grid-auto-rows: auto;
     align-content: start;
+    height: auto;
+    min-height: min-content;
     overflow: visible;
 }
 
@@ -1128,7 +1126,8 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
 }
 
 .process-page.process-page--bank .bank-virtual-scroll.process-cards {
-    min-height: min-content;
+    /* min-content 会撑开 grid 行轨道，导致 .bank-virtual-scroll-clip 无法产生纵向溢出 */
+    min-height: 0;
     width: 100%;
     box-sizing: border-box;
 }
@@ -1142,12 +1141,6 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
 
 .process-page.process-page--bank .bank-virtual-scroll .bank-virtual-data-row.process-card {
     flex-shrink: 0;
-}
-
-.process-page.process-page--bank .bank-virtual-scroll-clip::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
 }
 
 .process-page.process-page--bank .bank-virtual-data-row.process-card {
@@ -1315,8 +1308,8 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     /* 上下留白接近，避免「控制列到 GroupID」空一大块、Currency 底下过紧 */
     flex: 0 0 auto;
     padding: 12px 18px 14px 18px;
-    column-gap: clamp(8px, 0.83vw, 16px);
-    row-gap: 12px;
+    column-gap: var(--user-gc-inline-column-gap, 4px);
+    row-gap: var(--user-gc-inline-row-gap, 4px);
 }
 
 body.process-page .action-buttons-container .user-gc-inline-panel .user-gc-inline-label {
@@ -1357,7 +1350,7 @@ body.lang-zh.process-page.process-page--bank .action-buttons-container .user-gc-
     z-index: 2 !important;
 }
 
-/* Bank Process List 顶栏：日期/Search 与 Delete/Add 同一行垂直居中；filter chip 在下一行 */
+/* Bank Process List 顶栏：日期 / Search / filter chip / Delete·Add 同一行 */
 body.process-page.process-page--bank .action-buttons {
     align-items: stretch;
 }
@@ -1366,8 +1359,8 @@ body.process-page.process-page--bank .action-buttons .bank-process-toolbar-main 
     flex: 1 1 auto;
     min-width: 0;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
+    flex-direction: row;
+    align-items: center;
     width: 100%;
 }
 
@@ -1391,20 +1384,178 @@ body.process-page.process-page--bank .bank-process-toolbar-top-row .user-toolbar
     align-self: center;
 }
 
-/* Bank 操作栏：日期 + Search 单行；filter chip 在下一行 */
+/* Bank 操作栏：日期 + Search + filter chip 同一行 */
 body.process-page.process-page--bank .bank-process-toolbar-primary {
     flex-wrap: nowrap !important;
-    gap: clamp(4px, 0.5vw, 10px) !important;
+    gap: clamp(4px, 0.45vw, 8px) !important;
+    align-items: center;
+    min-width: 0;
 }
 
-.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
-    width: clamp(150px, 17vw, 240px);
-    max-width: clamp(150px, 17vw, 240px);
+body.process-page.process-page--bank .bank-process-filter-toolbar-slot {
+    display: flex;
+    align-items: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: clamp(4px, 0.4vw, 8px);
 }
 
-.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker {
-    min-width: clamp(150px, 17vw, 240px);
-    width: clamp(150px, 17vw, 240px);
+body.process-page.process-page--bank .bank-process-filter-toggle {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px 4px 10px;
+    margin: 0;
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: 999px;
+    background: #f8fafc;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+    color: #475569;
+    font-family: inherit;
+    font-size: clamp(11px, 0.72vw, 13px);
+    font-weight: var(--font-weight-semibold, 600);
+    line-height: 1.2;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        color 0.15s ease,
+        background-color 0.15s ease;
+}
+
+body.process-page.process-page--bank .bank-process-filter-toggle .fa-filter {
+    color: #3b82f6;
+    font-size: 12px;
+}
+
+body.process-page.process-page--bank .bank-process-filter-toggle:hover {
+    border-color: #cbd5e1;
+    box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08);
+}
+
+body.process-page.process-page--bank .bank-process-filter-toggle:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+}
+
+body.process-page.process-page--bank .bank-process-filter-toggle.is-open,
+body.process-page.process-page--bank .bank-process-filter-toggle.has-active-filters {
+    border-color: rgba(13, 96, 255, 0.45);
+    color: #0d60ff;
+    box-shadow: 0 2px 6px rgba(13, 96, 255, 0.12);
+}
+
+body.process-page.process-page--bank .bank-process-filter-panel {
+    display: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+body.process-page.process-page--bank .bank-process-filter-panel.is-open {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .userlist-filter-chips--bank-process {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: clamp(3px, 0.35vw, 6px);
+}
+
+body.process-page.process-page--bank .bank-process-filter-panel.is-open .userlist-filter-chips--bank-process {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 1px;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
+    width: clamp(200px, 18vw, 280px) !important;
+    max-width: clamp(200px, 18vw, 280px) !important;
+    flex-shrink: 0;
+}
+
+/* Bank Process 窄屏（<1700px）：Search 更窄，filter 收进按钮展开，不越过 Delete */
+@media (max-width: 1699px) {
+    body.process-page.process-page--bank .bank-process-filter-toggle {
+        display: inline-flex;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
+        width: clamp(96px, 8vw, 140px) !important;
+        max-width: clamp(96px, 8vw, 140px) !important;
+        flex: 0 0 auto !important;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toolbar-slot {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel.is-open {
+        max-width: 100%;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel.is-open .userlist-filter-chips--bank-process {
+        flex: 1 1 auto;
+        min-width: 0;
+        max-width: 100%;
+    }
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar .userlist-search-input,
+body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar .search-input.userlist-search-input {
+    width: 100% !important;
+    max-width: none !important;
+    flex: 1 1 auto !important;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker {
+    min-width: clamp(120px, 11vw, 180px);
+    width: clamp(120px, 11vw, 180px);
+    flex-shrink: 0;
+}
+
+/* Bank Process 宽屏（≥1700px）：日期适中、Search 略长，filter 居中并略加宽 */
+@media (min-width: 1700px) {
+    body.process-page.process-page--bank .bank-process-filter-toolbar-slot {
+        display: contents;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel {
+        display: contents;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker {
+        min-width: 220px;
+        width: clamp(220px, 12vw, 280px);
+        max-width: 280px;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
+        flex: 0 0 auto;
+        min-width: 240px;
+        width: clamp(240px, 14vw, 300px) !important;
+        max-width: 300px !important;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .userlist-filter-chips--bank-process {
+        flex: 1 1 auto;
+        min-width: 0;
+        margin-left: 0;
+        justify-content: center;
+        padding-left: clamp(8px, 0.75vw, 16px);
+        padding-right: clamp(8px, 0.75vw, 16px);
+        gap: clamp(6px, 0.5vw, 10px);
+    }
 }
 
 /* Bank 操作栏：5 个 checkbox（比 Games 多 3 个）+ 日期选择器 + Search，laptop 下防止换行 */
@@ -1484,19 +1635,13 @@ body.process-page.process-page--bank .search-container.userlist-search-bar .user
 
     .process-page .action-buttons-container .user-gc-inline-panel {
         padding: 8px 16px 12px 16px;
-        column-gap: clamp(8px, 0.83vw, 16px);
-        row-gap: 10px;
+        column-gap: var(--user-gc-inline-column-gap, 4px);
+        row-gap: var(--user-gc-inline-row-gap, 4px);
     }
 
     .process-page.process-page--bank .bank-table-wrapper,
     .process-page.process-page--bank .process-table-wrapper {
         margin-top: 8px;
-    }
-
-    .process-page.process-page--bank .page-title {
-        font-size: var(--text-page-title);
-        margin-top: 4px;
-        margin-bottom: 2px;
     }
 
     .process-page.process-page--bank .separator-line {
@@ -1678,12 +1823,19 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
     padding: 2px 4px;
     box-sizing: border-box;
     min-width: 0;
-    white-space: nowrap !important;
-    word-break: normal !important;
-    overflow-wrap: normal !important;
     overflow: hidden;
     text-overflow: ellipsis;
-    height: 30px !important;
+}
+
+/* 宽屏：单行省略；<1700px 由下方 media 放开行高与 Bank/Owner 两行 */
+@media (min-width: 1700px) {
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col,
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-virtual-cell {
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        height: 30px !important;
+    }
 }
 
 body.process-page.process-page--bank .bank-process-table-region .bank-virtual-head-row .header-item.bank-header,
@@ -1808,14 +1960,16 @@ body.process-page.process-page--bank .bank-process-table-region .bank-col-owner.
     min-width: 0;
 }
 
-body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell,
-body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner {
-    white-space: nowrap !important;
-    word-break: normal !important;
-    overflow-wrap: normal !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    justify-content: flex-start;
+@media (min-width: 1700px) {
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell,
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner {
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        justify-content: flex-start;
+    }
 }
 
 body.process-page.process-page--bank .bank-process-table-region .bank-col-owner.bank-virtual-cell {
@@ -2089,7 +2243,20 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
 @media (max-width: 1699px) {
     .process-page.process-page--bank {
         --bank-list-cell-padding-x: clamp(4px, 0.42vw, 8px);
+        --bank-list-cell-line-height: 1.28;
+        --bank-list-cell-min-height: clamp(48px, 3.4vw, 58px);
         --bank-list-header-row-height: clamp(40px, 2.9vw, 48px);
+        --bank-list-scroll-max-visible-rows: 9;
+        --bank-list-data-row-estimate: max(
+            var(--bank-list-cell-min-height),
+            calc(
+                2 * var(--bank-list-cell-padding-y)
+                + 2 * var(--bank-list-cell-line-height) * var(--text-medium, 14px)
+            )
+        );
+        --bank-list-scroll-body-max-height: calc(
+            var(--bank-list-scroll-max-visible-rows) * var(--bank-list-data-row-estimate)
+        );
         --bank-header-th-font-size: clamp(10px, 0.7vw, 12px);
         --bank-virtual-grid-columns:
             minmax(30px, 0.16fr) minmax(70px, 0.4fr) minmax(max-content, 0.3fr)
@@ -2160,18 +2327,6 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
         text-overflow: clip !important;
     }
 
-    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell,
-    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner {
-        overflow: hidden !important;
-        text-overflow: clip !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell,
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner {
-        overflow: hidden !important;
-        text-overflow: clip !important;
-    }
-
     body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-date.bank-virtual-th,
     body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-date.bank-virtual-cell {
         padding-left: clamp(6px, 0.4vw, 8px) !important;
@@ -2179,10 +2334,11 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
     }
 }
 
-/* Bank 列：宽屏单行「RHB (BUSINESS)」 */
+/* Bank 列：宽屏单行「RHB (BUSINESS)」— type 前导空格与 name 拼成 BANK (TYPE) */
 body.process-page.process-page--bank .bank-cell-display--typed {
     display: inline;
     max-width: 100%;
+    white-space: normal;
 }
 
 body.process-page.process-page--bank .bank-cell-display__name,
@@ -2190,46 +2346,116 @@ body.process-page.process-page--bank .bank-cell-display__type {
     display: inline;
 }
 
-/* 视口 < 1600px：表头/数据最多两行换行，完整展示内容 */
-@media (max-width: 1599px) {
+body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-display__type {
+    margin-left: 0.28em;
+}
+
+/* 视口 < 1700px：表头/数据最多两行换行，列表区内滚动，分页固定底部 */
+@media (max-width: 1699px) {
+    .process-page.process-page--bank .bank-process-list-body,
+    .process-page.process-page--bank .bank-process-list-scroll-region {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .process-page.process-page--bank .bank-process-list-scroll-region .process-table-wrapper.bank-process-table-region,
+    .process-page.process-page--bank .bank-virtual-table {
+        flex: 1 1 0;
+    }
+
+    .process-page.process-page--bank .bank-virtual-scroll-clip {
+        flex: 1 1 0;
+        min-height: var(--bank-list-scroll-body-min-height);
+        max-height: 100%;
+        grid-template-rows: auto;
+        overflow-y: visible;
+        overscroll-behavior: contain;
+    }
+
+    /* 超过 9 行：列表区高度 ≈ 9 行，内部滚动，避免挤压重叠 */
+    .process-page.process-page--bank .bank-virtual-scroll-clip.bank-virtual-scroll-clip--cap-rows {
+        max-height: min(100%, var(--bank-list-scroll-body-max-height)) !important;
+        overflow-y: auto !important;
+    }
+
+    .process-page.process-page--bank .bank-virtual-scroll.process-cards {
+        grid-auto-rows: minmax(var(--bank-list-data-row-estimate), auto);
+    }
+
+    .process-page.process-page--bank .bank-virtual-scroll .bank-virtual-data-row.process-card {
+        min-height: var(--bank-list-data-row-estimate) !important;
+    }
+
+    .process-page.process-page--bank .bank-virtual-data-row.process-card {
+        flex-shrink: 0;
+        overflow: visible;
+        isolation: isolate;
+        align-items: stretch !important;
+        min-height: var(--bank-list-data-row-estimate) !important;
+    }
     .process-page.process-page--bank {
+        --bank-list-scroll-max-visible-rows: 9;
+        --bank-list-scroll-body-max-height: calc(
+            var(--bank-list-scroll-max-visible-rows) * var(--bank-list-data-row-estimate)
+        );
         --bank-list-cell-padding-x: clamp(3px, 0.38vw, 6px);
-        --bank-list-cell-padding-y: clamp(4px, 0.38vw, 7px);
-        --bank-list-cell-line-height: 1.22;
-        --bank-list-cell-min-height: clamp(42px, 3vw, 54px);
+        --bank-list-cell-padding-y: clamp(5px, 0.42vw, 8px);
+        --bank-list-cell-line-height: 1.28;
+        --bank-list-cell-min-height: clamp(48px, 3.4vw, 58px);
         --bank-list-header-row-height: clamp(40px, 2.9vw, 48px);
+        --bank-list-data-row-estimate: max(
+            var(--bank-list-cell-min-height),
+            calc(
+                2 * var(--bank-list-cell-padding-y)
+                + 2 * var(--bank-list-cell-line-height) * var(--text-medium, 14px)
+            )
+        );
         --bank-header-th-font-size: clamp(9px, 0.65vw, 11px);
         /* 列宽按表头完整词 + 排序图标预留（No…Action） */
         --bank-virtual-grid-columns:
             minmax(28px, 0.14fr) minmax(64px, 0.38fr) minmax(max-content, 0.28fr)
-            minmax(44px, 0.58fr) minmax(82px, 0.98fr)
+            minmax(52px, 0.62fr) minmax(96px, 1.12fr)
             minmax(66px, 0.36fr) minmax(max-content, 0.32fr) minmax(max-content, 0.3fr)
             minmax(40px, 0.34fr) minmax(44px, 0.34fr) minmax(46px, 0.34fr)
             minmax(52px, 0.46fr) minmax(88px, 0.56fr) minmax(76px, 0.44fr);
         --bank-virtual-grid-columns-with-select:
             minmax(28px, 0.14fr) minmax(64px, 0.38fr) minmax(max-content, 0.28fr)
-            minmax(44px, 0.58fr) minmax(82px, 0.98fr)
+            minmax(52px, 0.62fr) minmax(96px, 1.12fr)
             minmax(66px, 0.36fr) minmax(max-content, 0.32fr) minmax(max-content, 0.3fr)
             minmax(40px, 0.34fr) minmax(44px, 0.34fr) minmax(46px, 0.34fr)
             minmax(52px, 0.46fr) minmax(88px, 0.56fr) minmax(76px, 0.44fr) minmax(34px, 0.26fr);
     }
 
-    /* 行高由 Bank/Owner 等两行列决定；其余列垂直居中于行内 */
+    /* Supplier：<1700px 仍单行省略 */
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-supplier.bank-virtual-cell {
+        display: flex !important;
+        white-space: nowrap !important;
+        word-break: normal !important;
+        overflow-wrap: normal !important;
+        -webkit-line-clamp: unset;
+        line-clamp: unset;
+    }
+
+    /* 行高由 Bank / Card Owner 两行列撑开；其余列垂直居中于行内 */
     .process-page.process-page--bank .bank-virtual-data-row {
-        align-items: center !important;
+        align-items: stretch !important;
     }
 
     body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col,
     body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-virtual-cell {
         height: auto !important;
-        min-height: var(--bank-list-cell-min-height) !important;
-        align-self: center !important;
+        min-height: var(--bank-list-data-row-estimate) !important;
+        align-self: stretch !important;
         align-items: center !important;
         justify-content: center;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
-    /* 名称列（Supplier / Card Owner）：最多 2 行，内容块在行内垂直居中 */
-    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-virtual-cell.bank-virtual-cell--wrap {
+    /* Bank / Card Owner：最多 2 行换行（无 bank-cell-display 时用 line-clamp） */
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-virtual-cell.bank-virtual-cell--wrap:not(:has(.bank-cell-display--typed)) {
         display: -webkit-box !important;
         -webkit-box-orient: vertical !important;
         -webkit-line-clamp: 2;
@@ -2244,7 +2470,7 @@ body.process-page.process-page--bank .bank-cell-display__type {
         text-align: left;
     }
 
-    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-supplier.bank-virtual-cell--wrap,
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-bank.bank-virtual-cell--wrap,
     body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell--wrap {
         justify-content: flex-start;
         -webkit-box-align: start;
@@ -2281,16 +2507,19 @@ body.process-page.process-page--bank .bank-cell-display__type {
         text-align: left;
     }
 
-    /* Bank：<1600px 固定两行（银行名 / 类型），完整展示、不省略 */
-    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-bank.bank-virtual-cell {
+    /* Bank：<1700px 有 type 时固定两行（银行名 / 类型），行高随内容撑开 */
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-bank.bank-virtual-cell:has(.bank-cell-display--typed),
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-bank.bank-virtual-cell--wrap:has(.bank-cell-display--typed) {
         display: flex !important;
         flex-wrap: nowrap !important;
-        align-self: center !important;
+        align-self: stretch !important;
         align-items: center !important;
         justify-content: flex-start !important;
         white-space: normal !important;
-        overflow: visible !important;
+        overflow: hidden !important;
         text-overflow: clip !important;
+        -webkit-line-clamp: unset;
+        line-clamp: unset;
     }
 
     body.process-page.process-page--bank .bank-cell-display--typed {
@@ -2300,9 +2529,12 @@ body.process-page.process-page--bank .bank-cell-display__type {
         justify-content: center;
         width: 100%;
         min-width: 0;
-        min-height: calc(2 * var(--bank-list-cell-line-height, 1.22) * 1em);
-        line-height: var(--bank-list-cell-line-height, 1.22);
-        overflow: visible;
+        min-height: calc(
+            2 * var(--bank-list-cell-line-height, 1.28) * var(--text-medium, 14px)
+        );
+        line-height: var(--bank-list-cell-line-height, 1.28);
+        overflow: hidden;
+        gap: 1px;
     }
 
     body.process-page.process-page--bank .bank-cell-display__name,
@@ -2311,20 +2543,32 @@ body.process-page.process-page--bank .bank-cell-display__type {
         width: 100%;
         max-width: 100%;
         white-space: nowrap;
-        overflow: visible;
-        text-overflow: clip;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-display__type {
+        margin-left: 0;
     }
 
     body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell,
-    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner {
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner,
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell--wrap {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell,
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner {
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-owner,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-col-owner.bank-virtual-cell--wrap {
         overflow: hidden !important;
         text-overflow: ellipsis !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        overflow-wrap: break-word !important;
     }
 
     /* Contract：单行徽章，随两行 Bank 垂直居中 */
@@ -2772,6 +3016,20 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     line-height: 1.1;
 }
 
+/* Bank virtual 数据格：勿套用全局 card-item 单行，避免 <1700px 两行重叠 */
+@media (max-width: 1699px) {
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-virtual-cell {
+        line-height: var(--bank-list-cell-line-height) !important;
+        min-height: var(--bank-list-data-row-estimate) !important;
+        height: auto !important;
+    }
+
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-virtual-cell.bank-virtual-cell--wrap,
+    body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .card-item.bank-col-bank.bank-virtual-cell:has(.bank-cell-display--typed) {
+        white-space: normal !important;
+    }
+}
+
 .process-page:not(.process-page--bank) .games-process-row .card-item:nth-child(5),
 .process-page:not(.process-page--bank) .games-process-table-header .header-item:nth-child(5) {
     justify-content: flex-start;
@@ -2869,9 +3127,8 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
 
 .process-page .bank-resend-btn:disabled,
 .process-page .bank-resent-btn:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-    color: #9ca3af;
+    opacity: 0.55;
+    cursor: wait;
 }
 
 .process-page .bank-resend-btn svg,
@@ -4068,7 +4325,7 @@ body.process-page > .process-modal {
 .process-page .modal .day-use-pill-row .user-gc-segment-group .user-gc-segment {
     flex: 1 1 0;
     min-width: 0;
-    padding: 8px clamp(10px, 1.2vw, 18px);
+    padding: var(--user-gc-segment-padding, 4px clamp(10px, 1.2vw, 18px));
     font-size: var(--text-medium) !important;
     font-weight: var(--font-weight-semibold) !important;
 }
@@ -5016,10 +5273,9 @@ body.process-page > .process-modal {
 }
 
 .process-btn-resend:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
+    opacity: 0.75;
+    cursor: wait;
     transform: none;
-    filter: grayscale(0.35);
 }
 
 /* Resend to Accounting Due — layout & form panel */

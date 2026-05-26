@@ -12,7 +12,17 @@ function rowKey(it, idx) {
   return `${a}|${c}|${n}|${idx}`;
 }
 
-export default function CustomerReportTable({ reportData, loading, reportSyncing = false, error, currencyList = [], t }) {
+export default function CustomerReportTable({
+  reportData,
+  reportSyncing = false,
+  error,
+  currencyList = [],
+  showAllCurrencies = false,
+  selectedCurrencies = [],
+  t,
+}) {
+  const showCurrencyHeaders =
+    showAllCurrencies || (Array.isArray(selectedCurrencies) && selectedCurrencies.length > 1);
   const tableHeader = (
     <div className="customer-report-table-header">
       <div>{t("colAccount")}</div>
@@ -53,14 +63,18 @@ export default function CustomerReportTable({ reportData, loading, reportSyncing
     );
   }
 
-  if (loading && reportData == null) {
-    return renderEmpty(t("loading"));
-  }
-
   const isEmpty = !reportData?.data?.length;
   if (isEmpty) {
-    const busy = loading || reportSyncing;
-    return renderEmpty(busy ? t("updatingReport") : t("noDataFound"));
+    const awaitingData = reportData == null && !error;
+    if (awaitingData || reportSyncing) {
+      return (
+        <div className="customer-report-list-container">
+          {tableHeader}
+          <div className="customer-report-cards" />
+        </div>
+      );
+    }
+    return renderEmpty(t("noDataFound"));
   }
 
   const data = reportData.data;
@@ -101,7 +115,10 @@ export default function CustomerReportTable({ reportData, loading, reportSyncing
     </>
   );
 
-  if (sortedCurrencies.length > 1 || (sortedCurrencies.length >= 1 && hasNull)) {
+  const shouldGroupWithHeaders =
+    showCurrencyHeaders && (sortedCurrencies.length > 0 || hasNull);
+
+  if (shouldGroupWithHeaders) {
     return (
       <div className="customer-report-list-container" id="currency-grouped-reports-container">
         {sortedCurrencies.map((c) => {

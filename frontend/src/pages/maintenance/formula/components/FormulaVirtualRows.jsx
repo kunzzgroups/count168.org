@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useProgressiveScrollExtent } from "../../shared/useProgressiveScrollExtent.js";
 import { formulaRowIdsMatch } from "../formulaMaintenanceLogic.js";
 import FormulaVirtualDataRow from "./FormulaVirtualDataRow.jsx";
 
@@ -133,11 +134,23 @@ export default function FormulaVirtualRows({
     onScrollRestoreComplete?.();
   }, [onScrollRestoreComplete]);
 
+  const vItems = rowVirtualizer.getVirtualItems();
+  const totalH = rowVirtualizer.getTotalSize();
+  const { displayTotalH, revealExtentForScrollTop } = useProgressiveScrollExtent({
+    scrollRef,
+    actualTotalH: totalH,
+    rowCount: rows.length,
+    rowHeightEstimate: rowHeight,
+    resetDeps: [rows],
+  });
+
   const scrollToRowId = useCallback(
     (rowId, align = "center") => {
       if (rowId == null) return false;
       const idx = rows.findIndex((r) => formulaRowIdsMatch(r.id, rowId));
       if (idx < 0) return false;
+      const offsetInfo = rowVirtualizer.getOffsetForIndex(idx, align);
+      revealExtentForScrollTop(offsetInfo?.offset ?? idx * rowHeight);
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           rowVirtualizer.scrollToIndex(idx, { align });
@@ -146,7 +159,7 @@ export default function FormulaVirtualRows({
       });
       return true;
     },
-    [rows, rowVirtualizer],
+    [rows, rowVirtualizer, revealExtentForScrollTop, rowHeight],
   );
 
   const tryRestoreScrollAnchor = useCallback(
@@ -233,9 +246,6 @@ export default function FormulaVirtualRows({
     };
   }, [onScrollingChange]);
 
-  const vItems = rowVirtualizer.getVirtualItems();
-  const totalH = rowVirtualizer.getTotalSize();
-
   return (
     <div ref={scrollRef} className="maintenance-virtual-scroll" tabIndex={0}>
       <FormulaVirtualTableHead
@@ -244,7 +254,7 @@ export default function FormulaVirtualRows({
         onToggleSelectAll={onToggleSelectAll}
         m={m}
       />
-      <div className="maintenance-virtual-spacer" style={{ height: totalH, position: "relative", width: "100%" }}>
+      <div className="maintenance-virtual-spacer" style={{ height: displayTotalH, position: "relative", width: "100%" }}>
         {vItems.map((virtualRow) => {
           const row = rows[virtualRow.index];
           if (!row) return null;

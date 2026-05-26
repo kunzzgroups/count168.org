@@ -152,6 +152,7 @@ function ensureDomainListFeeSettingsTable(PDO $pdo): void {
                 // Best effort for old schemas.
             }
             $ensured = true;
+            ensureDomainListFeePriceColumns($pdo);
             return;
         }
     } catch (Exception $e) {
@@ -171,6 +172,47 @@ function ensureDomainListFeeSettingsTable(PDO $pdo): void {
     }
     $pdo->exec("INSERT IGNORE INTO `domain_list_fee_settings` (`id`, `price`) VALUES (1, NULL)");
     $ensured = true;
+    ensureDomainListFeePriceColumns($pdo);
+}
+
+/**
+ * domain_list_fee_settings：分组价 / 公司价（与旧 price 列并存，price 同步为公司价）
+ */
+function ensureDomainListFeePriceColumns(PDO $pdo): void {
+    static $columnsEnsured = false;
+    if ($columnsEnsured) {
+        return;
+    }
+    ensureDomainListFeeSettingsTable($pdo);
+    foreach (['group_price', 'company_price'] as $col) {
+        try {
+            $pdo->exec("ALTER TABLE `domain_list_fee_settings` ADD COLUMN `{$col}` DECIMAL(25,8) NULL DEFAULT NULL");
+        } catch (Exception $e) {
+            // Column may already exist.
+        }
+    }
+    $columnsEnsured = true;
+}
+
+/**
+ * @return array{price: ?string, group_price: ?string, company_price: ?string}
+ */
+function fetchDomainListFeeSettingsRow(PDO $pdo): array
+{
+    ensureDomainListFeePriceColumns($pdo);
+    $stmt = $pdo->query("SELECT `price`, `group_price`, `company_price` FROM `domain_list_fee_settings` WHERE `id` = 1");
+    $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
+    if (!$row) {
+        return ['price' => null, 'group_price' => null, 'company_price' => null];
+    }
+    foreach (['price', 'group_price', 'company_price'] as $key) {
+        if ($row[$key] !== null && $row[$key] !== '') {
+            $row[$key] = money_out($row[$key]);
+        } else {
+            $row[$key] = null;
+        }
+    }
+    return $row;
 }
 
 /**
@@ -525,13 +567,16 @@ function tableHasColumn(PDO $pdo, string $table, string $column): bool
 
 function getDomainFeePrice(PDO $pdo): ?string
 {
-    ensureDomainListFeeSettingsTable($pdo);
-    $stmt = $pdo->query("SELECT `price` FROM `domain_list_fee_settings` WHERE `id` = 1");
-    $price = $stmt ? $stmt->fetchColumn() : null;
-    if ($price === false || $price === null || $price === '') {
+    $row = fetchDomainListFeeSettingsRow($pdo);
+    $company = $row['company_price'] ?? null;
+    if ($company !== null && $company !== '') {
+        return money_normalize($company);
+    }
+    $legacy = $row['price'] ?? null;
+    if ($legacy === null || $legacy === '') {
         return null;
     }
-    return money_normalize($price);
+    return money_normalize($legacy);
 }
 
 function domainApiClearTransactionSearchCache(): void
@@ -3200,14 +3245,7 @@ try {
                 exit;
             }
             try {
-                ensureDomainListFeeSettingsTable($pdo);
-                $stmt = $pdo->query("SELECT `price` FROM `domain_list_fee_settings` WHERE `id` = 1");
-                $row = $stmt->fetch(PDO::FETCH_ASSOC);
-                if (!$row) {
-                    $row = ['price' => null];
-                } elseif ($row['price'] !== null && $row['price'] !== '') {
-                    $row['price'] = money_out($row['price']);
-                }
+                $row = fetchDomainListFeeSettingsRow($pdo);
                 jsonResponse(true, 'OK', $row);
             } catch (Exception $e) {
                 jsonResponse(false, 'Error: ' . $e->getMessage(), null);
@@ -3219,17 +3257,24 @@ try {
                 jsonResponse(false, 'Forbidden', null, 403);
                 exit;
             }
-            $price = normalizeOptionalDecimal($data['price'] ?? null);
-            if ($price === false) {
+            $groupPrice = normalizeOptionalDecimal($data['group_price'] ?? ($data['price'] ?? null));
+            $companyPrice = normalizeOptionalDecimal($data['company_price'] ?? ($data['price'] ?? null));
+            if ($groupPrice === false || $companyPrice === false) {
                 jsonResponse(false, 'Price must be a number or empty', null);
                 exit;
             }
             try {
-                ensureDomainListFeeSettingsTable($pdo);
-                $stmt = $pdo->prepare("UPDATE `domain_list_fee_settings` SET `price` = ? WHERE `id` = 1");
-                $stmt->execute([$price]);
+                ensureDomainListFeePriceColumns($pdo);
+                $stmt = $pdo->prepare("
+                    UPDATE `domain_list_fee_settings`
+                    SET `group_price` = ?, `company_price` = ?, `price` = ?
+                    WHERE `id` = 1
+                ");
+                $stmt->execute([$groupPrice, $companyPrice, $companyPrice]);
                 jsonResponse(true, 'Saved successfully', [
-                    'price' => $price !== null ? money_out($price) : null
+                    'price' => $companyPrice !== null ? money_out($companyPrice) : null,
+                    'group_price' => $groupPrice !== null ? money_out($groupPrice) : null,
+                    'company_price' => $companyPrice !== null ? money_out($companyPrice) : null,
                 ]);
             } catch (Exception $e) {
                 jsonResponse(false, 'Error: ' . $e->getMessage(), null);

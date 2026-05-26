@@ -540,7 +540,6 @@ export default function DataCapturePage() {
     <DataCaptureErrorBoundary key={companyId ?? "none"}>
       <div className="container" key={companyId ?? "none"}>
       <div className="dc-page-toolbar">
-        <h1>{t("pageTitle")}</h1>
 
         <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
           <div

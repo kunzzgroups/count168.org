@@ -27,7 +27,7 @@ body.dashboard-page.report-page {
 body.dashboard-page.report-page .container {
     max-width: none;
     margin: 0;
-    padding: 1px clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
     width: 100%;
     box-sizing: border-box;
 }
@@ -380,13 +380,6 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
     gap: clamp(10px, 0.83vw, 16px);
     flex-wrap: wrap;
 }
-
-.account-page-title {
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-}
-
-
 
 /* Report Date Range：字号、颜色、框的 border 与 Account 一致 */
 

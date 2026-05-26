@@ -34,9 +34,6 @@ export default function TransactionDashboardPage() {
           message={page.companyAccessModal.message}
           onClose={page.closeCompanyAccessModal}
         />
-        <header className="dashboard-page-header">
-          <h1 className="dashboard-title">{i18n.transactionDashboard}</h1>
-        </header>
 
         {page.loadError && (
           <div className="dashboard-card" style={{ marginBottom: 12, color: "#b91c1c" }}>

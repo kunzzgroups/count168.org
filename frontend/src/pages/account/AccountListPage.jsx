@@ -945,7 +945,6 @@ export default function AccountListPage() {
     <>
       <div className="container">
         <div className="content">
-          <h1 className="account-page-title">{t("accountList")}</h1>
           <div className="action-buttons-container">
             <div className="action-buttons">
               <div className="account-toolbar-top-row">

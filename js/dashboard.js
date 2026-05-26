@@ -1721,7 +1721,7 @@ async function updateChart(data) {
             dataType: 'expenses'
         },
         {
-            label: 'NET PROFIT',
+            label: 'Net Profit',
             data: netProfitData,
             borderColor: '#10b981',
             backgroundColor: function (context) {
@@ -2085,7 +2085,7 @@ function createChart(canvas, chartData) {
                                                     '--- Summary ---',
                                                     `Profit: RM ${formatCurrency(p)}`,
                                                     `Expenses: RM ${formatCurrency(e)}`,
-                                                    `NET PROFIT: RM ${formatCurrency(np)}`,
+                                                    `Net Profit: RM ${formatCurrency(np)}`,
                                                     `Earnings: RM ${formatCurrency(er)}`
                                                 ];
                                             }

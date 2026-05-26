@@ -25,7 +25,7 @@
 .account-page .container {
     max-width: none;
     margin: 0;
-    padding: 1px 40px 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) 40px 20px var(--layout-main-offset);
     width: 100%;
     height: 100vh;
     box-sizing: border-box;
@@ -57,10 +57,6 @@ body.account-page:not(.account-page--show-all) .content {
     flex-direction: column;
     overflow: hidden;
     min-height: 0;
-}
-
-body.account-page:not(.account-page--show-all) .content > .account-page-title {
-    margin-top: 8px !important;
 }
 
 body.account-page .action-buttons-container {
@@ -131,8 +127,8 @@ body.account-page .action-controls-row {
 body.account-page .action-buttons-container .user-gc-inline-panel {
     flex: 0 0 auto;
     padding: 12px 18px 14px 18px;
-    column-gap: clamp(8px, 0.83vw, 16px);
-    row-gap: 12px;
+    column-gap: var(--user-gc-inline-column-gap, 4px);
+    row-gap: var(--user-gc-inline-row-gap, 4px);
 }
 
 body.account-page .account-table-wrapper {
@@ -285,17 +281,6 @@ body.account-page:not(.account-page--show-all) .account-pagination-container {
 
 .page-header {
     display: none;
-}
-
-.account-page-title {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
-    font-family: var(--font-heading-page);
 }
 
 /* Search Section */
@@ -3008,8 +2993,8 @@ body:not(.maintenance-page) .quick-select-dropdown-toggle .dropdown-item:hover {
 
     body.account-page .action-buttons-container .user-gc-inline-panel {
         padding: 8px 16px 12px 16px;
-        column-gap: clamp(8px, 0.83vw, 16px);
-        row-gap: 10px;
+        column-gap: var(--user-gc-inline-column-gap, 4px);
+        row-gap: var(--user-gc-inline-row-gap, 4px);
     }
 }
 

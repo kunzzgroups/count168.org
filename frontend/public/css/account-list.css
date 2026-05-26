@@ -1076,7 +1076,7 @@ body.account-page .search-container.userlist-search-bar .userlist-search-input {
     }
 
     body.account-page .action-buttons-container .user-gc-inline-panel {
-        row-gap: 10px;
+        row-gap: var(--user-gc-inline-row-gap, 4px);
     }
 
     /* —— Currency Setting 全屏 —— */

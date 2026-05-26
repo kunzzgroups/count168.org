@@ -17,14 +17,15 @@ import "../../../../public/css/maintenance_notifications.css";
 import BankprocessMaintenanceFilters from "./components/BankprocessMaintenanceFilters.jsx";
 import BankprocessMaintenanceTable from "./components/BankprocessMaintenanceTable.jsx";
 import MaintenanceDeleteConfirmModal from "../shared/MaintenanceDeleteConfirmModal.jsx";
-import PageContentLoader from "../../../components/PageContentLoader.jsx";
 import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
 import {
   deleteBankprocessData,
   fetchCompanyCurrencies,
   fetchCompanyPermissions,
   formatDmy,
+  isBankprocessMaintenanceRowSelectable,
   searchBankprocessData,
+  toggleBankprocessMaintenanceBatchSelection,
   updateSessionCompany,
 } from "./bankprocessMaintenanceLogic.js";
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
@@ -82,11 +83,6 @@ export default function BankprocessMaintenancePage() {
   const initialBankprocessSearchDoneRef = useRef(false);
   const searchSeqRef = useRef(0);
   const searchAbortRef = useRef(null);
-
-  const pageTitle = useMemo(
-    () => t("pageTitleBankProcess", { category: selectedPermission || m.bankProcessCategoryFallback }),
-    [t, selectedPermission, m.bankProcessCategoryFallback]
-  );
 
   const notify = useCallback((message, type = "success") => {
     const id = Date.now() + Math.random();
@@ -463,26 +459,23 @@ export default function BankprocessMaintenancePage() {
     setSelectedCurrencies([]);
   }, []);
 
-  const selectableRows = useMemo(
-    () => rows.filter((r) => !(r.is_deleted === 1 || r.is_deleted === "1" || r.is_deleted === true)),
-    [rows]
-  );
+  const selectableRows = useMemo(() => rows.filter((r) => isBankprocessMaintenanceRowSelectable(r)), [rows]);
 
   const selectAll = selectableRows.length > 0 && selectedIds.length === selectableRows.length;
 
   const onToggleSelectAll = useCallback(() => {
     setSelectedIds((prev) => {
-      const selectable = rowsRef.current.filter(
-        (r) => !(r.is_deleted === 1 || r.is_deleted === "1" || r.is_deleted === true),
-      );
+      const selectable = rowsRef.current.filter((r) => isBankprocessMaintenanceRowSelectable(r));
       if (prev.length === selectable.length && selectable.length > 0) return [];
       return selectable.map((r) => r.transaction_id);
     });
   }, []);
 
-  const onToggleRow = (transactionId) => {
-    setSelectedIds((prev) => (prev.includes(transactionId) ? prev.filter((id) => id !== transactionId) : [...prev, transactionId]));
-  };
+  const onToggleRow = useCallback((transactionId) => {
+    setSelectedIds((prev) =>
+      toggleBankprocessMaintenanceBatchSelection(prev, rowsRef.current, transactionId),
+    );
+  }, []);
 
   const onDelete = async () => {
     if (selectedIds.length === 0) {
@@ -512,7 +505,8 @@ export default function BankprocessMaintenancePage() {
     }
   };
 
-  if (bootLoading || !me) return <PageContentLoader />;
+  const tableLoading =
+    loading || bootLoading || !currenciesReady || (!hasSearched && Boolean(companyId));
 
   return (
     <div className="bankprocess-maintenance-page-root container">
@@ -546,13 +540,12 @@ export default function BankprocessMaintenancePage() {
         setConfirmDelete={setConfirmDelete}
         selectedIds={selectedIds}
         onDelete={onDelete}
-        pageTitle={pageTitle}
         m={m}
       />
 
       <BankprocessMaintenanceTable
         key={bankprocessDataSourceCompanyId ?? companyId ?? "no-company"}
-        loading={loading}
+        loading={tableLoading}
         rows={rows}
         hasSearched={hasSearched}
         listEpoch={bankprocessListEpoch}

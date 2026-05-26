@@ -256,7 +256,6 @@ export default function UserAccessPage() {
 
   return (
     <div style={{ marginLeft: 260, padding: 16 }}>
-      <h1>User Access</h1>
       <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
         <button onClick={() => navigate("/userlist")}>Back</button>
       </div>

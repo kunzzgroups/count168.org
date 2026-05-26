@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useProgressiveScrollExtent } from "../../shared/useProgressiveScrollExtent.js";
 import CaptureVirtualDataRow from "./CaptureVirtualDataRow.jsx";
 
 function pickOverscan(count) {
@@ -122,6 +123,13 @@ export default function CaptureVirtualRows({
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
+  const { displayTotalH } = useProgressiveScrollExtent({
+    scrollRef,
+    actualTotalH: totalH,
+    rowCount: rows.length,
+    rowHeightEstimate: rowHeight,
+    resetDeps: [rows],
+  });
 
   return (
     <div ref={scrollRef} className="maintenance-virtual-scroll" tabIndex={0}>
@@ -132,7 +140,7 @@ export default function CaptureVirtualRows({
         m={m}
         disableSelectAll={disableSelectAll}
       />
-      <div className="maintenance-virtual-spacer" style={{ height: totalH, position: "relative", width: "100%" }}>
+      <div className="maintenance-virtual-spacer" style={{ height: displayTotalH, position: "relative", width: "100%" }}>
         {vItems.map((virtualRow) => {
           const row = rows[virtualRow.index];
           if (!row) return null;

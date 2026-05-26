@@ -16,6 +16,12 @@ import {
 } from "../utils/auth/sidebarPermissions.js";
 import "../../public/css/modal-close-unified.css";
 
+function formatSidebarExpirationHint(hint, i18n) {
+  if (!hint || hint === "-") return "-";
+  if (hint === "No expiration date") return i18n.expNoDate;
+  return hint;
+}
+
 function readCookie(name) {
   const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
   return m ? decodeURIComponent(m[1]) : "";
@@ -527,7 +533,7 @@ export default function AuthenticatedLayout() {
             </div>
           )}
           {canAccess("payment") && (
-            <div className="informationmenu-section">
+            <div className="informationmenu-section informationmenu-section--transaction-payment">
               <div
                 className={`informationmenu-section-title ${path === "/transaction" ? "current-page" : "account-direct"}`}
                 title={sidebarMenuTitle(i18n.sidebarTransactionPayment)}
@@ -709,7 +715,9 @@ export default function AuthenticatedLayout() {
             </svg>
             <div className="expiration-content">
               <span className="expiration-label">{i18n.exp}</span>
-              <span className={`expiration-countdown-text ${me?.expiration_status || "normal"}`}>{me?.expiration_hint || "-"}</span>
+              <span className={`expiration-countdown-text ${me?.expiration_status || "normal"}`}>
+                {formatSidebarExpirationHint(me?.expiration_hint, i18n)}
+              </span>
             </div>
           </div>
           <button

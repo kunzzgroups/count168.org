@@ -3,38 +3,46 @@
     margin: 0;
     padding: 0;
     min-height: 100vh;
-    background-color: #e9f1ff;
-    background-image:
+    background-color: var(--color-page-bg, #e9f1ff);
+    background-image: var(--app-shell-bg-image,
         radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 48%),
         radial-gradient(circle at 70% 15%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 45%),
         radial-gradient(circle at 40% 70%, rgba(206, 232, 255, 0.55) 0%, rgba(255, 255, 255, 0) 60%),
         radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%),
-        linear-gradient(145deg, #97BFFC 0%, #AECFFA 40%, #f9fbff 100%);
+        linear-gradient(145deg, #97BFFC 0%, #AECFFA 40%, #f9fbff 100%));
     background-blend-mode: screen, screen, multiply, screen, normal;
     color: #334155;
     overflow-x: hidden;
     overflow-y: auto;
 }
 
+/* Short result sets leave a tall empty canvas — paint the workspace shell too (not only body). */
+body.transaction-page .transaction-container {
+    background-color: var(--color-page-bg, #e9f1ff);
+    background-image: var(--app-shell-bg-image,
+        radial-gradient(circle at 15% 20%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0) 48%),
+        radial-gradient(circle at 70% 15%, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 45%),
+        radial-gradient(circle at 40% 70%, rgba(206, 232, 255, 0.55) 0%, rgba(255, 255, 255, 0) 60%),
+        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 55%),
+        linear-gradient(145deg, #97BFFC 0%, #AECFFA 40%, #f9fbff 100%));
+    background-blend-mode: screen, screen, multiply, screen, normal;
+}
+
+/* global-13inch.css uses cover+fixed on ec-auth-shell; that washes the lower viewport to near-white on sparse pages. */
+@media screen and (max-width: 1440px) {
+    body.transaction-page.ec-auth-shell {
+        background-attachment: scroll !important;
+        background-size: auto !important;
+    }
+}
 
 .transaction-page .transaction-container {
     max-width: none;
     margin: 0;
-    padding: 1px clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap) clamp(20px, 2.08vw, 40px) 20px var(--layout-main-offset);
     width: 100%;
     min-height: 100vh;
     box-sizing: border-box;
-}
-
-.transaction-page .transaction-title {
-    color: var(--color-heading);
-    text-align: left;
-    margin: 0;
-    margin-top: var(--text-page-title-mt) !important;
-    font-size: var(--text-page-title);
-    font-family: var(--font-heading-page);
-    font-weight: var(--font-weight-page-title);
-    letter-spacing: var(--letter-spacing-page-title);
 }
 
 .transaction-page .transaction-main {
@@ -272,7 +280,8 @@ body.transaction-page .transaction-add-section .tx-add-winlose-heading {
 body.transaction-page .transaction-bottom-filters .user-gc-inline-panel {
     display: grid;
     grid-template-columns: auto 1fr;
-    column-gap: 14px;
+    column-gap: var(--user-gc-inline-column-gap, 4px);
+    row-gap: var(--user-gc-inline-row-gap, 4px);
     align-items: center;
     border-top: none;
     padding: 0 0 4px;
@@ -301,7 +310,7 @@ body.transaction-page .transaction-bottom-filters .user-gc-inline-pills {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     flex: 1 1 0;
     min-width: 0;
 }
@@ -309,7 +318,7 @@ body.transaction-page .transaction-bottom-filters .user-gc-inline-pills {
 body.transaction-page .transaction-bottom-filters .user-gc-inline-pills--segment-scroll {
     flex-wrap: nowrap;
     overflow-x: auto;
-    gap: 0;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     padding-top: 2px;
     padding-bottom: 6px;
     scrollbar-gutter: stable;
@@ -333,7 +342,7 @@ body.transaction-page .transaction-bottom-filters .user-gc-segment {
     flex: 0 0 auto;
     flex-shrink: 0;
     margin: 0;
-    padding: 8px clamp(10px, 1.2vw, 18px);
+    padding: var(--user-gc-segment-padding, 4px clamp(10px, 1.2vw, 18px));
     border: none;
     border-right: 1px solid var(--color-border, #e5e7eb);
     background: var(--color-surface, #ffffff);
@@ -2285,15 +2294,6 @@ body.transaction-page .transaction-header-left {
     margin-top: var(--text-page-title-mt) !important;
 }
 
-body.ec-auth-shell.transaction-page .transaction-header-left > .transaction-title,
-body.ec-auth-shell .transaction-page .transaction-header-left > h1.transaction-title,
-body.transaction-page .transaction-header-left .transaction-title {
-    margin: 0 !important;
-    padding: 0;
-    line-height: 1;
-    align-self: center;
-}
-
 .contra-inbox-wrap {
     position: relative;
     flex-shrink: 0;
@@ -2992,7 +2992,7 @@ body.transaction-page .transaction-header-left .transaction-title {
 .transaction-company-buttons {
     display: inline-flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--user-gc-inline-pills-gap, 4px);
     align-items: center;
 }
 

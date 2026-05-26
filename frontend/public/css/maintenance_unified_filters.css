@@ -147,7 +147,7 @@ body.maintenance-page .maintenance-actions .maintenance-confirm-filter-chips .us
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 14px 6px 10px;
+    padding: 4px 10px 4px 4px;
     margin: 0;
     border: 1px solid var(--color-border, #e5e7eb);
     border-radius: 999px;
@@ -397,78 +397,4 @@ body.maintenance-page .maintenance-table td.maintenance-table-cell {
     text-align: left !important;
 }
 
-/* Dashboard scrollbars — report + maintenance (contrast vs pale background) */
-body.dashboard-page.report-page,
-body.dashboard-page.maintenance-page {
-    scrollbar-width: thin;
-    scrollbar-color: #2563eb #bfdbfe;
-}
-
-body.dashboard-page.report-page::-webkit-scrollbar,
-body.dashboard-page.maintenance-page::-webkit-scrollbar {
-    width: 10px;
-}
-
-body.dashboard-page.report-page::-webkit-scrollbar-track,
-body.dashboard-page.maintenance-page::-webkit-scrollbar-track {
-    background: #bfdbfe;
-    border-radius: 10px;
-}
-
-body.dashboard-page.report-page::-webkit-scrollbar-thumb,
-body.dashboard-page.maintenance-page::-webkit-scrollbar-thumb {
-    background: #2563eb;
-    border-radius: 10px;
-    border: 2px solid #bfdbfe;
-}
-
-body.dashboard-page.report-page::-webkit-scrollbar-thumb:hover,
-body.dashboard-page.maintenance-page::-webkit-scrollbar-thumb:hover {
-    background: #1d4ed8;
-}
-
-/* Maintenance virtual list — slim scrollbar (no OS arrow buttons) */
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll {
-    scrollbar-gutter: stable;
-    scrollbar-width: thin;
-    scrollbar-color: #2563eb #eef4ff;
-}
-
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-button,
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-button:single-button,
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-button:vertical:decrement,
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-button:vertical:increment {
-    display: none;
-    width: 0;
-    height: 0;
-}
-
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-track {
-    background: #eef4ff;
-    border-radius: 8px;
-    margin: 6px 0;
-}
-
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, #60a5fa 0%, #2563eb 55%, #1d4ed8 100%);
-    border-radius: 8px;
-    border: 2px solid #eef4ff;
-    min-height: 48px;
-}
-
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 55%, #1e40af 100%);
-}
-
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-thumb:active {
-    background: #1e40af;
-}
-
-body.dashboard-page.maintenance-page .maintenance-virtual-scroll::-webkit-scrollbar-corner {
-    background: transparent;
-}
+/* Scrollbars: shared dashboard style — see dashboard-scrollbar.css (app-shell) */

@@ -487,6 +487,24 @@ export function deriveBankProcessUiStatus(row) {
   return "ACTIVE";
 }
 
+/** Optimistic row patch after status menu selection (matches BankProcessStatusControl.apply). */
+export function bankProcessStatusTargetPatch(row, target) {
+  switch (target) {
+    case "ACTIVE":
+      return { status: "active", issue_flag: "" };
+    case "INACTIVE":
+      return { status: "inactive", issue_flag: "" };
+    case "OFFICIAL":
+      return { issue_flag: "official" };
+    case "E_INVOICE":
+      return { issue_flag: "e_invoice" };
+    case "BLOCK":
+      return { issue_flag: "block" };
+    default:
+      return {};
+  }
+}
+
 export const EMPTY_BANK_FORM = {
   id: "",
   country: "",
