@@ -5,7 +5,7 @@
 #   sudo bash deploy/ec2-amazon-linux-setup.sh
 set -euo pipefail
 
-APP_ROOT="${APP_ROOT:-/var/www/count168}"
+APP_ROOT="${APP_ROOT:-/var/www/count168.org}"
 REPO_URL="${REPO_URL:-https://github.com/kunzzgroups/count168test.git}"
 BRANCH="${BRANCH:-main}"
 

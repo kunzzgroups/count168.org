@@ -2,7 +2,7 @@
 # EC2 上执行：拉取 main 并生效（由 GitHub Actions SSH 调用，或手动运行）
 set -euo pipefail
 
-APP_ROOT="${APP_ROOT:-/var/www/count168}"
+APP_ROOT="${APP_ROOT:-/var/www/count168.org}"
 BRANCH="${BRANCH:-main}"
 
 cd "$APP_ROOT"

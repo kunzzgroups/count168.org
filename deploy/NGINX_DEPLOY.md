@@ -43,26 +43,26 @@ npm run build
    - 用户名 / 密码：你的 SSH 账号  
 
 2. 连接后，在**右侧（服务器）**进入或新建目录，例如：  
-   `/var/www/count168/`
+   `/var/www/count168.org/`
 
 3. 在**左侧（本地）**打开项目根目录：  
    `C:\Users\kunzz\OneDrive\Desktop\count168.org`
 
-4. 把下面这些**拖到服务器** `/var/www/count168/` 里（保持文件夹结构）：
+4. 把下面这些**拖到服务器** `/var/www/count168.org/` 里（保持文件夹结构）：
 
    | 本地文件夹/文件 | 服务器上应变成 |
    |----------------|----------------|
-   | `api/` | `/var/www/count168/api/` |
-   | `includes/` | `/var/www/count168/includes/` |
-   | `frontend/dist/` | `/var/www/count168/frontend/dist/` |
-   | `images/` | `/var/www/count168/images/` |
-   | `js/` | `/var/www/count168/js/` |
-   | `favicon.ico` | `/var/www/count168/favicon.ico` |
+   | `api/` | `/var/www/count168.org/api/` |
+   | `includes/` | `/var/www/count168.org/includes/` |
+   | `frontend/dist/` | `/var/www/count168.org/frontend/dist/` |
+   | `images/` | `/var/www/count168.org/images/` |
+   | `js/` | `/var/www/count168.org/js/` |
+   | `favicon.ico` | `/var/www/count168.org/favicon.ico` |
 
 5. **不要上传**：`node_modules/`、`.git/`、`frontend/src/`（可选）
 
 6. 在 WinSCP 里编辑服务器上的  
-   `/var/www/count168/includes/config.php`  
+   `/var/www/count168.org/includes/config.php`  
    改成该服务器的 MySQL 主机、库名、用户名、密码。
 
 ---
@@ -110,7 +110,7 @@ ls /run/php/php*-fpm.sock
 2. 在 WinSCP 里右键该文件 → 编辑，确认三处：
 
    ```nginx
-   root /var/www/count168;                    # 与步骤 2 上传目录一致
+   root /var/www/count168.org;                    # 与步骤 2 上传目录一致
    server_name count168.org www.count168.org;
    fastcgi_pass unix:/run/php/php8.2-fpm.sock;  # 改成步骤 4 查到的路径
    ```
@@ -167,7 +167,7 @@ WinSCP 只覆盖上传 **`frontend/dist/`** 到服务器同名目录即可。
 ## 目录结构速查
 
 ```
-/var/www/count168/          ← Nginx root
+/var/www/count168.org/          ← Nginx root
 ├── api/                    ← PHP 接口
 ├── includes/config.php     ← 数据库配置
 ├── frontend/dist/          ← npm run build 产物
@@ -259,11 +259,11 @@ sudo systemctl restart php8.2-fpm
 
 **仍显示 “Welcome to nginx!”**  
 - 默认站点没删：确认执行了 `rm sites-enabled/default`  
-- `root` 指错：应是 `/var/www/count168`，不是 `/usr/share/nginx/html`  
+- `root` 指错：应是 `/var/www/count168.org`，不是 `/usr/share/nginx/html`  
 - 域名没指到这个 server 块：检查 `server_name`
 
 **页面白屏 / CSS 404**  
-检查服务器上是否存在 `/var/www/count168/frontend/dist/css/style.css`。
+检查服务器上是否存在 `/var/www/count168.org/frontend/dist/css/style.css`。
 
 **API 502**  
 `fastcgi_pass` 路径不对，或 php-fpm 未运行：`sudo systemctl status php8.2-fpm`。

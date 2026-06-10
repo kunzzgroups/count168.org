@@ -24,8 +24,8 @@ SSH / Instance Connect 登录后：
 
 ```bash
 sudo dnf install -y git
-sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git /var/www/count168
-cd /var/www/count168
+sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git /var/www/count168.org
+cd /var/www/count168.org
 sudo bash deploy/ec2-amazon-linux-setup.sh
 ```
 
@@ -42,27 +42,27 @@ cd frontend
 npm run build
 ```
 
-用 WinSCP / FileZilla 把 `frontend/dist/` 整个目录上传到服务器 `/var/www/count168/frontend/dist/`。
+用 WinSCP / FileZilla 把 `frontend/dist/` 整个目录上传到服务器 `/var/www/count168.org/frontend/dist/`。
 
 **方式 B — 在 EC2 上 build**
 
 ```bash
 sudo dnf install -y nodejs npm
-cd /var/www/count168/frontend
+cd /var/www/count168.org/frontend
 npm ci
 npm run build
 ```
 
 ## 五、数据库
 
-1. 编辑 `/var/www/count168/includes/config.php`（Hostinger 的库名/密码要改成 EC2 本地 MySQL）。
+1. 编辑 `/var/www/count168.org/includes/config.php`（Hostinger 的库名/密码要改成 EC2 本地 MySQL）。
 2. 导入数据：见 `database/HOSTINGER_IMPORT.md`。
 
 ## 六、验证
 
 ```bash
 curl -I http://127.0.0.1/login
-ls /var/www/count168/frontend/dist/index.html
+ls /var/www/count168.org/frontend/dist/index.html
 sudo systemctl status nginx php-fpm
 ```
 
@@ -81,7 +81,7 @@ sudo certbot --nginx -d count168.org -d www.count168.org
 
 ```bash
 sudo rm -f /etc/nginx/conf.d/default.conf
-sudo cp /var/www/count168/deploy/nginx/count168.org.amazon-linux.conf /etc/nginx/conf.d/count168.org.conf
+sudo cp /var/www/count168.org/deploy/nginx/count168.org.amazon-linux.conf /etc/nginx/conf.d/count168.org.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
@@ -95,7 +95,7 @@ sudo systemctl restart php-fpm nginx
 **403 / 权限**
 
 ```bash
-sudo chcon -R -t httpd_sys_content_t /var/www/count168
+sudo chcon -R -t httpd_sys_content_t /var/www/count168.org
 ```
 
 **API 数据库连接失败**
@@ -114,8 +114,8 @@ mysql -u admin -p -h 127.0.0.1 u857194726_c168org -e "SELECT 1"
 推荐在服务器创建 `includes/config.local.php`（已在 .gitignore，不会被 git pull 覆盖）：
 
 ```bash
-sudo cp /var/www/count168/includes/config.local.php.example /var/www/count168/includes/config.local.php
-sudo nano /var/www/count168/includes/config.local.php
+sudo cp /var/www/count168.org/includes/config.local.php.example /var/www/count168.org/includes/config.local.php
+sudo nano /var/www/count168.org/includes/config.local.php
 ```
 
 填入 EC2 本地 MySQL 的 `$dbname` / `$dbuser` / `$dbpass`，保存后测试：
@@ -149,19 +149,19 @@ push 后 GitHub Actions 会自动 SSH 到 EC2 执行 `deploy/deploy.sh`（`git p
 | `EC2_USER` | `ec2-user` |
 | `EC2_SSH_KEY` | 登录 EC2 用的 **私钥** 全文（`.pem` 文件内容） |
 
-EC2 上需已 `git clone` 到 `/var/www/count168`，且能 `git pull`（公开仓库即可；私有仓库要在 EC2 配 deploy key 或 PAT）。
+EC2 上需已 `git clone` 到 `/var/www/count168.org`，且能 `git pull`（公开仓库即可；私有仓库要在 EC2 配 deploy key 或 PAT）。
 
 手动部署（备用）：
 
 ```bash
-cd /var/www/count168
+cd /var/www/count168.org
 bash deploy/deploy.sh
 ```
 
 ## 日常更新（手动 pull，无 Actions 时）
 
 ```bash
-cd /var/www/count168
+cd /var/www/count168.org
 git pull origin main
 # 若前端有改：本地 build 后只覆盖 frontend/dist/
 sudo systemctl reload nginx
