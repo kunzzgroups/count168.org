@@ -1,7 +1,7 @@
 import React from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
 import { bankProcessFrequencyNormalized } from "../lib/bankProcessHelpers.js";
-import { BankFormDateField } from "./bankProcessFormFields.jsx";
+import { BankFormDateField, BankSimpleSelect } from "./bankProcessFormFields.jsx";
 
 export default function ResendModal({
   resendTarget,
@@ -19,6 +19,10 @@ export default function ResendModal({
 }) {
   const fq = bankProcessFrequencyNormalized(resendFrequency);
   const isOnce = fq === "once";
+  const isMonthly = fq === "monthly";
+  const isWeek = fq === "week";
+  const isDay = fq === "day";
+  const dayEndDisabled = isOnce || isMonthly || isWeek || isDay;
   return (
     <ProcessModalPortal>
     <div id="confirmBankResendModal" className="process-modal process-modal--bank-resend" style={processModalBackdropStyle}>
@@ -57,24 +61,29 @@ export default function ResendModal({
               htmlFor="bank_resend_day_end"
               label={t("dayEnd")}
               value={resendDayEnd}
-              disabled={isOnce}
-              minYmd={isOnce ? undefined : (resendDayStart || undefined)}
+              disabled={dayEndDisabled}
+              minYmd={dayEndDisabled ? undefined : (resendDayStart || undefined)}
               placeholder={t("pickDate")}
               clearLabel={t("clearDate")}
-              className={isOnce ? "bank-resend-day-end-field--muted" : ""}
+              className={dayEndDisabled ? "bank-resend-day-end-field--muted" : ""}
             />
             <div className="bank-resend-field bank-resend-field--full">
               <label className="bank-resend-field__label" htmlFor="bank_resend_frequency">{t("frequency")}</label>
-              <select
+              <BankSimpleSelect
                 id="bank_resend_frequency"
-                className="bank-resend-control bank-resend-control--select"
+                className="bank-resend-frequency-select"
+                portalDropdownClassName="bank-resend-select-dropdown"
                 value={fq}
-                onChange={(e) => setResendFrequency(e.target.value)}
-              >
-                <option value="1st_of_every_month">{t("firstOfEveryMonth")}</option>
-                <option value="monthly">{t("monthly")}</option>
-                <option value="once">{t("onceFrequency")}</option>
-              </select>
+                includeEmptyOption={false}
+                options={[
+                  { value: "1st_of_every_month", label: t("firstOfEveryMonth") },
+                  { value: "monthly", label: t("monthly") },
+                  { value: "week", label: t("weekFrequency") },
+                  { value: "day", label: t("dayFrequency") },
+                  { value: "once", label: t("onceFrequency") },
+                ]}
+                onChange={(next) => setResendFrequency(next)}
+              />
             </div>
           </div>
           {resendInlineError ? (

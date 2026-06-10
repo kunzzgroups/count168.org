@@ -1,6 +1,9 @@
 import React from "react";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
 export function EditAnnouncementModal({ t, open, draft, setDraft, onClose, onSave }) {
+  const { submitting, guardSubmit } = useSubmitGuard(open);
+
   if (!open) return null;
   return (
     <div
@@ -16,7 +19,7 @@ export function EditAnnouncementModal({ t, open, draft, setDraft, onClose, onSav
             &times;
           </span>
         </div>
-        <form id="editAnnouncementForm" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <form id="editAnnouncementForm" onSubmit={guardSubmit(onSave)}>
           <div className="form-group">
             <label htmlFor="editAnnouncementTitle">{t("titleRequired")}</label>
             <input
@@ -41,8 +44,8 @@ export function EditAnnouncementModal({ t, open, draft, setDraft, onClose, onSav
             <button type="button" className="edit-modal-btn edit-modal-btn-cancel" onClick={onClose}>
               {t("cancel")}
             </button>
-            <button type="submit" className="edit-modal-btn edit-modal-btn-save">
-              {t("saveChanges")}
+            <button type="submit" className="edit-modal-btn edit-modal-btn-save" disabled={submitting}>
+              {submitting ? t("saving") : t("saveChanges")}
             </button>
           </div>
         </form>
@@ -52,6 +55,8 @@ export function EditAnnouncementModal({ t, open, draft, setDraft, onClose, onSav
 }
 
 export function EditMaintenanceModal({ t, open, draft, setDraft, onClose, onSave }) {
+  const { submitting, guardSubmit } = useSubmitGuard(open);
+
   if (!open) return null;
   return (
     <div
@@ -67,7 +72,19 @@ export function EditMaintenanceModal({ t, open, draft, setDraft, onClose, onSave
             &times;
           </span>
         </div>
-        <form id="editMaintenanceForm" onSubmit={(e) => { e.preventDefault(); onSave(); }}>
+        <form id="editMaintenanceForm" onSubmit={guardSubmit(onSave)}>
+          <div className="form-group">
+            <label htmlFor="editMaintenancePrefix">{t("prefixRequired")}</label>
+            <input
+              id="editMaintenancePrefix"
+              type="text"
+              required
+              maxLength={100}
+              placeholder={t("enterMaintenancePrefix")}
+              value={draft.prefix}
+              onChange={(e) => setDraft((p) => ({ ...p, prefix: e.target.value }))}
+            />
+          </div>
           <div className="form-group">
             <label htmlFor="editMaintenanceContent">{t("contentRequired")}</label>
             <textarea
@@ -81,8 +98,8 @@ export function EditMaintenanceModal({ t, open, draft, setDraft, onClose, onSave
             <button type="button" className="edit-modal-btn edit-modal-btn-cancel" onClick={onClose}>
               {t("cancel")}
             </button>
-            <button type="submit" className="edit-modal-btn edit-modal-btn-save">
-              {t("saveChanges")}
+            <button type="submit" className="edit-modal-btn edit-modal-btn-save" disabled={submitting}>
+              {submitting ? t("saving") : t("saveChanges")}
             </button>
           </div>
         </form>

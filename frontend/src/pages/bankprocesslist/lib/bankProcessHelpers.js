@@ -1,7 +1,7 @@
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 
-export const PAGE_SIZE = 20;
+export const PAGE_SIZE = 25;
 
 /** Bank Process 金额：固定两位小数（如 300.00）. */
 export function isValidBankMoneyInput(value) {
@@ -114,7 +114,7 @@ export function formatBankAccountDisplay(codeRaw, nameRaw, fallbackRaw) {
  * 全列 minmax(0, fr)：铺满容器、无横向滚动。
  */
 export const BANK_GRID_TEMPLATE_COLUMNS =
-  "minmax(0,0.34fr) minmax(0,0.62fr) minmax(0,0.44fr) minmax(0,1.12fr) minmax(0,1.48fr) minmax(0,0.68fr) minmax(0,0.58fr) minmax(0,0.52fr) minmax(0,0.58fr) minmax(0,0.58fr) minmax(0,0.58fr) minmax(0,0.62fr) minmax(0,0.58fr) minmax(0,0.54fr)";
+  "minmax(0,0.34fr) minmax(0,0.62fr) minmax(0,0.44fr) minmax(max-content,1.08fr) minmax(0,1.35fr) minmax(0,0.68fr) minmax(0,0.58fr) minmax(0,0.52fr) minmax(0,0.58fr) minmax(0,0.58fr) minmax(0,0.58fr) minmax(0,0.62fr) minmax(0,0.58fr) minmax(0,0.54fr)";
 
 /** Bank Process 列表：BANK (TYPE)，如 RHB (BUSINESS) */
 export function formatBankWithTypeDisplay(bank, type) {
@@ -175,6 +175,29 @@ export function isBankInactiveLike(status, issueFlag) {
  *
  * "Plain inactive" means status==='inactive' AND issue_flag NOT IN (official, e_invoice, block).
  */
+/** Client-side search (mirrors getBankProcesses search fields). */
+export function filterBankProcessRowsBySearch(rows, searchTerm) {
+  const q = String(searchTerm || "").trim().toUpperCase();
+  if (!q || !Array.isArray(rows)) return rows || [];
+  return rows.filter((r) => {
+    const hay = [
+      r?.country,
+      r?.bank,
+      r?.type,
+      r?.types,
+      r?.supplier,
+      r?.card_lower,
+      r?.customer,
+      r?.name,
+      r?.card_merchant_name,
+      r?.card_merchant_account_id,
+    ]
+      .map((x) => String(x || "").toUpperCase())
+      .join(" ");
+    return hay.includes(q);
+  });
+}
+
 export function matchesCurrentBankFilters(row, filters) {
   if (!row) return false;
   const { showAll, showInactive, showOfficial, showEInvoice, showBlock } = filters || {};
@@ -522,6 +545,7 @@ export const EMPTY_BANK_FORM = {
   profit_sharing: "",
   day_start: "",
   day_end: "",
+  day_end_monthly_cap_enabled: false,
   /** Add Process: default Frequency = 1st of Every Month (edit uses saved `day_start_frequency`, including `once`). */
   day_start_frequency: "1st_of_every_month",
   status: "active",
@@ -529,9 +553,11 @@ export const EMPTY_BANK_FORM = {
   sop: "",
 };
 
-/** @returns {'monthly'|'once'|'1st_of_every_month'} */
+/** @returns {'monthly'|'week'|'day'|'once'|'1st_of_every_month'} */
 export function bankProcessFrequencyNormalized(v) {
   if (v === "monthly") return "monthly";
+  if (v === "week") return "week";
+  if (v === "day") return "day";
   if (v === "once") return "once";
   return "1st_of_every_month";
 }
@@ -694,9 +720,20 @@ export const contractBillingEndYmdForBankForm = (startYmd, termMonths, frequency
 /** Matches legacy processlist.js / bank_process_list.js Accounting Due row period_types. */
 export function accountingDuePeriodType(r) {
   if (r.is_once_one_off) return "once_one_off";
+  if (r.is_weekly) return "weekly";
+  if (r.is_daily && r.is_daily_consolidated) return "daily_consolidated";
+  if (r.is_daily) return "daily";
   if (r.is_manual_inactive) return "manual_inactive";
   if (r.is_resend_consolidated_range) return "resend_consolidated_range";
   if (r.is_partial_first_month) return "partial_first_month";
   if (r.is_day_end_tail) return "day_end_tail";
   return "monthly";
+}
+
+/** Accounting Due 入账/删除时传给后端的 billing_months[] 锚点。 */
+export function accountingDueBillingMonth(r) {
+  if (r.is_daily || r.is_daily_consolidated) {
+    return String(r.monthly_billing_month || r.daily_billing_start || "").trim();
+  }
+  return String(r.weekly_billing_start || r.monthly_billing_month || "").trim();
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { formatPaymentHistoryMoneyHalfUp, toUpperDisplay } from "../lib/transactionFormat.js";
+import { formatTransactionGridMoneyHalfUp, toUpperDisplay } from "../lib/transactionFormat.js";
 
 function formatContraDate(raw) {
   if (!raw || raw === "-") return "-";
@@ -19,7 +19,7 @@ export default function TransactionHeader({
   refreshContraInbox,
   approveContra,
   rejectContra,
-  fsCompanyId,
+  scopeApi,
   mutationsBlocked = false,
   m,
   t,
@@ -208,7 +208,7 @@ export default function TransactionHeader({
                         {toUpperDisplay(it.currency || "-")}
                       </div>
                       <div className="contra-inbox-grid-cell contra-inbox-grid-cell--amount" role="cell">
-                        {formatPaymentHistoryMoneyHalfUp(it.amount)}
+                        {formatTransactionGridMoneyHalfUp(it.amount)}
                       </div>
                       <div className="contra-inbox-grid-cell contra-inbox-grid-cell--submitter" role="cell">
                         {submittedBy}
@@ -226,7 +226,7 @@ export default function TransactionHeader({
                               if (mutationsBlocked) return;
                               const tid = it.transaction_id || it.id;
                               if (!tid) return;
-                              await approveContra({ transactionId: tid, companyId: fsCompanyId });
+                              await approveContra({ transactionId: tid, scopeApi });
                             }}
                           >
                             {m.approve}
@@ -240,7 +240,7 @@ export default function TransactionHeader({
                               if (!confirm(m.confirmRejectContra)) return;
                               const tid = it.transaction_id || it.id;
                               if (!tid) return;
-                              await rejectContra({ transactionId: tid, companyId: fsCompanyId });
+                              await rejectContra({ transactionId: tid, scopeApi });
                             }}
                           >
                             {m.reject}

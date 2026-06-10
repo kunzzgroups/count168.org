@@ -71,6 +71,26 @@ export function ymdToDmy(ymd) {
   return d ? formatDmy(d) : "";
 }
 
+/** Shift a calendar date by N months; clamp day (e.g. Mar 31 → Feb 28). */
+export function shiftYmdByMonths(ymd, monthDelta) {
+  const d = parseYmd(ymd);
+  const day = d.getDate();
+  const target = new Date(d.getFullYear(), d.getMonth() + monthDelta, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(day, lastDay));
+  target.setHours(0, 0, 0, 0);
+  return formatYmd(target);
+}
+
+/** KPI compare baseline: same calendar days in the previous month (Jun 1–2 → May 1–2). */
+export function previousMonthEquivalentRange(fromYmd, toYmd) {
+  return {
+    from: shiftYmdByMonths(fromYmd, -1),
+    to: shiftYmdByMonths(toYmd, -1),
+  };
+}
+
+/** Rolling window immediately before the range (legacy; not used for KPI %). */
 export function previousPeriodRange(fromYmd, toYmd) {
   const from = parseYmd(fromYmd);
   const to = parseYmd(toYmd);

@@ -4,10 +4,11 @@
  */
 import { pushDataCaptureNotification } from "../../lib/dataCaptureNotify.js";
 import { formatMoneyDisplay } from "./dataCapturePasteMoneyUtils.js";
-import { ensurePasteGrid } from "./dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid } from "./dataCapturePasteApply.js";
+import { getActiveCaptureType, runConvertTableOnSubmit } from "../../lib/dataCaptureBridge.js";
 
 function getCaptureType() {
-  return window.__DC_GET_CAPTURE_TYPE__?.() || "1.Text";
+  return getActiveCaptureType();
 }
 
 function notifyPaste(message, type) {
@@ -409,85 +410,40 @@ export function parseAndFillHTMLTable(htmlString, startCell) {
         // ===== ALIPAY 专用处理结束 =====
 
         // 直接填充到表格
-        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-        // VPOWER、AGENT_LINK、ALIPAY、1.Text：强制从第一列开始粘贴，保证解析顺序与表格列顺序一致
-        let startCol = parseInt(startCell.dataset.col);
-        if (getCaptureType() === 'VPOWER' || getCaptureType() === 'AGENT_LINK' || getCaptureType() === 'ALIPAY' || getCaptureType() === '1.Text') {
-            startCol = 0;
-        }
+        const captureType = getCaptureType();
+        const forceColZero =
+            captureType === "VPOWER" ||
+            captureType === "AGENT_LINK" ||
+            captureType === "ALIPAY" ||
+            captureType === "1.Text";
 
-        // 扩展表格（如果需要）
-        const currentRows = document.querySelectorAll('#tableBody tr').length;
-        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-        const requiredRows = startRow + dataMatrix.length;
-        const requiredCols = startCol + maxCols;
-
-        if (requiredRows > currentRows || requiredCols > currentCols) {
-            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-            const targetCols = Math.max(currentCols, requiredCols);
-            ensurePasteGrid(targetRows, targetCols);
-        }
-
-        // 填充数据并记录粘贴历史（用于撤销）
-        const tableBody = document.getElementById('tableBody');
-        const currentPasteChanges = [];
-        let successCount = 0;
-
-        dataMatrix.forEach((rowData, rowIndex) => {
-            const actualRowIndex = startRow + rowIndex;
-            const tableRow = tableBody.children[actualRowIndex];
-
-            if (tableRow) {
-                rowData.forEach((cellData, colIndex) => {
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1];
-
-                    if (cell && cell.contentEditable === 'true') {
-                        // 保存旧值用于撤销（包括空单元格）
-                        const trimmedData = (cellData || '').trim();
-                        currentPasteChanges.push({
-                            row: actualRowIndex,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: trimmedData
-                        });
-
-                        // 填充单元格（包括空单元格，以保留列位置）
-                        // 空单元格会被设置为空字符串，这样可以在粘贴时保留空列的位置
-                        if (trimmedData === '') {
-                            cell.textContent = '';
-                        } else {
-                            // VPOWER 格式：第一列（User Name）转为大写，第二列（profit）保持原样
-                            // AGENT_LINK 和 ALIPAY 格式：保持原始数据，不做任何转换
-                            let finalValue = trimmedData;
-                            if (getCaptureType() === 'VPOWER') {
-                                if (colIndex === 0) {
-                                    finalValue = trimmedData.toUpperCase();
-                                } else {
-                                    finalValue = trimmedData;
-                                }
-                            } else if (getCaptureType() === 'AGENT_LINK' || getCaptureType() === 'ALIPAY') {
-                                finalValue = trimmedData; // 保持原始格式
-                            } else {
-                                finalValue = trimmedData.toUpperCase();
-                            }
-                            cell.textContent = formatMoneyDisplay(finalValue);
-                            successCount++;
-                        }
+        applyParsedMatrixToGrid(dataMatrix, startCell, {
+            startColOverride: forceColZero ? 0 : undefined,
+            trimValues: true,
+            transformCell: (trimmedData, rowIndex, colIndex) => {
+                if (trimmedData === "") return "";
+                if (captureType === "VPOWER") {
+                    if (colIndex === 0) {
+                        return formatMoneyDisplay(trimmedData.toUpperCase());
                     }
-                });
-            }
+                    return formatMoneyDisplay(trimmedData);
+                }
+                if (captureType === "AGENT_LINK" || captureType === "ALIPAY") {
+                    return trimmedData;
+                }
+                return formatMoneyDisplay(trimmedData.toUpperCase());
+            },
         });
 
-        // 将本次粘贴操作添加到历史记录
-        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
-        console.log('HTML table filled directly:', dataMatrix.length, 'rows x', maxCols, 'columns');
-        notifyPaste(`Successfully pasted HTML table (${dataMatrix.length} rows x ${maxCols} cols)! Press Ctrl+Z to undo`, 'success');
+        console.log("HTML table filled directly:", dataMatrix.length, "rows x", maxCols, "columns");
+        notifyPaste(
+            `Successfully pasted HTML table (${dataMatrix.length} rows x ${maxCols} cols)! Press Ctrl+Z to undo`,
+            "success",
+        );
 
         // 粘贴完成后立即应用格式转换
         setTimeout(() => {
-            window.__DC_CONVERT_TABLE_ON_SUBMIT__?.();
+            runConvertTableOnSubmit();
         }, 100);
 
         return true;

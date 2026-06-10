@@ -1,4 +1,11 @@
-/** localStorage keys shared with legacy datacapturesummary.js */
+import {
+  captureSessionMatchesScope,
+  loadActiveCaptureSession,
+  loadCaptureSession,
+  CAPTURE_SCOPE_POINTER_KEY,
+} from "../../datacapture/lib/dataCaptureStorage.js";
+import { resolveDataCaptureScopeFromSessionMeta } from "../../datacapture/lib/dataCaptureScope.js";
+import { dataCaptureScopeCacheCompanyKey } from "../../datacapture/lib/dataCaptureScope.js";
 export const SUMMARY_CAPTURE_STORAGE_KEYS = [
   "capturedTableData",
   "capturedProcessData",
@@ -6,8 +13,10 @@ export const SUMMARY_CAPTURE_STORAGE_KEYS = [
   "capturedFormatPreviewHtml",
   "captured655PreviewHtml",
   "capturedTableRateValues",
+  "capturedTableRateValuesByProductId",
   "capturedTableFormulaSourceForRefresh",
   "capturedCaptureId",
+  "summarySuppressedRowKeys",
 ];
 
 export const SUMMARY_RATE_VALUES_KEY = "capturedTableRateValues";
@@ -38,12 +47,25 @@ export function consumeSummaryFreshNavigation() {
 
 export function clearSummaryCaptureRoundStorage() {
   try {
+    const session = loadActiveCaptureSession();
+    const scopeKey = session?.processData
+      ? dataCaptureScopeCacheCompanyKey({
+          mode: session.processData.groupOnlyCapture ? "group" : "company",
+          scopeCompanyId: session.processData.scopeCompanyId,
+          groupId: session.processData.captureSelectedGroup,
+        })
+      : localStorage.getItem(CAPTURE_SCOPE_POINTER_KEY);
+
     for (const key of SUMMARY_CAPTURE_STORAGE_KEYS) {
       localStorage.removeItem(key);
+      if (scopeKey != null) {
+        localStorage.removeItem(`${key}:${scopeKey}`);
+      }
       if (key === "capturedFormatPreviewHtml" || key === "captured655PreviewHtml") {
         sessionStorage.removeItem(key);
       }
     }
+    localStorage.removeItem(CAPTURE_SCOPE_POINTER_KEY);
   } catch {
     /* ignore */
   }
@@ -66,18 +88,50 @@ export function stripSummarySuccessParamFromUrl() {
   }
 }
 
-export function readCaptureSessionFromStorage() {
-  try {
-    const tableDataStr = localStorage.getItem("capturedTableData");
-    const processDataStr = localStorage.getItem("capturedProcessData");
-    if (!tableDataStr || !processDataStr) return null;
-    return {
-      tableData: JSON.parse(tableDataStr),
-      processData: JSON.parse(processDataStr),
-    };
-  } catch {
+/**
+ * Load capture session for Summary — tries pointer/active scope, then explicit scope, then legacy keys.
+ */
+export function loadSummaryCaptureSession(captureScope = null) {
+  const active = loadActiveCaptureSession();
+  if (active?.tableData && active?.processData) {
+    return active;
+  }
+
+  if (captureScope) {
+    const scoped = loadCaptureSession(captureScope);
+    if (scoped?.tableData && scoped?.processData) {
+      return scoped;
+    }
+  }
+
+  const legacy = loadCaptureSession(null);
+  if (legacy?.tableData && legacy?.processData) {
+    return legacy;
+  }
+
+  if (active?.processData) {
+    const fromMeta = resolveDataCaptureScopeFromSessionMeta(active.processData);
+    if (fromMeta) {
+      const metaScoped = loadCaptureSession(fromMeta);
+      if (metaScoped?.tableData && metaScoped?.processData) {
+        return metaScoped;
+      }
+    }
+  }
+
+  return null;
+}
+
+export function readCaptureSessionFromStorage(expectedScope = null) {
+  const session = loadSummaryCaptureSession(expectedScope);
+  if (!session) return null;
+  if (expectedScope && !captureSessionMatchesScope(session, expectedScope)) {
     return null;
   }
+  return {
+    tableData: session.tableData,
+    processData: session.processData,
+  };
 }
 
 /** Fresh capture round: drop stale captureId before rendering summary. */

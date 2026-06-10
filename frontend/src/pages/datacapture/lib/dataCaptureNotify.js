@@ -1,8 +1,8 @@
 /**
- * Shows a Data Capture toast. Uses React host when available (`__DC_PUSH_NOTIFICATION__`),
- * otherwise falls back to the same DOM behavior as `showNotification` in `js/datacapture.js`.
+ * Shows a Data Capture toast via runtime registry, with DOM fallback.
  */
 import { translateDataCaptureNotification } from "../../../translateFile/pages/dataCaptureTranslate.js";
+import { callDataCaptureRuntime, getDataCaptureRuntime } from "./dataCaptureRuntime.js";
 
 function resolveNotificationLang() {
   return localStorage.getItem("login_lang") === "zh" ? "zh" : "en";
@@ -10,8 +10,8 @@ function resolveNotificationLang() {
 
 export function pushDataCaptureNotification(message, type = "success") {
   const localized = translateDataCaptureNotification(resolveNotificationLang(), message);
-  if (typeof window.__DC_PUSH_NOTIFICATION__ === "function") {
-    window.__DC_PUSH_NOTIFICATION__(localized, type);
+  if (typeof getDataCaptureRuntime().pushNotification === "function") {
+    callDataCaptureRuntime("pushNotification", localized, type);
     return;
   }
 

@@ -1,164 +1,165 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { buildDataCaptureTable } from "../grid/dataCaptureBuildGrid.js";
-import { DEFAULT_GRID_COLS, DEFAULT_GRID_ROWS } from "../grid/dataCaptureGridMeta.js";
+import { useDataCaptureContext } from "../context/DataCaptureContext.jsx";
 import {
-  clearCaptureTableForReset,
+  clearGridCells,
+  clearCellsInGrid,
+  createEmptyGrid,
+  resizeGrid,
+  snapshotToGrid,
+} from "../grid/gridModel.js";
+import {
+  DEFAULT_GRID_COLS,
+  DEFAULT_GRID_ROWS,
+  resolveDataCaptureGridDimensions,
+  resolveRestoreGridDimensions,
+} from "../grid/dataCaptureGridMeta.js";
+import {
+  clearCaptureTableUiAfterGridClear,
   restoreCaptureTableFromData,
 } from "../grid/dataCaptureGridClearRestore.js";
-import {
-  clearEditableGridCells,
-  populateGridFromSnapshot,
-  readGridDimensions,
-} from "../grid/dataCaptureGridSnapshot.js";
+import { toggleBridgeFormatDisplay } from "../lib/dataCaptureBridge.js";
+import { callDataCaptureRuntime, getDataCaptureState, registerDataCaptureRuntime, unregisterDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
+import { useDataCaptureGridWindowBridges } from "./useDataCaptureGridWindowBridges.js";
 
 /** Minimum rows/cols to consider the grid already built. */
 function gridLooksInitialized(dims) {
   return dims.rows >= 1 && dims.cols >= 1;
 }
 
+function gridDimsFromModel(grid) {
+  if (!grid) return { rows: 0, cols: 0 };
+  return { rows: grid.rows, cols: grid.cols };
+}
+
 /**
- * Phase 3+: Grid lifecycle in React — build, init dimensions, clear, restore cell values.
+ * Grid lifecycle — React model init, resize, clear, restore.
  */
-export function useDataCaptureGrid(scriptsReady) {
-  const dimensionsRef = useRef({ rows: DEFAULT_GRID_ROWS, cols: DEFAULT_GRID_COLS });
+export function useDataCaptureGrid(engineReady, groupOnly = false) {
+  useDataCaptureGridWindowBridges();
 
-  const initializeGrid = useCallback((rows = DEFAULT_GRID_ROWS, cols = DEFAULT_GRID_COLS) => {
-    const r = Math.max(1, Number(rows) || DEFAULT_GRID_ROWS);
-    const c = Math.max(1, Number(cols) || DEFAULT_GRID_COLS);
-    dimensionsRef.current = { rows: r, cols: c };
+  const { gridRef, replaceGrid, updateCell } = useDataCaptureContext();
+  const dimensionsRef = useRef(resolveDataCaptureGridDimensions(groupOnly));
+  const groupOnlyRef = useRef(groupOnly);
+  groupOnlyRef.current = groupOnly;
 
-    buildDataCaptureTable(r, c);
-
-    const dataTable = document.getElementById("dataTable");
-    if (dataTable && dataTable.style.display === "none") {
-      const captureType =
-        typeof window.__DC_GET_CAPTURE_TYPE__ === "function" ? window.__DC_GET_CAPTURE_TYPE__() : "";
-      if (captureType !== "2.Format") {
-        const formatReady =
-          typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
-            ? window.__DC_GET_FORMAT_GRID_READY__()
-            : false;
-        if (formatReady) {
-          dataTable.style.display = "table";
-        }
-      } else {
-        dataTable.style.display = "table";
-      }
-    }
-
-    window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
-    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
-    return dimensionsRef.current;
-  }, []);
+  const initializeGrid = useCallback(
+    (rows = DEFAULT_GRID_ROWS, cols = DEFAULT_GRID_COLS) => {
+      const r = Math.max(1, Number(rows) || DEFAULT_GRID_ROWS);
+      const c = Math.max(1, Number(cols) || DEFAULT_GRID_COLS);
+      dimensionsRef.current = { rows: r, cols: c };
+      replaceGrid(createEmptyGrid(r, c));
+      toggleBridgeFormatDisplay();
+      callDataCaptureRuntime("recomputeSubmitState");
+      return dimensionsRef.current;
+    },
+    [replaceGrid],
+  );
 
   const ensureGridReady = useCallback(
     (rows = DEFAULT_GRID_ROWS, cols = DEFAULT_GRID_COLS) => {
       const r = Math.max(1, Number(rows) || DEFAULT_GRID_ROWS);
       const c = Math.max(1, Number(cols) || DEFAULT_GRID_COLS);
+      const current = gridRef.current;
 
-      let dims = readGridDimensions();
-      if (!gridLooksInitialized(dims)) {
+      if (!current || !gridLooksInitialized(gridDimsFromModel(current))) {
         initializeGrid(r, c);
-        dims = readGridDimensions();
+        return { rows: r, cols: c };
       }
 
-      if (!gridLooksInitialized(dims)) {
-        buildDataCaptureTable(r, c);
-        dims = readGridDimensions();
-        dimensionsRef.current = dims;
+      if (current.rows !== r || current.cols !== c) {
+        replaceGrid(resizeGrid(current, r, c));
       }
 
-      const dataTable = document.getElementById("dataTable");
-      if (dataTable && dataTable.style.display === "none") {
-        const captureType =
-          typeof window.__DC_GET_CAPTURE_TYPE__ === "function" ? window.__DC_GET_CAPTURE_TYPE__() : "";
-        if (captureType === "2.Format") {
-          dataTable.style.display = "table";
-        } else {
-          const formatReady =
-            typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
-              ? window.__DC_GET_FORMAT_GRID_READY__()
-              : false;
-          if (formatReady) {
-            dataTable.style.display = "table";
-          }
-        }
-      }
-
-      window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
-      window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
-      return dims;
+      dimensionsRef.current = { rows: r, cols: c };
+      toggleBridgeFormatDisplay();
+      callDataCaptureRuntime("recomputeSubmitState");
+      return { rows: r, cols: c };
     },
-    [initializeGrid],
+    [gridRef, initializeGrid, replaceGrid],
+  );
+
+  const populateGridFromSnapshot = useCallback(
+    (tableData) => {
+      if (!tableData?.rows?.length) return false;
+      const { rows: requiredRows, cols: requiredCols } = resolveRestoreGridDimensions(
+        groupOnlyRef.current,
+        tableData,
+      );
+      replaceGrid(snapshotToGrid(tableData, requiredRows, requiredCols));
+      return true;
+    },
+    [replaceGrid],
+  );
+
+  const clearGridCellsPure = useCallback(() => {
+    const current = gridRef.current;
+    if (!current) return;
+    replaceGrid(clearGridCells(current));
+  }, [gridRef, replaceGrid]);
+
+  const readGridDimensionsBridge = useCallback(() => {
+    return gridDimsFromModel(gridRef.current);
+  }, [gridRef]);
+
+  const clearCellsAt = useCallback(
+    (positions) => {
+      const current = gridRef.current;
+      if (!current || !positions?.length) return;
+      replaceGrid(clearCellsInGrid(current, positions));
+    },
+    [gridRef, replaceGrid],
   );
 
   const handlersRef = useRef({});
-  handlersRef.current = { initializeGrid, ensureGridReady };
+  handlersRef.current = {
+    initializeGrid,
+    ensureGridReady,
+    populateGridFromSnapshot,
+    clearGridCellsPure,
+    replaceGrid,
+    updateCell,
+    clearCellsAt,
+    gridRef,
+  };
 
   useLayoutEffect(() => {
-    window.__DC_BUILD_GRID_REACT__ = buildDataCaptureTable;
-    window.__DC_LEGACY_BUILD_TABLE__ = buildDataCaptureTable;
-    window.__DC_INITIALIZE_TABLE__ = (rows, cols) => handlersRef.current.initializeGrid(rows, cols);
-    window.__DC_ENSURE_GRID_READY__ = (rows, cols) => handlersRef.current.ensureGridReady(rows, cols);
-    window.__DC_POPULATE_GRID_FROM_SNAPSHOT__ = populateGridFromSnapshot;
-    window.__DC_CLEAR_GRID_CELLS__ = clearEditableGridCells;
-    window.__DC_GET_GRID_DIMENSIONS__ = readGridDimensions;
-    window.__DC_CLEAR_CAPTURE_TABLE__ = clearCaptureTableForReset;
-    window.__DC_RESTORE_CAPTURE_TABLE__ = restoreCaptureTableFromData;
-
-    return () => {
-      delete window.__DC_BUILD_GRID_REACT__;
-      delete window.__DC_LEGACY_BUILD_TABLE__;
-      delete window.__DC_INITIALIZE_TABLE__;
-      delete window.__DC_ENSURE_GRID_READY__;
-      delete window.__DC_POPULATE_GRID_FROM_SNAPSHOT__;
-      delete window.__DC_CLEAR_GRID_CELLS__;
-      delete window.__DC_GET_GRID_DIMENSIONS__;
-      delete window.__DC_CLEAR_CAPTURE_TABLE__;
-      delete window.__DC_RESTORE_CAPTURE_TABLE__;
+    const api = {
+      buildGridReact: (rows, cols) => handlersRef.current.initializeGrid(rows, cols),
+      initializeTable: (rows, cols) => handlersRef.current.initializeGrid(rows, cols),
+      ensureGridReady: (rows, cols) => handlersRef.current.ensureGridReady(rows, cols),
+      populateGridFromSnapshot: (tableData) => handlersRef.current.populateGridFromSnapshot(tableData),
+      clearGridCells: () => handlersRef.current.clearGridCellsPure(),
+      updateCell: (rowIndex, colIndex, patch) => handlersRef.current.updateCell(rowIndex, colIndex, patch),
+      clearCellsAt: (positions) => handlersRef.current.clearCellsAt(positions),
+      getGridModel: () => handlersRef.current.gridRef.current,
+      replaceGrid: (grid) => handlersRef.current.replaceGrid(grid),
+      getGridDimensions: readGridDimensionsBridge,
+      clearCaptureTable: () => {
+        const groupOnly = getDataCaptureState().isGroupOnlyGrid === true;
+        const { rows, cols } = resolveDataCaptureGridDimensions(groupOnly);
+        handlersRef.current.ensureGridReady(rows, cols);
+        handlersRef.current.clearGridCellsPure();
+        clearCaptureTableUiAfterGridClear();
+      },
+      restoreCaptureTable: restoreCaptureTableFromData,
     };
-  }, []);
+
+    registerDataCaptureRuntime(api);
+    return () => unregisterDataCaptureRuntime(Object.keys(api));
+  }, [readGridDimensionsBridge]);
+
+  useLayoutEffect(() => {
+    getDataCaptureState().isGroupOnlyGrid = groupOnly;
+    return () => {
+      getDataCaptureState().isGroupOnlyGrid = false;
+    };
+  }, [groupOnly]);
 
   useEffect(() => {
-    if (!scriptsReady) return;
-    handlersRef.current.ensureGridReady(DEFAULT_GRID_ROWS, DEFAULT_GRID_COLS);
-  }, [scriptsReady]);
-
-  useEffect(() => {
-    if (!scriptsReady) return;
-
-    let cleanup = null;
-    let pollId = null;
-
-    const attach = () => {
-      const tableBody = document.getElementById("tableBody");
-      if (!tableBody) return false;
-
-      const notify = () => {
-        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
-      };
-
-      tableBody.addEventListener("input", notify, true);
-      tableBody.addEventListener("focusin", notify, true);
-
-      cleanup = () => {
-        tableBody.removeEventListener("input", notify, true);
-        tableBody.removeEventListener("focusin", notify, true);
-      };
-      return true;
-    };
-
-    if (!attach()) {
-      pollId = setInterval(() => {
-        if (attach()) clearInterval(pollId);
-      }, 200);
-    }
-
-    return () => {
-      clearInterval(pollId);
-      cleanup?.();
-    };
-  }, [scriptsReady]);
+    if (!engineReady) return;
+    const { rows, cols } = resolveDataCaptureGridDimensions(groupOnly);
+    handlersRef.current.initializeGrid(rows, cols);
+  }, [engineReady, groupOnly]);
 
   return {
     initializeGrid,

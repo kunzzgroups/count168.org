@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { registerDataCaptureRuntime, unregisterDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
 
 function NotificationToast({ id, message, type, onRemove }) {
   const [visible, setVisible] = useState(false);
@@ -38,15 +39,12 @@ export default function ProcessNotificationContainer() {
   }, []);
 
   useLayoutEffect(() => {
-    const bridge = (message, type) => pushRef.current(message, type);
-    window.__DC_PUSH_NOTIFICATION__ = bridge;
-    return () => {
-      try {
-        delete window.__DC_PUSH_NOTIFICATION__;
-      } catch {
-        window.__DC_PUSH_NOTIFICATION__ = undefined;
-      }
+    const api = {
+      pushNotification: (message, type) => pushRef.current(message, type),
     };
+
+    registerDataCaptureRuntime(api);
+    return () => unregisterDataCaptureRuntime(Object.keys(api));
   }, []);
 
   return (

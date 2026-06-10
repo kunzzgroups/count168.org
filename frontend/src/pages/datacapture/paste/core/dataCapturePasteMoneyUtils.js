@@ -1,9 +1,23 @@
 import { MoneyDecimal } from "../../../../utils/money/moneyDecimal.js";
 
+/** True when value parses as numeric money (not labels like OVERALL / M99M06). */
+export function isMoneyLikeDisplayValue(value) {
+  const str = (typeof value === "string" ? value : String(value ?? "")).trim();
+  if (!str) return false;
+  try {
+    const cleaned = MoneyDecimal.cleanMoneyInput(str);
+    if (!cleaned) return false;
+    return /^-?(?:\d+|\d*\.\d+)$/.test(cleaned);
+  } catch {
+    return false;
+  }
+}
+
 export function formatNumberToTwoDecimals(value) {
   if (value === null || value === undefined) return value;
   const str = (typeof value === "string" ? value : String(value)).trim();
   if (str === "") return value;
+  if (!isMoneyLikeDisplayValue(str)) return value;
   try {
     return MoneyDecimal.formatFixed(str, 2);
   } catch {
@@ -12,6 +26,9 @@ export function formatNumberToTwoDecimals(value) {
 }
 
 export function formatMoneyDisplay(value) {
+  if (!isMoneyLikeDisplayValue(value)) {
+    return typeof value === "string" ? value : String(value ?? "");
+  }
   try {
     return MoneyDecimal.formatThousands(value, 2);
   } catch {

@@ -45,19 +45,23 @@ function findMaintenanceById(PDO $pdo, int $id) {
 /**
  * 更新维护内容
  */
-function updateMaintenanceContent(PDO $pdo, int $id, string $content) {
-    $stmt = $pdo->prepare("UPDATE maintenance_marquee SET content = ?, updated_at = NOW() WHERE id = ? AND company_code = 'C168'");
-    $stmt->execute([$content, $id]);
+function updateMaintenanceContent(PDO $pdo, int $id, string $prefix, string $content) {
+    $stmt = $pdo->prepare("UPDATE maintenance_marquee SET prefix = ?, content = ?, updated_at = NOW() WHERE id = ? AND company_code = 'C168'");
+    $stmt->execute([$prefix, $content, $id]);
 }
 
 try {
     requireC168InformationManagementAccess($pdo);
 
     $maintenanceId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+    $prefix = trim($_POST['prefix'] ?? '');
     $content = trim($_POST['content'] ?? '');
 
     if ($maintenanceId <= 0) {
         throw new Exception('Maintenance ID cannot be empty');
+    }
+    if ($prefix === '') {
+        throw new Exception('Prefix cannot be empty');
     }
     if ($content === '') {
         throw new Exception('Content cannot be empty');
@@ -67,7 +71,7 @@ try {
         throw new Exception('Maintenance content does not exist or you do not have permission to update it');
     }
 
-    updateMaintenanceContent($pdo, $maintenanceId, $content);
+    updateMaintenanceContent($pdo, $maintenanceId, $prefix, $content);
     jsonResponse(true, 'Maintenance content updated successfully');
 } catch (PDOException $e) {
     jsonResponse(false, 'Database error: ' . $e->getMessage(), null, 500);

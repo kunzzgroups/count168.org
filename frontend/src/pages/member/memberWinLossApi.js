@@ -1,4 +1,8 @@
 /** Parse JSON from API responses that may include leading noise. */
+import { buildApiUrl } from "../../utils/core/apiUrl.js";
+
+import { memberHistoryClosingBalancesForAllCurrencies, normalizeNumber } from "./memberPageHelpers.js";
+
 export function parseJsonResponse(text) {
   const raw = String(text || "").trim();
   try {
@@ -41,6 +45,16 @@ export function parseJsonResponse(text) {
   }
 }
 
+/** Map get_all_linked_accounts API rows to member page account objects. */
+export function mapLinkedAccountsApiList(data) {
+  if (!Array.isArray(data)) return [];
+  return data.map((acc) => ({
+    id: acc.id,
+    account_id: acc.account_id || "",
+    name: acc.name || "",
+  }));
+}
+
 /** Map batch account-currencies API rows to accountId → Set(currency codes). */
 export function mapBatchCurrencies(data, currencySortOrderRef) {
   const map = new Map();
@@ -63,4 +77,30 @@ export function mapBatchCurrencies(data, currencySortOrderRef) {
     map.set(id, set);
   });
   return map;
+}
+
+/** 单账户单币种：与 Payment History 同口径取区间末 Balance */
+export async function fetchAccountHistoryClosingBalance(accountId, currency, fromDate, toDate, companyId, signal) {
+  const cu = String(currency || "")
+    .trim()
+    .toUpperCase();
+  const params = new URLSearchParams({
+    account_id: String(accountId),
+    date_from: fromDate,
+    date_to: toDate,
+    company_id: String(companyId),
+    currency: cu,
+  });
+  const res = await fetch(buildApiUrl(`api/transactions/history_api.php?${params}&_t=${Date.now()}`), {
+    credentials: "include",
+    cache: "no-store",
+    signal,
+  });
+  const json = await parseJsonResponse(await res.text());
+  if (!json?.success) {
+    throw new Error(json?.error || json?.message || "History request failed");
+  }
+  const wanted = new Set([cu]);
+  const map = memberHistoryClosingBalancesForAllCurrencies(json.data?.history ?? [], wanted);
+  return map.get(cu) ?? normalizeNumber("0");
 }

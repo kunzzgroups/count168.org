@@ -265,27 +265,41 @@ body.bg::before {
     z-index: 2;
 }
 
-.input-group input {
+/* LoginPage (.sc-login-input) + 二级密码 / reset (.login-container .input-group input) */
+body.bg .sc-login-input,
+body.bg .login-container .input-group input {
     box-sizing: border-box;
+    min-width: 0;
     width: 100%;
     max-width: 100%;
     min-height: 46.5px;
     padding: 12px 25px 12px 46px;
-    border: 1px solid var(--login-bg-end);
+    border-width: 2px;
+    border-style: solid;
+    border-color: var(--login-bg-end);
     border-radius: var(--login-radius-pill);
     font-size: var(--text-base);
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    background: var(--login-surface);
     color: var(--login-text);
 }
 
-.input-group input:focus {
+body.bg .sc-login-input {
+    background: rgba(255, 255, 255, 0.9);
+}
+
+body.bg .login-container .input-group input {
+    background: var(--login-surface);
+}
+
+body.bg .sc-login-input:focus,
+body.bg .login-container .input-group input:focus {
     outline: none;
     border-color: var(--login-bg-start);
     box-shadow: 0 0 0 3px rgba(0, 79, 249, 0.1);
 }
 
-.input-group input::placeholder {
+body.bg .sc-login-input::placeholder,
+body.bg .login-container .input-group input::placeholder {
     color: var(--login-bg-end);
     font-weight: 400;
 }
@@ -523,8 +537,8 @@ body.bg::before {
     animation: none;
 }
 
-/* Input focus effects */
-.input-group input:focus {
+/* Input focus effects — 二级密码 / reset（pulse 定义见下方 @keyframes） */
+body.bg .login-container .input-group input:focus {
     animation: pulse 0.3s ease-out;
 }
 

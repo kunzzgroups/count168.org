@@ -1,11 +1,5 @@
-/**
- * Id Product helpers for Summary table DOM rows (aligned with legacy normalizeIdProductText when loaded).
- */
-
+/** Id Product text normalization for Summary rows. */
 export function normalizeSummaryIdProductText(text) {
-  if (typeof window !== "undefined" && typeof window.normalizeIdProductText === "function") {
-    return window.normalizeIdProductText(text);
-  }
   if (!text || typeof text !== "string") return "";
   const trimmed = text.trim();
   if (!trimmed) return "";

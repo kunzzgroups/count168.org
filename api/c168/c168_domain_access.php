@@ -29,6 +29,26 @@ function userHasC168AnnouncementPageAccess(string $roleLower): bool
     return userHasC168DomainPageAccess($roleLower);
 }
 
+/** Auto Renew：仅 C168 公司上下文下的 owner / admin */
+function c168AutoRenewAllowedRoles(): array
+{
+    return [
+        'owner',
+        'admin',
+    ];
+}
+
+function userHasC168AutoRenewAccess(PDO $pdo, string $roleLower, string $userType): bool
+{
+    if (strtolower(trim($userType)) === 'member') {
+        return false;
+    }
+    if (!userSessionHasC168CompanyContext($pdo)) {
+        return false;
+    }
+    return in_array(strtolower(trim($roleLower)), c168AutoRenewAllowedRoles(), true);
+}
+
 /**
  * 当前 session 是否处于 C168 公司上下文（与 announcement / maintenance 各 API 的 company 校验一致）。
  */

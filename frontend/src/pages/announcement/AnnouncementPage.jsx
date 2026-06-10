@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { getAnnouncementText } from "../../translateFile/pages/announcementTranslate.js";
-import "../../../public/css/accountCSS.css";
 import "../../../public/css/announcement.css";
 
 // Components
@@ -10,7 +9,7 @@ import { AnnouncementToast, AnnouncementConfirmModal } from "./components/Announ
 import { EditAnnouncementModal, EditMaintenanceModal } from "./components/AnnouncementModals.jsx";
 import { AnnouncementPanel, MaintenancePanel } from "./components/AnnouncementPanels.jsx";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
-import PageContentLoader from "../../components/PageContentLoader.jsx";
+import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
 
 export default function AnnouncementPage() {
   const navigate = useNavigate();
@@ -18,7 +17,6 @@ export default function AnnouncementPage() {
   const [lang, setLang] = useState(() => (localStorage.getItem("login_lang") === "zh" ? "zh" : "en"));
   const t = useCallback((key, params) => getAnnouncementText(lang, key, params), [lang]);
 
-  const [ready, setReady] = useState(false);
   const [activeTab, setActiveTab] = useState("announcement");
   const [notices, setNotices] = useState([]);
 
@@ -29,7 +27,7 @@ export default function AnnouncementPage() {
   // Modals
   const [editAnnouncement, setEditAnnouncement] = useState({ id: "", title: "", content: "" });
   const [announcementModalOpen, setAnnouncementModalOpen] = useState(false);
-  const [editMaintenance, setEditMaintenance] = useState({ id: "", content: "" });
+  const [editMaintenance, setEditMaintenance] = useState({ id: "", prefix: "", content: "" });
   const [maintenanceModalOpen, setMaintenanceModalOpen] = useState(false);
   const [confirmModal, setConfirmModal] = useState(null);
 
@@ -92,15 +90,13 @@ export default function AnnouncementPage() {
     if (!sessionReady || !me) return;
 
     let cancelled = false;
-    setReady(false);
     (async () => {
       try {
-        if (!me.has_c168_domain_page_access) {
+        if (!canAccessC168DomainPages(me)) {
           navigate("/dashboard", { replace: true });
           return;
         }
         await Promise.all([loadAnnouncements(), loadMaintenance()]);
-        if (!cancelled) setReady(true);
       } catch {
         if (!cancelled) navigate("/login", { replace: true });
       }
@@ -109,8 +105,6 @@ export default function AnnouncementPage() {
       cancelled = true;
     };
   }, [sessionReady, me, navigate, loadAnnouncements, loadMaintenance]);
-
-  if (!ready) return <PageContentLoader />;
 
   // Handlers
   function handleAnnouncementEdit(item) {
@@ -148,7 +142,7 @@ export default function AnnouncementPage() {
 
   function handleMaintenanceEdit(item) {
     if (!item) { loadMaintenance(); showNotice(t("maintenancePublishedSuccess")); return; }
-    setEditMaintenance({ id: item.id, content: item.content || "" });
+    setEditMaintenance({ id: item.id, prefix: item.prefix || "", content: item.content || "" });
     setMaintenanceModalOpen(true);
   }
 
@@ -171,7 +165,9 @@ export default function AnnouncementPage() {
   async function saveEditedMaintenance() {
     try {
       const fd = new FormData();
-      fd.append("id", editMaintenance.id); fd.append("content", editMaintenance.content.trim());
+      fd.append("id", editMaintenance.id);
+      fd.append("prefix", editMaintenance.prefix.trim());
+      fd.append("content", editMaintenance.content.trim());
       const res = await fetch(buildApiUrl("api/maintenance/update_api.php"), { method: "POST", body: fd, credentials: "include" });
       const json = await res.json();
       if (json.success) { showNotice(t("maintenanceUpdatedSuccess")); setMaintenanceModalOpen(false); loadMaintenance(); }

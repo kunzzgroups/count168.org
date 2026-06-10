@@ -17,6 +17,7 @@ header('Pragma: no-cache');
 header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
 header('X-Count168-History-Sort: calendar');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/transaction_scope.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/../includes/member_linked_closure.php';
 require_once __DIR__ . '/bank_process_bill_display.php';
@@ -45,6 +46,50 @@ function historyContraApprovedWhere(PDO $pdo, string $alias = 't'): string
                 {$a}transaction_type IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT')
                 AND {$a}approval_status = 'APPROVED'
             ) OR {$a}transaction_type NOT IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT'))";
+}
+
+/** Set by main handler after tx_resolve_transaction_list_scope. */
+function historyApiSetScopeFilter(array $filter, array $listScope): void
+{
+    $GLOBALS['HISTORY_SCOPE_FILTER'] = $filter;
+    $GLOBALS['HISTORY_LIST_SCOPE'] = $listScope;
+}
+
+function historyApiTxnWhereSql(string $alias = 't'): string
+{
+    return (string) ($GLOBALS['HISTORY_SCOPE_FILTER']['sql'] ?? "{$alias}.company_id = ?");
+}
+
+function historyApiTxnWhereBind(): int
+{
+    return (int) ($GLOBALS['HISTORY_SCOPE_FILTER']['bind'] ?? 0);
+}
+
+function historyApiTxnWhereSqlForAlias(string $alias): string
+{
+    return str_replace('t.', $alias . '.', historyApiTxnWhereSql('t'));
+}
+
+function historyApiIsGroupLedger(): bool
+{
+    return !empty($GLOBALS['HISTORY_SCOPE_FILTER']['is_group']);
+}
+
+/** DCD / bank_process / legacy currency FK — anchor company in group ledger mode. */
+function historyApiDcdCompanyId(): int
+{
+    if (historyApiIsGroupLedger()) {
+        return (int) ($GLOBALS['HISTORY_SCOPE_FILTER']['perm_company_id'] ?? 0);
+    }
+
+    $bind = historyApiTxnWhereBind();
+
+    return $bind > 0 ? $bind : (int) ($GLOBALS['HISTORY_SCOPE_FILTER']['perm_company_id'] ?? 0);
+}
+
+function historyApiListScope(): array
+{
+    return is_array($GLOBALS['HISTORY_LIST_SCOPE'] ?? null) ? $GLOBALS['HISTORY_LIST_SCOPE'] : [];
 }
 
 /**
@@ -413,19 +458,68 @@ function historyResolveProfitDisplayCode(PDO $pdo, int $companyId): string
     return 'PROFIT';
 }
 
-/** sms 形如 [DOMAIN_NET_PROFIT|QA] */
+/** Domain fee 类 sms 是否 Group 租户（含 GROUP| 段） */
+function historyIsDomainFeeGroupTenant(string $sms): bool
+{
+    return (bool) preg_match('/^\[DOMAIN_(?:LIST_FEE|SHARE_COMMISSION|NET_PROFIT)\|GROUP\|/i', trim($sms));
+}
+
+/**
+ * Payment History 描述：Group 付 Domain Fee 时追加 (Group)，Company 不变。
+ */
+function historyAppendDomainGroupLabel(string $description, string $sms = '', ?PDO $pdo = null, int $companyId = 0, string $srcCode = '', string $dateFromDb = '', string $dateToDb = ''): string
+{
+    if (historyIsDomainFeeGroupTenant($sms)) {
+        if (stripos($description, '(Group)') !== false) {
+            return $description;
+        }
+        return $description . ' (Group)';
+    }
+    $srcU = strtoupper(trim($srcCode));
+    if ($pdo !== null && $companyId > 0 && $srcU !== '' && $dateFromDb !== '' && $dateToDb !== '') {
+        try {
+            $st = $pdo->prepare("
+                SELECT 1 FROM transactions
+                WHERE company_id = ? AND transaction_type = 'PAYMENT'
+                  AND sms LIKE ?
+                  AND DATE(transaction_date) BETWEEN ? AND ?
+                LIMIT 1
+            ");
+            $st->execute([$companyId, '[DOMAIN_LIST_FEE|GROUP|' . $srcU . '%', $dateFromDb, $dateToDb]);
+            if ($st->fetchColumn() !== false) {
+                if (stripos($description, '(Group)') !== false) {
+                    return $description;
+                }
+                return $description . ' (Group)';
+            }
+        } catch (PDOException $e) {
+            // ignore
+        }
+    }
+    return $description;
+}
+
+/** sms 形如 [DOMAIN_NET_PROFIT|QA] 或 [DOMAIN_NET_PROFIT|GROUP|AP] */
 function historyParseDomainNetProfitSourceCompany(string $sms): string
 {
-    if (preg_match('/^\[DOMAIN_NET_PROFIT\|([^\]|]+)/i', trim($sms), $m)) {
+    $t = trim($sms);
+    if (preg_match('/^\[DOMAIN_NET_PROFIT\|GROUP\|([^\]|]+)/i', $t, $m)) {
+        return strtoupper(trim($m[1]));
+    }
+    if (preg_match('/^\[DOMAIN_NET_PROFIT\|([^\]|]+)/i', $t, $m)) {
         return strtoupper(trim($m[1]));
     }
     return '';
 }
 
-/** sms 形如 [DOMAIN_LIST_FEE|QA] */
+/** sms 形如 [DOMAIN_LIST_FEE|QA] 或 [DOMAIN_LIST_FEE|GROUP|AP] */
 function historyParseDomainListFeeSourceCompany(string $sms): string
 {
-    if (preg_match('/^\[DOMAIN_LIST_FEE\|([^\]|]+)/i', trim($sms), $m)) {
+    $t = trim($sms);
+    if (preg_match('/^\[DOMAIN_LIST_FEE\|GROUP\|([^\]|]+)/i', $t, $m)) {
+        return strtoupper(trim((string) ($m[1] ?? '')));
+    }
+    if (preg_match('/^\[DOMAIN_LIST_FEE\|([^\]|]+)/i', $t, $m)) {
         return strtoupper(trim((string) ($m[1] ?? '')));
     }
     return '';
@@ -578,9 +672,13 @@ function historyParseDomainShareCommissionSourceCompanyCode(string $sms): ?strin
     $s = trim($sms);
     if ($s === '')
         return null;
-    if (preg_match('/^\[DOMAIN_SHARE_COMMISSION\|([^|\]]+)/i', $s, $m)) {
+    if (preg_match('/^\[DOMAIN_SHARE_COMMISSION\|GROUP\|([^|\]]+)/i', $s, $m)) {
         $v = strtoupper(trim((string) $m[1]));
         return $v !== '' ? $v : null;
+    }
+    if (preg_match('/^\[DOMAIN_SHARE_COMMISSION\|([^|\]]+)/i', $s, $m)) {
+        $v = strtoupper(trim((string) $m[1]));
+        return $v !== '' && $v !== 'GROUP' ? $v : null;
     }
     return null;
 }
@@ -652,7 +750,7 @@ function buildVirtualDomainListFeeHistory(
         $dateFromDb,
         $dateToDb,
         "[DOMAIN_LIST_FEE|{$src}]%",
-        "[DOMAIN_LIST_FEE|{$src}|%",
+        "[DOMAIN_LIST_FEE|GROUP|{$src}]%",
         "DOMAIN LIST FEE FROM {$src}",
         "DOMAIN LIST FEE FROM %({$src})"
     ];
@@ -714,7 +812,10 @@ function buildVirtualDomainListFeeHistory(
             'win_loss' => historyFormat2(0),
             'cr_dr' => historyFormat2($cr),
             'balance' => historyFormat2($running),
-            'description' => $src . ' Pay For ' . $ownerCode,
+            'description' => historyAppendDomainGroupLabel(
+                $src . ' Pay For ' . $ownerCode,
+                (string) ($r['sms'] ?? '')
+            ),
             'sms' => '-',
             'remark' => '-',
             'created_by' => '-',
@@ -826,7 +927,15 @@ function buildVirtualDomainNetProfitHistory(
                 'amount' => $net,
                 'currency_id' => $cid,
                 'transaction_date' => $dateToDb,
-                'description' => 'Net Profit From ' . $dynSrc,
+                'description' => historyAppendDomainGroupLabel(
+                    'Net Profit From ' . $dynSrc,
+                    '',
+                    $pdo,
+                    $companyId,
+                    $dynSrc,
+                    $dateFromDb,
+                    $dateToDb
+                ),
                 'sms' => '[DOMAIN_NET_PROFIT|DYNAMIC]',
                 'created_by' => $fallbackSubmitter
             ];
@@ -875,7 +984,15 @@ function buildVirtualDomainNetProfitHistory(
         if ($srcFromRow === '' || strtoupper($srcFromRow) === 'DYNAMIC') {
             $srcFromRow = $srcCompanyParam !== '' ? $srcCompanyParam : $owner;
         }
-        $descNet = 'Net Profit From ' . $srcFromRow;
+        $descNet = historyAppendDomainGroupLabel(
+            'Net Profit From ' . $srcFromRow,
+            (string) ($r['sms'] ?? ''),
+            $pdo,
+            $companyId,
+            $srcFromRow,
+            $dateFromDb,
+            $dateToDb
+        );
         $history[] = [
             'date' => date('d/m/Y', strtotime((string) $r['transaction_date'])),
             'product' => 'PROFIT',
@@ -1013,51 +1130,15 @@ try {
     $sessionUserType = isset($_SESSION['user_type']) ? strtolower((string) $_SESSION['user_type']) : '';
     $isMemberUser = ($sessionUserType === 'member');
 
-    // 确定要访问的 company_id：优先使用参数，否则使用 session
-    $company_id = null;
-    if (isset($_GET['company_id']) && $_GET['company_id'] !== '') {
-        $requested_company_id = (int) $_GET['company_id'];
-        $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
-        $userType = isset($_SESSION['user_type']) ? strtolower($_SESSION['user_type']) : '';
-
-        if ($userRole === 'owner') {
-            // owner 可以访问自己名下的其他公司
-            $owner_id = $_SESSION['owner_id'] ?? $_SESSION['user_id'];
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ?");
-            $stmt->execute([$requested_company_id, $owner_id]);
-            if ($stmt->fetchColumn()) {
-                $company_id = $requested_company_id;
-            } else {
-                throw new Exception('无权访问该公司');
-            }
-        } elseif ($userType === 'member') {
-            // member：公司以登录账号的 account_company 为准
-            $memberAccountId = member_session_canonical_account_id();
-            $stmt = $pdo->prepare("
-                SELECT 1 
-                FROM account_company ac
-                WHERE ac.account_id = ? AND ac.company_id = ?
-            ");
-            $stmt->execute([$memberAccountId, $requested_company_id]);
-            if ($stmt->fetchColumn()) {
-                $company_id = $requested_company_id;
-            } else {
-                throw new Exception('无权访问该公司');
-            }
-        } else {
-            // 普通用户只能访问当前 session 公司
-            if (isset($_SESSION['company_id']) && (int) $_SESSION['company_id'] === $requested_company_id) {
-                $company_id = $requested_company_id;
-            } else {
-                throw new Exception('无权访问该公司');
-            }
-        }
-    } else {
-        if (!isset($_SESSION['company_id'])) {
-            throw new Exception('缺少公司信息');
-        }
-        $company_id = (int) $_SESSION['company_id'];
-    }
+    $listScope = tx_resolve_transaction_list_scope($pdo, $_GET);
+    $historyScopeFilter = tx_search_transaction_filter($pdo, $listScope, 't');
+    historyApiSetScopeFilter($historyScopeFilter, $listScope);
+    $history_txn_where = $historyScopeFilter['sql'];
+    $history_txn_bind = (int) $historyScopeFilter['bind'];
+    $history_is_group = (bool) $historyScopeFilter['is_group'];
+    $company_id = $history_is_group
+        ? historyApiDcdCompanyId()
+        : (int) ($listScope['company_id'] ?? 0);
 
     // 获取参数
     $account_id = (int) ($_GET['account_id'] ?? 0);
@@ -1085,13 +1166,13 @@ try {
     $date_from_start = $date_from_db . ' 00:00:00';
     $date_to_end = $date_to_db . ' 23:59:59';
 
-    // 获取 currency_id（如果指定了 currency）
+    // 获取 currency_id（如果指定了 currency；支持逗号分隔取首码）
     $currency_id = null;
     if ($currency) {
-        $currency_stmt = $pdo->prepare("SELECT id FROM currency WHERE code = ? AND company_id = ?");
-        $currency_stmt->execute([$currency, $company_id]);
-        $currency_id = $currency_stmt->fetchColumn();
-        error_log("Transaction History API: currency_id lookup: currency={$currency}, company_id={$company_id}, found={$currency_id}");
+        $currencyCode = strtoupper(trim(explode(',', (string) $currency)[0]));
+        if ($currencyCode !== '') {
+            $currency_id = tx_resolve_currency_id_for_scope($pdo, $currencyCode, $listScope);
+        }
     }
     if ($account_id <= 0 && $virtual_company_code !== '') {
         $isNetProfitVirtual = ($account_id <= -2000000);
@@ -1123,18 +1204,10 @@ try {
         exit;
     }
 
-    // 查询账户信息 - 使用 account_company 表过滤
-    $stmt = $pdo->prepare("
-        SELECT a.id, a.account_id, a.name 
-        FROM account a
-        INNER JOIN account_company ac ON a.id = ac.account_id
-        WHERE a.id = ? AND ac.company_id = ?
-    ");
-    $stmt->execute([$account_id, $company_id]);
-    $account = $stmt->fetch(PDO::FETCH_ASSOC);
+    $account = tx_fetch_account_row($pdo, $account_id, $listScope);
 
     if (!$account) {
-        throw new Exception('账户不存在或不属于当前公司');
+        throw new Exception('账户不存在或不属于当前范围');
     }
     // 强制校验：返回的账户必须与请求的 account_id 一致，避免单向/双向连接时误显示其他账户数据
     if ((int) $account['id'] !== (int) $account_id) {
@@ -1309,13 +1382,13 @@ try {
 
     $ph = implode(',', array_fill(0, count($account_ids), '?'));
     // 这里只查询非 RATE 的交易（RATE 在后续通过 transaction_entry 单独处理）
-    $sql .= " WHERE t.company_id = ?
+    $sql .= " WHERE {$history_txn_where}
               AND t.transaction_type <> 'RATE'
               AND (t.account_id IN ($ph) OR t.from_account_id IN ($ph))
               AND $effectiveTxnDateExpr BETWEEN ? AND ?";
     // 不再按 CURDATE() 隐藏未来 transaction_date：与 Transaction List 筛选一致，Resend 锚到未来月份时仍可查看 Payment History。
 
-    $transactionParams = array_merge([$company_id], $account_ids, $account_ids, [$date_from_db, $date_to_db]);
+    $transactionParams = array_merge([$history_txn_bind], $account_ids, $account_ids, [$date_from_db, $date_to_db]);
 
     // 如果指定了 currency，根据 data_capture 的 currency 或 transactions.currency_id 来过滤
     if ($currency) {
@@ -1374,7 +1447,7 @@ try {
                 SELECT DISTINCT TRIM(c.code) AS code
                 FROM transactions t
                 INNER JOIN currency c ON t.currency_id = c.id
-                WHERE t.company_id = ?
+                WHERE {$history_txn_where}
                   AND t.transaction_type <> 'RATE'
                   AND (t.account_id IN ($phTxCodes) OR t.from_account_id IN ($phTxCodes))
                   AND DATE(t.transaction_date) BETWEEN ? AND ?
@@ -1382,7 +1455,7 @@ try {
             ";
             $txCodesSql .= historyContraApprovedWhere($pdo, 't');
             $txCodesStmt = $pdo->prepare($txCodesSql);
-            $txCodesStmt->execute(array_merge([$company_id], $account_ids, $account_ids, [$date_from_db, $date_to_db]));
+            $txCodesStmt->execute(array_merge([$history_txn_bind], $account_ids, $account_ids, [$date_from_db, $date_to_db]));
             while ($crow = $txCodesStmt->fetch(PDO::FETCH_ASSOC)) {
                 $cc = trim((string) ($crow['code'] ?? ''));
                 if ($cc !== '') {
@@ -1397,13 +1470,15 @@ try {
                 FROM transaction_entry e
                 INNER JOIN transactions h ON e.header_id = h.id
                 INNER JOIN currency c ON e.currency_id = c.id
-                WHERE h.company_id = ? AND e.company_id = ?
+                WHERE " . historyApiTxnWhereSqlForAlias('h') . "
+                  " . ($history_is_group ? '' : 'AND e.company_id = ?') . "
                   AND h.transaction_type = 'RATE'
                   AND e.account_id IN ($ratePhDist)
                   AND DATE(h.transaction_date) BETWEEN ? AND ?
                   AND c.code IS NOT NULL AND TRIM(c.code) <> ''
             ");
-            $rateDistStmt->execute(array_merge([$company_id, $company_id], $account_ids, [$date_from_db, $date_to_db]));
+            $rateDistParams = array_merge([$history_txn_bind], $history_is_group ? [] : [$company_id], $account_ids, [$date_from_db, $date_to_db]);
+            $rateDistStmt->execute($rateDistParams);
             while ($rrow = $rateDistStmt->fetch(PDO::FETCH_ASSOC)) {
                 $rc = trim((string) ($rrow['code'] ?? ''));
                 if ($rc !== '') {
@@ -1419,10 +1494,12 @@ try {
             $codes = array_keys($codeSet);
             sort($codes, SORT_STRING);
             foreach ($codes as $code) {
-                $stmtCur = $pdo->prepare('SELECT id FROM currency WHERE code = ? AND company_id = ?');
-                $stmtCur->execute([$code, $company_id]);
-                $cid = $stmtCur->fetchColumn();
-                if (!$cid) {
+                try {
+                    $cid = tx_resolve_currency_id_for_scope($pdo, $code, $listScope);
+                } catch (Throwable $e) {
+                    continue;
+                }
+                if ($cid <= 0) {
                     continue;
                 }
                 $bfOne = '0';
@@ -1844,6 +1921,10 @@ try {
                     $description = bankProcessProRatedFirstMonthDescription($t);
                 } elseif ($periodType === 'once_one_off') {
                     $description = bankProcessOnceOneOffHistoryDescription($t);
+                } elseif ($periodType === 'weekly') {
+                    $description = bankProcessWeeklyHistoryDescription($t);
+                } elseif ($periodType === 'daily' || $periodType === 'daily_consolidated') {
+                    $description = bankProcessDailyHistoryDescription($t);
                 } else {
                     if ($periodType === 'day_end_tail') {
                         // 统一 day_end 展示文案：Prorated(... | n days)@Monthly（不带 DayEnd 前缀）
@@ -1950,6 +2031,9 @@ try {
                         $description = $description . ' ' . $billAmount;
                     }
                 }
+            }
+            if ($isBankProcessTransaction) {
+                $description = bankProcessAppendBankSuffixToDescription((string) $description, $t);
             }
         }
 
@@ -2123,15 +2207,21 @@ try {
             }
             $roleLabel = historyResolveDomainShareRoleLabel((string) $description, $smsText);
             if ($roleLabel === 'PROFIT') {
-                $description = 'Profit From ' . strtoupper($srcCompany);
+                $description = historyAppendDomainGroupLabel('Profit From ' . strtoupper($srcCompany), $smsText);
                 $domainShareProductKind = 'Profit';
             } else {
-                $description = $roleLabel . ' Commission From ' . strtoupper($srcCompany);
+                $description = historyAppendDomainGroupLabel(
+                    $roleLabel . ' Commission From ' . strtoupper($srcCompany),
+                    $smsText
+                );
                 $domainShareProductKind = 'Commission';
             }
         }
         if ($isDomainListFee) {
-            $description = 'Pay Domain Fee';
+            $description = historyAppendDomainGroupLabel(
+                stripos($descText, 'Pay Domain Fee') === 0 ? trim($descText) : 'Pay Domain Fee',
+                $smsText
+            );
         }
         $productLabel = $isManualProfit ? 'PROFIT' : ($domainShareProductKind !== null ? $domainShareProductKind : ($isDomainShareCommission ? 'Commission' : $t['transaction_type']));
 
@@ -2200,7 +2290,10 @@ try {
             'currency' => $transactionCurrencyRb,
             'percent' => '-',
             'rate' => '-',
-            'description' => 'Net Profit From ' . $srcU,
+            'description' => historyAppendDomainGroupLabel(
+                'Net Profit From ' . $srcU,
+                (string) ($ft['sms'] ?? '')
+            ),
             'sms' => '-',
             'created_by' => $transactionCreatedByRb,
         ];
@@ -2241,12 +2334,12 @@ try {
                 LEFT JOIN currency ct ON tr.rate_to_currency_id = ct.id
                 LEFT JOIN user u ON h.created_by = u.id
                 LEFT JOIN owner o ON h.created_by_owner = o.id
-                WHERE h.company_id = ?
-                  AND e.company_id = ?
+                WHERE " . historyApiTxnWhereSqlForAlias('h') . "
+                  " . ($history_is_group ? '' : 'AND e.company_id = ?') . "
                   AND h.transaction_type = 'RATE'
                   AND e.account_id IN ($ratePh)
                   AND DATE(h.transaction_date) BETWEEN ? AND ?";
-    $rateParams = array_merge([$company_id, $company_id], $account_ids, [$date_from_db, $date_to_db]);
+    $rateParams = array_merge([$history_txn_bind], $history_is_group ? [] : [$company_id], $account_ids, [$date_from_db, $date_to_db]);
 
     if ($currency && $currency_id) {
         $rateSql .= " AND e.currency_id = ?";
@@ -2611,16 +2704,16 @@ function calculateBF($pdo, $account_id, $date_from, $company_id)
                         WHEN transaction_type = 'ADJUSTMENT' THEN amount
                         ELSE 0
                     END), 0) as cr_dr
-            FROM transactions
-            WHERE company_id = ?
-              AND account_id = ?
-              AND transaction_date < ?
-              AND transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE', 'WIN', 'LOSE', 'ADJUSTMENT')
-              AND (transaction_type != 'RATE' OR from_account_id IS NOT NULL)"
-        . historyContraApprovedWhere($pdo, '');
+            FROM transactions t
+            WHERE " . historyApiTxnWhereSql('t') . "
+              AND t.account_id = ?
+              AND t.transaction_date < ?
+              AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE', 'WIN', 'LOSE', 'ADJUSTMENT')
+              AND (t.transaction_type != 'RATE' OR t.from_account_id IS NOT NULL)"
+        . historyContraApprovedWhere($pdo, 't');
 
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$company_id, $account_id, $date_from]);
+    $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from]);
     $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
     // PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM/RATE 影响 Cr/Dr（作为 From Account）；CONTRA/CLEAR 时 FROM 显示正数
@@ -2631,15 +2724,15 @@ function calculateBF($pdo, $account_id, $date_from, $company_id)
                         WHEN transaction_type = 'CLEAR' THEN amount
                         ELSE 0
                     END), 0) as cr_dr
-            FROM transactions
-            WHERE company_id = ?
-              AND from_account_id = ?
-              AND transaction_date < ?
-              AND transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE')"
-        . historyContraApprovedWhere($pdo, '');
+            FROM transactions t
+            WHERE " . historyApiTxnWhereSql('t') . "
+              AND t.from_account_id = ?
+              AND t.transaction_date < ?
+              AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE')"
+        . historyContraApprovedWhere($pdo, 't');
 
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$company_id, $account_id, $date_from]);
+    $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from]);
     $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
     return historyTrunc2($bf);
@@ -2656,7 +2749,7 @@ function historyBfFromAccountManualWinLose(PDO $pdo, $company_id, $account_id, $
                   ELSE 0
                 END), 0)
                 FROM transactions t
-                WHERE t.company_id = ?
+                WHERE " . historyApiTxnWhereSql('t') . "
                   AND CAST(t.from_account_id AS CHAR) = CAST(? AS CHAR)
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('WIN', 'LOSE')
@@ -2672,7 +2765,7 @@ function historyBfFromAccountManualWinLose(PDO $pdo, $company_id, $account_id, $
                       ))
                   )" . historyContraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $date_from, $currency_id, $company_id, $company_id, $currency_id]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $currency_id, $company_id, $company_id, $currency_id]);
     } else {
         $sql = "SELECT COALESCE(SUM(CASE
                   WHEN t.transaction_type = 'WIN' THEN t.amount
@@ -2680,7 +2773,7 @@ function historyBfFromAccountManualWinLose(PDO $pdo, $company_id, $account_id, $
                   ELSE 0
                 END), 0)
                 FROM transactions t
-                WHERE t.company_id = ? AND t.from_account_id = ? AND t.transaction_date < ?
+                WHERE " . historyApiTxnWhereSql('t') . " AND t.from_account_id = ? AND t.transaction_date < ?
                   AND t.transaction_type IN ('WIN', 'LOSE')
                   AND {$manual}
                   AND EXISTS (
@@ -2689,7 +2782,7 @@ function historyBfFromAccountManualWinLose(PDO $pdo, $company_id, $account_id, $
                       WHERE dcd.company_id = ? AND dc.company_id = ? AND dcd.account_id = t.from_account_id AND dcd.currency_id = ?
                   )" . historyContraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $company_id, $company_id, $currency_id]);
     }
     return (string) ($stmt->fetchColumn() ?: '0');
 }
@@ -2741,7 +2834,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   ELSE 0
                 END), 0) as total
                 FROM transactions t
-                WHERE t.company_id = ?
+                WHERE " . historyApiTxnWhereSql('t') . "
                   AND CAST(t.account_id AS CHAR) = CAST(? AS CHAR)
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
@@ -2756,7 +2849,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                       ))
                   )" . historyContraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $date_from, $currency_id, $company_id, $company_id, $currency_id]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $currency_id, $company_id, $company_id, $currency_id]);
         $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
         $bf = money_add($bf, historyBfFromAccountManualWinLose($pdo, $company_id, $account_id, $date_from, $currency_id, true), 8);
 
@@ -2773,14 +2866,14 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
-                WHERE t.company_id = ?
+                WHERE " . historyApiTxnWhereSql('t') . "
                   AND CAST(t.account_id AS CHAR) = CAST(? AS CHAR)
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
                   AND t.currency_id = ?"
             . historyContraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $date_from, $currency_id]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $currency_id]);
         $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
     } else {
         // WIN/LOSE 计入 B/F（Bank Process 保持原符号；手动 PROFIT TO 负 FROM 正）
@@ -2793,7 +2886,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   ELSE 0
                 END), 0) as total
                 FROM transactions t
-                WHERE t.company_id = ? AND t.account_id = ? AND t.transaction_date < ?
+                WHERE " . historyApiTxnWhereSql('t') . " AND t.account_id = ? AND t.transaction_date < ?
                   AND t.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
                   AND EXISTS (
                       SELECT 1 FROM data_capture_details dcd
@@ -2801,7 +2894,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                       WHERE dcd.company_id = ? AND dc.company_id = ? AND dcd.account_id = t.account_id AND dcd.currency_id = ?
                   )" . historyContraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $company_id, $company_id, $currency_id]);
         $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
         $bf = money_add($bf, historyBfFromAccountManualWinLose($pdo, $company_id, $account_id, $date_from, $currency_id, false), 8);
 
@@ -2816,7 +2909,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
-                WHERE t.company_id = ?
+                WHERE " . historyApiTxnWhereSql('t') . "
                   AND t.account_id = ?
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
@@ -2831,7 +2924,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   )"
             . historyContraApprovedWhere($pdo, 't');
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $company_id, $company_id, $currency_id]);
         $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
     }
 
@@ -2846,7 +2939,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
-                WHERE t.company_id = ?
+                WHERE " . historyApiTxnWhereSql('t') . "
                   AND t.from_account_id = ?
                   AND t.currency_id = ?
                   AND t.transaction_date < ?
@@ -2856,7 +2949,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
             . historyContraApprovedWhere($pdo, 't');
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $currency_id, $date_from]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $currency_id, $date_from]);
     } else {
         $sql = "SELECT 
                     COALESCE(SUM(CASE 
@@ -2867,7 +2960,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         ELSE 0
                     END), 0) as cr_dr
                 FROM transactions t
-                WHERE t.company_id = ?
+                WHERE " . historyApiTxnWhereSql('t') . "
                   AND t.from_account_id = ?
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
@@ -2885,11 +2978,12 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
             . historyContraApprovedWhere($pdo, 't');
 
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$company_id, $account_id, $date_from, $company_id, $company_id, $currency_id]);
+        $stmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $company_id, $company_id, $currency_id]);
     }
     $bf = money_add($bf, $stmt->fetchColumn() ?: '0', 8);
 
     // 4. 追加起始日期之前的所有 RATE 分录（统一从 transaction_entry 计算）
+    $rateEntryCompanySql = historyApiIsGroupLedger() ? '' : ' AND e.company_id = ?';
     $rateStmt = $pdo->prepare("
         SELECT COALESCE(SUM(CASE
           WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
@@ -2899,14 +2993,19 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
         END), 0) AS total
         FROM transaction_entry e
         JOIN transactions h ON e.header_id = h.id
-        WHERE h.company_id = ?
-          AND e.company_id = ?
+        WHERE " . historyApiTxnWhereSqlForAlias('h') . "
+          {$rateEntryCompanySql}
           AND h.transaction_type = 'RATE'
           AND e.account_id = ?
           AND e.currency_id = ?
           AND h.transaction_date < ?
     ");
-    $rateStmt->execute([$company_id, $company_id, $account_id, $currency_id, $date_from]);
+    $rateStmtParams = array_merge(
+        [historyApiTxnWhereBind()],
+        historyApiIsGroupLedger() ? [] : [$company_id],
+        [$account_id, $currency_id, $date_from]
+    );
+    $rateStmt->execute($rateStmtParams);
     $bf = money_add($bf, $rateStmt->fetchColumn() ?: '0', 8);
 
     // 5. 池子账户：起始日前已付的 Domain Share Commission 从 B/F 扣回（与 dashboard_api / 交易列表 searchApiApplyDomainSourceCompanyRows 一致）
@@ -2915,14 +3014,14 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
             $adjStmt = $pdo->prepare("
                 SELECT COALESCE(SUM(t.amount), 0)
                 FROM transactions t
-                WHERE t.company_id = ?
+                WHERE " . historyApiTxnWhereSql('t') . "
                   AND t.transaction_type = 'PAYMENT'
                   AND t.from_account_id = ?
                   AND t.transaction_date < ?
                   AND t.currency_id = ?
                   AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'
             ");
-            $adjStmt->execute([$company_id, $account_id, $date_from, $currency_id]);
+            $adjStmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $currency_id]);
             // SUM 保留符号：佣金合计为正则扣减 B/F；若存在负数冲正则代数相减
             $adj = $adjStmt->fetchColumn() ?: '0';
             if (money_cmp(money_abs($adj), '0.00001') > 0) {

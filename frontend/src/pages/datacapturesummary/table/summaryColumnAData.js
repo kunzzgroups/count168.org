@@ -71,11 +71,5 @@ export function buildColumnAEntries(tableData) {
 
   const idProducts = entries.map((e) => e.idProduct).filter((v) => v && v.trim() !== "");
 
-  try {
-    window._summaryColumnAOrder = idProducts.map((v) => v.trim().replace(/\s+/g, "")).filter(Boolean);
-  } catch {
-    /* ignore */
-  }
-
   return { entries, idProducts };
 }

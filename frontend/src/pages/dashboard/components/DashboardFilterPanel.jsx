@@ -3,6 +3,7 @@ export function DashboardFilterPanel({
   effectiveDateRangeText,
   groupIds,
   selectedGroup,
+  groupsAllMode,
   groupAllMode,
   companiesForPicker,
   companyId,
@@ -10,10 +11,14 @@ export function DashboardFilterPanel({
   currencies,
   currencyCode,
   onPickGroup,
+  onPickAllGroups,
   onPickCompany,
   onPickAllInGroup,
   onCurrencyChange,
+  onCurrencyDropOn,
 }) {
+  const showCompanyAll = companiesForPicker.length > 1;
+  const showCompanyRow = groupIds.length > 0 || companiesForPicker.length > 0;
   const showPanel =
     groupIds.length > 0 || companiesForPicker.length > 0 || currencies.length > 0;
 
@@ -51,11 +56,18 @@ export function DashboardFilterPanel({
               <span className="user-gc-inline-label">{i18n.groupId}</span>
               <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
                 <div className="user-gc-segment-group" role="group" aria-label={i18n.groupId}>
+                  <button
+                    type="button"
+                    className={`user-gc-segment${groupsAllMode ? " is-on" : ""}`}
+                    onClick={() => void onPickAllGroups?.()}
+                  >
+                    {i18n.all}
+                  </button>
                   {groupIds.map((gid) => (
                     <button
                       key={gid}
                       type="button"
-                      className={`user-gc-segment${selectedGroup === gid && !groupAllMode ? " is-on" : ""}`}
+                      className={`user-gc-segment${selectedGroup === gid && !groupsAllMode ? " is-on" : ""}`}
                       onClick={() => void onPickGroup(gid)}
                     >
                       {gid}
@@ -65,12 +77,12 @@ export function DashboardFilterPanel({
               </div>
             </div>
           )}
-          {companiesForPicker.length > 0 && (
+          {showCompanyRow && (
             <div className="user-gc-inline-row">
               <span className="user-gc-inline-label">{i18n.company}</span>
               <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
                 <div className="user-gc-segment-group" role="group" aria-label={i18n.company}>
-                  {selectedGroup && companiesForPicker.length > 1 && (
+                  {showCompanyAll && (
                     <button
                       type="button"
                       className={`user-gc-segment${groupAllMode ? " is-on" : ""}`}
@@ -105,12 +117,28 @@ export function DashboardFilterPanel({
             <div className="user-gc-inline-row">
               <span className="user-gc-inline-label">{i18n.currency}</span>
               <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
-                <div className="user-gc-segment-group" role="group" aria-label={i18n.currency}>
+                <div
+                  id="currency-buttons-container"
+                  className="user-gc-segment-group"
+                  role="group"
+                  aria-label={i18n.currency}
+                >
                   {currencies.map((code) => (
                     <button
                       key={code}
                       type="button"
-                      className={`user-gc-segment${currencyCode === code ? " is-on" : ""}`}
+                      draggable
+                      title={i18n.currencyDragHint}
+                      className={`user-gc-segment user-gc-segment--draggable-pill${currencyCode === code ? " is-on" : ""}`}
+                      data-currency-code={code}
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData("text/plain", code);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        void onCurrencyDropOn?.(e, code);
+                      }}
                       onClick={() => onCurrencyChange(code)}
                     >
                       {code}

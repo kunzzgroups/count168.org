@@ -4,6 +4,10 @@
  */
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
+require_once __DIR__ . '/../../includes/group_scope_resolve.php';
+require_once __DIR__ . '/../../includes/tenant_scope.php';
+require_once __DIR__ . '/../get_companies_helper.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
@@ -51,6 +55,72 @@ function getAccountPermissionFilterForCompany(PDO $pdo, int $company_id, string 
 }
 
 function validateCompanyAccess(PDO $pdo, int $company_id): void {
+    if (gc_is_group_login()) {
+        $current_user_id = (int)($_SESSION['user_id'] ?? 0);
+        $current_user_role = strtolower((string)($_SESSION['role'] ?? ''));
+        $current_user_type = strtolower((string)($_SESSION['user_type'] ?? ''));
+        $view_group = normalizeGroupId($_GET['group_id'] ?? null);
+
+        if ($current_user_id <= 0) {
+            throw new Exception('无权限访问该公司');
+        }
+
+        // Keep account-list visibility aligned with the same helper used by
+        // dashboard company pills / session switch (supports linked & virtual rows).
+        if ($current_user_type === 'member') {
+            $stmt = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM company c
+                INNER JOIN account_company ac ON c.id = ac.company_id
+                WHERE c.id = ? AND ac.account_id = ?
+            ");
+            $stmt->execute([$company_id, $current_user_id]);
+            $memberAllowed = (int)$stmt->fetchColumn() > 0;
+            if (!$memberAllowed) {
+                $stmt2 = $pdo->prepare("
+                    SELECT COUNT(*)
+                    FROM company c
+                    INNER JOIN user_company_map ucm ON c.id = ucm.company_id
+                    WHERE c.id = ? AND ucm.user_id = ?
+                ");
+                $stmt2->execute([$company_id, $current_user_id]);
+                $memberAllowed = (int)$stmt2->fetchColumn() > 0;
+            }
+            if (
+                !$memberAllowed
+                && gc_session_can_access_company_id($pdo, $company_id, $view_group)
+            ) {
+                $memberAllowed = true;
+            }
+            if (!$memberAllowed) {
+                throw new Exception('无权限访问该公司');
+            }
+        } else {
+            if ($current_user_role === 'owner') {
+                $owner_id = (int)($_SESSION['real_owner_id'] ?? $_SESSION['owner_id'] ?? $current_user_id);
+                $rows = getCompaniesByOwner($pdo, $owner_id, true, true);
+            } else {
+                $rows = getCompaniesByUser($pdo, $current_user_id, true, true);
+            }
+            $allowed = false;
+            foreach ($rows as $row) {
+                if ((int)($row['id'] ?? 0) === $company_id) {
+                    $allowed = true;
+                    break;
+                }
+            }
+            if (
+                !$allowed
+                && gc_session_can_access_company_id($pdo, $company_id, $view_group)
+            ) {
+                $allowed = true;
+            }
+            if (!$allowed) {
+                throw new Exception('无权限访问该公司');
+            }
+        }
+        return;
+    }
     $current_user_id = $_SESSION['user_id'];
     $current_user_role = $_SESSION['role'] ?? '';
     if ($current_user_role === 'owner') {
@@ -67,6 +137,159 @@ function validateCompanyAccess(PDO $pdo, int $company_id): void {
             throw new Exception('无权限访问该公司');
         }
     }
+}
+
+function normalizeGroupId(?string $groupId): ?string {
+    $g = strtoupper(trim((string)($groupId ?? '')));
+    return $g !== '' ? $g : null;
+}
+
+/** Legacy group-entity company row only (company_id = AP/IG). No subsidiary anchor. */
+function resolveGroupEntityCompanyId(PDO $pdo, string $groupId): int
+{
+    return gc_resolve_legacy_group_entity_company_id($pdo, $groupId);
+}
+
+function accountListHasAccountScopeColumn(PDO $pdo): bool
+{
+    static $cache = null;
+    if ($cache !== null) {
+        return $cache;
+    }
+    try {
+        $cache = $pdo->query("SHOW COLUMNS FROM account_company LIKE 'scope_type'")->rowCount() > 0;
+    } catch (PDOException $e) {
+        $cache = false;
+    }
+
+    return $cache;
+}
+
+/**
+ * Group ledger accounts (account_company.scope_type = group).
+ */
+function accountListTableExists(PDO $pdo, string $table): bool
+{
+    try {
+        return $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->rowCount() > 0;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+function fetchAccountsForGroupScope(
+    PDO $pdo,
+    int $groupScopePk,
+    string $searchTerm,
+    bool $showInactive,
+    bool $showAll,
+    ?array $accountIdFilter,
+    ?array $rolesFilter = null
+): array {
+    if ($groupScopePk <= 0) {
+        return [];
+    }
+
+    $accountIds = [];
+    if (accountListHasAccountScopeColumn($pdo)) {
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT ac.account_id
+            FROM account_company ac
+            WHERE ac.scope_type = 'group' AND ac.scope_id = ?
+        ");
+        $stmt->execute([$groupScopePk]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $accountIds[(int) $id] = true;
+        }
+    }
+    if (accountListTableExists($pdo, 'account_group_map')) {
+        $stmt = $pdo->prepare('SELECT DISTINCT account_id FROM account_group_map WHERE group_id = ?');
+        $stmt->execute([$groupScopePk]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $accountIds[(int) $id] = true;
+        }
+    }
+    $accountIds = array_values(array_filter(array_map('intval', array_keys($accountIds)), static fn (int $id): bool => $id > 0));
+    if ($accountIds === []) {
+        return [];
+    }
+
+    $hasCreatedSource = hasAccountCreatedSourceColumn($pdo);
+    $selectCreatedSource = $hasCreatedSource ? ', a.created_source' : ', NULL AS created_source';
+    $idPh = implode(',', array_fill(0, count($accountIds), '?'));
+    $sql = "SELECT DISTINCT a.id, a.account_id, a.name, a.status, a.last_login, a.role,
+            COALESCE(a.payment_alert, 0) AS payment_alert,
+            a.alert_day, a.alert_day AS alert_type, a.alert_specific_date, a.alert_specific_date AS alert_start_date,
+            a.alert_amount, a.remark
+            {$selectCreatedSource}
+            FROM account a
+            WHERE a.id IN ($idPh)";
+    $params = $accountIds;
+
+    if ($rolesFilter !== null && !empty($rolesFilter)) {
+        $placeholders = implode(',', array_fill(0, count($rolesFilter), '?'));
+        $sql .= " AND a.role IN ($placeholders)";
+        $params = array_merge($params, $rolesFilter);
+    }
+
+    if ($accountIdFilter !== null) {
+        if (empty($accountIdFilter)) {
+            $sql .= ' AND 1=0';
+        } else {
+            $placeholders = str_repeat('?,', count($accountIdFilter) - 1) . '?';
+            $sql .= " AND a.id IN ($placeholders)";
+            $params = array_merge($params, $accountIdFilter);
+        }
+    }
+
+    if ($searchTerm !== '') {
+        $searchParam = "%$searchTerm%";
+        $sql .= ' AND (a.account_id LIKE ? OR a.name LIKE ? OR a.status LIKE ? OR a.role LIKE ?)';
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+        $params[] = $searchParam;
+    }
+
+    if (!$showAll) {
+        if ($showInactive) {
+            $sql .= " AND a.status = 'inactive'";
+        } else {
+            $sql .= " AND a.status = 'active'";
+        }
+    }
+
+    $sql .= ' ORDER BY a.account_id ASC, a.id ASC';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $out = [];
+    foreach ($rows as $row) {
+        $createdSource = strtolower(trim((string) ($row['created_source'] ?? '')));
+        if ($createdSource === 'domain_auto' || shouldFormatAsCompanyId((string) ($row['account_id'] ?? ''))) {
+            $row['account_id'] = formatDomainAutoDisplayAccountId((string) ($row['account_id'] ?? ''));
+        }
+        if ($row['alert_amount'] !== null && $row['alert_amount'] !== '') {
+            $row['alert_amount'] = money_out($row['alert_amount']);
+        }
+        unset($row['created_source']);
+        $out[] = $row;
+    }
+
+    return $out;
+}
+
+function mergeAccountRowsById(array $primary, array $secondary): array
+{
+    $byId = [];
+    foreach (array_merge($primary, $secondary) as $row) {
+        $id = (int) ($row['id'] ?? 0);
+        if ($id > 0) {
+            $byId[$id] = $row;
+        }
+    }
+
+    return array_values($byId);
 }
 
 function hasAccountCreatedSourceColumn(PDO $pdo): bool {
@@ -141,7 +364,7 @@ function fetchAccountsForCompany(PDO $pdo, int $company_id, string $searchTerm, 
             {$selectCreatedSource}
             FROM account a
             INNER JOIN account_company ac ON a.id = ac.account_id
-            WHERE ac.company_id = ?";
+            WHERE ac.company_id = ?" . tenant_sql_account_company_subsidiary_only($pdo, 'ac');
     $params = [$company_id];
 
     if ($rolesFilter !== null && !empty($rolesFilter)) {
@@ -244,17 +467,17 @@ try {
         throw new Exception('用户未登录');
     }
 
+    $group_scope_id = normalizeGroupId($_GET['group_id'] ?? null);
+    if ($group_scope_id === null && gc_is_group_login()) {
+        $group_scope_id = normalizeGroupId(gc_session_login_identifier());
+    }
+
     $company_id = null;
     if (isset($_GET['company_id']) && $_GET['company_id'] !== '') {
         $company_id = (int) $_GET['company_id'];
-    } elseif (isset($_SESSION['company_id'])) {
+    } elseif ($group_scope_id === null && !gc_is_group_login() && isset($_SESSION['company_id'])) {
         $company_id = (int) $_SESSION['company_id'];
     }
-    if (!$company_id) {
-        throw new Exception('缺少公司信息');
-    }
-
-    validateCompanyAccess($pdo, $company_id);
 
     $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
     $showInactive = isset($_GET['showInactive']) ? filter_var($_GET['showInactive'], FILTER_VALIDATE_BOOLEAN) : false;
@@ -268,11 +491,96 @@ try {
         }));
     }
 
-    $current_user_role = $_SESSION['role'] ?? '';
-    $accountIdFilter = getAccountPermissionFilterForCompany($pdo, $company_id, $current_user_role);
-    $userAccountPermissions = getCurrentUserAccountPermissions($pdo, $company_id);
+    $groupOnlyLedger = false;
+    $explicitGroupOnly = isset($_GET['group_only']) && filter_var($_GET['group_only'], FILTER_VALIDATE_BOOLEAN);
+    if ($group_scope_id !== null) {
+        if ($company_id > 0 && !$explicitGroupOnly) {
+            if (gc_is_group_login()) {
+                gc_assert_company_id_allowed_for_login_scope($pdo, $company_id, $group_scope_id);
+            }
+        } else {
+            $groupScopePk = gc_resolve_group_pk_by_code($pdo, $group_scope_id);
+            if ($groupScopePk <= 0) {
+                echo json_encode([
+                    'success' => true,
+                    'message' => '',
+                    'data' => [
+                        'accounts' => [],
+                        'count' => 0,
+                        'searchTerm' => $searchTerm,
+                        'showInactive' => $showInactive,
+                        'showAll' => $showAll,
+                        'company_id' => null,
+                        'user_permissions_count' => 0,
+                    ],
+                ]);
+                exit;
+            }
+            $useGroupLedgerOnly = $explicitGroupOnly
+                || gc_is_group_login()
+                || (function_exists('tenant_dual_tenant_enabled') && tenant_dual_tenant_enabled($pdo));
+            if ($useGroupLedgerOnly) {
+                $groupOnlyLedger = true;
+                $company_id = null;
+            } else {
+                $legacyEntityId = resolveGroupEntityCompanyId($pdo, $group_scope_id);
+                if ($legacyEntityId > 0) {
+                    $company_id = $legacyEntityId;
+                    if (gc_is_group_login()) {
+                        gc_assert_company_id_allowed_for_login_scope($pdo, $company_id, $group_scope_id);
+                    }
+                } else {
+                    $groupOnlyLedger = true;
+                    $company_id = null;
+                }
+            }
+        }
+    }
 
-    $accounts = fetchAccountsForCompany($pdo, $company_id, $searchTerm, $showInactive, $showAll, $accountIdFilter, $rolesFilter);
+    if (!$company_id && !$groupOnlyLedger) {
+        throw new Exception('缺少公司信息');
+    }
+
+    if ($company_id > 0) {
+        validateCompanyAccess($pdo, $company_id);
+    } elseif ($group_scope_id !== null) {
+        gc_assert_group_ledger_access($pdo, $group_scope_id);
+    }
+
+    $current_user_role = $_SESSION['role'] ?? '';
+    $accountIdFilter = $company_id > 0
+        ? getAccountPermissionFilterForCompany($pdo, $company_id, $current_user_role)
+        : null;
+    $userAccountPermissions = $company_id > 0
+        ? getCurrentUserAccountPermissions($pdo, $company_id)
+        : [];
+
+    $accounts = [];
+    if ($groupOnlyLedger && $group_scope_id !== null) {
+        $groupScopePk = gc_resolve_group_pk_by_code($pdo, $group_scope_id);
+        $accounts = fetchAccountsForGroupScope(
+            $pdo,
+            $groupScopePk,
+            $searchTerm,
+            $showInactive,
+            $showAll,
+            $accountIdFilter,
+            $rolesFilter
+        );
+    } elseif ($group_scope_id !== null && $company_id > 0) {
+        // Subsidiary company pill (e.g. C168): that company only — do not merge group ledger rows.
+        $accounts = fetchAccountsForCompany(
+            $pdo,
+            $company_id,
+            $searchTerm,
+            $showInactive,
+            $showAll,
+            $accountIdFilter,
+            $rolesFilter
+        );
+    } else {
+        $accounts = fetchAccountsForCompany($pdo, $company_id, $searchTerm, $showInactive, $showAll, $accountIdFilter, $rolesFilter);
+    }
     $accounts = computeAlertStatus($accounts);
 
     echo json_encode([

@@ -73,7 +73,6 @@ export default function TransactionAddSection({
         >
           <option value="CONTRA">CONTRA</option>
           <option value="PAYMENT">PAYMENT</option>
-          <option value="RECEIVE">RECEIVE</option>
           <option value="CLAIM">CLAIM</option>
           <option value="PROFIT">PROFIT</option>
           <option value="RATE">RATE</option>

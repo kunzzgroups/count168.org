@@ -53,6 +53,7 @@ function BankprocessVirtualTableHead({ selectAllRef, selectAll, toggleSelectAll,
 
 export default function BankprocessMaintenanceTable({
   loading,
+  listSyncing = false,
   rows,
   hasSearched,
   listEpoch = 0,
@@ -111,7 +112,7 @@ export default function BankprocessMaintenanceTable({
     return (
       <div className="empty-state-container" id="emptyState" style={{ display: "block" }}>
         <div className="empty-state">
-          <p>{m.noDataAdjustSearch}</p>
+          <p>{listSyncing ? m.loading : m.noDataAdjustSearch}</p>
         </div>
       </div>
     );
@@ -121,9 +122,10 @@ export default function BankprocessMaintenanceTable({
 
   return (
     <div
-      className="maintenance-list-container maintenance-virtual-table bankprocess-virtual-table"
+      className={`maintenance-list-container maintenance-virtual-table bankprocess-virtual-table${
+        listSyncing ? " maintenance-list-container--syncing" : ""
+      }`}
       id="tableContainer"
-      style={{ display: "block" }}
     >
       <div className="maintenance-virtual-table-inner bankprocess-virtual-table-inner" role="table">
         <BankprocessVirtualTableHead

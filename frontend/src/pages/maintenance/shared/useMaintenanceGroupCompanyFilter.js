@@ -1,13 +1,42 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
+
+import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
 import {
-  applySharedGroupClickWithCompanySwitch,
-  filterMaintenanceVisibleCompanies,
+  canClearCompanySelection,
+  canUseGroupOnlyMode,
+} from "../../../utils/company/loginScope.js";
+import {
+  clearDashboardGroupFilterKeepCompany,
+  companiesForCompanyPicker,
+  DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
+  dedupeOwnerCompaniesByCode,
+  excludeGroupLabelsFromCompanyPicker,
+  filterCompaniesWithDisplayId,
+  independentCompaniesForPicker,
+  notifyDashboardGroupFilterChanged,
+  persistDashboardFilterState,
+  persistDashboardGroupFilter,
+  persistDashboardGroupOnlyMode,
+  resolveCompanyWhenClosingGroup,
   sortedUniqueGroupIds,
-  toggleGroupFilterKind,
 } from "../../../utils/company/sharedCompanyFilter.js";
+import {
+  filterCompaniesForBankPills,
+  filterCompaniesForGamesPills,
+} from "../../../utils/company/companyCategoryFlags.js";
+import { useGcFilterWithAllModes } from "../../../utils/company/useGcFilterWithAllModes.js";
+
+function isGroupFilterOptOut() {
+  return (
+    typeof sessionStorage !== "undefined" &&
+    sessionStorage.getItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY) === "1"
+  );
+}
 
 /**
- * Maintenance 各页 Group / Company 筛选（对齐 Process List、Account List 的 groupFilterKind 行为）。
+ * Maintenance Group / Company filters — All pills (never sent as group_id / company code).
+ * Group-only: re-clicking active group closes it and shows independent companies.
  */
 export function useMaintenanceGroupCompanyFilter({
   companies,
@@ -15,53 +44,181 @@ export function useMaintenanceGroupCompanyFilter({
   selectedGroup,
   setSelectedGroup,
   switchCompany,
+  onPrepareCompanySelect,
+  onClearCompany,
   switchingCompany = false,
+  enableGroupAnchorSession = true,
+  /** "games" | "bank" — hide companies that do not belong on this maintenance page. */
+  pillCategory = null,
 }) {
-  const [groupFilterKind, setGroupFilterKind] = useState("follow");
+  const { me } = useAuthSession();
+  const [groupFilterOptOutTick, setGroupFilterOptOutTick] = useState(0);
 
-  const snapGroupIds = useMemo(() => sortedUniqueGroupIds(companies), [companies]);
+  const gc = useGcFilterWithAllModes({
+    companies,
+    companyId,
+    selectedGroup,
+    setSelectedGroup,
+    onSelectCompany: switchCompany,
+    onPrepareCompanySelect,
+    onClearCompany,
+    switchingCompany,
+    preferredCompanyId: companyId,
+    me,
+    autoPickCompanyWhenEmpty: false,
+    forceAllowGroupOnly: canUseGroupOnlyMode(me),
+    clearCompanyOnActiveGroupReselect: false,
+    enableGroupAnchorSession,
+  });
 
-  const visibleCompanies = useMemo(
-    () =>
-      filterMaintenanceVisibleCompanies(companies, {
-        groupFilterKind,
-        selectedGroup,
-        groupIds: snapGroupIds,
-        preferredCompanyId: companyId,
-      }),
-    [companies, groupFilterKind, selectedGroup, snapGroupIds, companyId],
-  );
+  const {
+    groupIds,
+    companiesForPicker: baseCompaniesForPicker,
+    groupsAllMode,
+    groupAllMode,
+    setGroupsAllMode,
+    setGroupAllMode,
+    handlePickGroup: baseHandlePickGroup,
+    allowGroupOnly,
+  } = gc;
 
-  const handlePickAllGroups = useCallback(() => {
+  const visibleCompanies = useMemo(() => {
+    const preferredId = companyId ?? null;
+    const groupFilterOptOut = isGroupFilterOptOut();
+
+    const independentPicker = () => {
+      const list = independentCompaniesForPicker(companies, groupIds);
+      if (list.length) {
+        return dedupeOwnerCompaniesByCode(list, preferredId);
+      }
+      return excludeGroupLabelsFromCompanyPicker(
+        dedupeOwnerCompaniesByCode(filterCompaniesWithDisplayId(companies), preferredId),
+        groupIds,
+      ).filter((c) => !String(c.group_id || "").trim());
+    };
+
+    if (groupsAllMode) {
+      return baseCompaniesForPicker;
+    }
+
+    if (!selectedGroup || groupFilterOptOut) {
+      return independentPicker();
+    }
+
+    if (baseCompaniesForPicker.length > 0) return baseCompaniesForPicker;
+
+    const effectiveGroup = String(selectedGroup).trim().toUpperCase();
+    return dedupeOwnerCompaniesByCode(
+      companiesForCompanyPicker(companies, effectiveGroup, groupIds),
+      preferredId,
+    );
+  }, [
+    baseCompaniesForPicker,
+    companies,
+    companyId,
+    groupIds,
+    groupsAllMode,
+    selectedGroup,
+    groupFilterOptOutTick,
+  ]);
+
+  const categoryScopedCompanies = useMemo(() => {
+    if (pillCategory === "games") {
+      return filterCompaniesForGamesPills(visibleCompanies, companyId);
+    }
+    if (pillCategory === "bank") {
+      return filterCompaniesForBankPills(visibleCompanies, companyId);
+    }
+    return visibleCompanies;
+  }, [visibleCompanies, pillCategory, companyId]);
+
+  const deselectGroupKeepCompany = useCallback(async () => {
     if (switchingCompany) return;
-    setGroupFilterKind((k) => toggleGroupFilterKind(k));
-  }, [switchingCompany]);
+
+    persistDashboardGroupOnlyMode(false);
+    flushSync(() => {
+      setGroupsAllMode(false);
+      setGroupAllMode(false);
+      setSelectedGroup(null);
+    });
+
+    const pick = resolveCompanyWhenClosingGroup(companies, companyId, groupIds);
+    const nextCompanyId = pick?.id != null ? Number(pick.id) : null;
+
+    if (nextCompanyId != null && Number.isFinite(nextCompanyId) && nextCompanyId > 0) {
+      clearDashboardGroupFilterKeepCompany(nextCompanyId);
+      setGroupFilterOptOutTick((n) => n + 1);
+      onPrepareCompanySelect?.(pick);
+      const select = switchCompany;
+      if (select) await select(pick);
+      return;
+    }
+
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY, "1");
+    }
+    setGroupFilterOptOutTick((n) => n + 1);
+    persistDashboardGroupFilter(null);
+    persistDashboardFilterState(null, null, { allowGroupOnly: false });
+    notifyDashboardGroupFilterChanged(null, null);
+  }, [
+    switchingCompany,
+    companies,
+    companyId,
+    groupIds,
+    setGroupsAllMode,
+    setGroupAllMode,
+    setSelectedGroup,
+    onPrepareCompanySelect,
+    switchCompany,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!isGroupFilterOptOut()) return;
+    if (selectedGroup == null) return;
+    setSelectedGroup(null);
+  }, [selectedGroup, groupFilterOptOutTick, setSelectedGroup]);
 
   const handleGroupClick = useCallback(
     async (gid) => {
-      setGroupFilterKind("follow");
-      await applySharedGroupClickWithCompanySwitch({
-        clickedGroupId: gid,
-        currentSelectedGroup: selectedGroup,
-        companies,
-        currentCompanyId: companyId,
-        setSelectedGroup,
-        switchCompany,
-      });
+      if (switchingCompany) return;
+      const g = String(gid || "").trim().toUpperCase();
+      if (!g) return;
+
+      const current = String(selectedGroup || "").trim().toUpperCase();
+
+      if (g === current && companyId == null && allowGroupOnly) {
+        await deselectGroupKeepCompany();
+        return;
+      }
+
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.removeItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY);
+      }
+      setGroupFilterOptOutTick((n) => n + 1);
+
+      await baseHandlePickGroup(g);
     },
-    [selectedGroup, companies, companyId, setSelectedGroup, switchCompany],
+    [
+      switchingCompany,
+      selectedGroup,
+      companyId,
+      allowGroupOnly,
+      deselectGroupKeepCompany,
+      baseHandlePickGroup,
+    ],
   );
 
-  const followCurrentCompanyGroup = useCallback(() => {
-    setGroupFilterKind("follow");
-  }, []);
-
   return {
-    groupFilterKind,
-    snapGroupIds,
-    visibleCompanies,
-    handlePickAllGroups,
+    snapGroupIds: groupIds,
+    visibleCompanies: categoryScopedCompanies,
     handleGroupClick,
-    followCurrentCompanyGroup,
+    handlePickCompany: gc.handlePickCompany,
+    handlePickAllGroups: gc.handlePickAllGroups,
+    handlePickAllInGroup: gc.handlePickAllInGroup,
+    groupsAllMode: gc.groupsAllMode,
+    groupAllMode: gc.groupAllMode,
+    allowClearCompany: canClearCompanySelection(me, selectedGroup),
+    isListScopeReady: gc.isListScopeReady,
   };
 }

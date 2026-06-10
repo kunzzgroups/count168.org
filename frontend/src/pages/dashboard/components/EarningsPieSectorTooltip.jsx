@@ -3,6 +3,7 @@ import { formatCurrency, formatI18nTemplate } from "../lib/dashboardFormat.js";
 export function EarningsPieSectorTooltip({
   slice,
   sharePct,
+  displayConverted,
   baseCode,
   useConverted,
   convertedApproxTemplate,
@@ -10,9 +11,11 @@ export function EarningsPieSectorTooltip({
 }) {
   if (!slice?.code) return null;
   const displayAmount = slice.originalEarnings ?? slice.earnings ?? 0;
+  const convertedAmount =
+    displayConverted != null ? displayConverted : slice.earningsConverted;
   const showConverted =
     useConverted &&
-    slice.earningsConverted != null &&
+    convertedAmount != null &&
     String(slice.code).toUpperCase() !== String(baseCode || "").toUpperCase();
 
   return (
@@ -23,7 +26,7 @@ export function EarningsPieSectorTooltip({
         {showConverted && (
           <div className="dashboard-summary-pie-tooltip-converted">
             {formatI18nTemplate(convertedApproxTemplate, {
-              amount: formatCurrency(slice.earningsConverted),
+              amount: formatCurrency(convertedAmount),
               code: baseCode,
             })}
           </div>

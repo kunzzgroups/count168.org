@@ -1,0 +1,1 @@
+import{r as n}from"./index-BCtzXRLo.js";function u(r){if(!r||typeof r!="object")return!1;const t=String(r.role||"").trim().toLowerCase();if(t!=="partnership"&&t!=="audit")return!1;const e=r.read_only;return e===1||e===!0||e==="1"}function i(r){return n.useMemo(()=>u(r),[r])}function o(r,t){return u(r)?(typeof t=="function"&&t(),!0):!1}export{o as g,u as i,i as u};

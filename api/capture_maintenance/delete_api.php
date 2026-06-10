@@ -10,6 +10,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../deleted_log/deleted_log.php';
+require_once __DIR__ . '/../datacapture/data_capture_scope_common.php';
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -55,19 +56,33 @@ function ensureDeletedLogTable(PDO $pdo) {
 /**
  * 验证 capture_id 是否属于当前公司且在日期范围内，返回有效 ID 列表
  */
-function validateCaptureIds(PDO $pdo, int $company_id, array $captureIds, string $date_from_db, string $date_to_db) {
+function validateCaptureIds(
+    PDO $pdo,
+    array $scopeCtx,
+    array $captureIds,
+    string $date_from_db,
+    string $date_to_db,
+    string $scopeProcessFilter = ''
+) {
     if (empty($captureIds)) {
         return [];
     }
+    $ledgerDc = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dc', 'data_captures');
+    $processCompanyId = dcCaptureProcessCompanyId($scopeCtx);
     $placeholders = str_repeat('?,', count($captureIds) - 1) . '?';
     $sql = "SELECT dc.id
             FROM data_captures dc
             INNER JOIN process p ON dc.process_id = p.id
-            WHERE dc.company_id = ?
+            WHERE 1=1 {$ledgerDc['sql']}
               AND dc.id IN ($placeholders)
               AND dc.capture_date BETWEEN ? AND ?
-              AND p.company_id = ?";
-    $params = array_merge([$company_id], $captureIds, [$date_from_db, $date_to_db, $company_id]);
+              AND p.company_id = ?
+              $scopeProcessFilter";
+    $params = array_merge(
+        dcCaptureLedgerBindParams($ledgerDc),
+        $captureIds,
+        [$date_from_db, $date_to_db, $processCompanyId]
+    );
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -94,10 +109,9 @@ function backupToDeletedLog(PDO $pdo, int $company_id, array $validCaptureIds, ?
 }
 
 try {
-    if (!isset($_SESSION['company_id'])) {
-        throw new Exception('缺少公司信息');
+    if (!isset($_SESSION['user_id'])) {
+        throw new Exception('用户未登录');
     }
-    $company_id = (int)$_SESSION['company_id'];
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('只支持 POST 请求');
@@ -106,6 +120,48 @@ try {
     $payload = json_decode(file_get_contents('php://input'), true);
     if (!is_array($payload)) {
         throw new Exception('无效的请求数据');
+    }
+
+    $scopeParams = $payload;
+    $capture_scope_group = false;
+    $hasExplicitScope = dcRequestHasExplicitScope($scopeParams);
+
+    if ($hasExplicitScope) {
+        $scopeResolved = resolveDataCaptureRequestScope($pdo, $scopeParams);
+        $scopeCtx = dcFinalizeCaptureMaintenanceScope($pdo, $scopeResolved, $scopeParams);
+        $company_id = (int) $scopeCtx['company_id'];
+        $capture_scope_group = (bool) $scopeCtx['is_group_scope'];
+        $scopeProcessFilter = (string) $scopeCtx['scope_process_sql'];
+        $viewGroupForAccess = dcNormalizeGroupId(
+            $scopeParams['view_group'] ?? $scopeParams['group_id'] ?? ''
+        );
+        dcAssertUserCanAccessCompany(
+            $pdo,
+            $company_id,
+            $viewGroupForAccess !== '' ? $viewGroupForAccess : null
+        );
+    } else {
+        if (!isset($_SESSION['company_id'])) {
+            throw new Exception('缺少公司信息');
+        }
+        $company_id = (int) $_SESSION['company_id'];
+        $capture_scope_group = false;
+        $scopeCtx = [
+            'company_id' => $company_id,
+            'anchor_company_id' => $company_id,
+            'is_group_scope' => false,
+            'dual_tenant' => tenant_table_has_scope_columns($pdo, 'data_captures'),
+            'submitted_dual_tenant' => dcSubmittedProcessesDualTenantEnabled($pdo),
+        ];
+        $scopeProcessFilter = dcSqlCompanyProcessFilter('p');
+    }
+
+    if ($capture_scope_group) {
+        if ($company_id <= 0) {
+            throw new Exception('集团范围无效或未配置集团公司');
+        }
+    } elseif ($company_id > 0 && dcCompanyIdIsGroupEntity($pdo, $company_id)) {
+        throw new Exception('公司范围不能操作集团实体抓数记录');
     }
 
     $date_from = $payload['date_from'] ?? null;
@@ -149,7 +205,14 @@ try {
 
     $pdo->beginTransaction();
 
-    $validCaptureIds = validateCaptureIds($pdo, $company_id, $captureIds, $date_from_db, $date_to_db);
+    $validCaptureIds = validateCaptureIds(
+        $pdo,
+        $scopeCtx,
+        $captureIds,
+        $date_from_db,
+        $date_to_db,
+        $scopeProcessFilter
+    );
     if (empty($validCaptureIds)) {
         $pdo->rollBack();
         throw new Exception('没有找到符合条件且属于当前公司的记录');
@@ -174,45 +237,91 @@ try {
     // 确保当某个 Data Capture 被维护页删除后，Data Capture 页面右侧的 Submitted Processes 也不再显示这条记录。
     // 只按 company + process + capture_date 精准删除，不影响其他功能或历史记录。
     $placeholders = str_repeat('?,', count($validCaptureIds) - 1) . '?';
+    $ledgerDc = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dc', 'data_captures');
+    $processCompanyId = dcCaptureProcessCompanyId($scopeCtx);
     $captureMetaSql = "
         SELECT dc.id AS capture_id, dc.process_id, dc.capture_date
         FROM data_captures dc
         INNER JOIN process p ON dc.process_id = p.id
-        WHERE dc.company_id = ? AND p.company_id = ? AND dc.id IN ($placeholders)
+        WHERE 1=1 {$ledgerDc['sql']} AND p.company_id = ? AND dc.id IN ($placeholders)
     ";
-    $captureMetaParams = array_merge([$company_id, $company_id], $validCaptureIds);
+    $captureMetaParams = array_merge(
+        dcCaptureLedgerBindParams($ledgerDc),
+        [$processCompanyId],
+        $validCaptureIds
+    );
     $captureMetaStmt = $pdo->prepare($captureMetaSql);
     $captureMetaStmt->execute($captureMetaParams);
     $captureMetaRows = $captureMetaStmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (!empty($captureMetaRows)) {
-        $deleteSubmittedStmt = $pdo->prepare("
-            DELETE FROM submitted_processes
-            WHERE company_id = ?
-              AND process_id = ?
-              AND (
-                    (DATE(capture_date) = ?)
-                 OR (capture_date IS NULL AND DATE(date_submitted) = ?)
-              )
-        ");
+        $ledgerSp = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'sp', 'submitted_processes');
+        $useSpScope = !empty($scopeCtx['submitted_dual_tenant']);
+        if ($useSpScope) {
+            $deleteSubmittedStmt = $pdo->prepare("
+                DELETE FROM submitted_processes
+                WHERE scope_type = ?
+                  AND scope_id = ?
+                  AND process_id = ?
+                  AND (
+                        (DATE(capture_date) = ?)
+                     OR (capture_date IS NULL AND DATE(date_submitted) = ?)
+                  )
+            ");
+        } else {
+            $deleteSubmittedStmt = $pdo->prepare("
+                DELETE FROM submitted_processes
+                WHERE company_id = ?
+                  AND process_id = ?
+                  AND (
+                        (DATE(capture_date) = ?)
+                     OR (capture_date IS NULL AND DATE(date_submitted) = ?)
+                  )
+            ");
+        }
+        $scopeInsert = dcCaptureScopeInsertValues($scopeCtx);
         foreach ($captureMetaRows as $metaRow) {
             $procId = isset($metaRow['process_id']) ? (int)$metaRow['process_id'] : 0;
             $capDate = $metaRow['capture_date'] ?? null;
             if ($procId > 0 && $capDate) {
-                $findSp = $pdo->prepare(
-                    'SELECT id FROM submitted_processes WHERE company_id = ? AND process_id = ?
-                     AND ((DATE(capture_date) = ?) OR (capture_date IS NULL AND DATE(date_submitted) = ?))'
-                );
-                $findSp->execute([$company_id, $procId, $capDate, $capDate]);
+                if ($useSpScope) {
+                    $findSp = $pdo->prepare(
+                        'SELECT id FROM submitted_processes WHERE scope_type = ? AND scope_id = ? AND process_id = ?
+                         AND ((DATE(capture_date) = ?) OR (capture_date IS NULL AND DATE(date_submitted) = ?))'
+                    );
+                    $findSp->execute([
+                        $scopeInsert['scope_type'],
+                        $scopeInsert['scope_id'],
+                        $procId,
+                        $capDate,
+                        $capDate,
+                    ]);
+                } else {
+                    $findSp = $pdo->prepare(
+                        'SELECT id FROM submitted_processes WHERE company_id = ? AND process_id = ?
+                         AND ((DATE(capture_date) = ?) OR (capture_date IS NULL AND DATE(date_submitted) = ?))'
+                    );
+                    $findSp->execute([$company_id, $procId, $capDate, $capDate]);
+                }
                 while ($sid = $findSp->fetchColumn()) {
                     deletedLog($pdo, $userTagCap, $pageTagCap, 'submitted_processes', (string) $sid);
                 }
-                $deleteSubmittedStmt->execute([
-                    $company_id,
-                    $procId,
-                    $capDate,
-                    $capDate
-                ]);
+                if ($useSpScope) {
+                    $deleteSubmittedStmt->execute([
+                        $scopeInsert['scope_type'],
+                        $scopeInsert['scope_id'],
+                        $procId,
+                        $capDate,
+                        $capDate,
+                    ]);
+                } else {
+                    $deleteSubmittedStmt->execute([
+                        $company_id,
+                        $procId,
+                        $capDate,
+                        $capDate,
+                    ]);
+                }
             }
         }
     }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { accountCompanyPickerZIndex, accountModalOverlayZIndex } from "../../../components/ProcessModalPortal.jsx";
-import { sanitizeEmailInput } from "../../../utils/input/emailValidation.js";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
 /** Inline so first paint is 3-column even if extracted CSS applies one frame late */
 const modalBodyStyle = {
@@ -143,6 +143,7 @@ import {
   canInteractWithReadOnlyToggle,
   isUserModalPageReadOnlyLock,
 } from "../userListLogic.js";
+import { sanitizeEmailInput } from "../../../utils/input/emailValidation.js";
 
 export default function UserModal({
   open,
@@ -162,6 +163,12 @@ export default function UserModal({
   modalCompanies,
   selectedCompanyIds,
   setSelectedCompanyIds,
+  groupPickerMode = false,
+  dualTenantPicker = false,
+  modalGroupCompanies = [],
+  modalSubsidiaryCompanies = [],
+  selectedGroupIds = [],
+  setSelectedGroupIds,
   modalAccounts,
   selectedAccountIds,
   setSelectedAccountIds,
@@ -183,6 +190,7 @@ export default function UserModal({
   const [companySearchQuery, setCompanySearchQuery] = useState("");
   const [bulkSelectionSettling, setBulkSelectionSettling] = useState(false);
   const bulkSelectionTimerRef = useRef(null);
+  const { submitting, guardSubmit } = useSubmitGuard(open);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -312,16 +320,64 @@ export default function UserModal({
     bulkSelectionTimerRef.current = setTimeout(() => setBulkSelectionSettling(false), 120);
   };
 
+  const getCompanyPickerLabel = (companyRow) => {
+    if (groupPickerMode) return String(companyRow?.group_id || "").trim().toUpperCase();
+    return String(companyRow?.company_id || companyRow?.group_id || "").trim().toUpperCase();
+  };
+
+  const pickerGroupRows = dualTenantPicker ? modalGroupCompanies : groupPickerMode ? modalCompanies : [];
+  const pickerCompanyRows = dualTenantPicker ? modalSubsidiaryCompanies : groupPickerMode ? [] : modalCompanies;
+
+  const selectedGroupLabels = useMemo(() => {
+    if (!dualTenantPicker) return [];
+    const set = new Set(selectedGroupIds.map(Number));
+    return pickerGroupRows
+      .filter((c) => set.has(Number(c.id)))
+      .map((c) => String(c?.group_id || c?.company_id || "").trim().toUpperCase())
+      .filter(Boolean);
+  }, [dualTenantPicker, pickerGroupRows, selectedGroupIds]);
+
   const selectedCompanyLabels = useMemo(() => {
     const set = new Set(selectedCompanyIds.map(Number));
-    return modalCompanies.filter((c) => set.has(Number(c.id))).map((c) => String(c.company_id || "").toUpperCase());
-  }, [modalCompanies, selectedCompanyIds]);
+    const rows = dualTenantPicker ? pickerCompanyRows : modalCompanies;
+    return rows
+      .filter((c) => set.has(Number(c.id)))
+      .map((c) => getCompanyPickerLabel(c))
+      .filter(Boolean);
+  }, [modalCompanies, pickerCompanyRows, selectedCompanyIds, groupPickerMode, dualTenantPicker]);
 
-  const companyPickerFiltered = useMemo(() => {
+  const assignmentSummaryText = useMemo(() => {
+    if (dualTenantPicker) {
+      const left = selectedGroupLabels.join(", ");
+      const right = selectedCompanyLabels.join(", ");
+      if (left && right) return `${left} | ${right}`;
+      return left || right || "";
+    }
+    return selectedCompanyLabels.join(", ");
+  }, [dualTenantPicker, selectedGroupLabels, selectedCompanyLabels]);
+
+  const filterPickerRows = (rows, useGroupLabel) => {
     const q = companySearchQuery.trim().toUpperCase();
-    if (!q) return modalCompanies;
-    return modalCompanies.filter((c) => String(c.company_id || "").toUpperCase().includes(q));
-  }, [modalCompanies, companySearchQuery]);
+    if (!q) return rows;
+    return rows.filter((c) => {
+      const label = useGroupLabel
+        ? String(c?.group_id || c?.company_id || "").trim().toUpperCase()
+        : getCompanyPickerLabel(c);
+      return label.includes(q);
+    });
+  };
+
+  const groupPickerFiltered = useMemo(
+    () => filterPickerRows(pickerGroupRows, true),
+    [pickerGroupRows, companySearchQuery]
+  );
+
+  const companyPickerFiltered = useMemo(
+    () => filterPickerRows(pickerCompanyRows, false),
+    [pickerCompanyRows, companySearchQuery, groupPickerMode]
+  );
+
+  const showProcessColumn = dualTenantPicker ? selectedCompanyIds.length > 0 : !groupPickerMode;
 
   const selectedPermissionLabels = useMemo(
     () => PERMISSION_KEYS.filter((k) => permSelected.has(k)).map((k) => getPermissionLabel(k, t)),
@@ -360,7 +416,7 @@ export default function UserModal({
           <div ref={cardRef} className="user-modal-card" style={userModalCardStyle}>
             <div className="user-modal-col user-modal-col--info user-info-panel" style={userModalColStyle}>
               <h3 className="user-modal-col-title">{t("userInformation")}</h3>
-              <form id="userForm" onSubmit={onSave}>
+              <form id="userForm" onSubmit={guardSubmit(onSave)}>
               <div className="user-info-grid">
                 <div className="user-info-field-row">
                   <div className="form-group user-info-field">
@@ -446,7 +502,11 @@ export default function UserModal({
                   <div className="form-group user-info-field company-field-group">
                     <div className="user-modal-company-heading-row">
                       <label id="user-modal-company-trigger-label" htmlFor="user-modal-company-open-btn">
-                        {t("companyRequired")}
+                        {dualTenantPicker
+                          ? t("groupCompanyRequired")
+                          : groupPickerMode
+                            ? t("groupRequired")
+                            : t("companyRequired")}
                       </label>
                       <button
                         id="user-modal-company-open-btn"
@@ -458,14 +518,24 @@ export default function UserModal({
                           setCompanyPickerOpen(true);
                         }}
                       >
-                        {t("selectCompanies")}
+                        {dualTenantPicker
+                          ? t("selectGroupCompany")
+                          : groupPickerMode
+                            ? t("selectGroups")
+                            : t("selectCompanies")}
                       </button>
                     </div>
                     <div className="user-modal-company-summary" aria-labelledby="user-modal-company-trigger-label">
-                      {selectedCompanyLabels.length ? (
-                        <span className="user-modal-company-summary-text">{selectedCompanyLabels.join(", ")}</span>
+                      {assignmentSummaryText ? (
+                        <span className="user-modal-company-summary-text">{assignmentSummaryText}</span>
                       ) : (
-                        <span className="user-modal-company-summary-empty">{t("companyNoneSelected")}</span>
+                        <span className="user-modal-company-summary-empty">
+                          {dualTenantPicker
+                            ? t("groupCompanyNoneSelected")
+                            : groupPickerMode
+                              ? t("groupNoneSelected")
+                              : t("companyNoneSelected")}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -569,39 +639,43 @@ export default function UserModal({
                 </div>
               </div>
 
-            <div className="user-modal-col user-modal-col--process account-process-col" style={userModalColStyle}>
-                <label className="acc-proc-label user-modal-col-title">{t("process")}</label>
-                <div ref={processGridRef} className={`account-grid account-grid--four account-grid--process${bulkSelectionSettling ? " account-grid--bulk-settling" : ""}`}>
-                  {modalProcesses.map((p) => (
-                    <label key={p.id} className="account-item-compact account-item-compact--process user-modal-select-card">
-                      <input
-                        type="checkbox"
-                        id={`proc-${p.id}`}
-                        checked={selectedProcessIds.has(Number(p.id))}
-                        disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock}
-                        onChange={(e) => {
-                          setSelectedProcessIds((prev) => {
-                            const n = new Set(prev);
-                            if (e.target.checked) n.add(Number(p.id)); else n.delete(Number(p.id));
-                            return n;
-                          });
-                        }}
-                      />
-                      <span className="account-label account-label--process">
-                        {p.process_id}{p.description ? <span className="account-label-desc">{p.description}</span> : null}
-                      </span>
-                    </label>
-                  ))}
+            {showProcessColumn ? (
+              <div className="user-modal-col user-modal-col--process account-process-col" style={userModalColStyle}>
+                  <label className="acc-proc-label user-modal-col-title">{t("process")}</label>
+                  <div ref={processGridRef} className={`account-grid account-grid--four account-grid--process${bulkSelectionSettling ? " account-grid--bulk-settling" : ""}`}>
+                    {modalProcesses.map((p) => (
+                      <label key={p.id} className="account-item-compact account-item-compact--process user-modal-select-card">
+                        <input
+                          type="checkbox"
+                          id={`proc-${p.id}`}
+                          checked={selectedProcessIds.has(Number(p.id))}
+                          disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock}
+                          onChange={(e) => {
+                            setSelectedProcessIds((prev) => {
+                              const n = new Set(prev);
+                              if (e.target.checked) n.add(Number(p.id)); else n.delete(Number(p.id));
+                              return n;
+                            });
+                          }}
+                        />
+                        <span className="account-label account-label--process">
+                          {p.process_id}{p.description ? <span className="account-label-desc">{p.description}</span> : null}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className="account-control-buttons user-modal-col-actions">
+                    <button type="button" className="btn-account-control" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set(processIdList)))}>{t("selectAll")}</button>
+                    <button type="button" className="btn-clearall" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set()))}>{t("clearAll")}</button>
+                  </div>
                 </div>
-                <div className="account-control-buttons user-modal-col-actions">
-                  <button type="button" className="btn-account-control" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set(processIdList)))}>{t("selectAll")}</button>
-                  <button type="button" className="btn-clearall" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set()))}>{t("clearAll")}</button>
-                </div>
-              </div>
+            ) : null}
           </div>
         </div>
         <div className="user-modal-footer">
-          <button type="submit" form="userForm" className="btn btn-save" disabled={pageReadOnlyLock}>{t("save")}</button>
+          <button type="submit" form="userForm" className="btn btn-save" disabled={pageReadOnlyLock || submitting}>
+            {submitting ? t("saving") : t("save")}
+          </button>
           <button type="button" className="btn btn-cancel" onClick={onClose}>{t("cancel")}</button>
         </div>
       </div>
@@ -636,7 +710,13 @@ export default function UserModal({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="user-modal-company-picker-header">
-                <span id="user-modal-company-picker-title">{t("companyPickerTitle")}</span>
+                <span id="user-modal-company-picker-title">
+                  {dualTenantPicker
+                    ? t("groupCompanyPickerTitle")
+                    : groupPickerMode
+                      ? t("groupPickerTitle")
+                      : t("companyPickerTitle")}
+                </span>
                 <button
                   type="button"
                   className="user-modal-company-picker-close"
@@ -653,7 +733,11 @@ export default function UserModal({
                 <input
                   type="search"
                   className="user-modal-company-picker-search"
-                  placeholder={t("companySearchPlaceholder")}
+                  placeholder={
+                    dualTenantPicker || groupPickerMode
+                      ? t("groupSearchPlaceholder")
+                      : t("companySearchPlaceholder")
+                  }
                   value={companySearchQuery}
                   disabled={pageReadOnlyLock}
                   onChange={(e) => setCompanySearchQuery(e.target.value)}
@@ -664,37 +748,108 @@ export default function UserModal({
                   className="user-modal-company-picker-select-all"
                   disabled={fieldLocks.company || !!editingRow?.is_owner_shadow || modalCompanies.length === 0 || pageReadOnlyLock}
                   onClick={() => {
+                    if (dualTenantPicker && setSelectedGroupIds) {
+                      setSelectedGroupIds(pickerGroupRows.map((c) => Number(c.id)));
+                      setSelectedCompanyIds(pickerCompanyRows.map((c) => Number(c.id)));
+                      return;
+                    }
                     setSelectedCompanyIds(modalCompanies.map((c) => Number(c.id)));
                   }}
                 >
                   {t("selectAll")}
                 </button>
               </div>
-              <ul className="user-modal-company-picker-list">
-                {companyPickerFiltered.map((c) => {
-                  const id = Number(c.id);
-                  const checked = selectedCompanyIds.includes(id);
-                  const rowDisabled = fieldLocks.company || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
-                  return (
-                    <li key={c.id} className="user-modal-company-picker-row">
-                      <label className={checked ? "user-modal-company-picker-label is-checked" : "user-modal-company-picker-label"}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={rowDisabled}
-                          onChange={() =>
-                            setSelectedCompanyIds((prev) => {
-                              if (prev.includes(id)) return prev.filter((x) => x !== id);
-                              return [...prev, id];
-                            })
-                          }
-                        />
-                        <span>{String(c.company_id || "").toUpperCase()}</span>
-                      </label>
-                    </li>
-                  );
-                })}
-              </ul>
+              <div className="user-modal-company-picker-body">
+                {dualTenantPicker ? (
+                  <>
+                    <div className="user-modal-company-picker-section">
+                      <div className="user-modal-company-picker-section-title">{t("groupsSectionTitle")}</div>
+                      <ul className="user-modal-company-picker-list user-modal-company-picker-list--groups">
+                        {groupPickerFiltered.map((c) => {
+                          const id = Number(c.id);
+                          const label = String(c?.group_id || c?.company_id || "").trim().toUpperCase();
+                          const checked = selectedGroupIds.includes(id);
+                          const rowDisabled = fieldLocks.company || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
+                          return (
+                            <li key={`g-${c.id}`} className="user-modal-company-picker-row">
+                              <label className={checked ? "user-modal-company-picker-label is-checked" : "user-modal-company-picker-label"}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={rowDisabled || !setSelectedGroupIds}
+                                  onChange={() => {
+                                    setSelectedGroupIds?.((prev) => {
+                                      if (prev.includes(id)) return prev.filter((x) => x !== id);
+                                      return [...prev, id];
+                                    });
+                                  }}
+                                />
+                                <span>{label}</span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                    <div className="user-modal-company-picker-section">
+                      <div className="user-modal-company-picker-section-title">{t("companiesSectionTitle")}</div>
+                      <ul className="user-modal-company-picker-list user-modal-company-picker-list--companies">
+                        {companyPickerFiltered.map((c) => {
+                          const id = Number(c.id);
+                          const label = getCompanyPickerLabel(c);
+                          const checked = selectedCompanyIds.includes(id);
+                          const rowDisabled = fieldLocks.company || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
+                          return (
+                            <li key={`c-${c.id}`} className="user-modal-company-picker-row">
+                              <label className={checked ? "user-modal-company-picker-label is-checked" : "user-modal-company-picker-label"}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={rowDisabled}
+                                  onChange={() => {
+                                    setSelectedCompanyIds((prev) => {
+                                      if (prev.includes(id)) return prev.filter((x) => x !== id);
+                                      return [...prev, id];
+                                    });
+                                  }}
+                                />
+                                <span>{label}</span>
+                              </label>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  </>
+                ) : (
+                  <ul className="user-modal-company-picker-list">
+                    {companyPickerFiltered.map((c) => {
+                      const id = Number(c.id);
+                      const label = getCompanyPickerLabel(c);
+                      const checked = selectedCompanyIds.includes(id);
+                      const rowDisabled = fieldLocks.company || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
+                      return (
+                        <li key={c.id} className="user-modal-company-picker-row">
+                          <label className={checked ? "user-modal-company-picker-label is-checked" : "user-modal-company-picker-label"}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={rowDisabled}
+                              onChange={() => {
+                                setSelectedCompanyIds((prev) => {
+                                  if (prev.includes(id)) return prev.filter((x) => x !== id);
+                                  return [...prev, id];
+                                });
+                              }}
+                            />
+                            <span>{label}</span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
               <div className="user-modal-company-picker-footer">
                 <button
                   type="button"
@@ -704,7 +859,7 @@ export default function UserModal({
                     setCompanySearchQuery("");
                   }}
                 >
-                  {t("companyPickerDone")}
+                  {dualTenantPicker || groupPickerMode ? t("groupPickerDone") : t("companyPickerDone")}
                 </button>
               </div>
             </div>

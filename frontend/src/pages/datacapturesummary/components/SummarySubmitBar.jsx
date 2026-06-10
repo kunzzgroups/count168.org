@@ -2,20 +2,26 @@ import { assetUrl } from "../../../utils/core/apiUrl.js";
 
 export default function SummarySubmitBar({
   t,
+  visible = false,
   submitting = false,
+  submitDisabled = false,
   refreshing = false,
   onSubmit,
   onBack,
   onRefresh,
 }) {
   return (
-    <div className="summary-submit-container" id="summarySubmitContainer" style={{ display: "none" }}>
+    <div
+      className="summary-submit-container"
+      id="summarySubmitContainer"
+      style={{ display: visible ? "flex" : "none" }}
+    >
       <button
         type="button"
         className="btn btn-save"
         id="summarySubmitBtn"
         onClick={onSubmit}
-        disabled={submitting}
+        disabled={submitting || submitDisabled}
       >
         {submitting ? t("submitting") : t("submit")}
       </button>

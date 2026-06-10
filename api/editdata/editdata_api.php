@@ -2,12 +2,16 @@
 /**
  * Edit Data API - 提供编辑表单所需的货币与角色列表
  * 路径: api/editdata/editdata_api.php
+ *
+ * Roles are global (role table). Currencies are optional and scoped to a company when resolvable.
  */
 
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
+require_once __DIR__ . '/../transactions/transaction_scope.php';
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -32,6 +36,12 @@ function getCurrenciesByCompany(PDO $pdo, int $company_id) {
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
+function normalizeGroupId(?string $groupId): ?string
+{
+    $g = strtoupper(trim((string) ($groupId ?? '')));
+    return $g !== '' ? $g : null;
+}
+
 /**
  * 获取所有角色代码
  */
@@ -40,21 +50,60 @@ function getRoles(PDO $pdo) {
     return $stmt->fetchAll(PDO::FETCH_COLUMN);
 }
 
-try {
-    if (!isset($_SESSION['company_id'])) {
-        throw new Exception('用户未登录或缺少公司信息');
+/**
+ * Resolve numeric company id for currency list (optional).
+ */
+function editdataResolveCurrencyCompanyId(PDO $pdo): int
+{
+    if (isset($_GET['company_id']) && trim((string) $_GET['company_id']) !== '') {
+        $cid = (int) $_GET['company_id'];
+        if ($cid > 0) {
+            $viewGroup = isset($_GET['group_id']) ? normalizeGroupId($_GET['group_id']) : null;
+            gc_assert_api_company_access($pdo, $cid, $viewGroup);
+            return $cid;
+        }
     }
-    $company_id = (int)$_SESSION['company_id'];
 
-    $currencies = getCurrenciesByCompany($pdo, $company_id);
+    if (isset($_SESSION['company_id']) && (int) $_SESSION['company_id'] > 0) {
+        return (int) $_SESSION['company_id'];
+    }
+
+    if (gc_is_group_login()) {
+        $groupCode = normalizeGroupId(gc_session_login_identifier());
+        if ($groupCode !== null) {
+            $entityId = tx_resolve_group_entity_company_id($pdo, $groupCode);
+            if ($entityId > 0) {
+                return $entityId;
+            }
+        }
+    }
+
+    return 0;
+}
+
+try {
+    if (!isset($_SESSION['user_id']) || (int) $_SESSION['user_id'] <= 0) {
+        throw new Exception('用户未登录');
+    }
+
     $roles = getRoles($pdo);
+    $currencies = [];
+    try {
+        $company_id = editdataResolveCurrencyCompanyId($pdo);
+        if ($company_id > 0) {
+            $currencies = getCurrenciesByCompany($pdo, $company_id);
+        }
+    } catch (Throwable $currencyScopeError) {
+        // Roles are global; currency scope may be unavailable in group-only view.
+        $currencies = [];
+    }
 
     jsonResponse(true, 'OK', [
         'currencies' => $currencies,
-        'roles' => $roles
+        'roles' => $roles,
     ]);
 } catch (PDOException $e) {
     jsonResponse(false, 'Database error: ' . $e->getMessage(), null, 500);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     jsonResponse(false, $e->getMessage(), null, 401);
 }

@@ -1,17 +1,6 @@
 import { useMemo } from "react";
-import { isCompanyVisibleForSharedFilter } from "../../../utils/company/sharedCompanyFilter.js";
-
-/** GroupID = ALL: show C168 first (same expectation as other owner tools). */
-function orderSnapCompaniesForAllGroup(companies) {
-  const list = Array.isArray(companies) ? companies : [];
-  if (list.length === 0) return [...list];
-  const code = (c) => String(c.company_id || "").trim().toUpperCase();
-  const i = list.findIndex((c) => code(c) === "C168");
-  if (i <= 0) return [...list];
-  const next = [...list];
-  const [c168] = next.splice(i, 1);
-  return [c168, ...next];
-}
+import GcInlineFilterPanel from "../../../components/GcInlineFilterPanel.jsx";
+import { buildTransactionCompanyStripRows } from "../lib/transactionCompanyStrip.js";
 
 export default function TransactionSearchSection({
   selectedCategories,
@@ -26,19 +15,18 @@ export default function TransactionSearchSection({
   setSearchState,
   fs,
   onGroupButtonClick,
-  onGroupFilterAllClick,
   onCompanyButtonClick,
+  onPickAllGroups,
+  onPickAllInGroup,
+  allowCompanyDeselect = false,
   currencyRowsOrdered,
-  showAllCurrencies,
   selectedCurrencies,
-  toggleAllCurrenciesBtn,
   onCurrencyDragStart,
   onCurrencyDropOn,
   toggleCurrencyBtn,
   m,
   t,
 }) {
-  const hideGroupFilter = !fs.snapGroupIds?.length;
   const displayFilterChips = useMemo(() => [
     { id: "show_name", key: "showName", label: m.showName },
     { id: "show_capture_only", key: "showCaptureOnly", label: m.showCaptureOnly },
@@ -47,10 +35,22 @@ export default function TransactionSearchSection({
   ], [m]);
 
   const companiesForCompanyStrip = useMemo(() => {
-    const list = fs.snapCompanies || [];
-    if (fs.groupFilterKind === "all") return orderSnapCompaniesForAllGroup(list);
-    return list;
-  }, [fs.snapCompanies, fs.groupFilterKind]);
+    if (!fs) return [];
+    return buildTransactionCompanyStripRows(fs, {
+      selectedGroup: fs.selectedGroup,
+      companyId: fs.companyId,
+      groupsAllMode: Boolean(fs.groupsAllMode),
+    });
+  }, [
+    fs,
+    fs?.selectedGroup,
+    fs?.companyId,
+    fs?.groupFilterOptOut,
+    fs?.groupsAllMode,
+    fs?.snapCompanies,
+    fs?.snapCompaniesAll,
+    fs?.snapGroupIds,
+  ]);
 
   return (
     <div className="transaction-search-section">
@@ -198,93 +198,34 @@ export default function TransactionSearchSection({
         })}
       </div>
 
-      {(fs.snapGroupIds.length > 0 || fs.snapCompanies.length > 0 || currencyRowsOrdered.length > 0) && (
+      {(fs.snapGroupIds.length > 0 || fs.snapCompanies.length > 0) && (
         <div className="transaction-bottom-filters">
-          <div className="user-gc-inline-panel">
-            {fs.snapGroupIds.length > 0 && (
-              <div id="group-buttons-wrapper" className="user-gc-inline-row">
-                <span className="user-gc-inline-label">{m.groupId}</span>
-                <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
-                  <div id="group-buttons-container" className="user-gc-segment-group" role="group" aria-label="Group ID">
-                    <button
-                      type="button"
-                      className={`user-gc-segment${fs.groupFilterKind === "all" ? " is-on" : ""}`}
-                      data-group-filter="all"
-                      onClick={() => onGroupFilterAllClick?.()}
-                    >
-                      {m.all}
-                    </button>
-                    {fs.snapGroupIds.map((gid) => (
-                      <button
-                        key={gid}
-                        type="button"
-                        className={`user-gc-segment${fs.groupFilterKind === "follow" && fs.selectedGroup === gid ? " is-on" : ""}`}
-                        data-group-id={gid}
-                        onClick={() => onGroupButtonClick(gid)}
-                      >
-                        {gid}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {fs.snapCompanies.length > 0 && (
-              <div id="company-buttons-wrapper" className="user-gc-inline-row">
-                <span className="user-gc-inline-label">{m.company}</span>
-                <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
-                  <div id="company-buttons-container" className="user-gc-segment-group" role="group" aria-label="Company">
-                    {companiesForCompanyStrip.map((comp) => {
-                      const visible = isCompanyVisibleForSharedFilter(
-                        comp,
-                        fs.selectedGroup,
-                        hideGroupFilter,
-                        fs.groupFilterKind || "follow",
-                      );
-                      return (
-                        <button
-                          key={comp.id}
-                          type="button"
-                          style={{ display: visible ? undefined : "none" }}
-                          className={`user-gc-segment${Number(comp.id) === Number(fs.companyId) ? " is-on" : ""}`}
-                          data-company-id={comp.id}
-                          data-group-id={comp.group_id != null ? String(comp.group_id).toUpperCase().trim() : ""}
-                          data-company-code={comp.company_id}
-                          onClick={() => {
-                            if (!visible) return;
-                            onCompanyButtonClick(comp);
-                          }}
-                        >
-                          {String(comp.company_id || "").toUpperCase()}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-
+          <GcInlineFilterPanel
+            t={(key) => m[key] ?? key}
+            groupIds={fs.snapGroupIds}
+            groupsAllMode={Boolean(fs.groupsAllMode)}
+            selectedGroup={fs.selectedGroup}
+            onPickAllGroups={onPickAllGroups}
+            onPickGroup={onGroupButtonClick}
+            companiesForPicker={companiesForCompanyStrip}
+            groupAllMode={Boolean(fs.groupAllMode)}
+            pickerCompanyId={fs.companyId}
+            onPickAllInGroup={onPickAllInGroup}
+            onPickCompany={onCompanyButtonClick}
+            allowCompanyDeselect={allowCompanyDeselect}
+          >
             {currencyRowsOrdered.length > 0 && (
               <div id="currency-buttons-wrapper" className="user-gc-inline-row">
                 <span className="user-gc-inline-label">{m.currencyLabel}</span>
                 <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
                   <div id="currency-buttons-container" className="user-gc-segment-group" role="group" aria-label="Currency">
-                    <button
-                      type="button"
-                      className={`user-gc-segment${showAllCurrencies ? " is-on" : ""}`}
-                      data-currency-code="ALL"
-                      onClick={toggleAllCurrenciesBtn}
-                    >
-                      {m.all}
-                    </button>
                     {currencyRowsOrdered.map((c) => {
                       const code = c.code;
                       return (
                         <button
                           key={code}
                           type="button"
-                          className={`user-gc-segment${!showAllCurrencies && selectedCurrencies.includes(code) ? " is-on" : ""}`}
+                          className={`user-gc-segment${selectedCurrencies.includes(code) ? " is-on" : ""}`}
                           data-currency-code={code}
                           draggable
                           onDragStart={() => onCurrencyDragStart(code)}
@@ -300,7 +241,7 @@ export default function TransactionSearchSection({
                 </div>
               </div>
             )}
-          </div>
+          </GcInlineFilterPanel>
         </div>
       )}
     </div>

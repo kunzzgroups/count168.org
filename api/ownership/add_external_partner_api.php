@@ -2,6 +2,7 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 require_once '../../includes/config.php';
+require_once '../includes/ownership_history.php';
 
 header('Content-Type: application/json');
 
@@ -185,6 +186,9 @@ try {
         $stmtInsert->execute([$company_id, $partnerId]);
     }
 
+    $savedBy = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+    ownership_history_snapshot_company_from_live_safe($pdo, (int) $company_id, $savedBy);
+
     echo json_encode([
         'status' => 'success',
         'message' => $isSameOwnerGroupLink
@@ -192,7 +196,6 @@ try {
             : "Partner '{$partner['name']}' linked successfully"
     ]);
 
-} catch (PDOException $e) {
+} catch (Throwable $e) {
     echo json_encode(['status' => 'error', 'message' => 'Database error: ' . $e->getMessage()]);
 }
-?>

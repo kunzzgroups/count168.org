@@ -142,6 +142,60 @@ export function parseCompleteFormula(completeFormula) {
   return { baseFormula: formula, sourcePercent };
 }
 
+function getPreviousNonWhitespaceIndex(str, startIndex) {
+  if (!str || startIndex === undefined) return null;
+  for (let i = startIndex; i >= 0; i -= 1) {
+    const char = str[i];
+    if (char && !/\s/.test(char)) return i;
+  }
+  return null;
+}
+
+/** Extract numeric matches while distinguishing unary minus from subtraction. */
+export function getFormulaNumberMatches(formula) {
+  const matches = [];
+  if (!formula) return matches;
+  const regex = /-?\d+\.?\d*/g;
+  let match;
+  while ((match = regex.exec(formula)) !== null) {
+    const raw = match[0];
+    if (!raw) continue;
+    const startIndex = match.index;
+    const endIndex = startIndex + raw.length;
+    let displayValue = raw;
+    let numericValue = parseFloat(raw);
+    let isUnaryNegative = false;
+    let binaryOperator = "";
+    if (raw.startsWith("-")) {
+      const prevIndex = getPreviousNonWhitespaceIndex(formula, startIndex - 1);
+      const prevChar = prevIndex !== null ? formula[prevIndex] : null;
+      const unaryIndicators = ["+", "-", "*", "/", "("];
+      const treatAsUnary = prevChar === null || unaryIndicators.includes(prevChar);
+      if (treatAsUnary) {
+        isUnaryNegative = true;
+        numericValue = parseFloat(raw);
+        displayValue = raw;
+      } else {
+        displayValue = raw.substring(1);
+        numericValue = parseFloat(displayValue);
+        binaryOperator = "-";
+      }
+    }
+    displayValue = displayValue.trim();
+    if (displayValue === "" || Number.isNaN(numericValue)) continue;
+    matches.push({
+      value: numericValue,
+      displayValue,
+      raw,
+      startIndex,
+      endIndex,
+      isUnaryNegative,
+      binaryOperator,
+    });
+  }
+  return matches;
+}
+
 /** Wrap bare negative numbers in parentheses for formula display. */
 export function formatNegativeNumbersInFormula(formula) {
   if (!formula || typeof formula !== "string") {

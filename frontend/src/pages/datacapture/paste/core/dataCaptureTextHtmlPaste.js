@@ -1,9 +1,59 @@
-import { ensureGridFits, notifyPasteSuccess, resolvePasteAnchor } from "./dataCapturePasteApply.js";
+import { applyDataMatrixToGrid, notifyPasteSuccess } from "./dataCapturePasteApply.js";
+import { recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 import {
   detectColumnReorder,
   measureHtmlTable,
   sanitizePastedCellHtml,
 } from "./dataCaptureClipboard.js";
+
+function emptyPatch() {
+  return { value: "" };
+}
+
+function patchFromSourceCell(sourceCell) {
+  let cellContent = sourceCell.innerHTML;
+  if (!cellContent || cellContent.trim() === "") {
+    cellContent = sourceCell.textContent || "";
+  }
+
+  const cellText = (sourceCell.textContent || sourceCell.innerText || "").trim();
+  const cleanContent = sanitizePastedCellHtml(cellContent);
+
+  if (cleanContent.includes("<") && cleanContent.includes(">")) {
+    return { value: cellText, html: cleanContent };
+  }
+  return { value: cellContent };
+}
+
+function buildRowPatches(sourceRow, maxCols, columnOrder) {
+  const row = Array.from({ length: maxCols }, () => emptyPatch());
+  const rawCells = sourceRow.querySelectorAll("td, th");
+  const sourceCells =
+    columnOrder && rawCells.length >= columnOrder.length
+      ? columnOrder.map((i) => rawCells[i])
+      : Array.from(rawCells);
+
+  let currentCol = 0;
+
+  sourceCells.forEach((sourceCell) => {
+    const colspan = Number.parseInt(sourceCell.getAttribute("colspan") || "1", 10);
+
+    if (currentCol < maxCols) {
+      row[currentCol] = patchFromSourceCell(sourceCell);
+    }
+
+    for (let i = 1; i < colspan; i += 1) {
+      currentCol += 1;
+      if (currentCol < maxCols) {
+        row[currentCol] = emptyPatch();
+      }
+    }
+
+    currentCol += 1;
+  });
+
+  return row;
+}
 
 /**
  * 1.Text — paste Excel HTML table while preserving cell formatting (Phase 4b).
@@ -21,92 +71,19 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
     if (!measured) return false;
 
     const { allRows, maxCols } = measured;
-    const { startRow, startCol } = resolvePasteAnchor(anchorCell);
-
-    ensureGridFits(startRow, startCol, allRows.length, maxCols);
-
-    const tableBody = document.getElementById("tableBody");
-    if (!tableBody) return false;
-
-    const actualCols = document.querySelectorAll("#tableHeader th").length - 1;
     const columnOrder = detectColumnReorder(allRows);
-    const changes = [];
-    let successCount = 0;
+    const dataMatrix = allRows.map((sourceRow) => buildRowPatches(sourceRow, maxCols, columnOrder));
 
-    allRows.forEach((sourceRow, rowIndex) => {
-      const actualRowIndex = startRow + rowIndex;
-      const tableRow = tableBody.children[actualRowIndex];
-      if (!tableRow) return;
-
-      const rawCells = sourceRow.querySelectorAll("td, th");
-      const sourceCells =
-        columnOrder && rawCells.length >= columnOrder.length
-          ? columnOrder.map((i) => rawCells[i])
-          : Array.from(rawCells);
-
-      let currentCol = startCol;
-
-      sourceCells.forEach((sourceCell) => {
-        const colspan = Number.parseInt(sourceCell.getAttribute("colspan") || "1", 10);
-        let cellContent = sourceCell.innerHTML;
-        if (!cellContent || cellContent.trim() === "") {
-          cellContent = sourceCell.textContent || "";
-        }
-
-        if (currentCol < actualCols) {
-          const targetCell = tableRow.children[currentCol + 1];
-          if (targetCell?.contentEditable === "true") {
-            const oldValue = targetCell.textContent || targetCell.innerHTML || "";
-            const cellText = sourceCell.textContent || sourceCell.innerText || "";
-            const cleanContent = sanitizePastedCellHtml(cellContent);
-
-            if (cleanContent.includes("<") && cleanContent.includes(">")) {
-              targetCell.innerHTML = cleanContent;
-            } else {
-              targetCell.textContent = cellContent;
-            }
-
-            changes.push({
-              row: actualRowIndex,
-              col: currentCol,
-              oldValue,
-              newValue: targetCell.textContent || targetCell.innerHTML,
-            });
-
-            if (cellText.trim() !== "") successCount += 1;
-          }
-        }
-
-        for (let i = 1; i < colspan; i += 1) {
-          currentCol += 1;
-          if (currentCol < actualCols) {
-            const targetCell = tableRow.children[currentCol + 1];
-            if (targetCell?.contentEditable === "true") {
-              const oldValue = targetCell.textContent || targetCell.innerHTML || "";
-              targetCell.textContent = "";
-              changes.push({
-                row: actualRowIndex,
-                col: currentCol,
-                oldValue,
-                newValue: "",
-              });
-            }
-          }
-        }
-
-        currentCol += 1;
-      });
+    const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
+      trimValues: false,
+      uppercaseValues: false,
     });
-
-    if (changes.length > 0) {
-      window.__DC_PUSH_PASTE_HISTORY__?.(changes);
-    }
 
     if (successCount > 0) {
       notifyPasteSuccess(
-        `成功粘贴 ${successCount} 个单元格 (${allRows.length} 行 x ${maxCols} 列)，已保持Excel原始格式!`,
+        `成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持Excel原始格式!`,
       );
-      window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+      recomputeSubmitStateAfterPaste();
       return true;
     }
 

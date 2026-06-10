@@ -1,6 +1,9 @@
 ﻿import { useCallback, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useProgressiveScrollExtent } from "../../shared/useProgressiveScrollExtent.js";
+import {
+  useMaintenanceCyclicScrollExtent,
+  useMaintenanceCyclicScrollObserver,
+} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
 import BankprocessVirtualDataRow from "./BankprocessVirtualDataRow.jsx";
 
 function pickOverscan(count) {
@@ -22,6 +25,7 @@ export default function BankprocessVirtualRows({
   alreadyDeletedTitle,
 }) {
   const scrollRef = useRef(null);
+  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
   const rowsRef = useRef(rows);
 
@@ -62,9 +66,11 @@ export default function BankprocessVirtualRows({
     overscan: pickOverscan(rows.length),
     getItemKey,
     measureElement,
+    observeElementOffset,
   });
 
   useLayoutEffect(() => {
+    contentOffsetRef.current = 0;
     scrollRef.current?.scrollTo(0, 0);
     sizeCacheRef.current.clear();
     rowVirtualizer.measure();
@@ -72,12 +78,13 @@ export default function BankprocessVirtualRows({
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH } = useProgressiveScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: rowHeight,
     resetDeps: [rows],
+    contentOffsetRef,
   });
 
   return (
@@ -102,7 +109,7 @@ export default function BankprocessVirtualRows({
                 width: "100%",
                 height: `${virtualRow.size}px`,
                 minHeight: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
+                transform: `translateY(${virtualRow.start - cyclicRowOffset}px)`,
               }}
             >
               <BankprocessVirtualDataRow

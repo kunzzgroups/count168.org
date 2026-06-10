@@ -1,4 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  transactionScopeApiParams,
+  transactionScopeCacheKey,
+  transactionScopeIsReady,
+} from "../lib/transactionScope.js";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   parseRateExpression,
@@ -18,11 +23,20 @@ export function useTransactionForm({
   onSearch,
   refreshContraInboxBadge,
   filterSnapshot,
+  transactionScope,
   accountOptions,
   m,
   t,
 }) {
-  const [txType, setTxType] = useState("CONTRA");
+  const [txType, setTxTypeRaw] = useState("CONTRA");
+  const setTxType = useCallback((next) => {
+    const v = String(next || "").trim().toUpperCase();
+    if (v === "RECEIVE") return;
+    setTxTypeRaw(v || "CONTRA");
+  }, []);
+  useEffect(() => {
+    if (txType === "RECEIVE") setTxTypeRaw("CONTRA");
+  }, [txType]);
   const [txDate, setTxDate] = useState(null);
   const [txToAccount, setTxToAccount] = useState(null);
   const [txFromAccount, setTxFromAccount] = useState(null);
@@ -52,9 +66,24 @@ export function useTransactionForm({
   const [rateMiddlemanRate, setRateMiddlemanRate] = useState("");
   const [rateMiddlemanAmount, setRateMiddlemanAmount] = useState("");
   const queryClient = useQueryClient();
+  const scopeKeyRef = useRef(transactionScopeCacheKey(transactionScope));
+
+  useEffect(() => {
+    const key = transactionScopeCacheKey(transactionScope);
+    if (scopeKeyRef.current === key) return;
+    scopeKeyRef.current = key;
+    setTxToAccount(null);
+    setTxFromAccount(null);
+    setRateToAccount(null);
+    setRateFromAccount(null);
+    setRateTransferToAccount(null);
+    setRateTransferFromAccount(null);
+    setRateMiddlemanAccount(null);
+  }, [transactionScope]);
 
   const submitMutation = useMutation({
-    mutationFn: ({ companyId, payload, clientRequestId }) => submitTransaction({ companyId, payload, clientRequestId }),
+    mutationFn: ({ scopeApi, payload, clientRequestId }) =>
+      submitTransaction({ ...scopeApi, payload, clientRequestId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
       queryClient.invalidateQueries({ queryKey: transactionQueryKeys.contraInboxRoot() });
@@ -142,7 +171,7 @@ export function useTransactionForm({
     [accountOptions, filterSnapshot?.mutationsBlocked, pushToast, txType, m, t],
   );
 
-  const needsFromTo = ["CONTRA", "PAYMENT", "RECEIVE", "CLAIM", "PROFIT", "CLEAR"].includes(txType);
+  const needsFromTo = ["CONTRA", "PAYMENT", "CLAIM", "PROFIT", "CLEAR"].includes(txType);
   const showStandardFromAndReverse = txType !== "RATE" && needsFromTo;
   const isAdjustment = txType === "ADJUSTMENT";
 
@@ -223,11 +252,18 @@ export function useTransactionForm({
       return;
     }
 
-    const companyId = filterSnapshot?.companyId;
-    if (!companyId) return;
+    const scopeApi = transactionScopeApiParams(transactionScope);
+    if (!transactionScopeIsReady(transactionScope)) {
+      pushToast(m.submitFailed, "error");
+      return;
+    }
 
     if (!txType) {
       pushToast(m.pleaseSelectTransactionType, "error");
+      return;
+    }
+    if (txType === "RECEIVE") {
+      pushToast(m.receiveTypeDisabled, "error");
       return;
     }
 
@@ -239,7 +275,7 @@ export function useTransactionForm({
       return;
     }
 
-    const needsFromTo = ["CONTRA", "PAYMENT", "RECEIVE", "CLAIM", "PROFIT", "CLEAR"].includes(txType);
+    const needsFromTo = ["CONTRA", "PAYMENT", "CLAIM", "PROFIT", "CLEAR"].includes(txType);
     const isAdjustment = txType === "ADJUSTMENT";
 
     if (txType === "PROFIT") {
@@ -337,7 +373,7 @@ export function useTransactionForm({
           rateTransferFromAccount,
         });
 
-        const res = await submitMutation.mutateAsync({ companyId, payload, clientRequestId });
+        const res = await submitMutation.mutateAsync({ scopeApi, payload, clientRequestId });
         if (res?.success) {
           const approvalStatus = res?.data?.approval_status ? String(res.data.approval_status).toUpperCase() : "";
           if (approvalStatus === "PENDING") {
@@ -345,7 +381,7 @@ export function useTransactionForm({
           } else {
             pushToast(res?.message || m.rateTransactionSubmitted, "success");
           }
-          await refreshContraInboxBadge(companyId);
+          await refreshContraInboxBadge(scopeApi);
           setTxConfirm(false);
           setRateCurrencyFromAmount("");
           setRateExchangeRateRaw("");
@@ -423,7 +459,7 @@ export function useTransactionForm({
         currency: txCurrency,
       };
 
-      const res = await submitMutation.mutateAsync({ companyId, payload, clientRequestId });
+      const res = await submitMutation.mutateAsync({ scopeApi, payload, clientRequestId });
       if (res?.success) {
         const approvalStatus = res?.data?.approval_status ? String(res.data.approval_status).toUpperCase() : "";
         if (approvalStatus === "PENDING") {
@@ -431,7 +467,7 @@ export function useTransactionForm({
         } else {
           pushToast(res?.message || m.transactionSubmitted, "success");
         }
-        await refreshContraInboxBadge(companyId);
+        await refreshContraInboxBadge(scopeApi);
         setTxAmount("");
         setTxConfirm(false);
         await onSearch({ forceRefresh: true });

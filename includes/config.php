@@ -1,46 +1,45 @@
 <?php
 
-$host = 'localhost';
+// 默认连接参数（可被 config.local.php 覆盖，服务器上请用 config.local.php 放真实密码）
 
+$host = '127.0.0.1';
 $dbname = 'u857194726_c168site';
-$dbuser = 'u857194726_c168site';
-$dbpass = 'C168_site18';
-
-
+$dbuser = 'admin';
+$dbpass = 'C168_site';
 
 // 设置PHP时区为马来西亚时间
-
 date_default_timezone_set('Asia/Kuala_Lumpur');
-
 
 
 // 全局禁用任何 PHP 接口和表单页面的浏览器缓存 (防止各模块出现显示同步遗漏问题)
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-
 header('Pragma: no-cache');
 
-
+$pdo = null;
 
 try {
 
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $dbuser, $dbpass);
+    $pdo = new PDO(
+        "mysql:host=$host;dbname=$dbname;charset=utf8mb4;connect_timeout=5",
+        $dbuser,
+        $dbpass,
+        [PDO::ATTR_TIMEOUT => 5]
+    );
 
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    
+
 
     // 设置MySQL连接的时区
 
     $pdo->exec("SET time_zone = '+08:00'");
 
-    
+} catch (PDOException $e) {
 
-} catch(PDOException $e) {
+    error_log('Database connection failed: ' . $e->getMessage());
 
-    // 抛出异常而不是直接 die，让调用者可以处理
-
-    throw new PDOException("数据库连接失败: " . $e->getMessage());
+    $pdo = null;
 
 }
 

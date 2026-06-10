@@ -1,80 +1,109 @@
 <?php
-/**
- * Real-world email format validation (provider-agnostic).
- * Supports subdomains, + aliases, dots in local part; rejects malformed input.
- */
 
-function normalize_email_input($raw) {
-    return strtolower(trim((string) $raw));
+function sanitize_email_input($value): string
+{
+    $value = (string) $value;
+    $value = preg_replace('/[\x{4e00}-\x{9fa5}]/u', '', $value) ?? '';
+    $value = preg_replace('/\s+/', '', $value) ?? '';
+    return strtolower($value);
 }
 
-/**
- * @return array{valid: bool, email: string}
- */
-function validate_email_format($raw) {
-    $email = normalize_email_input($raw);
+function normalize_email($value): string
+{
+    return sanitize_email_input(trim((string) $value));
+}
 
-    if ($email === '' || strlen($email) > 254) {
-        return ['valid' => false, 'email' => $email];
+function email_has_dangerous_content(string $email): bool
+{
+    return (bool) preg_match('/[<>\"\'`;\\\\]|(\/\/)|javascript:|data:|\x00/i', $email);
+}
+
+function is_valid_email_local_part(string $local): bool
+{
+    if ($local === '' || strlen($local) > 64) {
+        return false;
+    }
+    if ($local[0] === '.' || substr($local, -1) === '.') {
+        return false;
+    }
+    if (strpos($local, '..') !== false) {
+        return false;
+    }
+    return (bool) preg_match('/^[a-z0-9.+_-]+$/', $local);
+}
+
+function is_valid_email_domain_label(string $label): bool
+{
+    if ($label === '' || strlen($label) > 63) {
+        return false;
+    }
+    if ($label[0] === '-' || substr($label, -1) === '-') {
+        return false;
+    }
+    return (bool) preg_match('/^[a-z0-9-]+$/', $label);
+}
+
+function is_valid_email_domain_part(string $domain): bool
+{
+    if ($domain === '' || strlen($domain) > 253) {
+        return false;
+    }
+    if ($domain[0] === '.' || substr($domain, -1) === '.') {
+        return false;
+    }
+    if (strpos($domain, '..') !== false) {
+        return false;
     }
 
-    if (substr_count($email, '@') !== 1) {
-        return ['valid' => false, 'email' => $email];
-    }
-
-    $atIndex = strpos($email, '@');
-    $localPart = substr($email, 0, $atIndex);
-    $domainPart = substr($email, $atIndex + 1);
-
-    if ($localPart === '' || strlen($localPart) > 64) {
-        return ['valid' => false, 'email' => $email];
-    }
-
-    if ($localPart[0] === '.' || substr($localPart, -1) === '.' || strpos($localPart, '..') !== false) {
-        return ['valid' => false, 'email' => $email];
-    }
-
-    if (!preg_match('/^[a-z0-9._%+-]+$/', $localPart)) {
-        return ['valid' => false, 'email' => $email];
-    }
-
-    if ($domainPart === '' || strlen($domainPart) > 253) {
-        return ['valid' => false, 'email' => $email];
-    }
-
-    if (preg_match('/^[.\-]|[.\-]$/', $domainPart)) {
-        return ['valid' => false, 'email' => $email];
-    }
-
-    $labels = explode('.', $domainPart);
+    $labels = explode('.', $domain);
     if (count($labels) < 2) {
-        return ['valid' => false, 'email' => $email];
-    }
-
-    foreach ($labels as $label) {
-        if ($label === '' || strlen($label) > 63) {
-            return ['valid' => false, 'email' => $email];
-        }
-        if ($label[0] === '-' || substr($label, -1) === '-') {
-            return ['valid' => false, 'email' => $email];
-        }
-        if (!preg_match('/^[a-z0-9-]+$/', $label)) {
-            return ['valid' => false, 'email' => $email];
-        }
+        return false;
     }
 
     $tld = $labels[count($labels) - 1];
     if (strlen($tld) < 2 || !preg_match('/^[a-z]+$/', $tld)) {
-        return ['valid' => false, 'email' => $email];
+        return false;
     }
 
-    if (preg_match('/[<>\'"\\\\;(){}[\\]]/', $email)) {
-        return ['valid' => false, 'email' => $email];
+    foreach ($labels as $label) {
+        if (!is_valid_email_domain_label($label)) {
+            return false;
+        }
     }
 
-    return ['valid' => true, 'email' => $email];
+    return true;
 }
 
-function is_valid_email_format($raw) {
-    return validate_email_format($raw)['valid'];
+function is_valid_email($value): bool
+{
+    $email = normalize_email($value);
+    if ($email === '') {
+        return false;
+    }
+    if (email_has_dangerous_content($email)) {
+        return false;
+    }
+    if (substr_count($email, '@') !== 1) {
+        return false;
+    }
+
+    [$local, $domain] = explode('@', $email, 2);
+    if ($local === '' || $domain === '') {
+        return false;
+    }
+
+    return is_valid_email_local_part($local) && is_valid_email_domain_part($domain);
+}
+
+/** @return array{ok: bool, normalized: string, error: ?string} */
+function validate_email($value): array
+{
+    $normalized = normalize_email($value);
+    if ($normalized === '') {
+        return ['ok' => false, 'normalized' => '', 'error' => 'empty'];
+    }
+    if (!is_valid_email($normalized)) {
+        return ['ok' => false, 'normalized' => $normalized, 'error' => 'invalid'];
+    }
+    return ['ok' => true, 'normalized' => $normalized, 'error' => null];
 }

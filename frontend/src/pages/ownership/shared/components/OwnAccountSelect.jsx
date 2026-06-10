@@ -10,7 +10,7 @@ export function formatOwnAccountLabel(acc, t) {
   return `${acc.account_name} (${acc.name})${mainStr}`;
 }
 
-export default function OwnAccountSelect({ value, onChange, accounts, disabled, t }) {
+export default function OwnAccountSelect({ value, onChange, accounts, displayLabel = "", disabled, t }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
 
@@ -37,6 +37,13 @@ export default function OwnAccountSelect({ value, onChange, accounts, disabled, 
     [accounts, value]
   );
 
+  const triggerLabel = useMemo(() => {
+    if (selected) return formatOwnAccountLabel(selected, t);
+    if (value && displayLabel) return displayLabel;
+    if (value) return String(value);
+    return placeholder;
+  }, [selected, value, displayLabel, placeholder, t]);
+
   const pick = (id) => {
     onChange(id ? String(id) : "");
     close();
@@ -58,7 +65,7 @@ export default function OwnAccountSelect({ value, onChange, accounts, disabled, 
         }}
       >
         <span className="own-account-select-trigger-text">
-          {selected ? formatOwnAccountLabel(selected, t) : placeholder}
+          {triggerLabel}
         </span>
       </button>
       {open ? (

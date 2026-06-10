@@ -1,8 +1,18 @@
 /** Account List Logic Helpers */
 
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
+import {
+  companiesForCompanyPicker,
+  DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
+  dedupeOwnerCompaniesByCode,
+  excludeGroupLabelsFromCompanyPicker,
+  filterCompaniesWithDisplayId,
+  independentCompaniesForPicker,
+  isDashboardGroupOnlyMode,
+  normalizeCompanyGroupId,
+} from "../../utils/company/sharedCompanyFilter.js";
 
-export const PAGE_SIZE = 20;
+export const PAGE_SIZE = 25;
 
 export const ROLE_PRIORITY = ["CAPITAL", "BANK", "CASH", "PROFIT", "EXPENSES", "COMPANY", "PARTNER", "STAFF", "SUPPLIER", "AGENT", "MEMBER", "DEBTOR"];
 
@@ -47,9 +57,6 @@ export function getOrderedRoles(roles) {
     const t = String(r || "").trim();
     if (t) map.set(toUpper(t), t);
   });
-  ["PARTNER", "STAFF", "DEBTOR"].forEach((r) => {
-    if (!map.has(r)) map.set(r, r);
-  });
   const out = [];
   ROLE_PRIORITY.forEach((p) => {
     if (map.has(p)) {
@@ -82,17 +89,144 @@ export function buildAccountsFetchKey(companyId, searchTerm, showInactive, showA
   return `${companyId || ""}|${String(searchTerm || "").trim()}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
 }
 
-export function buildAccountsUrl(companyId, searchTerm, showInactive, showAll) {
+export function buildAccountsUrl(companyId, searchTerm, showInactive, showAll, { groupId = null } = {}) {
   const url = new URL(buildApiUrl("api/accounts/accountlistapi.php"));
   url.searchParams.set("company_id", String(companyId));
+  const gid = groupId ? String(groupId).trim().toUpperCase() : "";
+  if (gid) url.searchParams.set("group_id", gid);
   if (String(searchTerm || "").trim()) url.searchParams.set("search", String(searchTerm || "").trim());
   if (showInactive) url.searchParams.set("showInactive", "1");
   if (showAll) url.searchParams.set("showAll", "1");
   return url;
 }
 
+export function buildGroupAccountsUrl(groupId, searchTerm, showInactive, showAll, { groupOnly = true } = {}) {
+  const url = new URL(buildApiUrl("api/accounts/accountlistapi.php"));
+  url.searchParams.set("group_id", String(groupId));
+  if (groupOnly) url.searchParams.set("group_only", "1");
+  if (String(searchTerm || "").trim()) url.searchParams.set("search", String(searchTerm || "").trim());
+  if (showInactive) url.searchParams.set("showInactive", "1");
+  if (showAll) url.searchParams.set("showAll", "1");
+  return url;
+}
+
+function mergeAccountRows(jsonList) {
+  const byId = new Map();
+  for (const json of jsonList) {
+    if (!json?.success) continue;
+    const rows = Array.isArray(json?.data?.accounts) ? json.data.accounts : [];
+    for (const row of rows) {
+      const id = Number(row?.id);
+      if (Number.isFinite(id) && id > 0) byId.set(id, row);
+    }
+  }
+  return [...byId.values()];
+}
+
+/** Fetch and merge accounts across multiple companies / groups (All modes). */
+export async function fetchMergedAccounts({
+  companyIds = [],
+  groupIds = [],
+  searchTerm = "",
+  showInactive = false,
+  showAll = false,
+  signal = undefined,
+}) {
+  const tasks = [];
+  for (const cid of companyIds) {
+    tasks.push(
+      fetch(buildAccountsUrl(cid, searchTerm, showInactive, showAll).toString(), {
+        credentials: "include",
+        signal,
+      }).then((r) => r.json()),
+    );
+  }
+  for (const gid of groupIds) {
+    tasks.push(
+      fetch(buildGroupAccountsUrl(gid, searchTerm, showInactive, showAll).toString(), {
+        credentials: "include",
+        signal,
+      }).then((r) => r.json()),
+    );
+  }
+  if (!tasks.length) return { success: false, accounts: [] };
+  const results = await Promise.all(tasks);
+  const failed = results.find((j) => !j?.success);
+  if (failed) return { success: false, message: failed.message, accounts: [] };
+  return { success: true, accounts: mergeAccountRows(results) };
+}
+
 /** Add Account：列表中有 MYR 时默认勾选 */
 export function pickDefaultAddCurrencyIds(currencies) {
   const myr = (currencies || []).find((c) => toUpper(c.code) === "MYR");
   return myr ? [Number(myr.id)] : [];
+}
+
+/** Company pills shown in Account List inline filter (matches AccountListPage useMemo). */
+export function resolveAccountListInlinePickerCompanies({
+  companies = [],
+  groupIds = [],
+  selectedGroup = null,
+  preferredCompanyId = null,
+  companiesForPickerFromHook = null,
+  groupFilterOptOut = false,
+} = {}) {
+  const independentPicker = () => {
+    const list = independentCompaniesForPicker(companies, groupIds);
+    if (list.length) {
+      return dedupeOwnerCompaniesByCode(list, preferredCompanyId);
+    }
+    return excludeGroupLabelsFromCompanyPicker(
+      dedupeOwnerCompaniesByCode(filterCompaniesWithDisplayId(companies), preferredCompanyId),
+      groupIds,
+    ).filter((c) => !normalizeCompanyGroupId(c));
+  };
+
+  if (!selectedGroup || groupFilterOptOut) {
+    return independentPicker();
+  }
+
+  if (Array.isArray(companiesForPickerFromHook) && companiesForPickerFromHook.length > 0) {
+    return companiesForPickerFromHook;
+  }
+
+  const effectiveGroup = String(selectedGroup).trim().toUpperCase();
+  return dedupeOwnerCompaniesByCode(
+    companiesForCompanyPicker(companies, effectiveGroup, groupIds),
+    preferredCompanyId,
+  );
+}
+
+export function isCompanyInAccountListPicker(options, companyId) {
+  const cid = Number(companyId);
+  if (!Number.isFinite(cid) || cid <= 0) return false;
+  return resolveAccountListInlinePickerCompanies(options).some((c) => Number(c.id) === cid);
+}
+
+/** List fetch is allowed only with an active company pill or explicit group-only mode. */
+export function shouldLoadAccountListData({
+  companyId = null,
+  selectedGroup = null,
+  groupOnlyMode = false,
+  groupsAllMode = false,
+  groupAllMode = false,
+} = {}) {
+  if (groupsAllMode || groupAllMode) return true;
+  if (companyId != null && Number(companyId) > 0) return true;
+  if (groupOnlyMode && selectedGroup) return true;
+  return false;
+}
+
+export function readAccountListGroupFilterOptOut() {
+  return (
+    typeof sessionStorage !== "undefined" &&
+    sessionStorage.getItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY) === "1"
+  );
+}
+
+export function resolveAccountListGroupOnlyFetch(selectedGroup, companyId, groupsAllMode, groupAllMode) {
+  const sg = String(selectedGroup || "").trim().toUpperCase();
+  const cid = companyId != null ? Number(companyId) : null;
+  if (!sg || (cid != null && cid > 0) || groupAllMode || groupsAllMode) return false;
+  return isDashboardGroupOnlyMode();
 }

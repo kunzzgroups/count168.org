@@ -68,10 +68,17 @@ export function isBankOnlyCategoryCompany(permissions) {
 /**
  * Process list for maintenance filters.
  */
-export async function fetchMaintenanceProcesses(companyId, { credentials = false } = {}) {
+export async function fetchMaintenanceProcesses(
+  companyId,
+  { credentials = false, permission } = {},
+) {
   const params = new URLSearchParams();
   if (companyId) {
     params.append("company_id", companyId);
+  }
+  const perm = String(permission ?? "").trim();
+  if (perm) {
+    params.append("permission", perm);
   }
   const url = buildApiUrl(`api/processes/processlist_api.php?${params.toString()}`);
   const init = credentials ? { credentials: "include" } : {};

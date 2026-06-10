@@ -1,8 +1,7 @@
 /** PEGASUS paste. */
-
-
-
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser } from "../../lib/dataCaptureBridge.js";
+import { detectHtmlTableInClipboard } from "../core/dataCaptureClipboard.js";
+import { applyParsedMatrixToGrid } from "../core/dataCapturePasteApply.js";
 
 /** @returns {boolean} */
 export function handlePegasusPaste(e, pastedData) {
@@ -116,56 +115,17 @@ export function handlePegasusPaste(e, pastedData) {
             console.log('PEGASUS: Merged all data into single row with', allCells.length, 'cells');
             console.log('PEGASUS: First 10 cells:', allCells.slice(0, 10));
 
-            const startCell = e.target;
-            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-            // PEGASUS 格式：强制从第一列（Column 1）开始粘贴
-            const startCol = 0;
-
-            const currentRows = document.querySelectorAll('#tableBody tr').length;
-            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-            const requiredCols = startCol + allCells.length;
-
-            if (requiredCols > currentCols) {
-                const targetCols = Math.max(currentCols, requiredCols);
-                ensurePasteGrid(currentRows, targetCols);
-            }
-
-            const tableBody = document.getElementById('tableBody');
-            const tableRow = tableBody.children[startRow];
-            const currentPasteChanges = [];
-            let successCount = 0;
-
-            allCells.forEach((cellData, colIndex) => {
-                const actualColIndex = startCol + colIndex;
-                const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                if (cell && cell.contentEditable === 'true') {
-                    const trimmedData = (cellData || '').trim();
-                    currentPasteChanges.push({
-                        row: startRow,
-                        col: actualColIndex,
-                        oldValue: cell.textContent,
-                        newValue: trimmedData
-                    });
-
-                    // 保持原始数据，不做任何转换
-                    cell.textContent = trimmedData;
-
-                    if (trimmedData) {
-                        successCount++;
-                    }
-                }
+            const { successCount } = applyParsedMatrixToGrid([allCells], e.target, {
+                startColOverride: 0,
+                trimValues: true,
             });
 
-            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
             if (successCount > 0) {
-                window.showNotification?.(`Successfully pasted PEGASUS data (1 row x ${allCells.length} cols)!`, 'success');
+                notifyPasteUser(`Successfully pasted PEGASUS data (1 row x ${allCells.length} cols)!`, 'success');
             } else {
-                window.showNotification?.('No cells were pasted from PEGASUS format.', 'danger');
+                notifyPasteUser('No cells were pasted from PEGASUS format.', 'danger');
             }
 
-            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
             return true;
         } else {
             console.log('PEGASUS: No data extracted, continuing with other parsers');

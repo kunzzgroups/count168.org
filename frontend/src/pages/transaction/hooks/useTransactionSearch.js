@@ -14,6 +14,7 @@ import {
   readTxListFromSessionStorage,
   sortByRole,
   sanitizeSearchApiData,
+  mergeSearchApiDataList,
 } from "../lib/transactionPaymentLogic.js";
 import {
   searchTransactions as searchTransactionsApi,
@@ -21,9 +22,25 @@ import {
   transactionQueryKeys,
 } from "../lib/transactionApi.js";
 import { clearTxSearchCache, getTxSearchCache, setTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
+import {
+  buildDashboardCurrencyScopeKey,
+  notifyDashboardCurrencyFilterChanged,
+  resolveCrossPageCurrencyPreference,
+} from "../../../utils/company/sharedCompanyFilter.js";
+import { persistCurrencyDisplayOrder } from "../../../utils/company/currencyDisplayOrder.js";
+import { useCrossPageCurrencySync } from "../../../utils/company/useCrossPageCurrencySync.js";
+import {
+  transactionScopeApiParams,
+  transactionScopeCacheCompanyKey,
+  transactionScopeCacheKey,
+  transactionScopeIsReady,
+  resolveTransactionCurrencyOrderCompanyId,
+} from "../lib/transactionScope.js";
 
 export function useTransactionSearch({
   filterSnapshot,
+  transactionScope,
+  currencyScopeBundle,
   todayDmy,
   pushToast,
   txType,
@@ -60,9 +77,10 @@ export function useTransactionSearch({
   const prevServerSideFiltersRef = useRef(null);
   /** After a real company switch, skip one blocking "Loading data" overlay (still fetch in background). */
   const suppressBlockingOverlayOnceRef = useRef(false);
-  const prevCompanyIdForSearchRef = useRef(null);
+  const prevScopeKeyForSearchRef = useRef(null);
   /** Capture Date 变更后触发搜索；与「仅首次拉数」的 initial effect 分离，避免 initialSearchDoneRef 为 true 时改日期不请求 */
   const prevCaptureDateRangeKeyRef = useRef(null);
+  const lastInitialSearchKeyRef = useRef("");
   const [categoryOpen, setCategoryOpen] = useState(false);
 
   const categoryAllCheckboxRef = useRef(null);
@@ -70,14 +88,34 @@ export function useTransactionSearch({
   const effectiveDateTo = dateTo || todayDmy;
   const effectiveDateRangeText = `${effectiveDateFrom} - ${effectiveDateTo}`;
   const selectedCurrenciesKey = selectedCurrencies.map((c) => String(c || "").toUpperCase()).join(",");
+  const scopeViewGroup = transactionScope?.viewGroup ?? null;
+  const scopeReady = transactionScopeIsReady(transactionScope);
+  const scopeApi = useMemo(() => transactionScopeApiParams(transactionScope), [transactionScope]);
+  const scopeCacheCompanyKey = transactionScopeCacheCompanyKey(transactionScope);
+  const orderCompanyId = useMemo(
+    () =>
+      resolveTransactionCurrencyOrderCompanyId(
+        transactionScope,
+        filterSnapshot?.snapCompaniesAll || filterSnapshot?.snapCompanies,
+      ),
+    [transactionScope, filterSnapshot?.snapCompanies, filterSnapshot?.snapCompaniesAll],
+  );
 
-  const persistCurrencyFilter = useCallback((companyId, showAll, sel) => {
+  const persistCurrencyFilter = useCallback((companyId, showAll, sel, scopeGroup = null) => {
     if (!companyId) return;
     try {
       localStorage.setItem(
         TRANSACTION_CURRENCY_FILTER_KEY_PREFIX + companyId,
         JSON.stringify({ showAll: !!showAll, currencies: [...(sel || [])] }),
       );
+      if (!showAll && sel?.length >= 1) {
+        const scopeKey =
+          buildDashboardCurrencyScopeKey({
+            companyId: /^\d+$/.test(String(companyId)) ? Number(companyId) : null,
+            selectedGroup: scopeGroup,
+          }) || String(companyId);
+        notifyDashboardCurrencyFilterChanged(sel[sel.length - 1], scopeKey);
+      }
     } catch {
       /* ignore */
     }
@@ -127,10 +165,52 @@ export function useTransactionSearch({
     setShowAllCurrencies(next);
     const nextSel = [];
     setSelectedCurrencies(nextSel);
-    persistCurrencyFilter(filterSnapshot?.companyId, next, nextSel);
+    persistCurrencyFilter(scopeCacheCompanyKey, next, nextSel, transactionScope?.selectedGroup);
     // Currency is not wired through categoryChangedByUserRef; schedule search after state flush.
     scheduleAutoSearch();
-  }, [showAllCurrencies, filterSnapshot?.companyId, persistCurrencyFilter, scheduleAutoSearch]);
+  }, [showAllCurrencies, scopeCacheCompanyKey, persistCurrencyFilter, scheduleAutoSearch, transactionScope?.selectedGroup]);
+
+  const txCurrencyCodes = useMemo(
+    () =>
+      (currencyRowsOrdered || [])
+        .map((r) => String(r.code || "").toUpperCase().trim())
+        .filter(Boolean),
+    [currencyRowsOrdered],
+  );
+
+  const applyCrossPageCurrency = useCallback(
+    (code) => {
+      const c = String(code || "").toUpperCase().trim();
+      if (!c) return;
+      setShowAllCurrencies(false);
+      setSelectedCurrencies([c]);
+      persistCurrencyFilter(
+        scopeCacheCompanyKey,
+        false,
+        [c],
+        transactionScope?.selectedGroup,
+      );
+      scheduleAutoSearch();
+    },
+    [
+      scopeCacheCompanyKey,
+      persistCurrencyFilter,
+      scheduleAutoSearch,
+      transactionScope?.selectedGroup,
+    ],
+  );
+
+  useCrossPageCurrencySync({
+    enabled: txCurrencyCodes.length > 0 && scopeReady,
+    companyId:
+      transactionScope?.scopeCompanyId > 0
+        ? transactionScope.scopeCompanyId
+        : null,
+    selectedGroup: transactionScope?.selectedGroup ?? scopeViewGroup,
+    availableCodes: txCurrencyCodes,
+    currentCode: selectedCurrencies.length === 1 ? selectedCurrencies[0] : "",
+    onApplyCode: applyCrossPageCurrency,
+  });
 
   const toggleCurrencyBtn = useCallback(
     (code) => {
@@ -149,10 +229,29 @@ export function useTransactionSearch({
 
       setShowAllCurrencies(nextShowAll);
       setSelectedCurrencies(nextSel);
-      persistCurrencyFilter(filterSnapshot?.companyId, nextShowAll, nextSel);
+      persistCurrencyFilter(scopeCacheCompanyKey, nextShowAll, nextSel, transactionScope?.selectedGroup);
+      if (nextSel.includes(c)) {
+        const scopeKey =
+          buildDashboardCurrencyScopeKey({
+            companyId:
+              transactionScope?.scopeCompanyId > 0
+                ? transactionScope.scopeCompanyId
+                : null,
+            selectedGroup: transactionScope?.selectedGroup ?? scopeViewGroup,
+          }) || String(scopeCacheCompanyKey);
+        notifyDashboardCurrencyFilterChanged(c, scopeKey);
+      }
       scheduleAutoSearch();
     },
-    [selectedCurrencies, filterSnapshot?.companyId, persistCurrencyFilter, scheduleAutoSearch],
+    [
+      selectedCurrencies,
+      scopeCacheCompanyKey,
+      persistCurrencyFilter,
+      scheduleAutoSearch,
+      transactionScope?.selectedGroup,
+      transactionScope?.scopeCompanyId,
+      scopeViewGroup,
+    ],
   );
 
   const onCurrencyDragStart = useCallback((code) => {
@@ -174,9 +273,24 @@ export function useTransactionSearch({
       list.splice(tIdx, 0, moved);
 
       setCurrencyRowsOrdered(list);
-      await saveUserCurrencyOrder(list.map((x) => x.code));
+      const codes = list.map((x) => String(x.code || x.currency || "").trim().toUpperCase()).filter(Boolean);
+      if (orderCompanyId != null) {
+        persistCurrencyDisplayOrder(orderCompanyId, codes);
+      }
+      try {
+        await saveUserCurrencyOrder(codes, {
+          companyId: orderCompanyId ?? undefined,
+        });
+        if (orderCompanyId != null) {
+          await queryClient.invalidateQueries({
+            queryKey: [...transactionQueryKeys.userCurrencyOrder(), orderCompanyId],
+          });
+        }
+      } catch {
+        /* localStorage already updated */
+      }
     },
-    [currencyRowsOrdered, setCurrencyRowsOrdered],
+    [currencyRowsOrdered, setCurrencyRowsOrdered, orderCompanyId, queryClient],
   );
 
   useEffect(() => {
@@ -193,13 +307,13 @@ export function useTransactionSearch({
   useEffect(() => {
     if (!categoryChangedByUserRef.current) return;
     categoryChangedByUserRef.current = false;
-    if (!filterSnapshot?.companyId) return;
+    if (!scopeReady) return;
     if (!effectiveDateFrom || !effectiveDateTo) return;
     if (!showAllCurrencies && selectedCurrencies.length === 0) return;
     scheduleAutoSearch();
   }, [
     selectedCategories,
-    filterSnapshot?.companyId,
+    scopeReady,
     effectiveDateFrom,
     effectiveDateTo,
     effectiveDateRangeText,
@@ -208,10 +322,10 @@ export function useTransactionSearch({
     scheduleAutoSearch,
   ]);
 
-  // Show 0 balance 需重搜（后端 account×currency 范围变化）；Payment/Win-Loss 勾选时前端即时过滤，取消勾选时再拉全量。
+  // Show 0 balance 需重搜（后端 account×currency 范围变化）；Win/Loss / Payment 勾选仅前端即时过滤（取消 Payment/Win-Loss 时再拉全量）。
   useEffect(() => {
     if (!initialSearchDoneRef.current) return;
-    if (!filterSnapshot?.companyId) return;
+    if (!scopeReady) return;
     if (!effectiveDateFrom || !effectiveDateTo) return;
     if (!showAllCurrencies && selectedCurrencies.length === 0) return;
 
@@ -240,7 +354,7 @@ export function useTransactionSearch({
     searchState.showPaymentOnly,
     searchState.showCaptureOnly,
     searchState.showZeroBalance,
-    filterSnapshot?.companyId,
+    scopeReady,
     effectiveDateFrom,
     effectiveDateTo,
     showAllCurrencies,
@@ -252,7 +366,7 @@ export function useTransactionSearch({
     (data) => {
       try {
         const key = buildTxListSessionKey({
-          companyId: filterSnapshot?.companyId,
+          companyId: scopeCacheCompanyKey,
           dateFrom: effectiveDateFrom,
           dateTo: effectiveDateTo,
           selectedCategories,
@@ -273,7 +387,7 @@ export function useTransactionSearch({
       }
     },
     [
-      filterSnapshot?.companyId,
+      scopeCacheCompanyKey,
       effectiveDateFrom,
       effectiveDateTo,
       selectedCategories,
@@ -293,9 +407,9 @@ export function useTransactionSearch({
       notifyErrors: notifyErrorsOpt,
       showBlockingOverlay: showBlockingOverlayOpt,
     } = {}) => {
-      const cid = filterSnapshot?.companyId;
+      const cid = scopeCacheCompanyKey;
       const notifyErr = notifyErrorsOpt !== undefined ? notifyErrorsOpt : !silent;
-      if (!cid) return;
+      if (!scopeReady || !cid) return;
       if (!effectiveDateFrom || !effectiveDateTo) {
         pushToast(m.pleaseSelectDateRange, "error");
         return;
@@ -315,8 +429,10 @@ export function useTransactionSearch({
 
       const showInactiveForQuery =
         searchState.showZeroBalance && searchState.showPaymentOnly ? false : searchState.showPaymentOnly;
-      const showCaptureOnlyForQuery =
-        searchState.showZeroBalance && searchState.showCaptureOnly ? false : searchState.showCaptureOnly;
+      // Win/Loss Only 始终在前端 applyPaymentWinLossFilters 过滤。
+      // 后端 show_capture_only=1 + hide_zero_balance=1 的 Layer 2 会误删「当日有 W/L 动账但 Balance=0」的组合行
+      //（与 PHP transaction.php 勾选后仍显示此类账号的行为不一致）。
+      const showCaptureOnlyForQuery = false;
 
       const requestKey = JSON.stringify({
         dateFrom: effectiveDateFrom,
@@ -365,20 +481,27 @@ export function useTransactionSearch({
       if (instantData) {
         setRawSearchData(instantData);
         setTablesVisible(true);
-      } else if (!isInitialLoad && !silent) {
-        setRawSearchData(null);
       }
 
       let didSetBlockingLoading = false;
-      const showLoadingIndicator = blockOverlay || !instantData;
+      const hasExistingData = Boolean(rawSearchData);
+      const showLoadingIndicator = blockOverlay || (!instantData && !hasExistingData);
       if (showLoadingIndicator) {
         setSearchLoading(true);
         didSetBlockingLoading = true;
       }
       setTablesVisible(true);
 
+      const subsidiarySearch =
+        scopeApi.subsidiaryAccountsOnly ||
+        (scopeApi.companyId != null && Number(scopeApi.companyId) > 0);
       const paramsBase = {
-        companyId: cid,
+        ...scopeApi,
+        // Search must not send view_group when drilling into a subsidiary — backend would treat it as group ledger.
+        viewGroup: subsidiarySearch ? undefined : scopeApi.viewGroup,
+        groupId: subsidiarySearch ? undefined : scopeApi.groupId,
+        groupAggregate: subsidiarySearch ? undefined : scopeApi.groupAggregate,
+        subsidiaryAccountsOnly: subsidiarySearch ? true : scopeApi.subsidiaryAccountsOnly,
         dateFrom: effectiveDateFrom,
         dateTo: effectiveDateTo,
         showInactive: showInactiveForQuery,
@@ -417,19 +540,36 @@ export function useTransactionSearch({
       };
 
       try {
-        const result = await fetchSearch(paramsBase);
-        if (latestRunTokenRef.current !== runToken) return;
-        if (!result?.success || !result?.data) {
-          if (notifyErr) {
-            pushToast(result?.message || result?.error || m.searchFailed, "error");
+        let currentData = null;
+        if (transactionScope?.mode === "aggregate" && transactionScope.mergeCompanyIds?.length) {
+          const results = await Promise.all(
+            transactionScope.mergeCompanyIds.map((cid) =>
+              fetchSearch({
+                ...paramsBase,
+                companyId: cid,
+                viewGroup: scopeViewGroup || undefined,
+                groupId: undefined,
+              }),
+            ),
+          );
+          if (latestRunTokenRef.current !== runToken) return;
+          const payloads = results.filter((r) => r?.success && r?.data).map((r) => r.data);
+          if (!payloads.length) {
+            if (notifyErr) pushToast(m.searchFailed, "error");
+            return;
           }
-          if (!silent) {
-            setRawSearchData(null);
+          currentData = mergeSearchApiDataList(payloads);
+        } else {
+          const result = await fetchSearch(paramsBase);
+          if (latestRunTokenRef.current !== runToken) return;
+          if (!result?.success || !result?.data) {
+            if (notifyErr) {
+              pushToast(result?.message || result?.error || m.searchFailed, "error");
+            }
+            return;
           }
-          return;
+          currentData = result.data;
         }
-
-        let currentData = result.data;
         const leftRows = Array.isArray(currentData.left_table) ? currentData.left_table : [];
         const rightRows = Array.isArray(currentData.right_table) ? currentData.right_table : [];
         const totalAccounts = leftRows.length + rightRows.length;
@@ -483,7 +623,9 @@ export function useTransactionSearch({
       }
     },
     [
-      filterSnapshot?.companyId,
+      scopeReady,
+      scopeApi,
+      scopeCacheCompanyKey,
       effectiveDateFrom,
       effectiveDateTo,
       showAllCurrencies,
@@ -494,6 +636,7 @@ export function useTransactionSearch({
       saveTxListToSession,
       queryClient,
       txType,
+      rawSearchData,
       m,
       t,
     ],
@@ -547,7 +690,10 @@ export function useTransactionSearch({
       showCaptureOnly: searchState.showCaptureOnly,
       showZeroBalance: searchState.showZeroBalance,
     });
-    const z = applyZeroBalanceFilter(pf.filteredLeft, pf.filteredRight, searchState.showZeroBalance);
+    const z = applyZeroBalanceFilter(pf.filteredLeft, pf.filteredRight, searchState.showZeroBalance, {
+      showCaptureOnly: searchState.showCaptureOnly,
+      showPaymentOnly: searchState.showPaymentOnly,
+    });
     const sortedLeft = z.left;
     const sortedRight = z.right;
     const totalsLeft = calculateTotals(sortedLeft);
@@ -632,28 +778,57 @@ export function useTransactionSearch({
     };
   }, [rawSearchData, baseRowsPresentation, searchState, showAllCurrencies, selectedCurrencies, currencyRowsOrdered]);
 
-  /** 切换公司：中止旧请求、清空列表数据，并用 suppress 跳过一次大块 “Loading data” 遮罩（后台拉取）。 */
+  /** 切换 scope（含 group/company 模式）：中止旧请求、清空列表，后台重搜。 */
+  const scopeKey = transactionScopeCacheKey(transactionScope) || null;
+
   useEffect(() => {
-    const cid = filterSnapshot?.companyId;
-    if (cid == null) return;
-    const prev = prevCompanyIdForSearchRef.current;
-    if (prev != null && Number(prev) !== Number(cid)) {
+    const prev = prevScopeKeyForSearchRef.current;
+    const scopeChanged = prev != null && prev !== scopeKey;
+
+    if (scopeKey == null) {
+      if (prev != null) {
+        suppressBlockingOverlayOnceRef.current = true;
+        prevCaptureDateRangeKeyRef.current = null;
+        prevServerSideFiltersRef.current = null;
+        setRawSearchData(null);
+        setSearchLoading(false);
+        clearTxSearchCache();
+        lastCompletedSearchKeyRef.current = "";
+        try {
+          latestRunTokenRef.current += 1;
+          queryClient.cancelQueries({ queryKey: transactionQueryKeys.searchRoot() });
+        } catch {
+          /* ignore */
+        }
+      }
+      prevScopeKeyForSearchRef.current = null;
+      return;
+    }
+
+    if (scopeChanged) {
       suppressBlockingOverlayOnceRef.current = true;
-      setRawSearchData(null);
       prevCaptureDateRangeKeyRef.current = null;
       prevServerSideFiltersRef.current = null;
+      setRawSearchData(null);
+      setSearchLoading(false);
       clearTxSearchCache();
+      lastCompletedSearchKeyRef.current = "";
+      try {
+        latestRunTokenRef.current += 1;
+        queryClient.cancelQueries({ queryKey: transactionQueryKeys.searchRoot() });
+      } catch {
+        /* ignore */
+      }
     }
-    prevCompanyIdForSearchRef.current = cid;
+
+    prevScopeKeyForSearchRef.current = scopeKey;
     setTablesVisible((prev) => (prev ? prev : true));
-    lastCompletedSearchKeyRef.current = "";
-    try {
-      latestRunTokenRef.current += 1;
-      queryClient.cancelQueries({ queryKey: transactionQueryKeys.searchRoot() });
-    } catch {
-      /* ignore */
+    if (scopeChanged) {
+      lastCompletedSearchKeyRef.current = "";
+      initialSearchDoneRef.current = false;
+      lastInitialSearchKeyRef.current = "";
     }
-  }, [filterSnapshot?.companyId, queryClient]);
+  }, [scopeKey, queryClient]);
 
   const selectedCategoriesKey = useMemo(
     () =>
@@ -665,23 +840,30 @@ export function useTransactionSearch({
     [selectedCategories],
   );
 
-  // Initial search / replay logic
+  // Initial search / replay logic — wait until currency bundle matches scope (after restore in useLayoutEffect).
   useEffect(() => {
-    if (filterSnapshot?.companyId) {
-      initialSearchDoneRef.current = false;
-    }
-  }, [filterSnapshot?.companyId]);
-
-  useEffect(() => {
-    if (!filterSnapshot?.companyId) return;
-    if (currencyRowsOrdered.length === 0) return;
+    if (!scopeReady) return;
+    if (!scopeKey || currencyScopeBundle?.scopeKey !== scopeKey) return;
+    if (currencyScopeBundle.rows.length === 0) return;
     if (!showAllCurrencies && selectedCurrencies.length === 0) return;
-    if (initialSearchDoneRef.current) return;
+
+    const initSearchKey = [
+      scopeKey,
+      showAllCurrencies ? "ALL" : selectedCurrenciesKey,
+      selectedCategoriesKey,
+      effectiveDateFrom,
+      effectiveDateTo,
+      searchState.showPaymentOnly ? "1" : "0",
+      searchState.showCaptureOnly ? "1" : "0",
+      searchState.showZeroBalance ? "1" : "0",
+    ].join("|");
+
+    if (lastInitialSearchKeyRef.current === initSearchKey) return;
 
     let hadReplay = false;
     try {
       const key = buildTxListSessionKey({
-        companyId: filterSnapshot?.companyId,
+        companyId: scopeCacheCompanyKey,
         dateFrom: effectiveDateFrom,
         dateTo: effectiveDateTo,
         selectedCategories,
@@ -702,6 +884,7 @@ export function useTransactionSearch({
       /* ignore */
     }
 
+    lastInitialSearchKeyRef.current = initSearchKey;
     initialSearchDoneRef.current = true;
     void runSearchRef.current?.({
       isInitialLoad: true,
@@ -710,8 +893,11 @@ export function useTransactionSearch({
       showBlockingOverlay: !hadReplay,
     });
   }, [
-    filterSnapshot?.companyId,
-    currencyRowsOrdered.length,
+    scopeKey,
+    scopeReady,
+    scopeCacheCompanyKey,
+    currencyScopeBundle?.scopeKey,
+    currencyScopeBundle?.rows?.length,
     showAllCurrencies,
     selectedCurrenciesKey,
     effectiveDateFrom,
@@ -723,7 +909,7 @@ export function useTransactionSearch({
   ]);
 
   useEffect(() => {
-    if (!filterSnapshot?.companyId) return;
+    if (!scopeReady) return;
     if (!initialSearchDoneRef.current) return;
     if (!effectiveDateFrom || !effectiveDateTo) return;
     if (!showAllCurrencies && selectedCurrencies.length === 0) return;
@@ -740,7 +926,7 @@ export function useTransactionSearch({
       notifyErrors: true,
       showBlockingOverlay: true,
     });
-  }, [effectiveDateFrom, effectiveDateTo, filterSnapshot?.companyId, showAllCurrencies, selectedCurrenciesKey]);
+  }, [effectiveDateFrom, effectiveDateTo, scopeReady, showAllCurrencies, selectedCurrenciesKey]);
 
   return {
     dateFrom,

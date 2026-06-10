@@ -1,6 +1,7 @@
 import React from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
 import { sanitizeCapitalLettersOnly } from "../../../utils/input/sanitizeCapitalLettersOnly.js";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
 export default function BankSelectionModal({
   banksList,
@@ -17,6 +18,7 @@ export default function BankSelectionModal({
   notify,
   t,
 }) {
+  const { submitting: addingBank, guardSubmit } = useSubmitGuard(true);
   const pickBank = (b) => {
     setSelectedBankChips((prev) => (prev.includes(b) ? prev : [...prev, b]));
   };
@@ -36,7 +38,7 @@ export default function BankSelectionModal({
             <div className="available-banks-section">
               <div className="add-bank-bar">
                 <h3>{t("addNewBank")}</h3>
-                <form className="add-bank-form" onSubmit={onSubmitNewBank}>
+                <form className="add-bank-form" onSubmit={guardSubmit(onSubmitNewBank)}>
                   <div className="add-bank-input-group">
                     <input
                       type="text"
@@ -45,7 +47,9 @@ export default function BankSelectionModal({
                       value={newBankName}
                       onChange={(e) => setNewBankName(sanitizeCapitalLettersOnly(e.target.value))}
                     />
-                    <button type="submit" className="btn btn-save bank-selection-add-btn">{t("add")}</button>
+                    <button type="submit" className="btn btn-save bank-selection-add-btn" disabled={addingBank}>
+                      {addingBank ? t("saving") : t("add")}
+                    </button>
                   </div>
                 </form>
               </div>

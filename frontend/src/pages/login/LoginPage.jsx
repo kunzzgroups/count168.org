@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LOGIN_I18N } from "../../translateFile/auth/authTranslate.js";
+import {
+  clearDashboardFilterSession,
+  seedDashboardFilterFromLogin,
+} from "../../utils/company/sharedCompanyFilter.js";
 import { useAuthBackground } from "./useAuthBackground.js";
 
 function escapeHtml(text) {
@@ -132,6 +136,11 @@ export default function LoginPage() {
   }, [lang]);
 
   useEffect(() => {
+    if (sessionStorage.getItem("ec_skip_session_bootstrap") === "1") {
+      sessionStorage.removeItem("ec_skip_session_bootstrap");
+      return undefined;
+    }
+
     let cancelled = false;
     const controller = new AbortController();
     (async () => {
@@ -262,8 +271,30 @@ export default function LoginPage() {
       }
 
       const res = await fetch("/api/session/login_api.php", { method: "POST", body: fd, credentials: "include" });
-      const data = await res.json();
+      const raw = await res.text();
+      let data = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        const msg = res.ok
+          ? i18n.loginInvalidResponse
+          : i18n.loginServerError.replace("{status}", String(res.status));
+        showNotice(msg);
+        return;
+      }
       if (data.status === "success" && data.redirect) {
+        clearDashboardFilterSession();
+        const loginScope = String(data.login_scope || "").trim().toLowerCase();
+        const loginIdentifier = String(data.login_identifier || companyId).trim().toUpperCase();
+        if (loginScope === "group" || loginScope === "company") {
+          seedDashboardFilterFromLogin({
+            loginScope,
+            loginIdentifier,
+            sessionCompanyId: data.company_id != null ? Number(data.company_id) : null,
+            sessionCompanyCode: loginScope === "company" ? loginIdentifier : null,
+          });
+        }
+
         const userType = String(data.user_type || "").toLowerCase();
         const redirect = String(data.redirect || "");
         const loginRole = role;
@@ -320,7 +351,7 @@ export default function LoginPage() {
               {[...maintenanceList, ...maintenanceList].map((item, index) => (
                 <div className="sc-login-maintenance-item" key={`${item.id}-${index}`}>
                   <span className="sc-login-maintenance-dot" />
-                  <span className="sc-login-maintenance-label">{i18n.maintenanceLabel}</span>
+                  <span className="sc-login-maintenance-label">{item.prefix || i18n.maintenanceLabel}</span>
                   <span dangerouslySetInnerHTML={{ __html: escapeHtml(item.content) }} />
                 </div>
               ))}

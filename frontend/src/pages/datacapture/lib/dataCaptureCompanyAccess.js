@@ -1,5 +1,6 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { fetchCompanyPermissionsForDataCapture } from "./dataCaptureApi.js";
+import { canUseGroupOnlyMode } from "../../../utils/company/loginScope.js";
 
 /** Home route when the active company has no Games / Gambling category. */
 export const DATA_CAPTURE_HOME_PATH = "/dashboard";
@@ -9,6 +10,23 @@ export function permissionsIncludeGames(permissions) {
     Array.isArray(permissions) &&
     (permissions.includes("Games") || permissions.includes("Gambling"))
   );
+}
+
+/** Session has any company category (direct row or aggregated group flags). */
+export function sessionUserHasCompanyCategoryAccess(sessionUser) {
+  const perms = Array.isArray(sessionUser?.company_permissions)
+    ? sessionUser.company_permissions
+    : [];
+  if (perms.length > 0) return true;
+  if (sessionUser?.company_has_gambling === true) return true;
+  if (sessionUser?.company_has_bank === true) return true;
+  return false;
+}
+
+/** Session may use Data Capture when group/company has Games (incl. aggregated group flags). */
+export function sessionUserHasGamblingAccess(sessionUser) {
+  if (sessionUser?.company_has_gambling === true) return true;
+  return permissionsIncludeGames(sessionUser?.company_permissions);
 }
 
 export async function fetchCompanyHasGamesCategory(companyCode) {
@@ -35,15 +53,10 @@ export async function syncDataCaptureCompanySession(companyId) {
 
 /** @returns {Promise<boolean>} true when company may use Data Capture */
 export async function resolveCompanyGamesAccess({ companyId, companyCode, sessionUser }) {
+  if (sessionUserHasGamblingAccess(sessionUser)) return true;
+
   const numericId = Number(companyId);
   if (!Number.isFinite(numericId) || numericId <= 0) return false;
-
-  const sameAsSession =
-    sessionUser?.company_id != null && Number(sessionUser.company_id) === numericId;
-
-  if (sameAsSession && sessionUser.company_has_gambling === false) {
-    return false;
-  }
 
   try {
     const syncJson = await syncDataCaptureCompanySession(numericId);
@@ -58,4 +71,33 @@ export async function resolveCompanyGamesAccess({ companyId, companyCode, sessio
   }
 
   return fetchCompanyHasGamesCategory(companyCode);
+}
+
+export function isGroupCaptureScope(captureScope, sessionProcessData = null) {
+  if (captureScope?.mode === "group") return true;
+  if (sessionProcessData?.groupOnlyCapture === true) return true;
+  if (captureScope?.resolveCompanyViaGroupId && captureScope?.groupId) return true;
+  return false;
+}
+
+/** Summary page access: group ledger users or company with Games category. */
+export async function resolveSummaryPageAccess({
+  captureScope,
+  companyId,
+  companyCode,
+  sessionUser,
+  sessionProcessData = null,
+  hasStoredCaptureSession = false,
+}) {
+  if (hasStoredCaptureSession) return true;
+
+  if (isGroupCaptureScope(captureScope, sessionProcessData)) {
+    const groupKey =
+      captureScope?.groupId || sessionProcessData?.captureSelectedGroup || null;
+    if (canUseGroupOnlyMode(sessionUser, groupKey ? String(groupKey) : null)) {
+      return true;
+    }
+  }
+
+  return resolveCompanyGamesAccess({ companyId, companyCode, sessionUser });
 }

@@ -98,6 +98,8 @@
         font-size: 11px !important;
         padding-top: 8px !important;
         padding-bottom: 8px !important;
+        padding-left: 32px !important;
+        background-position: 9px center !important;
     }
 
     body.ec-auth-shell.user-page .user-modal-company-picker-select-all {
@@ -442,15 +444,9 @@
         max-width: clamp(100px, 7.5vw, 150px) !important;
     }
 
-    /* <1700px 由 processCSS 收窄 Search；此处勿再放大 bank 顶栏药丸搜索 */
-    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
-        width: clamp(96px, 8vw, 140px) !important;
-        max-width: clamp(96px, 8vw, 140px) !important;
-        flex: 0 0 auto !important;
-    }
-
-    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar .userlist-search-input,
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar .userlist-search-input.search-input {
+    /* <1700px bank 顶栏 Search：图标收起 / 点击展开，宽度由 processCSS .bank-process-search-bar 控制 */
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar .userlist-search-input,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar .userlist-search-input.search-input {
         width: 100% !important;
         max-width: none !important;
         flex: 1 1 auto !important;
@@ -486,28 +482,7 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
    Global SaaS "Premium Feel" Upgrades
    ========================================================================== */
 
-/* 1. Login / non-dashboard scrollbars (dashboard uses dashboard-scrollbar.css) */
-body:not(.dashboard-page)::-webkit-scrollbar,
-body:not(.dashboard-page) *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-body:not(.dashboard-page)::-webkit-scrollbar-track,
-body:not(.dashboard-page) *::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-body:not(.dashboard-page)::-webkit-scrollbar-thumb,
-body:not(.dashboard-page) *::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.4);
-    border-radius: 10px;
-}
-
-body:not(.dashboard-page)::-webkit-scrollbar-thumb:hover,
-body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
-    background: rgba(148, 163, 184, 0.7);
-}
+/* 1. Scrollbars: app-wide — see dashboard-scrollbar.css (app-shell) */
 
 /* 2. Modal/Dialog Smart Overflow for 13-inch Screens */
 @media screen and (max-height: 800px) {
@@ -659,7 +634,7 @@ body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
     body.user-page,
     body.transaction-page,
     body.dashboard-page:not(.datacapture-page),
-    body.ec-auth-shell:not(.datacapture-page):not(.process-page--bank) {
+    body.ec-auth-shell:not(.datacapture-page) {
         height: auto !important;
         min-height: 100vh !important;
         max-height: none !important;
@@ -667,11 +642,11 @@ body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
         overflow-x: hidden !important;
     }
 
-    body.ec-auth-shell:not(.datacapture-page):not(.process-page--bank) .container,
-    body.ec-auth-shell:not(.datacapture-page):not(.process-page--bank) .content,
-    body.ec-auth-shell:not(.datacapture-page):not(.process-page--bank) .transaction-container,
-    body.ec-auth-shell:not(.datacapture-page):not(.process-page--bank) .datacapture-container,
-    body.ec-auth-shell:not(.datacapture-page):not(.process-page--bank) .dashboard-container {
+    body.ec-auth-shell:not(.datacapture-page) .container,
+    body.ec-auth-shell:not(.datacapture-page) .content,
+    body.ec-auth-shell:not(.datacapture-page) .transaction-container,
+    body.ec-auth-shell:not(.datacapture-page) .datacapture-container,
+    body.ec-auth-shell:not(.datacapture-page) .dashboard-container {
         height: auto !important;
         min-height: 100vh !important;
         max-height: none !important;
@@ -696,7 +671,7 @@ body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
 
     body.user-page:not(.user-page--show-all) .content,
     body.account-page:not(.account-page--show-all) .content {
-        height: calc(100vh - 22px) !important;
+        height: calc(100vh - var(--layout-page-top-inset)) !important;
         min-height: 0 !important;
         overflow: hidden !important;
     }
@@ -705,7 +680,11 @@ body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
     body.ec-auth-shell .table-container,
     body.ec-auth-shell .account-cards,
     body.ec-auth-shell .process-cards:not(.bank-virtual-scroll),
-    body.ec-auth-shell .process-table-wrapper:not(.bank-process-table-region),
+    body.ec-auth-shell .process-table-wrapper,
+    body.ec-auth-shell .bank-virtual-scroll-clip,
+    body.ec-auth-shell .bank-virtual-table,
+    body.ec-auth-shell .bank-process-list-body,
+    body.ec-auth-shell .bank-process-list-scroll-region,
     body.ec-auth-shell .dashboard-content,
     body.ec-auth-shell .transaction-main-content,
     body.ec-auth-shell .transaction-table-wrapper,
@@ -715,73 +694,6 @@ body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
         max-height: none !important;
         overflow: visible !important;
         /* This forces the data to completely render out, triggering the global browser scrollbar */
-    }
-
-    /* Bank Process List：保留 100vh flex + 列表区 .bank-virtual-scroll-clip 内滚动 */
-    body.ec-auth-shell.process-page.process-page--bank {
-        height: 100vh !important;
-        max-height: 100vh !important;
-        overflow-x: hidden !important;
-        overflow-y: hidden !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .container,
-    body.ec-auth-shell.process-page.process-page--bank #root > .container {
-        display: flex !important;
-        flex-direction: column !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-        min-height: 0 !important;
-        overflow: hidden !important;
-        padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)) !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .content {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        overflow: hidden !important;
-        max-width: 100% !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-list-body,
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-list-scroll-region {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        overflow: hidden !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .process-table-wrapper.bank-process-table-region,
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-table {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        max-height: 100% !important;
-        overflow: hidden !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll-clip {
-        flex: 1 1 0 !important;
-        min-height: var(--bank-list-scroll-body-min-height) !important;
-        max-height: 100% !important;
-        overflow-x: hidden !important;
-        overflow-y: visible !important;
-        -webkit-overflow-scrolling: touch !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll-clip.bank-virtual-scroll-clip--cap-rows {
-        max-height: min(100%, var(--bank-list-scroll-body-max-height)) !important;
-        overflow-y: auto !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll.process-cards {
-        min-height: min-content !important;
-        max-height: none !important;
-        overflow: visible !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll .bank-virtual-data-row.process-card {
-        min-height: var(--bank-list-data-row-estimate) !important;
     }
 
     body.user-page:not(.user-page--show-all) .user-cards {
@@ -798,7 +710,77 @@ body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
     }
 
     body.account-page:not(.account-page--show-all) .account-table-wrapper {
+        padding-bottom: 52px !important;
+    }
+
+    /* Games Process List（非 Bank / 非 Show All）：与 User List 一屏 flex 布局，禁止整页纵向滚动 */
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) {
+        overflow-y: hidden !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+    }
+
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .container {
+        height: 100vh !important;
+        min-height: 0 !important;
+        max-height: 100vh !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
         padding-bottom: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .content {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 0 !important;
+    }
+
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .action-buttons-container {
+        flex-shrink: 0 !important;
+    }
+
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-table-wrapper {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 52px !important;
+        box-sizing: border-box !important;
+    }
+
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-cards:not(.bank-virtual-scroll) {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .games-process-table-header,
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-table-wrapper > .table-header {
+        flex-shrink: 0 !important;
+    }
+
+    body.process-page:not(.process-page--bank):not(.process-page--show-all) .pagination-container {
+        position: fixed !important;
+        right: max(40px, env(safe-area-inset-right, 0px)) !important;
+        bottom: max(20px, env(safe-area-inset-bottom, 0px)) !important;
+        left: auto !important;
+        top: auto !important;
+        margin: 0 !important;
+        z-index: 120 !important;
+        width: fit-content !important;
+        flex-shrink: 0 !important;
     }
 
     /* 3. Ensure the aesthetic background doesn't tear or tile awkwardly when scrolling a long page natively */
@@ -836,81 +818,6 @@ body:not(.dashboard-page) *::-webkit-scrollbar-thumb:hover {
         min-height: 0 !important;
     }
 
-}
-
-/* Bank Process List：<1700px 与 payment maintenance 一致 — 整页不滚，仅列表区纵向滚动，分页不被顶出视口 */
-@media screen and (max-width: 1699px) {
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
-        width: clamp(96px, 8vw, 140px) !important;
-        max-width: clamp(96px, 8vw, 140px) !important;
-        flex: 0 0 auto !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank {
-        height: 100vh !important;
-        max-height: 100vh !important;
-        overflow-x: hidden !important;
-        overflow-y: hidden !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .container,
-    body.ec-auth-shell.process-page.process-page--bank #root > .container {
-        display: flex !important;
-        flex-direction: column !important;
-        height: 100vh !important;
-        max-height: 100vh !important;
-        min-height: 0 !important;
-        overflow: hidden !important;
-        padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)) !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .content {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        overflow: hidden !important;
-        max-width: 100% !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-list-body,
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-list-scroll-region {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        overflow: hidden !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .process-table-wrapper.bank-process-table-region,
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-table {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        max-height: 100% !important;
-        overflow: hidden !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll-clip {
-        flex: 1 1 0 !important;
-        min-height: var(--bank-list-scroll-body-min-height) !important;
-        max-height: 100% !important;
-        overflow-x: hidden !important;
-        overflow-y: visible !important;
-        -webkit-overflow-scrolling: touch !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll-clip.bank-virtual-scroll-clip--cap-rows {
-        max-height: min(100%, var(--bank-list-scroll-body-max-height)) !important;
-        overflow-y: auto !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll.process-cards {
-        min-height: min-content !important;
-        max-height: none !important;
-        overflow: visible !important;
-    }
-
-    body.ec-auth-shell.process-page.process-page--bank .bank-virtual-scroll .bank-virtual-data-row.process-card {
-        min-height: var(--bank-list-data-row-estimate) !important;
-    }
 }
 
 /* ==========================================================================

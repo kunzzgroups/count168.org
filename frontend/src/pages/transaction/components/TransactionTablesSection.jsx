@@ -1,4 +1,5 @@
-import { formatPaymentHistoryMoneyHalfUp, toUpperDisplay } from "../lib/transactionFormat.js";
+import { toUpperDisplay } from "../lib/transactionFormat.js";
+import TransactionWinLossCell from "./TransactionWinLossCell.jsx";
 
 export default function TransactionTablesSection({
   tablesVisible,
@@ -62,10 +63,10 @@ export default function TransactionTablesSection({
                       <tr key={`${row.account_db_id}-${row.currency || ""}`} className={`transaction-table-row${row.is_alert == 1 || row.is_alert === true ? " transaction-alert-row" : ""}`}>
                         <td className={accountCellClass} style={{ cursor: "pointer" }} onClick={() => openHistory(row)}>{row.account_id}</td>
                         <td className="transaction-name-column" style={{ display: searchState.showName ? "" : "none" }}>{toUpperDisplay(row.account_name)}</td>
-                        <td>{formatPaymentHistoryMoneyHalfUp(row.bf)}</td>
-                        <td>{formatPaymentHistoryMoneyHalfUp(row.win_loss)}</td>
-                        <td>{formatPaymentHistoryMoneyHalfUp(row.cr_dr)}</td>
-                        <td className="transaction-balance-cell" style={{ cursor: "pointer" }} onClick={() => handleBalanceCellClick(row, "left")}>{formatPaymentHistoryMoneyHalfUp(row.balance)}</td>
+                        <td><TransactionWinLossCell value={row.bf} /></td>
+                        <td><TransactionWinLossCell value={row.win_loss} /></td>
+                        <td><TransactionWinLossCell value={row.cr_dr} /></td>
+                        <td className="transaction-balance-cell" style={{ cursor: "pointer" }} onClick={() => handleBalanceCellClick(row, "left")}><TransactionWinLossCell value={row.balance} /></td>
                       </tr>
                     );
                   })}
@@ -74,10 +75,10 @@ export default function TransactionTablesSection({
                   <tr className="transaction-table-footer">
                     <td>{m.total}</td>
                     <td className="transaction-name-column" style={{ display: searchState.showName ? "" : "none" }} />
-                    <td id="left_total_bf">{formatPaymentHistoryMoneyHalfUp(tp.totalsLeft?.bf ?? "0")}</td>
-                    <td id="left_total_winloss">{formatPaymentHistoryMoneyHalfUp(tp.totalsLeft?.win_loss ?? "0")}</td>
-                    <td id="left_total_crdr">{formatPaymentHistoryMoneyHalfUp(tp.totalsLeft?.cr_dr ?? "0")}</td>
-                    <td id="left_total_balance">{formatPaymentHistoryMoneyHalfUp(tp.totalsLeft?.balance ?? "0")}</td>
+                    <td id="left_total_bf"><TransactionWinLossCell value={tp.totalsLeft?.bf ?? "0"} /></td>
+                    <td id="left_total_winloss"><TransactionWinLossCell value={tp.totalsLeft?.win_loss ?? "0"} /></td>
+                    <td id="left_total_crdr"><TransactionWinLossCell value={tp.totalsLeft?.cr_dr ?? "0"} /></td>
+                    <td id="left_total_balance"><TransactionWinLossCell value={tp.totalsLeft?.balance ?? "0"} /></td>
                   </tr>
                 </tfoot>
               </table>
@@ -99,10 +100,10 @@ export default function TransactionTablesSection({
                       <tr key={`${row.account_db_id}-${row.currency || ""}`} className={`transaction-table-row${row.is_alert == 1 || row.is_alert === true ? " transaction-alert-row" : ""}`}>
                         <td className={accountCellClass} style={{ cursor: "pointer" }} onClick={() => openHistory(row)}>{row.account_id}</td>
                         <td className="transaction-name-column" style={{ display: searchState.showName ? "" : "none" }}>{toUpperDisplay(row.account_name)}</td>
-                        <td>{formatPaymentHistoryMoneyHalfUp(row.bf)}</td>
-                        <td>{formatPaymentHistoryMoneyHalfUp(row.win_loss)}</td>
-                        <td>{formatPaymentHistoryMoneyHalfUp(row.cr_dr)}</td>
-                        <td className="transaction-balance-cell" style={{ cursor: "pointer" }} onClick={() => handleBalanceCellClick(row, "right")}>{formatPaymentHistoryMoneyHalfUp(row.balance)}</td>
+                        <td><TransactionWinLossCell value={row.bf} /></td>
+                        <td><TransactionWinLossCell value={row.win_loss} /></td>
+                        <td><TransactionWinLossCell value={row.cr_dr} /></td>
+                        <td className="transaction-balance-cell" style={{ cursor: "pointer" }} onClick={() => handleBalanceCellClick(row, "right")}><TransactionWinLossCell value={row.balance} /></td>
                       </tr>
                     );
                   })}
@@ -111,10 +112,10 @@ export default function TransactionTablesSection({
                   <tr className="transaction-table-footer">
                     <td>{m.total}</td>
                     <td className="transaction-name-column" style={{ display: searchState.showName ? "" : "none" }} />
-                    <td id="right_total_bf">{formatPaymentHistoryMoneyHalfUp(tp.totalsRight?.bf ?? "0")}</td>
-                    <td id="right_total_winloss">{formatPaymentHistoryMoneyHalfUp(tp.totalsRight?.win_loss ?? "0")}</td>
-                    <td id="right_total_crdr">{formatPaymentHistoryMoneyHalfUp(tp.totalsRight?.cr_dr ?? "0")}</td>
-                    <td id="right_total_balance">{formatPaymentHistoryMoneyHalfUp(tp.totalsRight?.balance ?? "0")}</td>
+                    <td id="right_total_bf"><TransactionWinLossCell value={tp.totalsRight?.bf ?? "0"} /></td>
+                    <td id="right_total_winloss"><TransactionWinLossCell value={tp.totalsRight?.win_loss ?? "0"} /></td>
+                    <td id="right_total_crdr"><TransactionWinLossCell value={tp.totalsRight?.cr_dr ?? "0"} /></td>
+                    <td id="right_total_balance"><TransactionWinLossCell value={tp.totalsRight?.balance ?? "0"} /></td>
                   </tr>
                 </tfoot>
               </table>
@@ -157,10 +158,10 @@ export default function TransactionTablesSection({
                             <tr key={`${side.key}-${row.account_db_id}-${row.currency || ""}`} className={`transaction-table-row${row.is_alert == 1 || row.is_alert === true ? " transaction-alert-row" : ""}`}>
                               <td className={accountCellClass} style={{ cursor: "pointer" }} onClick={() => openHistory(row)}>{row.account_id}</td>
                               <td className="transaction-name-column" style={{ display: searchState.showName ? "" : "none" }}>{toUpperDisplay(row.account_name)}</td>
-                              <td>{formatPaymentHistoryMoneyHalfUp(row.bf)}</td>
-                              <td>{formatPaymentHistoryMoneyHalfUp(row.win_loss)}</td>
-                              <td>{formatPaymentHistoryMoneyHalfUp(row.cr_dr)}</td>
-                              <td className="transaction-balance-cell" style={{ cursor: "pointer" }} onClick={() => handleBalanceCellClick(row, side.isLeft ? "left" : "right")}>{formatPaymentHistoryMoneyHalfUp(row.balance)}</td>
+                              <td><TransactionWinLossCell value={row.bf} /></td>
+                              <td><TransactionWinLossCell value={row.win_loss} /></td>
+                              <td><TransactionWinLossCell value={row.cr_dr} /></td>
+                              <td className="transaction-balance-cell" style={{ cursor: "pointer" }} onClick={() => handleBalanceCellClick(row, side.isLeft ? "left" : "right")}><TransactionWinLossCell value={row.balance} /></td>
                             </tr>
                           );
                         })}
@@ -169,10 +170,10 @@ export default function TransactionTablesSection({
                         <tr className="transaction-table-footer">
                           <td>{m.total}</td>
                           <td className="transaction-name-column" style={{ display: searchState.showName ? "" : "none" }} />
-                          <td>{formatPaymentHistoryMoneyHalfUp(side.totals?.bf ?? "0")}</td>
-                          <td>{formatPaymentHistoryMoneyHalfUp(side.totals?.win_loss ?? "0")}</td>
-                          <td>{formatPaymentHistoryMoneyHalfUp(side.totals?.cr_dr ?? "0")}</td>
-                          <td>{formatPaymentHistoryMoneyHalfUp(side.totals?.balance ?? "0")}</td>
+                          <td><TransactionWinLossCell value={side.totals?.bf ?? "0"} /></td>
+                          <td><TransactionWinLossCell value={side.totals?.win_loss ?? "0"} /></td>
+                          <td><TransactionWinLossCell value={side.totals?.cr_dr ?? "0"} /></td>
+                          <td><TransactionWinLossCell value={side.totals?.balance ?? "0"} /></td>
                         </tr>
                       </tfoot>
                     </table>
@@ -183,10 +184,10 @@ export default function TransactionTablesSection({
                 <table className="transaction-summary-table" style={{ margin: "0 auto", maxWidth: 400 }}>
                   <thead><tr className="transaction-table-header"><th colSpan={2}>{m.total}</th></tr></thead>
                   <tbody>
-                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.bfTable}</td><td>{formatPaymentHistoryMoneyHalfUp(g.totalsSummary?.bf ?? "0")}</td></tr>
-                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.winLossTable}</td><td>{formatPaymentHistoryMoneyHalfUp(g.totalsSummary?.win_loss ?? "0")}</td></tr>
-                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.crDrTable}</td><td>{formatPaymentHistoryMoneyHalfUp(g.totalsSummary?.cr_dr ?? "0")}</td></tr>
-                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.balanceTable}</td><td>{formatPaymentHistoryMoneyHalfUp(g.totalsSummary?.balance ?? "0")}</td></tr>
+                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.bfTable}</td><td><TransactionWinLossCell value={g.totalsSummary?.bf ?? "0"} /></td></tr>
+                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.winLossTable}</td><td><TransactionWinLossCell value={g.totalsSummary?.win_loss ?? "0"} /></td></tr>
+                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.crDrTable}</td><td><TransactionWinLossCell value={g.totalsSummary?.cr_dr ?? "0"} /></td></tr>
+                    <tr className="transaction-table-row"><td className="transaction-summary-label">{m.balanceTable}</td><td><TransactionWinLossCell value={g.totalsSummary?.balance ?? "0"} /></td></tr>
                   </tbody>
                 </table>
               </div>
@@ -198,10 +199,10 @@ export default function TransactionTablesSection({
         <table className="transaction-summary-table">
           <thead><tr className="transaction-table-header"><th colSpan={2}>{m.total}</th></tr></thead>
           <tbody>
-            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.bfTable}</td><td id="sum_total_bf">{formatPaymentHistoryMoneyHalfUp(tp.totalsSummary?.bf ?? "0")}</td></tr>
-            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.winLossTable}</td><td id="sum_total_winloss">{formatPaymentHistoryMoneyHalfUp(tp.totalsSummary?.win_loss ?? "0")}</td></tr>
-            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.crDrTable}</td><td id="sum_total_crdr">{formatPaymentHistoryMoneyHalfUp(tp.totalsSummary?.cr_dr ?? "0")}</td></tr>
-            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.balanceTable}</td><td id="sum_total_balance">{formatPaymentHistoryMoneyHalfUp(tp.totalsSummary?.balance ?? "0")}</td></tr>
+            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.bfTable}</td><td id="sum_total_bf"><TransactionWinLossCell value={tp.totalsSummary?.bf ?? "0"} /></td></tr>
+            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.winLossTable}</td><td id="sum_total_winloss"><TransactionWinLossCell value={tp.totalsSummary?.win_loss ?? "0"} /></td></tr>
+            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.crDrTable}</td><td id="sum_total_crdr"><TransactionWinLossCell value={tp.totalsSummary?.cr_dr ?? "0"} /></td></tr>
+            <tr className="transaction-table-row"><td className="transaction-summary-label">{m.balanceTable}</td><td id="sum_total_balance"><TransactionWinLossCell value={tp.totalsSummary?.balance ?? "0"} /></td></tr>
           </tbody>
         </table>
       </div>

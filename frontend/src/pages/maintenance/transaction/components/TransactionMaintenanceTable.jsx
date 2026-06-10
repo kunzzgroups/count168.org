@@ -1,6 +1,9 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useProgressiveScrollExtent } from "../../shared/useProgressiveScrollExtent.js";
+import {
+  useMaintenanceCyclicScrollExtent,
+  useMaintenanceCyclicScrollObserver,
+} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
 import { formatAmount } from "../transactionMaintenanceLogic.js";
 import MaintenanceCreatedAtDisplay from "../../shared/MaintenanceCreatedAtDisplay.jsx";
 
@@ -107,18 +110,23 @@ function VirtualDataRow({ row, index }) {
  * @param {object} props
  * @param {Array} props.data
  * @param {boolean} props.showSkeleton
+ * @param {boolean} props.showEmptyState
  * @param {string} props.statusMessage
- * @param {boolean} props.isPlaceholderData
+ * @param {boolean} props.listSyncing
  * @param {object} props.m
  */
 export default function TransactionMaintenanceTable({
   data,
   showSkeleton,
+  showEmptyState = false,
   statusMessage = "",
-  isPlaceholderData,
+  showTopLoading = false,
+  topLoadingLabel = "",
+  listSyncing = false,
   m,
 }) {
   const scrollRef = useRef(null);
+  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
   const rowsRef = useRef([]);
   const rows = Array.isArray(data) ? data : [];
@@ -159,9 +167,11 @@ export default function TransactionMaintenanceTable({
     overscan: pickOverscan(rows.length),
     getItemKey,
     measureElement,
+    observeElementOffset,
   });
 
   useLayoutEffect(() => {
+    contentOffsetRef.current = 0;
     scrollRef.current?.scrollTo(0, 0);
     sizeCacheRef.current.clear();
     rowVirtualizer.measure();
@@ -169,18 +179,19 @@ export default function TransactionMaintenanceTable({
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH } = useProgressiveScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: ROW_HEIGHT,
     resetDeps: [rows],
+    contentOffsetRef,
   });
 
   if (rows.length === 0 && (showSkeleton || statusMessage)) {
     const label = statusMessage || m.loading;
     return (
-      <div className="maintenance-list-container maintenance-virtual-table transaction-virtual-table" style={{ display: "block" }}>
+      <div className="maintenance-list-container maintenance-virtual-table transaction-virtual-table">
         <div className="maintenance-virtual-table-inner transaction-virtual-table-inner" role="table" aria-label={m.pageTitleTransaction}>
           <TopLoadingBar label={label} />
           <VirtualTableHeader m={m} />
@@ -192,7 +203,7 @@ export default function TransactionMaintenanceTable({
     );
   }
 
-  if (rows.length === 0 && !showSkeleton) {
+  if (rows.length === 0 && showEmptyState && !showSkeleton) {
     return (
       <div className="empty-state-container" style={{ display: "block" }}>
         <div className="empty-state">
@@ -202,12 +213,17 @@ export default function TransactionMaintenanceTable({
     );
   }
 
-  const showBlueBar = showSkeleton || Boolean(isPlaceholderData);
+  const showBlueBar = Boolean(showTopLoading);
+  const topLabel = topLoadingLabel || m.loading;
 
   return (
-    <div className="maintenance-list-container maintenance-virtual-table transaction-virtual-table" style={{ display: "block" }}>
+    <div
+      className={`maintenance-list-container maintenance-virtual-table transaction-virtual-table${
+        listSyncing ? " maintenance-list-container--syncing" : ""
+      }`}
+    >
       <div className="maintenance-virtual-table-inner transaction-virtual-table-inner" role="table" aria-label={m.pageTitleTransaction}>
-        {showBlueBar ? <TopLoadingBar label={m.loading} /> : null}
+        {showBlueBar ? <TopLoadingBar label={topLabel} /> : null}
         <VirtualTableHeader m={m} />
         <div ref={scrollRef} className="maintenance-virtual-scroll maintenance-virtual-scroll--body" tabIndex={0}>
           {rows.length > 0 ? (
@@ -227,7 +243,7 @@ export default function TransactionMaintenanceTable({
                       width: "100%",
                       height: `${virtualRow.size}px`,
                       minHeight: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
+                      transform: `translateY(${virtualRow.start - cyclicRowOffset}px)`,
                     }}
                   >
                     <VirtualDataRow row={row} index={virtualRow.index} />

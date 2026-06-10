@@ -44,18 +44,22 @@ function countActiveMaintenance(PDO $pdo) {
 /**
  * 插入新维护内容
  */
-function insertMaintenance(PDO $pdo, string $content, $createdBy, string $userType) {
-    $sql = "INSERT INTO maintenance_marquee (content, company_code, created_by, user_type, status)
-            VALUES (?, 'C168', ?, ?, 'active')";
+function insertMaintenance(PDO $pdo, string $prefix, string $content, $createdBy, string $userType) {
+    $sql = "INSERT INTO maintenance_marquee (prefix, content, company_code, created_by, user_type, status)
+            VALUES (?, ?, 'C168', ?, ?, 'active')";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$content, $createdBy, $userType]);
+    $stmt->execute([$prefix, $content, $createdBy, $userType]);
     return (int) $pdo->lastInsertId();
 }
 
 try {
     requireC168InformationManagementAccess($pdo);
 
+    $prefix = trim($_POST['prefix'] ?? '');
     $content = trim($_POST['content'] ?? '');
+    if ($prefix === '') {
+        throw new Exception('Prefix cannot be empty');
+    }
     if ($content === '') {
         throw new Exception('Content cannot be empty');
     }
@@ -68,7 +72,7 @@ try {
     $user_type = $_SESSION['user_type'] ?? 'user';
     $created_by = ($user_type === 'owner') ? ($_SESSION['owner_id'] ?? $user_id) : $user_id;
 
-    $id = insertMaintenance($pdo, $content, $created_by, $user_type);
+    $id = insertMaintenance($pdo, $prefix, $content, $created_by, $user_type);
     jsonResponse(true, 'Maintenance content created successfully', ['id' => $id]);
 } catch (PDOException $e) {
     jsonResponse(false, 'Database error: ' . $e->getMessage(), null, 500);

@@ -23,6 +23,22 @@ body.datacapture-page {
     --dc-accent-soft: #eff6ff;
     --dc-border: #e2e8f0;
     --dc-text-muted: #64748b;
+    --dc-layout-gap: clamp(12px, 1.15vw, 18px);
+    --dc-top-col-left: minmax(0, 1.8fr);
+    --dc-top-col-right: minmax(0, 1fr);
+    /* Group-only table: cap scroll area to remaining viewport (no empty filler below few rows) */
+    --dc-go-table-scroll-max: calc(
+        100dvh
+        - var(--layout-page-top-gap, 10px)
+        - 12px
+        - clamp(36px, 4.2vh, 52px)
+        - clamp(200px, 30vh, 300px)
+        - var(--dc-layout-gap)
+        - clamp(40px, 4.5vh, 52px)
+        - var(--dc-layout-gap)
+        - clamp(40px, 5vh, 56px)
+        - var(--dc-layout-gap)
+    );
 }
 
 body.datacapture-page {
@@ -57,7 +73,7 @@ body.datacapture-page #root {
 body.datacapture-page .container {
     max-width: none;
     margin: 0;
-    padding: var(--layout-page-top-gap) clamp(24px, 2.2vw, 36px) 12px var(--layout-main-offset);
+    padding: var(--layout-page-top-gap, 10px) clamp(24px, 2.2vw, 36px) 12px var(--layout-main-offset);
     width: 100%;
     height: 100vh;
     height: 100dvh;
@@ -66,6 +82,7 @@ body.datacapture-page .container {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
+    gap: var(--dc-layout-gap);
     min-height: 0;
     overflow: hidden;
 }
@@ -119,6 +136,10 @@ body.datacapture-page .container {
         min-height: min(42vh, 360px);
     }
 
+    body.datacapture-page .excel-table-container--group-only .excel-table-scroll-body {
+        max-height: none;
+    }
+
     body.datacapture-page .form-container {
         overflow: visible;
     }
@@ -137,40 +158,21 @@ body.datacapture-page .dc-page-toolbar {
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    margin: 8px 0 10px;
+    margin: 0;
     min-width: 0;
 }
 
-.top-section {
-    display: flex;
-    gap: clamp(18px, 2.2vw, 32px);
-    margin-top: 0;
-    margin-bottom: clamp(8px, 0.85vw, 14px);
-    align-items: stretch;
-    flex-shrink: 0;
-    min-width: 0;
-}
-
-@media (max-width: 900px) {
-    .top-section {
-        flex-direction: column;
-    }
-
-    .form-column,
-    .submitted-column {
-        max-width: 100%;
-    }
-}
-
-/* Equal columns: form shows all fields; submitted list scrolls inside matched card height */
+/* Top band: form + submitted cards share one grid row (equal height via stretch) */
 body.datacapture-page .top-section {
     display: grid;
-    grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+    grid-template-columns: var(--dc-top-col-left) var(--dc-top-col-right);
     align-items: stretch;
-    column-gap: clamp(18px, 2.2vw, 32px);
+    column-gap: var(--dc-layout-gap);
     grid-template-rows: auto;
     flex: 0 0 auto;
     flex-shrink: 0;
+    margin: 0;
+    min-width: 0;
     max-height: none;
     overflow: visible;
 }
@@ -180,28 +182,27 @@ body.datacapture-page .top-section .submitted-column {
     max-width: none;
     width: 100%;
     min-width: 0;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-}
-
-body.datacapture-page .top-section .form-column {
-    min-height: auto;
-}
-
-/* Card height synced to .form-container via --dc-form-band-height (useDataCaptureSubmittedPanelHeight) */
-body.datacapture-page .top-section .submitted-column {
-    min-height: var(--dc-form-band-height, auto);
-    height: var(--dc-form-band-height, auto);
-    max-height: var(--dc-form-band-height, none);
     align-self: stretch;
-    overflow: hidden;
+}
+
+body.datacapture-page .top-section .form-column > .form-container,
+body.datacapture-page .top-section .submitted-column > .submitted-container {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    margin: 0;
+    box-sizing: border-box;
 }
 
 body.datacapture-page .top-section .form-column > .form-container {
-    flex: 1 1 auto;
-    min-height: 100%;
-    height: auto;
     overflow: visible;
+}
+
+body.datacapture-page .top-section .submitted-column > .submitted-container {
+    overflow: hidden;
 }
 
 body.datacapture-page .form-container .process-form {
@@ -209,15 +210,6 @@ body.datacapture-page .form-container .process-form {
     overflow-y: visible;
     flex: 0 0 auto;
     min-height: auto;
-}
-
-body.datacapture-page .top-section .submitted-column > .submitted-container {
-    flex: 1 1 0;
-    min-height: 100%;
-    height: 100%;
-    max-height: 100%;
-    overflow: hidden;
-    box-sizing: border-box;
 }
 
 body.datacapture-page .submitted-list {
@@ -231,11 +223,12 @@ body.datacapture-page .submitted-list {
 @media (max-width: 900px) {
     body.datacapture-page .top-section {
         grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
     }
 
-    body.datacapture-page .top-section .submitted-column {
+    body.datacapture-page .top-section .form-column > .form-container,
+    body.datacapture-page .top-section .submitted-column > .submitted-container {
         height: auto;
-        max-height: none;
     }
 
     body.datacapture-page .submitted-list {
@@ -244,9 +237,10 @@ body.datacapture-page .submitted-list {
 }
 
 body.datacapture-page .form-container .user-gc-inline-panel.dc-data-capture-gc-panel {
-    padding: 0 0 6px;
-    margin: 0 0 4px;
+    padding: 0 0 clamp(8px, 0.7vw, 12px);
+    margin: 0 0 clamp(10px, 0.85vw, 14px);
     border-top: none;
+    border-bottom: 1px solid var(--dc-border, #e2e8f0);
     row-gap: var(--user-gc-inline-row-gap, 4px);
 }
 
@@ -307,6 +301,19 @@ body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .f
 
 body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group .input-with-icon input {
     width: 100%;
+}
+
+/* Group-only (no Company): Currency | Remark same row as Date | Process */
+body.datacapture-page .process-form.dc-form--group-only .dc-form-two-col--stacked > .form-group > input#capture_remark {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 36px;
+    padding: clamp(6px, 0.35vw, 9px) clamp(8px, 0.63vw, 12px);
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    font-size: clamp(10px, 0.74vw, 14px);
+    font-weight: 600;
 }
 
 /* Bottom block: Replace Word outside the 2-col grid so Remove | Remark get equal tracks (spanning rows skew column sizing) */
@@ -433,10 +440,10 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
 .bottom-section {
     flex: 1 1 auto;
     min-height: 0;
-    margin-top: 0;
+    margin: 0;
     display: flex;
     flex-direction: column;
-    gap: clamp(6px, 0.65vw, 12px);
+    gap: var(--dc-layout-gap);
     overflow: hidden;
 }
 
@@ -678,6 +685,7 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
     border-radius: 4px;
     font-size: 14px;
     box-sizing: border-box;
+    text-transform: uppercase;
 }
 
 .custom-select-options {
@@ -768,7 +776,7 @@ body.datacapture-page .dc-react-submitted-list {
     border: 1px solid var(--dc-border, #e2e8f0);
     border-radius: 8px;
     margin-bottom: 8px;
-    padding: 10px 12px;
+    padding: 2px 12px;
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
@@ -812,7 +820,7 @@ body.datacapture-page .dc-react-submitted-list {
 
 .detail-row strong {
     color: #333;
-    font-size: clamp(8px, 0.73vw, 14px);
+    font-size: var(--text-medium);
     /* width: clamp(80px, 6.77vw, 130px); */
     display: inline-block;
 }
@@ -826,7 +834,7 @@ body.datacapture-page .dc-react-submitted-list {
 .submitted-by {
     width: clamp(80px, 6.25vw, 120px);
     text-align: right;
-    font-size: clamp(8px, 0.625vw, 12px);
+    font-size: var(--text-medium);
     font-weight: 800;
     color: #666;
     flex-shrink: 0;
@@ -834,7 +842,7 @@ body.datacapture-page .dc-react-submitted-list {
 
 .submitted-date {
     text-align: right;
-    font-size: clamp(8px, 0.625vw, 12px);
+    font-size: var(--text-medium);
     font-weight: 800;
     color: #333;
     flex-shrink: 0;
@@ -991,23 +999,26 @@ body.datacapture-page .bottom-section .form-actions {
 }
 
 /* Description Selection Modal — align with Process List / app-wide modal pattern */
-.modal-content.description-selection-modal {
-    width: min(980px, 94vw);
-    max-width: min(980px, 94vw);
-    min-height: 610px;
-    max-height: 90vh;
-    border-radius: 12px;
+.modal-content.description-selection-modal,
+#descriptionSelectionModal.modal.show > .modal-content.description-selection-modal {
+    width: var(--process-form-modal-width, var(--desc-modal-width, min(1040px, calc(100vw - 48px))));
+    max-width: var(--process-form-modal-width, var(--desc-modal-width, min(1040px, calc(100vw - 48px))));
+    min-height: 0;
+    height: auto;
+    max-height: var(--process-form-modal-max-height, var(--desc-modal-max-height, 92vh));
+    border-radius: var(--desc-modal-radius, 12px);
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    margin: 3% auto;
+    margin: 4vh auto;
+    box-sizing: border-box;
 }
 
 .modal-content.description-selection-modal .modal-header {
     position: relative;
     flex-shrink: 0;
     margin: 0;
-    padding: 3px 20px;
+    padding: var(--desc-modal-pad-block, 3px) var(--desc-modal-pad-inline, 20px) 0;
     background: #f8fafc;
     border-bottom: none;
     border-radius: 12px 12px 0 0;
@@ -1016,7 +1027,7 @@ body.datacapture-page .bottom-section .form-actions {
 
 .modal-content.description-selection-modal .modal-header h2 {
     margin: 0;
-    padding: clamp(12px, 0.75vw, 15px) clamp(20px, 1.25vw, 25px);
+    padding: 0;
     background: transparent;
     border-bottom: none;
     font-size: var(--text-page-title);
@@ -1106,71 +1117,77 @@ body.datacapture-page .bottom-section .form-actions {
     color: #ffffff;
 }
 
-.modal-content.description-selection-modal .modal-footer .btn {
-    min-width: 92px;
-    min-height: 34px;
-    height: 34px;
-    padding: 0 12px;
-    font-size: 13px;
-    border-radius: 5px;
-}
-
-.modal-content.description-selection-modal .add-description-input-group .btn {
-    min-width: 64px;
-    max-width: 64px;
-    min-height: 28px;
-    height: 28px;
-    padding: 0 8px;
-    font-size: 12px;
-    border-radius: 4px;
-}
-
 .description-selection-container {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 28px;
+    grid-template-areas:
+        "desc-sel-h3   desc-add-h3"
+        "desc-sel-list desc-add-form"
+        "desc-sel-list desc-avail-h3"
+        "desc-sel-list desc-search"
+        "desc-sel-list desc-avail-list";
+    column-gap: var(--desc-modal-col-gap, 28px);
+    row-gap: 0;
     flex: 1 1 auto;
-    min-height: 450px;
+    min-height: 0;
     width: 100%;
-    align-items: stretch;
+    align-items: start;
 }
 
-.selected-descriptions-section {
-    min-width: 0;
-    border-right: 1px solid #e5e7eb;
-    padding-right: 16px;
+.modal-content.description-selection-modal .selected-descriptions-section,
+.modal-content.description-selection-modal .available-descriptions-section,
+.modal-content.description-selection-modal .add-description-bar {
+    display: contents;
 }
 
-.available-descriptions-section {
-    min-width: 0;
-    padding-left: 8px;
-}
-
-.selected-descriptions-section h3,
-.available-descriptions-section h3 {
-    margin: 0 0 8px 0;
-    color: #374151;
-    font-size: var(--text-medium);
+.modal-content.description-selection-modal .selected-descriptions-section h3 {
+    grid-area: desc-sel-h3;
+    margin: 0 0 var(--desc-modal-list-item-gap, 0.45rem) 0;
+    padding-right: var(--desc-modal-col-gap, 28px);
+    font-size: var(--desc-modal-section-size, var(--text-h3));
     font-family: var(--font-heading-page);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-body-strong, #374151);
+    line-height: 1.25;
 }
 
-.add-description-bar {
-    margin-bottom: clamp(10px, 1.04vw, 20px);
-    padding-bottom: clamp(10px, 1.04vw, 20px);
+.modal-content.description-selection-modal .add-description-bar h3 {
+    grid-area: desc-add-h3;
+    margin: 0 0 var(--desc-modal-list-item-gap, 0.45rem) 0;
+    padding-left: calc(var(--desc-modal-col-gap, 28px) * 0.25);
+}
+
+.modal-content.description-selection-modal .available-descriptions-section > h3 {
+    grid-area: desc-avail-h3;
+    margin: 0 0 var(--desc-modal-list-item-gap, 0.45rem) 0;
+    padding-left: calc(var(--desc-modal-col-gap, 28px) * 0.25);
+}
+
+.modal-content.description-selection-modal .add-description-form {
+    grid-area: desc-add-form;
+    margin: 0 0 var(--space-gap, 0.75rem) 0;
+    padding: 0 0 var(--space-gap, 0.75rem) 0;
+    padding-left: calc(var(--desc-modal-col-gap, 28px) * 0.25);
     border-bottom: 1px solid #e9ecef;
 }
 
-.add-description-bar h3 {
-    margin: 0 0 6px 0;
-    color: #374151;
-    font-size: var(--text-small);
-    font-family: var(--font-heading-page);
-    font-weight: 600;
+.modal-content.description-selection-modal .description-search {
+    grid-area: desc-search;
+    padding-left: calc(var(--desc-modal-col-gap, 28px) * 0.25);
 }
 
-.add-description-form {
-    margin: 0;
+.modal-content.description-selection-modal .description-list {
+    grid-area: desc-avail-list;
+    padding-left: calc(var(--desc-modal-col-gap, 28px) * 0.25);
+}
+
+.modal-content.description-selection-modal .selected-descriptions-list {
+    grid-area: desc-sel-list;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid #e5e7eb;
+    padding-right: var(--desc-modal-col-gap, 28px);
 }
 
 .add-description-input-group {
@@ -1179,60 +1196,78 @@ body.datacapture-page .bottom-section .form-actions {
     align-items: center;
 }
 
-.add-description-input-group input {
+.add-description-input-group input,
+.modal-content.description-selection-modal .add-description-input-group input {
     width: 100%;
     padding: clamp(4px, 0.42vw, 8px) clamp(6px, 0.83vw, 16px);
     border: 1px solid #d1d5db;
     border-radius: clamp(4px, 0.42vw, 8px);
-    font-size: clamp(8px, 0.73vw, 14px);
+    font-size: var(--desc-modal-control-text, var(--text-tiny));
+    font-family: var(--font-ui);
     box-sizing: border-box;
     transition: all 0.2s;
     background-color: white;
+    text-transform: uppercase;
 }
 
 .description-search {
-    margin-bottom: 0.9375rem;
+    margin-bottom: var(--space-gap, 0.75rem);
 }
 
-.description-search input {
+.description-search input,
+.modal-content.description-selection-modal .description-search-input,
+.modal-content.description-selection-modal .description-search input {
     width: 100%;
     padding: clamp(4px, 0.42vw, 8px) clamp(6px, 0.83vw, 16px);
     border: 1px solid #d1d5db;
     border-radius: clamp(4px, 0.42vw, 8px);
-    font-size: clamp(8px, 0.73vw, 14px);
+    font-size: var(--desc-modal-control-text, var(--text-tiny));
+    font-family: var(--font-ui);
     box-sizing: border-box;
     transition: all 0.2s;
     background-color: white;
+    text-transform: uppercase;
 }
 
-.description-list {
-    height: 315px;
-    min-height: 315px;
-    max-height: 315px;
+.description-list,
+.modal-content.description-selection-modal .description-list {
+    width: 100%;
+    box-sizing: border-box;
+    height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
+    min-height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
+    max-height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
     overflow-y: auto;
     border: 1px solid #e5e7eb;
     border-radius: 4px;
-    padding: 0 10px;
+    padding: var(--desc-modal-list-pad, 0.5rem);
     background-color: #f8fafc;
 }
 
-.selected-descriptions-list {
-    height: 315px;
-    min-height: 315px;
-    max-height: 315px;
+.selected-descriptions-list,
+.modal-content.description-selection-modal .selected-descriptions-list {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    align-self: stretch;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
+    height: 100%;
+    max-height: none;
     overflow-y: auto;
     border: 1px solid #e5e7eb;
     border-radius: 4px;
-    padding: 10px;
+    padding: var(--desc-modal-list-pad, 0.5rem);
     background-color: #f8fafc;
 }
 
+.modal-content.description-selection-modal .description-item,
 .description-item {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--desc-modal-list-item-gap, 0.45rem);
     justify-content: space-between;
-    padding: clamp(4px, 0.21vw, 8px) 0;
+    padding: var(--desc-modal-list-item-pad-block, 0.45rem) var(--desc-modal-list-item-pad-inline, 0.35rem);
     border-bottom: 0.0625rem solid #e9ecef;
 }
 
@@ -1240,11 +1275,13 @@ body.datacapture-page .bottom-section .form-actions {
     border-bottom: none;
 }
 
+.modal-content.description-selection-modal .description-item-left,
 .description-item-left {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--desc-modal-list-item-gap, 0.45rem);
     flex: 1;
+    min-width: 0;
 }
 
 .description-item input[type="checkbox"] {
@@ -1252,22 +1289,29 @@ body.datacapture-page .bottom-section .form-actions {
     width: clamp(10px, 0.73vw, 14px);
 }
 
-.description-item label {
+.description-item label,
+.modal-content.description-selection-modal .description-item label {
     margin: 0;
-    font-size: clamp(10px, 0.73vw, 14px);
+    font-size: var(--desc-modal-list-text, var(--text-tiny));
+    font-family: var(--font-ui);
+    font-weight: var(--font-weight-normal);
     cursor: pointer;
     flex: 1;
-    color: #333;
+    color: var(--color-body-strong, #333);
+    line-height: 1.35;
 }
 
+.modal-content.description-selection-modal .description-delete-btn,
 .description-delete-btn {
     border: none;
     background: transparent;
     color: #c00;
     font-size: 18px;
     cursor: pointer;
-    padding: 4px 6px;
+    padding: 0.15rem var(--desc-modal-list-item-pad-inline, 0.35rem);
     line-height: 1;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .description-delete-btn:hover {
@@ -1278,15 +1322,16 @@ body.datacapture-page .bottom-section .form-actions {
     background-color: #e9ecef;
 }
 
+.modal-content.description-selection-modal .selected-description-modal-item,
 .selected-description-modal-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: clamp(2px, 0.42vw, 8px) 8px;
+    gap: var(--desc-modal-list-item-gap, 0.45rem);
+    padding: var(--desc-modal-list-item-pad-block, 0.45rem) var(--desc-modal-list-item-pad-inline, 0.35rem);
     border-bottom: 0.0625rem solid #e9ecef;
     background-color: #e3f2fd;
     border-radius: 0.25rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: var(--desc-modal-list-item-gap, 0.45rem);
 }
 
 .selected-description-modal-item:last-child {
@@ -1323,10 +1368,11 @@ body.datacapture-page .bottom-section .form-actions {
     color: white;
 }
 
-.no-descriptions {
+.no-descriptions,
+.modal-content.description-selection-modal .no-descriptions {
     text-align: center;
     color: #6c757d;
-    font-size: clamp(10px, 0.78vw, 15px);
+    font-size: var(--desc-modal-empty-size, var(--text-tiny));
     font-style: italic;
     padding: clamp(20px, 2.08vw, 40px) 20px;
 }
@@ -1540,9 +1586,24 @@ body.datacapture-page .excel-table-container {
     text-transform: uppercase;
 }
 
+/* 1.Text / 2.Format：手动输入同样全大写；带内联样式的 Format 单元格不强制 text-transform */
+.excel-table-container.capture-type-text .excel-table td[contenteditable="true"]:not([style]),
+.excel-table-container.capture-type-format .excel-table td[contenteditable="true"]:not([style]) {
+    text-transform: uppercase;
+}
+
 /* 2.Format模式：确保粘贴的单元格内容样式不被覆盖 */
 .excel-table td[contenteditable="true"][style] {
     color: inherit !important;
+}
+
+.excel-table-container.capture-type-format .excel-table td[contenteditable="true"][style] {
+    text-transform: none !important;
+}
+
+.excel-table-container.capture-type-text .excel-table td[contenteditable="true"]:focus,
+.excel-table-container.capture-type-format .excel-table td[contenteditable="true"]:focus:not([style]) {
+    text-transform: uppercase;
 }
 
 .excel-table td[contenteditable="true"] span[style],
@@ -1586,10 +1647,71 @@ body.datacapture-page .excel-table-container {
     color: #0f172a;
 }
 
+.excel-table-header .dc-table-header-main {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+}
+
+/* Group-only: shrink-wrap to row count; scroll only when rows exceed viewport */
+body.datacapture-page .bottom-section:has(.excel-table-container--group-only) {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow: visible;
+}
+
+body.datacapture-page .excel-table-container--group-only {
+    flex: 0 1 auto;
+    height: auto;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+}
+
+body.datacapture-page .excel-table-container--group-only .excel-table-header {
+    flex-shrink: 0;
+}
+
+body.datacapture-page .excel-table-container--group-only .excel-table-scroll-body {
+    flex: 0 1 auto;
+    height: auto;
+    max-height: var(--dc-go-table-scroll-max);
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+body.datacapture-page .excel-table-container--group-only .excel-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #f6f8fa;
+}
+
+body.datacapture-page .excel-table-container--group-only .excel-table td.row-header {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: #f6f8fa;
+}
+
+body.datacapture-page .excel-table-container--group-only .excel-table thead th:first-child {
+    left: 0;
+    z-index: 3;
+}
+
+.excel-table-header.dc-table-header-bar--group-only {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+}
+
 .excel-table-header .dc-table-header-controls {
     display: inline-flex;
     align-items: center;
     gap: 8px;
+    flex: 0 0 auto;
 }
 
 .data-capture-type-selector {

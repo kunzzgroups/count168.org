@@ -11,7 +11,8 @@ import { formatNumberToTwoDecimals, formatMoneyDisplay } from "../core/dataCaptu
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 
 /** @returns {boolean} */
 export function handle2SpecialPaste(e, pastedData) {
@@ -29,53 +30,15 @@ export function handle2SpecialPaste(e, pastedData) {
             if (citibetParsed) {
                 console.log('2.SPECIAL: Detected CITIBET format (2.1)');
                 formatDetected = true;
-                const { dataMatrix, maxRows, maxCols } = citibetParsed;
+                const { dataMatrix } = citibetParsed;
 
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = parseInt(startCell.dataset.col);
-
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredRows = startRow + maxRows;
-                const requiredCols = startCol + maxCols;
-
-                if (requiredRows > currentRows || requiredCols > currentCols) {
-                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(targetRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                dataMatrix.forEach((rowData, rowIndex) => {
-                    const actualRowIndex = startRow + rowIndex;
-                    const tableRow = tableBody.children[actualRowIndex];
-                    if (!tableRow) return;
-
-                    rowData.forEach((cellData, colIndex) => {
-                        const actualColIndex = startCol + colIndex;
-                        const cell = tableRow.children[actualColIndex + 1];
-                        if (cell && cell.contentEditable === 'true') {
-                            currentPasteChanges.push({
-                                row: actualRowIndex,
-                                col: actualColIndex,
-                                oldValue: cell.textContent,
-                                newValue: cellData
-                            });
-                            const finalValue = (cellData || '').toUpperCase();
-                            cell.textContent = finalValue;
-                            successCount++;
-                        }
-                    });
+                const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                    uppercaseValues: true,
                 });
 
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
                 if (successCount > 0) {
-                    window.showNotification?.(`2.SPECIAL: 检测到CITIBET格式 (2.1)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${maxCols} 列)!`, 'success');
-                    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                    notifyPasteUser(`2.SPECIAL: 检测到CITIBET格式 (2.1)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                    recomputeSubmitStateAfterPaste();
                     return true;
                 }
             }
@@ -105,67 +68,18 @@ export function handle2SpecialPaste(e, pastedData) {
             console.log('2.SPECIAL: VPOWER parse result:', vpowerParsed);
 
             if (vpowerParsed) {
-                const { dataMatrix, maxRows, maxCols } = vpowerParsed;
+                const { dataMatrix } = vpowerParsed;
 
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                // VPOWER 格式：强制从第一列（Column 1）开始粘贴，每行数据都从第一列开始
-                const startCol = 0;
-
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-
-                const requiredRows = startRow + maxRows;
-                const requiredCols = startCol + maxCols;
-
-                if (requiredRows > currentRows || requiredCols > currentCols) {
-                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(targetRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                dataMatrix.forEach((rowData, rowIndex) => {
-                    const actualRowIndex = startRow + rowIndex;
-                    const tableRow = tableBody.children[actualRowIndex];
-                    if (!tableRow) return;
-
-                    rowData.forEach((cellData, colIndex) => {
-                        // 每行数据都从第一列（Column 1）开始
-                        const actualColIndex = startCol + colIndex;
-                        const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                        if (cell && cell.contentEditable === 'true') {
-                            const trimmedData = (cellData || '').trim();
-                            currentPasteChanges.push({
-                                row: actualRowIndex,
-                                col: actualColIndex,
-                                oldValue: cell.textContent,
-                                newValue: trimmedData
-                            });
-
-                            // User Name 转为大写，profit 保持原样
-                            if (colIndex === 0) {
-                                cell.textContent = trimmedData.toUpperCase();
-                            } else {
-                                cell.textContent = trimmedData;
-                            }
-
-                            if (trimmedData) {
-                                successCount++;
-                            }
-                        }
-                    });
+                const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                    startColOverride: 0,
+                    trimValues: true,
+                    transformCell: (raw, row, col) => col === 0 ? String(raw).trim().toUpperCase() : String(raw).trim(),
                 });
-
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                 if (successCount > 0) {
                     formatDetected = true;
-                    window.showNotification?.(`2.SPECIAL: 检测到VPOWER格式 (2.2)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${maxCols} 列)!`, 'success');
-                    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                    notifyPasteUser(`2.SPECIAL: 检测到VPOWER格式 (2.2)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                    recomputeSubmitStateAfterPaste();
                     return true;
                 }
             } else {
@@ -276,58 +190,13 @@ export function handle2SpecialPaste(e, pastedData) {
 
                                     console.log('2.SPECIAL: MAXBET HTML parsing successful -', dataMatrix.length, 'rows x', maxCols, 'cols');
 
-                                    // 填充到表格，从用户点击的单元格开始
-                                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                                    const startCol = parseInt(startCell.dataset.col);
-
-                                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                                    const requiredRows = startRow + dataMatrix.length;
-                                    const requiredCols = startCol + maxCols;
-
-                                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                        const targetCols = Math.max(currentCols, requiredCols);
-                                        ensurePasteGrid(targetRows, targetCols);
-                                    }
-
-                                    const tableBody = document.getElementById('tableBody');
-                                    const currentPasteChanges = [];
-                                    let successCount = 0;
-
-                                    dataMatrix.forEach((rowData, rowIndex) => {
-                                        const actualRowIndex = startRow + rowIndex;
-                                        const tableRow = tableBody.children[actualRowIndex];
-                                        if (!tableRow) return;
-
-                                        rowData.forEach((cellData, colIndex) => {
-                                            const actualColIndex = startCol + colIndex;
-                                            const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                            if (cell && cell.contentEditable === 'true') {
-                                                const cellValue = cellData || '';
-                                                currentPasteChanges.push({
-                                                    row: actualRowIndex,
-                                                    col: actualColIndex,
-                                                    oldValue: cell.textContent,
-                                                    newValue: cellValue
-                                                });
-
-                                                cell.textContent = cellValue;
-                                                if (cellValue) {
-                                                    successCount++;
-                                                }
-                                            }
-                                        });
-                                    });
-
-                                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell);
 
                                     if (successCount > 0) {
                                         formatDetected = true;
-                                        console.log('2.SPECIAL: MAXBET HTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                                        window.showNotification?.(`2.SPECIAL: 检测到MAXBET格式 (2.3)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                        console.log('2.SPECIAL: MAXBET HTML paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                                        notifyPasteUser(`2.SPECIAL: 检测到MAXBET格式 (2.3)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                                        recomputeSubmitStateAfterPaste();
                                         return true;
                                     }
                                 }
@@ -378,58 +247,13 @@ export function handle2SpecialPaste(e, pastedData) {
                                     }
                                 });
 
-                                // 从用户点击的单元格开始粘贴
-                                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                                const startCol = parseInt(startCell.dataset.col);
-
-                                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                                const requiredRows = startRow + dataMatrix.length;
-                                const requiredCols = startCol + maxCols;
-
-                                if (requiredRows > currentRows || requiredCols > currentCols) {
-                                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                    const targetCols = Math.max(currentCols, requiredCols);
-                                    ensurePasteGrid(targetRows, targetCols);
-                                }
-
-                                const tableBody = document.getElementById('tableBody');
-                                const currentPasteChanges = [];
-                                let successCount = 0;
-
-                                dataMatrix.forEach((rowData, rowIndex) => {
-                                    const actualRowIndex = startRow + rowIndex;
-                                    const tableRow = tableBody.children[actualRowIndex];
-                                    if (!tableRow) return;
-
-                                    rowData.forEach((cellData, colIndex) => {
-                                        const actualColIndex = startCol + colIndex;
-                                        const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                        if (cell && cell.contentEditable === 'true') {
-                                            const cellValue = cellData || '';
-                                            currentPasteChanges.push({
-                                                row: actualRowIndex,
-                                                col: actualColIndex,
-                                                oldValue: cell.textContent,
-                                                newValue: cellValue
-                                            });
-
-                                            cell.textContent = cellValue;
-                                            if (cellValue) {
-                                                successCount++;
-                                            }
-                                        }
-                                    });
-                                });
-
-                                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                                const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell);
 
                                 if (successCount > 0) {
                                     formatDetected = true;
-                                    console.log('2.SPECIAL: MAXBET detectAndParseHTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                                    window.showNotification?.(`2.SPECIAL: 检测到MAXBET格式 (2.3)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                                    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                    console.log('2.SPECIAL: MAXBET detectAndParseHTML paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                                    notifyPasteUser(`2.SPECIAL: 检测到MAXBET格式 (2.3)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                                    recomputeSubmitStateAfterPaste();
                                     return true;
                                 }
                             }
@@ -504,57 +328,13 @@ export function handle2SpecialPaste(e, pastedData) {
 
                     // 填充到表格，从用户点击的单元格开始
                     if (dataMatrix.length > 0 && maxCols > 0) {
-                        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                        const startCol = parseInt(startCell.dataset.col);
-
-                        const currentRows = document.querySelectorAll('#tableBody tr').length;
-                        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                        const requiredRows = startRow + dataMatrix.length;
-                        const requiredCols = startCol + maxCols;
-
-                        if (requiredRows > currentRows || requiredCols > currentCols) {
-                            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                            const targetCols = Math.max(currentCols, requiredCols);
-                            ensurePasteGrid(targetRows, targetCols);
-                        }
-
-                        const tableBody = document.getElementById('tableBody');
-                        const currentPasteChanges = [];
-                        let successCount = 0;
-
-                        dataMatrix.forEach((rowData, rowIndex) => {
-                            const actualRowIndex = startRow + rowIndex;
-                            const tableRow = tableBody.children[actualRowIndex];
-                            if (!tableRow) return;
-
-                            rowData.forEach((cellData, colIndex) => {
-                                const actualColIndex = startCol + colIndex;
-                                const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                if (cell && cell.contentEditable === 'true') {
-                                    const cellValue = cellData || '';
-                                    currentPasteChanges.push({
-                                        row: actualRowIndex,
-                                        col: actualColIndex,
-                                        oldValue: cell.textContent,
-                                        newValue: cellValue
-                                    });
-
-                                    cell.textContent = cellValue;
-                                    if (cellValue) {
-                                        successCount++;
-                                    }
-                                }
-                            });
-                        });
-
-                        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell);
 
                         if (successCount > 0) {
                             formatDetected = true;
-                            console.log('2.SPECIAL: MAXBET Text format paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                            window.showNotification?.(`2.SPECIAL: 检测到MAXBET格式 (2.3)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                            console.log('2.SPECIAL: MAXBET Text format paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                            notifyPasteUser(`2.SPECIAL: 检测到MAXBET格式 (2.3)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                            recomputeSubmitStateAfterPaste();
                             return true;
                         }
                     }
@@ -735,58 +515,15 @@ export function handle2SpecialPaste(e, pastedData) {
 
                                     // 填充到表格
                                     // C8PLAY 格式：强制从第一列（Column 1）开始粘贴
-                                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                                    const startCol = 0; // C8PLAY: 强制从第一列开始
-
-                                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                                    const requiredRows = startRow + dataMatrix.length;
-                                    const requiredCols = startCol + maxCols;
-
-                                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                        const targetCols = Math.max(currentCols, requiredCols);
-                                        ensurePasteGrid(targetRows, targetCols);
-                                    }
-
-                                    const tableBody = document.getElementById('tableBody');
-                                    const currentPasteChanges = [];
-                                    let successCount = 0;
-
-                                    dataMatrix.forEach((rowData, rowIndex) => {
-                                        const actualRowIndex = startRow + rowIndex;
-                                        const tableRow = tableBody.children[actualRowIndex];
-                                        if (!tableRow) return;
-
-                                        rowData.forEach((cellData, colIndex) => {
-                                            // 每行数据都从第一列（Column 1）开始
-                                            const actualColIndex = startCol + colIndex;
-                                            const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                            if (cell && cell.contentEditable === 'true') {
-                                                const cellValue = cellData || '';
-                                                currentPasteChanges.push({
-                                                    row: actualRowIndex,
-                                                    col: actualColIndex,
-                                                    oldValue: cell.textContent,
-                                                    newValue: cellValue
-                                                });
-
-                                                cell.textContent = cellValue;
-                                                if (cellValue) {
-                                                    successCount++;
-                                                }
-                                            }
-                                        });
+                                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                                        startColOverride: 0,
                                     });
-
-                                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                                     if (successCount > 0) {
                                         formatDetected = true;
-                                        console.log('2.SPECIAL: C8PLAY HTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                                        window.showNotification?.(`2.SPECIAL: 检测到C8PLAY格式 (2.4)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                        console.log('2.SPECIAL: C8PLAY HTML paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                                        notifyPasteUser(`2.SPECIAL: 检测到C8PLAY格式 (2.4)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                                        recomputeSubmitStateAfterPaste();
                                         return true;
                                     }
                                 }
@@ -841,58 +578,15 @@ export function handle2SpecialPaste(e, pastedData) {
                                     });
 
                                     // C8PLAY 格式：强制从第一列（Column 1）开始粘贴
-                                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                                    const startCol = 0; // C8PLAY: 强制从第一列开始
-
-                                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                                    const requiredRows = startRow + dataMatrix.length;
-                                    const requiredCols = startCol + maxCols;
-
-                                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                        const targetCols = Math.max(currentCols, requiredCols);
-                                        ensurePasteGrid(targetRows, targetCols);
-                                    }
-
-                                    const tableBody = document.getElementById('tableBody');
-                                    const currentPasteChanges = [];
-                                    let successCount = 0;
-
-                                    dataMatrix.forEach((rowData, rowIndex) => {
-                                        const actualRowIndex = startRow + rowIndex;
-                                        const tableRow = tableBody.children[actualRowIndex];
-                                        if (!tableRow) return;
-
-                                        rowData.forEach((cellData, colIndex) => {
-                                            // 每行数据都从第一列（Column 1）开始
-                                            const actualColIndex = startCol + colIndex;
-                                            const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                            if (cell && cell.contentEditable === 'true') {
-                                                const cellValue = cellData || '';
-                                                currentPasteChanges.push({
-                                                    row: actualRowIndex,
-                                                    col: actualColIndex,
-                                                    oldValue: cell.textContent,
-                                                    newValue: cellValue
-                                                });
-
-                                                cell.textContent = cellValue;
-                                                if (cellValue) {
-                                                    successCount++;
-                                                }
-                                            }
-                                        });
+                                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                                        startColOverride: 0,
                                     });
-
-                                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                                     if (successCount > 0) {
                                         formatDetected = true;
-                                        console.log('2.SPECIAL: C8PLAY detectAndParseHTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                                        window.showNotification?.(`2.SPECIAL: 检测到C8PLAY格式 (2.4)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                        console.log('2.SPECIAL: C8PLAY detectAndParseHTML paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                                        notifyPasteUser(`2.SPECIAL: 检测到C8PLAY格式 (2.4)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                                        recomputeSubmitStateAfterPaste();
                                         return true;
                                     }
                                 }
@@ -1048,59 +742,17 @@ export function handle2SpecialPaste(e, pastedData) {
                     // C8PLAY 格式：强制从第一列（Column 1）开始粘贴，每行数据都从第一列开始
                     if (dataMatrix.length > 0 && maxCols > 0) {
                         const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                        const startCol = 0; // C8PLAY: 强制从第一列开始
+                        console.log('2.SPECIAL: C8PLAY Starting paste at row', startRow, 'col', 0);
 
-                        console.log('2.SPECIAL: C8PLAY Starting paste at row', startRow, 'col', startCol);
-
-                        const currentRows = document.querySelectorAll('#tableBody tr').length;
-                        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                        const requiredRows = startRow + dataMatrix.length;
-                        const requiredCols = startCol + maxCols;
-
-                        if (requiredRows > currentRows || requiredCols > currentCols) {
-                            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                            const targetCols = Math.max(currentCols, requiredCols);
-                            ensurePasteGrid(targetRows, targetCols);
-                        }
-
-                        const tableBody = document.getElementById('tableBody');
-                        const currentPasteChanges = [];
-                        let successCount = 0;
-
-                        dataMatrix.forEach((rowData, rowIndex) => {
-                            const actualRowIndex = startRow + rowIndex;
-                            const tableRow = tableBody.children[actualRowIndex];
-                            if (!tableRow) return;
-
-                            rowData.forEach((cellData, colIndex) => {
-                                // 每行数据都从第一列（Column 1）开始
-                                const actualColIndex = startCol + colIndex;
-                                const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                if (cell && cell.contentEditable === 'true') {
-                                    const cellValue = cellData || '';
-                                    currentPasteChanges.push({
-                                        row: actualRowIndex,
-                                        col: actualColIndex,
-                                        oldValue: cell.textContent,
-                                        newValue: cellValue
-                                    });
-
-                                    cell.textContent = cellValue;
-                                    if (cellValue) {
-                                        successCount++;
-                                    }
-                                }
-                            });
+                        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                            startColOverride: 0,
                         });
-
-                        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                         if (successCount > 0) {
                             formatDetected = true;
-                            console.log('2.SPECIAL: C8PLAY Successfully pasted', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                            window.showNotification?.(`2.SPECIAL: 检测到C8PLAY格式 (2.4)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                            console.log('2.SPECIAL: C8PLAY Successfully pasted', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                            notifyPasteUser(`2.SPECIAL: 检测到C8PLAY格式 (2.4)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                            recomputeSubmitStateAfterPaste();
                             return true;
                         }
                     }
@@ -1189,8 +841,8 @@ export function handle2SpecialPaste(e, pastedData) {
                             const filled = parseAndFillHtmlTableForAwc(htmlData, startCell);
                             if (filled) {
                                 formatDetected = true;
-                                window.showNotification?.('2.SPECIAL: 检测到AWC格式 (2.5)!', 'success');
-                                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                notifyPasteUser('2.SPECIAL: 检测到AWC格式 (2.5)!', 'success');
+                                recomputeSubmitStateAfterPaste();
                                 return true;
                             }
                         }
@@ -1206,8 +858,8 @@ export function handle2SpecialPaste(e, pastedData) {
                             const filled = parseAndFillHtmlTableForAwc(htmlDataFromDetect, startCell);
                             if (filled) {
                                 formatDetected = true;
-                                window.showNotification?.('2.SPECIAL: 检测到AWC格式 (2.5)!', 'success');
-                                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                notifyPasteUser('2.SPECIAL: 检测到AWC格式 (2.5)!', 'success');
+                                recomputeSubmitStateAfterPaste();
                                 return true;
                             }
                         }
@@ -1249,62 +901,14 @@ export function handle2SpecialPaste(e, pastedData) {
 
                                 // 填充到表格（包括空白单元格）
                                 if (dataMatrix.length > 0 && maxCols > 0) {
-                                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                                    const startCol = parseInt(startCell.dataset.col);
-
-                                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                                    const requiredRows = startRow + dataMatrix.length;
-                                    const requiredCols = startCol + maxCols;
-
-                                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                        const targetCols = Math.max(currentCols, requiredCols);
-                                        ensurePasteGrid(targetRows, targetCols);
-                                    }
-
-                                    const tableBody = document.getElementById('tableBody');
-                                    const currentPasteChanges = [];
-                                    let successCount = 0;
-
-                                    dataMatrix.forEach((rowData, rowIndex) => {
-                                        const actualRowIndex = startRow + rowIndex;
-                                        const tableRow = tableBody.children[actualRowIndex];
-                                        if (!tableRow) return;
-
-                                        rowData.forEach((cellData, colIndex) => {
-                                            const actualColIndex = startCol + colIndex;
-                                            const cell = tableRow.children[actualColIndex + 1];
-
-                                            if (cell && cell.contentEditable === 'true') {
-                                                // 保留空白单元格：即使cellData是空字符串，也要设置
-                                                // trim()不会影响空字符串，但会去除空格
-                                                const cellValue = (cellData !== null && cellData !== undefined) ? String(cellData).trim() : '';
-
-                                                currentPasteChanges.push({
-                                                    row: actualRowIndex,
-                                                    col: actualColIndex,
-                                                    oldValue: cell.textContent,
-                                                    newValue: cellValue
-                                                });
-
-                                                // 明确设置单元格内容（包括空字符串以保持空白单元格）
-                                                cell.textContent = cellValue;
-
-                                                // 即使单元格是空的，也要计入（因为我们保留了空白单元格的位置）
-                                                if (cellValue !== '') {
-                                                    successCount++;
-                                                }
-                                            }
-                                        });
+                                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                                        trimValues: true,
                                     });
-
-                                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                                     if (successCount > 0) {
                                         formatDetected = true;
-                                        window.showNotification?.(`2.SPECIAL: 检测到AWC格式 (2.5)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持表格行格式!`, 'success');
-                                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                        notifyPasteUser(`2.SPECIAL: 检测到AWC格式 (2.5)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持表格行格式!`, 'success');
+                                        recomputeSubmitStateAfterPaste();
                                         return true;
                                     }
                                 }
@@ -1324,56 +928,14 @@ export function handle2SpecialPaste(e, pastedData) {
                                     });
 
                                     // 填充到表格
-                                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                                    const startCol = parseInt(startCell.dataset.col);
-
-                                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                                    const requiredRows = startRow + dataMatrix.length;
-                                    const requiredCols = startCol + maxCols;
-
-                                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                        const targetCols = Math.max(currentCols, requiredCols);
-                                        ensurePasteGrid(targetRows, targetCols);
-                                    }
-
-                                    const tableBody = document.getElementById('tableBody');
-                                    const currentPasteChanges = [];
-                                    let successCount = 0;
-
-                                    dataMatrix.forEach((rowData, rowIndex) => {
-                                        const actualRowIndex = startRow + rowIndex;
-                                        const tableRow = tableBody.children[actualRowIndex];
-                                        if (!tableRow) return;
-
-                                        rowData.forEach((cellData, colIndex) => {
-                                            const actualColIndex = startCol + colIndex;
-                                            const cell = tableRow.children[actualColIndex + 1];
-
-                                            if (cell && cell.contentEditable === 'true') {
-                                                const cellValue = (cellData || '').trim();
-                                                currentPasteChanges.push({
-                                                    row: actualRowIndex,
-                                                    col: actualColIndex,
-                                                    oldValue: cell.textContent,
-                                                    newValue: cellValue
-                                                });
-
-                                                cell.textContent = cellValue;
-                                                if (cellValue) {
-                                                    successCount++;
-                                                }
-                                            }
-                                        });
+                                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                                        trimValues: true,
                                     });
-
-                                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                                     if (successCount > 0) {
                                         formatDetected = true;
-                                        window.showNotification?.(`2.SPECIAL: 检测到AWC格式 (2.5)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已根据数据模式智能分组!`, 'success');
-                                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                        notifyPasteUser(`2.SPECIAL: 检测到AWC格式 (2.5)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已根据数据模式智能分组!`, 'success');
+                                        recomputeSubmitStateAfterPaste();
                                         return true;
                                     }
                                 }
@@ -1474,60 +1036,17 @@ export function handle2SpecialPaste(e, pastedData) {
                 }
 
                 if (dataMatrix.length > 0 && maxCols > 0) {
-                    console.log('2.SPECIAL: S88 parsing successful -', dataMatrix.length, 'rows x', maxCols, 'cols');
-
-                    // 填充到表格，从用户点击的单元格开始
-                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                    const startCol = parseInt(startCell.dataset.col);
-
-                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                    const requiredRows = startRow + dataMatrix.length;
-                    const requiredCols = startCol + maxCols;
-
-                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                        const targetCols = Math.max(currentCols, requiredCols);
-                        ensurePasteGrid(targetRows, targetCols);
-                    }
-
-                    const tableBody = document.getElementById('tableBody');
-                    const currentPasteChanges = [];
-                    let successCount = 0;
-
-                    dataMatrix.forEach((rowData, rowIndex) => {
-                        const actualRowIndex = startRow + rowIndex;
-                        const tableRow = tableBody.children[actualRowIndex];
-                        if (!tableRow) return;
-
-                        rowData.forEach((cellData, colIndex) => {
-                            const actualColIndex = startCol + colIndex;
-                            const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                            if (cell && cell.contentEditable === 'true') {
-                                const cellValue = (cellData || '').trim();
-                                currentPasteChanges.push({
-                                    row: actualRowIndex,
-                                    col: actualColIndex,
-                                    oldValue: cell.textContent,
-                                    newValue: cellValue
-                                });
-
-                                cell.textContent = cellValue;
-                                if (cellValue) {
-                                    successCount++;
-                                }
-                            }
-                        });
+                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                        trimValues: true,
                     });
 
-                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                    console.log('2.SPECIAL: S88 parsing successful -', maxRows, 'rows x', cols, 'cols');
 
                     if (successCount > 0) {
                         formatDetected = true;
-                        console.log('2.SPECIAL: S88 paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                        window.showNotification?.(`2.SPECIAL: 检测到S88格式 (2.6)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)!`, 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        console.log('2.SPECIAL: S88 paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                        notifyPasteUser(`2.SPECIAL: 检测到S88格式 (2.6)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     }
                 } else {
@@ -1598,8 +1117,8 @@ export function handle2SpecialPaste(e, pastedData) {
                     if (filled) {
                         console.log('2.SPECIAL: ALIPAY Successfully filled using parseAndFillHTMLTable');
                         formatDetected = true;
-                        window.showNotification?.('2.SPECIAL: 检测到ALIPAY格式 (2.7)!', 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser('2.SPECIAL: 检测到ALIPAY格式 (2.7)!', 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     } else {
                         console.log('2.SPECIAL: ALIPAY parseAndFillHTMLTable returned false, trying manual HTML parsing');
@@ -1980,63 +1499,17 @@ export function handle2SpecialPaste(e, pastedData) {
                 }
 
                 if (alipayParsed) {
-                    const { dataMatrix, maxRows, maxCols } = alipayParsed;
+                    const { dataMatrix } = alipayParsed;
 
-                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                    // ALIPAY 格式：强制从第一列（Column 1）开始粘贴
-                    const startCol = 0;
-
-                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-
-                    const requiredRows = startRow + maxRows;
-                    const requiredCols = startCol + maxCols;
-
-                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-                        const targetCols = Math.max(currentCols, requiredCols);
-                        ensurePasteGrid(targetRows, targetCols);
-                    }
-
-                    const tableBody = document.getElementById('tableBody');
-                    const currentPasteChanges = [];
-                    let successCount = 0;
-
-                    dataMatrix.forEach((rowData, rowIndex) => {
-                        const actualRowIndex = startRow + rowIndex;
-                        const tableRow = tableBody.children[actualRowIndex];
-                        if (!tableRow) return;
-
-                        rowData.forEach((cellData, colIndex) => {
-                            // 每行数据都从第一列（Column 1）开始
-                            const actualColIndex = startCol + colIndex;
-                            const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                            if (cell && cell.contentEditable === 'true') {
-                                const trimmedData = (cellData || '').trim();
-                                currentPasteChanges.push({
-                                    row: actualRowIndex,
-                                    col: actualColIndex,
-                                    oldValue: cell.textContent,
-                                    newValue: trimmedData
-                                });
-
-                                // 保持原始数据，不做任何转换
-                                cell.textContent = trimmedData;
-
-                                if (trimmedData) {
-                                    successCount++;
-                                }
-                            }
-                        });
+                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                        startColOverride: 0,
+                        trimValues: true,
                     });
-
-                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                     if (successCount > 0) {
                         formatDetected = true;
-                        window.showNotification?.(`2.SPECIAL: 检测到ALIPAY格式 (2.7)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${maxCols} 列)!`, 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser(`2.SPECIAL: 检测到ALIPAY格式 (2.7)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     }
                 }
@@ -2064,8 +1537,8 @@ export function handle2SpecialPaste(e, pastedData) {
                     if (filled) {
                         console.log('2.SPECIAL: Detected PS3838 format (2.4) - HTML');
                         formatDetected = true;
-                        window.showNotification?.('2.SPECIAL: 检测到PS3838格式 (2.8)!', 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser('2.SPECIAL: 检测到PS3838格式 (2.8)!', 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     }
                 }
@@ -2161,58 +1634,16 @@ export function handle2SpecialPaste(e, pastedData) {
                 if (agentLinkParsed) {
                     console.log('2.SPECIAL: Detected PS3838 format (2.4)');
                     formatDetected = true;
-                    const { dataMatrix, maxRows, maxCols } = agentLinkParsed;
+                    const { dataMatrix } = agentLinkParsed;
 
-                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                    const startCol = 0; // PS3838: 强制从第一列开始
-
-                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                    const requiredRows = startRow + maxRows;
-                    const requiredCols = startCol + maxCols;
-
-                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                        const targetCols = Math.max(currentCols, requiredCols);
-                        ensurePasteGrid(targetRows, targetCols);
-                    }
-
-                    const tableBody = document.getElementById('tableBody');
-                    const currentPasteChanges = [];
-                    let successCount = 0;
-
-                    dataMatrix.forEach((rowData, rowIndex) => {
-                        const actualRowIndex = startRow + rowIndex;
-                        const tableRow = tableBody.children[actualRowIndex];
-                        if (!tableRow) return;
-
-                        rowData.forEach((cellData, colIndex) => {
-                            const actualColIndex = startCol + colIndex;
-                            const cell = tableRow.children[actualColIndex + 1];
-
-                            if (cell && cell.contentEditable === 'true') {
-                                const trimmedData = (cellData || '').trim();
-                                currentPasteChanges.push({
-                                    row: actualRowIndex,
-                                    col: actualColIndex,
-                                    oldValue: cell.textContent,
-                                    newValue: trimmedData
-                                });
-
-                                cell.textContent = trimmedData;
-
-                                if (trimmedData) {
-                                    successCount++;
-                                }
-                            }
-                        });
+                    const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                        startColOverride: 0,
+                        trimValues: true,
                     });
 
-                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
                     if (successCount > 0) {
-                        window.showNotification?.(`2.SPECIAL: 检测到PS3838格式 (2.8)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${maxCols} 列)!`, 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser(`2.SPECIAL: 检测到PS3838格式 (2.8)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     }
                 }
@@ -2273,8 +1704,8 @@ export function handle2SpecialPaste(e, pastedData) {
                     if (filled) {
                         console.log('2.SPECIAL: WBET Successfully filled using parseAndFillHTMLTableForWBET');
                         formatDetected = true;
-                        window.showNotification?.('2.SPECIAL: 检测到WBET格式 (2.9)!', 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser('2.SPECIAL: 检测到WBET格式 (2.9)!', 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     } else {
                         console.log('2.SPECIAL: WBET parseAndFillHTMLTableForWBET returned false, trying standard HTML parsing');
@@ -2297,8 +1728,8 @@ export function handle2SpecialPaste(e, pastedData) {
                     const filled = parseAndFillHtmlTableForWbet(htmlData, startCell);
                     if (filled) {
                         formatDetected = true;
-                        window.showNotification?.('2.SPECIAL: 检测到WBET格式 (2.9)!', 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser('2.SPECIAL: 检测到WBET格式 (2.9)!', 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     }
                 }
@@ -2580,55 +2011,15 @@ export function handle2SpecialPaste(e, pastedData) {
                         console.log('2.SPECIAL: WBET First few processed rows:', processedMatrix.slice(0, 5));
 
                         if (processedMatrix.length > 0) {
-                            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                            const startCol = 0; // WBET: 强制从第一列开始
-
-                            const currentRows = document.querySelectorAll('#tableBody tr').length;
-                            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                            const requiredRows = startRow + processedMatrix.length;
-                            const requiredCols = startCol + maxCols;
-
-                            if (requiredRows > currentRows || requiredCols > currentCols) {
-                                const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                const targetCols = Math.max(currentCols, requiredCols);
-                                ensurePasteGrid(targetRows, targetCols);
-                            }
-
-                            const tableBody = document.getElementById('tableBody');
-                            const currentPasteChanges = [];
-                            let successCount = 0;
-
-                            processedMatrix.forEach((rowData, rowIndex) => {
-                                const actualRowIndex = startRow + rowIndex;
-                                const tableRow = tableBody.children[actualRowIndex];
-                                if (!tableRow) return;
-
-                                rowData.forEach((cellData, colIndex) => {
-                                    const actualColIndex = startCol + colIndex;
-                                    const cell = tableRow.children[actualColIndex + 1];
-                                    if (cell && cell.contentEditable === 'true') {
-                                        currentPasteChanges.push({
-                                            row: actualRowIndex,
-                                            col: actualColIndex,
-                                            oldValue: cell.textContent,
-                                            newValue: cellData
-                                        });
-                                        // 保持原始格式，不做任何转换
-                                        cell.textContent = cellData;
-                                        if (cellData) {
-                                            successCount++;
-                                        }
-                                    }
-                                });
+                            const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(processedMatrix, startCell, {
+                                startColOverride: 0,
                             });
-
-                            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                             if (successCount > 0) {
                                 formatDetected = true;
-                                console.log('2.SPECIAL: WBET Successfully pasted', successCount, 'cells in', processedMatrix.length, 'rows x', maxCols, 'cols');
-                                window.showNotification?.(`2.SPECIAL: 检测到WBET格式 (2.9)，成功粘贴 ${successCount} 个单元格 (${processedMatrix.length} 行 x ${maxCols} 列)!`, 'success');
-                                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                console.log('2.SPECIAL: WBET Successfully pasted', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                                notifyPasteUser(`2.SPECIAL: 检测到WBET格式 (2.9)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                                recomputeSubmitStateAfterPaste();
                                 return true;
                             }
                         }
@@ -2756,52 +2147,15 @@ export function handle2SpecialPaste(e, pastedData) {
                 console.log('2.SPECIAL: PEGASUS Merged all data into single row with', allCells.length, 'cells');
                 console.log('2.SPECIAL: PEGASUS First 10 cells:', allCells.slice(0, 10));
 
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                // PEGASUS 格式：强制从第一列（Column 1）开始粘贴
-                const startCol = 0;
-
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredCols = startCol + allCells.length;
-
-                if (requiredCols > currentCols) {
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(currentRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const tableRow = tableBody.children[startRow];
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                allCells.forEach((cellData, colIndex) => {
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                    if (cell && cell.contentEditable === 'true') {
-                        const trimmedData = (cellData || '').trim();
-                        currentPasteChanges.push({
-                            row: startRow,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: trimmedData
-                        });
-
-                        // 保持原始数据，不做任何转换
-                        cell.textContent = trimmedData;
-
-                        if (trimmedData) {
-                            successCount++;
-                        }
-                    }
+                const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid([allCells], startCell, {
+                    startColOverride: 0,
+                    trimValues: true,
                 });
-
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                 if (successCount > 0) {
                     formatDetected = true;
-                    window.showNotification?.(`2.SPECIAL: 检测到PEGASUS格式 (2.10)，成功粘贴 ${successCount} 个单元格 (1 行 x ${allCells.length} 列)!`, 'success');
-                    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                    notifyPasteUser(`2.SPECIAL: 检测到PEGASUS格式 (2.10)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                    recomputeSubmitStateAfterPaste();
                     return true;
                 }
             } else {
@@ -2921,58 +2275,15 @@ export function handle2SpecialPaste(e, pastedData) {
 
                             // 填充到表格
                             // C8PLAY 格式：强制从第一列（Column 1）开始粘贴
-                            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                            const startCol = 0; // C8PLAY: 强制从第一列开始
-
-                            const currentRows = document.querySelectorAll('#tableBody tr').length;
-                            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                            const requiredRows = startRow + dataMatrix.length;
-                            const requiredCols = startCol + maxCols;
-
-                            if (requiredRows > currentRows || requiredCols > currentCols) {
-                                const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                const targetCols = Math.max(currentCols, requiredCols);
-                                ensurePasteGrid(targetRows, targetCols);
-                            }
-
-                            const tableBody = document.getElementById('tableBody');
-                            const currentPasteChanges = [];
-                            let successCount = 0;
-
-                            dataMatrix.forEach((rowData, rowIndex) => {
-                                const actualRowIndex = startRow + rowIndex;
-                                const tableRow = tableBody.children[actualRowIndex];
-                                if (!tableRow) return;
-
-                                rowData.forEach((cellData, colIndex) => {
-                                    // 每行数据都从第一列（Column 1）开始
-                                    const actualColIndex = startCol + colIndex;
-                                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                    if (cell && cell.contentEditable === 'true') {
-                                        const cellValue = cellData || '';
-                                        currentPasteChanges.push({
-                                            row: actualRowIndex,
-                                            col: actualColIndex,
-                                            oldValue: cell.textContent,
-                                            newValue: cellValue
-                                        });
-
-                                        cell.textContent = cellValue;
-                                        if (cellValue) {
-                                            successCount++;
-                                        }
-                                    }
-                                });
-                            });
-
-                            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                            const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                                        startColOverride: 0,
+                                    });
 
                             if (successCount > 0) {
                                 formatDetected = true;
-                                console.log('2.SPECIAL: C8PLAY HTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                                window.showNotification?.(`2.SPECIAL: 检测到C8PLAY格式 (2.10)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                console.log('2.SPECIAL: C8PLAY HTML paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                                notifyPasteUser(`2.SPECIAL: 检测到C8PLAY格式 (2.10)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                                recomputeSubmitStateAfterPaste();
                                 return true;
                             }
                         }
@@ -3027,58 +2338,15 @@ export function handle2SpecialPaste(e, pastedData) {
                             });
 
                             // C8PLAY 格式：强制从第一列（Column 1）开始粘贴
-                            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                            const startCol = 0; // C8PLAY: 强制从第一列开始
-
-                            const currentRows = document.querySelectorAll('#tableBody tr').length;
-                            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                            const requiredRows = startRow + dataMatrix.length;
-                            const requiredCols = startCol + maxCols;
-
-                            if (requiredRows > currentRows || requiredCols > currentCols) {
-                                const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                const targetCols = Math.max(currentCols, requiredCols);
-                                ensurePasteGrid(targetRows, targetCols);
-                            }
-
-                            const tableBody = document.getElementById('tableBody');
-                            const currentPasteChanges = [];
-                            let successCount = 0;
-
-                            dataMatrix.forEach((rowData, rowIndex) => {
-                                const actualRowIndex = startRow + rowIndex;
-                                const tableRow = tableBody.children[actualRowIndex];
-                                if (!tableRow) return;
-
-                                rowData.forEach((cellData, colIndex) => {
-                                    // 每行数据都从第一列（Column 1）开始
-                                    const actualColIndex = startCol + colIndex;
-                                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                    if (cell && cell.contentEditable === 'true') {
-                                        const cellValue = cellData || '';
-                                        currentPasteChanges.push({
-                                            row: actualRowIndex,
-                                            col: actualColIndex,
-                                            oldValue: cell.textContent,
-                                            newValue: cellValue
-                                        });
-
-                                        cell.textContent = cellValue;
-                                        if (cellValue) {
-                                            successCount++;
-                                        }
-                                    }
-                                });
-                            });
-
-                            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                            const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                                        startColOverride: 0,
+                                    });
 
                             if (successCount > 0) {
                                 formatDetected = true;
-                                console.log('2.SPECIAL: C8PLAY detectAndParseHTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                                window.showNotification?.(`2.SPECIAL: 检测到C8PLAY格式 (2.10)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                console.log('2.SPECIAL: C8PLAY detectAndParseHTML paste successful -', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                                notifyPasteUser(`2.SPECIAL: 检测到C8PLAY格式 (2.10)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                                recomputeSubmitStateAfterPaste();
                                 return true;
                             }
                         }
@@ -3230,59 +2498,17 @@ export function handle2SpecialPaste(e, pastedData) {
             // C8PLAY 格式：强制从第一列（Column 1）开始粘贴，每行数据都从第一列开始
             if (dataMatrix.length > 0 && maxCols > 0) {
                 const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = 0; // C8PLAY: 强制从第一列开始
+                        console.log('2.SPECIAL: C8PLAY Starting paste at row', startRow, 'col', 0);
 
-                console.log('2.SPECIAL: C8PLAY Starting paste at row', startRow, 'col', startCol);
-
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredRows = startRow + dataMatrix.length;
-                const requiredCols = startCol + maxCols;
-
-                if (requiredRows > currentRows || requiredCols > currentCols) {
-                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(targetRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                dataMatrix.forEach((rowData, rowIndex) => {
-                    const actualRowIndex = startRow + rowIndex;
-                    const tableRow = tableBody.children[actualRowIndex];
-                    if (!tableRow) return;
-
-                    rowData.forEach((cellData, colIndex) => {
-                        // 每行数据都从第一列（Column 1）开始
-                        const actualColIndex = startCol + colIndex;
-                        const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                        if (cell && cell.contentEditable === 'true') {
-                            const cellValue = cellData || '';
-                            currentPasteChanges.push({
-                                row: actualRowIndex,
-                                col: actualColIndex,
-                                oldValue: cell.textContent,
-                                newValue: cellValue
-                            });
-
-                            cell.textContent = cellValue;
-                            if (cellValue) {
-                                successCount++;
-                            }
-                        }
-                    });
-                });
-
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                            startColOverride: 0,
+                        });
 
                 if (successCount > 0) {
                     formatDetected = true;
-                    console.log('2.SPECIAL: C8PLAY Successfully pasted', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                    window.showNotification?.(`2.SPECIAL: 检测到C8PLAY格式 (2.10)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                    console.log('2.SPECIAL: C8PLAY Successfully pasted', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                    notifyPasteUser(`2.SPECIAL: 检测到C8PLAY格式 (2.10)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
+                    recomputeSubmitStateAfterPaste();
                     return true;
                 }
             }

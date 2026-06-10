@@ -5,7 +5,8 @@ import { parseAndFillHtmlTableForInvoice } from "./dataCaptureInvoiceHtmlPaste.j
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 
 /** @returns {boolean} */
 export function handle3ApiPaste(e, pastedData) {
@@ -34,8 +35,8 @@ export function handle3ApiPaste(e, pastedData) {
                 if (filled) {
                     console.log('3.API: 3.1 WBET_API Successfully filled using parseAndFillHTMLTableForWBET_API');
                     formatDetected = true;
-                    window.showNotification?.('3.API: 检测到WBET_API格式 (3.1)!', 'success');
-                    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                    notifyPasteUser('3.API: 检测到WBET_API格式 (3.1)!', 'success');
+                    recomputeSubmitStateAfterPaste();
                     return true;
                 } else {
                     console.log('3.API: 3.1 WBET_API parseAndFillHTMLTableForWBET_API returned false, trying standard HTML parsing');
@@ -58,8 +59,8 @@ export function handle3ApiPaste(e, pastedData) {
                 const filled = parseAndFillHtmlTableForWbetApi(htmlData, startCell);
                 if (filled) {
                     formatDetected = true;
-                    window.showNotification?.('3.API: 检测到WBET_API格式 (3.1)!', 'success');
-                    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                    notifyPasteUser('3.API: 检测到WBET_API格式 (3.1)!', 'success');
+                    recomputeSubmitStateAfterPaste();
                     return true;
                 }
             }
@@ -365,56 +366,15 @@ export function handle3ApiPaste(e, pastedData) {
                     console.log('3.API: 3.1 WBET_API First few processed rows:', processedMatrix.slice(0, 5));
 
                     if (processedMatrix.length > 0) {
-                        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                        const startCol = 0; // 3.API: 3.1 WBET_API 强制从第一列开始
-
-                        const currentRows = document.querySelectorAll('#tableBody tr').length;
-                        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                        const requiredRows = startRow + processedMatrix.length;
-                        const requiredCols = startCol + maxCols;
-
-                        if (requiredRows > currentRows || requiredCols > currentCols) {
-                            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                            const targetCols = Math.max(currentCols, requiredCols);
-                            ensurePasteGrid(targetRows, targetCols);
-                        }
-
-                        const tableBody = document.getElementById('tableBody');
-                        const currentPasteChanges = [];
-                        let successCount = 0;
-
-                        processedMatrix.forEach((rowData, rowIndex) => {
-                            const actualRowIndex = startRow + rowIndex;
-                            const tableRow = tableBody.children[actualRowIndex];
-                            if (!tableRow) return;
-
-                            // 填充数据（从第一列开始）
-                            rowData.forEach((cellData, colIndex) => {
-                                const actualColIndex = startCol + colIndex;
-                                const cell = tableRow.children[actualColIndex + 1];
-                                if (cell && cell.contentEditable === 'true') {
-                                    currentPasteChanges.push({
-                                        row: actualRowIndex,
-                                        col: actualColIndex,
-                                        oldValue: cell.textContent,
-                                        newValue: cellData
-                                    });
-                                    // 保持原始格式，不做任何转换
-                                    cell.textContent = cellData;
-                                    if (cellData) {
-                                        successCount++;
-                                    }
-                                }
-                            });
+                        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(processedMatrix, startCell, {
+                            startColOverride: 0,
                         });
-
-                        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                         if (successCount > 0) {
                             formatDetected = true;
-                            console.log('3.API: 3.1 WBET_API Successfully pasted', successCount, 'cells in', processedMatrix.length, 'rows x', maxCols, 'cols');
-                            window.showNotification?.(`3.API: 检测到WBET_API格式 (3.1)，成功粘贴 ${successCount} 个单元格 (${processedMatrix.length} 行 x ${maxCols} 列)!`, 'success');
-                            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                            console.log('3.API: 3.1 WBET_API Successfully pasted', successCount, 'cells in', maxRows, 'rows x', cols, 'cols');
+                            notifyPasteUser(`3.API: 检测到WBET_API格式 (3.1)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)!`, 'success');
+                            recomputeSubmitStateAfterPaste();
                             return true;
                         }
                     }
@@ -442,8 +402,8 @@ export function handle3ApiPaste(e, pastedData) {
                     const filled = parseAndFillHtmlTableForInvoice(invoiceHtmlData, startCell);
                     if (filled) {
                         formatDetected = true;
-                        window.showNotification?.('3.API: 检测到INVOICE格式 (3.2)!', 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser('3.API: 检测到INVOICE格式 (3.2)!', 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true; // 成功处理，直接返回
                     }
                 }
@@ -459,8 +419,8 @@ export function handle3ApiPaste(e, pastedData) {
                     const filled = parseAndFillHtmlTableForInvoice(invoiceHtmlDataFromDetect, startCell);
                     if (filled) {
                         formatDetected = true;
-                        window.showNotification?.('3.API: 检测到INVOICE格式 (3.2)!', 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                        notifyPasteUser('3.API: 检测到INVOICE格式 (3.2)!', 'success');
+                        recomputeSubmitStateAfterPaste();
                         return true; // 成功处理，直接返回
                     }
                 }
@@ -908,56 +868,14 @@ export function handle3ApiPaste(e, pastedData) {
 
                     // 填充到表格，保持原始格式（与 INVOICE 选项一致：从用户点击的列开始）
                     if (dataMatrix.length > 0 && maxCols > 0) {
-                        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                        const startCol = parseInt(startCell.dataset.col);
-
-                        const currentRows = document.querySelectorAll('#tableBody tr').length;
-                        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                        const requiredRows = startRow + dataMatrix.length;
-                        const requiredCols = startCol + maxCols;
-
-                        if (requiredRows > currentRows || requiredCols > currentCols) {
-                            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                            const targetCols = Math.max(currentCols, requiredCols);
-                            ensurePasteGrid(targetRows, targetCols);
-                        }
-
-                        const tableBody = document.getElementById('tableBody');
-                        const currentPasteChanges = [];
-                        let successCount = 0;
-
-                        dataMatrix.forEach((rowData, rowIndex) => {
-                            const actualRowIndex = startRow + rowIndex;
-                            const tableRow = tableBody.children[actualRowIndex];
-                            if (!tableRow) return;
-
-                            rowData.forEach((cellData, colIndex) => {
-                                const actualColIndex = startCol + colIndex;
-                                const cell = tableRow.children[actualColIndex + 1];
-
-                                if (cell && cell.contentEditable === 'true') {
-                                    const cellValue = (cellData || '').trim();
-                                    currentPasteChanges.push({
-                                        row: actualRowIndex,
-                                        col: actualColIndex,
-                                        oldValue: cell.textContent,
-                                        newValue: cellValue
-                                    });
-
-                                    cell.textContent = cellValue;
-                                    if (cellValue) {
-                                        successCount++;
-                                    }
-                                }
-                            });
+                        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                            trimValues: true,
                         });
-
-                        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
 
                         if (successCount > 0) {
                             formatDetected = true;
-                            window.showNotification?.(`3.API: 检测到INVOICE格式 (3.2)，成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持PDF原始格式!`, 'success');
-                            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                            notifyPasteUser(`3.API: 检测到INVOICE格式 (3.2)，成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持PDF原始格式!`, 'success');
+                            recomputeSubmitStateAfterPaste();
                             return true;
                         }
                     }

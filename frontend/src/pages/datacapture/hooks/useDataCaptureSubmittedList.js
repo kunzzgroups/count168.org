@@ -1,45 +1,48 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { fetchSubmissionsByCaptureDate } from "../lib/dataCaptureApi.js";
+import { useCallback, useLayoutEffect, useRef } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { dataCaptureQueryKeys, fetchSubmissionsByCaptureDate } from "../lib/dataCaptureApi.js";
+import { dataCaptureScopeCacheKey, dataCaptureScopeIsReady } from "../lib/dataCaptureScope.js";
+import { registerDataCaptureRuntime, unregisterDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
 
-export function useDataCaptureSubmittedList(companyId, captureDate) {
-  const [items, setItems] = useState([]);
+export function useDataCaptureSubmittedList(captureScope, captureDate) {
+  const queryClient = useQueryClient();
+  const scopeKey = dataCaptureScopeCacheKey(captureScope);
+  const enabled = dataCaptureScopeIsReady(captureScope);
+
+  const query = useQuery({
+    queryKey: dataCaptureQueryKeys.submissions(scopeKey, captureDate),
+    queryFn: async () => {
+      const res = await fetchSubmissionsByCaptureDate(captureDate, captureScope);
+      if (res.success) return Array.isArray(res.data) ? res.data : [];
+      return [];
+    },
+    enabled,
+  });
 
   const refreshSubmitted = useCallback(async () => {
-    if (!companyId) {
-      setItems([]);
-      return;
-    }
-    try {
-      const res = await fetchSubmissionsByCaptureDate(captureDate, companyId);
-      if (res.success) {
-        setItems(Array.isArray(res.data) ? res.data : []);
-      } else {
-        setItems([]);
-      }
-    } catch {
-      setItems([]);
-    }
-  }, [companyId, captureDate]);
+    if (!enabled) return;
+    await queryClient.invalidateQueries({
+      queryKey: dataCaptureQueryKeys.submissions(scopeKey, captureDate),
+    });
+  }, [queryClient, scopeKey, captureDate, enabled]);
 
   const refreshRef = useRef(refreshSubmitted);
   refreshRef.current = refreshSubmitted;
 
-  useEffect(() => {
-    void refreshSubmitted();
-  }, [refreshSubmitted]);
-
   useLayoutEffect(() => {
-    window.__DC_REFRESH_SUBMITTED_PROCESSES__ = async () => {
-      await refreshRef.current();
+    const api = {
+      refreshSubmittedProcesses: async () => {
+        await refreshRef.current();
+      },
     };
-    return () => {
-      try {
-        delete window.__DC_REFRESH_SUBMITTED_PROCESSES__;
-      } catch {
-        window.__DC_REFRESH_SUBMITTED_PROCESSES__ = undefined;
-      }
-    };
+
+    registerDataCaptureRuntime(api);
+    return () => unregisterDataCaptureRuntime(Object.keys(api));
   }, []);
 
-  return { submittedItems: items, refreshSubmitted };
+  return {
+    submittedItems: query.data ?? [],
+    refreshSubmitted,
+    submissionsLoading: query.isLoading,
+  };
 }

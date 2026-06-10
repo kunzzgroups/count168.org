@@ -221,6 +221,37 @@ body.maintenance-page .maintenance-list-container {
     box-sizing: border-box;
 }
 
+/* Empty state — unified override (!important beats stale SPA sheets / old dist/css) */
+body.dashboard-page.maintenance-page .empty-state-container {
+    position: relative !important;
+    top: 10px !important;
+    background: #ffffff !important;
+    border: 1px solid #d0d7de !important;
+    border-radius: 8px !important;
+    padding: clamp(40px, 3.33vw, 64px) !important;
+    margin-bottom: clamp(20px, 1.67vw, 32px) !important;
+    margin-top: 10px !important;
+    max-width: none !important;
+    width: 100% !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    text-align: center !important;
+    box-sizing: border-box !important;
+}
+
+body.dashboard-page.maintenance-page .empty-state {
+    color: #64748b !important;
+    font-size: clamp(14px, 1.04vw, 20px) !important;
+    font-weight: inherit !important;
+    line-height: inherit !important;
+}
+
+body.dashboard-page.maintenance-page .empty-state p {
+    margin: 0 !important;
+    max-width: none !important;
+    font-family: var(--font-heading-page) !important;
+}
+
 /*
  * 所有 maintenance 列表表：行 / 表头 / 数据格字号与字重统一。
  * 本文件先于各 *_maintenance.css 加载，故用 body.dashboard-page + !important 盖过各页 scoped 表规则。
@@ -318,33 +349,26 @@ body.dashboard-page.maintenance-page .maintenance-virtual-spacer {
     margin-top: 0 !important;
 }
 
-/* Created At — date left, time centered in column (all maintenance pages) */
+/* Created At — date only; portal tooltip on hover (all maintenance pages) */
 body.maintenance-page .maintenance-created-at-display {
-    display: block;
-    width: 100%;
+    display: inline-block;
+    max-width: 100%;
     text-align: left;
     line-height: 1.35;
-    white-space: normal;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
 }
 
 body.maintenance-page .maintenance-created-at-date {
-    display: block;
-    font-size: 0.95em;
-    text-align: left;
-}
-
-body.maintenance-page .maintenance-created-at-time {
-    display: block;
-    width: 100%;
-    font-size: 0.95em;
-    margin-top: 1px;
-    text-align: left;
+    color: inherit;
 }
 
 body.maintenance-page .maintenance-virtual-cell--created-at {
     justify-content: flex-start;
     text-align: left;
-    white-space: normal;
 }
 
 /* All maintenance virtual lists: left-align every header and cell */
@@ -397,4 +421,63 @@ body.maintenance-page .maintenance-table td.maintenance-table-cell {
     text-align: left !important;
 }
 
-/* Scrollbars: shared dashboard style — see dashboard-scrollbar.css (app-shell) */
+/* All maintenance pages: no window scroll; list scrolls inside virtual table only */
+html:has(body.maintenance-page),
+body.dashboard-page.maintenance-page {
+    overflow: hidden !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+}
+
+body.maintenance-page #root {
+    overflow: hidden !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+}
+
+body.maintenance-page .container,
+body.maintenance-page .capture-maintenance-page-root,
+body.maintenance-page .payment-maintenance-page-root,
+body.maintenance-page .transaction-maintenance-page-root,
+body.maintenance-page .formula-maintenance-page-root,
+body.maintenance-page .bankprocess-maintenance-page-root {
+    overflow: hidden !important;
+    box-sizing: border-box;
+    max-height: 100dvh;
+}
+
+/* Wrapper scrolls horizontally only; vertical scroll lives on .maintenance-virtual-scroll */
+body.maintenance-page .maintenance-virtual-table,
+body.maintenance-page .payment-virtual-table,
+body.maintenance-page .formula-virtual-table,
+body.maintenance-page .transaction-virtual-table,
+body.maintenance-page .capture-virtual-table,
+body.maintenance-page .bankprocess-virtual-table {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+}
+
+body.maintenance-page .maintenance-virtual-table-inner,
+body.maintenance-page .payment-virtual-table-inner,
+body.maintenance-page .formula-virtual-table-inner,
+body.maintenance-page .transaction-virtual-table-inner,
+body.maintenance-page .capture-virtual-table-inner,
+body.maintenance-page .bankprocess-virtual-table-inner {
+    overflow: hidden !important;
+}
+
+body.maintenance-page .maintenance-list-container {
+    overflow: hidden !important;
+}
+
+body.maintenance-page .maintenance-virtual-scroll,
+body.maintenance-page .maintenance-virtual-scroll--body {
+    max-height: min(72vh, calc(100dvh - 260px), 900px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto !important;
+    -ms-overflow-style: auto !important;
+}
+
+/* Scrollbars: app-wide — see dashboard-scrollbar.css (app-shell) */

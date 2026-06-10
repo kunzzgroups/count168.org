@@ -1,6 +1,9 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useProgressiveScrollExtent } from "../../shared/useProgressiveScrollExtent.js";
+import {
+  useMaintenanceCyclicScrollExtent,
+  useMaintenanceCyclicScrollObserver,
+} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
 import PaymentVirtualDataRow from "./PaymentVirtualDataRow.jsx";
 import { isPaymentMaintenanceRowSelectable } from "../paymentMaintenanceLogic.js";
 
@@ -68,6 +71,7 @@ export default function PaymentVirtualRows({
   disableSelectAll,
 }) {
   const scrollRef = useRef(null);
+  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
   const rowsRef = useRef(rows);
 
@@ -108,9 +112,11 @@ export default function PaymentVirtualRows({
     overscan: pickOverscan(rows.length),
     getItemKey,
     measureElement,
+    observeElementOffset,
   });
 
   useLayoutEffect(() => {
+    contentOffsetRef.current = 0;
     scrollRef.current?.scrollTo(0, 0);
     sizeCacheRef.current.clear();
     rowVirtualizer.measure();
@@ -118,12 +124,13 @@ export default function PaymentVirtualRows({
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH } = useProgressiveScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: rowHeight,
     resetDeps: [rows],
+    contentOffsetRef,
   });
 
   return (
@@ -156,7 +163,7 @@ export default function PaymentVirtualRows({
                 width: "100%",
                 height: `${virtualRow.size}px`,
                 minHeight: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
+                transform: `translateY(${virtualRow.start - cyclicRowOffset}px)`,
               }}
             >
               <PaymentVirtualDataRow

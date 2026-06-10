@@ -1,7 +1,10 @@
 <?php
 require_once '../../includes/session_check.php';
 require_once '../../includes/config.php';
+require_once '../../includes/group_company_access.php';
 require_once '../includes/money_decimal.php';
+require_once '../includes/ownership_history.php';
+require_once '../includes/ownership_schema.php';
 
 header('Content-Type: application/json');
 
@@ -39,6 +42,13 @@ if (!$company_id) {
     exit();
 }
 
+try {
+    gc_assert_api_company_access($pdo, (int) $company_id, gc_session_login_identifier());
+} catch (RuntimeException $e) {
+    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+    exit();
+}
+
 function ownershipPct($value): string {
     return money_normalize($value, 2);
 }
@@ -47,14 +57,22 @@ function ownershipPctOut($value): string {
     return money_out($value, 2);
 }
 
-// Validate total percentage
+// Validate total percentage (external partners at 0% are excluded)
 $total_percentage = '0.00';
 foreach ($owners as $owner) {
     if (!isset($owner['account_id']) || !isset($owner['percentage'])) {
         echo json_encode(['status' => 'error', 'message' => 'Invalid owner data format']);
         exit();
     }
+    $isExternal = !empty($owner['is_external_partner']);
     $pct = ownershipPct($owner['percentage']);
+    if ($isExternal) {
+        if (money_cmp($pct, '0', 2) !== 0) {
+            echo json_encode(['status' => 'error', 'message' => 'External partner rows must stay at 0%']);
+            exit();
+        }
+        continue;
+    }
     if (money_cmp($pct, '0', 2) <= 0 || money_cmp($pct, '100', 2) > 0) {
         echo json_encode(['status' => 'error', 'message' => 'Percentage must be between 0 and 100']);
         exit();
@@ -77,6 +95,9 @@ try {
     // Drop legacy UNIQUE (company_id, account_id) key that blocks multi-group rows
     try { $pdo->exec("ALTER TABLE company_ownership DROP INDEX unique_company_account"); } catch (Exception $e) {}
 
+    ownership_history_ensure_tables($pdo);
+    ownership_ensure_sort_order_column($pdo, 'company_ownership');
+
     $pdo->beginTransaction();
 
     // Preserve existing partner_group_id and read_only for owner-type rows
@@ -93,12 +114,14 @@ try {
     $stmt = $pdo->prepare("DELETE FROM company_ownership WHERE company_id = ?");
     $stmt->execute([$company_id]);
 
+    $historyRows = [];
+
     // Insert new owners
     if (count($owners) > 0) {
         if ($hasOwnerType) {
             $insertStmt = $pdo->prepare("
-                INSERT INTO company_ownership (company_id, account_id, owner_type, percentage, partner_group_id, read_only)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO company_ownership (company_id, account_id, owner_type, percentage, partner_group_id, read_only, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ");
         } else {
             $insertStmt = $pdo->prepare("
@@ -107,12 +130,14 @@ try {
             ");
         }
 
-        foreach ($owners as $owner) {
+        foreach ($owners as $sortIdx => $owner) {
             $raw_id = (string) $owner['account_id'];
             $owner_type = 'account'; // default
             $real_id = $raw_id;
             $is_group_entry = false;
             $group_ref = null;
+            $isExternal = !empty($owner['is_external_partner']);
+            $sortOrder = isset($owner['sort_order']) ? (int) $owner['sort_order'] : (int) $sortIdx;
 
             if (strpos($raw_id, 'G_') === 0) {
                 // Group entry: G_IG → owner_type='group', account_id=0, partner_group_id='IG'
@@ -143,7 +168,16 @@ try {
                         $roVal = $existingReadOnly[(int) $real_id] ?? 1;
                     }
                 }
-                $insertStmt->execute([$company_id, (int) $real_id, $owner_type, ownershipPctOut($owner['percentage']), $pgid, $roVal]);
+                $pctOut = ownershipPctOut($owner['percentage']);
+                $insertStmt->execute([$company_id, (int) $real_id, $owner_type, $pctOut, $pgid, $roVal, $sortOrder]);
+
+                $historyRows[] = [
+                    'account_id' => (int) $real_id,
+                    'owner_type' => $owner_type,
+                    'percentage' => $pctOut,
+                    'partner_group_id' => $pgid,
+                    'read_only' => $roVal,
+                ];
 
                 // 同步 read_only 到 user 表的全局设置作为默认回退
                 if ($owner_type === 'user') {
@@ -153,9 +187,25 @@ try {
             } else {
                 // If migration hasn't run, we must drop Users so it doesn't crash, or attempt.
                 // In a perfect world, migration is run first. If not, only save numbers.
-                $insertStmt->execute([$company_id, (int) $real_id, ownershipPctOut($owner['percentage'])]);
+                $pctOut = ownershipPctOut($owner['percentage']);
+                $insertStmt->execute([$company_id, (int) $real_id, $pctOut]);
+                $historyRows[] = [
+                    'account_id' => (int) $real_id,
+                    'owner_type' => 'account',
+                    'percentage' => $pctOut,
+                    'partner_group_id' => null,
+                    'read_only' => 1,
+                ];
             }
         }
+    }
+
+    $savedBy = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+    ownership_history_save_company($pdo, (int) $company_id, $historyRows, $savedBy);
+
+    $retrofillMonths = $inputData['retrofill_months'] ?? [];
+    if (is_array($retrofillMonths) && count($retrofillMonths) > 0) {
+        ownership_history_apply_retrofill_months($pdo, (int) $company_id, $historyRows, $savedBy, $retrofillMonths);
     }
 
     $pdo->commit();

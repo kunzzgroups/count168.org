@@ -1,6 +1,9 @@
 import { useCallback, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useProgressiveScrollExtent } from "../../shared/useProgressiveScrollExtent.js";
+import {
+  useMaintenanceCyclicScrollExtent,
+  useMaintenanceCyclicScrollObserver,
+} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
 import CaptureVirtualDataRow from "./CaptureVirtualDataRow.jsx";
 
 function pickOverscan(count) {
@@ -73,6 +76,7 @@ export default function CaptureVirtualRows({
   disableSelectAll,
 }) {
   const scrollRef = useRef(null);
+  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
   const rowsRef = useRef(rows);
 
@@ -113,23 +117,26 @@ export default function CaptureVirtualRows({
     overscan: pickOverscan(rows.length),
     getItemKey,
     measureElement,
+    observeElementOffset,
   });
-
-  useLayoutEffect(() => {
-    scrollRef.current?.scrollTo(0, 0);
-    sizeCacheRef.current.clear();
-    rowVirtualizer.measure();
-  }, [rows, rowVirtualizer]);
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH } = useProgressiveScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: rowHeight,
     resetDeps: [rows],
+    contentOffsetRef,
   });
+
+  useLayoutEffect(() => {
+    contentOffsetRef.current = 0;
+    scrollRef.current?.scrollTo(0, 0);
+    sizeCacheRef.current.clear();
+    rowVirtualizer.measure();
+  }, [rows, rowVirtualizer]);
 
   return (
     <div ref={scrollRef} className="maintenance-virtual-scroll" tabIndex={0}>
@@ -160,7 +167,7 @@ export default function CaptureVirtualRows({
                 width: "100%",
                 height: `${virtualRow.size}px`,
                 minHeight: `${virtualRow.size}px`,
-                transform: `translateY(${virtualRow.start}px)`,
+                transform: `translateY(${virtualRow.start - cyclicRowOffset}px)`,
               }}
             >
               <CaptureVirtualDataRow

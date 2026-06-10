@@ -20,6 +20,38 @@ body.process-page {
     position: relative;
 }
 
+/* Games Process List（非 Bank / 非 Show All）：全视口一屏，禁止整页纵向滚动（含普通 desktop） */
+html:has(body.process-page:not(.process-page--bank):not(.process-page--show-all)) {
+    height: 100%;
+    overflow: hidden;
+}
+
+body.process-page:not(.process-page--bank):not(.process-page--show-all) {
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+}
+
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .container {
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
+}
+
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .content {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
 .process-page .container {
     max-width: none;
     margin: 0;
@@ -49,7 +81,7 @@ body.process-page {
 .process-page .process-list-date-filter {
     display: inline-flex;
     align-items: center;
-    min-width: clamp(180px, 15vw, 250px);
+    min-width: clamp(180px, 15vw, 235px);
 }
 
 .process-page .process-list-date-filter .date-range-picker {
@@ -97,7 +129,7 @@ body.process-page {
 
 /* Bank Process 列表日期：对齐 Transaction Payment 药丸框（无 Period 侧栏） */
 .process-page .process-list-date-filter.transaction-date-range-group {
-    min-width: clamp(180px, 15vw, 250px);
+    min-width: clamp(180px, 15vw, 235px);
 }
 
 .process-page .transaction-date-range-group .date-range-picker {
@@ -210,7 +242,7 @@ body.process-page {
 
 /* Controls Section - copied from accountCSS.css */
 .process-page .action-buttons-container {
-    margin-top: 20px;
+    margin-top: clamp(12px, 1.04vw, 20px);
     background-color: #ffffff;
     border-radius: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -290,7 +322,7 @@ body.process-page {
     background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
     color: #fff;
     border-color: transparent;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
 }
 
 /* Buttons - mirror user list styles */
@@ -318,7 +350,7 @@ body.process-page {
     font-weight: var(--font-weight-semibold);
     border: none;
     border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
     --sweep-color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
     display: flex;
@@ -337,7 +369,7 @@ body.process-page {
 
 .process-page .content .btn-add:hover {
     background: var(--btn-add-gradient-hover);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    box-shadow: var(--shadow-btn-add-page-hover);
     transform: translateY(-1px);
 }
 
@@ -503,7 +535,7 @@ body.process-page {
     width: 100%;
 }
 
-/* 横向滚动仅由 .process-table-wrapper 承担，避免表头与数据行错位（Bank 列表在 .bank-virtual-scroll-clip 内滚动） */
+/* 横向滚动仅由 .process-table-wrapper 承担；Bank 列表用浏览器默认纵向滚动，避免 nested scrollbar 导致表头/数据列宽不一致 */
 .process-page:not(.process-page--bank) .process-table-wrapper .process-cards.bank-mode {
     overflow-x: visible;
     overflow-y: auto;
@@ -865,9 +897,10 @@ body.process-page {
 .process-page.process-page--bank .container {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    height: 100vh;
-    max-height: 100vh;
+    overflow: visible;
+    height: auto;
+    min-height: 100vh;
+    max-height: none;
     padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
     padding-left: var(--layout-main-offset);
 }
@@ -885,7 +918,7 @@ body.process-page {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     max-width: 100%;
 }
 
@@ -894,38 +927,38 @@ body.process-page {
     flex-shrink: 0;
 }
 
-/* 列表 + 分页：flex 列，分页固定在底部，中间列表区域纵向滚动 */
+/* 列表 + 分页：列表区撑满剩余高度，分页条在 flex 末尾（页面最下方） */
 .process-page.process-page--bank .bank-process-list-body {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
 }
 
-/* 列表滚动槽：占满标题/筛选与分页之间的剩余高度 */
+/* 列表区随内容增高，不在此层产生 nested scrollbar */
 .process-page.process-page--bank .bank-process-list-scroll-region {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: visible;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
 }
 
 .process-page.process-page--bank .bank-process-list-scroll-region .process-table-wrapper.bank-process-table-region {
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-height: 0;
-    height: 100%;
-    max-height: 100%;
+    height: auto;
+    max-height: none;
     width: 100%;
     align-self: stretch;
-    overflow: hidden;
+    overflow: visible;
 }
 
 /* Bank 标题行字号与间距与 Games 完全统一（由 processlist.php 标题行的 inline margin-top/bottom: 20px 控制，此处不再 override） */
@@ -956,22 +989,22 @@ body.process-page {
 .process-page.process-page--bank {
     --bank-list-cell-padding-y: clamp(4px, 0.4vw, 7px);
     --bank-list-cell-padding-x: clamp(6px, 0.65vw, 12px);
-    --bank-list-cell-min-height: clamp(32px, 2.4vw, 44px);
+    --bank-list-cell-min-height: clamp(28px, 2.4vw, 34px);
     --bank-list-header-row-height: clamp(40px, 2.8vw, 48px);
     --bank-list-cell-line-height: 1.35;
     /* Country / Insurance / Customer 列设最小像素宽，保证表头英文标题+排序角标完整显示 */
     --bank-virtual-grid-columns:
         minmax(0, 0.34fr) minmax(0, 0.62fr) minmax(max-content, 0.44fr)
-        minmax(0, 1.05fr) minmax(0, 1.78fr)
+        minmax(max-content, 1.08fr) minmax(0, 1.35fr)
         minmax(0, 0.6fr) minmax(max-content, 0.56fr) minmax(max-content, 0.5fr)
         minmax(0, 0.56fr) minmax(0, 0.56fr) minmax(0, 0.56fr)
-        minmax(0, 0.6fr) minmax(0, 0.56fr) minmax(0, 0.52fr);
+        minmax(0, 0.6fr) minmax(0, 0.56fr) max-content;
     --bank-virtual-grid-columns-with-select:
         minmax(0, 0.34fr) minmax(0, 0.62fr) minmax(max-content, 0.44fr)
-        minmax(0, 1.05fr) minmax(0, 1.78fr)
+        minmax(max-content, 1.08fr) minmax(0, 1.35fr)
         minmax(0, 0.6fr) minmax(max-content, 0.56fr) minmax(max-content, 0.5fr)
         minmax(0, 0.56fr) minmax(0, 0.56fr) minmax(0, 0.56fr)
-        minmax(0, 0.6fr) minmax(0, 0.56fr) minmax(0, 0.52fr) minmax(0, 0.34fr);
+        minmax(0, 0.6fr) minmax(0, 0.56fr) max-content max-content;
     --bank-virtual-grid-active: var(--bank-virtual-grid-columns);
 }
 
@@ -982,19 +1015,20 @@ body.process-page {
 .process-page.process-page--bank .process-table-wrapper.bank-process-table-region {
     display: flex;
     flex-direction: column;
+    overflow: visible;
     overflow-x: hidden;
-    overflow-y: hidden;
+    overflow-y: visible;
 }
 
 .process-page.process-page--bank .bank-virtual-table {
     display: flex;
     flex-direction: column;
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-height: 0;
-    height: 100%;
+    height: auto;
     width: 100%;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
     -webkit-overflow-scrolling: touch;
 }
 
@@ -1004,15 +1038,15 @@ body.process-page {
     max-width: 100%;
     display: grid;
     grid-template-columns: var(--bank-virtual-grid-active);
-    grid-template-rows: auto minmax(0, 1fr);
-    flex: 1 1 0;
+    grid-template-rows: auto auto;
+    flex: 0 1 auto;
     min-height: 0;
-    height: 100%;
-    overflow: hidden;
+    height: auto;
+    overflow: visible;
     box-sizing: border-box;
 }
 
-/* 表头不参与独立 grid：与数据行共用 inner 的列轨道（subgrid），避免每行 max-content 宽度不一致 */
+/* 表头不参与独立 grid：与数据行共用 inner 的列轨道（subgrid） */
 .process-page.process-page--bank .bank-virtual-thead {
     display: contents;
 }
@@ -1050,29 +1084,27 @@ body.process-page {
     }
 }
 
-/* 数据区：隐藏滚动条，仍可用滚轮/触控板/触摸滑动 */
+/* 数据区：不嵌套滚动，由浏览器默认 scrollbar 承担纵向滚动 */
 .process-page.process-page--bank .bank-virtual-scroll-clip {
     grid-column: 1 / -1;
     grid-row: 2;
     align-self: stretch;
-    flex: 1 1 0;
-    min-height: var(--bank-list-scroll-body-min-height);
-    max-height: 100%;
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: none;
     display: grid;
     grid-template-columns: subgrid;
     grid-template-rows: auto;
     align-content: start;
     overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
+    overflow-y: visible;
+    overscroll-behavior: auto;
     border-radius: 0 0 8px 8px;
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
     margin-right: 0;
     padding-right: 0;
-    scroll-padding-bottom: 8px;
 }
 
 .process-page.process-page--bank .bank-virtual-scroll-shell {
@@ -1114,7 +1146,6 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     border-radius: 8px 8px 0 0;
     background: linear-gradient(180deg, #60c1fe 0%, #0f61ff 100%);
     padding: 0;
-    padding-right: 0;
     overflow: visible;
     grid-auto-rows: var(--bank-list-header-row-height, var(--bank-list-cell-min-height));
     box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
@@ -1122,7 +1153,6 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
-    margin-right: 0;
 }
 
 .process-page.process-page--bank .bank-virtual-scroll.process-cards {
@@ -1336,18 +1366,17 @@ body.lang-zh.process-page.process-page--bank .action-buttons-container .user-gc-
     scrollbar-gutter: stable;
 }
 
-/* Bank 分页：在 .bank-process-list-body 内流式布局（见上方 bank-process-list-body 规则） */
-.process-page.process-page--bank .bank-process-list-body > .pagination-container,
-.process-page.process-page--bank .bank-process-pagination.pagination-container {
-    position: static !important;
-    flex: 0 0 auto;
-    align-self: flex-end;
-    margin: 8px 0 max(8px, env(safe-area-inset-bottom, 0px)) 0 !important;
+/* Bank 分页：与 Games Process 共用 .pagination-* 尺寸，flex 末尾右下对齐 */
+.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body > .pagination-container {
+    position: relative;
+    margin-top: auto !important;
+    margin-bottom: 0 !important;
     margin-left: auto !important;
     margin-right: 0 !important;
-    right: auto !important;
-    bottom: auto !important;
-    z-index: 2 !important;
+    padding: 0;
+    align-self: flex-end;
+    flex-shrink: 0;
+    z-index: 1;
 }
 
 /* Bank Process List 顶栏：日期 / Search / filter chip / Delete·Add 同一行 */
@@ -1425,9 +1454,18 @@ body.process-page.process-page--bank .bank-process-filter-toggle {
         background-color 0.15s ease;
 }
 
-body.process-page.process-page--bank .bank-process-filter-toggle .fa-filter {
-    color: #3b82f6;
-    font-size: 12px;
+body.process-page.process-page--bank .bank-process-filter-toggle__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: #64748b;
+}
+
+body.process-page.process-page--bank .bank-process-filter-toggle__icon svg {
+    width: clamp(12px, 0.9vw, 14px);
+    height: clamp(12px, 0.9vw, 14px);
+    display: block;
 }
 
 body.process-page.process-page--bank .bank-process-filter-toggle:hover {
@@ -1448,16 +1486,13 @@ body.process-page.process-page--bank .bank-process-filter-toggle.has-active-filt
 }
 
 body.process-page.process-page--bank .bank-process-filter-panel {
-    display: none;
+    display: grid;
+    grid-template-columns: 0fr;
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
-}
-
-body.process-page.process-page--bank .bank-process-filter-panel.is-open {
-    display: flex;
-    align-items: center;
-    min-width: 0;
+    pointer-events: none;
+    transition: grid-template-columns 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 body.process-page.process-page--bank .bank-process-toolbar-primary .userlist-filter-chips--bank-process {
@@ -1470,7 +1505,6 @@ body.process-page.process-page--bank .bank-process-toolbar-primary .userlist-fil
 body.process-page.process-page--bank .bank-process-filter-panel.is-open .userlist-filter-chips--bank-process {
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 1px;
 }
@@ -1481,33 +1515,495 @@ body.process-page.process-page--bank .bank-process-toolbar-primary .search-conta
     flex-shrink: 0;
 }
 
-/* Bank Process 窄屏（<1700px）：Search 更窄，filter 收进按钮展开，不越过 Delete */
+/* Bank Process 顶栏日期：药丸与日历 dropdown 同宽（--bank-toolbar-date-pill-width = 250px） */
+body.process-page.process-page--bank {
+    --bank-toolbar-calendar-min: 250px;
+    --bank-toolbar-date-pill-width: var(--bank-toolbar-calendar-min);
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .process-list-date-filter.transaction-date-range-group,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .process-list-date-filter.transaction-date-range-group {
+    width: var(--bank-toolbar-date-pill-width) !important;
+    min-width: var(--bank-toolbar-date-pill-width) !important;
+    max-width: var(--bank-toolbar-date-pill-width) !important;
+    flex: 0 0 auto;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    padding-right: clamp(6px, 0.5vw, 10px) !important;
+    gap: clamp(3px, 0.3vw, 5px);
+    box-sizing: border-box;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group #date-range-display,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group #date-range-display {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(10px, 0.72vw, 12px);
+    font-weight: 700;
+    padding-right: 0;
+    color: #94a3b8;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker.has-selected-range #date-range-display,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker.has-selected-range #date-range-display {
+    color: #64748b;
+}
+
+/* 仅有完整日期范围时显示 ×；重新点选日历过程中保持图一样式 */
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .process-list-date-clear,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .process-list-date-clear {
+    display: none !important;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker.has-selected-range .process-list-date-clear,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker.has-selected-range .process-list-date-clear {
+    display: inline-flex !important;
+}
+
+/* 顶栏日期：× 与下拉箭头参与 flex 排版，避免 absolute 与文字贴在一起 */
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .process-list-date-clear,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .process-list-date-clear {
+    position: static;
+    right: auto;
+    top: auto;
+    transform: none;
+    flex: 0 0 auto;
+    width: clamp(14px, 1vw, 16px);
+    height: clamp(14px, 1vw, 16px);
+    margin: 0 0 0 clamp(1px, 0.12vw, 2px);
+    font-size: clamp(12px, 0.85vw, 14px);
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .transaction-date-range-chevron,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .transaction-date-range-chevron {
+    position: static;
+    right: auto;
+    top: auto;
+    transform: none;
+    flex: 0 0 auto;
+    margin: 0 0 0 clamp(1px, 0.15vw, 2px);
+    pointer-events: none;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker:hover .transaction-date-range-chevron,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker:hover .transaction-date-range-chevron {
+    transform: none;
+}
+
+/* Bank Process 顶栏日历弹层：与药丸同宽、左对齐 */
+body.process-page.process-page--bank #calendar-popup.calendar-popup.calendar-popup--transaction-range.calendar-popup--match-anchor,
+body.process-page.process-page--bank #calendar-popup.calendar-popup.calendar-popup--transaction-range.calendar-popup--no-presets,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup.calendar-popup--transaction-range.calendar-popup--match-anchor,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup.calendar-popup--transaction-range.calendar-popup--no-presets {
+    width: var(--bank-toolbar-date-pill-width, var(--bank-toolbar-calendar-min)) !important;
+    min-width: var(--bank-toolbar-date-pill-width, var(--bank-toolbar-calendar-min)) !important;
+    max-width: min(calc(100vw - 24px), var(--bank-toolbar-date-pill-width, var(--bank-toolbar-calendar-min))) !important;
+    box-sizing: border-box;
+    overflow: hidden;
+    border-radius: 10px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+    padding: 0;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--match-anchor .transaction-calendar-panel,
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .transaction-calendar-panel,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--match-anchor .transaction-calendar-panel,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .transaction-calendar-panel {
+    padding: 6px 8px 8px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-header,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    max-width: none !important;
+    width: 100%;
+    margin: 0 0 6px;
+    padding: 0;
+    column-gap: 2px;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-month-year,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-month-year {
+    min-height: 26px;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-month-trigger,
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-year-trigger,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-month-trigger,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-year-trigger {
+    min-width: 0 !important;
+    min-height: 24px;
+    padding: 3px 4px;
+    font-size: clamp(9px, 0.65vw, 11px);
+    flex: 1 1 0;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-nav-btn,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-nav-btn {
+    width: clamp(22px, 1.6vw, 26px);
+    height: clamp(22px, 1.6vw, 26px);
+    flex-shrink: 0;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-weekday,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-weekday {
+    font-size: clamp(8px, 0.58vw, 10px);
+    padding: 2px 0;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day {
+    min-height: 20px;
+    font-size: clamp(8px, 0.58vw, 10px);
+    font-weight: 700;
+    border-radius: 6px;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-weekdays,
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-days,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-weekdays,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-days {
+    gap: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+/* 与 dashboard transaction-range 日历区间选中样式一致 */
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day:not(.disabled):not(.selected):not(.start-date):not(.end-date):hover,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day:not(.disabled):not(.selected):not(.start-date):not(.end-date):hover {
+    background: #f1f5ff;
+    color: #1d4ed8;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.today:not(.start-date):not(.end-date):not(.selected),
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.today:not(.start-date):not(.end-date):not(.selected) {
+    border-color: rgba(37, 99, 235, 0.55);
+    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.in-range,
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.preview-range,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.in-range,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.preview-range {
+    background: #eff6ff;
+    color: #2563eb;
+    border-radius: 0;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.start-date,
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.end-date,
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.selected,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.start-date,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.end-date,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.selected {
+    background: var(--btn-add-gradient);
+    color: #ffffff;
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
+    transform: translateY(-1px);
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.start-date,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.start-date {
+    border-radius: 6px 0 0 6px;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.end-date,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.end-date {
+    border-radius: 0 6px 6px 0;
+}
+
+body.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.start-date.end-date,
+body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popup--transaction-range .calendar-day.start-date.end-date {
+    border-radius: 6px;
+}
+
+/* Bank Process 窄屏（<1700px）：日期加长、Search/Filter 图标药丸，filter 收进按钮 */
 @media (max-width: 1699px) {
-    body.process-page.process-page--bank .bank-process-filter-toggle {
+    body.process-page.process-page--bank .bank-process-filter-toggle,
+    body.process-page.process-page--bank .bank-process-filter-toggle.bank-process-filter-toggle--icon-only {
         display: inline-flex;
+        position: relative;
+        justify-content: center;
+        align-items: center;
+        width: clamp(36px, 2.6vw, 40px);
+        min-width: clamp(36px, 2.6vw, 40px);
+        height: clamp(36px, 2.6vw, 40px);
+        min-height: clamp(36px, 2.6vw, 40px);
+        padding: 0;
+        gap: 0;
+        background: var(--color-surface, #ffffff);
+        border: 1px solid var(--color-border, #e5e7eb);
+        border-radius: 999px;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+        box-sizing: border-box;
     }
 
-    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar,
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
-        width: clamp(96px, 8vw, 140px) !important;
-        max-width: clamp(96px, 8vw, 140px) !important;
+    body.process-page.process-page--bank .bank-process-filter-toggle__label {
+        display: none;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toggle__icon {
+        width: 100%;
+        height: 100%;
+        color: #64748b;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toggle__icon svg {
+        width: clamp(14px, 1vw, 16px);
+        height: clamp(14px, 1vw, 16px);
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toggle:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 2px 10px rgba(15, 23, 42, 0.1);
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toggle:hover .bank-process-filter-toggle__icon {
+        color: #475569;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toggle.is-open,
+    body.process-page.process-page--bank .bank-process-filter-toggle.has-active-filters {
+        border-color: rgba(59, 130, 246, 0.55);
+        background: #eff6ff;
+        color: #2563eb;
+        box-shadow: 0 2px 10px rgba(37, 99, 235, 0.14);
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toggle.is-open .bank-process-filter-toggle__icon,
+    body.process-page.process-page--bank .bank-process-filter-toggle.has-active-filters .bank-process-filter-toggle__icon {
+        color: #2563eb;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-toggle.has-active-filters::after {
+        content: "";
+        position: absolute;
+        top: 7px;
+        right: 7px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #2563eb;
+        border: 1.5px solid #ffffff;
+        box-sizing: border-box;
+        pointer-events: none;
+    }
+
+    /* 顶栏日期宽度见上方全局 --bank-toolbar-date-floor / max(...) 规则 */
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
+        width: clamp(28px, 2.1vw, 34px);
+        border-radius: 10px 0 0 10px;
+        font-size: clamp(10px, 0.72vw, 12px);
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker {
+        min-height: clamp(28px, 2.1vw, 34px);
+        gap: clamp(4px, 0.4vw, 6px);
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .transaction-date-range-chevron,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .transaction-date-range-chevron {
+        font-size: clamp(9px, 0.62vw, 11px) !important;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar {
         flex: 0 0 auto !important;
+        transition: width 0.28s ease, max-width 0.28s ease;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-collapsed,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-collapsed {
+        width: clamp(36px, 2.6vw, 40px) !important;
+        max-width: clamp(36px, 2.6vw, 40px) !important;
+        min-width: clamp(36px, 2.6vw, 40px) !important;
+        padding: 0;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded {
+        /* <1700px：展开后更长（明显一点，避免“看不出变化”） */
+        width: clamp(220px, 18vw, 320px) !important;
+        max-width: clamp(220px, 18vw, 320px) !important;
+    }
+
+    /* <1700px：展开后的 Search 更“细”，高度与 Date range 药丸对齐 */
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded {
+        min-height: clamp(28px, 2.1vw, 34px) !important;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded .userlist-search-input,
+    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded .userlist-search-input {
+        padding-top: 4px !important;
+        padding-bottom: 4px !important;
+        line-height: 1.1;
+    }
+
+    body.process-page.process-page--bank .bank-process-search-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: calc(18px + 12px + 2px);
+        margin: 0;
+        padding: 0;
+        border: none;
+        background: transparent;
+        border-radius: 999px;
+        cursor: pointer;
+        color: inherit;
+    }
+
+    body.process-page.process-page--bank .bank-process-search-toggle .userlist-search-bar__icon {
+        pointer-events: none;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-collapsed .userlist-search-input {
+        width: 0 !important;
+        min-width: 0 !important;
+        flex: 0 0 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        opacity: 0;
+        pointer-events: none;
     }
 
     body.process-page.process-page--bank .bank-process-filter-toolbar-slot {
-        flex: 1 1 auto;
+        position: relative;
+        flex: 0 0 auto;
+        align-items: center;
         min-width: 0;
-        max-width: 100%;
+        gap: 0;
     }
 
-    body.process-page.process-page--bank .bank-process-filter-panel.is-open {
-        max-width: 100%;
+    /* 窄屏：自 filter 按钮向左锚点，向右下横向浮层展开 */
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: auto;
+        z-index: 140;
+        display: block;
+        grid-template-columns: unset;
+        flex: none;
+        width: max-content;
+        min-width: 0;
+        max-width: min(calc(100vw - 16px), calc(100% + 520px));
+        overflow: visible;
+        pointer-events: none;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(-4px);
+        transform-origin: top left;
+        transition:
+            opacity 0.18s ease,
+            transform 0.2s cubic-bezier(0.34, 1.2, 0.64, 1),
+            visibility 0.18s ease;
     }
 
-    body.process-page.process-page--bank .bank-process-filter-panel.is-open .userlist-filter-chips--bank-process {
-        flex: 1 1 auto;
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown.is-open {
+        pointer-events: auto;
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown .bank-process-filter-dropdown {
+        position: relative;
+        display: inline-flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 6px;
+        margin: 0;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        border: 1px solid rgba(203, 213, 225, 0.85);
+        border-radius: 14px;
+        box-shadow:
+            0 14px 36px rgba(15, 23, 42, 0.11),
+            0 4px 10px rgba(15, 23, 42, 0.05),
+            inset 0 1px 0 rgba(255, 255, 255, 0.9);
+        overflow: visible;
+        width: max-content;
+        max-width: min(calc(100vw - 16px), 720px);
         min-width: 0;
-        max-width: 100%;
+        box-sizing: border-box;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown .bank-process-filter-dropdown::before {
+        content: "";
+        position: absolute;
+        top: -5px;
+        left: 14px;
+        width: 10px;
+        height: 10px;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+        border-top: 1px solid rgba(203, 213, 225, 0.85);
+        border-left: 1px solid rgba(203, 213, 225, 0.85);
+        transform: rotate(45deg);
+        box-shadow: -2px -2px 4px rgba(15, 23, 42, 0.03);
+        pointer-events: none;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown .bank-process-filter-dropdown__clear {
+        display: inline-flex;
+        align-items: center;
+        align-self: stretch;
+        flex-shrink: 0;
+        margin: 0;
+        padding: 0 10px 0 12px;
+        border: none;
+        border-left: 1px solid #dbe3ec;
+        border-radius: 0;
+        background: transparent;
+        color: #64748b;
+        font-family: inherit;
+        font-size: clamp(10px, 0.68vw, 11px);
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: 0.01em;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: color 0.15s ease, background-color 0.15s ease;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown .bank-process-filter-dropdown__clear:hover {
+        background: rgba(239, 246, 255, 0.65);
+        color: #2563eb;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown .bank-process-filter-dropdown__clear:focus-visible {
+        outline: 2px solid #6366f1;
+        outline-offset: 2px;
+        border-radius: 6px;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown > .bank-process-filter-dropdown,
+    body.process-page.process-page--bank .bank-process-filter-panel--dropdown > .bank-process-filter-dropdown > .userlist-filter-chips--bank-process {
+        opacity: 1;
+        transform: none;
+        overflow: visible;
     }
 }
 
@@ -1518,14 +2014,26 @@ body.process-page.process-page--bank .bank-process-toolbar-primary .search-conta
     flex: 1 1 auto !important;
 }
 
-body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker {
-    min-width: clamp(120px, 11vw, 180px);
-    width: clamp(120px, 11vw, 180px);
-    flex-shrink: 0;
+/* Bank 顶栏 Search：高度与 Date range 药丸对齐（更“细”一点） */
+body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
+    min-height: 34px;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar .userlist-search-input,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar .userlist-search-input {
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+    line-height: 1.1;
 }
 
 /* Bank Process 宽屏（≥1700px）：日期适中、Search 略长，filter 居中并略加宽 */
 @media (min-width: 1700px) {
+    /* 宽屏：date range 与 search bar 间距更紧凑 */
+    body.process-page.process-page--bank .bank-process-toolbar-primary {
+        gap: 2px !important;
+    }
+
     body.process-page.process-page--bank .bank-process-filter-toolbar-slot {
         display: contents;
     }
@@ -1534,24 +2042,55 @@ body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-
         display: contents;
     }
 
+    body.process-page.process-page--bank .bank-process-filter-dropdown {
+        display: contents;
+    }
+
+    /* 宽屏：filter chips 常驻展示（不依赖 is-open / filter 按钮） */
+    body.process-page.process-page--bank .bank-process-filter-panel {
+        pointer-events: auto;
+        overflow: visible;
+    }
+
+    body.process-page.process-page--bank .bank-process-filter-panel > .bank-process-filter-dropdown > .userlist-filter-chips--bank-process {
+        opacity: 1;
+        transform: none;
+        overflow: visible;
+        visibility: visible;
+    }
+
     body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker {
-        min-width: 220px;
-        width: clamp(220px, 12vw, 280px);
-        max-width: 280px;
+        /* 宽度由全局 --bank-toolbar-date-floor 控制；此处仅缩小高度 */
+        min-height: 34px;
+        padding-top: 0;
+        padding-bottom: 0;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
+        width: 34px;
+        min-width: 34px;
+        height: 34px;
+        min-height: 34px;
+        border-radius: 10px 0 0 10px;
+    }
+
+    body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .date-range-picker #date-range-display {
+        line-height: 1.1;
     }
 
     body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
         flex: 0 0 auto;
-        min-width: 240px;
-        width: clamp(240px, 14vw, 300px) !important;
-        max-width: 300px !important;
+        /* 略短一点点 */
+        min-width: 210px;
+        width: clamp(210px, 12vw, 260px) !important;
+        max-width: 260px !important;
     }
 
     body.process-page.process-page--bank .bank-process-toolbar-primary .userlist-filter-chips--bank-process {
         flex: 1 1 auto;
         min-width: 0;
         margin-left: 0;
-        justify-content: center;
+        justify-content: left;
         padding-left: clamp(8px, 0.75vw, 16px);
         padding-right: clamp(8px, 0.75vw, 16px);
         gap: clamp(6px, 0.5vw, 10px);
@@ -1646,13 +2185,6 @@ body.process-page.process-page--bank .search-container.userlist-search-bar .user
 
     .process-page.process-page--bank .separator-line {
         margin-bottom: 0px;
-    }
-
-    .process-page.process-page--bank .bank-process-list-body > .pagination-container,
-    .process-page.process-page--bank .bank-process-pagination.pagination-container {
-        position: static !important;
-        margin: 6px 0 max(6px, env(safe-area-inset-bottom, 0px)) 0 !important;
-        margin-left: auto !important;
     }
 }
 
@@ -1784,10 +2316,13 @@ body.process-page.process-page--show-all:not(.process-page--bank) .process-card 
     flex-shrink: 0;
 }
 
-/* Process Cards - copied from accountCSS.css */
+/* Process Cards - legacy；Games 分页一屏见下方 body.process-page 规则 */
 .process-page .process-cards {
     display: flex;
     flex-direction: column;
+}
+
+.process-page.process-page--bank .bank-process-table-region .process-cards.bank-mode:not(.bank-virtual-scroll) {
     max-height: calc(100vh - 280px);
     overflow-y: auto;
 }
@@ -1942,7 +2477,7 @@ body.process-page.process-page--bank .bank-process-table-region .bank-col-ccy.ba
 body.process-page.process-page--bank .bank-process-table-region .bank-col-bank.bank-virtual-th,
 body.process-page.process-page--bank .bank-process-table-region .bank-col-bank.bank-virtual-cell {
     padding-left: clamp(6px, 0.45vw, 10px);
-    padding-right: clamp(10px, 0.55vw, 14px);
+    padding-right: clamp(4px, 0.32vw, 8px);
     white-space: nowrap;
     word-break: normal;
     overflow-wrap: normal;
@@ -1952,10 +2487,10 @@ body.process-page.process-page--bank .bank-process-table-region .bank-col-bank.b
     min-width: 0;
 }
 
-/* Card Owner：加宽列、收紧与 Contract 间距，完整显示名称 */
+/* Card Owner：桌面列宽略窄于 Bank；<1700px 由 media query 加宽以完整显示 */
 body.process-page.process-page--bank .bank-process-table-region .bank-col-owner.bank-virtual-th,
 body.process-page.process-page--bank .bank-process-table-region .bank-col-owner.bank-virtual-cell {
-    padding-left: clamp(6px, 0.42vw, 9px);
+    padding-left: clamp(3px, 0.24vw, 5px);
     padding-right: clamp(2px, 0.12vw, 3px);
     min-width: 0;
 }
@@ -2019,11 +2554,26 @@ body.process-page.process-page--bank .bank-process-table-region .bank-col-date.b
 }
 
 body.process-page.process-page--bank .bank-process-table-region .bank-col-action.bank-virtual-th,
-body.process-page.process-page--bank .bank-process-table-region .bank-col-action.bank-virtual-cell {
+body.process-page.process-page--bank .bank-process-table-region .bank-col-action.bank-virtual-cell,
+body.process-page.process-page--bank .bank-process-table-region .bank-virtual-data-row > .bank-action-cell {
     padding-left: clamp(4px, 0.35vw, 6px);
     padding-right: clamp(4px, 0.28vw, 6px);
     justify-content: flex-start;
     overflow: visible;
+    width: auto;
+    min-width: max-content;
+    max-width: max-content;
+    flex: 0 0 auto;
+}
+
+body.process-page.process-page--bank .bank-process-table-region.process-table-wrapper--select-col .bank-col-bulk.bank-virtual-th,
+body.process-page.process-page--bank .bank-process-table-region.process-table-wrapper--select-col .bank-row-select-cell {
+    width: auto;
+    min-width: max-content;
+    max-width: max-content;
+    flex: 0 0 auto;
+    padding-left: clamp(2px, 0.2vw, 4px) !important;
+    padding-right: clamp(2px, 0.2vw, 4px) !important;
 }
 
 body.process-page.process-page--bank .bank-process-table-region .bank-virtual-head-row .bank-header.bank-col-action.bank-action-header {
@@ -2263,13 +2813,13 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
             minmax(108px, 0.82fr) minmax(128px, 1.42fr)
             minmax(70px, 0.38fr) minmax(max-content, 0.34fr) minmax(max-content, 0.32fr)
             minmax(42px, 0.36fr) minmax(46px, 0.36fr) minmax(48px, 0.36fr)
-            minmax(56px, 0.48fr) minmax(90px, 0.54fr) minmax(80px, 0.44fr);
+            minmax(56px, 0.48fr) minmax(90px, 0.54fr) max-content;
         --bank-virtual-grid-columns-with-select:
             minmax(30px, 0.16fr) minmax(70px, 0.4fr) minmax(max-content, 0.3fr)
             minmax(108px, 0.82fr) minmax(128px, 1.42fr)
             minmax(70px, 0.38fr) minmax(max-content, 0.34fr) minmax(max-content, 0.32fr)
             minmax(42px, 0.36fr) minmax(46px, 0.36fr) minmax(48px, 0.36fr)
-            minmax(56px, 0.48fr) minmax(90px, 0.54fr) minmax(80px, 0.44fr) minmax(38px, 0.28fr);
+            minmax(56px, 0.48fr) minmax(90px, 0.54fr) max-content max-content;
     }
 
     /* 表头：单行对齐；角标 ↕/▲/▼ 贴列右上，文字同一基线 */
@@ -2334,49 +2884,47 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
     }
 }
 
-/* Bank 列：宽屏单行「RHB (BUSINESS)」— type 前导空格与 name 拼成 BANK (TYPE) */
-body.process-page.process-page--bank .bank-cell-display--typed {
-    display: inline;
-    max-width: 100%;
-    white-space: normal;
+@media (min-width: 1700px) {
+    /* Bank 列：宽屏单行「SUNCROP ABN (BUSINESS)」— name 与 (TYPE) 同一行 */
+    body.process-page.process-page--bank .bank-cell-display--typed {
+        display: inline;
+        max-width: 100%;
+        white-space: nowrap;
+    }
+
+    body.process-page.process-page--bank .bank-cell-display__name,
+    body.process-page.process-page--bank .bank-cell-display__type {
+        display: inline;
+    }
+
+    body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-display__type {
+        margin-left: 0.28em;
+    }
 }
 
-body.process-page.process-page--bank .bank-cell-display__name,
-body.process-page.process-page--bank .bank-cell-display__type {
-    display: inline;
-}
-
-body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-display__type {
-    margin-left: 0.28em;
-}
-
-/* 视口 < 1700px：表头/数据最多两行换行，列表区内滚动，分页固定底部 */
+/* 视口 < 1700px：表头/数据最多两行换行；整页滚动，不在列表内嵌套 scrollbar */
 @media (max-width: 1699px) {
     .process-page.process-page--bank .bank-process-list-body,
     .process-page.process-page--bank .bank-process-list-scroll-region {
-        flex: 1 1 0;
+        flex: 0 1 auto;
         min-height: 0;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .process-page.process-page--bank .bank-process-list-scroll-region .process-table-wrapper.bank-process-table-region,
     .process-page.process-page--bank .bank-virtual-table {
-        flex: 1 1 0;
+        flex: 0 1 auto;
+        height: auto;
+        max-height: none;
     }
 
     .process-page.process-page--bank .bank-virtual-scroll-clip {
-        flex: 1 1 0;
-        min-height: var(--bank-list-scroll-body-min-height);
-        max-height: 100%;
+        flex: 0 1 auto;
+        min-height: 0;
+        max-height: none;
         grid-template-rows: auto;
         overflow-y: visible;
-        overscroll-behavior: contain;
-    }
-
-    /* 超过 9 行：列表区高度 ≈ 9 行，内部滚动，避免挤压重叠 */
-    .process-page.process-page--bank .bank-virtual-scroll-clip.bank-virtual-scroll-clip--cap-rows {
-        max-height: min(100%, var(--bank-list-scroll-body-max-height)) !important;
-        overflow-y: auto !important;
+        overscroll-behavior: auto;
     }
 
     .process-page.process-page--bank .bank-virtual-scroll.process-cards {
@@ -2412,19 +2960,7 @@ body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-displa
             )
         );
         --bank-header-th-font-size: clamp(9px, 0.65vw, 11px);
-        /* 列宽按表头完整词 + 排序图标预留（No…Action） */
-        --bank-virtual-grid-columns:
-            minmax(28px, 0.14fr) minmax(64px, 0.38fr) minmax(max-content, 0.28fr)
-            minmax(52px, 0.62fr) minmax(96px, 1.12fr)
-            minmax(66px, 0.36fr) minmax(max-content, 0.32fr) minmax(max-content, 0.3fr)
-            minmax(40px, 0.34fr) minmax(44px, 0.34fr) minmax(46px, 0.34fr)
-            minmax(52px, 0.46fr) minmax(88px, 0.56fr) minmax(76px, 0.44fr);
-        --bank-virtual-grid-columns-with-select:
-            minmax(28px, 0.14fr) minmax(64px, 0.38fr) minmax(max-content, 0.28fr)
-            minmax(52px, 0.62fr) minmax(96px, 1.12fr)
-            minmax(66px, 0.36fr) minmax(max-content, 0.32fr) minmax(max-content, 0.3fr)
-            minmax(40px, 0.34fr) minmax(44px, 0.34fr) minmax(46px, 0.34fr)
-            minmax(52px, 0.46fr) minmax(88px, 0.56fr) minmax(76px, 0.44fr) minmax(34px, 0.26fr);
+        /* 列宽由上方 @2584 统一 media 定义，此处不再覆盖（避免平板 Card Owner 被挤窄） */
     }
 
     /* Supplier：<1700px 仍单行省略 */
@@ -2674,13 +3210,13 @@ body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-displa
             minmax(100px, 0.72fr) minmax(72px, 1.05fr)
             minmax(66px, 0.36fr) minmax(max-content, 0.32fr) minmax(max-content, 0.3fr)
             minmax(40px, 0.34fr) minmax(44px, 0.34fr) minmax(46px, 0.34fr)
-            minmax(52px, 0.46fr) minmax(88px, 0.56fr) minmax(76px, 0.44fr);
+            minmax(52px, 0.46fr) minmax(88px, 0.56fr) max-content;
         --bank-virtual-grid-columns-with-select:
             minmax(28px, 0.14fr) minmax(66px, 0.4fr) minmax(max-content, 0.28fr)
             minmax(100px, 0.72fr) minmax(72px, 1.05fr)
             minmax(66px, 0.36fr) minmax(max-content, 0.32fr) minmax(max-content, 0.3fr)
             minmax(40px, 0.34fr) minmax(44px, 0.34fr) minmax(46px, 0.34fr)
-            minmax(52px, 0.46fr) minmax(88px, 0.56fr) minmax(76px, 0.44fr) minmax(34px, 0.26fr);
+            minmax(52px, 0.46fr) minmax(88px, 0.56fr) max-content max-content;
     }
 
     body.process-page.process-page--bank .bank-process-table-region .bank-col-bank.bank-virtual-th,
@@ -2724,13 +3260,13 @@ body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-displa
             minmax(104px, 0.76fr) minmax(68px, 1.02fr)
             minmax(66px, 0.36fr) minmax(70px, 0.32fr) minmax(66px, 0.3fr)
             minmax(66px, 0.46fr) minmax(66px, 0.46fr) minmax(62px, 0.44fr)
-            minmax(52px, 0.44fr) minmax(90px, 0.56fr) minmax(78px, 0.44fr);
+            minmax(52px, 0.44fr) minmax(90px, 0.56fr) max-content;
         --bank-virtual-grid-columns-with-select:
             minmax(28px, 0.14fr) minmax(64px, 0.38fr) minmax(60px, 0.26fr)
             minmax(104px, 0.76fr) minmax(68px, 1.02fr)
             minmax(66px, 0.36fr) minmax(70px, 0.32fr) minmax(66px, 0.3fr)
             minmax(66px, 0.46fr) minmax(66px, 0.46fr) minmax(62px, 0.44fr)
-            minmax(52px, 0.44fr) minmax(90px, 0.56fr) minmax(78px, 0.44fr) minmax(34px, 0.26fr);
+            minmax(52px, 0.44fr) minmax(90px, 0.56fr) max-content max-content;
     }
 
     body.process-page.process-page--bank .bank-process-table-region .bank-col-bank.bank-virtual-th,
@@ -2792,13 +3328,13 @@ body.process-page.process-page--bank .bank-cell-display--typed .bank-cell-displa
             minmax(104px, 0.74fr) minmax(66px, 1fr)
             minmax(66px, 0.36fr) minmax(70px, 0.32fr) minmax(66px, 0.3fr)
             minmax(66px, 0.44fr) minmax(66px, 0.44fr) minmax(62px, 0.42fr)
-            minmax(52px, 0.42fr) minmax(94px, 0.58fr) minmax(82px, 0.46fr);
+            minmax(52px, 0.42fr) minmax(94px, 0.58fr) max-content;
         --bank-virtual-grid-columns-with-select:
             minmax(28px, 0.14fr) minmax(64px, 0.38fr) minmax(60px, 0.26fr)
             minmax(104px, 0.74fr) minmax(66px, 1fr)
             minmax(66px, 0.36fr) minmax(70px, 0.32fr) minmax(66px, 0.3fr)
             minmax(66px, 0.44fr) minmax(66px, 0.44fr) minmax(62px, 0.42fr)
-            minmax(52px, 0.42fr) minmax(94px, 0.58fr) minmax(82px, 0.46fr) minmax(34px, 0.26fr);
+            minmax(52px, 0.42fr) minmax(94px, 0.58fr) max-content max-content;
     }
 
     body.process-page.process-page--bank .bank-process-table-region .bank-col-date.bank-virtual-th,
@@ -2869,12 +3405,12 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
 
     body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-bank.bank-virtual-th,
     body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-bank.bank-virtual-cell {
-        padding-right: clamp(10px, 0.55vw, 14px) !important;
+        padding-right: clamp(4px, 0.32vw, 8px) !important;
     }
 
     body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-owner.bank-virtual-th,
     body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-owner.bank-virtual-cell {
-        padding-left: clamp(6px, 0.42vw, 9px) !important;
+        padding-left: clamp(3px, 0.24vw, 5px) !important;
         padding-right: clamp(2px, 0.12vw, 3px) !important;
     }
 }
@@ -3272,7 +3808,7 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     font-weight: var(--font-weight-semibold);
     border: none;
     border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
     --sweep-color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
     white-space: nowrap;
@@ -3286,7 +3822,7 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
 .process-page .btn-save:hover {
     background: var(--btn-add-gradient-hover);
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    box-shadow: var(--shadow-btn-add-page-hover);
 }
 
 .process-page .btn-save:active {
@@ -3327,7 +3863,7 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     align-items: center;
     padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
     border-radius: 20px;
-    font-size: clamp(7px, 0.63vw, 12px);
+    font-size: var(--text-tiny);
     font-weight: bold;
     text-transform: capitalize;
     letter-spacing: 0.025em;
@@ -3396,17 +3932,11 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     font-family: inherit;
 }
 
-/* Games list: pagination fixed to viewport bottom-right (does not move with row count / list scroll) */
+/* Games list: 分页在分页模式下 fixed（见 body.process-page 规则）；Show All 为 relative */
 .process-page:not(.process-page--bank) .pagination-container {
-    position: relative;
     margin-top: 6px;
     margin-left: auto;
     margin-right: 0;
-    right: auto;
-    bottom: auto;
-    left: auto;
-    top: auto;
-    z-index: 1;
 }
 
 /* Reserve space inside the scrollable list so the last row is not hidden under fixed pagination */
@@ -3414,40 +3944,45 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     padding-bottom: 0;
 }
 
-/* Non-bank Process List: fixed viewport layout, 20 rows visible without scrolling */
-.process-page:not(.process-page--bank) .content {
-    height: calc(100vh - 22px);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
-.process-page:not(.process-page--bank) .content>div:first-child {
-    margin-top: 8px !important;
+/* Non-bank Process List: fixed viewport layout, 25 rows visible without scrolling */
+.process-page:not(.process-page--bank) .content > div:first-child {
+    margin-top: 0 !important;
 }
 
 .process-page:not(.process-page--bank) .action-buttons-container {
-    margin-top: 20px;
+    margin-top: clamp(12px, 1.04vw, 20px);
+    flex-shrink: 0;
 }
 
-.process-page:not(.process-page--bank) .process-table-wrapper {
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-table-wrapper {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding-bottom: 52px;
+    box-sizing: border-box;
 }
 
-.process-page:not(.process-page--bank):not(.process-page--show-all) .pagination-container {
-    margin-top: 8px !important;
-    margin-bottom: 0 !important;
-    margin-left: auto !important;
-    align-self: flex-end;
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-table-wrapper .games-process-table-header,
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-table-wrapper > .table-header {
     flex-shrink: 0;
 }
 
-.process-page:not(.process-page--bank) .process-cards {
-    flex: 1;
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .pagination-container {
+    position: fixed;
+    right: max(40px, env(safe-area-inset-right, 0px));
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    left: auto;
+    top: auto;
+    margin: 0 !important;
+    z-index: 120;
+    width: fit-content;
+    flex-shrink: 0;
+}
+
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-cards {
+    flex: 1 1 auto;
     min-height: 0;
     max-height: none;
     overflow: hidden;
@@ -3456,11 +3991,60 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     justify-content: flex-start;
 }
 
-.process-page:not(.process-page--bank) .process-card {
+body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-card {
     flex: 0 1 auto;
     height: auto;
     min-height: 0;
     box-sizing: border-box;
+}
+
+/* Show All：整页可滚动，分页回文档流 */
+body.process-page.process-page--show-all:not(.process-page--bank) {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+}
+
+html:has(body.process-page.process-page--show-all:not(.process-page--bank)) {
+    height: auto;
+    overflow: visible;
+}
+
+body.process-page.process-page--show-all:not(.process-page--bank) .container {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: block !important;
+}
+
+body.process-page.process-page--show-all:not(.process-page--bank) .content {
+    height: auto !important;
+    min-height: calc(100vh - var(--layout-page-top-inset)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: none !important;
+}
+
+body.process-page.process-page--show-all:not(.process-page--bank) .process-table-wrapper {
+    flex: 0 1 auto !important;
+    min-height: 0 !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+}
+
+body.process-page.process-page--show-all:not(.process-page--bank) .pagination-container {
+    position: relative !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin-top: 8px !important;
+    margin-left: auto !important;
+    align-self: flex-end;
+    z-index: 1 !important;
 }
 
 /*
@@ -3892,6 +4476,13 @@ body.process-page > .process-modal {
     margin-right: auto !important;
 }
 
+/* React process-form-modal：勿用旧版 min-height 撑满视口，避免 Multi-Process 展开时出现外壳滚动条 */
+.process-page #addModal .modal-content.process-form-modal,
+.process-page #editModal .modal-content.process-form-modal {
+    min-height: 0 !important;
+    height: auto !important;
+}
+
 .process-page #addModal .modal-body {
     padding: 1.2rem 1.6rem 1rem 1.6rem !important;
 }
@@ -3917,12 +4508,15 @@ body.process-page > .process-modal {
     padding-top: 0.55rem !important;
 }
 
-.process-page #addModal .process-form .form-group label {
+.process-page #addModal .process-form .form-group > label {
     font-size: var(--text-medium) !important;
     font-weight: 600 !important;
     font-family: var(--font-heading-page) !important;
     letter-spacing: 0.015em !important;
     margin-bottom: 0.55rem !important;
+    max-width: none !important;
+    white-space: nowrap;
+    hyphens: none;
 }
 
 .process-page #addModal .process-form .form-row {
@@ -4207,16 +4801,93 @@ body.process-page > .process-modal {
 
 
 /* Process Form Specific Styles */
-.process-page .input-with-checkbox {
+.process-page .input-with-checkbox,
+.process-form-modal .input-with-checkbox,
+#addModal .modal-content.process-form-modal .input-with-checkbox {
     display: flex;
-    align-items: center;
-    gap: 0.9375rem;
-    flex-wrap: wrap;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: calc(var(--space-gap, 0.75rem) * 0.65);
+    width: 100%;
+    min-width: 0;
 }
 
-.process-page .input-with-checkbox input[type="text"] {
-    flex: 1;
-    min-width: 12rem;
+.process-page .input-with-checkbox > input[type="text"],
+.process-form-modal .input-with-checkbox > input[type="text"],
+#addModal .modal-content.process-form-modal .input-with-checkbox > input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto !important;
+    max-width: 100%;
+}
+
+.process-page .btn-multi-process-toggle,
+.process-form-modal .btn-multi-process-toggle,
+#addModal .modal-content.process-form-modal .btn-multi-process-toggle {
+    flex-shrink: 0;
+    align-self: stretch;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+    height: auto;
+    min-width: clamp(7.25rem, 9vw, 9.75rem);
+    padding: 0 calc(var(--space-gap, 0.75rem) * 0.85);
+    font-family: var(--font-heading-page);
+    font-size: var(--text-medium);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    border-radius: calc(var(--process-form-modal-radius, 0.75rem) * 0.55);
+    border: 1px solid var(--color-border-muted, #cbd5e1);
+    outline: none;
+    background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    color: var(--color-body-muted, #475569);
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+    transform: none;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.process-page .btn-multi-process-toggle.is-on,
+.process-form-modal .btn-multi-process-toggle.is-on,
+#addModal .modal-content.process-form-modal .btn-multi-process-toggle.is-on {
+    border: 1px solid transparent;
+    background: var(--btn-add-gradient);
+    color: var(--color-surface, #fff);
+    box-shadow: var(--shadow-btn-add-page);
+}
+
+.process-page .btn-multi-process-toggle:hover:not(:disabled),
+.process-form-modal .btn-multi-process-toggle:hover:not(:disabled),
+#addModal .modal-content.process-form-modal .btn-multi-process-toggle:hover:not(:disabled) {
+    border-color: var(--color-primary, #0d60ff);
+    color: var(--color-primary-strong, #0d60ff);
+    background: linear-gradient(180deg, #fff 0%, #eff6ff 100%);
+    box-shadow: 0 2px 6px rgba(13, 96, 255, 0.12);
+}
+
+.process-page .btn-multi-process-toggle.is-on:hover:not(:disabled),
+.process-form-modal .btn-multi-process-toggle.is-on:hover:not(:disabled),
+#addModal .modal-content.process-form-modal .btn-multi-process-toggle.is-on:hover:not(:disabled) {
+    border-color: transparent;
+    background: var(--btn-add-gradient-hover);
+    color: var(--color-surface, #fff);
+    box-shadow: var(--shadow-btn-add-page-hover);
+    transform: translateY(-1px);
+}
+
+.process-page .btn-multi-process-toggle:focus-visible,
+.process-form-modal .btn-multi-process-toggle:focus-visible,
+#addModal .modal-content.process-form-modal .btn-multi-process-toggle:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(13, 96, 255, 0.2);
+}
+
+.process-page .btn-multi-process-toggle:disabled,
+.process-form-modal .btn-multi-process-toggle:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .process-page .checkbox-container {
@@ -4449,13 +5120,48 @@ body.process-page > .process-modal {
 }
 
 /* Multi-use actions under checkbox grid */
-.process-page .multi-use-actions {
+.process-page .multi-use-actions,
+.process-form-modal .multi-use-actions,
+#addModal .multi-use-actions {
     display: flex;
     justify-content: flex-end;
-    margin-top: 0.5rem;
+    margin-top: calc(var(--space-gap, 0.75rem) * 0.55);
 }
 
-/* Multi-use Processes Checkbox Grid - left aligned */
+.process-page .btn-multi-use-confirm,
+.process-form-modal .btn-multi-use-confirm,
+#addModal .btn-multi-use-confirm {
+    font-family: var(--font-heading-page) !important;
+    font-size: var(--process-form-modal-multi-confirm-font, var(--text-small)) !important;
+    font-weight: var(--font-weight-semibold) !important;
+    min-width: 0 !important;
+    width: auto !important;
+    min-height: var(--process-form-modal-multi-confirm-min-h, clamp(2rem, 1.6vw, 2.35rem)) !important;
+    height: auto !important;
+    padding: 0.3rem var(--process-form-modal-multi-confirm-pad-x, clamp(0.75rem, 0.9vw, 1rem)) !important;
+    border: none !important;
+    border-radius: calc(var(--process-form-modal-radius, 0.75rem) * 0.4) !important;
+    background: var(--btn-add-gradient) !important;
+    color: var(--color-surface, #fff) !important;
+    box-shadow: var(--shadow-btn-add-page) !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    line-height: 1.2;
+    transform: none;
+    cursor: pointer;
+}
+
+.process-page .btn-multi-use-confirm:hover:not(:disabled),
+.process-form-modal .btn-multi-use-confirm:hover:not(:disabled),
+#addModal .btn-multi-use-confirm:hover:not(:disabled) {
+    background: var(--btn-add-gradient-hover) !important;
+    box-shadow: var(--shadow-btn-add-page-hover) !important;
+    transform: translateY(-1px);
+}
+
+/* Multi-use Processes Checkbox Grid — 3 列、tiny 字号、勾选垂直居中 */
 .process-page .process-checkboxes {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -4469,8 +5175,33 @@ body.process-page > .process-modal {
     padding: 0.625rem 0.75rem;
     background-color: #f8fafc;
     justify-items: start;
-    /* ensure items align left */
     text-align: left;
+}
+
+.process-form-modal .process-checkboxes,
+#addModal .modal-content.process-form-modal .process-checkboxes,
+#multi_use_processes .process-checkboxes {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: auto;
+    align-items: center;
+    gap: var(--process-form-modal-multi-list-row-gap, var(--desc-modal-list-item-gap))
+        var(--process-form-modal-multi-grid-col-gap, calc(var(--desc-modal-list-item-gap) * 1.65));
+    margin-top: var(--process-form-modal-multi-list-row-gap, var(--desc-modal-list-item-gap));
+    height: auto;
+    min-height: 0;
+    max-height: var(--process-form-modal-multi-list-max-h, clamp(6.5rem, 14vh, 9.5rem));
+    flex: 0 1 auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--color-border-muted);
+    border-radius: calc(var(--process-form-modal-radius) * 0.45);
+    padding: var(--process-form-modal-multi-list-pad, var(--desc-modal-list-pad));
+    background-color: var(--color-surface-gray-50);
 }
 
 .process-page .process-checkboxes .checkbox-item {
@@ -4480,24 +5211,74 @@ body.process-page > .process-modal {
     column-gap: 0.5rem;
     min-width: 0;
     justify-items: start;
-    /* left align contents */
 }
 
-.process-page .process-checkboxes .checkbox-item input[type="checkbox"] {
-    margin: 0;
-    width: 16px;
-    height: 16px;
+/* 压过 #addModal .form-group label（!important medium） */
+.process-form-modal .process-checkboxes .checkbox-item,
+#addModal .modal-content.process-form-modal .process-checkboxes .checkbox-item,
+#multi_use_processes .process-checkboxes .checkbox-item {
+    display: inline-flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: var(--process-form-modal-multi-item-gap, var(--desc-modal-list-item-gap)) !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    min-height: 0 !important;
+    padding: var(--process-form-modal-multi-item-pad-block, var(--desc-modal-list-item-pad-block)) 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
 }
 
-.process-page .process-checkboxes .checkbox-item label {
-    margin: 0;
-    font-size: 0.85rem;
-    font-weight: 600;
+.process-form-modal .process-checkboxes .checkbox-item input[type="checkbox"],
+#addModal .modal-content.process-form-modal .process-checkboxes .checkbox-item input[type="checkbox"],
+#multi_use_processes .process-checkboxes .checkbox-item input[type="checkbox"] {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: var(--process-form-modal-multi-checkbox-size, var(--desc-modal-checkbox-size)) !important;
+    height: var(--process-form-modal-multi-checkbox-size, var(--desc-modal-checkbox-size)) !important;
+    min-width: var(--process-form-modal-multi-checkbox-size, var(--desc-modal-checkbox-size)) !important;
+    min-height: var(--process-form-modal-multi-checkbox-size, var(--desc-modal-checkbox-size)) !important;
+    flex: 0 0 auto !important;
     cursor: pointer;
-    color: #0f172a;
+    accent-color: var(--color-primary-strong);
+}
+
+.process-form-modal .process-checkboxes .checkbox-item label,
+#addModal .modal-content.process-form-modal .process-checkboxes .checkbox-item label,
+#multi_use_processes .process-checkboxes .checkbox-item label {
+    margin: 0 !important;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    font-family: var(--font-ui) !important;
+    font-size: var(--process-form-modal-multi-list-text, var(--process-form-modal-control-size, var(--text-small))) !important;
+    font-weight: 400 !important;
+    line-height: var(--process-form-modal-multi-item-line-height, 1.35) !important;
+    cursor: pointer;
+    color: var(--color-body-strong) !important;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: block !important;
+}
+
+@media (max-width: 48rem) {
+    .process-form-modal .process-checkboxes,
+    #addModal .modal-content.process-form-modal .process-checkboxes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 30rem) {
+    .process-form-modal .process-checkboxes,
+    #addModal .modal-content.process-form-modal .process-checkboxes {
+        grid-template-columns: minmax(0, 1fr);
+    }
 }
 
 .process-page .btn.btn-small,
@@ -4540,194 +5321,286 @@ body.process-page > .process-modal {
     display: block;
 }
 
-/* Description Selection Modal Styles (restore to reference layout) */
-.process-page .description-selection-modal,
-.description-selection-modal {
-    width: min(980px, 94vw) !important;
-    max-width: min(980px, 94vw) !important;
-    border-radius: 0.85rem !important;
+/* Description Selection Modal — align count168.com / processlist.php; tokens --desc-modal-* */
+body.process-page > .modal.show:has(.description-selection-modal) {
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(0.25rem);
+}
+
+.modal-content.description-selection-modal,
+.process-page .modal-content.description-selection-modal {
+    width: var(--process-form-modal-width, var(--desc-modal-width, min(1040px, calc(100vw - 48px)))) !important;
+    max-width: var(--process-form-modal-width, var(--desc-modal-width, min(1040px, calc(100vw - 48px)))) !important;
+    box-sizing: border-box;
+    min-height: 0;
+    height: auto;
+    max-height: var(--process-form-modal-max-height, var(--desc-modal-max-height, 92vh));
+    margin: 4vh auto;
+    padding: 0;
+    border: none;
+    border-radius: var(--desc-modal-radius);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-surface);
+    box-shadow: 0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1), 0 0.625rem 0.625rem -0.3125rem rgba(0, 0, 0, 0.04);
+    font-family: var(--font-ui);
+    font-size: var(--desc-modal-body-size);
+    color: var(--color-body-strong);
 }
 
-.process-page .description-selection-modal .modal-header,
-.description-selection-modal .modal-header {
-    padding: 1rem 1.25rem 0.9rem 1.25rem;
+.modal-content.description-selection-modal .description-selection-modal-header.modal-header,
+.process-page .modal-content.description-selection-modal .modal-header {
+    flex-shrink: 0;
+    margin: 0;
+    padding: var(--desc-modal-pad-block) var(--desc-modal-pad-inline) 0;
+    background: var(--color-surface);
     border-bottom: none;
+    border-radius: var(--desc-modal-radius) var(--desc-modal-radius) 0 0;
 }
 
-.process-page .description-selection-modal .modal-header h2,
-.description-selection-modal .modal-header h2 {
+.modal-content.description-selection-modal .description-selection-modal-header h2,
+.modal-content.description-selection-modal .modal-header h2,
+.process-page .modal-content.description-selection-modal .modal-header h2 {
     margin: 0;
     padding: 0;
-    font-size: var(--text-page-title);
+    font-size: var(--desc-modal-title-size);
     font-family: var(--font-heading-page);
     font-weight: var(--font-weight-page-title);
     letter-spacing: var(--letter-spacing-page-title);
-    color: #1f2937;
+    color: var(--color-body-strong);
+    line-height: 1.2;
 }
 
-.process-page .description-selection-modal .modal-body,
-.description-selection-modal .modal-body {
-    padding: 0.9rem 1.15rem 1rem 1.15rem !important;
+.modal-content.description-selection-modal .modal-body,
+.process-page .modal-content.description-selection-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: var(--process-form-modal-pad, var(--desc-modal-pad-block)) var(--process-form-modal-pad, var(--desc-modal-pad-inline));
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
-.process-page .description-selection-container,
-.description-selection-container {
+/* 双栏对齐：标题同行；左列表顶 = 右「Enter new description」输入行（图二） */
+.modal-content.description-selection-modal .description-selection-container,
+.process-page .description-selection-container {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 1rem;
-    min-height: 380px;
+    grid-template-areas:
+        "desc-sel-h3   desc-add-h3"
+        "desc-sel-list desc-add-form"
+        "desc-sel-list desc-avail-h3"
+        "desc-sel-list desc-search"
+        "desc-sel-list desc-avail-list";
+    column-gap: var(--desc-modal-col-gap);
+    row-gap: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    align-items: start;
 }
 
-.process-page .selected-descriptions-section,
-.selected-descriptions-section {
-    min-width: 0;
-    border-right: 1px solid #e5e7eb;
-    padding-right: 1rem;
+.modal-content.description-selection-modal .selected-descriptions-section,
+.modal-content.description-selection-modal .available-descriptions-section,
+.modal-content.description-selection-modal .add-description-bar,
+.process-page .description-selection-modal .selected-descriptions-section,
+.process-page .description-selection-modal .available-descriptions-section,
+.process-page .description-selection-modal .add-description-bar {
+    display: contents;
 }
 
-.process-page .available-descriptions-section,
-.available-descriptions-section {
-    min-width: 0;
-    padding-left: 0.2rem;
-}
-
-.process-page .selected-descriptions-section h3,
-.process-page .available-descriptions-section h3,
-.description-selection-modal .selected-descriptions-section h3,
-.description-selection-modal .available-descriptions-section h3 {
-    margin: 0 0 0.5rem 0;
-    color: #374151;
-    font-size: var(--text-medium);
+.modal-content.description-selection-modal .selected-descriptions-section h3,
+.process-page .description-selection-modal .selected-descriptions-section h3 {
+    grid-area: desc-sel-h3;
+    margin: 0 0 var(--desc-modal-list-item-gap, 0.45rem) 0;
+    padding-right: var(--desc-modal-col-gap);
+    font-size: var(--desc-modal-section-size, var(--text-h3));
     font-family: var(--font-heading-page);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-body-strong);
+    line-height: 1.25;
 }
 
-.process-page .add-description-bar,
-.description-selection-modal .add-description-bar {
-    margin-bottom: 0.75rem;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid #e5e7eb;
-}
-
-.process-page .add-description-bar h3,
-.description-selection-modal .add-description-bar h3 {
-    margin: 0 0 0.45rem 0;
-    color: #374151;
-    font-size: var(--text-small);
+.modal-content.description-selection-modal .add-description-bar h3,
+.process-page .description-selection-modal .add-description-bar h3 {
+    grid-area: desc-add-h3;
+    margin: 0 0 var(--desc-modal-list-item-gap, 0.45rem) 0;
+    padding-left: calc(var(--desc-modal-col-gap) * 0.25);
+    font-size: var(--desc-modal-section-size, var(--text-h3));
     font-family: var(--font-heading-page);
-    font-weight: 600;
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-body-strong);
+    line-height: 1.25;
 }
 
-.process-page .add-description-form,
-.description-selection-modal .add-description-form {
-    margin: 0;
+.modal-content.description-selection-modal .available-descriptions-section > h3,
+.process-page .description-selection-modal .available-descriptions-section > h3 {
+    grid-area: desc-avail-h3;
+    margin: 0 0 var(--desc-modal-list-item-gap, 0.45rem) 0;
+    padding-left: calc(var(--desc-modal-col-gap) * 0.25);
+    font-size: var(--desc-modal-section-size, var(--text-h3));
+    font-family: var(--font-heading-page);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-body-strong);
+    line-height: 1.25;
 }
 
-.process-page .add-description-input-group,
-.description-selection-modal .add-description-input-group {
+.modal-content.description-selection-modal .add-description-form,
+.process-page .description-selection-modal .add-description-form {
+    grid-area: desc-add-form;
+    margin: 0 0 var(--space-gap) 0;
+    padding: 0 0 var(--space-gap) 0;
+    padding-left: calc(var(--desc-modal-col-gap) * 0.25);
+    border-bottom: 1px solid var(--color-border);
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.modal-content.description-selection-modal .add-description-input-group,
+.process-page .description-selection-modal .add-description-input-group {
     display: flex;
-    gap: 0.45rem;
+    gap: calc(var(--space-gap) * 0.5);
     align-items: center;
+    width: 100%;
+    min-width: 0;
 }
 
-.process-page .add-description-input-group input,
-.description-selection-modal .add-description-input-group input {
+.modal-content.description-selection-modal .add-description-input-group input,
+.process-page .description-selection-modal .add-description-input-group input {
     flex: 1;
     min-width: 0;
-    padding: 0.42rem 0.65rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.35rem;
-    font-size: 0.72rem;
+    box-sizing: border-box;
+    min-height: var(--process-form-modal-control-min-h, var(--desc-modal-control-min-h));
+    padding: calc(var(--space-gap) * 0.4) calc(var(--space-gap) * 0.55);
+    border: 1px solid var(--color-border-muted);
+    border-radius: calc(var(--desc-modal-radius) * 0.45);
+    font-family: var(--font-ui);
+    font-size: var(--desc-modal-control-text);
+    color: var(--color-body-strong);
+    background-color: var(--color-surface);
     text-transform: uppercase;
 }
 
-.process-page .add-description-input-group .btn,
-.description-selection-modal .add-description-input-group .btn {
-    min-width: 72px;
-    height: 1.4rem;
-    padding: 0.2rem 0.8rem;
-    margin: 0;
-    font-size: 0.68rem;
-    line-height: 1;
-    border-radius: 0.35rem;
-}
-
-.process-page .description-search,
-.description-selection-modal .description-search {
-    margin-bottom: 0.45rem;
-}
-
-.process-page .description-search input,
-.description-selection-modal .description-search input {
+.modal-content.description-selection-modal .description-search-input,
+.modal-content.description-selection-modal .description-search input,
+.process-page .description-selection-modal .description-search input {
     width: 100%;
-    padding: 0.4rem 0.6rem;
-    border: 1px solid #d1d5db;
-    border-radius: 0.35rem;
-    font-size: 0.72rem;
+    box-sizing: border-box;
+    min-height: var(--desc-modal-control-min-h);
+    padding: calc(var(--space-gap) * 0.4) calc(var(--space-gap) * 0.55);
+    border: 1px solid var(--color-border-muted);
+    border-radius: calc(var(--desc-modal-radius) * 0.45);
+    font-family: var(--font-ui);
+    font-size: var(--desc-modal-control-text);
+    color: var(--color-body-strong);
+    background-color: var(--color-surface);
+    text-transform: uppercase;
 }
 
-.process-page .description-list,
-.description-selection-modal .description-list {
-    height: 265px;
+.modal-content.description-selection-modal .description-search,
+.process-page .description-selection-modal .description-search {
+    grid-area: desc-search;
+    margin: 0 0 var(--space-gap) 0;
+    padding-left: calc(var(--desc-modal-col-gap) * 0.25);
+    min-width: 0;
+}
+
+.modal-content.description-selection-modal .add-description-input-group .btn,
+.process-page .description-selection-modal .add-description-input-group .btn,
+.modal-content.description-selection-modal .modal-footer .btn,
+.process-page .description-selection-modal .modal-footer .btn {
+    flex-shrink: 0;
+    font-family: var(--font-heading-page);
+    font-size: var(--text-medium);
+    font-weight: var(--font-weight-semibold);
+    min-width: var(--userlist-btn-add-width);
+    width: auto;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+    height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+    padding: 0 calc(var(--space-gap, 0.75rem) * 0.9);
+    line-height: 1.2;
+    border-radius: calc(var(--desc-modal-radius) * 0.55);
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    transform: none;
+}
+
+.modal-content.description-selection-modal .add-description-input-group .btn,
+.process-page .description-selection-modal .add-description-input-group .btn {
+    min-width: var(--desc-modal-add-btn-width);
+    max-width: var(--desc-modal-add-btn-width);
+    padding: 0 calc(var(--space-gap, 0.75rem) * 0.65);
+    background: var(--btn-add-gradient);
+    color: var(--color-surface);
+    box-shadow: var(--shadow-btn-add-page);
+}
+
+.modal-content.description-selection-modal .add-description-input-group .btn:hover:not(:disabled),
+.process-page .description-selection-modal .add-description-input-group .btn:hover:not(:disabled) {
+    background: var(--btn-add-gradient-hover);
+    transform: none;
+}
+
+.modal-content.description-selection-modal .description-list,
+.modal-content.description-selection-modal .selected-descriptions-list,
+.process-page .description-selection-modal .description-list,
+.process-page .description-selection-modal .selected-descriptions-list {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--color-border);
+    border-radius: calc(var(--desc-modal-radius) * 0.45);
+    padding: var(--desc-modal-list-pad, 0.5rem);
+    background-color: var(--color-surface-gray-50, #f8fafc);
+}
+
+.modal-content.description-selection-modal .description-list,
+.process-page .description-selection-modal .description-list {
     overflow-y: auto;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.35rem;
-    padding: 0.4rem;
-    background-color: #f8fafc;
 }
 
-.process-page .selected-descriptions-list,
-.description-selection-modal .selected-descriptions-list {
-    height: 265px;
+/* 右侧 Available：与 Add Process 弹窗同尺度，固定列表区高度、框内滚动 */
+.modal-content.description-selection-modal .description-list,
+.process-page .description-selection-modal .description-list {
+    grid-area: desc-avail-list;
+    flex: 0 0 auto;
+    align-self: stretch;
+    height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
+    min-height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
+    max-height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
+    padding-left: calc(var(--desc-modal-col-gap) * 0.25);
+    min-width: 0;
+}
+
+/* 左侧 Selected：外框顶与右栏新增输入行齐平，底边与右列表对齐 */
+.modal-content.description-selection-modal .selected-descriptions-list,
+.process-page .description-selection-modal .selected-descriptions-list {
+    grid-area: desc-sel-list;
+    align-self: stretch;
+    min-height: var(--desc-modal-list-min-h, clamp(11rem, 28vh, 16rem));
+    height: 100%;
+    max-height: none;
+    padding-right: var(--desc-modal-col-gap);
+    border-right: 1px solid var(--color-border);
+    min-width: 0;
     overflow-y: auto;
-    border: 1px solid #e5e7eb;
-    border-radius: 0.35rem;
-    padding: 0.4rem;
-    background-color: #f8fafc;
 }
 
-.process-page .description-item {
+.process-page .selected-description-modal-item,
+.modal-content.description-selection-modal .selected-description-modal-item {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
-    border-bottom: 0.0625rem solid #e9ecef;
-}
-
-.process-page .description-item:last-child {
-    border-bottom: none;
-}
-
-.process-page .description-item input[type="radio"] {
-    margin: 0;
-}
-
-.process-page .description-item label {
-    margin: 0;
-    font-size: 0.875rem;
-    cursor: pointer;
-    flex: 1;
-    color: #333;
-}
-
-.process-page .description-item:hover {
-    background-color: #e9ecef;
-    border-radius: 0.25rem;
-    padding: 0.5rem;
-    margin: 0 -0.5rem;
-}
-
-.process-page .selected-description-modal-item {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
-    border-bottom: 0.0625rem solid #e9ecef;
-    background-color: #e3f2fd;
-    border-radius: 0.25rem;
-    margin-bottom: 0.5rem;
-    padding: 0.5rem;
+    gap: var(--desc-modal-list-item-gap, 0.45rem);
+    padding: var(--desc-modal-list-item-pad-block, 0.45rem) var(--desc-modal-list-item-pad-inline, 0.35rem);
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--desc-modal-selected-bg);
+    border-radius: calc(var(--desc-modal-radius) * 0.4);
+    margin-bottom: var(--desc-modal-list-item-gap, 0.45rem);
 }
 
 .process-page .selected-description-modal-item:last-child {
@@ -4735,71 +5608,226 @@ body.process-page > .process-modal {
     margin-bottom: 0;
 }
 
-.process-page .selected-description-modal-item span {
+.process-page .selected-description-modal-item span,
+.modal-content.description-selection-modal .selected-description-modal-item span {
     flex: 1;
-    font-size: 0.875rem;
-    color: #1976d2;
-    font-weight: 500;
+    font-size: var(--desc-modal-list-text, var(--text-tiny));
+    font-family: var(--font-ui);
+    color: var(--desc-modal-selected-fg);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1.35;
 }
 
-.process-page .remove-description-modal {
+.modal-content.description-selection-modal .description-item,
+.process-page .description-selection-modal .description-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--desc-modal-list-item-gap, 0.45rem);
+    padding: var(--desc-modal-list-item-pad-block, 0.45rem) var(--desc-modal-list-item-pad-inline, 0.35rem);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.modal-content.description-selection-modal .description-item:last-child,
+.process-page .description-selection-modal .description-item:last-child {
+    border-bottom: none;
+}
+
+.modal-content.description-selection-modal .description-item:hover,
+.process-page .description-selection-modal .description-item:hover {
+    background-color: var(--color-surface-slate-200, #eef2f7);
+    border-radius: calc(var(--desc-modal-radius) * 0.35);
+}
+
+.modal-content.description-selection-modal .description-item-left,
+.process-page .description-selection-modal .description-item-left {
+    display: flex;
+    align-items: center;
+    gap: var(--desc-modal-list-item-gap, 0.45rem);
+    flex: 1;
+    min-width: 0;
+}
+
+.modal-content.description-selection-modal .description-item input[type="checkbox"],
+.process-page .description-selection-modal .description-item input[type="checkbox"] {
+    margin: 0;
+    width: var(--desc-modal-checkbox-size);
+    height: var(--desc-modal-checkbox-size);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.modal-content.description-selection-modal .description-item label,
+.process-page .description-selection-modal .description-item label {
+    margin: 0;
+    font-size: var(--desc-modal-list-text, var(--text-tiny));
+    font-family: var(--font-ui);
+    font-weight: var(--font-weight-normal);
+    cursor: pointer;
+    flex: 1;
+    color: var(--color-body-strong);
+    line-height: 1.35;
+}
+
+.modal-content.description-selection-modal .description-delete-btn,
+.process-page .description-selection-modal .description-delete-btn {
+    border: none;
+    background: transparent;
+    color: var(--desc-modal-delete-fg);
+    font-size: var(--text-h3);
+    font-weight: var(--font-weight-bold);
+    cursor: pointer;
+    padding: 0.15rem var(--desc-modal-list-item-pad-inline, 0.35rem);
+    line-height: 1;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.modal-content.description-selection-modal .description-delete-btn:hover:not(:disabled),
+.process-page .description-selection-modal .description-delete-btn:hover:not(:disabled) {
+    color: var(--color-danger);
+}
+
+.modal-content.description-selection-modal .remove-description-modal,
+.process-page .description-selection-modal .remove-description-modal {
     background: none;
     border: none;
-    color: #1976d2;
-    font-size: 1rem;
-    font-weight: bold;
+    color: var(--desc-modal-selected-fg);
+    font-size: var(--text-medium);
+    font-weight: var(--font-weight-bold);
     cursor: pointer;
     padding: 0;
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.35rem;
+    height: 1.35rem;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    transition: background-color 0.2s;
 }
 
-.process-page .remove-description-modal:hover {
-    background-color: #1976d2;
-    color: white;
+.modal-content.description-selection-modal .remove-description-modal:hover:not(:disabled),
+.process-page .description-selection-modal .remove-description-modal:hover:not(:disabled) {
+    background-color: var(--desc-modal-selected-fg);
+    color: var(--color-surface);
 }
 
-.process-page .description-selection-modal .modal-footer,
-.description-selection-modal .modal-footer {
-    margin-top: 0.6rem;
-    padding-top: 0.7rem;
-    border-top: 1px solid #e5e7eb;
+.modal-content.description-selection-modal .modal-footer,
+.process-page .description-selection-modal .modal-footer {
+    flex-shrink: 0;
+    margin-top: 0;
+    padding: var(--desc-modal-pad-block) var(--desc-modal-pad-inline);
+    border-top: 1px solid var(--color-border);
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 0.55rem;
+    gap: var(--space-gap);
     flex-wrap: nowrap;
 }
 
-.process-page .description-selection-modal .modal-footer .btn,
-.description-selection-modal .modal-footer .btn {
+.modal-content.description-selection-modal .modal-footer .btn-save,
+.process-page .description-selection-modal .modal-footer .btn-save {
+    background: var(--btn-add-gradient);
+    color: var(--color-surface);
     font-family: var(--font-heading-page);
-    font-size: var(--text-medium);
-    font-weight: var(--font-weight-semibold);
-    min-width: var(--userlist-btn-add-width);
-    width: auto;
-    min-height: auto;
-    padding: clamp(6px, 0.42vw, 8px) 20px;
-    line-height: 1.2;
-    border-radius: 6px;
-    border: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: clamp(5px, 0.42vw, 8px);
-    white-space: nowrap;
 }
 
-.process-page .no-descriptions {
+/* 手机竖屏：双栏改单栏；平板/笔记本保持双栏 + PHP 宽度 */
+@media (max-width: 40rem) {
+    .modal-content.description-selection-modal,
+    .process-page .modal-content.description-selection-modal {
+        width: var(--process-form-modal-width, min(1040px, calc(100vw - 24px))) !important;
+        max-width: var(--process-form-modal-width, min(1040px, calc(100vw - 24px))) !important;
+        margin: 4vh auto;
+        min-height: 0;
+        height: auto;
+        max-height: var(--process-form-modal-max-height, 92vh);
+    }
+
+    .modal-content.description-selection-modal .description-selection-container,
+    .process-page .description-selection-container {
+        display: flex;
+        flex-direction: column;
+        gap: var(--desc-modal-col-gap);
+    }
+
+    .modal-content.description-selection-modal .selected-descriptions-section,
+    .modal-content.description-selection-modal .available-descriptions-section,
+    .modal-content.description-selection-modal .add-description-bar,
+    .process-page .description-selection-modal .selected-descriptions-section,
+    .process-page .description-selection-modal .available-descriptions-section,
+    .process-page .description-selection-modal .add-description-bar {
+        display: block;
+    }
+
+    .modal-content.description-selection-modal .selected-descriptions-section h3,
+    .modal-content.description-selection-modal .add-description-bar h3,
+    .modal-content.description-selection-modal .available-descriptions-section > h3,
+    .modal-content.description-selection-modal .add-description-form,
+    .modal-content.description-selection-modal .description-search,
+    .modal-content.description-selection-modal .description-list,
+    .modal-content.description-selection-modal .selected-descriptions-list {
+        grid-area: auto;
+        padding-left: 0;
+        padding-right: 0;
+        border-right: none;
+    }
+
+    .modal-content.description-selection-modal .selected-descriptions-section {
+        padding-bottom: var(--desc-modal-col-gap);
+        border-bottom: 1px solid var(--color-border);
+    }
+
+    .modal-content.description-selection-modal .selected-descriptions-list {
+        border-right: none;
+    }
+
+    .modal-content.description-selection-modal .description-list {
+        height: var(--desc-modal-list-min-h, clamp(10rem, 22vh, 13.5rem));
+        min-height: var(--desc-modal-list-min-h, clamp(10rem, 22vh, 13.5rem));
+        max-height: var(--desc-modal-list-min-h, clamp(10rem, 22vh, 13.5rem));
+    }
+
+    .modal-content.description-selection-modal .selected-descriptions-list {
+        min-height: var(--desc-modal-list-min-h, clamp(10rem, 22vh, 13.5rem));
+        height: 100%;
+        max-height: none;
+    }
+}
+
+.modal-content.description-selection-modal .modal-footer .btn-save:hover:not(:disabled),
+.process-page .description-selection-modal .modal-footer .btn-save:hover:not(:disabled) {
+    background: var(--btn-add-gradient-hover);
+    transform: none;
+}
+
+.modal-content.description-selection-modal .btn-cancel,
+.process-page .description-selection-modal .btn-cancel {
+    background: linear-gradient(180deg, #bcbcbc 0%, #585858 100%);
+    color: var(--color-surface);
+    font-family: var(--font-heading-page);
+    box-shadow: 0 2px 4px rgba(88, 88, 88, 0.3);
+}
+
+.modal-content.description-selection-modal .btn-cancel:hover:not(:disabled),
+.process-page .description-selection-modal .btn-cancel:hover:not(:disabled) {
+    transform: none;
+}
+
+.process-page .no-descriptions,
+.modal-content.description-selection-modal .no-descriptions,
+.modal-content.description-selection-modal .selected-descriptions-list .no-descriptions {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-align: center;
-    color: #6c757d;
+    color: var(--color-muted-fg);
+    font-size: var(--desc-modal-empty-size);
+    font-family: var(--font-ui);
     font-style: italic;
-    padding: 1.25rem;
+    font-weight: 400;
+    padding: var(--space-card);
+    margin: 0;
 }
 
 /* Selected Descriptions Display */
@@ -5475,13 +6503,78 @@ body.process-page > .process-modal {
     box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
 }
 
-#confirmBankResendModal .bank-resend-control--select {
-    cursor: pointer;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: right 16px center;
-    padding-right: 48px;
+#confirmBankResendModal .bank-resend-frequency-select.custom-select-wrapper {
+    width: 100%;
+}
+
+#confirmBankResendModal .bank-resend-frequency-select .custom-select-button {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 56px;
+    padding: 13px 48px 13px 16px !important;
+    font-size: 1.4125rem !important;
+    font-family: inherit !important;
+    font-weight: 500;
+    color: #1e293b;
+    background: #fff;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 10px !important;
+    box-shadow: none !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    line-height: 1.35;
+}
+
+#confirmBankResendModal .bank-resend-frequency-select .custom-select-button:hover {
+    border-color: #94a3b8 !important;
+}
+
+#confirmBankResendModal .bank-resend-frequency-select .custom-select-button:focus,
+#confirmBankResendModal .bank-resend-frequency-select .custom-select-button.open {
+    outline: none;
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2) !important;
+}
+
+#confirmBankResendModal .bank-resend-frequency-select .custom-select-button::after {
+    right: 16px;
+    font-size: 11px;
+    color: #64748b;
+}
+
+.custom-select-dropdown.bank-resend-select-dropdown {
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    box-shadow:
+        0 10px 28px rgba(15, 23, 42, 0.12),
+        0 2px 6px rgba(15, 23, 42, 0.06);
+    overflow: hidden;
+}
+
+.custom-select-dropdown.bank-resend-select-dropdown .custom-select-options {
+    max-height: min(280px, 52vh);
+}
+
+.custom-select-dropdown.bank-resend-select-dropdown .custom-select-option {
+    padding: 12px 16px;
+    font-size: 1.125rem !important;
+    font-family: inherit !important;
+    color: #1e293b;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.custom-select-dropdown.bank-resend-select-dropdown .custom-select-option:last-child {
+    border-bottom: none;
+}
+
+.custom-select-dropdown.bank-resend-select-dropdown .custom-select-option:hover {
+    background: #f0fdf4;
+    color: #0f766e;
+}
+
+.custom-select-dropdown.bank-resend-select-dropdown .custom-select-option.selected {
+    background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
+    color: #047857;
+    font-weight: 700;
 }
 
 #confirmBankResendModal .process-confirm-actions.bank-resend-modal-actions {
@@ -5504,11 +6597,18 @@ body.process-page > .process-modal {
 #confirmBankResendModal .bank-resend-modal-actions .process-btn-cancel,
 #confirmBankResendModal .bank-resend-modal-actions .process-btn-resend {
     width: 100%;
-    min-height: 58px;
     padding: 0.85rem 1.5rem;
     font-size: clamp(1.25rem, 2.4vw, 1.65rem);
     font-weight: 700;
     border-radius: 0.55rem;
+}
+
+#confirmBankResendModal .bank-resend-modal-actions .process-btn-cancel {
+    min-height: 58px;
+}
+
+#confirmBankResendModal .bank-resend-modal-actions .process-btn-resend {
+    min-height: 35px;
 }
 
 /* 覆盖 ec-auth-shell 对全局 .btn 的缩小 */
@@ -5516,23 +6616,17 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
 body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-btn-resend {
     font-size: clamp(1.25rem, 2.4vw, 1.65rem) !important;
     padding: 0.85rem 1.5rem !important;
+}
+
+body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-btn-cancel {
     min-height: 45px !important;
 }
 
-/* Scrollbar for long messages */
-.process-confirm-message::-webkit-scrollbar {
-    width: 6px;
+body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-btn-resend {
+    min-height: 35px !important;
 }
 
-.process-confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.process-confirm-message::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 10px;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 /* Notification styles - 与accountlist保持一致但使用process前缀 */
 .process-notification-container {
@@ -5606,8 +6700,8 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
 }
 
 @media (max-width: 1024px) {
-    .process-page:not(.process-page--bank) .process-cards {
-        min-height: calc(100vh - 250px);
+    .process-page:not(.process-page--bank):not(.process-page--show-all) .process-cards {
+        min-height: 0;
     }
 
     /* Edit Process 弹窗：仅占侧栏右侧整块，随侧栏展开/收起贴合 */
@@ -5818,7 +6912,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
 #editModal .add-actions .btn-save {
     background: var(--btn-add-gradient) !important;
     color: #ffffff !important;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3) !important;
+    box-shadow: var(--shadow-btn-add-page) !important;
 }
 
 #addModal .add-actions .btn-save:hover,
@@ -5826,7 +6920,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     background: var(--btn-add-gradient-hover) !important;
     color: #ffffff !important;
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4) !important;
+    box-shadow: var(--shadow-btn-add-page-hover) !important;
 }
 
 #addModal .add-actions .btn-save:active,
@@ -5852,7 +6946,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
 }
 
 /* Hard fallback: ensure Add Process modal stays readable even if parent wrapper class changes */
-#addModal .modal-content {
+#addModal .modal-content:not(.process-form-modal) {
     width: clamp(900px, 84vw, 1120px) !important;
     max-width: 1120px !important;
     min-height: clamp(500px, 66vh, 660px) !important;
@@ -5886,7 +6980,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     padding-top: 0.55rem !important;
 }
 
-#addModal .process-form .form-group label {
+#addModal .process-form .form-group > label {
     display: block !important;
     font-size: var(--text-medium) !important;
     font-family: var(--font-heading-page) !important;
@@ -5894,6 +6988,10 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     letter-spacing: 0.015em !important;
     line-height: 1.3 !important;
     margin-bottom: 0.45rem !important;
+    max-width: none !important;
+    white-space: nowrap;
+    hyphens: none;
+    word-break: normal;
 }
 
 #addModal .process-form .form-group {
@@ -6125,156 +7223,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     resize: none !important;
 }
 
-/* Final lock: restore Select/Add Description modal to reference layout */
-.modal-content.description-selection-modal {
-    width: min(1040px, 95vw) !important;
-    max-width: min(1040px, 95vw) !important;
-    min-height: 610px !important;
-    max-height: 90vh !important;
-    border-radius: 12px !important;
-    overflow: hidden !important;
-    display: flex !important;
-    flex-direction: column !important;
-}
-
-.modal-content.description-selection-modal .modal-header {
-    padding: 14px 18px 12px 18px !important;
-    border-bottom: none !important;
-}
-
-.modal-content.description-selection-modal .modal-header h2 {
-    margin: 0 !important;
-    padding: 0 !important;
-    font-size: 40px !important;
-    line-height: 1 !important;
-}
-
-.modal-content.description-selection-modal .modal-body {
-    padding: 12px 16px 14px 16px !important;
-    display: flex !important;
-    flex-direction: column !important;
-    min-height: 515px !important;
-    flex: 1 1 auto !important;
-    width: 100% !important;
-    overflow: hidden !important;
-}
-
-.modal-content.description-selection-modal .description-selection-container {
-    display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-    column-gap: 28px !important;
-    min-height: 450px !important;
-    flex: 1 1 auto !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    align-items: stretch !important;
-}
-
-.modal-content.description-selection-modal .selected-descriptions-section {
-    min-width: 0 !important;
-    padding-right: 16px !important;
-    border-right: 1px solid #e5e7eb !important;
-    width: 100% !important;
-}
-
-.modal-content.description-selection-modal .available-descriptions-section {
-    min-width: 0 !important;
-    padding-left: 8px !important;
-    width: 100% !important;
-}
-
-.modal-content.description-selection-modal .selected-descriptions-section h3,
-.modal-content.description-selection-modal .available-descriptions-section h3 {
-    margin: 0 0 8px 0 !important;
-    font-size: 15px !important;
-    font-weight: 700 !important;
-}
-
-.modal-content.description-selection-modal .add-description-bar {
-    margin-bottom: 10px !important;
-    padding-bottom: 10px !important;
-}
-
-.modal-content.description-selection-modal .add-description-bar h3 {
-    margin: 0 0 6px 0 !important;
-    font-size: 14px !important;
-    font-weight: 700 !important;
-}
-
-.modal-content.description-selection-modal .add-description-input-group {
-    display: flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-}
-
-.modal-content.description-selection-modal .add-description-input-group input,
-.modal-content.description-selection-modal .description-search input {
-    padding: 7px 10px !important;
-    font-size: 13px !important;
-    border-radius: 4px !important;
-}
-
-.modal-content.description-selection-modal .add-description-input-group .btn {
-    min-width: 64px !important;
-    max-width: 64px !important;
-    min-height: 28px !important;
-    height: 28px !important;
-    padding: 0 8px !important;
-    font-size: 12px !important;
-    border-radius: 4px !important;
-}
-
-.modal-content.description-selection-modal .description-list,
-.modal-content.description-selection-modal .selected-descriptions-list {
-    height: 315px !important;
-    min-height: 315px !important;
-    max-height: 315px !important;
-    overflow-y: auto !important;
-}
-
-.modal-content.description-selection-modal .description-item label,
-.modal-content.description-selection-modal .selected-description-modal-item span {
-    font-size: 14px !important;
-}
-
-.modal-content.description-selection-modal .description-item .remove-description {
-    font-size: 1.15rem !important;
-    width: 1.3rem !important;
-    height: 1.3rem !important;
-    line-height: 1 !important;
-}
-
-.modal-content.description-selection-modal .modal-footer {
-    margin-top: 0 !important;
-    padding: 10px 16px 12px 16px !important;
-    border-top: 1px solid #e5e7eb !important;
-    display: flex !important;
-    justify-content: flex-end !important;
-    align-items: center !important;
-    gap: 8px !important;
-    flex-wrap: nowrap !important;
-    width: 100% !important;
-    align-self: stretch !important;
-    flex: 0 0 auto !important;
-}
-
-.modal-content.description-selection-modal .modal-footer .btn {
-    font-family: var(--font-heading-page) !important;
-    font-size: var(--text-medium) !important;
-    font-weight: var(--font-weight-semibold) !important;
-    min-width: var(--userlist-btn-add-width) !important;
-    width: auto !important;
-    min-height: auto !important;
-    height: auto !important;
-    padding: clamp(6px, 0.42vw, 8px) 20px !important;
-    border-radius: 6px !important;
-    border: none !important;
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-}
-
-/* Bank list: pagination in flex footer (see .bank-process-list-body rules above) */
+/* Bank list: pagination uses shared .pagination-container (see rules above) */
 
 .process-page.process-page--bank .bank-table-wrapper,
 .process-page.process-page--bank .process-table-wrapper {
@@ -6284,6 +7233,42 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
 .process-page.process-page--bank.process-page--bank-show-all .bank-table-wrapper,
 .process-page.process-page--bank.process-page--bank-show-all .process-table-wrapper {
     padding-bottom: 0;
+}
+
+/* Bank Show All：整页纵向滚动，列表随内容增高（对齐 Games process-page--show-all） */
+body.process-page.process-page--bank.process-page--bank-show-all {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+}
+
+html:has(body.process-page.process-page--bank.process-page--bank-show-all) {
+    height: auto;
+    overflow: visible;
+}
+
+body.process-page.process-page--bank.process-page--bank-show-all .container {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.process-page.process-page--bank.process-page--bank-show-all .content,
+body.process-page.process-page--bank.process-page--bank-show-all .bank-process-list-body,
+body.process-page.process-page--bank.process-page--bank-show-all .bank-process-list-scroll-region {
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.process-page.process-page--bank.process-page--bank-show-all .bank-table-wrapper,
+body.process-page.process-page--bank.process-page--bank-show-all .process-table-wrapper.bank-process-table-region {
+    flex: 0 1 auto !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
 }
 
 /* Status 下拉走 portal/fixed，单元格可 hidden 防止胶囊溢出遮挡 Date */
@@ -6435,5 +7420,328 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
 #editModal #edit_dts_modified span,
 #editModal #edit_dts_created span {
     font-size: clamp(12px, 0.86vw, 13px) !important;
+}
+
+/* Description picker — 压过通用 .modal-content，与 PHP 同宽 */
+body.process-page > #descriptionPickerModal.modal.show > .modal-content.description-selection-modal,
+#descriptionPickerModal.modal.show > .modal-content.description-selection-modal,
+#descriptionSelectionModal.modal.show > .modal-content.description-selection-modal {
+    width: var(--process-form-modal-width, min(1040px, calc(100vw - 48px))) !important;
+    max-width: var(--process-form-modal-width, min(1040px, calc(100vw - 48px))) !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: var(--process-form-modal-max-height, 92vh) !important;
+    margin: 4vh auto !important;
+    box-sizing: border-box !important;
+}
+
+body.process-page > #descriptionPickerModal.modal.show > .modal-content.description-selection-modal .add-description-input-group input {
+    flex: 1 1 0%;
+    min-width: 0;
+}
+
+/* Add/Edit Process modal — 与 Description picker 同款壳层 / token */
+body.process-page > #addModal.modal.show > .modal-content.process-form-modal,
+body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
+#addModal .modal-content.process-form-modal,
+#editModal .modal-content.process-form-modal {
+    width: var(--process-form-modal-width, min(1040px, calc(100vw - 48px))) !important;
+    max-width: var(--process-form-modal-width, min(1040px, calc(100vw - 48px))) !important;
+    max-height: var(--process-form-modal-max-height, 92vh) !important;
+    min-height: 0 !important;
+    margin: 4vh auto;
+    padding: 0;
+    border: none;
+    border-radius: var(--process-form-modal-radius, 0.75rem);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-surface, #fff);
+    box-shadow: 0 1.25rem 1.5625rem -0.3125rem rgba(0, 0, 0, 0.1), 0 0.625rem 0.625rem -0.3125rem rgba(0, 0, 0, 0.04);
+    font-family: var(--font-ui);
+    color: var(--color-body-strong, #1f2937);
+    box-sizing: border-box;
+}
+
+.process-form-modal .process-form-modal-header.modal-header,
+#addModal .modal-content.process-form-modal .modal-header,
+#editModal .modal-content.process-form-modal .modal-header {
+    flex-shrink: 0;
+    margin: 0;
+    padding: var(--process-form-modal-pad, var(--space-card));
+    background: var(--color-surface, #fff);
+    border-bottom: none;
+    border-radius: var(--process-form-modal-radius, 0.75rem) var(--process-form-modal-radius, 0.75rem) 0 0;
+}
+
+.process-form-modal .process-form-modal-header h2,
+#addModal .modal-content.process-form-modal .modal-header h2,
+#editModal .modal-content.process-form-modal .modal-header h2 {
+    margin: 0;
+    padding: 0;
+    font-size: var(--process-form-modal-title-size, var(--text-page-title));
+    font-family: var(--font-heading-page);
+    font-weight: var(--font-weight-page-title);
+    letter-spacing: var(--letter-spacing-page-title);
+    color: var(--color-body-strong, #1f2937);
+    line-height: 1.2;
+}
+
+.process-form-modal .modal-body,
+#addModal .modal-content.process-form-modal .modal-body,
+#editModal .modal-content.process-form-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: var(--process-form-modal-pad, var(--space-card));
+    overflow: hidden;
+}
+
+/* Multi-Process 区块：列表独占滚动，不把 modal-body 撑出纵向滚动条 */
+.process-form-modal #multi_use_processes .form-group,
+#addModal .modal-content.process-form-modal #multi_use_processes .form-group,
+#multi_use_processes .form-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+    min-width: 0;
+}
+
+.process-form-modal #multi_use_processes .multi-use-actions,
+#addModal .modal-content.process-form-modal #multi_use_processes .multi-use-actions {
+    flex-shrink: 0;
+    margin-top: var(--process-form-modal-multi-list-row-gap, var(--desc-modal-list-item-gap));
+    min-height: 0;
+}
+
+.process-form-modal .process-form.add-grid,
+#addModal .modal-content.process-form-modal .process-form.add-grid,
+#editModal .modal-content.process-form-modal .process-form.add-grid {
+    padding: 0 0 calc(var(--space-gap, 0.75rem) * 0.5) 0;
+    column-gap: var(--desc-modal-col-gap, clamp(1rem, 1.75vw, 1.75rem));
+    row-gap: calc(var(--space-gap, 0.75rem) * 0.65);
+}
+
+.process-form-modal .process-form.add-grid .add-col,
+#addModal .modal-content.process-form-modal .process-form.add-grid .add-col,
+#editModal .modal-content.process-form-modal .process-form.add-grid .add-col {
+    padding: calc(var(--space-gap, 0.75rem) * 0.35) calc(var(--space-gap, 0.75rem) * 0.5);
+    background: transparent;
+}
+
+.process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child),
+#addModal .modal-content.process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child),
+#editModal .modal-content.process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child) {
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 1.1);
+    padding-bottom: calc(var(--space-gap, 0.75rem) * 0.95);
+    border-bottom: 1px solid var(--color-border, #e8eef5);
+}
+
+.process-form-modal .process-form-section-title,
+#addModal .modal-content.process-form-modal .process-form-section-title,
+#editModal .modal-content.process-form-modal .process-form-section-title {
+    margin: 0 0 calc(var(--space-gap, 0.75rem) * 0.75) 0;
+    padding: 0 0 calc(var(--space-gap, 0.75rem) * 0.45) 0.55rem;
+    font-size: var(--process-form-modal-section-size, var(--text-h3));
+    font-weight: var(--font-weight-semibold);
+    font-family: var(--font-heading-page);
+    color: var(--color-body-muted, #475569);
+    letter-spacing: 0.02em;
+    line-height: 1.25;
+    border-left: 3px solid var(--color-primary, #0d60ff);
+    border-bottom: 1px solid var(--color-border-muted, #e2e8f0);
+}
+
+.process-form-modal .process-form .form-group > label,
+#addModal .modal-content.process-form-modal .process-form .form-group > label,
+#editModal .modal-content.process-form-modal .process-form .form-group > label {
+    font-size: var(--process-form-modal-label-size, var(--text-medium)) !important;
+    font-family: var(--font-heading-page) !important;
+    font-weight: var(--font-weight-semibold) !important;
+    color: var(--color-body-strong, #0f172a);
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.45) !important;
+    display: block !important;
+    width: 100%;
+    max-width: none !important;
+    white-space: nowrap;
+    hyphens: none;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+/* 勿套用勾选行 label 的 ellipsis / max-width */
+.process-form-modal #multi_use_processes .form-group > label,
+#addModal .modal-content.process-form-modal #multi_use_processes .form-group > label {
+    white-space: nowrap !important;
+    hyphens: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+}
+
+.process-form-modal .process-form .form-group textarea,
+#addModal .modal-content.process-form-modal .process-form .form-group textarea,
+#editModal .modal-content.process-form-modal .process-form .form-group textarea {
+    text-transform: uppercase;
+}
+
+.process-form-modal .process-form .form-group input,
+.process-form-modal .process-form .form-group select,
+.process-form-modal .process-form .form-group textarea,
+#addModal .modal-content.process-form-modal .process-form .form-group input,
+#addModal .modal-content.process-form-modal .process-form .form-group select,
+#addModal .modal-content.process-form-modal .process-form .form-group textarea,
+#editModal .modal-content.process-form-modal .process-form .form-group input,
+#editModal .modal-content.process-form-modal .process-form .form-group select,
+#editModal .modal-content.process-form-modal .process-form .form-group textarea {
+    font-size: var(--process-form-modal-control-size, var(--text-small)) !important;
+    font-family: var(--font-ui) !important;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+    padding: calc(var(--space-gap, 0.75rem) * 0.45) calc(var(--space-gap, 0.75rem) * 0.65) !important;
+    border: 1px solid var(--color-border-muted, #dbe3ee) !important;
+    border-radius: calc(var(--process-form-modal-radius, 0.75rem) * 0.55) !important;
+    background-color: var(--color-surface, #fff);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+    color: var(--color-body-strong, #1f2937);
+}
+
+.process-form-modal .process-form .form-group input:focus,
+.process-form-modal .process-form .form-group select:focus,
+.process-form-modal .process-form .form-group textarea:focus,
+#addModal .modal-content.process-form-modal .process-form .form-group input:focus,
+#addModal .modal-content.process-form-modal .process-form .form-group textarea:focus {
+    border-color: var(--color-primary, #0d60ff) !important;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(13, 96, 255, 0.12);
+}
+
+.process-form-modal .input-with-icon input[readonly],
+#addModal .modal-content.process-form-modal .input-with-icon input[readonly] {
+    background-color: var(--color-surface-gray-50, #f8fafc);
+    cursor: pointer;
+}
+
+.process-form-modal .custom-select-button,
+#addModal .modal-content.process-form-modal .custom-select-button,
+#editModal .modal-content.process-form-modal .custom-select-button {
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem)) !important;
+    border-radius: calc(var(--process-form-modal-radius, 0.75rem) * 0.55) !important;
+    border-color: var(--color-border-muted, #dbe3ee) !important;
+    font-size: var(--process-form-modal-control-size, var(--text-small)) !important;
+}
+
+.process-form-modal .field-help,
+.process-form-modal .form-row small,
+#addModal .modal-content.process-form-modal .field-help,
+#addModal .modal-content.process-form-modal .form-row small {
+    font-size: var(--process-form-modal-hint-size, var(--text-small)) !important;
+    font-family: var(--font-ui) !important;
+    color: var(--color-text-muted, #64748b);
+}
+
+.process-form-modal .selected-descriptions,
+.process-form-modal .selected-processes,
+#addModal .modal-content.process-form-modal .selected-descriptions {
+    padding: calc(var(--space-gap, 0.75rem) * 0.55);
+    border: 1px solid var(--color-border, #e5e7eb);
+    border-radius: calc(var(--process-form-modal-radius, 0.75rem) * 0.45);
+    background-color: var(--color-surface-gray-50, #f8fafc);
+}
+
+.process-form-modal .selected-description-tag,
+#addModal .modal-content.process-form-modal .selected-description-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: calc(var(--space-gap, 0.75rem) * 0.25) calc(var(--space-gap, 0.75rem) * 0.5);
+    border-radius: calc(var(--process-form-modal-radius, 0.75rem) * 0.35);
+    background: var(--desc-modal-selected-bg, var(--color-surface-info-tint));
+    color: var(--desc-modal-selected-fg, var(--color-primary-strong));
+    font-size: var(--process-form-modal-control-size, var(--text-small));
+    font-family: var(--font-ui);
+    font-weight: var(--font-weight-semibold);
+}
+
+.process-form-modal .add-icon,
+#addModal .modal-content.process-form-modal .add-icon {
+    width: clamp(2rem, 2.2vw, 2.35rem);
+    height: clamp(2rem, 2.2vw, 2.35rem);
+    font-size: var(--text-h3);
+    background: var(--btn-add-gradient);
+    box-shadow: var(--shadow-btn-add-page);
+}
+
+.process-form-modal .add-icon:hover:not(:disabled),
+#addModal .modal-content.process-form-modal .add-icon:hover:not(:disabled) {
+    background: var(--btn-add-gradient-hover);
+}
+
+.process-form-modal .process-form-modal-footer.add-actions,
+#addModal .modal-content.process-form-modal .process-form-modal-footer,
+#editModal .modal-content.process-form-modal .process-form-modal-footer {
+    flex-shrink: 0;
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: var(--process-form-modal-pad, var(--space-card));
+    padding-top: calc(var(--space-gap, 0.75rem) * 0.85);
+    border-top: 1px solid var(--color-border, #e8eef5);
+    background: var(--color-surface, #fff);
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--space-gap, 0.75rem);
+    flex-wrap: nowrap;
+}
+
+.process-form-modal .process-form-modal-footer .btn,
+#addModal .modal-content.process-form-modal .process-form-modal-footer .btn,
+#editModal .modal-content.process-form-modal .process-form-modal-footer .btn {
+    font-family: var(--font-heading-page) !important;
+    font-size: var(--text-medium) !important;
+    font-weight: var(--font-weight-semibold) !important;
+    min-width: var(--userlist-btn-add-width);
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+    height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+    padding: 0 calc(var(--space-gap, 0.75rem) * 0.9) !important;
+    border-radius: calc(var(--process-form-modal-radius, 0.75rem) * 0.55) !important;
+    border: none !important;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    transform: none;
+}
+
+.process-form-modal .process-form-modal-footer .btn-save,
+#addModal .modal-content.process-form-modal .process-form-modal-footer .btn-save,
+#editModal .modal-content.process-form-modal .process-form-modal-footer .btn-save {
+    background: var(--btn-add-gradient) !important;
+    color: var(--color-surface, #fff) !important;
+    box-shadow: var(--shadow-btn-add-page) !important;
+}
+
+.process-form-modal .process-form-modal-footer .btn-save:hover:not(:disabled),
+#addModal .modal-content.process-form-modal .process-form-modal-footer .btn-save:hover:not(:disabled) {
+    background: var(--btn-add-gradient-hover) !important;
+    transform: none;
+}
+
+.process-form-modal .process-form-modal-footer .btn-cancel,
+#addModal .modal-content.process-form-modal .process-form-modal-footer .btn-cancel,
+#editModal .modal-content.process-form-modal .process-form-modal-footer .btn-cancel {
+    background: linear-gradient(180deg, #bcbcbc 0%, #585858 100%) !important;
+    color: var(--color-surface, #fff) !important;
+    box-shadow: 0 2px 4px rgba(88, 88, 88, 0.3) !important;
+}
+
+@media (max-width: 40rem) {
+    body.process-page > #addModal.modal.show > .modal-content.process-form-modal,
+    body.process-page > #editModal.modal.show > .modal-content.process-form-modal {
+        width: min(1040px, calc(100vw - 24px)) !important;
+        max-width: min(1040px, calc(100vw - 24px)) !important;
+        margin: 3vh auto;
+    }
+
+    .process-form-modal .process-form.add-grid,
+    #addModal .modal-content.process-form-modal .process-form.add-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
 }
 

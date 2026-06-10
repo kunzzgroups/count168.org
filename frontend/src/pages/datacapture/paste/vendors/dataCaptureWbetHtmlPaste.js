@@ -1,8 +1,9 @@
 /** WBET / WBET_API HTML paste. */
-import { formatMoneyDisplay, fixSummaryRowTotalColumns } from "../core/dataCapturePasteMoneyUtils.js";
+import { notifyPasteUser } from "../../lib/dataCaptureBridge.js";
+import { formatMoneyDisplay, fixSummaryRowTotalColumns, formatNumberToTwoDecimals } from "../core/dataCapturePasteMoneyUtils.js";
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid } from "../core/dataCapturePasteApply.js";
 
 export function parseAndFillHtmlTableForWbet(htmlString, startCell) {
     try {
@@ -350,61 +351,14 @@ export function parseAndFillHtmlTableForWbet(htmlString, startCell) {
         });
 
         // 直接填充到表格（钱数统一 .xx + 千分位）
-        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-        const startCol = 0; // WBET: 强制从第一列开始
-
-        // 扩展表格（如果需要）
-        const currentRows = document.querySelectorAll('#tableBody tr').length;
-        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-        const requiredRows = startRow + processedMatrix.length;
-        const requiredCols = startCol + processedMaxCols;
-
-        if (requiredRows > currentRows || requiredCols > currentCols) {
-            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-            const targetCols = Math.max(currentCols, requiredCols);
-            ensurePasteGrid(targetRows, targetCols);
-        }
-
-        // 填充数据并记录粘贴历史（用于撤销）
-        const tableBody = document.getElementById('tableBody');
-        const currentPasteChanges = [];
-        let successCount = 0;
-
-        processedMatrix.forEach((rowData, rowIndex) => {
-            const actualRowIndex = startRow + rowIndex;
-            const tableRow = tableBody.children[actualRowIndex];
-
-            if (tableRow) {
-                rowData.forEach((cellData, colIndex) => {
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1];
-
-                    if (cell && cell.contentEditable === 'true') {
-                        // 保存旧值用于撤销（包括空单元格）
-                        const trimmedData = (cellData || '').trim();
-                        const displayValue = formatMoneyDisplay(trimmedData);
-                        currentPasteChanges.push({
-                            row: actualRowIndex,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: displayValue
-                        });
-
-                        // 钱数统一 .xx 点后两位 + 千分位
-                        cell.textContent = displayValue;
-                        if (trimmedData) {
-                            successCount++;
-                        }
-                    }
-                });
-            }
+        applyParsedMatrixToGrid(processedMatrix, startCell, {
+            startColOverride: 0,
+            trimValues: true,
+            transformCell: (trimmedData) => formatMoneyDisplay(trimmedData),
         });
 
-        // 将本次粘贴操作添加到历史记录
-        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
         console.log('WBET: HTML table filled directly:', processedMatrix.length, 'rows x', processedMaxCols, 'columns');
-        window.showNotification?.(`Successfully pasted WBET data (${processedMatrix.length} rows x ${processedMaxCols} cols)! Press Ctrl+Z to undo`, 'success');
+        notifyPasteUser(`Successfully pasted WBET data (${processedMatrix.length} rows x ${processedMaxCols} cols)! Press Ctrl+Z to undo`, 'success');
 
         // 注意：WBET 格式不调用 convertTableFormatOnSubmit，以保持 Sub Total 和 Grand Total 分开成两行
 
@@ -784,62 +738,14 @@ export function parseAndFillHtmlTableForWbetApi(htmlString, startCell) {
         });
 
         // 直接填充到表格（钱数统一 .xx + 千分位）
-        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-        const startCol = 0; // 2.11 WBET_API: 强制从第一列开始
-
-        // 扩展表格（如果需要）
-        const currentRows = document.querySelectorAll('#tableBody tr').length;
-        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-        const requiredRows = startRow + processedMatrix.length;
-        const requiredCols = startCol + processedMaxCols;
-
-        if (requiredRows > currentRows || requiredCols > currentCols) {
-            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-            const targetCols = Math.max(currentCols, requiredCols);
-            ensurePasteGrid(targetRows, targetCols);
-        }
-
-        // 填充数据并记录粘贴历史（用于撤销）
-        const tableBody = document.getElementById('tableBody');
-        const currentPasteChanges = [];
-        let successCount = 0;
-
-        processedMatrix.forEach((rowData, rowIndex) => {
-            const actualRowIndex = startRow + rowIndex;
-            const tableRow = tableBody.children[actualRowIndex];
-
-            if (tableRow) {
-                // 填充数据（从第一列开始）
-                rowData.forEach((cellData, colIndex) => {
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1];
-
-                    if (cell && cell.contentEditable === 'true') {
-                        // 保存旧值用于撤销（包括空单元格）
-                        const trimmedData = (cellData || '').trim();
-                        const displayValue = formatMoneyDisplay(trimmedData);
-                        currentPasteChanges.push({
-                            row: actualRowIndex,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: displayValue
-                        });
-
-                        // 钱数统一 .xx 点后两位 + 千分位
-                        cell.textContent = displayValue;
-                        if (trimmedData) {
-                            successCount++;
-                        }
-                    }
-                });
-            }
+        applyParsedMatrixToGrid(processedMatrix, startCell, {
+            startColOverride: 0,
+            trimValues: true,
+            transformCell: (trimmedData) => formatMoneyDisplay(trimmedData),
         });
 
-        // 将本次粘贴操作添加到历史记录
-        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
         console.log('2.11 WBET_API: HTML table filled directly:', processedMatrix.length, 'rows x', processedMaxCols, 'columns');
-        window.showNotification?.(`2.11 WBET_API: 成功粘贴 ${processedMatrix.length} 行 x ${processedMaxCols} 列数据! Press Ctrl+Z to undo`, 'success');
+        notifyPasteUser(`2.11 WBET_API: 成功粘贴 ${processedMatrix.length} 行 x ${processedMaxCols} 列数据! Press Ctrl+Z to undo`, 'success');
 
         // 注意：2.11 WBET_API 格式不调用 convertTableFormatOnSubmit，以保持 Sub Total 和 Grand Total 分开成两行
 

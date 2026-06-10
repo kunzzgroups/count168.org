@@ -24,8 +24,10 @@ export default function ProcessSelect({
   const useIdValue = valueMode === "id";
   const useTransactionSelectAll = valueMode === "processName" && unsetPlaceholder == null;
 
-  const filteredProcesses = processes.filter((p) => {
-    const text = p.description ? `${p.process_name} (${p.description})` : p.process_name;
+  const filteredProcesses = (Array.isArray(processes) ? processes : []).filter((p) => {
+    const name = String(p.process_name ?? p.process ?? p.process_id ?? "").trim();
+    const text = p.description ? `${name} (${p.description})` : name;
+    if (!text) return false;
     return text.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
@@ -89,11 +91,13 @@ export default function ProcessSelect({
     }
     if (!value || value === placeholder) return placeholder;
 
+    const list = Array.isArray(processes) ? processes : [];
     const p = useIdValue
-      ? processes.find((proc) => String(proc.id) === String(value))
-      : processes.find((proc) => String(proc.process_name) === value);
+      ? list.find((proc) => String(proc.id) === String(value))
+      : list.find((proc) => String(proc.process_name ?? proc.process ?? "") === value);
     if (!p) return placeholder;
-    return p.description ? `${p.process_name} (${p.description})` : p.process_name;
+    const name = String(p.process_name ?? p.process ?? p.process_id ?? "").trim();
+    return p.description ? `${name} (${p.description})` : name || placeholder;
   };
 
   const handleKeyDown = (e) => {
@@ -148,13 +152,15 @@ export default function ProcessSelect({
                 if (isSelectAllOption(p)) {
                   text = placeholder;
                 } else if (useTransactionSelectAll) {
-                  text = p.description ? `${p.process_name} (${p.description})` : p.process_name;
+                  const name = String(p.process_name ?? p.process ?? "").trim();
+                  text = p.description ? `${name} (${p.description})` : name;
                 } else {
+                  const name = String(p.process_name ?? p.process ?? "").trim();
                   text =
-                    p.process_name !== placeholder
+                    name && name !== placeholder
                       ? p.description
-                        ? `${p.process_name} (${p.description})`
-                        : p.process_name
+                        ? `${name} (${p.description})`
+                        : name
                       : placeholder;
                 }
 

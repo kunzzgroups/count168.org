@@ -148,3 +148,91 @@ function prorateMonthlyAnniversaryPeriodLinear(
         'ratio' => $r,
     ];
 }
+
+/** Week：单期 [start, start+6]（含首尾 7 日）。 */
+function weekPeriodEndInclusiveYmd(string $periodStartYmd): ?string
+{
+    try {
+        return (new DateTimeImmutable($periodStartYmd))->modify('+6 days')->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** 下一期起点 = 上一期结束日次日（周期间不重叠，如 6/1–6/7 后接 6/8–6/14）。 */
+function weekPeriodNextStartYmd(string $currentPeriodStartYmd): ?string
+{
+    try {
+        return (new DateTimeImmutable($currentPeriodStartYmd))->modify('+7 days')->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** 非 Resend：仅当今天 >= 周期开始日，该周才进入 Accounting Due / 允许入账（例：6/1–6/7 在 6/1 出现）。 */
+function weekPeriodIsReadyForAccounting(string $periodStartYmd, string $todayYmd, bool $resendRelax): bool
+{
+    if ($resendRelax) {
+        return true;
+    }
+    return $todayYmd >= $periodStartYmd;
+}
+
+/** Day frequency：下一自然日 Y-m-d。 */
+function dailyNextDayYmd(string $ymd): ?string
+{
+    try {
+        return (new DateTimeImmutable($ymd))->modify('+1 day')->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** 指定自然月首日 Y-m-d。 */
+function calendarMonthFirstYmd(int $year, int $month): string
+{
+    return sprintf('%04d-%02d-01', $year, max(1, min(12, $month)));
+}
+
+/** Day frequency：按天数累乘 cost / price / profit（单日全额 × N）。 */
+function dailyAmountsForDayCount(string $cost, string $price, string $profit, int $days): array
+{
+    $d = (string) max(1, $days);
+    return [
+        'cost' => money_mul($cost, $d, 2),
+        'price' => money_mul($price, $d, 2),
+        'profit' => money_mul($profit, $d, 2),
+    ];
+}
+
+/** 解析 daily consolidated billing_month 锚点 `start|end`（均为 Y-m-d）。 */
+function dailyParseConsolidatedBillingRange(?string $billingMonth): ?array
+{
+    $raw = trim((string) $billingMonth);
+    if ($raw === '' || strpos($raw, '|') === false) {
+        return null;
+    }
+    [$start, $end] = array_map('trim', explode('|', $raw, 2));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+        return null;
+    }
+    if ($start > $end) {
+        return null;
+    }
+    return ['start' => $start, 'end' => $end];
+}
+
+/** 含首尾的自然日天数。 */
+function dailyInclusiveDayCount(string $startYmd, string $endYmd): int
+{
+    try {
+        $a = new DateTimeImmutable($startYmd);
+        $b = new DateTimeImmutable($endYmd);
+        if ($b < $a) {
+            return 0;
+        }
+        return (int) $a->diff($b)->days + 1;
+    } catch (Throwable $e) {
+        return 0;
+    }
+}

@@ -1,3 +1,10 @@
+import {
+  getPasteGridModel,
+  notifyPasteUser,
+  replacePasteGridModel,
+} from "../lib/dataCaptureBridge.js";
+import { setCell } from "./gridModel.js";
+
 const MAX_HISTORY_SIZE = 50;
 
 export const pasteHistory = [];
@@ -20,24 +27,22 @@ export function hasPasteHistory() {
 
 export function undoLastPaste() {
   if (pasteHistory.length === 0) {
-    window.showNotification?.("No paste operation to undo", "danger");
+    notifyPasteUser("No paste operation to undo", "danger");
     return;
   }
 
   const lastPaste = pasteHistory.pop();
-  const tableBody = document.getElementById("tableBody");
-  if (!tableBody) return;
+  let grid = getPasteGridModel();
+  if (!grid) return;
 
   let undoCount = 0;
   lastPaste.forEach((change) => {
-    const row = tableBody.children[change.row];
-    if (!row) return;
-    const cell = row.children[change.col + 1];
-    if (cell && cell.contentEditable === "true") {
-      cell.textContent = change.oldValue;
+    if (grid.cells?.[change.row]?.[change.col]) {
+      grid = setCell(grid, change.row, change.col, { value: change.oldValue ?? "" });
       undoCount += 1;
     }
   });
 
-  window.showNotification?.(`Undo completed: ${undoCount} cells restored`, "success");
+  replacePasteGridModel(grid);
+  notifyPasteUser(`Undo completed: ${undoCount} cells restored`, "success");
 }

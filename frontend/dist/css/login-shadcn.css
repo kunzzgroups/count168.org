@@ -55,7 +55,6 @@ body.bg::before {
 .sc-login-lang-ios-wrap {
   display: flex;
   justify-content: center;
-  margin-top: 12px;
 }
 
 .sc-login-lang-switch,
@@ -261,9 +260,9 @@ button.sc-login-lang-seg.active {
 .sc-login-role-tab {
   flex: 1;
   min-width: 0;
-  min-height: 57.5px;
+  min-height: 46.5px;
   box-sizing: border-box;
-  padding: 15px;
+  padding: 12px;
   border: none;
   background: rgba(255, 255, 255, 0.2);
   color: #ffffff;
@@ -283,7 +282,7 @@ button.sc-login-lang-seg.active {
 }
 
 .sc-login-card-content {
-  padding: 30px 20px;
+  padding: 18px 20px;
   min-width: 0;
   font-size: 16px;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -293,7 +292,7 @@ button.sc-login-lang-seg.active {
 .sc-login-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
 }
 
@@ -306,7 +305,7 @@ button.sc-login-lang-seg.active {
 
 .sc-login-input-icon {
   position: absolute;
-  left: 15px;
+  left: 20px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--login-bg-end);
@@ -314,31 +313,9 @@ button.sc-login-lang-seg.active {
   z-index: 2;
 }
 
-.sc-login-input {
-  min-width: 0;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  min-height: 46.5px;
-  padding: 12px 25px 12px 46px;
-  border: 1px solid var(--login-bg-end);
-  border-radius: var(--login-radius-pill);
-  font-size: var(--text-base);
-  transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  background: rgba(255, 255, 255, 0.9);
-  color: var(--login-text);
-}
-
+/* 输入框 chrome 见 style.css + src/styles/login-auth-fields.css */
 .sc-login-input:focus {
-  outline: none;
-  border-color: var(--login-bg-start);
-  box-shadow: 0 0 0 3px rgba(0, 79, 249, 0.1);
   animation: sc-login-pulse 0.3s ease-out;
-}
-
-.sc-login-input::placeholder {
-  color: var(--login-bg-end);
-  font-weight: 400;
 }
 
 .sc-login-options {
@@ -415,10 +392,9 @@ button.sc-login-lang-seg.active {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #656565;
-  font-size: var(--text-base);
-  font-weight: 400;
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  color: #666;
+  font-size: var(--text-small);
+  font-weight: 500;
 }
 
 .sc-login-forgot-link {
@@ -426,8 +402,8 @@ button.sc-login-lang-seg.active {
   max-width: 100%;
   color: #56ccf2;
   text-decoration: none;
-  font-size: var(--text-base);
-  font-weight: 400;
+  font-size: var(--text-small);
+  font-weight: 500;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   white-space: nowrap;
   overflow: hidden;

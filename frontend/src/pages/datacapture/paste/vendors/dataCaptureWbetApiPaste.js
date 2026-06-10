@@ -4,7 +4,8 @@ import { parseAndFillHtmlTableForWbetApi } from "./dataCaptureWbetHtmlPaste.js";
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 
 /** @returns {boolean} */
 export function handleWbetApiPaste(e, pastedData) {
@@ -21,7 +22,7 @@ export function handleWbetApiPaste(e, pastedData) {
             const filled = parseAndFillHtmlTableForWbetApi(htmlDataFromDetect, startCell);
             if (filled) {
                 console.log('2.11 WBET_API: Successfully filled using parseAndFillHTMLTableForWBET_API');
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             } else {
                 console.log('2.11 WBET_API: parseAndFillHTMLTableForWBET_API returned false, trying standard HTML parsing');
@@ -43,7 +44,7 @@ export function handleWbetApiPaste(e, pastedData) {
             console.log('2.11 WBET_API: HTML data detected, length:', htmlData.length);
             const filled = parseAndFillHtmlTableForWbetApi(htmlData, e.target);
             if (filled) {
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             }
         }
@@ -346,59 +347,16 @@ export function handleWbetApiPaste(e, pastedData) {
             console.log('2.11 WBET_API: First few processed rows:', processedMatrix.slice(0, 5));
 
             if (processedMatrix.length > 0) {
-                const startCell = e.target;
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = 0; // WBET_API: 强制从第一列开始
-
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredRows = startRow + processedMatrix.length;
-                const requiredCols = startCol + maxCols;
-
-                if (requiredRows > currentRows || requiredCols > currentCols) {
-                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(targetRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                processedMatrix.forEach((rowData, rowIndex) => {
-                    const actualRowIndex = startRow + rowIndex;
-                    const tableRow = tableBody.children[actualRowIndex];
-                    if (!tableRow) return;
-
-                    // 填充数据（从第一列开始）
-                    rowData.forEach((cellData, colIndex) => {
-                        const actualColIndex = startCol + colIndex;
-                        const cell = tableRow.children[actualColIndex + 1];
-                        if (cell && cell.contentEditable === 'true') {
-                            currentPasteChanges.push({
-                                row: actualRowIndex,
-                                col: actualColIndex,
-                                oldValue: cell.textContent,
-                                newValue: cellData
-                            });
-                            // 保持原始格式，不做任何转换
-                            cell.textContent = cellData;
-                            if (cellData) {
-                                successCount++;
-                            }
-                        }
-                    });
+                const { successCount } = applyParsedMatrixToGrid(processedMatrix, e.target, {
+                    startColOverride: 0,
                 });
 
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
                 if (successCount > 0) {
-                    window.showNotification?.(`2.11 WBET_API: 成功粘贴 ${processedMatrix.length} 行 x ${maxCols} 列数据!`, 'success');
+                    notifyPasteUser(`2.11 WBET_API: 成功粘贴 ${processedMatrix.length} 行 x ${maxCols} 列数据!`, 'success');
                 } else {
-                    window.showNotification?.('2.11 WBET_API: 没有粘贴任何数据。', 'danger');
+                    notifyPasteUser('2.11 WBET_API: 没有粘贴任何数据。', 'danger');
                 }
 
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
                 return true;
             }
         }

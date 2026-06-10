@@ -33,10 +33,10 @@ export function isCitibetCaptureType(captureType) {
   return normalizeCaptureType(captureType) === "CITIBET";
 }
 
-/** Descriptions from modal/global state, with fallback when display text is set but array is empty. */
-export function getActiveDescriptions(descriptionDisplay) {
-  const fromWindow = Array.isArray(window.selectedDescriptions) ? window.selectedDescriptions : [];
-  if (fromWindow.length) return fromWindow.filter(Boolean);
+/** Descriptions from Context/modal, with fallback when display text is set but array is empty. */
+export function getActiveDescriptions(descriptionDisplay, selectedDescriptions = null) {
+  const fromContext = Array.isArray(selectedDescriptions) ? selectedDescriptions : [];
+  if (fromContext.length) return fromContext.filter(Boolean);
   const display = String(descriptionDisplay || "").trim();
   if (!display) return [];
   return display
@@ -52,6 +52,8 @@ export function validateDataCaptureForm({
   currencyId,
   captureType,
   tableData,
+  requireDescriptions = true,
+  requireTableData = false,
 }) {
   const activeDescriptions = descriptions?.length
     ? descriptions
@@ -60,15 +62,18 @@ export function validateDataCaptureForm({
   if (!selectedProcess?.id) {
     return { ok: false, message: "Please select a process" };
   }
-  if (!activeDescriptions.length) {
+  if (requireDescriptions && !activeDescriptions.length) {
     return { ok: false, message: "Please select at least one description" };
   }
   if (!currencyId) {
     return { ok: false, message: "Please select a currency" };
   }
-  // Match legacy PHP: only CITIBET blocks Submit until the grid has data.
+  // Group-only capture and CITIBET require grid data before Submit.
   // 2.Format table checks run at submit time (after prepareFormatSubmitSnapshot).
-  if (isCitibetCaptureType(captureType) && !tableSnapshotHasData(tableData)) {
+  if (
+    (requireTableData || isCitibetCaptureType(captureType)) &&
+    !tableSnapshotHasData(tableData)
+  ) {
     return { ok: false, message: "Please enter data in the table" };
   }
   return { ok: true };

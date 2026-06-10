@@ -18,13 +18,17 @@ export default function CaptureMaintenanceFilters({
   setDateTo,
   today,
   companyId,
-  groupFilterKind,
   snapGroupIds,
   visibleCompanies,
   selectedGroup,
   onGroupClick,
+  onPickCompany,
+  onClearCompany,
+  allowClearCompany = true,
   onPickAllGroups,
-  onSwitchCompany,
+  onPickAllInGroup,
+  groupsAllMode = false,
+  groupAllMode = false,
   onDelete,
   canDelete,
   confirmDelete,
@@ -94,15 +98,20 @@ export default function CaptureMaintenanceFilters({
       <div className="maintenance-filter-row">
         <div className="maintenance-filter-left-full">
           <ReportGcFilterPanel
+            layout="dashboard"
             groupIds={snapGroupIds}
-            groupFilterKind={groupFilterKind}
-            selectedGroupKey={selectedGroup}
-            onPickAllGroups={onPickAllGroups}
+            selectedGroup={selectedGroup}
             onPickGroup={(g) => onGroupClick(g)}
+            onPickAllGroups={onPickAllGroups}
+            onPickAllInGroup={onPickAllInGroup}
+            groupsAllMode={groupsAllMode}
+            groupAllMode={groupAllMode}
             companyButtons={visibleCompanies}
             companyId={companyId}
             highlightCompanyId={companyId}
-            onSwitchCompany={onSwitchCompany}
+            onSwitchCompany={onPickCompany}
+            onClearCompany={onClearCompany}
+            allowClearCompany={allowClearCompany}
             t={(key) => {
               if (key === "groupId") return m.groupId;
               if (key === "company") return m.company;

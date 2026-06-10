@@ -18,11 +18,16 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
     ], JSON_UNESCAPED_UNICODE);
 }
 
+if (!isset($pdo) || !$pdo instanceof PDO) {
+    jsonResponse(false, 'Database unavailable', null, 503);
+    exit;
+}
+
 /**
  * 获取 C168 公司下所有活跃的维护跑马灯内容
  */
 function fetchActiveMaintenanceList(PDO $pdo) {
-    $sql = "SELECT m.id, m.content, m.status
+    $sql = "SELECT m.id, m.prefix, m.content, m.status
             FROM maintenance_marquee m
             WHERE m.company_code = 'C168' AND m.status = 'active'
             ORDER BY m.created_at DESC";
@@ -39,6 +44,7 @@ function formatPublicRows(array $rows) {
     foreach ($rows as $row) {
         $list[] = [
             'id' => (int)$row['id'],
+            'prefix' => $row['prefix'] ?? '',
             'content' => $row['content'] ?? ''
         ];
     }

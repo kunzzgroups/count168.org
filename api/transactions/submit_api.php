@@ -7,9 +7,8 @@
  * - WIN: 赢钱
  * - LOSE: 输钱
  * - PAYMENT: 付款
- * - RECEIVE: 收款
  * - CONTRA: 对冲/转账
- * - CLAIM: 索赔（算法与 RECEIVE 相同）
+ * - CLAIM: 索赔
  */
 
 session_start();
@@ -18,6 +17,7 @@ header('Content-Type: application/json');
 
 try {
     require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/transaction_scope.php';
     require_once __DIR__ . '/../includes/money_decimal.php';
 } catch (Throwable $e) {
     http_response_code(500);
@@ -56,12 +56,12 @@ function requiresTransactionApproval(string $role, string $transactionDateDb): b
 
 /**
  * 需要审批的交易类型：
- * CONTRA / PAYMENT / RECEIVE / CLAIM / CLEAR / ADJUSTMENT / PROFIT(实际落库为 WIN/LOSE)
+ * CONTRA / PAYMENT / CLAIM / CLEAR / ADJUSTMENT / PROFIT(实际落库为 WIN/LOSE)
  */
 function requiresApprovalForType(string $transactionType): bool
 {
     $type = strtoupper(trim($transactionType));
-    return in_array($type, ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'PROFIT', 'WIN', 'LOSE'], true);
+    return in_array($type, ['CONTRA', 'PAYMENT', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'PROFIT', 'WIN', 'LOSE'], true);
 }
 
 function tableHasColumn(PDO $pdo, string $table, string $column): bool
@@ -214,9 +214,6 @@ try {
         throw new Exception('请先登录');
     }
     
-    // 确定要操作的 company_id（支持 owner 切换公司）
-    $company_id = null;
-    $requested_company_id = isset($_POST['company_id']) ? trim($_POST['company_id']) : '';
     $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
     // Audit / Partnership 在 read_only=1（或未设置时默认只读）时禁止写入
     if (in_array($userRole, ['audit', 'partnership'], true)) {
@@ -226,30 +223,15 @@ try {
         }
     }
 
-    if ($requested_company_id !== '') {
-        $requested_company_id = (int)$requested_company_id;
-        if ($userRole === 'owner') {
-            $owner_id = $_SESSION['owner_id'] ?? $_SESSION['user_id'];
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ?");
-            $stmt->execute([$requested_company_id, $owner_id]);
-            if ($stmt->fetchColumn()) {
-                $company_id = $requested_company_id;
-            } else {
-                throw new Exception('无权访问该公司');
-            }
-        } else {
-            if (!isset($_SESSION['company_id']) || (int)$_SESSION['company_id'] !== $requested_company_id) {
-                throw new Exception('无权访问该公司');
-            }
-            $company_id = (int)$_SESSION['company_id'];
-        }
-    } else {
-        if (!isset($_SESSION['company_id'])) {
-            throw new Exception('用户未登录或缺少公司信息');
-        }
-        $company_id = (int)$_SESSION['company_id'];
+    $listScope = tx_resolve_transaction_list_scope($pdo, $_POST);
+    $company_id = (int) ($listScope['company_id'] ?? 0);
+    if ($company_id <= 0) {
+        $company_id = tx_permission_company_id_for_scope($pdo, $listScope);
     }
-    
+    if ($company_id <= 0 && ($listScope['mode'] ?? '') !== 'group') {
+        throw new Exception('缺少 company_id');
+    }
+
     // 检查请求方法
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('只支持 POST 请求');
@@ -261,7 +243,7 @@ try {
     }
     $idempotencyKey = '';
     if ($client_request_id !== '') {
-        $idempotencyKey = (string)$company_id . ':' . $client_request_id;
+        $idempotencyKey = tx_idempotency_scope_key($listScope) . ':' . $client_request_id;
         $cachedResponse = getSubmitIdempotencyCache($idempotencyKey);
         if ($cachedResponse !== null) {
             session_write_close(); // 命中缓存，无需继续持有 session 锁
@@ -304,7 +286,11 @@ try {
         throw new Exception('请选择交易类型');
     }
     
-    if (!in_array($transaction_type, ['WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'ADJUSTMENT'])) {
+    if ($transaction_type === 'RECEIVE') {
+        throw new Exception('RECEIVE 交易类型已停用');
+    }
+
+    if (!in_array($transaction_type, ['WIN', 'LOSE', 'PAYMENT', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'ADJUSTMENT'])) {
         throw new Exception('无效的交易类型');
     }
     
@@ -364,10 +350,10 @@ try {
     }
 
     // WIN/LOSE（PROFIT）：数据库触发器要求 from_account_id 必须为 NULL，插入前会强制置空；前端可选填 From Account 仅用于展示
-    // 验证 From Account（PAYMENT/RECEIVE/CONTRA/CLAIM/CLEAR 需要，RATE 有特殊处理）
-    if (in_array($transaction_type, ['PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'CLEAR'])) {
+    // 验证 From Account（PAYMENT/CONTRA/CLAIM/CLEAR 需要，RATE 有特殊处理）
+    if (in_array($transaction_type, ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR'])) {
         if (!$from_account_id || $from_account_id <= 0) {
-            throw new Exception('PAYMENT/RECEIVE/CONTRA/CLAIM/CLEAR 交易必须选择 From Account');
+            throw new Exception('PAYMENT/CONTRA/CLAIM/CLEAR 交易必须选择 From Account');
         }
         
         if ($from_account_id == $account_id) {
@@ -375,73 +361,35 @@ try {
         }
     }
     
-    // 验证账户是否存在且属于当前公司（非 RATE 类型）
-    // 支持 account 通过 company_id 或 account_company 表关联到公司
+    // 验证账户是否属于当前 scope（集团账套 vs 子公司）
     if (!$is_rate) {
-        // 验证 To Account（只使用 account_company 表）
-        $stmt = $pdo->prepare("
-            SELECT a.id, a.account_id, a.name 
-            FROM account a
-            INNER JOIN account_company ac ON a.id = ac.account_id
-            WHERE a.id = ? AND ac.company_id = ?
-        ");
-        $stmt->execute([$account_id, $company_id]);
-        $to_account = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+        $to_account = tx_fetch_account_row($pdo, $account_id, $listScope);
         if (!$to_account) {
-            throw new Exception('To Account 不存在或不属于当前公司');
+            throw new Exception('To Account 不存在或不属于当前范围');
         }
-        
-        // 验证 From Account（只使用 account_company 表）
+
         if ($from_account_id) {
-            $stmt = $pdo->prepare("
-                SELECT a.id, a.account_id, a.name 
-                FROM account a
-                INNER JOIN account_company ac ON a.id = ac.account_id
-                WHERE a.id = ? AND ac.company_id = ?
-            ");
-            $stmt->execute([$from_account_id, $company_id]);
-            $from_account = $stmt->fetch(PDO::FETCH_ASSOC);
-            
+            $from_account = tx_fetch_account_row($pdo, (int) $from_account_id, $listScope);
             if (!$from_account) {
-                throw new Exception('From Account 不存在或不属于当前公司');
+                throw new Exception('From Account 不存在或不属于当前范围');
             }
         }
     }
-    
+
     // 验证 currency 并获取 currency_id，如果不存在则自动创建
     $currency_id = null;
     if (!empty($currency)) {
-        $stmt = $pdo->prepare("SELECT id FROM currency WHERE code = ? AND company_id = ?");
-        $stmt->execute([$currency, $company_id]);
-        $currency_id = $stmt->fetchColumn();
-        
-        // 如果 currency 不存在于该公司，自动创建
-        if (!$currency_id) {
-            $currencyCode = strtoupper(trim($currency));
-            if (strlen($currencyCode) > 10) {
-                throw new Exception('Currency code 长度不能超过 10 个字符');
-            }
-            
-            // 检查该 currency code 是否在其他公司存在（用于验证格式）
-            $stmt = $pdo->prepare("SELECT COUNT(*) FROM currency WHERE code = ?");
-            $stmt->execute([$currencyCode]);
-            $existsElsewhere = $stmt->fetchColumn() > 0;
-            
-            // 自动创建 currency 到当前公司
-            $stmt = $pdo->prepare("INSERT INTO currency (code, company_id) VALUES (?, ?)");
-            $stmt->execute([$currencyCode, $company_id]);
-            $currency_id = $pdo->lastInsertId();
+        $currencyCode = strtoupper(trim($currency));
+        if (strlen($currencyCode) > 10) {
+            throw new Exception('Currency code 长度不能超过 10 个字符');
         }
-        
-        // 注意：不再检查账户是否在 data_capture_details 中有记录
-        // 允许即使没有 data_capture 记录也可以提交交易
+        $currency_id = tx_resolve_currency_id_for_scope($pdo, $currencyCode, $listScope);
     }
     
     // 自动生成 description（如果为空）
     if (empty($description) && $transaction_type === 'ADJUSTMENT') {
         $description = 'ADJUSTMENT - WIN/LOSS';
-    } elseif (empty($description) && in_array($transaction_type, ['PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'CLEAR'])) {
+    } elseif (empty($description) && in_array($transaction_type, ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR'])) {
         // 从 To Account 的视角生成描述
         $description = $transaction_type . ' FROM ' . $from_account['account_id'];
     }
@@ -1010,6 +958,7 @@ try {
                     $txnRow['approved_at'] = $approved_at;
                 }
             }
+            tx_apply_scope_columns_to_row($pdo, $txnRow, $listScope);
 
             $transaction_id = insertTransactionRow($pdo, $txnRow);
         

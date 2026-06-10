@@ -290,7 +290,6 @@ export default function FormulaMaintenanceTable({
         className={`maintenance-list-container maintenance-virtual-table formula-virtual-table${
           listHydrating ? " formula-list-container--hydrating" : ""
         }${listSyncing ? " formula-list-container--syncing" : ""}`}
-        style={{ display: "block" }}
       >
         {hydrateHint}
         <div className="maintenance-virtual-table-inner formula-virtual-table-inner" role="table">

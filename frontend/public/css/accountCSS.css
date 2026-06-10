@@ -52,7 +52,7 @@ body.account-page:not(.account-page--show-all) .container {
 }
 
 body.account-page:not(.account-page--show-all) .content {
-    height: calc(100vh - 22px) !important;
+    height: calc(100vh - var(--layout-page-top-inset)) !important;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -60,7 +60,7 @@ body.account-page:not(.account-page--show-all) .content {
 }
 
 body.account-page .action-buttons-container {
-    margin-top: 12px;
+    margin-top: var(--layout-page-first-block-mt);
     background-color: #ffffff;
     border-radius: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -138,7 +138,7 @@ body.account-page .account-table-wrapper {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding-bottom: 0;
+    padding-bottom: 52px;
     box-sizing: border-box;
 }
 
@@ -254,19 +254,15 @@ body.account-page:not(.account-page--show-all) .account-card {
     box-sizing: border-box;
 }
 
-/* 分页：与 process-page .pagination-container 相同（流内右下，非 fixed） */
+/* 分页：固定右下角（与 User List 一致），避免 25 行时流内分页被挤出视口 */
 body.account-page:not(.account-page--show-all) .account-pagination-container {
-    position: relative;
-    right: auto;
-    bottom: auto;
+    position: fixed;
+    right: max(40px, env(safe-area-inset-right, 0px));
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
     left: auto;
     top: auto;
-    margin-top: 8px !important;
-    margin-bottom: 0 !important;
-    margin-left: auto !important;
-    align-self: flex-end;
-    flex-shrink: 0;
-    z-index: 1;
+    margin: 0 !important;
+    z-index: 120;
     width: fit-content;
     display: flex;
     align-items: center;
@@ -277,9 +273,10 @@ body.account-page:not(.account-page--show-all) .account-pagination-container {
     backdrop-filter: blur(8px);
     border: 1px solid rgba(148, 163, 184, 0.2);
     font-family: inherit;
+    flex-shrink: 0;
 }
 
-.page-header {
+body.account-page .page-header {
     display: none;
 }
 
@@ -601,7 +598,7 @@ body.account-page--show-all .container {
 
 body.account-page--show-all .content {
     height: auto !important;
-    min-height: calc(100vh - 22px) !important;
+    min-height: calc(100vh - var(--layout-page-top-inset)) !important;
     overflow: visible !important;
     display: flex;
     flex-direction: column;
@@ -1355,6 +1352,7 @@ body.ec-auth-shell.account-page .account-cards.account-cards--show-all > .accoun
 
 /* Confirm Delete Modal — match userlist #confirmModal (flex center, compact card) */
 #confirmDeleteModal.account-modal,
+#forceDeleteCurrencyModal.account-modal,
 #accountAlertModal.account-modal {
     display: flex;
     align-items: center;
@@ -1498,20 +1496,7 @@ body.account-page #confirmDeleteModal .confirm-delete {
     text-align: center;
 }
 
-/* Scrollbar for long messages */
-.account-confirm-message::-webkit-scrollbar {
-    width: 6px;
-}
-
-.account-confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.account-confirm-message::-webkit-scrollbar-thumb {
-    background: #6f7b8d;
-    border-radius: 10px;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 .account-modal-content {
     background-color: #ffffff;
@@ -2438,7 +2423,7 @@ body.account-page #confirmDeleteModal .confirm-delete {
 .account-role-badge {
     display: inline-flex;
     align-items: center;
-    padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
+    padding: clamp(0px, 0vw, 2px) clamp(4px, 0.42vw, 8px);
     border-radius: 20px;
     font-size: var(--text-tiny);
     font-weight: bold;
@@ -2984,7 +2969,7 @@ body:not(.maintenance-page) .quick-select-dropdown-toggle .dropdown-item:hover {
     }
 
     body.account-page .action-buttons-container {
-        margin-top: 8px;
+        margin-top: var(--layout-page-first-block-mt);
     }
 
     body.account-page .action-buttons-container > .action-buttons {
@@ -3277,6 +3262,7 @@ body > #userModal.modal {
 
 body > #confirmModal.modal,
 body > #confirmDeleteModal.account-modal,
+body > #forceDeleteCurrencyModal.account-modal,
 body > #accountAlertModal.account-modal {
     z-index: 20100;
 }
@@ -3288,5 +3274,69 @@ body > .account-notification-container {
 body > .user-modal-company-picker-root--above-modals,
 body > .user-modal-permission-picker-root--above-modals {
     z-index: 25500;
+}
+
+/* Add/Edit Account — Companies picker: compact width, 4-col grid, smaller chips */
+.user-modal-company-picker--account {
+    width: min(400px, calc(100vw - 32px));
+    max-height: min(68vh, 460px);
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-header {
+    padding: 12px 14px;
+    font-size: 14px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-filter-row {
+    padding: 10px 14px 0;
+    gap: 6px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-search {
+    padding: 7px 10px 7px 32px;
+    font-size: 12px;
+    border-radius: 8px;
+    background-position: 9px center;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-select-all {
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 8px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-body {
+    flex: 0 1 auto;
+    max-height: min(36vh, 280px);
+    padding: 6px 6px 2px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    padding: 0 4px 8px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-label {
+    padding: 5px 6px;
+    gap: 5px;
+    font-size: 11px;
+    border-radius: 7px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-label input[type="checkbox"],
+.user-modal-company-picker--account .user-modal-company-picker-label input[type="radio"] {
+    width: 13px;
+    height: 13px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-footer {
+    padding: 10px 14px 12px;
+}
+
+.user-modal-company-picker--account .user-modal-company-picker-done {
+    padding: 9px 12px;
+    font-size: 13px;
+    border-radius: 8px;
 }
 

@@ -2,6 +2,15 @@
  * Context menu positioning and show/hide — extracted from js/datacapture.js (Phase 5b).
  */
 
+import {
+  gridClearAllSelections,
+  gridGetSelectedCellCount,
+  gridGetSelectedCells,
+  gridRegisterSelectedCell,
+  gridSetContextMenuColumn,
+  gridSetContextMenuRow,
+} from "./dataCaptureBridge.js";
+
 let activeContextMenuAnchor = null;
 let contextMenuColumn = null;
 let contextMenuRow = null;
@@ -42,11 +51,11 @@ function getRowIndexFromHeader(rowHeader) {
 }
 
 function getSelectedCellCount() {
-  return window.__DC_GET_SELECTED_CELL_COUNT__?.() ?? 0;
+  return gridGetSelectedCellCount();
 }
 
 function getSelectedCells() {
-  return window.__DC_GET_SELECTED_CELLS__?.() ?? [];
+  return gridGetSelectedCells();
 }
 
 function isCellSelected(cell) {
@@ -54,11 +63,11 @@ function isCellSelected(cell) {
 }
 
 function clearAllSelections() {
-  window.__DC_CLEAR_ALL_SELECTIONS__?.();
+  gridClearAllSelections();
 }
 
 function registerSelectedCell(cell) {
-  window.__DC_REGISTER_SELECTED_CELL__?.(cell);
+  gridRegisterSelectedCell(cell);
 }
 
 function positionContextMenuAtPoint(menuElement, cursorX, cursorY) {
@@ -199,7 +208,7 @@ export function showColumnContextMenu(e, headerEl) {
 
   showOnlyContextMenu(columnContextMenu, e, target, () => {
     setContextMenuColumn(finalColIndex);
-    window.__DC_SET_CONTEXT_MENU_COLUMN__?.(finalColIndex);
+    gridSetContextMenuColumn(finalColIndex);
   });
 
   scheduleDismissOnOutsideClick("columnContextMenu");
@@ -220,7 +229,7 @@ export function showRowContextMenu(e, rowHeaderEl) {
 
   showOnlyContextMenu(rowContextMenu, e, target, () => {
     setContextMenuRow(finalRowIndex);
-    window.__DC_SET_CONTEXT_MENU_ROW__?.(finalRowIndex);
+    gridSetContextMenuRow(finalRowIndex);
   });
 
   scheduleDismissOnOutsideClick("rowContextMenu");

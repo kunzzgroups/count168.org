@@ -4,20 +4,58 @@
  */
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { evaluateExpression } from "./summaryFormulaEvaluate.js";
-import { removeThousandsSeparators } from "./summaryFormulaParseUtils.js";
+import { parseIdProductColumnRef, removeThousandsSeparators } from "./summaryFormulaParseUtils.js";
+import { normalizeSummaryIdProductText } from "../lib/summaryIdProductUtils.js";
+import {
+  getCapturedProcessData,
+  getTransformedTableData,
+} from "../lib/summaryFormulaContext.js";
 
 function normalizeIdProductText(text) {
-  if (typeof window.normalizeIdProductText === "function") {
-    return window.normalizeIdProductText(text);
-  }
-  return (text || "").trim().replace(/\s+/g, "");
+  return normalizeSummaryIdProductText(text);
 }
 
 function truncateProcessedAmountTo6Decimals(value) {
-  if (typeof window.truncateProcessedAmountTo6Decimals === "function") {
-    return window.truncateProcessedAmountTo6Decimals(value);
+  try {
+    return MoneyDecimal.formatDisplay(value, 6);
+  } catch {
+    return value;
   }
-  return value;
+}
+
+function readTransformedTableData() {
+  const fromCtx = getTransformedTableData();
+  if (fromCtx) return fromCtx;
+  try {
+    const raw = localStorage.getItem("capturedTableData");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function findCaptureRowIndexByLabel(tableData, rowLabel, idProductResolved) {
+    if (!tableData?.rows?.length || !rowLabel) {
+        return { rowIndex: null, idMatches: false };
+    }
+    const idTrim = String(idProductResolved || '').trim();
+    const normalizedTarget = normalizeIdProductText(idProductResolved);
+    for (let i = 0; i < tableData.rows.length; i += 1) {
+        const row = tableData.rows[i];
+        const label = row[0]?.type === 'header' ? String(row[0].value || '').trim() : '';
+        if (label !== rowLabel) continue;
+        if (!row[1] || row[1].type !== 'data') {
+            return { rowIndex: i, idMatches: false };
+        }
+        const rowId = String(row[1].value || '').trim();
+        const idMatches =
+            rowId === idTrim ||
+            (typeof isFullIdProduct === 'function' && isFullIdProduct(idProductResolved)
+                ? rowId === idTrim
+                : normalizeIdProductText(rowId) === normalizedTarget);
+        return { rowIndex: i, idMatches: !!idMatches };
+    }
+    return { rowIndex: null, idMatches: false };
 }
 
 function readDataColumnCellFromProcessRow(processRow, columnIndex) {
@@ -48,22 +86,17 @@ function readDataColumnCellFromProcessRow(processRow, columnIndex) {
 // captureRowIndex: 可选，Data Capture 行序（0-based），与 id_product:#N:col 一致
 // Format: "id_product:row_label:column_index" (e.g., "BB:C:3") or "id_product:column_index" (backward compatibility)
 
-function getCellValueByIdProductAndColumn(idProduct, columnIndex, rowLabel = null, captureRowIndex = null) {
+export function getCellValueByIdProductAndColumn(idProduct, columnIndex, rowLabel = null, captureRowIndex = null) {
     try {
         // 若传入的是截断 id（如 "(T07)"），先解析为完整 id_product，避免 No row found / Cell value not found（有 row_label 时优先按行标签匹配）
         const idProductResolved = typeof resolveToFullIdProduct === 'function' ? resolveToFullIdProduct(idProduct, rowLabel) : idProduct;
 
         // Use transformed table data if available, otherwise get from localStorage
         let parsedTableData;
-        if (window.transformedTableData) {
-            parsedTableData = window.transformedTableData;
-        } else {
-            const tableData = localStorage.getItem('capturedTableData');
-            if (!tableData) {
-                console.error('No captured table data found');
-                return null;
-            }
-            parsedTableData = JSON.parse(tableData);
+        parsedTableData = readTransformedTableData();
+        if (!parsedTableData) {
+            console.error('No captured table data found');
+            return null;
         }
 
         if (captureRowIndex !== null && captureRowIndex !== undefined && String(captureRowIndex).trim() !== '') {
@@ -85,56 +118,9 @@ function getCellValueByIdProductAndColumn(idProduct, columnIndex, rowLabel = nul
         let rowIndexIdProductMatches = false;
 
         if (rowLabel) {
-            // Find row by row_label first, then verify id_product matches
-            const capturedTableBody = document.getElementById('capturedTableBody');
-            if (capturedTableBody) {
-                const rows = capturedTableBody.querySelectorAll('tr');
-                console.log('getCellValueByIdProductAndColumn: Searching for row_label:', rowLabel, 'id_product:', idProductResolved, 'total rows:', rows.length);
-                for (let i = 0; i < rows.length; i++) {
-                    const row = rows[i];
-                    const rowHeaderCell = row.querySelector('.row-header');
-                    if (!rowHeaderCell) {
-                        continue; // Skip rows without header
-                    }
-
-                    const rowHeaderTextRaw = rowHeaderCell.textContent;
-                    const rowHeaderTextTrimmed = rowHeaderTextRaw ? rowHeaderTextRaw.trim() : '';
-                    console.log('getCellValueByIdProductAndColumn: Checking row', i, 'row_header:', JSON.stringify(rowHeaderTextTrimmed), 'rowLabel:', JSON.stringify(rowLabel), 'match:', rowHeaderTextTrimmed === rowLabel);
-
-                    // Check if row header matches rowLabel (case-sensitive)
-                    if (rowHeaderTextTrimmed === rowLabel) {
-                        // Found row by label, now verify id_product matches
-                        rowIndex = i;
-                        console.log('getCellValueByIdProductAndColumn: Found row by row_label! rowIndex:', rowIndex, 'rowLabel:', rowLabel);
-
-                        // CRITICAL: Verify id_product matches - if not, ignore this rowIndex
-                        // 完整 id_product（如含 RSLOTS、(T07)）必须精确匹配，避免 4DDMYMYR (T07) 与 AB4D55MYR (T38) 串行
-                        const idProductCell = row.querySelector('td[data-column-index="1"]') || row.querySelector('td[data-col-index="1"]') || row.querySelectorAll('td')[1];
-                        if (idProductCell) {
-                            const cellIdProductText = idProductCell.textContent ? idProductCell.textContent.trim() : '';
-                            const idProductTrimmed = (idProductResolved || '').trim();
-                            if (typeof isFullIdProduct === 'function' && isFullIdProduct(idProductResolved)) {
-                                rowIndexIdProductMatches = (cellIdProductText === idProductTrimmed);
-                            } else {
-                                const cellIdProduct = normalizeIdProductText(cellIdProductText);
-                                const normalizedIdProduct = normalizeIdProductText(idProductResolved);
-                                rowIndexIdProductMatches = (cellIdProduct === normalizedIdProduct);
-                            }
-                            console.log('getCellValueByIdProductAndColumn: Verified id_product - match:', rowIndexIdProductMatches);
-
-                            if (!rowIndexIdProductMatches) {
-                                // 在实际逻辑上依然回退到 id_product 搜索，但不再用 warn 污染控制台
-                                console.log('getCellValueByIdProductAndColumn: row_label found but id_product mismatch, will fallback to id_product search. rowLabel:', rowLabel, 'rowIndex:', rowIndex, 'expected:', idProductTrimmed, 'found:', cellIdProductText);
-                                rowIndex = null; // Reset rowIndex if id_product doesn't match
-                            }
-                        } else {
-                            console.log('getCellValueByIdProductAndColumn: idProductCell not found for row_label, will fallback to id_product search. rowLabel:', rowLabel);
-                            rowIndex = null; // Reset rowIndex if id_product cell not found
-                        }
-                        break;
-                    }
-                }
-            }
+            const labelMatch = findCaptureRowIndexByLabel(parsedTableData, rowLabel, idProductResolved);
+            rowIndex = labelMatch.rowIndex;
+            rowIndexIdProductMatches = labelMatch.idMatches;
 
             // Only use rowIndex if id_product matches
             if (rowIndex !== null && rowIndexIdProductMatches) {
@@ -224,7 +210,7 @@ function resolveToFullIdProduct(shortId, rowLabel) {
         }
     }
     // Replace Word 转换得到的产品 ID 视为独立 MAIN，不参与前缀/截断解析，避免 SZ 被解析成 SZT
-    const processData = window.capturedProcessData || (function () {
+    const processData = getCapturedProcessData() || (function () {
         try {
             const raw = localStorage.getItem('capturedProcessData');
             return raw ? JSON.parse(raw) : null;
@@ -238,9 +224,8 @@ function resolveToFullIdProduct(shortId, rowLabel) {
     }
     if (!isTruncatedIdProduct(shortTrim)) return shortId;
     let parsedTableData;
-    if (window.transformedTableData) {
-        parsedTableData = window.transformedTableData;
-    } else {
+    parsedTableData = readTransformedTableData();
+    if (!parsedTableData) {
         try {
             const tableData = localStorage.getItem('capturedTableData');
             if (!tableData) return shortId;
@@ -441,21 +426,35 @@ function findProcessRow(tableData, processValue, rowIndex = null) {
     return null;
 }
 
+/** Row label (A, B, C, …) from capture table for a given id_product / row index. */
+function getRowLabelFromProcessValue(processValue, rowIndexOverride = null) {
+    try {
+        const parsedTableData = readTransformedTableData();
+        if (!parsedTableData) return null;
+
+        const processRow = findProcessRow(parsedTableData, processValue, rowIndexOverride);
+        if (!processRow?.length) return null;
+
+        if (processRow[0]?.type === "header") {
+            return String(processRow[0].value || "").trim() || null;
+        }
+        return null;
+    } catch (error) {
+        console.error("Error getting row label from process value:", error);
+        return null;
+    }
+}
+
 // Get column value by id_product and column_number (for reference format [id_product : column])
 
 function getColumnValueByIdProduct(idProduct, columnNumber) {
     try {
         // Use transformed table data if available, otherwise get from localStorage
         let parsedTableData;
-        if (window.transformedTableData) {
-            parsedTableData = window.transformedTableData;
-        } else {
-            const tableData = localStorage.getItem('capturedTableData');
-            if (!tableData) {
-                console.error('No captured table data found');
-                return null;
-            }
-            parsedTableData = JSON.parse(tableData);
+        parsedTableData = readTransformedTableData();
+        if (!parsedTableData) {
+            console.error('No captured table data found');
+            return null;
         }
 
         // Find the row that matches the id_product
@@ -507,16 +506,9 @@ function getColumnValueFromCellReference(cellReference, processValue, rowIndexOv
             return null;
         }
 
-        // Get data capture table data
-        let parsedTableData;
-        if (window.transformedTableData) {
-            parsedTableData = window.transformedTableData;
-        } else {
-            const tableData = localStorage.getItem('capturedTableData');
-            if (!tableData) {
-                return null;
-            }
-            parsedTableData = JSON.parse(tableData);
+        const parsedTableData = readTransformedTableData();
+        if (!parsedTableData) {
+            return null;
         }
 
         // Find the row that matches the process value
@@ -689,7 +681,7 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                     // IMPORTANT: $数字 仅应解析为当前编辑行；不能只按列号匹配，否则会串到其他 id_product 的引用。
                     for (let j = refIndex; j < refs.length; j++) {
                         const ref = refs[j];
-                        const parsed = typeof parseIdProductColumnRef === 'function' ? parseIdProductColumnRef(ref) : null;
+                        const parsed = parseIdProductColumnRef(ref);
                         if (parsed && parsed.dataColumnIndex === dataColumnIndex) {
                             const refIdProduct = parsed.idProduct;
                             const isCurrentRowRef = processValue && (
@@ -1163,24 +1155,4 @@ function applyInputMethodTransformation(result, inputMethod) {
         default:
             return value.toString(); // No transformation
     }
-}
-
-export function registerSummaryFormulaReferenceEngine() {
-  window.__SUMMARY_FORMULA_REFERENCE_ENGINE__ = true;
-  window.__SUMMARY_PARSE_REFERENCE_FORMULA__ = parseReferenceFormula;
-  window.__SUMMARY_EVALUATE_FORMULA_EXPRESSION__ = evaluateFormulaExpression;
-  window.__SUMMARY_CALCULATE_FORMULA_RESULT_FROM_EXPRESSION__ = calculateFormulaResultFromExpression;
-  window.parseReferenceFormula = parseReferenceFormula;
-  window.evaluateFormulaExpression = evaluateFormulaExpression;
-  window.calculateFormulaResultFromExpression = calculateFormulaResultFromExpression;
-  window.getCellValueByIdProductAndColumn = getCellValueByIdProductAndColumn;
-  window.resolveToFullIdProduct = resolveToFullIdProduct;
-  window.applyInputMethodTransformation = applyInputMethodTransformation;
-}
-
-export function unregisterSummaryFormulaReferenceEngine() {
-  delete window.__SUMMARY_FORMULA_REFERENCE_ENGINE__;
-  delete window.__SUMMARY_PARSE_REFERENCE_FORMULA__;
-  delete window.__SUMMARY_EVALUATE_FORMULA_EXPRESSION__;
-  delete window.__SUMMARY_CALCULATE_FORMULA_RESULT_FROM_EXPRESSION__;
 }

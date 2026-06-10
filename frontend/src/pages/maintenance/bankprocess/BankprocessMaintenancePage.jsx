@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { removeOtherMaintenanceStylesheets } from "../../../utils/maintenance/maintenanceStylesheets.js";
 import { injectStylesheet } from "../../../utils/core/injectStylesheet.js";
 import { ensureMaintenanceDateRangePicker } from "../../../utils/date/dateRangePicker.js";
-import { notifyCompanySessionUpdated } from "../../../utils/company/companySessionEvents.js";
 import { useMaintenanceGroupCompanyFilter } from "../shared/useMaintenanceGroupCompanyFilter.js";
+import { runMaintenanceCompanySwitch, syncMaintenanceBootSidebar } from "../shared/maintenanceCompanySwitch.js";
+import { useMaintenancePageScrollLock } from "../shared/useMaintenancePageScrollLock.js";
+import {
+  isDashboardGroupOnlyMode,
+  persistDashboardFilterState,
+  resolveBootCompanyId,
+  resolveInitialSelectedGroupFromSession,
+} from "../../../utils/company/sharedCompanyFilter.js";
 import "../../../../public/css/accountCSS.css";
 import "../../../../public/css/userlist.css";
 import "../../../../public/css/maintenance_unified_filters.css";
@@ -18,6 +25,7 @@ import BankprocessMaintenanceFilters from "./components/BankprocessMaintenanceFi
 import BankprocessMaintenanceTable from "./components/BankprocessMaintenanceTable.jsx";
 import MaintenanceDeleteConfirmModal from "../shared/MaintenanceDeleteConfirmModal.jsx";
 import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
+import { fetchOwnerCompaniesAll } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   deleteBankprocessData,
   fetchCompanyCurrencies,
@@ -47,10 +55,12 @@ function consumeNoDataToastDedupeKey(key) {
 
 export default function BankprocessMaintenancePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { me, sessionReady } = useAuthSession();
   const lang = useLoginLang();
   const m = useMemo(() => MAINTENANCE_I18N[lang] || MAINTENANCE_I18N.en, [lang]);
   const t = useCallback((key, params) => getMaintenanceText(lang, key, params), [lang]);
+  useMaintenancePageScrollLock();
   const [bootLoading, setBootLoading] = useState(true);
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState(null);
@@ -70,6 +80,7 @@ export default function BankprocessMaintenancePage() {
   const [bankprocessListEpoch, setBankprocessListEpoch] = useState(0);
   const [bankprocessDataSourceCompanyId, setBankprocessDataSourceCompanyId] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [listSyncing, setListSyncing] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -102,33 +113,6 @@ export default function BankprocessMaintenancePage() {
     setDateFrom(today);
     setDateTo(today);
 
-    // Force native page scrolling for maintenance screens even if legacy CSS locks viewport.
-    const targets = [document.documentElement, document.body, document.getElementById("root")].filter(Boolean);
-    const originalStyles = targets.map((el) => ({
-      el,
-      overflow: el.style.getPropertyValue("overflow"),
-      overflowPriority: el.style.getPropertyPriority("overflow"),
-      overflowY: el.style.getPropertyValue("overflow-y"),
-      overflowYPriority: el.style.getPropertyPriority("overflow-y"),
-      overflowX: el.style.getPropertyValue("overflow-x"),
-      overflowXPriority: el.style.getPropertyPriority("overflow-x"),
-      height: el.style.getPropertyValue("height"),
-      heightPriority: el.style.getPropertyPriority("height"),
-      minHeight: el.style.getPropertyValue("min-height"),
-      minHeightPriority: el.style.getPropertyPriority("min-height"),
-      maxHeight: el.style.getPropertyValue("max-height"),
-      maxHeightPriority: el.style.getPropertyPriority("max-height"),
-    }));
-
-    targets.forEach((el) => {
-      el.style.setProperty("overflow", "auto", "important");
-      el.style.setProperty("overflow-y", "auto", "important");
-      el.style.setProperty("overflow-x", "hidden", "important");
-      el.style.setProperty("height", "auto", "important");
-      el.style.setProperty("min-height", "100vh", "important");
-      el.style.setProperty("max-height", "none", "important");
-    });
-
     const setup = async () => {
       removeOtherMaintenanceStylesheets("bankprocess_maintenance.css");
       const links = [
@@ -140,21 +124,6 @@ export default function BankprocessMaintenancePage() {
 
     setup().catch(() => null);
     return () => {
-      originalStyles.forEach((item) => {
-        const { el } = item;
-        if (item.overflow) el.style.setProperty("overflow", item.overflow, item.overflowPriority);
-        else el.style.removeProperty("overflow");
-        if (item.overflowY) el.style.setProperty("overflow-y", item.overflowY, item.overflowYPriority);
-        else el.style.removeProperty("overflow-y");
-        if (item.overflowX) el.style.setProperty("overflow-x", item.overflowX, item.overflowXPriority);
-        else el.style.removeProperty("overflow-x");
-        if (item.height) el.style.setProperty("height", item.height, item.heightPriority);
-        else el.style.removeProperty("height");
-        if (item.minHeight) el.style.setProperty("min-height", item.minHeight, item.minHeightPriority);
-        else el.style.removeProperty("min-height");
-        if (item.maxHeight) el.style.setProperty("max-height", item.maxHeight, item.maxHeightPriority);
-        else el.style.removeProperty("max-height");
-      });
       document.body.classList.remove("maintenance-page");
     };
   }, [today]);
@@ -175,10 +144,9 @@ export default function BankprocessMaintenancePage() {
     setBootLoading(true);
     (async () => {
       try {
-        const compRes = await fetch(buildApiUrl("api/transactions/get_owner_companies_api.php?all=1"), { credentials: "include" });
-
-        const compJson = await compRes.json();
-        const compRows = Array.isArray(compJson?.data) ? compJson.data.filter((c) => c.company_id) : [];
+        const allRows = await fetchOwnerCompaniesAll();
+        const compRows = allRows.filter((c) => c.company_id);
+        if (cancelled) return;
 
         const user = me;
         if (String(user.user_type || "").toLowerCase() === "member") {
@@ -195,13 +163,31 @@ export default function BankprocessMaintenancePage() {
 
         setCompanies(compRows);
 
-        let initialCompanyId = user.company_id ? Number(user.company_id) : (compRows[0]?.id ? Number(compRows[0].id) : null);
-        if (initialCompanyId && !compRows.some((c) => Number(c.id) === Number(initialCompanyId))) {
-          initialCompanyId = compRows[0]?.id ? Number(compRows[0].id) : null;
+        let initialCompanyId = resolveBootCompanyId({
+          sessionCompanyId: user.company_id,
+          defaultRowId: compRows[0]?.id,
+        });
+        if (
+          initialCompanyId &&
+          !compRows.some((c) => Number(c.id) === Number(initialCompanyId))
+        ) {
+          initialCompanyId = resolveBootCompanyId({ defaultRowId: compRows[0]?.id });
+        }
+        const currentComp =
+          initialCompanyId != null
+            ? compRows.find((c) => Number(c.id) === Number(initialCompanyId))
+            : null;
+        const bootGroup = resolveInitialSelectedGroupFromSession(compRows, currentComp);
+        setSelectedGroup(bootGroup);
+        if (isDashboardGroupOnlyMode()) {
+          setCompanyId(null);
+          currentCompanyIdRef.current = null;
+          setCompanyCode("");
+          setCurrenciesReady(true);
+          return;
         }
         setCompanyId(initialCompanyId);
         currentCompanyIdRef.current = initialCompanyId;
-        const currentComp = compRows.find((c) => Number(c.id) === Number(initialCompanyId));
         setCompanyCode(currentComp?.company_id || "");
         const code = currentComp?.company_id || "";
 
@@ -228,17 +214,8 @@ export default function BankprocessMaintenancePage() {
         }
         setCurrenciesReady(true);
 
-        const savedGroup = sessionStorage.getItem("dashboard_group_filter");
-        const groups = [...new Set(compRows.filter((c) => c.group_id).map((c) => String(c.group_id).toUpperCase().trim()))].sort();
-        let selGroup = null;
-        if (savedGroup && groups.includes(savedGroup) && currentComp?.group_id && String(currentComp.group_id).toUpperCase().trim() === savedGroup) {
-          selGroup = savedGroup;
-        } else if (currentComp?.group_id) {
-          selGroup = String(currentComp.group_id).toUpperCase().trim();
-        }
-        setSelectedGroup(selGroup);
-        if (selGroup) {
-          sessionStorage.setItem("dashboard_group_filter", selGroup);
+        if (bootGroup) {
+          sessionStorage.setItem("dashboard_group_filter", bootGroup);
         } else {
           sessionStorage.removeItem("dashboard_group_filter");
         }
@@ -251,7 +228,36 @@ export default function BankprocessMaintenancePage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionReady, navigate, me]);
+  }, [sessionReady, navigate, me?.user_id]);
+
+  useEffect(() => {
+    if (bootLoading || !companyId || !companies.length) return;
+    const id = Number(companyId);
+    if (!Number.isFinite(id) || id <= 0) return;
+    if (sidebarSyncedCompanyIdRef.current === id) return;
+
+    const row = companies.find((c) => Number(c.id) === id);
+    if (!row?.id) return;
+
+    let cancelled = false;
+    sidebarSyncedCompanyIdRef.current = id;
+    void (async () => {
+      try {
+        await syncMaintenanceBootSidebar({
+          companyRow: row,
+          viewGroup: selectedGroup,
+          updateSessionCompany: (cid) => updateSessionCompany(Number(cid)),
+          sessionCompanyId: me?.company_id,
+        });
+      } finally {
+        if (cancelled) sidebarSyncedCompanyIdRef.current = null;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bootLoading, companyId, companies, selectedGroup, me?.company_id]);
 
   useEffect(() => {
     if (bootLoading || !companyId || !companyCode) return;
@@ -303,6 +309,10 @@ export default function BankprocessMaintenancePage() {
     const seq = ++searchSeqRef.current;
 
     if (!quietRefresh) setLoading(true);
+    else {
+      setLoading(false);
+      setListSyncing(true);
+    }
     setSelectedIds([]);
 
     const currencyKey = allCurrenciesSelected ? "ALL" : selectedCurrencies.slice().sort().join(",");
@@ -350,6 +360,7 @@ export default function BankprocessMaintenancePage() {
       if (seq === searchSeqRef.current) {
         initialBankprocessSearchDoneRef.current = true;
         setLoading(false);
+        setListSyncing(false);
       }
     }
   }, [
@@ -399,45 +410,80 @@ export default function BankprocessMaintenancePage() {
 
   const followGroupRef = useRef(() => {});
 
-  const handleSwitchCompany = useCallback(async (targetCompany) => {
+  const handleClearCompany = useCallback(() => {
+    setCompanyId(null);
+    setCompanyCode("");
+    setSelectedIds([]);
+    setRows([]);
+    setHasSearched(false);
+    currentCompanyIdRef.current = null;
+  }, []);
+
+  const switchCompanyRef = useRef(async () => {});
+  const onPrepareCompanySelectRef = useRef(() => {});
+  const sidebarSyncedCompanyIdRef = useRef(null);
+
+  const onPrepareCompanySelect = useCallback((targetCompany) => {
     if (!targetCompany?.id) return;
     const nextId = Number(targetCompany.id);
-    if (nextId === Number(currentCompanyIdRef.current)) return;
+    const newGroup = targetCompany.group_id
+      ? String(targetCompany.group_id).toUpperCase().trim()
+      : null;
+    setCompanyId(nextId);
+    setCompanyCode(targetCompany.company_id || "");
+    setSelectedGroup(newGroup);
+    persistDashboardFilterState(newGroup, nextId);
+    currentCompanyIdRef.current = nextId;
+    followGroupRef.current();
+  }, []);
+
+  onPrepareCompanySelectRef.current = onPrepareCompanySelect;
+
+  const handleSwitchCompany = useCallback(async (targetCompany) => {
+    if (!targetCompany?.id) return;
     try {
-      await updateSessionCompany(nextId);
-      const newGroup = targetCompany.group_id
-        ? String(targetCompany.group_id).toUpperCase().trim()
-        : null;
-      setCompanyId(nextId);
-      setCompanyCode(targetCompany.company_id || "");
-      setSelectedGroup(newGroup);
-      if (newGroup) sessionStorage.setItem("dashboard_group_filter", newGroup);
-      else sessionStorage.removeItem("dashboard_group_filter");
-      currentCompanyIdRef.current = nextId;
-      followGroupRef.current();
-      notifyCompanySessionUpdated();
-      notify(t("switchedTo", { company: targetCompany.company_id }), "success");
+      const { redirected } = await runMaintenanceCompanySwitch({
+        companyRow: targetCompany,
+        viewGroup: targetCompany.group_id
+          ? String(targetCompany.group_id).trim().toUpperCase()
+          : selectedGroup,
+        currentPath: location.pathname,
+        navigate,
+        updateSessionCompany: (id) => updateSessionCompany(Number(id)),
+        onStay: async () => {
+          notify(t("switchedTo", { company: targetCompany.company_id }), "success");
+        },
+      });
+      if (redirected) return;
     } catch (err) {
       notify(err.message || t("switchFailed"), "error");
     }
-  }, [notify, t]);
+  }, [location.pathname, navigate, notify, selectedGroup, t]);
+
+  switchCompanyRef.current = handleSwitchCompany;
 
   const {
-    groupFilterKind,
     snapGroupIds: groupedIdsFromHook,
     visibleCompanies,
-    handlePickAllGroups,
     handleGroupClick: onGroupClick,
-    followCurrentCompanyGroup,
+    handlePickCompany,
+    handlePickAllGroups,
+    handlePickAllInGroup,
+    groupsAllMode,
+    groupAllMode,
+    allowClearCompany,
   } = useMaintenanceGroupCompanyFilter({
     companies,
     companyId,
     selectedGroup,
     setSelectedGroup,
-    switchCompany: handleSwitchCompany,
+    switchCompany: (c) => switchCompanyRef.current(c),
+    onPrepareCompanySelect: (c) => onPrepareCompanySelectRef.current(c),
+    onClearCompany: handleClearCompany,
+    pillCategory: "bank",
   });
 
-  followGroupRef.current = followCurrentCompanyGroup;
+  followGroupRef.current = () => {};
 
   const groupedIds = groupedIdsFromHook;
 
@@ -506,7 +552,11 @@ export default function BankprocessMaintenancePage() {
   };
 
   const tableLoading =
-    loading || bootLoading || !currenciesReady || (!hasSearched && Boolean(companyId));
+    loading ||
+    bootLoading ||
+    ((!currenciesReady || !hasSearched) &&
+      Boolean(companyId) &&
+      !initialBankprocessSearchDoneRef.current);
 
   return (
     <div className="bankprocess-maintenance-page-root container">
@@ -523,14 +573,16 @@ export default function BankprocessMaintenancePage() {
         setQuery={setQuery}
         onSearch={performSearch}
         groupedIds={groupedIds}
-        groupFilterKind={groupFilterKind}
         selectedGroup={selectedGroup}
         onGroupClick={onGroupClick}
+        onPickCompany={handlePickCompany}
         onPickAllGroups={handlePickAllGroups}
+        onPickAllInGroup={handlePickAllInGroup}
+        groupsAllMode={groupsAllMode}
+        groupAllMode={groupAllMode}
         companies={companies}
         visibleCompanies={visibleCompanies}
         companyId={companyId}
-        handleSwitchCompany={handleSwitchCompany}
         currencies={currencies}
         allCurrenciesSelected={allCurrenciesSelected}
         selectedCurrencies={selectedCurrencies}
@@ -543,19 +595,27 @@ export default function BankprocessMaintenancePage() {
         m={m}
       />
 
-      <BankprocessMaintenanceTable
-        key={bankprocessDataSourceCompanyId ?? companyId ?? "no-company"}
-        loading={tableLoading}
-        rows={rows}
-        hasSearched={hasSearched}
-        listEpoch={bankprocessListEpoch}
-        rowKeyCompanyId={bankprocessDataSourceCompanyId ?? companyId}
-        selectedIds={selectedIds}
-        onToggleRow={onToggleRow}
-        selectAll={selectAll}
-        onToggleSelectAll={onToggleSelectAll}
-        m={m}
-      />
+      <div className="bankprocess-maintenance-table-region">
+        {listSyncing && (
+          <div className="bankprocess-maintenance-sync-track" aria-hidden>
+            <div className="bankprocess-maintenance-sync-bar" />
+          </div>
+        )}
+        <BankprocessMaintenanceTable
+          key={bankprocessDataSourceCompanyId ?? companyId ?? "no-company"}
+          loading={tableLoading}
+          listSyncing={listSyncing}
+          rows={rows}
+          hasSearched={hasSearched}
+          listEpoch={bankprocessListEpoch}
+          rowKeyCompanyId={bankprocessDataSourceCompanyId ?? companyId}
+          selectedIds={selectedIds}
+          onToggleRow={onToggleRow}
+          selectAll={selectAll}
+          onToggleSelectAll={onToggleSelectAll}
+          m={m}
+        />
+      </div>
 
       <div id="notificationContainer" className="maintenance-notification-container">
         {toasts.map((toast) => (

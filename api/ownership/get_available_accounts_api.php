@@ -27,6 +27,10 @@ try {
         ");
         $stmtOwner->execute(['comp_id1' => $company_id, 'comp_id2' => $company_id]);
         $users = $stmtOwner->fetchAll(PDO::FETCH_ASSOC);
+        // External partners (Link Partner) must not appear in "+ Add Account" dropdown.
+        $users = array_values(array_filter($users, static function ($row) {
+            return (int) ($row['is_main_owner'] ?? 0) === 1;
+        }));
 
         // Fetch linked group entries for this company so existing G_xxx rows
         // always have a matching option in the account dropdown.

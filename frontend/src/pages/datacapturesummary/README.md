@@ -1,31 +1,27 @@
-# Data Capture Summary page (React + legacy)
+# Data Capture Summary page (pure React)
 
-Route: `/datacapturesummary` (see `App.jsx`). Entry: `DataCaptureSummaryPage.jsx`.
+Route: `/datacapturesummary` (see `App.jsx`). Entry: `DataCaptureSummaryPage.jsx` → `DataCaptureSummaryPagePure.jsx`.
 
-Upstream: `/datacapture` — capture session → `localStorage` → this page for review/submit.
+Upstream: `/datacapture` — `saveCaptureSession` → `localStorage` → this page for review, formula edit, and submit.
 
 ## Where to change what
 
 | Task | Location |
 |------|----------|
-| Page shell, legacy script boot, error boundary | `DataCaptureSummaryPage.jsx` |
-| Session / company access (same rules as Data Capture) | `hooks/useSummaryBoot.js` → `datacapture/lib/dataCaptureCompanyAccess.js` |
+| Page shell + error boundary | `DataCaptureSummaryPage.jsx` |
+| Session / company access | `hooks/useSummaryBoot.js` → `datacapture/lib/dataCaptureCompanyAccess.js` |
 | Capture session + server prefetch | `hooks/useSummaryCaptureBootstrap.js`, `lib/summaryStorage.js`, `lib/summaryTransform.js` |
-| Summary rows state (React tbody) | `hooks/useSummaryRows.js`, `table/summaryRowModel.js` |
-| Table populate + row/cell handlers | `hooks/useSummaryTablePopulate.js`, `table/summaryTablePostPopulate.js` |
-| Column A reference data | `table/summaryColumnAData.js` |
-| Sub-template grouping on refresh | `table/summarySubTemplatePopulate.js` |
-| React/legacy table bridge flags | `hooks/useSummaryTableBridge.js` |
-| Submit flow (validate → collect → API) | `hooks/useSummarySubmit.js`, `submit/summarySubmit*.js` |
-| Batch limits / notification timing | `submit/summarySubmitConstants.js` |
-| Delete selected rows | `lib/summaryDeleteFlow.js`, `hooks/useSummaryPageActions.js` |
-| Back / restore capture navigation | `lib/summaryPageActions.js` |
-| Edit Formula modal | `components/EditFormulaModal.jsx`, `hooks/useSummaryEditFormula.js` |
-| Formula parse / eval / save | `formula/summaryFormula*.js`, `formula/editFormulaConstants.js` |
-| Legacy formula shims on `window` | `formula/summaryFormulaEngineBridge.js` |
-| Add account modal | `hooks/useSummaryAddAccount.js`, shared `AccountModal.jsx` |
-| API calls | `lib/summaryApi.js` |
-| Notifications | `lib/summaryNotify.js`, `hooks/useSummaryOverlays.js` |
+| Row state | `context/SummaryContext.jsx` |
+| Table populate | `hooks/useSummaryTableModel.js`, `table/summaryTemplatePopulatePure.js` |
+| Column A / row model | `table/summaryColumnAData.js`, `table/summaryRowData.js`, `table/summaryRowModel.js` |
+| Submit (validate → API) | `hooks/useSummarySubmitPure.js`, `submit/buildSubmitRowsFromModel.js`, `submit/summarySubmitExecution.js` |
+| Page actions (back / refresh / delete / rate) | `hooks/useSummaryPageActionsPure.js`, `lib/summaryPageActions.js`, `lib/summaryRefreshStatePure.js` |
+| Edit Formula | `hooks/useSummaryEditFormulaPure.js`, `formula/editFormulaFormState.js`, `components/EditFormulaModal.jsx` |
+| Formula parse / eval | `formula/summaryFormulaReference.js`, `formula/summaryFormulaEvaluate.js` |
+| Template save | `formula/summarySaveTemplatePure.js` |
+| Add account | `hooks/useSummaryAddAccount.js`, shared `AccountModal.jsx` |
+| API | `lib/summaryApi.js` |
+| Notifications | `lib/summaryNotify.js`, `lib/summaryRuntime.js`, `hooks/useSummaryOverlays.js` |
 | UI chrome | `components/Summary*.jsx` |
 
 ## Folder layout
@@ -33,20 +29,21 @@ Upstream: `/datacapture` — capture session → `localStorage` → this page fo
 ```
 datacapturesummary/
   DataCaptureSummaryPage.jsx
-  README.md
-  hooks/              # useSummary*.js — React orchestration
-  components/         # Summary table shell, bars, modals
-  lib/                # API, storage, notify, transform, page actions, delete
-  submit/             # summarySubmit* — validation, DOM collect, payload, execution
-  table/              # row model, column A, populate, DOM bridge, sub-templates
-  formula/            # formula engine + editFormulaConstants (extracted from legacy)
+  DataCaptureSummaryPagePure.jsx
+  context/           # SummaryProvider — rows, rate, delete
+  hooks/             # useSummary*Pure.js — boot, populate, submit, formula
+  components/        # Summary table shell, bars, modals
+  lib/               # API, storage, notify, transform, page actions
+  submit/            # payload, execution, validation (from row state)
+  table/             # row model, column A, template populate
+  formula/           # formula engine + edit form state
 ```
 
-## Legacy
+## Contracts
 
-- Runtime: `js/datacapturesummary.js` (loaded by `DataCaptureSummaryPage.jsx`).
-- React modules register `window.__SUMMARY_*` shims; do not change `localStorage` keys in `lib/summaryStorage.js` without updating legacy.
-- Regenerate extracted modules: `frontend/scripts/extract-summary-*.mjs` (paths point at `submit/` and `formula/`).
+- Do not change `localStorage` keys in `lib/summaryStorage.js` without updating `datacapture` submit flow.
+- Cross-page navigation uses `window.isNavigatingAwayByBackOrSubmit` and `markSummaryFreshNavigation()` in session storage.
+- No `js/datacapturesummary.js` — all logic lives in this package.
 
 ## Styles
 

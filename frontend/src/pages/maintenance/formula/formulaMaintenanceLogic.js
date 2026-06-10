@@ -1,14 +1,75 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { companiesNativeInGroupList } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   fetchFormulaCompanyPermissionsRaw,
   fetchMaintenanceProcesses,
-  isBankOnlyCategoryCompany,
 } from "../shared/maintenanceCompanyApi.js";
+import { fetchProcesses as fetchDomainReportProcesses } from "../../report/domain/domainReportApi.js";
+import { mapDomainGroupProcesses } from "../../report/domain/domainReportGroupProcesses.js";
 import {
   buildFormulaDisplayParenFromParts,
   formatSourcePercent,
   normalizeMaintenanceFormulaInput,
 } from "../../../shared/formula/index.js";
+import {
+  formulaMaintenanceScopeApiParams,
+  formulaMaintenanceUsesGroupProcesses,
+} from "./formulaMaintenanceScope.js";
+
+const FORMULA_PAYROLL_PROCESS_CODES = new Set(["SALARY", "COMMISSION", "BONUS"]);
+
+/** ProcessSelect expects process_name; domain report rows use process / display_text. */
+export function mapProcessesForMaintenanceSelect(apiList, { groupPayrollShort = false } = {}) {
+  return (Array.isArray(apiList) ? apiList : []).map((row) => {
+    const processName = String(
+      row.process_name ?? row.process ?? row.process_id ?? "",
+    ).trim();
+    const upper = processName.toUpperCase();
+    let description = row.description ?? null;
+    if (FORMULA_PAYROLL_PROCESS_CODES.has(upper)) {
+      description = groupPayrollShort ? null : upper;
+    }
+    return {
+      id: row.id,
+      process_name: processName,
+      description,
+    };
+  });
+}
+
+function appendFormulaScopeToParams(params, scope) {
+  const { companyId, viewGroup, groupId, reportScope, groupOnly, groupAggregate } =
+    formulaMaintenanceScopeApiParams(scope);
+  if (companyId) params.append("company_id", String(companyId));
+  const vg = viewGroup ? String(viewGroup).trim().toUpperCase() : "";
+  if (vg) params.append("view_group", vg);
+  const gid = groupId ? String(groupId).trim().toUpperCase() : "";
+  if (gid) params.append("group_id", gid);
+  if (reportScope) params.append("report_scope", reportScope);
+  if (groupOnly) params.append("group_only", "1");
+  if (groupAggregate) params.append("group_aggregate", "1");
+}
+
+function appendFormulaScopeToPayload(payload, scope, fallbackCompanyId = null) {
+  // Never send company_id: 0 — backend rejects it; group scope resolves from group_id (same as list GET).
+  if (payload.company_id != null && Number(payload.company_id) <= 0) {
+    delete payload.company_id;
+  }
+  const { companyId, viewGroup, groupId, reportScope, groupOnly, groupAggregate } =
+    formulaMaintenanceScopeApiParams(scope);
+  if (companyId) payload.company_id = companyId;
+  else if (reportScope === "group") delete payload.company_id;
+  else {
+    const resolved =
+      fallbackCompanyId != null && Number(fallbackCompanyId) > 0 ? Number(fallbackCompanyId) : null;
+    if (resolved) payload.company_id = resolved;
+  }
+  if (viewGroup) payload.view_group = viewGroup;
+  if (groupId) payload.group_id = groupId;
+  if (reportScope) payload.report_scope = reportScope;
+  if (groupOnly) payload.group_only = "1";
+  if (groupAggregate) payload.group_aggregate = "1";
+}
 
 export async function fetchCompanyPermissionsRaw(companyCode) {
   return fetchFormulaCompanyPermissionsRaw(companyCode);
@@ -19,33 +80,63 @@ export async function fetchCompanyPermissions(companyCode) {
   return permissions.filter((p) => p !== "Bank");
 }
 
-export { isBankOnlyCategoryCompany };
+export { isBankOnlyCategoryCompany } from "../shared/maintenanceCompanyApi.js";
 
-export async function fetchProcesses(companyId) {
-  return fetchMaintenanceProcesses(companyId);
+export async function fetchProcesses(companyId, scope = null) {
+  if (scope && formulaMaintenanceUsesGroupProcesses(scope)) {
+    const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
+    return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList), {
+      groupPayrollShort: true,
+    });
+  }
+  const effectiveId = scope?.scopeCompanyId ?? companyId;
+  const rows = await fetchMaintenanceProcesses(effectiveId, { credentials: "include" });
+  return mapProcessesForMaintenanceSelect(rows, { groupPayrollShort: false });
 }
 
-export async function fetchAccounts(companyId) {
+export async function bootstrapFormulaMaintenanceMeta({ companies, groupId = null }) {
+  const anchor =
+    (groupId ? companiesNativeInGroupList(companies, groupId)[0] : null) ??
+    (Array.isArray(companies) ? companies[0] : null) ??
+    null;
+  const code = anchor?.company_id ? String(anchor.company_id) : "";
+  const rawPerms = code
+    ? await fetchCompanyPermissionsRaw(code)
+    : ["Games", "Gambling", "Bank", "Loan", "Rate", "Money"];
+  const companyPerms = rawPerms.filter((p) => p !== "Bank");
+  const savedPerm = code ? localStorage.getItem(`selectedPermission_${code}`) : null;
+  const initialActive =
+    savedPerm && companyPerms.includes(savedPerm) ? savedPerm : companyPerms.length > 0 ? companyPerms[0] : "";
+  return { permissions: companyPerms, activePermission: initialActive, rawPerms };
+}
+
+export async function fetchAccounts(companyId, scope = null) {
+  const effectiveId = scope?.scopeCompanyId ?? companyId;
   const params = new URLSearchParams();
-  if (companyId) params.append("company_id", companyId);
+  if (effectiveId) params.append("company_id", String(effectiveId));
+  appendFormulaScopeToParams(params, scope);
   params.append("status", "active");
   const url = buildApiUrl(`api/transactions/get_accounts_api.php?${params.toString()}`);
 
-  const response = await fetch(url);
+  const response = await fetch(url, { credentials: "include" });
   const data = await response.json();
   if (!data.success) throw new Error(data.error || "Failed to load accounts");
   return data.data || [];
 }
 
-export async function listFormulaTemplates({ companyId, category, process, search }) {
+export async function listFormulaTemplates({ companyId, category, process, search, scope }) {
   const params = new URLSearchParams();
-  if (companyId) params.append("company_id", companyId);
+  // Scope params include company_id for group/company; avoid duplicating query keys.
+  appendFormulaScopeToParams(params, scope);
+  if (!scope && companyId) params.append("company_id", String(companyId));
   if (category) params.append("category", category);
-  if (process) params.append("process", process);
+  if (process != null && String(process).trim() !== "") {
+    params.append("process", String(process).trim());
+  }
   if (search) params.append("search", String(search).toUpperCase());
   params.append("_t", Date.now());
   const url = buildApiUrl(`api/formula_maintenance/list_api.php?${params.toString()}`);
-  const response = await fetch(url, { cache: "no-cache" });
+  const response = await fetch(url, { cache: "no-cache", credentials: "include" });
   const data = await response.json();
 
   if (!data.success) throw new Error(data.message || data.error || "Search failed");
@@ -53,13 +144,15 @@ export async function listFormulaTemplates({ companyId, category, process, searc
   return list;
 }
 
-export async function updateFormulaTemplate(payload) {
+export async function updateFormulaTemplate(payload, scope = null) {
   const normalizedFormula = normalizeMaintenanceFormulaInput(payload.formula);
   const body = { ...payload, formula: normalizedFormula };
+  appendFormulaScopeToPayload(body, scope);
 
   const response = await fetch(buildApiUrl("api/formula_maintenance/update_api.php"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(body),
   });
   const data = await response.json();
@@ -67,11 +160,15 @@ export async function updateFormulaTemplate(payload) {
   return data.data;
 }
 
-export async function deleteFormulaTemplates(companyId, templateIds) {
+export async function deleteFormulaTemplates(companyId, templateIds, scope = null) {
+  const payload = { template_ids: templateIds };
+  appendFormulaScopeToPayload(payload, scope, companyId);
+
   const response = await fetch(buildApiUrl("api/formula_maintenance/delete_api.php"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ company_id: companyId, template_ids: templateIds }),
+    credentials: "include",
+    body: JSON.stringify(payload),
   });
   const data = await response.json();
   if (!data.success) throw new Error(data.message || data.error || "Delete failed");
@@ -79,7 +176,9 @@ export async function deleteFormulaTemplates(companyId, templateIds) {
 }
 
 export async function updateSessionCompany(companyId) {
-  const response = await fetch(buildApiUrl(`api/session/update_company_session_api.php?company_id=${companyId}`));
+  const response = await fetch(buildApiUrl(`api/session/update_company_session_api.php?company_id=${companyId}`), {
+    credentials: "include",
+  });
   const result = await response.json();
   if (!result.success) throw new Error(result.error || "Failed to update session company");
   return result.data;
@@ -106,7 +205,7 @@ export const toUpperDisplay = (val) => {
 export function formulaRowIdsMatch(a, b) {
   if (a == null || b == null) return false;
   return String(a) === String(b);
-}
+};
 
 /** Edit form: formula field is base-only; strip accidental *(source) suffix. */
 export function parseFormulaEditTail(raw) {

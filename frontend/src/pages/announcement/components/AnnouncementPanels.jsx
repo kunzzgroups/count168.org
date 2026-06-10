@@ -97,24 +97,26 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete }) {
 }
 
 export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete }) {
-  const [content, setContent] = useState("");
+  const [form, setForm] = useState({ prefix: "", content: "" });
   const [submitting, setSubmitting] = useState(false);
   const canCreate = maintenanceList.length === 0;
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const trimmed = content.trim();
-    if (!trimmed) return;
+    const prefix = form.prefix.trim();
+    const content = form.content.trim();
+    if (!prefix || !content) return;
     setSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append("content", trimmed);
+      fd.append("prefix", prefix);
+      fd.append("content", content);
       const res = await fetch(buildApiUrl("api/maintenance/create_api.php"), {
         method: "POST", body: fd, credentials: "include",
       });
       const json = await res.json();
       if (json.success) {
-        setContent("");
+        setForm({ prefix: "", content: "" });
         onEdit(); // triggers reload in parent
       }
     } finally {
@@ -136,14 +138,27 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete }) {
           )}
           <form id="maintenanceForm" onSubmit={handleSubmit}>
             <div className="form-group">
+              <label htmlFor="maintenancePrefix">{t("prefixRequired")}</label>
+              <input
+                id="maintenancePrefix"
+                type="text"
+                required
+                maxLength={100}
+                placeholder={t("enterMaintenancePrefix")}
+                disabled={!canCreate}
+                value={form.prefix}
+                onChange={(e) => setForm((p) => ({ ...p, prefix: e.target.value }))}
+              />
+            </div>
+            <div className="form-group">
               <label htmlFor="maintenanceContent">{t("contentRequired")}</label>
               <textarea
                 id="maintenanceContent"
                 required
                 placeholder={t("enterMaintenanceContent")}
                 disabled={!canCreate}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
+                value={form.content}
+                onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
               />
             </div>
             <button type="submit" className="submit-btn" disabled={!canCreate || submitting}>
@@ -169,7 +184,10 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete }) {
                       <button className="maintenance-delete-btn" onClick={() => onDelete(item)}>{t("delete")}</button>
                     </div>
                   </div>
-                  <div className="maintenance-content">{item.content}</div>
+                  <div className="maintenance-content">
+                    {item.prefix ? <strong>{item.prefix} </strong> : null}
+                    {item.content}
+                  </div>
                   <div className="announcement-meta">
                     <span>{t("createdBy", { name: item.created_by })}</span>
                     <span>{t("createdAt", { time: item.created_at })}</span>

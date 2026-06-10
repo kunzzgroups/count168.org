@@ -790,22 +790,5 @@ body::before {
     margin-top: clamp(18px, 1.67vw, 32px);
 }
 
-/* Scrollbar for long user lists */
-.confirm-message::-webkit-scrollbar {
-    width: 6px;
-}
-
-.confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.confirm-message::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 10px;
-}
-
-.confirm-message::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 

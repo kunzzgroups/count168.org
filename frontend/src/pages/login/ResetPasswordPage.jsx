@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RESET_PASSWORD_I18N } from "../../translateFile/auth/authTranslate.js";
 import { useAuthBackground } from "./useAuthBackground.js";
-import { sanitizeEmailInput, validateEmailFormat } from "../../utils/input/emailValidation.js";
+import { sendResetTac, submitResetPassword } from "./resetPassword.js";
+import { sanitizeEmailInput, validateEmail } from "../../utils/input/emailValidation.js";
 
 function AlertModal({ open, title, message, confirmText, onClose }) {
   useEffect(() => {
@@ -99,14 +100,18 @@ export default function ResetPasswordPage() {
 
   const onSendTac = async () => {
     const normalizedCompanyId = companyId.toUpperCase().trim();
-    const emailCheck = validateEmailFormat(email);
+    const trimmedEmail = validateEmail(email).normalized;
 
     if (!normalizedCompanyId) {
       showModal(i18n.notice, i18n.companyIdFirst);
       return;
     }
-    if (!emailCheck.valid) {
-      showModal(i18n.notice, email.trim() ? i18n.invalidEmailFormat : i18n.emailFirst);
+    if (!trimmedEmail) {
+      showModal(i18n.notice, i18n.emailFirst);
+      return;
+    }
+    if (!validateEmail(trimmedEmail).ok) {
+      showModal(i18n.notice, i18n.invalidEmailFormat);
       return;
     }
 
@@ -114,7 +119,7 @@ export default function ResetPasswordPage() {
     try {
       const data = await sendResetTac({
         companyId: normalizedCompanyId,
-        email: emailCheck.email,
+        email: trimmedEmail,
       });
 
       if (data.success) {
@@ -148,7 +153,8 @@ export default function ResetPasswordPage() {
     }
 
     const normalizedCompanyId = companyId.toUpperCase().trim();
-    const emailCheck = validateEmailFormat(email);
+    const emailCheck = validateEmail(email);
+    const trimmedEmail = emailCheck.normalized;
     const trimmedTac = tac.trim();
 
     if (!trimmedTac) {
@@ -156,11 +162,12 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    if (!normalizedCompanyId || !emailCheck.valid) {
-      showModal(
-        i18n.notice,
-        !normalizedCompanyId ? i18n.companyIdFirst : email.trim() ? i18n.invalidEmailFormat : i18n.emailFirst
-      );
+    if (!normalizedCompanyId || !trimmedEmail) {
+      showModal(i18n.notice, i18n.companyEmailRequired);
+      return;
+    }
+    if (!emailCheck.ok) {
+      showModal(i18n.notice, i18n.invalidEmailFormat);
       return;
     }
 
@@ -168,7 +175,7 @@ export default function ResetPasswordPage() {
     try {
       const data = await submitResetPassword({
         companyId: normalizedCompanyId,
-        email: emailCheck.email,
+        email: trimmedEmail,
         tac: trimmedTac,
         newPassword,
       });

@@ -13,34 +13,29 @@ import { domGridHasEditableData } from "../../lib/dataCaptureTableSnapshot.js";
 import { isGridPasteBlockedTarget } from "./dataCaptureClipboard.js";
 import { showFormatEditableGrid, syncFormatPreviewFromDom } from "../../format/dataCaptureFormat.js";
 import { resolvePasteCell } from "./dataCaptureClipboard.js";
-
-function getCaptureType() {
-  if (typeof window.__DC_GET_CAPTURE_TYPE__ === "function") {
-    return window.__DC_GET_CAPTURE_TYPE__() || "1.Text";
-  }
-  return "1.Text";
-}
+import {
+  getActiveCaptureType,
+  recomputeSubmitStateAfterPaste,
+  setFormatGridReady,
+  toggleFormatDisplay,
+} from "../../lib/dataCaptureBridge.js";
 
 function isFormatMode() {
-  return getCaptureType() === "2.Format";
+  return getActiveCaptureType() === "2.Format";
 }
 
 function isEditableFormField(el) {
   return isGridPasteBlockedTarget(el);
 }
 
-function markFormatGridReady(ready) {
-  window.__DC_SET_FORMAT_GRID_READY__?.(ready);
-}
-
 function afterFormatPasteFilled(filled, area) {
   if (!filled) return false;
-  markFormatGridReady(true);
+  setFormatGridReady(true);
   syncFormatPreviewFromDom();
   if (area) area.innerHTML = "";
   showFormatEditableGrid();
-  window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
-  window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+  toggleFormatDisplay();
+  recomputeSubmitStateAfterPaste();
   return true;
 }
 
@@ -149,7 +144,6 @@ export function handleGlobalFormatPaste(e) {
   const startRow = appendMode ? resolveFormatPasteStartRow(anchorCell) : 0;
 
   const pasteAreaFormat = document.getElementById("pasteAreaFormat");
-  showFormatEditableGrid();
 
   const { html, text } = readClipboard(clipboard);
 

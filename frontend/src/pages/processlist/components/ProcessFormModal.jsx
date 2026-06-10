@@ -1,5 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
+import { toProcessFormUpperInput } from "../processListHelpers.js";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
 const DAY_NAME_MAP = {
   "MON": "dayMonday",
@@ -56,6 +58,7 @@ export default function ProcessFormModal({
   t,
 }) {
   const ro = Boolean(readOnly);
+  const { submitting, guardSubmit } = useSubmitGuard(true);
   const [copyOpen, setCopyOpen] = useState(false);
   const [copySearch, setCopySearch] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -95,15 +98,15 @@ export default function ProcessFormModal({
   return (
     <ProcessModalPortal>
     <div id={editMode ? "editModal" : "addModal"} className="modal" style={processModalBackdropStyle}>
-      <div className="modal-content">
-        <div className="modal-header">
+      <div className="modal-content process-form-modal">
+        <div className="modal-header process-form-modal-header">
           <h2>{editMode ? t("editProcess") : t("addProcess")}</h2>
           <span className="close" onClick={onClose} role="presentation">
             &times;
           </span>
         </div>
         <div className="modal-body">
-          <form className="process-form add-grid" onSubmit={onSubmit}>
+          <form className="process-form add-grid" onSubmit={guardSubmit(onSubmit)}>
             <div className="add-col">
               <div className="process-form-section">
                 <h3 className="process-form-section-title">{t("processFormSectionBasic")}</h3>
@@ -186,45 +189,51 @@ export default function ProcessFormModal({
                     <input
                       id={editMode ? "edit_process_name" : "add_process_id"}
                       value={form.process_name}
-                      onChange={(e) => setForm((prev) => ({ ...prev, process_name: e.target.value }))}
+                      onChange={(e) => setForm((prev) => ({ ...prev, process_name: toProcessFormUpperInput(e.target.value) }))}
+                      style={
+                        editMode || form.is_multi_process
+                          ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" }
+                          : { textTransform: "uppercase" }
+                      }
                       required={!form.is_multi_process}
                       readOnly={editMode || form.is_multi_process}
                       disabled={ro}
-                      style={editMode || form.is_multi_process ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" } : undefined}
                       placeholder={t("enterProcessId")}
                     />
                     {!editMode && (
-                      <div className="checkbox-container">
-                        <input
-                          type="checkbox"
-                          id="add_multi_use"
-                          checked={form.is_multi_process || false}
-                          disabled={ro}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setForm((prev) => ({
-                              ...prev,
-                              is_multi_process: checked,
-                              show_multi_process_selection: true,
-                              selected_processes: checked ? prev.selected_processes : [],
-                              process_name: checked ? "" : prev.process_name,
-                            }));
-                          }}
-                        />
-                        <label htmlFor="add_multi_use">{t("multiProcess")}</label>
-                      </div>
+                      <button
+                        type="button"
+                        className={`btn btn-multi-process-toggle${form.is_multi_process ? " is-on" : ""}`}
+                        disabled={ro}
+                        aria-pressed={Boolean(form.is_multi_process)}
+                        onClick={() => {
+                          const next = !form.is_multi_process;
+                          setForm((prev) => ({
+                            ...prev,
+                            is_multi_process: next,
+                            show_multi_process_selection: true,
+                            selected_processes: next ? prev.selected_processes : [],
+                            process_name: next ? "" : prev.process_name,
+                          }));
+                        }}
+                      >
+                        {t("multiProcess")}
+                      </button>
                     )}
                   </div>
                 </div>
               </div>
 
-              {!editMode && form.is_multi_process && form.show_multi_process_selection !== false && (
+              {!editMode &&
+                form.is_multi_process &&
+                (form.show_multi_process_selection !== false ||
+                  !(form.selected_processes?.length > 0)) && (
                 <div className="form-row" id="multi_use_processes">
                   <div className="form-group">
                     <label>{t("selectMultiUseProcesses")}</label>
                     <div className="process-checkboxes" id="process_checkboxes">
                       {multiUseRows.map((p) => (
-                        <div key={p.process_name} className="checkbox-item">
+                        <div key={p.process_name} className="checkbox-item" title={p.process_name}>
                           <input
                             type="checkbox"
                             id={`mp_${p.process_name.replace(/[^a-zA-Z0-9_]/g, "_")}`}
@@ -244,27 +253,34 @@ export default function ProcessFormModal({
                         </div>
                       ))}
                     </div>
-                    <div className="multi-use-actions">
-                      <button
-                        type="button"
-                        className="btn btn-save btn-small"
-                        disabled={ro}
-                        onClick={() => setForm((prev) => ({ ...prev, show_multi_process_selection: false }))}
-                      >
-                        {t("confirm")}
-                      </button>
-                    </div>
+                    {(form.selected_processes?.length ?? 0) > 0 && (
+                      <div className="multi-use-actions">
+                        <button
+                          type="button"
+                          className="btn btn-save btn-multi-use-confirm"
+                          disabled={ro}
+                          onClick={() =>
+                            setForm((prev) => ({ ...prev, show_multi_process_selection: false }))
+                          }
+                        >
+                          {t("confirm")}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {!editMode && form.is_multi_process && form.show_multi_process_selection === false && (
+              {!editMode &&
+                form.is_multi_process &&
+                form.show_multi_process_selection === false &&
+                (form.selected_processes?.length ?? 0) > 0 && (
                 <div className="form-row" id="selected_processes_display">
                   <div className="form-group">
                     <label>{t("selectedMultiUseProcesses")}</label>
                     <div className="selected-processes" id="selected_processes_list">
                       {form.selected_processes?.map((name) => (
-                        <div key={name} className="selected-process-item">
+                        <div key={name} className="selected-process-item" title={name}>
                           <span>{name}</span>
                           <button
                             type="button"
@@ -305,7 +321,6 @@ export default function ProcessFormModal({
                       required={!editMode}
                       value={descSummary}
                       placeholder={t("clickToSelectDescriptions")}
-                      style={{ backgroundColor: "#f5f5f5" }}
                     />
                     <button
                       type="button"
@@ -468,8 +483,9 @@ export default function ProcessFormModal({
                   <input
                     value={form.remove_word}
                     disabled={ro}
-                    onChange={(e) => setForm((prev) => ({ ...prev, remove_word: e.target.value }))}
+                    onChange={(e) => setForm((prev) => ({ ...prev, remove_word: toProcessFormUpperInput(e.target.value) }))}
                     placeholder={t("enterWordsToRemove")}
+                    style={{ textTransform: "uppercase" }}
                   />
                   <small className="field-help">{t("removeWordsHelp")}</small>
                 </div>
@@ -481,8 +497,9 @@ export default function ProcessFormModal({
                   <input
                     value={form.replace_word_from}
                     disabled={ro}
-                    onChange={(e) => setForm((prev) => ({ ...prev, replace_word_from: e.target.value }))}
+                    onChange={(e) => setForm((prev) => ({ ...prev, replace_word_from: toProcessFormUpperInput(e.target.value) }))}
                     placeholder={t("oldWord")}
+                    style={{ textTransform: "uppercase" }}
                   />
                   <small className="field-help">{t("wordToBeReplaced")}</small>
                 </div>
@@ -491,8 +508,9 @@ export default function ProcessFormModal({
                   <input
                     value={form.replace_word_to}
                     disabled={ro}
-                    onChange={(e) => setForm((prev) => ({ ...prev, replace_word_to: e.target.value }))}
+                    onChange={(e) => setForm((prev) => ({ ...prev, replace_word_to: toProcessFormUpperInput(e.target.value) }))}
                     placeholder={t("newWord")}
+                    style={{ textTransform: "uppercase" }}
                   />
                   <small className="field-help">{t("replacementWord")}</small>
                 </div>
@@ -568,17 +586,18 @@ export default function ProcessFormModal({
                     rows={5}
                     value={form.remark}
                     disabled={ro}
-                    onChange={(e) => setForm((prev) => ({ ...prev, remark: e.target.value }))}
+                    onChange={(e) => setForm((prev) => ({ ...prev, remark: toProcessFormUpperInput(e.target.value) }))}
                     placeholder={t("enterRemarks")}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </div>
               </div>
               </div>
             </div>
 
-            <div className="form-actions add-actions">
-              <button type="submit" className="btn btn-save" disabled={ro}>
-                {editMode ? t("updateProcess") : t("addProcess")}
+            <div className="form-actions add-actions modal-footer process-form-modal-footer">
+              <button type="submit" className="btn btn-save" disabled={ro || submitting}>
+                {submitting ? t("saving") : editMode ? t("updateProcess") : t("addProcess")}
               </button>
               <button type="button" className="btn btn-cancel" onClick={onClose}>
                 {t("cancel")}

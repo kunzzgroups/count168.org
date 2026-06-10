@@ -47,6 +47,7 @@ export default function TransactionDashboardPage() {
             effectiveDateRangeText={effectiveDateRangeText}
             groupIds={page.groupIds}
             selectedGroup={page.selectedGroup}
+            groupsAllMode={page.groupsAllMode}
             groupAllMode={page.groupAllMode}
             companiesForPicker={page.companiesForPicker}
             companyId={page.companyId}
@@ -54,9 +55,11 @@ export default function TransactionDashboardPage() {
             currencies={page.currencies}
             currencyCode={page.currencyCode}
             onPickGroup={page.handlePickGroup}
+            onPickAllGroups={page.handlePickAllGroups}
             onPickCompany={page.handlePickCompany}
             onPickAllInGroup={page.handlePickAllInGroup}
-            onCurrencyChange={page.setCurrencyCode}
+            onCurrencyChange={page.handleCurrencyChange}
+            onCurrencyDropOn={page.handleCurrencyDropOn}
           />
 
           <DashboardKpiGrid
@@ -84,13 +87,16 @@ export default function TransactionDashboardPage() {
               currencies={page.currencies}
               earningsCurrencyRows={page.earningsCurrencyRows}
               useConvertedEarnings={page.useConvertedEarnings}
+              earningsBreakdownShowsRate={page.earningsBreakdownShowsRate}
               summaryEarningsValue={page.summaryEarningsValue}
               summaryConversionNote={page.summaryConversionNote}
               summaryEarningsLoading={page.summaryEarningsLoading}
+              earningsPanelStable={page.earningsPanelStable}
               earningsByCurrencyLoading={page.earningsByCurrencyLoading}
               exchangeRates={page.exchangeRates}
               exchangeRatesError={page.exchangeRatesError}
               exchangeRatesLoading={page.exchangeRatesLoading}
+              exchangeRateScopeKey={page.exchangeRateScopeKey}
               rateFootnoteText={page.rateFootnoteText}
               convertedEarningsTotal={page.convertedEarningsTotal}
             />

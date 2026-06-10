@@ -9,17 +9,17 @@
 @import "../../public/css/dashboard.css";
 @import "../../public/css/global-13inch.css";
 @import "../../public/css/dashboard-scrollbar.css";
+@import "../../public/css/portal-tooltip.css";
 @import "../../public/css/sidebar.css";
 
-/* --- Shared loading surfaces (session boot + in-layout page boot) --- */
+/* --- Session boot loading (login → dashboard, once per session) --- */
 @keyframes ec-shell-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.ec-app-boot-loading,
-.ec-page-content-loader {
+.ec-app-boot-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -27,9 +27,6 @@
   gap: 16px;
   font-family: Inter, "Segoe UI", sans-serif;
   color: #334155;
-}
-
-.ec-app-boot-loading {
   position: fixed;
   inset: 0;
   z-index: 5000;
@@ -44,15 +41,7 @@
   background-blend-mode: screen, screen, multiply, screen, normal;
 }
 
-.ec-page-content-loader {
-  min-height: min(72vh, calc(100vh - 120px));
-  width: 100%;
-  padding: 48px 24px;
-  box-sizing: border-box;
-}
-
-.ec-app-boot-loading__spinner,
-.ec-page-content-loader__spinner {
+.ec-app-boot-loading__spinner {
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -61,16 +50,45 @@
   animation: ec-shell-spin 0.75s linear infinite;
 }
 
-.ec-app-boot-loading__label,
-.ec-page-content-loader__label {
+.ec-app-boot-loading__label {
   font-size: 14px;
   font-weight: 600;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ec-app-boot-loading__spinner,
-  .ec-page-content-loader__spinner {
+  .ec-app-boot-loading__spinner {
     animation: none;
     border-top-color: #3b82f6;
   }
+}
+
+.ec-page-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.ec-page-shell__content {
+  width: 100%;
+  min-height: min(72vh, calc(100vh - 120px));
+}
+
+.ec-page-shell-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: min(72vh, calc(100vh - 120px));
+  width: 100%;
+  color: #334155;
+  font-family: Inter, "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ec-page-shell-loading .ec-app-boot-loading__spinner {
+  width: 36px;
+  height: 36px;
 }

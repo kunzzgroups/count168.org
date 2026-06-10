@@ -16,7 +16,8 @@ import { parsePastedData } from "./dataCaptureParsePastedData.js";
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "./dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid, parseGenericHtmlTable } from "./dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste, runConvertTableOnSubmit } from "../../lib/dataCaptureBridge.js";
 
 /** @returns {boolean} */
 export function handleGenericPaste(e, pastedData) {
@@ -46,7 +47,7 @@ export function handleGenericPaste(e, pastedData) {
             const filled = parseGenericHtmlTable(htmlData, startCell);
             if (filled) {
                 // HTML表格已直接填充，更新提交按钮状态
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             }
         }
@@ -85,56 +86,13 @@ export function handleGenericPaste(e, pastedData) {
 
                 // 如果成功解析成多行数据，填充到表格
                 if (dataMatrix.length > 0 && maxCols > 0) {
-                    const startCell = e.target;
-                    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                    const startCol = parseInt(startCell.dataset.col);
-
-                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                    const requiredRows = startRow + dataMatrix.length;
-                    const requiredCols = startCol + maxCols;
-
-                    if (requiredRows > currentRows || requiredCols > currentCols) {
-                        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                        const targetCols = Math.max(currentCols, requiredCols);
-                        ensurePasteGrid(targetRows, targetCols);
-                    }
-
-                    const tableBody = document.getElementById('tableBody');
-                    const currentPasteChanges = [];
-                    let successCount = 0;
-
-                    dataMatrix.forEach((rowData, rowIndex) => {
-                        const actualRowIndex = startRow + rowIndex;
-                        const tableRow = tableBody.children[actualRowIndex];
-                        if (!tableRow) return;
-
-                        rowData.forEach((cellData, colIndex) => {
-                            const actualColIndex = startCol + colIndex;
-                            const cell = tableRow.children[actualColIndex + 1];
-
-                            if (cell && cell.contentEditable === 'true') {
-                                const trimmedData = (cellData || '').trim();
-                                currentPasteChanges.push({
-                                    row: actualRowIndex,
-                                    col: actualColIndex,
-                                    oldValue: cell.textContent,
-                                    newValue: trimmedData
-                                });
-
-                                cell.textContent = trimmedData;
-                                if (trimmedData) {
-                                    successCount++;
-                                }
-                            }
-                        });
-                    });
-
-                    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
-                    if (successCount > 0) {
-                        window.showNotification?.(`成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)! 按 Ctrl+Z 可撤销`, 'success');
-                        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                    const result = applyParsedMatrixToGrid(dataMatrix, e.target, { trimValues: true });
+                    if (result.applied) {
+                        notifyPasteUser(
+                            `成功粘贴 ${result.successCount} 个单元格 (${result.maxRows} 行 x ${result.maxCols} 列)! 按 Ctrl+Z 可撤销`,
+                            "success",
+                        );
+                        recomputeSubmitStateAfterPaste();
                         return true;
                     }
                 }
@@ -152,63 +110,19 @@ export function handleGenericPaste(e, pastedData) {
     const excelFormatParsed = parseExcelFormatPaymentReport(pastedData);
     if (excelFormatParsed) {
         const { dataMatrix, maxRows, maxCols } = excelFormatParsed;
-
-        const startCell = e.target;
-        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-        const startCol = parseInt(startCell.dataset.col);
-
-        const currentRows = document.querySelectorAll('#tableBody tr').length;
-        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-
-        const requiredRows = startRow + maxRows;
-        const requiredCols = startCol + maxCols;
-
-        if (requiredRows > currentRows || requiredCols > currentCols) {
-            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-            const targetCols = Math.max(currentCols, requiredCols);
-            ensurePasteGrid(targetRows, targetCols);
-        }
-
-        const tableBody = document.getElementById('tableBody');
-        const currentPasteChanges = [];
-        let successCount = 0;
-
-        dataMatrix.forEach((rowData, rowIndex) => {
-            const actualRowIndex = startRow + rowIndex;
-            const tableRow = tableBody.children[actualRowIndex];
-            if (!tableRow) return;
-
-            rowData.forEach((cellData, colIndex) => {
-                const actualColIndex = startCol + colIndex;
-                const cell = tableRow.children[actualColIndex + 1];
-                if (cell && cell.contentEditable === 'true') {
-                    currentPasteChanges.push({
-                        row: actualRowIndex,
-                        col: actualColIndex,
-                        oldValue: cell.textContent,
-                        newValue: cellData
-                    });
-                    const finalValue = (cellData || '').toUpperCase();
-                    cell.textContent = finalValue;
-                    successCount++;
-                }
-            });
-        });
-
-        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+        const { successCount } = applyParsedMatrixToGrid(dataMatrix, e.target, { uppercaseValues: true });
 
         if (successCount > 0) {
-            window.showNotification?.(`Successfully pasted Excel format (${successCount} cells, ${maxRows} rows x ${maxCols} cols)!`, 'success');
+            notifyPasteUser(`Successfully pasted Excel format (${successCount} cells, ${maxRows} rows x ${maxCols} cols)!`, 'success');
         } else {
-            window.showNotification?.('No cells were pasted from Excel format.', 'danger');
+            notifyPasteUser('No cells were pasted from Excel format.', 'danger');
         }
 
-        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+        recomputeSubmitStateAfterPaste();
 
         if (successCount > 0) {
             setTimeout(() => {
-                window.__DC_CONVERT_TABLE_ON_SUBMIT__?.();
-                window.__DC_FIX_CITIBET_AMOUNTS__?.();
+                runConvertTableOnSubmit();
             }, 100);
         }
 
@@ -219,64 +133,19 @@ export function handleGenericPaste(e, pastedData) {
     const fullPayment = parseFullPaymentReport(pastedData);
     if (fullPayment) {
         const { dataMatrix, maxRows, maxCols } = fullPayment;
-
-        const startCell = e.target;
-        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-        const startCol = parseInt(startCell.dataset.col);
-
-        const currentRows = document.querySelectorAll('#tableBody tr').length;
-        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-
-        const requiredRows = startRow + maxRows;
-        const requiredCols = startCol + maxCols;
-
-        if (requiredRows > currentRows || requiredCols > currentCols) {
-            console.log('Full payment paste: expanding table. Current:', currentRows, 'x', currentCols, 'Required:', requiredRows, 'x', requiredCols);
-            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-            const targetCols = Math.max(currentCols, requiredCols);
-            ensurePasteGrid(targetRows, targetCols);
-        }
-
-        const tableBody = document.getElementById('tableBody');
-        const currentPasteChanges = [];
-        let successCount = 0;
-
-        dataMatrix.forEach((rowData, rowIndex) => {
-            const actualRowIndex = startRow + rowIndex;
-            const tableRow = tableBody.children[actualRowIndex];
-            if (!tableRow) return;
-
-            rowData.forEach((cellData, colIndex) => {
-                const actualColIndex = startCol + colIndex;
-                const cell = tableRow.children[actualColIndex + 1]; // +1 为了跳过行号
-                if (cell && cell.contentEditable === 'true') {
-                    currentPasteChanges.push({
-                        row: actualRowIndex,
-                        col: actualColIndex,
-                        oldValue: cell.textContent,
-                        newValue: cellData
-                    });
-                    const finalValue = (cellData || '').toUpperCase();
-                    cell.textContent = finalValue;
-                    successCount++;
-                }
-            });
-        });
-
-        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+        const { successCount } = applyParsedMatrixToGrid(dataMatrix, e.target, { uppercaseValues: true });
 
         if (successCount > 0) {
-            window.showNotification?.(`Successfully pasted ${successCount} cells (${maxRows} rows x ${maxCols} cols)!`, 'success');
+            notifyPasteUser(`Successfully pasted ${successCount} cells (${maxRows} rows x ${maxCols} cols)!`, 'success');
         } else {
-            window.showNotification?.('No cells were pasted from payment report.', 'danger');
+            notifyPasteUser('No cells were pasted from payment report.', 'danger');
         }
 
-        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+        recomputeSubmitStateAfterPaste();
 
-        // 粘贴完成后立即应用格式转换
         if (successCount > 0) {
             setTimeout(() => {
-                window.__DC_CONVERT_TABLE_ON_SUBMIT__?.();
+                runConvertTableOnSubmit();
             }, 100);
         }
 
@@ -288,64 +157,19 @@ export function handleGenericPaste(e, pastedData) {
     const simplePayment = parseSimplePaymentReport(pastedData);
     if (simplePayment) {
         const { dataMatrix, maxRows, maxCols } = simplePayment;
-
-        const startCell = e.target;
-        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-        const startCol = parseInt(startCell.dataset.col);
-
-        const currentRows = document.querySelectorAll('#tableBody tr').length;
-        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-
-        const requiredRows = startRow + maxRows;
-        const requiredCols = startCol + maxCols;
-
-        if (requiredRows > currentRows || requiredCols > currentCols) {
-            console.log('Simple payment paste: expanding table. Current:', currentRows, 'x', currentCols, 'Required:', requiredRows, 'x', requiredCols);
-            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-            const targetCols = Math.max(currentCols, requiredCols);
-            ensurePasteGrid(targetRows, targetCols);
-        }
-
-        const tableBody = document.getElementById('tableBody');
-        const currentPasteChanges = [];
-        let successCount = 0;
-
-        dataMatrix.forEach((rowData, rowIndex) => {
-            const actualRowIndex = startRow + rowIndex;
-            const tableRow = tableBody.children[actualRowIndex];
-            if (!tableRow) return;
-
-            rowData.forEach((cellData, colIndex) => {
-                const actualColIndex = startCol + colIndex;
-                const cell = tableRow.children[actualColIndex + 1]; // +1 为了跳过行号
-                if (cell && cell.contentEditable === 'true') {
-                    currentPasteChanges.push({
-                        row: actualRowIndex,
-                        col: actualColIndex,
-                        oldValue: cell.textContent,
-                        newValue: cellData
-                    });
-                    const finalValue = (cellData || '').toUpperCase();
-                    cell.textContent = finalValue;
-                    successCount++;
-                }
-            });
-        });
-
-        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+        const { successCount } = applyParsedMatrixToGrid(dataMatrix, e.target, { uppercaseValues: true });
 
         if (successCount > 0) {
-            window.showNotification?.(`Successfully pasted ${successCount} cells (${maxRows} rows x ${maxCols} cols)!`, 'success');
+            notifyPasteUser(`Successfully pasted ${successCount} cells (${maxRows} rows x ${maxCols} cols)!`, 'success');
         } else {
-            window.showNotification?.('No cells were pasted from payment report.', 'danger');
+            notifyPasteUser('No cells were pasted from payment report.', 'danger');
         }
 
-        window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+        recomputeSubmitStateAfterPaste();
 
-        // 粘贴完成后立即应用格式转换
         if (successCount > 0) {
             setTimeout(() => {
-                window.__DC_CONVERT_TABLE_ON_SUBMIT__?.();
+                runConvertTableOnSubmit();
             }, 100);
         }
 
@@ -489,64 +313,20 @@ export function handleGenericPaste(e, pastedData) {
 
             console.log('Final split result:', finalSplit);
 
-            // 填充到表格
-            const startCell = e.target;
-            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-            const startCol = parseInt(startCell.dataset.col);
-
-            // 确保表格有足够的列
-            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-            const requiredCols = startCol + finalSplit.length;
-
-            if (requiredCols > currentCols) {
-                const targetCols = Math.max(currentCols, requiredCols);
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                ensurePasteGrid(currentRows, targetCols);
-            }
-
-            const tableBody = document.getElementById('tableBody');
-            const tableRow = tableBody.children[startRow];
-            const currentPasteChanges = [];
-            let successCount = 0;
-
-            finalSplit.forEach((cellData, colIndex) => {
-                const actualColIndex = startCol + colIndex;
-                const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                if (cell && cell.contentEditable === 'true') {
-                    // 保存旧值（包括空单元格）
-                    const trimmedData = (cellData || '').trim();
-                    currentPasteChanges.push({
-                        row: startRow,
-                        col: actualColIndex,
-                        oldValue: cell.textContent,
-                        newValue: trimmedData
-                    });
-
-                    // 填充单元格（包括空单元格，以保留列位置）
-                    // 空单元格会被设置为空字符串，这样可以在粘贴时保留空列的位置
-                    if (trimmedData === '') {
-                        cell.textContent = '';
-                    } else {
-                        const finalValue = trimmedData.toUpperCase();
-                        cell.textContent = finalValue;
-                        successCount++;
-                    }
-                }
+            const { successCount } = applyParsedMatrixToGrid([finalSplit], e.target, {
+                trimValues: true,
+                uppercaseValues: true,
             });
 
-            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
             if (successCount > 0) {
-                window.showNotification?.(`Successfully pasted ${successCount} cells in ${finalSplit.length} columns!`, 'success');
+                notifyPasteUser(`Successfully pasted ${successCount} cells in ${finalSplit.length} columns!`, 'success');
             }
 
-            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+            recomputeSubmitStateAfterPaste();
 
-            // 粘贴完成后立即应用格式转换
             if (successCount > 0) {
                 setTimeout(() => {
-                    window.__DC_CONVERT_TABLE_ON_SUBMIT__?.();
+                    runConvertTableOnSubmit();
                 }, 100);
             }
 
@@ -2614,7 +2394,7 @@ export function handleGenericPaste(e, pastedData) {
     }
     if (dataMatrix.length === 0) {
         console.warn('All pasted rows were empty after filtering; aborting paste.');
-        window.showNotification?.('Pasted content is empty after filtering blank lines.', 'danger');
+        notifyPasteUser('Pasted content is empty after filtering blank lines.', 'danger');
         return;
     }
 
@@ -2783,120 +2563,32 @@ export function handleGenericPaste(e, pastedData) {
     console.log('First 3 rows of final matrix:', dataMatrix.slice(0, 3));
     console.log('=== PASTE DEBUG END ===');
 
-    // 获取起始单元格位置 - 在扩展表格之前获取
-    const startCell = e.target;
-    const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-    const startCol = parseInt(startCell.dataset.col);
+    const matrixToApply = isDownlinePaymentFinal
+        ? dataMatrix.map((row) => row.slice(0, 11))
+        : dataMatrix;
+    const fillMaxCols = isDownlinePaymentFinal ? Math.min(maxCols, 11) : maxCols;
 
-    console.log('Starting position - Row:', startRow, 'Col:', startCol);
-
-    // 获取当前表格尺寸
-    const currentRows = document.querySelectorAll('#tableBody tr').length;
-    const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-
-    // 计算需要的总尺寸
-    const requiredRows = startRow + maxRows;
-    const requiredCols = startCol + maxCols;
-
-    // 扩展表格（如果需要）- 但限制最大行数
-    if (requiredRows > currentRows || requiredCols > currentCols) {
-        console.log('Table needs expansion. Current:', currentRows, 'x', currentCols, 'Required:', requiredRows, 'x', requiredCols);
-        console.log('maxCols from dataMatrix:', maxCols, 'startCol:', startCol, 'requiredCols:', requiredCols);
-        const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // 限制最大702行 (ZZ)
-        const targetCols = Math.max(currentCols, requiredCols);
-        console.log('Expanding table to:', targetRows, 'x', targetCols);
-        ensurePasteGrid(targetRows, targetCols);
-
-        // 验证表格扩展后是否正确
-        setTimeout(() => {
-            const newCols = document.querySelectorAll('#tableHeader th').length - 1;
-            console.log('Table expanded. New column count:', newCols, '(expected:', targetCols, ')');
-        }, 100);
-    } else {
-        console.log('Table size is sufficient. Current:', currentRows, 'x', currentCols, 'Required:', requiredRows, 'x', requiredCols);
-    }
-
-    // 记录本次粘贴操作的变更（用于撤销）
-    const currentPasteChanges = [];
-
-    // 粘贴数据 - 横向排列（每行数据放在表格的对应行中）
-    const tableBody = document.getElementById('tableBody');
-    let successCount = 0;
-    let skippedRows = 0;
-
-    dataMatrix.forEach((rowData, rowIndex) => {
-        const actualRowIndex = startRow + rowIndex;
-        const tableRow = tableBody.children[actualRowIndex];
-
-        if (tableRow) {
-            // 如果是 Downline Payment 格式，只填充前11列
-            const maxColsToFill = isDownlinePaymentFinal ? 11 : rowData.length;
-            const colsToProcess = Math.min(maxColsToFill, rowData.length);
-
-            for (let colIndex = 0; colIndex < colsToProcess; colIndex++) {
-                const cellData = rowData[colIndex];
-                const actualColIndex = startCol + colIndex;
-                // +1 因为第一列是行号（row header）
-                const cell = tableRow.children[actualColIndex + 1];
-
-                if (cell && cell.contentEditable === 'true') {
-                    // 保存旧值（包括空单元格）
-                    const trimmedData = (cellData || '').trim();
-                    currentPasteChanges.push({
-                        row: actualRowIndex,
-                        col: actualColIndex,
-                        oldValue: cell.textContent,
-                        newValue: trimmedData
-                    });
-
-                    // 填充单元格（包括空单元格，以保留列位置）
-                    // 空单元格会被设置为空字符串，这样可以在粘贴时保留空列的位置
-                    if (trimmedData === '') {
-                        cell.textContent = '';
-                    } else {
-                        const finalValue = trimmedData.toUpperCase();
-                        cell.textContent = finalValue;
-                        successCount++;
-                    }
-
-                    // 调试：输出前几个单元格的粘贴位置
-                    if (successCount <= 5 && trimmedData !== '') {
-                        console.log(`Pasted cell[${actualRowIndex}][${actualColIndex}] = "${trimmedData.toUpperCase()}"`);
-                    }
-                }
-            }
-        } else {
-            skippedRows++;
-            console.warn('Row', actualRowIndex, 'does not exist in table');
-        }
+    const { successCount } = applyParsedMatrixToGrid(matrixToApply, e.target, {
+        trimValues: true,
+        uppercaseValues: true,
     });
 
-    // 将本次粘贴操作添加到历史记录
-    window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
     console.log(`Paste completed: ${successCount} cells filled`);
-    console.log(`Pasted ${maxRows} rows x ${maxCols} cols starting at row ${startRow}, col ${startCol}`);
+    console.log(`Pasted ${maxRows} rows x ${fillMaxCols} cols`);
 
     if (successCount > 0) {
-        let message = `Successfully pasted ${successCount} cells (${maxRows} rows x ${maxCols} cols)! Press Ctrl+Z to undo`;
-        if (skippedRows > 0) {
-            message += `\nNote: ${skippedRows} rows were skipped due to table size limit.`;
-        }
-        window.showNotification?.(message, 'success');
+        let message = `Successfully pasted ${successCount} cells (${maxRows} rows x ${fillMaxCols} cols)! Press Ctrl+Z to undo`;
+        notifyPasteUser(message, 'success');
     } else {
-        window.showNotification?.('No cells were pasted. Check console for details.', 'danger');
+        notifyPasteUser('No cells were pasted. Check console for details.', 'danger');
     }
 
-    // 粘贴完成后强制刷新一次提交按钮状态
-    // 确保「先选 process 再粘贴」与「先粘贴再选 process」两种顺序都能正确启用 Submit 按钮
-    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+    recomputeSubmitStateAfterPaste();
 
-    // 粘贴完成后立即应用格式转换（SUB TOTAL / GRAND TOTAL 转换）
-    // 这样用户粘贴后就能看到最终的排版效果，不需要等到点击 submit
     if (successCount > 0) {
         setTimeout(() => {
-            window.__DC_CONVERT_TABLE_ON_SUBMIT__?.();
-        }, 100); // 稍微延迟，确保 DOM 更新完成
+            runConvertTableOnSubmit();
+        }, 100);
     }
-  return typeof successCount !== "undefined" && successCount > 0;
+  return successCount > 0;
 }

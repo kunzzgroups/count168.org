@@ -1,8 +1,9 @@
-import { useLayoutEffect, useRef, useEffect } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 export default function SummaryActionBar({
   t,
   lang,
+  visible = false,
   rateInput,
   onRateInputChange,
   rateSelectAllLabel,
@@ -16,23 +17,18 @@ export default function SummaryActionBar({
   const deleteBtnRef = useRef(null);
   const deleteLabel = deleteCount > 0 ? t("deleteWithCount", { count: deleteCount }) : t("delete");
 
-  // Legacy updateDeleteButton() may overwrite button text — re-apply after render and on lang change.
   useLayoutEffect(() => {
     if (deleteBtnRef.current) {
       deleteBtnRef.current.textContent = deleteLabel;
     }
   }, [deleteLabel, lang]);
 
-  useEffect(() => {
-    const onLangUpdated = () => {
-      window.__SUMMARY_SYNC_DELETE_BUTTON_LABEL__?.();
-    };
-    window.addEventListener("eazycount:language-updated", onLangUpdated);
-    return () => window.removeEventListener("eazycount:language-updated", onLangUpdated);
-  }, []);
-
   return (
-    <div className="summary-action-buttons" id="actionButtons" style={{ display: "none" }}>
+    <div
+      className="summary-action-buttons"
+      id="actionButtons"
+      style={{ display: visible ? "flex" : "none" }}
+    >
       <div style={{ flex: 1 }} />
       <div className="batch-controls-group">
         <label htmlFor="rateInput" className="batch-label">

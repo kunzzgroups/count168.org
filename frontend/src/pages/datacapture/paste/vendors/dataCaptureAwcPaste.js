@@ -3,7 +3,8 @@ import { formatNumberToTwoDecimals } from "../core/dataCapturePasteMoneyUtils.js
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 
 export function parseAWCPatternBasedData(lines) {
     try {
@@ -281,98 +282,40 @@ export function parseAndFillHtmlTableForAwc(htmlString, startCell) {
             return false;
         }
 
-        // 获取起始位置
-        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-        const startCol = parseInt(startCell.dataset.col);
+        // 获取起始位置并填充
+        const dataMatrix = [];
 
-        // 扩展表格（如果需要）
-        const currentRows = document.querySelectorAll('#tableBody tr').length;
-        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-        const requiredRows = startRow + allRows.length;
-        const requiredCols = startCol + maxCols;
-
-        if (requiredRows > currentRows || requiredCols > currentCols) {
-            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-            const targetCols = Math.max(currentCols, requiredCols);
-            ensurePasteGrid(targetRows, targetCols);
-        }
-
-        // 填充数据并记录粘贴历史（用于撤销）
-        const tableBody = document.getElementById('tableBody');
-        // 重新获取列数（扩展表格后可能已改变）
-        const actualCols = document.querySelectorAll('#tableHeader th').length - 1;
-        const currentPasteChanges = [];
-        let successCount = 0;
-
-        allRows.forEach((sourceRow, rowIndex) => {
-            const actualRowIndex = startRow + rowIndex;
-            const tableRow = tableBody.children[actualRowIndex];
-            if (!tableRow) return;
-
+        allRows.forEach((sourceRow) => {
             const sourceCells = sourceRow.querySelectorAll('td, th');
-            let currentCol = startCol;
-
-            // 创建行数据数组，确保所有列位置都被填充（包括空白单元格）
             const rowData = new Array(maxCols).fill('');
             let colIndex = 0;
 
             sourceCells.forEach(sourceCell => {
                 const colspan = parseInt(sourceCell.getAttribute('colspan') || '1', 10);
-
-                // 获取源单元格的文本内容（AWC格式使用纯文本，保留空白）
                 let cellContent = sourceCell.textContent || '';
                 const trimmedContent = cellContent.trim();
 
-                // 填充当前单元格位置
                 if (colIndex < maxCols) {
                     rowData[colIndex] = trimmedContent;
                     colIndex++;
                 }
 
-                // 处理colspan的后续列（填充空字符串以保持列位置）
                 for (let i = 1; i < colspan; i++) {
                     if (colIndex < maxCols) {
-                        rowData[colIndex] = ''; // 明确设置为空字符串
+                        rowData[colIndex] = '';
                         colIndex++;
                     }
                 }
             });
 
-            // 填充到表格（包括空白单元格）
-            rowData.forEach((cellData, colIdx) => {
-                const actualColIndex = startCol + colIdx;
-                if (actualColIndex < actualCols) {
-                    const targetCell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                    if (targetCell && targetCell.contentEditable === 'true') {
-                        const oldValue = targetCell.textContent || '';
-                        const cellValue = (cellData || '').toString(); // 确保是字符串，空字符串也要保留
-
-                        // 设置单元格内容（包括空字符串）
-                        targetCell.textContent = cellValue;
-
-                        currentPasteChanges.push({
-                            row: actualRowIndex,
-                            col: actualColIndex,
-                            oldValue: oldValue,
-                            newValue: cellValue
-                        });
-
-                        // 即使单元格是空的，也计入成功（因为我们保留了空白单元格的位置）
-                        if (cellValue !== '') {
-                            successCount++;
-                        }
-                    }
-                }
-            });
+            dataMatrix.push(rowData);
         });
 
-        // 将本次粘贴操作添加到历史记录
-        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell);
 
         if (successCount > 0) {
-            window.showNotification?.(`AWC (2.7): 成功粘贴 ${successCount} 个单元格 (${allRows.length} 行 x ${maxCols} 列)，已保持表格行格式!`, 'success');
-            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+            notifyPasteUser(`AWC (2.7): 成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持表格行格式!`, 'success');
+            recomputeSubmitStateAfterPaste();
             return true;
         } else {
             console.log('AWC (2.7): No cells were pasted');

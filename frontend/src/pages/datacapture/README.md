@@ -4,22 +4,26 @@ Route: `/datacapture` (see `App.jsx`). Entry: `DataCapturePage.jsx`.
 
 Related: `/datacapturesummary` — `pages/datacapturesummary/` (see `datacapturesummary/README.md`).
 
+Pure React SPA — no runtime load of `js/datacapture.js` or other legacy scripts. Cross-module APIs use `lib/dataCaptureRuntime.js` (registered by hooks), not `window.__DC_*`.
+
 ## Where to change what
 
 | Task | Location |
 |------|----------|
-| Page shell, company filter, script boot, page-ready chrome | `DataCapturePage.jsx` |
+| Page shell, company filter, page-ready chrome | `DataCapturePage.jsx` |
 | Form fields, capture type, submit/reset | `hooks/useDataCaptureFormEngine.js`, `hooks/useDataCaptureCaptureType.js`, `hooks/useDataCaptureSubmitReset.js` |
 | Category / permission gates | `hooks/useDataCaptureCategoryPermissions.js` |
 | Submitted process list (right panel) | `hooks/useDataCaptureSubmittedList.js` |
-| SPA init + legacy globals + notifications | `hooks/useDataCaptureGlobalShims.js`, `lib/dataCaptureSpaInit.js` |
+| Page lifecycle (first load, URL params) | `hooks/useDataCapturePageLifecycle.js` |
+| Runtime registry (replaces legacy globals) | `lib/dataCaptureRuntime.js`, `lib/dataCaptureBridge.js` |
 | Table section JSX | `components/DataCaptureTableSection.jsx` |
 | Editable grid JSX | `components/DataCaptureGrid.jsx` |
-| Grid state & hooks | `hooks/useDataCaptureGrid.js`, `hooks/useDataCaptureGridInteraction.js`, `hooks/useDataCaptureGridHeader.js` |
+| Grid state & lifecycle | `hooks/useDataCaptureGrid.js`, `hooks/useDataCaptureGridWindowBridges.js` |
+| Grid interaction (selection, keyboard, context menu) | `hooks/useDataCapturePureReactGridInteraction.js` |
 | Grid constants, row labels, active flag | `grid/dataCaptureGridMeta.js` |
-| Grid DOM / keyboard / selection | `grid/dataCaptureGrid*.js` (other grid modules) |
-| Build empty grid, row/column CRUD | `grid/dataCaptureBuildGrid.js`, `grid/dataCaptureGridRowColumnCrud.js` |
-| Format display & format-mode paste | `hooks/useDataCaptureFormatDisplay.js`, `hooks/useDataCaptureFormatPaste.js`, `format/dataCaptureFormat.js` |
+| Grid DOM / keyboard / selection | `grid/dataCaptureGrid*.js`, `grid/gridCellInteraction.js` |
+| Row/column CRUD on grid model | `grid/gridRowColumnModel.js` |
+| Format display & format-mode paste | `hooks/useDataCaptureFormat.js`, `format/dataCaptureFormat.js` |
 | Cell paste (orchestration + typed router) | `hooks/useDataCapturePaste.js` → `paste/core/dataCapturePasteHandler.js` |
 | Typed capture paste (VPOWER, WBET, …) | `paste/core/dataCapturePasteHandler.js` (`TYPED_CAPTURE_TYPES`) + `paste/vendors/*` |
 | Citibet auto-detect / parsers | `paste/core/dataCapturePasteDetect.js`, `paste/vendors/dataCaptureCitibet*.js` |
@@ -38,14 +42,18 @@ Related: `/datacapturesummary` — `pages/datacapturesummary/` (see `datacapture
 ```
 datacapture/
   DataCapturePage.jsx
+  context/DataCaptureContext.jsx
   hooks/                       # 12 useDataCapture*.js
   components/
   grid/
     dataCaptureGridMeta.js     # DEFAULT_GRID_*, getRowLabel, tableActive
+    gridModel.js               # empty grid, resize, snapshot
+    gridDomAdapter.js          # applyCellModelToElement (display sync from model)
     dataCaptureGrid*.js        # interaction modules
   format/
     dataCaptureFormat.js       # preview storage + display toggles
   lib/
+    dataCaptureRuntime.js      # module-scoped registry (no window.__DC_*)
   paste/
     core/
     vendors/
@@ -57,7 +65,13 @@ datacapture/
 
 - `datacapturesummary/hooks/useSummaryBoot.js` → `datacapture/lib/dataCaptureCompanyAccess.js`
 
-## Styles & legacy
+## Styles
 
 - CSS: `frontend/public/css/datacapture.css`, `userlist.css`, `global-13inch.css`
-- Legacy reference: `js/datacapture.js` (phased out; React owns paste via `window.__DC_*` shims)
+
+## Grid architecture
+
+- **React grid model is the single source of truth** (`DataCaptureContext.grid` + `grid/gridModel.js`).
+- Cells use contentEditable for input UX; `onInput` / `onBlur` commit to the model via `updateCell`.
+- Paste, undo, submit snapshot, and row/column CRUD all read/write the model — not live DOM scraping.
+- `gridDomAdapter.applyCellModelToElement` only pushes model → DOM for display (paste html/styles, version bumps).

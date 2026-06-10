@@ -27,6 +27,11 @@ import { handlePegasusPaste } from "../vendors/dataCapturePegasusPaste.js";
 import { handleAlipayPaste } from "../vendors/dataCaptureAlipayPaste.js";
 import { handleC8PlayPaste } from "../vendors/dataCaptureC8PlayPaste.js";
 import { handleMaxbetPaste } from "../vendors/dataCaptureMaxbetPaste.js";
+import {
+  applyActiveCaptureType,
+  getActiveCaptureType,
+  setTableActiveForPaste,
+} from "../../lib/dataCaptureBridge.js";
 
 /** Capture types with dedicated paste handlers in React. */
 export const TYPED_CAPTURE_TYPES = new Set([
@@ -56,19 +61,6 @@ export const MIGRATED_PASTE_TYPES = new Set([
   "CITIBET",
   ...TYPED_CAPTURE_TYPES,
 ]);
-
-function setLegacyPasteContext(captureType, mode = "fallback") {
-  window.__DC_LEGACY_PASTE_CTX__ = {
-    captureType,
-    mode,
-    skipAutoDetect: true,
-    skipPrimaryBlocks: true,
-  };
-}
-
-function clearLegacyPasteContext() {
-  delete window.__DC_LEGACY_PASTE_CTX__;
-}
 
 /**
  * Route typed capture paste to the matching handler.
@@ -114,35 +106,15 @@ export function handleSpecialFormatPaste(e, pastedData, captureType) {
   return handleTypedCapturePaste(e, pastedData, captureType);
 }
 
-function getCaptureType() {
-  if (typeof window.__DC_GET_CAPTURE_TYPE__ === "function") {
-    return window.__DC_GET_CAPTURE_TYPE__() || "1.Text";
-  }
-  return "1.Text";
-}
-
-function applyCaptureType(nextType) {
-  if (typeof window.__DC_APPLY_CAPTURE_TYPE__ === "function") {
-    window.__DC_APPLY_CAPTURE_TYPE__(nextType);
-  } else if (typeof window.applyDataCaptureType === "function") {
-    window.applyDataCaptureType(nextType);
-  }
-}
-
 function invokeGenericPasteFallback(e, pastedData) {
-  setLegacyPasteContext(getCaptureType(), "fallback");
-  try {
-    return handleGenericPaste(e, pastedData);
-  } finally {
-    clearLegacyPasteContext();
-  }
+  return handleGenericPaste(e, pastedData);
 }
 
 /**
  * Global paste for 1.Text / CITIBET / 4.RETURN etc. when focus is outside the grid.
  */
 export function handleGlobalGridPaste(e) {
-  const captureType = getCaptureType();
+  const captureType = getActiveCaptureType();
   if (captureType === "2.Format") return;
   if (isGridPasteBlockedTarget(e.target)) return;
   if (e.target?.closest?.("#dataTable")) return;
@@ -157,7 +129,7 @@ export function handleGlobalGridPaste(e) {
   e.preventDefault();
   e.stopPropagation();
 
-  window.__DC_SET_TABLE_ACTIVE__?.(true);
+  setTableActiveForPaste();
   handleCellPasteEvent({ ...e, target: anchorCell, currentTarget: anchorCell });
 }
 
@@ -172,12 +144,12 @@ export function handleCellPasteEvent(e) {
   const pastedData = getClipboardPlainText(e);
   const detected = autoDetectCaptureTypeFromPaste(pastedData);
   if (detected) {
-    applyCaptureType(detected);
-  } else if (shouldExitCitibetMode(pastedData, getCaptureType())) {
-    applyCaptureType("1.Text");
+    applyActiveCaptureType(detected);
+  } else if (shouldExitCitibetMode(pastedData, getActiveCaptureType())) {
+    applyActiveCaptureType("1.Text");
   }
 
-  const captureType = getCaptureType();
+  const captureType = getActiveCaptureType();
 
   if (captureType === "2.Format") {
     if (handleFormatCellPaste(e, pastedData)) return;

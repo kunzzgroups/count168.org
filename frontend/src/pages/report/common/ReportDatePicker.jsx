@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   bindMaintenanceCalendarDismissListeners,
   ensureMaintenanceDateRangePicker,
@@ -41,6 +41,8 @@ export default function ReportDatePicker({
   weekdaysShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
 }) {
   const anchorLabelId = "report-date-range-outlined-label";
+  const onRangeChangeRef = useRef(onRangeChange);
+  onRangeChangeRef.current = onRangeChange;
 
   const parsedFrom = useMemo(() => parseYmd(dateFrom), [dateFrom]);
   const initialMonthLabel = parsedFrom ? monthLabels[parsedFrom.getMonth()] : monthLabels[new Date().getMonth()];
@@ -81,7 +83,7 @@ export default function ReportDatePicker({
           const nextToDmy = window.MaintenanceDateRangePicker.getDateTo?.() || "";
           const nextFrom = dmyToYmd(nextFromDmy);
           const nextTo = dmyToYmd(nextToDmy);
-          if (nextFrom && nextTo) onRangeChange(nextFrom, nextTo);
+          if (nextFrom && nextTo) onRangeChangeRef.current?.(nextFrom, nextTo);
         },
       });
     };
@@ -92,7 +94,7 @@ export default function ReportDatePicker({
     return () => {
       disposed = true;
     };
-  }, [onRangeChange, placeholder, selectEndDateHint]);
+  }, [placeholder, selectEndDateHint]);
 
   const dateBar = captureDateStyle ? (
     <div className="transaction-date-range-group">

@@ -9,9 +9,58 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/../datacapture/data_capture_scope_common.php';
 
 @ini_set('memory_limit', '768M');
 @set_time_limit(600);
+
+/**
+ * 子公司查询：与旧版 maintenance_search_api 一致的 company_id 解析（owner / session / 跨公司权限）。
+ */
+function maintenanceResolveRequestedCompanyId(PDO $pdo, int $requestedCompanyId, array $scopeParams = []): int
+{
+    if ($requestedCompanyId <= 0) {
+        throw new Exception('无效的 company_id');
+    }
+
+    $userRole = strtolower((string) ($_SESSION['role'] ?? ''));
+
+    if ($userRole === 'owner') {
+        $ownerId = $_SESSION['owner_id'] ?? $_SESSION['user_id'] ?? null;
+        if (!$ownerId) {
+            throw new Exception('缺少 Owner 信息');
+        }
+        $stmt = $pdo->prepare('SELECT id FROM company WHERE id = ? AND owner_id = ? LIMIT 1');
+        $stmt->execute([$requestedCompanyId, $ownerId]);
+        if (!$stmt->fetchColumn()) {
+            throw new Exception('无权访问该公司');
+        }
+        return $requestedCompanyId;
+    }
+
+    if (isset($_SESSION['company_id']) && (int) $_SESSION['company_id'] === $requestedCompanyId) {
+        return $requestedCompanyId;
+    }
+
+    $viewGroup = dcNormalizeGroupId($scopeParams['view_group'] ?? $scopeParams['group_id'] ?? '');
+    dcAssertUserCanAccessCompany(
+        $pdo,
+        $requestedCompanyId,
+        $viewGroup !== '' ? $viewGroup : null
+    );
+
+    return $requestedCompanyId;
+}
+
+function maintenanceResolveProcessIdByCode(PDO $pdo, int $companyId, string $processCode, bool $isGroupScope): ?int
+{
+    return dcResolveProcessIdByCode($pdo, $companyId, $processCode, $isGroupScope);
+}
+
+function maintenanceAssertProcessIdForScope(PDO $pdo, int $processId, int $companyId, bool $isGroupScope): void
+{
+    dcAssertProcessIdInCaptureScope($pdo, $processId, $companyId, $isGroupScope);
+}
 
 /**
  * 统一 Rate 显示：最多 8 位小数，不补尾零（与 Data Summary / Payment History 一致）
@@ -267,29 +316,108 @@ function maintenanceBuildTransactionUnionBranch(
 }
 
 /**
+ * Build scope context for legacy requests without explicit report_scope params.
+ *
+ * @return array<string, mixed>
+ */
+function maintenanceBuildScopeCtxFromLegacy(
+    PDO $pdo,
+    int $companyId,
+    bool $isGroupScope,
+    string $scopeProcessFilter,
+    string $scopeCompanySql,
+    string $scopeCompanySqlDeleted,
+    array $params
+): array {
+    $dualTenant = tenant_table_has_scope_columns($pdo, 'data_captures');
+    $ctx = [
+        'company_id' => $companyId,
+        'anchor_company_id' => $companyId,
+        'is_group_scope' => $isGroupScope,
+        'scope_process_sql' => $scopeProcessFilter,
+        'scope_company_sql' => $scopeCompanySql,
+        'scope_company_sql_deleted' => $scopeCompanySqlDeleted,
+        'dual_tenant' => $dualTenant,
+    ];
+
+    if ($isGroupScope) {
+        $groupId = dcNormalizeGroupId($params['view_group'] ?? $params['group_id'] ?? '');
+        if ($groupId !== '') {
+            $groupPk = gc_resolve_group_pk_by_code($pdo, $groupId);
+            $anchorId = gc_resolve_group_anchor_company_id($pdo, $groupId);
+            if ($anchorId > 0) {
+                $ctx['company_id'] = $anchorId;
+                $ctx['anchor_company_id'] = $anchorId;
+            }
+            if ($groupPk > 0) {
+                $ctx['group_id'] = $groupId;
+                $ctx['group_scope_id'] = $groupPk;
+                $ctx['scope_id'] = $groupPk;
+                $ctx['scope_type'] = 'group';
+            }
+        }
+    }
+
+    return $ctx;
+}
+
+/**
+ * Ledger-aware WHERE for data_captures (group/company isolation).
+ *
+ * @return array{where_sql: string, params: array}
+ */
+function maintenanceBuildCaptureWhere(
+    PDO $pdo,
+    array $scopeCtx,
+    string $date_from_db,
+    string $date_to_db,
+    ?string $process = null,
+    string $scopeProcessFilter = ''
+): array {
+    $ledgerDc = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dc', 'data_captures');
+    $ledgerDcd = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dcd', 'data_capture_details');
+    $processCompanyId = dcCaptureProcessCompanyId($scopeCtx);
+
+    $conditions = ['dc.capture_date BETWEEN ? AND ?', 'p.company_id = ?'];
+    $params = array_merge(
+        dcCaptureLedgerBindParams($ledgerDc),
+        dcCaptureLedgerBindParams($ledgerDcd),
+        [$date_from_db, $date_to_db, $processCompanyId]
+    );
+
+    if ($process) {
+        $conditions[] = 'p.process_id = ?';
+        $params[] = $process;
+    }
+
+    $whereSql = 'WHERE 1=1 ' . $ledgerDc['sql'] . $ledgerDcd['sql']
+        . ' AND ' . implode(' AND ', $conditions) . $scopeProcessFilter;
+
+    return ['where_sql' => $whereSql, 'params' => $params];
+}
+
+/**
  * 构建 Data Capture 分支（UNION 子查询）。
  * @return array{sql: string, params: array}
  */
 function maintenanceBuildCaptureUnionBranch(
     PDO $pdo,
-    int $company_id,
+    array $scopeCtx,
     string $date_from_db,
     string $date_to_db,
-    ?string $process
+    ?string $process,
+    string $scopeProcessFilter = ''
 ): array {
-    $captureWhere = [
-        "dc.company_id = ?",
-        "dcd.company_id = ?",
-        "dc.capture_date BETWEEN ? AND ?",
-    ];
-    $captureParams = [$company_id, $company_id, $date_from_db, $date_to_db];
-
-    if ($process) {
-        $captureWhere[] = "p.process_id = ?";
-        $captureParams[] = $process;
-    }
-
-    $captureWhereSql = 'WHERE ' . implode(' AND ', $captureWhere);
+    $built = maintenanceBuildCaptureWhere(
+        $pdo,
+        $scopeCtx,
+        $date_from_db,
+        $date_to_db,
+        $process,
+        $scopeProcessFilter
+    );
+    $captureWhereSql = $built['where_sql'];
+    $captureParams = $built['params'];
 
     $sql = "
         SELECT
@@ -325,7 +453,7 @@ function maintenanceBuildCaptureUnionBranch(
         INNER JOIN data_captures dc ON dcd.capture_id = dc.id
         INNER JOIN process p ON dc.process_id = p.id
         " . maintenanceDataCaptureAccountJoinSql('dcd', 'a') . "
-        INNER JOIN currency c ON dcd.currency_id = c.id
+        LEFT JOIN currency c ON dcd.currency_id = c.id
         LEFT JOIN description d ON p.description_id = d.id
         LEFT JOIN user u ON dc.user_type = 'user' AND dc.created_by = u.id
         LEFT JOIN owner o ON dc.user_type = 'owner' AND dc.created_by = o.id
@@ -411,23 +539,23 @@ function maintenanceBuildTransactionFastBranch(
  * @return array{sql: string, params: array}
  */
 function maintenanceBuildCaptureFastBranch(
-    int $company_id,
+    PDO $pdo,
+    array $scopeCtx,
     string $date_from_db,
     string $date_to_db,
-    ?string $process
+    ?string $process,
+    string $scopeProcessFilter = ''
 ): array {
-    $captureWhere = [
-        "dc.company_id = ?",
-        "dc.capture_date BETWEEN ? AND ?",
-    ];
-    $captureParams = [$company_id, $date_from_db, $date_to_db];
-
-    if ($process) {
-        $captureWhere[] = "p.process_id = ?";
-        $captureParams[] = $process;
-    }
-
-    $captureWhereSql = 'WHERE ' . implode(' AND ', $captureWhere);
+    $built = maintenanceBuildCaptureWhere(
+        $pdo,
+        $scopeCtx,
+        $date_from_db,
+        $date_to_db,
+        $process,
+        $scopeProcessFilter
+    );
+    $captureWhereSql = $built['where_sql'];
+    $captureParams = $built['params'];
 
     $sql = "
         SELECT
@@ -459,11 +587,11 @@ function maintenanceBuildCaptureFastBranch(
             dcd.description_main AS description_main,
             dcd.description_sub AS description_sub,
             dcd.columns_value AS columns_value
-        FROM data_captures dc
-        INNER JOIN data_capture_details dcd ON dcd.capture_id = dc.id
+        FROM data_capture_details dcd
+        INNER JOIN data_captures dc ON dcd.capture_id = dc.id
         INNER JOIN process p ON dc.process_id = p.id
-        LEFT JOIN account a ON a.id = dcd.account_id
-        INNER JOIN currency c ON dcd.currency_id = c.id
+        " . maintenanceDataCaptureAccountJoinSql('dcd', 'a') . "
+        LEFT JOIN currency c ON dcd.currency_id = c.id
         LEFT JOIN description d ON p.description_id = d.id
         LEFT JOIN user u ON dc.user_type = 'user' AND dc.created_by = u.id
         LEFT JOIN owner o ON dc.user_type = 'owner' AND dc.created_by = o.id
@@ -667,12 +795,74 @@ function maintenanceMergeSortedRowLists(array $lists, int $maxRows): array
     return ['rows' => $merged, 'indices' => $indices];
 }
 
+/** @return array<string, mixed> */
+function maintenanceSearchScopeDebug(
+    PDO $pdo,
+    int $company_id,
+    string $date_from_db,
+    string $date_to_db,
+    bool $maintenance_scope_group,
+    string $scopeProcessFilter
+): array {
+    $companyRow = null;
+    try {
+        $stmt = $pdo->prepare('SELECT id, company_id, group_id FROM company WHERE id = ? LIMIT 1');
+        $stmt->execute([$company_id]);
+        $companyRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    } catch (PDOException $e) {
+        /* ignore */
+    }
+
+    $txCount = 0;
+    $capCount = 0;
+    try {
+        $txStmt = $pdo->prepare("
+            SELECT COUNT(*) FROM transactions t
+            WHERE t.company_id = ? AND t.transaction_date BETWEEN ? AND ?
+              AND t.transaction_type NOT IN ('PAYMENT','RECEIVE','CONTRA','CLAIM','RATE','CLEAR','ADJUSTMENT','WIN','LOSE')
+        ");
+        $txStmt->execute([$company_id, $date_from_db, $date_to_db]);
+        $txCount = (int) $txStmt->fetchColumn();
+
+        $capSql = "
+            SELECT COUNT(*)
+            FROM data_capture_details dcd
+            INNER JOIN data_captures dc ON dcd.capture_id = dc.id
+            INNER JOIN process p ON dc.process_id = p.id
+            WHERE dc.company_id = ? AND dcd.company_id = ?
+              AND dc.capture_date BETWEEN ? AND ?
+              $scopeProcessFilter
+        ";
+        $capStmt = $pdo->prepare($capSql);
+        $capStmt->execute([$company_id, $company_id, $date_from_db, $date_to_db]);
+        $capCount = (int) $capStmt->fetchColumn();
+    } catch (PDOException $e) {
+        return [
+            'company_id' => $company_id,
+            'company_row' => $companyRow,
+            'scope_group' => $maintenance_scope_group,
+            'error' => $e->getMessage(),
+        ];
+    }
+
+    return [
+        'company_id' => $company_id,
+        'company_row' => $companyRow,
+        'date_from' => $date_from_db,
+        'date_to' => $date_to_db,
+        'scope_group' => $maintenance_scope_group,
+        'raw_tx_count' => $txCount,
+        'raw_capture_detail_count' => $capCount,
+    ];
+}
+
 /**
  * SQL 层分页：UNION ALL + 全局游标 + LIMIT（单次查询，保证条数完整且更快）。
  */
 function maintenanceSearchPaginatedFast(
     PDO $pdo,
     int $company_id,
+    array $scopeCtx,
     string $date_from_db,
     string $date_to_db,
     ?string $process,
@@ -680,13 +870,15 @@ function maintenanceSearchPaginatedFast(
     bool $is_bank_category,
     int $page,
     int $page_size,
-    ?string $cursor_raw = null
+    ?string $cursor_raw = null,
+    bool $maintenance_scope_group = false,
+    string $scopeProcessFilter = ''
 ): void {
     $has_source_bank_col = maintenanceHasSourceBankCol($pdo);
     $unionParts = [];
     $params = [];
 
-    if (empty($process)) {
+    if (empty($process) && !$maintenance_scope_group) {
         $tx = maintenanceBuildTransactionFastBranch(
             $company_id,
             $date_from_db,
@@ -702,10 +894,12 @@ function maintenanceSearchPaginatedFast(
     if (!$is_bank_category) {
         try {
             $cap = maintenanceBuildCaptureFastBranch(
-                $company_id,
+                $pdo,
+                $scopeCtx,
                 $date_from_db,
                 $date_to_db,
-                $process
+                $process,
+                $scopeProcessFilter
             );
             $unionParts[] = '(' . $cap['sql'] . ')';
             $params = array_merge($params, $cap['params']);
@@ -762,7 +956,7 @@ function maintenanceSearchPaginatedFast(
     }
 
     $returned = count($formatted);
-    echo json_encode([
+    $payload = [
         'success' => true,
         'data' => $formatted,
         'pagination' => [
@@ -772,43 +966,157 @@ function maintenanceSearchPaginatedFast(
             'has_more' => $hasMore,
             'next_cursor' => $nextCursor,
         ],
-    ], JSON_UNESCAPED_UNICODE);
+    ];
+    if (!empty($_GET['debug_scope']) && (string) $_GET['debug_scope'] === '1') {
+        $payload['debug'] = maintenanceSearchScopeDebug(
+            $pdo,
+            $company_id,
+            $date_from_db,
+            $date_to_db,
+            $maintenance_scope_group,
+            $scopeProcessFilter
+        );
+        $payload['debug']['category'] = $category;
+        $payload['debug']['is_bank_category'] = $is_bank_category;
+        $payload['debug']['scope_process_filter'] = trim($scopeProcessFilter);
+    }
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
 }
 
 try {
-    // 确定 company_id（支持 owner 指定，多公司切换）
-    $company_id = null;
-    if (isset($_GET['company_id']) && $_GET['company_id'] !== '') {
-        $requestedCompanyId = (int)$_GET['company_id'];
-        $userRole = strtolower($_SESSION['role'] ?? '');
-        
-        if ($userRole === 'owner') {
-            $ownerId = $_SESSION['owner_id'] ?? $_SESSION['user_id'] ?? null;
-            if (!$ownerId) {
-                throw new Exception('缺少 Owner 信息');
+    if (!isset($_SESSION['user_id'])) {
+        throw new Exception('用户未登录');
+    }
+
+    $scopeParams = $_GET;
+    $maintenance_scope_group = false;
+    $scopeProcessFilter = '';
+    $scopeCompanySql = '';
+    $scopeCompanySqlDeleted = '';
+    $hasExplicitScope = dcRequestHasExplicitScope($scopeParams);
+    $requestedViewGroup = dcNormalizeGroupId(
+        $scopeParams['view_group'] ?? $scopeParams['group_id'] ?? ''
+    );
+
+    if ($hasExplicitScope) {
+        $scopeResolved = resolveDataCaptureRequestScope($pdo, $scopeParams);
+        $scopeCtx = dcFinalizeCaptureMaintenanceScope($pdo, $scopeResolved, $scopeParams);
+        $company_id = (int) $scopeCtx['company_id'];
+        $maintenance_scope_group = (bool) $scopeCtx['is_group_scope'];
+        $scopeProcessFilter = (string) $scopeCtx['scope_process_sql'];
+        $scopeCompanySql = (string) $scopeCtx['scope_company_sql'];
+        $scopeCompanySqlDeleted = (string) ($scopeCtx['scope_company_sql_deleted'] ?? '');
+        if ($scopeCompanySqlDeleted === '' && !$maintenance_scope_group) {
+            $scopeCompanySqlDeleted = dcSqlCaptureOnSubsidiaryCompany('dcd');
+        }
+        dcAssertUserCanAccessCompany(
+            $pdo,
+            $company_id,
+            $requestedViewGroup !== '' ? $requestedViewGroup : null
+        );
+    } else {
+        $company_id = null;
+        if (isset($_GET['company_id']) && $_GET['company_id'] !== '') {
+            $requestedCompanyId = (int) $_GET['company_id'];
+            $userRole = strtolower($_SESSION['role'] ?? '');
+
+            if ($userRole === 'owner') {
+                $ownerId = $_SESSION['owner_id'] ?? $_SESSION['user_id'] ?? null;
+                if (!$ownerId) {
+                    throw new Exception('缺少 Owner 信息');
+                }
+                $stmt = $pdo->prepare('SELECT id FROM company WHERE id = ? AND owner_id = ? LIMIT 1');
+                $stmt->execute([$requestedCompanyId, $ownerId]);
+                if (!$stmt->fetchColumn()) {
+                    throw new Exception('无权访问该公司');
+                }
+                $company_id = $requestedCompanyId;
+            } else {
+                if (!isset($_SESSION['company_id'])) {
+                    throw new Exception('缺少公司信息');
+                }
+                $viewGroupForLegacy = dcNormalizeGroupId(
+                    $scopeParams['view_group'] ?? $scopeParams['group_id'] ?? ''
+                );
+                try {
+                    dcAssertUserCanAccessCompany(
+                        $pdo,
+                        $requestedCompanyId,
+                        $viewGroupForLegacy !== '' ? $viewGroupForLegacy : null
+                    );
+                    $company_id = $requestedCompanyId;
+                } catch (Exception $accessErr) {
+                    if ($requestedCompanyId !== (int) $_SESSION['company_id']) {
+                        throw new Exception('无权访问该公司');
+                    }
+                    $company_id = $requestedCompanyId;
+                }
             }
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ? LIMIT 1");
-            $stmt->execute([$requestedCompanyId, $ownerId]);
-            if (!$stmt->fetchColumn()) {
-                throw new Exception('无权访问该公司');
-            }
-            $company_id = $requestedCompanyId;
         } else {
             if (!isset($_SESSION['company_id'])) {
                 throw new Exception('缺少公司信息');
             }
-            if ($requestedCompanyId !== (int)$_SESSION['company_id']) {
-                throw new Exception('无权访问该公司');
-            }
-            $company_id = $requestedCompanyId;
+            $company_id = (int) $_SESSION['company_id'];
         }
-    } else {
-        if (!isset($_SESSION['company_id'])) {
-            throw new Exception('缺少公司信息');
+
+        $maintenance_scope_group = dcIsGroupScopeHint([
+            'company_id' => $company_id,
+            'group_id' => dcNormalizeGroupId($scopeParams['view_group'] ?? $scopeParams['group_id'] ?? ''),
+            'report_scope_hint' => '',
+        ]);
+        $scopeProcessFilter = $maintenance_scope_group
+            ? dcSqlGroupProcessFilter('p')
+            : dcSqlCompanyProcessFilter('p');
+        $scopeCompanySql = $maintenance_scope_group
+            ? ''
+            : dcSqlCaptureOnSubsidiaryCompany('dc');
+        $scopeCompanySqlDeleted = $maintenance_scope_group
+            ? ''
+            : dcSqlCaptureOnSubsidiaryCompany('dcd');
+        if ($maintenance_scope_group && $company_id > 0 && dcCompanyIdIsGroupEntity($pdo, $company_id)) {
+            $scopeCompanySql = dcSqlCaptureOnGroupEntityCompany('dc');
+            $scopeCompanySqlDeleted = dcSqlCaptureOnGroupEntityCompany('dcd');
         }
-        $company_id = (int)$_SESSION['company_id'];
+        $scopeCtx = maintenanceBuildScopeCtxFromLegacy(
+            $pdo,
+            (int) $company_id,
+            $maintenance_scope_group,
+            $scopeProcessFilter,
+            $scopeCompanySql,
+            $scopeCompanySqlDeleted,
+            $scopeParams
+        );
     }
-    
+
+    if ($maintenance_scope_group && (int) $company_id <= 0) {
+        echo json_encode([
+            'success' => true,
+            'data' => [],
+            'pagination' => [
+                'page' => isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1,
+                'page_size' => isset($_GET['page_size']) ? (int) $_GET['page_size'] : 0,
+                'total' => 0,
+                'has_more' => false,
+                'next_cursor' => null,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+    if (!$maintenance_scope_group && (int) $company_id > 0 && dcCompanyIdIsGroupEntity($pdo, (int) $company_id)) {
+        echo json_encode([
+            'success' => true,
+            'data' => [],
+            'pagination' => [
+                'page' => isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1,
+                'page_size' => isset($_GET['page_size']) ? (int) $_GET['page_size'] : 0,
+                'total' => 0,
+                'has_more' => false,
+                'next_cursor' => null,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        return;
+    }
+
     // 参数
     $date_from = $_GET['date_from'] ?? null;
     $date_to   = $_GET['date_to']   ?? null;
@@ -826,16 +1134,59 @@ try {
     // 统一 process 为 process_id（代码）：前端可能传 "SPORT (SPORT)" 或数字 id
     if ($process !== null && $process !== '') {
         if (preg_match('/^\d+$/', $process)) {
-            $stmt = $pdo->prepare("SELECT process_id FROM process WHERE id = ? AND company_id = ? LIMIT 1");
-            $stmt->execute([(int)$process, $company_id]);
+            $processPk = (int) $process;
+            try {
+                maintenanceAssertProcessIdForScope(
+                    $pdo,
+                    $processPk,
+                    (int) $company_id,
+                    (bool) $maintenance_scope_group
+                );
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => true,
+                    'data' => [],
+                    'pagination' => [
+                        'page' => $page > 0 ? $page : 1,
+                        'page_size' => $page_size > 0 ? $page_size : 0,
+                        'total' => 0,
+                        'has_more' => false,
+                        'next_cursor' => null,
+                    ],
+                ], JSON_UNESCAPED_UNICODE);
+                return;
+            }
+            $stmt = $pdo->prepare('SELECT process_id FROM process WHERE id = ? AND company_id = ? LIMIT 1');
+            $stmt->execute([$processPk, $company_id]);
             $res = $stmt->fetchColumn();
-            $process = $res !== false ? (string)$res : null;
+            $process = $res !== false ? (string) $res : null;
         } else {
             if (strpos($process, '(') !== false) {
                 $process = trim(explode('(', $process)[0]);
             }
             if ($process === '') {
                 $process = null;
+            } else {
+                $resolvedPid = maintenanceResolveProcessIdByCode(
+                    $pdo,
+                    (int) $company_id,
+                    (string) $process,
+                    (bool) $maintenance_scope_group
+                );
+                if ($resolvedPid === null) {
+                    echo json_encode([
+                        'success' => true,
+                        'data' => [],
+                        'pagination' => [
+                            'page' => $page > 0 ? $page : 1,
+                            'page_size' => $page_size > 0 ? $page_size : 0,
+                            'total' => 0,
+                            'has_more' => false,
+                            'next_cursor' => null,
+                        ],
+                    ], JSON_UNESCAPED_UNICODE);
+                    return;
+                }
             }
         }
     }
@@ -846,6 +1197,10 @@ try {
             $process = null;
         }
     }
+
+    $capture_company_id = (int) $company_id;
+    $capture_scope_group = (bool) $maintenance_scope_group;
+    $captureScopeProcessFilter = $scopeProcessFilter;
 
     if (!$date_from || !$date_to) {
         throw new Exception('日期范围是必填项');
@@ -883,13 +1238,14 @@ try {
     // 仅当显式传入 include_deleted=1 时，才附加 transactions_deleted / data_captures_deleted 的历史记录
     $includeDeleted = isset($_GET['include_deleted']) && $_GET['include_deleted'] === '1';
 
-    // 常用路径：无已删除记录 + 分页 → SQL UNION（失败则回退 legacy 双查询）
-    if (!$includeDeleted && $page_size > 0) {
+    // 子公司：与旧 PHP 一致走 legacy 全量查询 + PHP 分页；仅 group scope 用 SQL UNION 游标分页
+    if (!$includeDeleted && $page_size > 0 && $capture_scope_group) {
         $page = $page > 0 ? $page : 1;
         try {
             maintenanceSearchPaginatedFast(
                 $pdo,
-                $company_id,
+                $capture_company_id,
+                $scopeCtx,
                 $date_from_db,
                 $date_to_db,
                 $process,
@@ -897,7 +1253,9 @@ try {
                 $is_bank_category,
                 $page,
                 $page_size,
-                $cursor_raw !== '' ? $cursor_raw : null
+                $cursor_raw !== '' ? $cursor_raw : null,
+                (bool) $capture_scope_group,
+                $captureScopeProcessFilter
             );
             return;
         } catch (Throwable $fastErr) {
@@ -911,8 +1269,9 @@ try {
     $no = 1;
 
     // ========== 1. 查询 Transaction 数据 ==========
-    // 当指定了 Process 时，不查 Transaction（transactions 表无 process 关联），只由下方 Data Capture 按 process 过滤
-    if (empty($process)) {
+    // Group scope：仅 SALARY/BONUS（Data Capture）；不查无 process 的 Transaction 分支
+    // 当指定了 Process 时，不查 Transaction，只由下方 Data Capture 按 process 过滤
+    if (empty($process) && !$capture_scope_group) {
     $where = [];
     $params = [];
 
@@ -1012,33 +1371,23 @@ try {
     // ========== 2. 查询 Data Capture 数据（Bank category 不包含 Data Capture，仅 Transaction）==========
     if (!$is_bank_category) {
     try {
-        $captureWhere = [];
-        $captureParams = [];
+        $captureBuilt = maintenanceBuildCaptureWhere(
+            $pdo,
+            $scopeCtx,
+            $date_from_db,
+            $date_to_db,
+            $process,
+            $captureScopeProcessFilter
+        );
+        $captureWhereSql = $captureBuilt['where_sql'];
+        $captureParams = $captureBuilt['params'];
 
-        $captureWhere[] = "dc.company_id = ?";
-        $captureParams[] = $company_id;
-
-        $captureWhere[] = "dcd.company_id = ?";
-        $captureParams[] = $company_id;
-
-        $captureWhere[] = "dc.capture_date BETWEEN ? AND ?";
-        $captureParams[] = $date_from_db;
-        $captureParams[] = $date_to_db;
-
-        // Process 过滤（如果指定）
-        if ($process) {
-            $captureWhere[] = "p.process_id = ?";
-            $captureParams[] = $process;
-        }
-
-        $captureWhereSql = 'WHERE ' . implode(' AND ', $captureWhere);
-        
         $captureSql = "
             SELECT
                 dcd.id AS capture_detail_id,
                 dc.id AS capture_id,
                 p.process_id,
-                COALESCE(a.account_id, CAST(dcd.account_id AS CHAR), '-') AS account_id,
+                a.account_id,
                 NULL AS from_account,
                 COALESCE(d.name, dcd.description_main, dcd.description_sub, dcd.columns_value, 'Data Capture') AS description,
                 COALESCE(dc.remark, '') AS remark,
@@ -1063,7 +1412,7 @@ try {
             FROM data_capture_details dcd
             INNER JOIN data_captures dc ON dcd.capture_id = dc.id
             INNER JOIN process p ON dc.process_id = p.id
-            " . maintenanceDataCaptureAccountJoinSql('dcd', 'a') . "
+            INNER JOIN account a ON dcd.account_id = a.id
             INNER JOIN currency c ON dcd.currency_id = c.id
             LEFT JOIN description d ON p.description_id = d.id
             LEFT JOIN user u ON dc.user_type = 'user' AND dc.created_by = u.id
@@ -1221,7 +1570,7 @@ try {
             $deletedCaptureParams = [];
             
             $deletedCaptureWhere[] = "dcd.company_id = ?";
-            $deletedCaptureParams[] = $company_id;
+            $deletedCaptureParams[] = $capture_company_id;
             
             $deletedCaptureWhere[] = "dcd.capture_date BETWEEN ? AND ?";
             $deletedCaptureParams[] = $date_from_db;
@@ -1233,7 +1582,7 @@ try {
                 $deletedCaptureParams[] = $process;
             }
             
-            $deletedCaptureWhereSql = 'WHERE ' . implode(' AND ', $deletedCaptureWhere);
+            $deletedCaptureWhereSql = 'WHERE ' . implode(' AND ', $deletedCaptureWhere) . $captureScopeProcessFilter . $scopeCompanySqlDeleted;
             
             $deletedCaptureSql = "
                 SELECT
@@ -1263,7 +1612,7 @@ try {
                 FROM data_captures_deleted dcd
                 INNER JOIN process p ON dcd.process_id = p.id
                 " . maintenanceDataCaptureAccountJoinSql('dcd', 'a') . "
-                INNER JOIN currency c ON dcd.currency_id = c.id
+                LEFT JOIN currency c ON dcd.currency_id = c.id
                 LEFT JOIN description d ON p.description_id = d.id
                 LEFT JOIN user u ON dcd.user_type = 'user' AND dcd.created_by = u.id
                 LEFT JOIN owner o ON dcd.user_type = 'owner' AND dcd.created_by = o.id

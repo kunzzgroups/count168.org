@@ -1,4 +1,7 @@
 import { Component } from "react";
+import { isChunkLoadError } from "../utils/routing/lazyWithRetry.js";
+
+const CHUNK_RELOAD_KEY = "ec-chunk-reload";
 
 export default class AppErrorBoundary extends Component {
   constructor(props) {
@@ -11,12 +14,18 @@ export default class AppErrorBoundary extends Component {
   }
 
   componentDidCatch(error, errorInfo) {
+    if (isChunkLoadError(error) && !sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+      window.location.reload();
+      return;
+    }
     console.error("AppErrorBoundary", error, errorInfo);
   }
 
   render() {
     if (this.state.error) {
       const msg = this.state.error?.message || String(this.state.error);
+      const chunkError = isChunkLoadError(this.state.error);
       return (
         <div
           style={{
@@ -45,8 +54,9 @@ export default class AppErrorBoundary extends Component {
               {msg}
             </p>
             <p style={{ margin: 0, color: "#64748b", fontSize: 14, lineHeight: 1.5 }}>
-              请按 F12 打开开发者工具，查看 Console 里的红色报错。若刚部署过前端，请确认已上传完整的{" "}
-              <code>frontend/dist</code> 文件夹（含 <code>index.html</code> 与 <code>assets/</code> 里同名 JS）。
+              {chunkError
+                ? "前端资源版本不一致（常见于部署后浏览器缓存旧 index.js）。请 Ctrl+F5 强制刷新；若仍失败，请重新部署完整的 frontend/dist（含 index.html 与 assets/ 全部文件）。"
+                : "请按 F12 打开开发者工具，查看 Console 里的红色报错。若刚部署过前端，请确认已上传完整的 frontend/dist 文件夹（含 index.html 与 assets/ 里全部 JS）。"}
             </p>
             <button
               type="button"

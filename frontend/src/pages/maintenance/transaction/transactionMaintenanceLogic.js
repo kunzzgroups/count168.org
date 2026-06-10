@@ -1,10 +1,24 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { formatDmy, parseDdMmYyyyToYmd, parseYmd } from "../../../utils/date/dateUtils.js";
 import {
+  companiesInGroupList,
+  pickDefaultSubsidiaryForGroup,
+  pickGroupAnchorCompany,
+} from "../../../utils/company/sharedCompanyFilter.js";
+import { notifyCompanySessionUpdated } from "../../../utils/company/companySessionEvents.js";
+import { syncCompanySessionApi } from "../../../utils/company/companySessionSync.js";
+import {
   fetchDomainCompanyPermissions,
   fetchMaintenanceProcesses,
   isBankOnlyCategoryCompany,
 } from "../shared/maintenanceCompanyApi.js";
+import { fetchProcesses as fetchDomainReportProcesses } from "../../report/domain/domainReportApi.js";
+import { mapDomainGroupProcesses } from "../../report/domain/domainReportGroupProcesses.js";
+import {
+  transactionMaintenanceScopeApiParams,
+  transactionMaintenanceScopeCacheKey,
+  transactionMaintenanceUsesGroupProcesses,
+} from "./transactionMaintenanceScope.js";
 
 /** 宽日期兜底分片（游标分页下通常整段一次查完；仅超范围或失败再分片）。 */
 const MAINTENANCE_CHUNK_DAYS = 90;
@@ -67,13 +81,94 @@ export async function fetchCompanyPermissions(companyCode) {
 
 export { isBankOnlyCategoryCompany };
 
-export async function fetchProcesses(companyId) {
-  return fetchMaintenanceProcesses(companyId, { credentials: true });
+/** ProcessSelect rows: { id, process_name, description }. */
+export function mapProcessesForMaintenanceSelect(apiList) {
+  return (Array.isArray(apiList) ? apiList : []).map((row) => {
+    const processName = String(
+      row.process_name ?? row.process ?? row.process_id ?? "",
+    ).trim();
+    return {
+      id: row.id,
+      process_name: processName,
+      description: row.description ?? null,
+    };
+  });
+}
+
+function appendMaintenanceScopeToParams(params, scope) {
+  const {
+    companyId,
+    viewGroup,
+    groupId,
+    reportScope,
+    groupsAll,
+    groupAll,
+    groupOnly,
+    groupAggregate,
+  } = transactionMaintenanceScopeApiParams(scope);
+  if (companyId) params.append("company_id", String(companyId));
+  const vg = viewGroup ? String(viewGroup).trim().toUpperCase() : "";
+  if (vg) params.append("view_group", vg);
+  const gid = groupId
+    ? String(groupId).trim().toUpperCase()
+    : vg;
+  if (gid) params.append("group_id", gid);
+  if (groupsAll) params.append("groups_all", "1");
+  if (groupAll) params.append("group_all", "1");
+  if (reportScope) params.append("report_scope", reportScope);
+  if (groupOnly) params.append("group_only", "1");
+  if (groupAggregate) params.append("group_aggregate", "1");
+}
+
+export async function fetchProcesses(companyId, scope = null) {
+  return fetchProcessesForMaintenance(companyId, "", scope);
+}
+
+export async function fetchProcessesForPermission(companyId, permission, scope = null) {
+  return fetchProcessesForMaintenance(companyId, permission, scope);
+}
+
+export async function fetchProcessesForMaintenance(companyId, permission, scope = null) {
+  if (scope && transactionMaintenanceUsesGroupProcesses(scope)) {
+    const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
+    return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList));
+  }
+  const effectiveId = scope?.scopeCompanyId ?? companyId;
+  const rows = await fetchMaintenanceProcesses(effectiveId, {
+    credentials: true,
+    permission,
+  });
+  return mapProcessesForMaintenanceSelect(rows);
+}
+
+/**
+ * Load permission/category + process list when Company is cleared (group-only).
+ * Uses a group anchor company for permissions UI only — does not select that company.
+ */
+export async function bootstrapTransactionMaintenanceMeta({
+  companies,
+  groupId = null,
+  anchorCompany = null,
+}) {
+  const anchor =
+    anchorCompany ??
+    (groupId ? companiesInGroupList(companies, groupId)[0] : null) ??
+    (Array.isArray(companies) ? companies[0] : null) ??
+    null;
+  const code = anchor?.company_id ? String(anchor.company_id) : "";
+  const companyPerms = code
+    ? await fetchCompanyPermissions(code)
+    : filterTransactionMaintenancePermissions(["Games", "Gambling", "Bank"]);
+  const savedPerm = code ? localStorage.getItem(`selectedPermission_${code}`) : null;
+  const activePermission = pickTransactionMaintenancePermission(companyPerms, savedPerm);
+  return { permissions: companyPerms, activePermission };
 }
 
 /** Transaction Maintenance 仅 Games/Gambling/Bank 有数据；Loan/Rate/Money 与其它维护页共用 localStorage 时会误传。 */
 const TXN_MAINTENANCE_SEARCH_CATEGORIES = new Set(["games", "gambling", "bank"]);
 const TXN_MAINTENANCE_EMPTY_CATEGORIES = new Set(["loan", "rate", "money"]);
+/** 与 Payment 等页共用 localStorage；Bank 在本页会跳过 Data Capture，默认不恢复 saved Bank。 */
+const TXN_MAINTENANCE_IGNORE_SAVED_CATEGORIES = new Set(["loan", "rate", "money", "bank"]);
 
 /** 本页可选的 Category 按钮（过滤 Loan/Rate/Money）。 */
 export function filterTransactionMaintenancePermissions(permissions) {
@@ -84,14 +179,14 @@ export function filterTransactionMaintenancePermissions(permissions) {
   return filtered.length > 0 ? filtered : perms;
 }
 
-/** 选择默认 Category：优先 Games/Gambling，忽略 Loan/Rate/Money 的 localStorage。 */
+/** 选择默认 Category：优先 Games/Gambling，忽略 Loan/Rate/Money/Bank 的 localStorage。 */
 export function pickTransactionMaintenancePermission(permissions, saved) {
   const perms = filterTransactionMaintenancePermissions(permissions);
   const savedLower = String(saved ?? "").toLowerCase();
   if (
     saved &&
     perms.includes(saved) &&
-    !TXN_MAINTENANCE_EMPTY_CATEGORIES.has(savedLower)
+    !TXN_MAINTENANCE_IGNORE_SAVED_CATEGORIES.has(savedLower)
   ) {
     return saved;
   }
@@ -179,8 +274,8 @@ export async function searchTransactionData({
   dateFrom,
   dateTo,
   process,
-  companyId,
   category,
+  scope,
   signal,
   onFirstPage,
   onProgress,
@@ -193,12 +288,60 @@ export async function searchTransactionData({
     if (typeof onProgress === "function") onProgress(snapshot);
     else if (typeof onFirstPage === "function") onFirstPage(snapshot);
   };
+
+  const mergeCompanyIds =
+    scope?.mode === "aggregate" && Array.isArray(scope.mergeCompanyIds)
+      ? scope.mergeCompanyIds.filter((id) => Number(id) > 0)
+      : [];
+
+  if (mergeCompanyIds.length > 0) {
+    let merged = [];
+    for (const scopedCompanyId of mergeCompanyIds) {
+      if (signal?.aborted) {
+        throw new DOMException("The operation was aborted.", "AbortError");
+      }
+      const subScope = {
+        ...scope,
+        mode: "company",
+        scopeCompanyId: Number(scopedCompanyId),
+        uiCompanyId: Number(scopedCompanyId),
+        mergeCompanyIds: [Number(scopedCompanyId)],
+        groupsAllMode: false,
+        groupAllMode: false,
+      };
+      const part = await fetchMaintenanceDateRangeResilient({
+        dateFrom,
+        dateTo,
+        process: processFilter,
+        category: categoryFilter,
+        scope: subScope,
+        signal,
+        onProgress:
+          typeof onProgress === "function"
+            ? (rows) => {
+                if (!rows.length) return;
+                merged = merged.length
+                  ? mergeSortedMaintenanceRows(merged, finalizeMaintenanceRows(rows))
+                  : finalizeMaintenanceRows(rows);
+                emitProgress(merged);
+              }
+            : undefined,
+      });
+      if (!part.length) continue;
+      merged = merged.length
+        ? mergeSortedMaintenanceRows(merged, finalizeMaintenanceRows(part))
+        : finalizeMaintenanceRows(part);
+      if (typeof onProgress === "function") emitProgress(merged);
+    }
+    return renumberMaintenanceRows(merged);
+  }
+
   const merged = await fetchMaintenanceDateRangeResilient({
     dateFrom,
     dateTo,
     process: processFilter,
-    companyId,
     category: categoryFilter,
+    scope,
     signal,
     onProgress: emitProgress,
   });
@@ -209,8 +352,8 @@ async function fetchMaintenanceDateRangeResilient({
   dateFrom,
   dateTo,
   process,
-  companyId,
   category,
+  scope,
   signal,
   onProgress,
 }) {
@@ -226,8 +369,8 @@ async function fetchMaintenanceDateRangeResilient({
       dateFrom: rangesNewestFirst[0].dateFrom,
       dateTo: rangesNewestFirst[0].dateTo,
       process,
-      companyId,
       category,
+      scope,
       signal,
       onProgress,
     });
@@ -242,8 +385,8 @@ async function fetchMaintenanceDateRangeResilient({
       dateFrom: range.dateFrom,
       dateTo: range.dateTo,
       process,
-      companyId,
       category,
+      scope,
       signal,
     });
     if (!part.length) continue;
@@ -292,14 +435,14 @@ function maintenancePageSizeForRequest(isFirstPage, pageSizeIndex) {
 }
 
 async function fetchAllPagesForRange(params, pageSizeIndex, onProgress) {
-  const fetchBatch = async ({ cursor, isFirstPage }) => {
-    const pageSize = maintenancePageSizeForRequest(isFirstPage, pageSizeIndex);
+  const fetchBatch = async ({ cursor, page }) => {
+    const pageSize = maintenancePageSizeForRequest(page === 1 && !cursor, pageSizeIndex);
     try {
       return await fetchMaintenancePageWithRetries({
         ...params,
         cursor,
         pageSize,
-        page: isFirstPage ? 1 : undefined,
+        page: cursor ? 1 : page,
       });
     } catch (err) {
       rethrowIfAborted(err, params.signal);
@@ -312,25 +455,27 @@ async function fetchAllPagesForRange(params, pageSizeIndex, onProgress) {
 
   let all = [];
   let cursor = null;
-  let isFirstPage = true;
+  let currentPage = 1;
   let loops = 0;
 
   while (loops < MAINTENANCE_MAX_PAGES) {
     if (params.signal?.aborted) {
       throw new DOMException("The operation was aborted.", "AbortError");
     }
-    const result = await fetchBatch({ cursor, isFirstPage });
+    const result = await fetchBatch({ cursor, page: currentPage });
     if (result.data?.length) {
       all = appendMaintenancePageRows(all, result.data);
       if (typeof onProgress === "function") onProgress(all);
     }
     if (!result.pagination?.has_more) break;
     const nextCursor = result.pagination?.next_cursor;
-    if (!nextCursor) {
-      break;
+    if (nextCursor) {
+      cursor = nextCursor;
+      currentPage = 1;
+    } else {
+      cursor = null;
+      currentPage += 1;
     }
-    cursor = nextCursor;
-    isFirstPage = false;
     loops += 1;
   }
 
@@ -428,8 +573,8 @@ async function searchTransactionMaintenanceOnce({
   dateFrom,
   dateTo,
   process,
-  companyId,
   category,
+  scope,
   signal,
   page = 1,
   pageSize = MAINTENANCE_FIRST_PAGE_SIZE,
@@ -446,7 +591,7 @@ async function searchTransactionMaintenanceOnce({
     params.append("page", String(page));
   }
   if (process) params.append("process", process);
-  if (companyId) params.append("company_id", companyId);
+  appendMaintenanceScopeToParams(params, scope);
   if (category) params.append("category", category);
 
   const url = buildApiUrl(`api/transactions/maintenance_search_api.php?${params.toString()}`);
@@ -510,6 +655,27 @@ export async function updateSessionCompany(companyId) {
   return result.data;
 }
 
+/** Group-only: sync anchor subsidiary + view_group before maintenance search APIs run. */
+export async function syncTransactionMaintenanceGroupAnchorSession(
+  companies,
+  groupId,
+  sessionCompanyId = null,
+  options = {},
+) {
+  const { notify = true } = options;
+  const g = groupId ? String(groupId).trim().toUpperCase() : "";
+  if (!g) return false;
+  const anchor =
+    pickDefaultSubsidiaryForGroup(companies, g, {
+      preferredCompanyId: sessionCompanyId,
+    }) ?? pickGroupAnchorCompany(companies, g);
+  const id = anchor?.id != null ? Number(anchor.id) : Number.NaN;
+  if (!Number.isFinite(id) || id <= 0) return false;
+  const json = await syncCompanySessionApi(id, g);
+  if (json?.success && notify) notifyCompanySessionUpdated();
+  return Boolean(json?.success);
+}
+
 export function isMaintenanceRecoverableError(err) {
   if (!err || err?.name === "AbortError") return false;
   return isMaintenanceTransferError(err);
@@ -547,16 +713,16 @@ export function getMaintenanceCacheRows(data) {
   return Array.isArray(data.rows) ? data.rows : [];
 }
 
-/** 仅 complete===true 视为可长期复用的完整结果；数组旧缓存视为未完成。 */
+/** 仅 complete===true 视为可长期复用的完整结果；无缓存/数组旧缓存视为未完成。 */
 export function isMaintenanceCacheComplete(data) {
-  if (!data) return true;
+  if (!data) return false;
   if (Array.isArray(data)) return false;
   return data.complete === true;
 }
 
 /** React Query queryKey（与 TransactionMaintenancePage 一致）。 */
 export function buildTransactionMaintenanceQueryKey({
-  companyId,
+  scope,
   dateFrom,
   dateTo,
   process,
@@ -564,7 +730,7 @@ export function buildTransactionMaintenanceQueryKey({
 }) {
   return [
     "transaction-maintenance",
-    companyId,
+    transactionMaintenanceScopeCacheKey(scope),
     dateFrom,
     dateTo,
     normalizeMaintenanceProcessFilter(process),

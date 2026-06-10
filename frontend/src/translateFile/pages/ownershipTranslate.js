@@ -67,6 +67,13 @@ export const OWNERSHIP_I18N = {
     linkAsLoginId: "Link as Login ID:",
     joinAsGroup: "Join Group:",
     multipleMatchesHint: "Multiple matches found. Please specify login or group ID more precisely.",
+    viewMonth: "View month",
+    currentMonth: "Current",
+    historicalView: "Historical",
+    noSnapshotForMonth: "No ownership snapshot saved for {month}.",
+    historicalSnapshotSaved: "{month} snapshot (saved {savedAt})",
+    noSnapshotShort: "No snapshot this month",
+    snapshotSavedShort: "Saved {savedAt}",
   },
   zh: {
     accountOwnership: "账号归属",
@@ -134,6 +141,13 @@ export const OWNERSHIP_I18N = {
     linkAsLoginId: "按登录ID关联：",
     joinAsGroup: "加入分组：",
     multipleMatchesHint: "发现多个匹配，请更精确输入登录ID或分组ID。",
+    viewMonth: "查看月份",
+    currentMonth: "当前月",
+    historicalView: "历史记录",
+    noSnapshotForMonth: "{month} 暂无归属比例存档。",
+    historicalSnapshotSaved: "{month} 存档（保存于 {savedAt}）",
+    noSnapshotShort: "该月无存档",
+    snapshotSavedShort: "保存于 {savedAt}",
   },
 };
 

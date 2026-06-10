@@ -54,16 +54,24 @@ export default function SidebarLangSwitch({ lang, onLanguageChange, ariaLabel = 
           className={`sidebar-lang-option${lang === "en" ? " active" : ""}`}
           onClick={() => onLanguageChange("en")}
           aria-pressed={lang === "en"}
+          aria-label="English"
+          lang="en"
         >
-          EN
+          <span className="sidebar-lang-option-label" aria-hidden="true">
+            EN
+          </span>
         </button>
         <button
           type="button"
           className={`sidebar-lang-option${lang === "zh" ? " active" : ""}`}
           onClick={() => onLanguageChange("zh")}
           aria-pressed={lang === "zh"}
+          aria-label="中文"
+          lang="zh"
         >
-          中
+          <span className="sidebar-lang-option-label" aria-hidden="true">
+            中
+          </span>
         </button>
       </div>
     </div>

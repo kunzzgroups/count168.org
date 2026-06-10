@@ -5,6 +5,7 @@ import {
   parseYmd,
   shouldAggregateChartByMonth,
 } from "./dashboardDateUtils.js";
+import { resolveEffectiveOwnershipPct } from "./dashboardKpi.js";
 
 /** 按天模式：1 个自然月每天；2 个月隔 2 天；≤14 天每天；更长区间按宽度跳日 */
 export function resolveDailyChartXAxisTicks(dayCount, monthSpan) {
@@ -62,29 +63,10 @@ function buildChartMetricRow(date, label, dailyData, earningsMultiplier) {
   };
 }
 
-function resolveChartEarningsMultiplier(data) {
-  const ownershipPercentage = parseFloat(data?.ownership_percentage) || 0;
-  const groupEquityPercentage = parseFloat(data?.group_equity_percentage) || 0;
-  const groupAccountPercentage = parseFloat(data?.group_account_percentage) || 0;
-  const hasGroupOwnership = !!data?.has_group_ownership;
-  const linkMul = parseFloat(data?._link_multiplier || 0) || 0;
-  const hasLinkOwnership = linkMul > 0 && linkMul !== 1;
-  const directPct = ownershipPercentage / 100;
-  if (hasLinkOwnership) {
-    const viewerGroupShare = groupAccountPercentage > 0 ? groupAccountPercentage / 100 : 1;
-    return linkMul * viewerGroupShare;
-  }
-  if (directPct > 0) return directPct;
-  if (hasGroupOwnership) {
-    return (groupEquityPercentage / 100) * (groupAccountPercentage / 100);
-  }
-  return 0;
-}
-
-export function buildChartRows(data, startYmd, endYmd, locale = "en-US") {
+export function buildChartRows(data, startYmd, endYmd, locale = "en-US", selectedGroup = null) {
   if (!data?.daily_data) return [];
   const dailyData = data.daily_data;
-  const earningsMultiplier = resolveChartEarningsMultiplier(data);
+  const earningsMultiplier = resolveEffectiveOwnershipPct(data, selectedGroup);
   const rangeStart = parseYmd(startYmd);
   const rangeEnd = parseYmd(endYmd);
 

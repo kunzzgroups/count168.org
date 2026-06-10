@@ -1,6 +1,7 @@
 import React from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
 import { sanitizeCapitalLettersOnly } from "../../../utils/input/sanitizeCapitalLettersOnly.js";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
 function TrashRemoveIcon() {
   return (
@@ -26,6 +27,7 @@ export default function CountrySelectionModal({
   notify,
   t,
 }) {
+  const { submitting: addingCountry, guardSubmit } = useSubmitGuard(true);
   const pickCountry = (c) => {
     setSelectedCountryChips((prev) => (prev.includes(c) ? prev : [...prev, c]));
   };
@@ -45,7 +47,7 @@ export default function CountrySelectionModal({
             <div className="available-countries-section">
               <div className="add-country-bar">
                 <h3>{t("addNewCountry")}</h3>
-                <form className="add-country-form" onSubmit={onSubmitNewCountry}>
+                <form className="add-country-form" onSubmit={guardSubmit(onSubmitNewCountry)}>
                   <div className="add-country-input-group">
                     <input
                       type="text"
@@ -54,7 +56,9 @@ export default function CountrySelectionModal({
                       value={newCountryName}
                       onChange={(e) => setNewCountryName(sanitizeCapitalLettersOnly(e.target.value))}
                     />
-                    <button type="submit" className="btn btn-save country-selection-add-btn">{t("add")}</button>
+                    <button type="submit" className="btn btn-save country-selection-add-btn" disabled={addingCountry}>
+                      {addingCountry ? t("saving") : t("add")}
+                    </button>
                   </div>
                 </form>
               </div>

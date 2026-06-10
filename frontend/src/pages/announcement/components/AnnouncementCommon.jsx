@@ -19,7 +19,7 @@ export function AnnouncementConfirmModal({ t, message, onConfirm, onClose }) {
       style={{ display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="edit-modal-content" style={{ maxWidth: 420, padding: "28px 32px" }}>
+      <div className="edit-modal-content edit-modal-content--confirm-delete" style={{ maxWidth: 420, padding: "28px 32px" }}>
         <div style={{ fontSize: "clamp(14px,1.1vw,18px)", fontWeight: 600, color: "#1e293b", marginBottom: 12 }}>
           {t("confirmTitle")}
         </div>
@@ -27,15 +27,10 @@ export function AnnouncementConfirmModal({ t, message, onConfirm, onClose }) {
           {message}
         </p>
         <div className="edit-modal-actions">
-          <button type="button" className="edit-modal-btn edit-modal-btn-cancel" onClick={onClose}>
+          <button type="button" className="edit-modal-btn edit-modal-btn-cancel confirm-cancel" onClick={onClose}>
             {t("cancel")}
           </button>
-          <button
-            type="button"
-            className="edit-modal-btn edit-modal-btn-save"
-            style={{ background: "#ef4444" }}
-            onClick={onConfirm}
-          >
+          <button type="button" className="edit-modal-btn edit-modal-btn-save confirm-delete" onClick={onConfirm}>
             {t("delete")}
           </button>
         </div>

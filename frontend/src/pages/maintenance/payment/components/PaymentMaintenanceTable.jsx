@@ -81,7 +81,6 @@ export default function PaymentMaintenanceTable({
       className={`maintenance-list-container maintenance-virtual-table payment-virtual-table${
         listSyncing ? " maintenance-list-container--syncing" : ""
       }`}
-      style={{ display: "block" }}
     >
       <div className="maintenance-virtual-table-inner payment-virtual-table-inner" role="table">
         <PaymentVirtualRows

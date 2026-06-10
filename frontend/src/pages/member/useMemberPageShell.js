@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { assetUrl, buildApiUrl } from "../../utils/core/apiUrl.js";
 import { injectStylesheet } from "../../utils/core/injectStylesheet.js";
 import { MAINTENANCE_I18N } from "../../translateFile/pages/maintenanceTranslate.js";
 import { formatMemberRole, getMemberText } from "../../translateFile/pages/memberTranslate.js";
 import { ensureMaintenanceDateRangePicker } from "../../utils/date/dateRangePicker.js";
+import { useExpirationReminder } from "../../hooks/useExpirationReminder.js";
+import { clearDashboardFilterSession, clearOwnerCompaniesCache } from "../../utils/company/sharedCompanyFilter.js";
 
 function readCookie(name) {
   const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -55,7 +57,6 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
   const [notifications, setNotifications] = useState([]);
 
   const avatarSrc = useMemo(() => AVATAR_MAP[selectedAvatarId] || AVATAR_MAP.male1, [selectedAvatarId]);
-  const avatarContainerRef = useRef(null);
 
   const showNotification = useCallback((message, type = "info") => {
     if (!message) return;
@@ -114,6 +115,28 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
     };
   }, [navigate, mondayDmy, todayDmy, initSession]);
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const meRes = await fetch(buildApiUrl("api/session/current_user_api.php"), { credentials: "include" });
+      const meJson = await meRes.json();
+      if (meRes.ok && meJson.success && meJson.data) {
+        setMe(meJson.data);
+        return meJson.data;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }, []);
+
+  useEffect(() => {
+    const onCompanySession = () => {
+      void refreshSession();
+    };
+    window.addEventListener("eazycount:company-session-updated", onCompanySession);
+    return () => window.removeEventListener("eazycount:company-session-updated", onCompanySession);
+  }, [refreshSession]);
+
   useEffect(() => {
     injectStylesheet("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css").catch(() => {});
   }, []);
@@ -129,16 +152,6 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
     });
   }, [loading, me, lang, t]);
 
-  useEffect(() => {
-    const onClickOutside = (e) => {
-      if (avatarContainerRef.current && !avatarContainerRef.current.contains(e.target)) {
-        setShowAvatarOptions(false);
-      }
-    };
-    document.addEventListener("click", onClickOutside);
-    return () => document.removeEventListener("click", onClickOutside);
-  }, []);
-
   const handleSelectAvatar = useCallback((avatarId) => {
     setSelectedAvatarId(avatarId);
     setShowAvatarOptions(false);
@@ -150,11 +163,20 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
     }
   }, []);
 
-  const toggleNotifications = useCallback(async () => {
+  const roleLabel = useMemo(() => formatMemberRole(lang, me?.role), [lang, me?.role]);
+
+  const expirationReminder = useExpirationReminder(me, lang);
+  const displayAnnouncements = useMemo(
+    () => expirationReminder.mergeAnnouncements(announcements),
+    [announcements, expirationReminder.mergeAnnouncements],
+  );
+
+  const toggleNotificationsWithExpiration = useCallback(async () => {
     if (showNotifications) {
       setShowNotifications(false);
       return;
     }
+    expirationReminder.onBellOpen();
     setShowNotifications(true);
     setAnnouncementsLoading(true);
     try {
@@ -168,19 +190,26 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
     } finally {
       setAnnouncementsLoading(false);
     }
-  }, [showNotifications]);
+  }, [showNotifications, expirationReminder.onBellOpen]);
 
   const performLogout = useCallback(async () => {
     if (logoutLoading) return;
     setLogoutLoading(true);
     try {
-      await fetch(buildApiUrl("api/session/logout_api.php"), { method: "POST", credentials: "include" });
+      sessionStorage.setItem("ec_skip_session_bootstrap", "1");
+      await fetch(buildApiUrl("api/session/logout_api.php"), {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
     } finally {
+      clearDashboardFilterSession();
+      clearOwnerCompaniesCache();
       setLogoutLoading(false);
       setShowLogoutConfirm(false);
-      navigate("/login", { replace: true });
+      window.location.assign(new URL("/login", window.location.origin).href);
     }
-  }, [logoutLoading, navigate]);
+  }, [logoutLoading]);
 
   const logoutI18n = useMemo(
     () => ({
@@ -193,8 +222,6 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
     [t],
   );
 
-  const roleLabel = useMemo(() => formatMemberRole(lang, me?.role), [lang, me?.role]);
-
   return {
     loading,
     me,
@@ -206,18 +233,18 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
     setSelectedGender,
     showAvatarOptions,
     setShowAvatarOptions,
-    avatarContainerRef,
     handleSelectAvatar,
     notifications,
     showNotification,
     showNotifications,
-    toggleNotifications,
-    announcements,
+    toggleNotifications: toggleNotificationsWithExpiration,
+    announcements: displayAnnouncements,
     announcementsLoading,
     showLogoutConfirm,
     setShowLogoutConfirm,
     logoutLoading,
     performLogout,
     logoutI18n,
+    expirationReminder,
   };
 }

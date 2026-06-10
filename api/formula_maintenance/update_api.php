@@ -9,6 +9,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/formula_fields_helper.php';
+require_once __DIR__ . '/formula_maintenance_scope.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -24,43 +25,17 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
  * 从 JSON 请求体中解析并验证 company_id
  */
 function getCompanyIdFromInput(PDO $pdo, array $input) {
-    $requested = isset($input['company_id']) ? trim((string)$input['company_id']) : '';
-    if ($requested !== '') {
-        $requested = (int)$requested;
-        $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
-        if ($userRole === 'owner') {
-            $owner_id = $_SESSION['owner_id'] ?? $_SESSION['user_id'];
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ?");
-            $stmt->execute([$requested, $owner_id]);
-            if ($stmt->fetchColumn()) {
-                return $requested;
-            }
-            throw new Exception('无权访问该公司');
-        }
-        if (!isset($_SESSION['company_id']) || (int)$_SESSION['company_id'] !== $requested) {
-            throw new Exception('无权访问该公司');
-        }
-        return (int)$_SESSION['company_id'];
-    }
-    if (!isset($_SESSION['company_id'])) {
-        throw new Exception('用户未登录或缺少公司信息');
-    }
-    return (int)$_SESSION['company_id'];
+    $scope = formulaMaintenanceResolveRequestScope($pdo, $input);
+
+    return (int) $scope['company_id'];
 }
 
 /**
- * 验证模板是否属于当前公司（使用 process 表）
+ * 验证模板是否属于当前 scope（group/company ledger）
  */
-function validateTemplateBelongsToCompany(PDO $pdo, int $templateId, int $companyId) {
-    $stmt = $pdo->prepare("
-        SELECT dct.id
-        FROM data_capture_templates dct
-        INNER JOIN process p ON dct.process_id = p.id
-        WHERE dct.id = ? AND p.company_id = ?
-    ");
-    $stmt->execute([$templateId, $companyId]);
-    $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$row) {
+function validateTemplateBelongsToCompany(PDO $pdo, int $templateId, array $scopeCtx) {
+    $validIds = formulaMaintenanceValidateTemplateIdsInScope($pdo, [$templateId], $scopeCtx);
+    if ($validIds === []) {
         throw new Exception('模板不存在或不属于当前公司');
     }
 }
@@ -290,7 +265,9 @@ try {
         throw new Exception('无效的请求数据');
     }
 
-    $companyId = getCompanyIdFromInput($pdo, $input);
+    $scopeCtx = formulaMaintenanceResolveRequestScope($pdo, $input);
+    $companyId = (int) $scopeCtx['company_id'];
+    $formula_scope_group = (bool) $scopeCtx['is_group_scope'];
     $templateId = isset($input['template_id']) ? (int)$input['template_id'] : 0;
     $accountId = isset($input['account_id']) ? (int)$input['account_id'] : 0;
     $sourceColumns = isset($input['source_columns']) ? trim($input['source_columns']) : '';
@@ -307,7 +284,15 @@ try {
         throw new Exception('Account 是必填项');
     }
 
-    validateTemplateBelongsToCompany($pdo, $templateId, $companyId);
+    if ($formula_scope_group) {
+        if ($companyId <= 0) {
+            throw new Exception('集团范围无效或未配置集团公司');
+        }
+    } elseif ($companyId > 0 && dcCompanyIdIsGroupEntity($pdo, $companyId)) {
+        throw new Exception('公司范围不能操作集团实体公式');
+    }
+
+    validateTemplateBelongsToCompany($pdo, $templateId, $scopeCtx);
     $accountDisplay = getAccountDisplay($pdo, $accountId, $companyId);
     $templateInfo = getTemplateProcessInfo($pdo, $templateId);
     $sourceProcessId = $templateInfo ? (int)$templateInfo['process_id'] : null;

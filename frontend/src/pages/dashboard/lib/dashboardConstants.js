@@ -1,7 +1,10 @@
 export const DASHBOARD_API = "api/transactions/dashboard_api.php";
+export const DASHBOARD_BOOTSTRAP_API = "api/transactions/dashboard_bootstrap_api.php";
 
 export const DASHBOARD_PROFIT_COLOR = "#3b82f6";
 export const DASHBOARD_EARNINGS_PIE_HEIGHT = 180;
+/** Minimum sector angle (deg) so small currencies (e.g. CNY) stay visible on the donut. */
+export const DASHBOARD_EARNINGS_PIE_MIN_ANGLE = 5;
 export const DASHBOARD_EARNINGS_COLOR = "#f59e0b";
 
 /** 各币种固定色：圆环与右侧列表一致，便于对照 */

@@ -377,6 +377,7 @@ function rowToItem(array $row) {
                 $billAmount = bankProcessBillFormatTripartNumber($row['amount'] ?? '0');
                 $description = $description . ' ' . $billAmount;
             }
+            $description = bankProcessAppendBankSuffixToDescription((string) $description, $row);
         }
     } elseif (empty($description) && in_array($row['transaction_type'] ?? '', ['CONTRA', 'PAYMENT', 'RECEIVE', 'CLAIM'])) {
         $description = ($row['transaction_type'] ?? '') . ' FROM ' . ($row['from_account_code'] ?? 'N/A');

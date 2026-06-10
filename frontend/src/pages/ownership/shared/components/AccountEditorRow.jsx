@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import OwnAccountSelect from "./OwnAccountSelect.jsx";
+import { accountsForRowPicker } from "../ownershipRowHelpers.js";
 
 function applySliderBg(sliderEl, value) {
   if (!sliderEl) return;
@@ -123,8 +124,9 @@ export default function AccountEditorRow({
       </div>
       <OwnAccountSelect
         value={row.account_id}
-        accounts={accounts}
-        disabled={readOnlyMode}
+        accounts={accountsForRowPicker(accounts, row.account_id)}
+        displayLabel={row.account_label}
+        disabled={readOnlyMode || row.is_external_partner}
         t={t}
         onChange={(id) => onUpdate(idx, "account_id", id)}
       />

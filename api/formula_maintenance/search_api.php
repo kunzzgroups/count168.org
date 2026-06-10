@@ -13,40 +13,11 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/formula_maintenance_scope.php';
 
 try {
-    // 确定查询使用的公司
-    $company_id = null;
-    if (isset($_GET['company_id']) && $_GET['company_id'] !== '') {
-        $requestedCompanyId = (int)$_GET['company_id'];
-        $userRole = strtolower($_SESSION['role'] ?? '');
-        
-        if ($userRole === 'owner') {
-            $ownerId = $_SESSION['owner_id'] ?? $_SESSION['user_id'] ?? null;
-            if (!$ownerId) {
-                throw new Exception('缺少 Owner 信息');
-            }
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ? LIMIT 1");
-            $stmt->execute([$requestedCompanyId, $ownerId]);
-            if (!$stmt->fetchColumn()) {
-                throw new Exception('无权访问该公司');
-            }
-            $company_id = $requestedCompanyId;
-        } else {
-            if (!isset($_SESSION['company_id'])) {
-                throw new Exception('缺少公司信息');
-            }
-            if ($requestedCompanyId !== (int)$_SESSION['company_id']) {
-                throw new Exception('无权访问该公司');
-            }
-            $company_id = $requestedCompanyId;
-        }
-    } else {
-        if (!isset($_SESSION['company_id'])) {
-            throw new Exception('缺少公司信息');
-        }
-        $company_id = (int)$_SESSION['company_id'];
-    }
+    $scope = formulaMaintenanceResolveRequestScope($pdo, $_GET);
+    $company_id = (int) $scope['company_id'];
     
     // 获取搜索参数
     $process_name = $_GET['process'] ?? null; // process.process_id (字符串，如 'L22KZMASTER')

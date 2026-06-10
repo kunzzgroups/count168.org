@@ -10,6 +10,9 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/permissions.php';
+require_once __DIR__ . '/transaction_scope.php';
+require_once __DIR__ . '/../../includes/tenant_scope.php';
+require_once __DIR__ . '/../reports/report_scope_common.php';
 
 try {
     if (!isset($_SESSION['user_id'])) {
@@ -28,40 +31,18 @@ try {
         throw new Exception('account_company 表不存在，请先执行 create_account_company_table.sql');
     }
 
-    $company_id = null;
-    $requested_company_id = isset($_GET['company_id']) ? trim($_GET['company_id']) : '';
-
-    if ($requested_company_id !== '') {
-        $requested_company_id = (int)$requested_company_id;
-        $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
-        if ($userRole === 'owner') {
-            $owner_id = $_SESSION['owner_id'] ?? $_SESSION['user_id'];
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ?");
-            $stmt->execute([$requested_company_id, $owner_id]);
-            if ($stmt->fetchColumn()) {
-                $company_id = $requested_company_id;
-            } else {
-                throw new Exception('无权访问该公司');
-            }
-        } else {
-            if (!isset($_SESSION['company_id']) || $requested_company_id !== (int)$_SESSION['company_id']) {
-                throw new Exception('无权访问该公司');
-            }
-            $company_id = (int)$_SESSION['company_id'];
-        }
-    } else {
-        if (!isset($_SESSION['company_id'])) {
-            throw new Exception('用户未登录或缺少公司信息');
-        }
-        $company_id = (int)$_SESSION['company_id'];
-    }
+    $listScope = tx_resolve_transaction_list_scope($pdo, $_GET);
+    $company_id = (int) ($listScope['company_id'] ?? 0);
+    $permCompanyId = $company_id > 0
+        ? $company_id
+        : tx_resolve_group_anchor_company_id($pdo, (string) ($listScope['group_code'] ?? ''));
 
     $role = $_GET['role'] ?? null;
     $status = $_GET['status'] ?? 'active';
     $currency = $_GET['currency'] ?? null;
 
     $currency_id = null;
-    if ($currency) {
+    if ($currency && $company_id > 0) {
         $currency_stmt = $pdo->prepare("SELECT id FROM currency WHERE code = ? AND company_id = ?");
         $currency_stmt->execute([$currency, $company_id]);
         $currency_id = $currency_stmt->fetchColumn();
@@ -69,8 +50,24 @@ try {
 
     $where_conditions = [];
     $params = [];
-    $where_conditions[] = "ac.company_id = ?";
-    $params[] = $company_id;
+    if (($listScope['mode'] ?? '') === 'group') {
+        $groupScopeId = (int) ($listScope['group_scope_id'] ?? 0);
+        if ($groupScopeId <= 0) {
+            throw new Exception('无效的 group_id');
+        }
+        $accountIds = tenant_collect_group_account_ids($pdo, $groupScopeId);
+        if ($accountIds === []) {
+            $where_conditions[] = '1=0';
+        } else {
+            $placeholders = implode(',', array_fill(0, count($accountIds), '?'));
+            $where_conditions[] = "a.id IN ($placeholders)";
+            $params = array_merge($params, $accountIds);
+        }
+    } else {
+        $acSubsidiaryWhere = tenant_account_company_subsidiary_where($pdo, $company_id, 'ac');
+        $where_conditions[] = $acSubsidiaryWhere['sql'];
+        $params = array_merge($params, $acSubsidiaryWhere['params']);
+    }
     if ($role) {
         $where_conditions[] = "a.role = ?";
         $params[] = $role;
@@ -92,11 +89,17 @@ try {
     }
 
     $where_sql = !empty($where_conditions) ? 'WHERE ' . implode(' AND ', $where_conditions) : '';
+    $joinAc = ($listScope['mode'] ?? '') === 'group'
+        ? ''
+        : ' INNER JOIN account_company ac ON a.id = ac.account_id';
     $baseSql = "SELECT DISTINCT a.id, a.account_id, a.name, a.role, a.status
             FROM account a
-            INNER JOIN account_company ac ON a.id = ac.account_id
+            $joinAc
             $where_sql";
-    list($baseSql, $params) = filterAccountsByPermissions($pdo, $baseSql, $params, $company_id);
+    if (($listScope['mode'] ?? '') !== 'group') {
+        $baseSql .= tenant_sql_account_company_subsidiary_only($pdo, 'ac');
+    }
+    list($baseSql, $params) = filterAccountsByPermissions($pdo, $baseSql, $params, $permCompanyId > 0 ? $permCompanyId : $company_id);
     $baseSql = preg_replace('/\bAND id IN\b/i', 'AND a.id IN', $baseSql);
     $baseSql = preg_replace('/\bWHERE id IN\b/i', 'WHERE a.id IN', $baseSql);
     $baseSql = preg_replace('/\bAND 1=0\b/i', 'AND 1=0', $baseSql);

@@ -86,6 +86,3 @@ foreach ($user_companies as $comp) {
     </div>
 </div>
 <?php endif; ?>
-
-<!-- 引入前端动态交互 JS -->
-<script src="js/shared_company_filter.js?v=<?php echo file_exists(__DIR__ . '/../../js/shared_company_filter.js') ? filemtime(__DIR__ . '/../../js/shared_company_filter.js') : time(); ?>"></script>

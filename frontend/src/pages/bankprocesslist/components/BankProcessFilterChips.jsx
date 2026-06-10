@@ -2,6 +2,7 @@ import React from "react";
 
 export default function BankProcessFilterChips({
   t,
+  layout = "inline",
   showInactive,
   setShowInactive,
   showAll,
@@ -13,8 +14,16 @@ export default function BankProcessFilterChips({
   showBlock,
   setShowBlock,
 }) {
+  const isDropdown = layout === "dropdown";
   return (
-    <div className="userlist-filter-chips userlist-filter-chips--bank-process" role="group">
+    <div
+      className={[
+        "userlist-filter-chips",
+        "userlist-filter-chips--bank-process",
+        isDropdown ? "userlist-filter-chips--bank-process-dropdown" : "",
+      ].filter(Boolean).join(" ")}
+      role="group"
+    >
       <button
         type="button"
         className={`user-filter-chip${showInactive && !showAll ? " is-selected" : ""}`}

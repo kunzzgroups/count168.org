@@ -17,45 +17,88 @@ export default function DataCaptureTableSection({
   captureType,
   citibetMode = false,
   formatGridReady = false,
+  hideCaptureTypeSelector = false,
+  groupOnlyTable = false,
   onCaptureTypeChange,
   submitDisabled = true,
+  isSubmitting = false,
   onSubmit,
   onReset,
+  engineReady = false,
 }) {
+  const formatPasteMode = captureType === "2.Format" && !formatGridReady;
   const containerClass = [
     "excel-table-container",
+    groupOnlyTable ? "excel-table-container--group-only" : "",
     citibetMode ? "citibet-mode" : "",
+    captureType === "1.Text" ? "capture-type-text" : "",
+    captureType === "2.Format" ? "capture-type-format" : "",
+    formatPasteMode ? "format-paste-mode" : "",
   ]
     .filter(Boolean)
     .join(" ");
 
+  const gridBody = (
+    <>
+      <DataCaptureGrid engineReady={engineReady} />
+      <div id="tablePreviewFormat" className="table-preview-format" style={{ display: "none" }}>
+        <iframe
+          id="tablePreviewFrameFormat"
+          className="table-preview-frame-format"
+          title="Format Table Preview"
+        />
+      </div>
+      <div
+        id="pasteAreaFormat"
+        className="paste-area-format"
+        style={{ display: "none" }}
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder="在此直接粘贴整张表格（支持Excel/Sheets复制的表格格式）..."
+      />
+    </>
+  );
+
   return (
     <div className="bottom-section">
       <div className={containerClass}>
-        <div className="excel-table-header dc-table-header-bar">
+        <div
+          className={`excel-table-header dc-table-header-bar${hideCaptureTypeSelector ? " dc-table-header-bar--group-only" : ""}`.trim()}
+        >
           <div className="dc-table-header-main">
             <span className="dc-table-header-title">{t("dataCaptureTable")}</span>
+            {hideCaptureTypeSelector ? (
+              <button
+                type="button"
+                className="btn btn-cancel dc-table-header-reset-btn"
+                onClick={() => onReset?.()}
+              >
+                {t("reset")}
+              </button>
+            ) : null}
           </div>
-          <div className="dc-table-header-controls">
-            <select
-              id="dataCaptureTypeSelector"
-              className="data-capture-type-selector"
-              value={captureType}
-              onChange={onCaptureTypeChange}
-              aria-label={t("captureFormatAria")}
-            >
-              {CAPTURE_TYPE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {captureTypeLabel(opt, t)}
-                </option>
-              ))}
-            </select>
-            <button type="button" className="btn btn-cancel" onClick={() => (onReset ? onReset() : window.resetForm?.())}>
-              {t("reset")}
-            </button>
-          </div>
+          {!hideCaptureTypeSelector ? (
+            <div className="dc-table-header-controls">
+              <select
+                id="dataCaptureTypeSelector"
+                className="data-capture-type-selector"
+                value={captureType}
+                onChange={onCaptureTypeChange}
+                aria-label={t("captureFormatAria")}
+              >
+                {CAPTURE_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {captureTypeLabel(opt, t)}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-cancel" onClick={() => onReset?.()}>
+                {t("reset")}
+              </button>
+            </div>
+          ) : null}
         </div>
-        <DataCaptureGrid />
+        {groupOnlyTable ? <div className="excel-table-scroll-body">{gridBody}</div> : gridBody}
       </div>
 
       <div className="form-actions">
@@ -63,20 +106,16 @@ export default function DataCaptureTableSection({
           id="dataCaptureSubmitBtn"
           type="button"
           className="btn btn-save"
-          disabled={submitDisabled}
+          disabled={submitDisabled || isSubmitting}
           style={{
-            opacity: submitDisabled ? 0.6 : 1,
-            cursor: submitDisabled ? "not-allowed" : "pointer",
+            opacity: submitDisabled || isSubmitting ? 0.6 : 1,
+            cursor: submitDisabled || isSubmitting ? "not-allowed" : "pointer",
           }}
           onClick={() => {
-            if (onSubmit) {
-              void onSubmit();
-              return;
-            }
-            void window.submitDataCaptureForm?.();
+            void onSubmit?.();
           }}
         >
-          {t("submit")}
+          {isSubmitting ? t("submitting") : t("submit")}
         </button>
       </div>
     </div>

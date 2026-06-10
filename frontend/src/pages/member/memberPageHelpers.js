@@ -3,14 +3,19 @@ import { MoneyDecimal } from "../../utils/money/moneyDecimal.js";
 export const MINI_GRID_SHELL_CCY = ["MYR", "SGD"];
 export const MINI_GRID_SHELL_ROWS = 5;
 
-/** Win/Loss 迷你矩阵：账户行数大于此值时，矩阵区域纵向滚动，默认可见约 5 个账户行 + 表头 */
+/** @deprecated 账户矩阵不再纵向滚动，始终展示全部筛选账户 */
 export const WINLOSS_MINI_MATRIX_ACCOUNT_SCROLL_THRESHOLD = 5;
+
+/** 账户矩阵始终随内容增高，不启用纵向滚动 */
+export function winLossMiniMatrixNeedsAccountScroll() {
+  return false;
+}
 
 /** Win/Loss Account：每条 segment 白底带最多按钮数，多出的自动再开新带 */
 export const WINLOSS_ACCOUNT_SEGMENT_MAX_BUTTONS = 7;
 /** 视口较窄（<1410px）时每行更少格，多账户换行展示完整户 名 */
 export const WINLOSS_ACCOUNT_SEGMENT_MAX_BUTTONS_NARROW = 4;
-export const WINLOSS_ACCOUNT_SEGMENT_NARROW_MQ = "(max-width: 1409px)";
+export const WINLOSS_ACCOUNT_SEGMENT_NARROW_MQ = "(max-width: 1366px)";
 
 /** Win/Loss Currency：每条 segment 白底带最多按钮数（含第一段的「All」占位），多出的自动再开新带 */
 export const WINLOSS_CURRENCY_SEGMENT_MAX_BUTTONS = 8;
@@ -26,8 +31,10 @@ export const WINLOSS_MATRIX_MIN_CCY_COL_WIDTH = "6rem";
 /** 单币种紧凑表：列最小宽与单元格水平 padding（须与 member.css 一致） */
 export const WINLOSS_COMPACT_ACCOUNT_COL_MIN = "5.5rem";
 export const WINLOSS_COMPACT_AMT_COL_MIN = "5.25rem";
-export const WINLOSS_COMPACT_ACCOUNT_CELL_PAD_X = 24;
-export const WINLOSS_COMPACT_AMT_CELL_PAD_X = 24;
+export const WINLOSS_COMPACT_ACCOUNT_CELL_PAD_X = 32;
+export const WINLOSS_COMPACT_AMT_CELL_PAD_X = 32;
+/** 多币种矩阵列：水平 padding 总和 + 右缘缓冲（须与 member.css 单元格 padding 一致） */
+export const WINLOSS_MATRIX_CCY_CELL_PAD_X = 32;
 
 export function measureElementTextWidthPx(referenceEl, text) {
   if (!referenceEl || typeof document === "undefined") return 0;
@@ -81,6 +88,51 @@ export function measureCompactMatrixColumnWidths(gridEl, remPx) {
   });
 
   return { accountColPx: Math.ceil(accountColPx), amtColPx: Math.ceil(amtColPx) };
+}
+
+/** 多币种矩阵：按列量宽（表头 + 该列各格），避免一列大金额把所有币种列撑同样宽 */
+export function measureMatrixCurrencyColumnWidths(gridEl, remPx, ncu) {
+  const parseRem = (s, fallbackRem) => {
+    const hit = String(s).match(/^([\d.]+)rem$/);
+    return hit ? parseFloat(hit[1]) * remPx : fallbackRem * remPx;
+  };
+  const minColPx = parseRem(WINLOSS_MATRIX_MIN_CCY_COL_WIDTH, 6);
+  const minRowheadPx = parseRem(WINLOSS_MATRIX_ROWHEAD_COL_WIDTH, 5.75);
+  const pad = WINLOSS_MATRIX_CCY_CELL_PAD_X;
+  const probe =
+    gridEl.querySelector(".member-balance-matrix-amt") ||
+    gridEl.querySelector(".member-balance-matrix-th") ||
+    gridEl.querySelector(".member-balance-matrix-cell");
+
+  const measureText = (el, text) => measureElementTextWidthPx(probe || el, text) + pad;
+
+  let rowheadPx = minRowheadPx;
+  gridEl.querySelectorAll(".member-balance-matrix-corner, .member-balance-matrix-rowhead").forEach((el) => {
+    rowheadPx = Math.max(rowheadPx, measureText(el, el.textContent));
+  });
+
+  const headers = [...gridEl.querySelectorAll(".member-balance-matrix-th")];
+  const colCount = ncu > 0 ? ncu : headers.length;
+  const colPx = Array.from({ length: colCount }, (_, ci) => {
+    const th = headers[ci];
+    let w = th ? measureText(th, th.textContent) : minColPx;
+    w = Math.max(w, minColPx * 0.55);
+    return w;
+  });
+
+  const cells = [...gridEl.querySelectorAll(".member-balance-matrix-cell")];
+  cells.forEach((cell, idx) => {
+    const ci = idx % colCount;
+    const amt = cell.querySelector(".member-balance-matrix-amt");
+    const na = cell.querySelector(".member-balance-matrix-na");
+    if (amt) colPx[ci] = Math.max(colPx[ci], measureText(amt, amt.textContent));
+    if (na) colPx[ci] = Math.max(colPx[ci], measureText(na, na.textContent));
+  });
+
+  return {
+    rowheadPx: Math.ceil(rowheadPx),
+    colPx: colPx.map((w) => Math.ceil(w)),
+  };
 }
 
 export function normalizeNumber(value) {
@@ -179,6 +231,38 @@ export function getWlGridIncludedAccountIds(linkedAccounts, wlGridSelectedIds) {
   let sel = wlGridSelectedIds.map(Number).filter((id) => allow.has(id));
   if (!sel.length) sel = [...allow];
   return sel;
+}
+
+export function isWlGridAllSelected(linkedAccounts, wlGridSelectedIds) {
+  const allow = linkedAccounts.map((a) => Number(a.id)).filter(Boolean);
+  if (!allow.length) return true;
+  const included = getWlGridIncludedAccountIds(linkedAccounts, wlGridSelectedIds);
+  return included.length === allow.length;
+}
+
+export function applyWlGridAccountAll(linkedAccounts) {
+  return linkedAccounts.map((a) => Number(a.id)).filter(Boolean);
+}
+
+export function applyWlGridAccountToggle(linkedAccounts, wlGridSelectedIds, accountId) {
+  const allow = linkedAccounts.map((a) => Number(a.id)).filter(Boolean);
+  const id = Number(accountId);
+  if (!allow.includes(id)) return getWlGridIncludedAccountIds(linkedAccounts, wlGridSelectedIds);
+
+  let sel = wlGridSelectedIds.map(Number).filter((x) => allow.includes(x));
+  if (!sel.length) sel = [...allow];
+
+  if (sel.length === allow.length) {
+    return [id];
+  }
+
+  if (sel.includes(id)) {
+    const next = sel.filter((x) => x !== id);
+    return next.length ? next : [...allow];
+  }
+
+  const next = [...sel, id];
+  return next.length === allow.length ? [...allow] : next;
 }
 
 export function collectLinkedUnionCurrencyCodes(linkedAccountCurrenciesMap, includedIds) {
@@ -290,6 +374,17 @@ export function getAvailableCurrencies({
     return getAvailableCurrenciesFromSummaryOnly(currencySummary, currencySortOrder, currencyDisplayOrder);
   }
   return sortCurrencyList(baseOrder, currencySortOrder, currencyDisplayOrder, fromLinkedUnion);
+}
+
+export function formatCompactCurrencyLabel(code) {
+  return String(code || "").trim().toUpperCase();
+}
+
+export function miniGridShowsTotalRow(shellMode, accounts) {
+  if (shellMode) return false;
+  const list = Array.isArray(accounts) ? accounts : [];
+  const real = list.filter((a) => Number(a?.id) > 0);
+  return real.length > 1;
 }
 
 export function getMemberMiniGridCurrencies(availableCurrencies, isAllSelected, selectedCurrencies) {

@@ -4,7 +4,8 @@ import { parseAndFillHtmlTableForWbet } from "./dataCaptureWbetHtmlPaste.js";
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 
 /** @returns {boolean} */
 export function handleWbetPaste(e, pastedData) {
@@ -21,7 +22,7 @@ export function handleWbetPaste(e, pastedData) {
             const filled = parseAndFillHtmlTableForWbet(htmlDataFromDetect, startCell);
             if (filled) {
                 console.log('WBET: Successfully filled using parseAndFillHTMLTableForWBET');
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             } else {
                 console.log('WBET: parseAndFillHTMLTableForWBET returned false, trying standard HTML parsing');
@@ -43,7 +44,7 @@ export function handleWbetPaste(e, pastedData) {
             console.log('WBET: HTML data detected, length:', htmlData.length);
             const filled = parseAndFillHtmlTableForWbet(htmlData, e.target);
             if (filled) {
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             }
         }
@@ -324,59 +325,16 @@ export function handleWbetPaste(e, pastedData) {
             console.log('WBET: First few processed rows:', processedMatrix.slice(0, 5));
 
             if (processedMatrix.length > 0) {
-                const startCell = e.target;
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = 0; // WBET: 强制从第一列开始
-
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredRows = startRow + processedMatrix.length;
-                const requiredCols = startCol + maxCols;
-
-                if (requiredRows > currentRows || requiredCols > currentCols) {
-                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(targetRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                processedMatrix.forEach((rowData, rowIndex) => {
-                    const actualRowIndex = startRow + rowIndex;
-                    const tableRow = tableBody.children[actualRowIndex];
-                    if (!tableRow) return;
-
-                    rowData.forEach((cellData, colIndex) => {
-                        const actualColIndex = startCol + colIndex;
-                        const cell = tableRow.children[actualColIndex + 1];
-                        if (cell && cell.contentEditable === 'true') {
-                            currentPasteChanges.push({
-                                row: actualRowIndex,
-                                col: actualColIndex,
-                                oldValue: cell.textContent,
-                                newValue: cellData
-                            });
-                            // 保持原始格式，不做任何转换
-                            cell.textContent = cellData;
-                            if (cellData) {
-                                successCount++;
-                            }
-                        }
-                    });
+                const { applied } = applyParsedMatrixToGrid(processedMatrix, e.target, {
+                    startColOverride: 0,
+                    successMessage: `Successfully pasted WBET data (${processedMatrix.length} rows x ${maxCols} cols)!`,
+                    emptyMessage: "No cells were pasted from WBET format.",
                 });
 
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
-                if (successCount > 0) {
-                    window.showNotification?.(`Successfully pasted WBET data (${processedMatrix.length} rows x ${maxCols} cols)!`, 'success');
-                } else {
-                    window.showNotification?.('No cells were pasted from WBET format.', 'danger');
+                if (applied) {
+                    recomputeSubmitStateAfterPaste();
+                    return true;
                 }
-
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
-                return true;
             }
         }
 

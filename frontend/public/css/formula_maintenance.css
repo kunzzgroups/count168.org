@@ -1,4 +1,8 @@
-﻿body {
+﻿@import "./maintenance_empty_state.css";
+
+@import "./maintenance_empty_state.css";
+
+body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     margin: 0;
     padding: 0;
@@ -22,7 +26,7 @@ body.dashboard-page.maintenance-page {
     height: auto !important;
     min-height: 100vh !important;
     max-height: none !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
 }
 
@@ -537,12 +541,12 @@ body.dashboard-page.maintenance-page {
 
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table th:nth-child(4),
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(4) {
-    width: 6.7%;
+    width: 7.2%;
 }
 
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table th:nth-child(5),
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(5) {
-    width: 6.5%;
+    width: 6%;
     text-align: left;
 }
 
@@ -715,34 +719,6 @@ body.dashboard-page.maintenance-page {
     font-size: clamp(10px, 0.83vw, 14px);
     font-weight: bold;
     line-height: 1;
-}
-
-/* Empty State Styles */
-.formula-maintenance-page-root .empty-state-container {
-    position: relative;
-    top: 10px;
-    background: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 8px;
-    padding: clamp(40px, 3.33vw, 64px);
-    margin-bottom: clamp(20px, 1.67vw, 32px);
-    margin-top: 10px;
-    max-width: 1600px;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
-    box-sizing: border-box;
-}
-
-.formula-maintenance-page-root .empty-state {
-    color: #64748b;
-    font-size: clamp(14px, 1.04vw, 20px);
-}
-
-.formula-maintenance-page-root .empty-state p {
-    margin: 0;
-    font-family: var(--font-heading-page);
 }
 
 /* Notification Styles */
@@ -1042,20 +1018,7 @@ body.maintenance-page #confirmDeleteModal .confirm-delete {
     text-align: center;
 }
 
-/* Scrollbar for long messages */
-.maintenance-confirm-message::-webkit-scrollbar {
-    width: 6px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-thumb {
-    background: #94a3b8;
-    border-radius: 10px;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 /* Button styles for confirm modal (scoped — avoid overriding sidebar .logout-btn) */
 body.maintenance-page .maintenance-modal .btn {
@@ -1333,7 +1296,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     display: grid;
     /* 列宽与 table nth-child 比例对齐；第 7 列 Input Method 加宽 */
     grid-template-columns:
-        minmax(28px, 4fr) minmax(64px, 13fr) minmax(52px, 9fr) minmax(36px, 5fr) minmax(40px, 6fr) minmax(52px, 8.5fr) minmax(180px, 26fr) minmax(96px, 18fr) minmax(56px, 10fr) minmax(48px, 7fr);
+        minmax(28px, 4fr) minmax(64px, 13fr) minmax(52px, 9fr) minmax(52px, 6.5fr) minmax(36px, 5.5fr) minmax(52px, 8.5fr) minmax(180px, 26fr) minmax(96px, 18fr) minmax(56px, 10fr) minmax(48px, 7fr);
     align-items: stretch;
     width: 100%;
     box-sizing: border-box;
@@ -1351,6 +1314,13 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* Currency 列居中，避免表头文字与 Source 列重叠 */
+.formula-maintenance-page-root .formula-virtual-head-row .maintenance-virtual-th:nth-child(4) {
+    justify-content: center !important;
+    text-align: center !important;
 }
 
 .formula-maintenance-page-root .maintenance-virtual-th:first-child {
@@ -1362,8 +1332,6 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 .formula-maintenance-page-root .maintenance-virtual-scroll {
-    max-height: min(72vh, 900px);
-    overflow: auto;
     border-radius: 0 0 8px 8px;
     background: #fff;
 }
@@ -1457,6 +1425,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 .formula-maintenance-page-root .maintenance-virtual-data-row .maintenance-cell-currency {
     text-align: center;
     justify-content: center;
+    padding-right: clamp(6px, 0.55vw, 10px);
 }
 
 .formula-maintenance-page-root .formula-virtual-data-row--editing {

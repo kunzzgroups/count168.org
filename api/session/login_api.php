@@ -26,35 +26,31 @@ header('Content-Type: application/json');
 // 开启输出缓冲，防止意外输出（必须在 header 之后）
 ob_start();
 
-require_once __DIR__ . '/../../includes/config.php';
+try {
+    require_once __DIR__ . '/../../includes/config.php';
+    require_once __DIR__ . '/../../includes/session_user_payload_cache.php';
+    require_once __DIR__ . '/../../includes/login_scope.php';
+    require_once __DIR__ . '/../../includes/group_company_access.php';
+    require_once __DIR__ . '/../../includes/company_expiration.php';
+} catch (Throwable $e) {
+    ob_clean();
+    echo json_encode(['status' => 'error', 'message' => 'Database connection failed']);
+    exit;
+}
 
 // 检查 $pdo 是否已定义
 if (!isset($pdo) || !$pdo) {
+    ob_clean();
     echo json_encode(['status' => 'error', 'message' => 'Database connection failed']);
     exit;
 }
 
 /**
- * 规则：
- * - C168 永远可登录（不受 expiration_date 限制）
- * - 其他公司：未设置到期日（Not set）或已过期，视为不可登录
+ * @deprecated Use gc_is_company_expiration_blocking()
  */
-function isCompanyExpiredOrUnset($expirationDate, $companyCode = null): bool
+function isCompanyExpiredOrUnset($expirationDate, $companyCode = null, $groupId = null): bool
 {
-    if (strtoupper(trim((string)$companyCode)) === 'C168') {
-        return false;
-    }
-
-    if ($expirationDate === null || trim((string)$expirationDate) === '') {
-        return true;
-    }
-
-    $expTs = strtotime((string)$expirationDate);
-    if ($expTs === false) {
-        return true;
-    }
-
-    return $expTs < strtotime(date('Y-m-d'));
+    return gc_is_company_expiration_blocking($expirationDate, $companyCode, $groupId);
 }
 
 try {
@@ -76,7 +72,7 @@ try {
         // 从 account 表验证：验证公司、账号、密码、状态
         // 修改条件，允许匹配 company_id 或者 group_id
         $stmt = $pdo->prepare("
-            SELECT a.*, c.id AS company_numeric_id, c.company_id AS company_code, c.expiration_date 
+            SELECT a.*, c.id AS company_numeric_id, c.company_id AS company_code, c.group_id, c.expiration_date 
             FROM account a
             INNER JOIN account_company ac ON a.id = ac.account_id
             INNER JOIN company c ON ac.company_id = c.id
@@ -108,7 +104,7 @@ try {
                 continue;
             }
             $password_match = true;
-            if (isCompanyExpiredOrUnset($row['expiration_date'] ?? null, $row['company_code'] ?? null)) {
+            if (isCompanyExpiredOrUnset($row['expiration_date'] ?? null, $row['company_code'] ?? null, $row['group_id'] ?? null)) {
                 $has_expired = true;
             } else {
                 $account = $row;
@@ -122,6 +118,7 @@ try {
             $_SESSION['member_login_account_id'] = $account['id'];
             $_SESSION['member_winloss_view_account_id'] = $account['id'];
             $_SESSION['user_id'] = $account['id'];
+            session_user_payload_cache_clear();
             $_SESSION['login_id'] = $account['account_id'];
             $_SESSION['name'] = $account['name'];
             $_SESSION['role'] = $account['role'];
@@ -142,10 +139,15 @@ try {
             $stmt = $pdo->prepare("UPDATE account SET last_login = NOW() WHERE id = ?");
             $stmt->execute([$account['id']]);
 
+            persist_login_filter_scope($pdo, $company_id);
+            $loginFilter = resolve_login_identifier_scope($pdo, $company_id);
             echo json_encode([
                 'status' => 'success',
                 'redirect' => '/member',
                 'user_type' => 'member',
+                'company_id' => (int) ($_SESSION['company_id'] ?? 0) ?: null,
+                'login_scope' => $loginFilter['scope'],
+                'login_identifier' => $loginFilter['identifier'],
             ]);
             exit;
         } else {
@@ -172,6 +174,7 @@ try {
             u.*,
             c.id AS company_numeric_id,
             c.company_id AS company_code,
+            c.group_id,
             c.expiration_date
         FROM user u
         INNER JOIN user_company_map ucm ON u.id = ucm.user_id
@@ -188,7 +191,7 @@ try {
     foreach ($matched_users as $row) {
         if (password_verify($password, $row['password'])) {
             $user_password_match = true;
-            if (isCompanyExpiredOrUnset($row['expiration_date'] ?? null, $row['company_code'] ?? null)) {
+            if (isCompanyExpiredOrUnset($row['expiration_date'] ?? null, $row['company_code'] ?? null, $row['group_id'] ?? null)) {
                 $user_has_expired = true;
             } else {
                 $user = $row;
@@ -200,6 +203,7 @@ try {
     if ($user) {
         // User 登录成功
         $_SESSION['user_id'] = $user['id'];
+        session_user_payload_cache_clear();
         $_SESSION['login_id'] = $user['login_id'];
         $_SESSION['name'] = $user['name'];
         $_SESSION['role'] = $user['role'];
@@ -238,13 +242,31 @@ try {
             }
         }
 
+        persist_login_filter_scope($pdo, $company_id);
+        if (function_exists('gc_hydrate_session_assigned_tenants')) {
+            gc_hydrate_session_assigned_tenants($pdo);
+        }
+        $loginFilter = resolve_login_identifier_scope($pdo, $company_id);
+
         if ($needs_secondary_password) {
             // 需要二级密码验证，跳转到二级密码验证页面
-            echo json_encode(['status' => 'success', 'redirect' => '/user-secondary-password']);
+            echo json_encode([
+                'status' => 'success',
+                'redirect' => '/user-secondary-password',
+                'company_id' => (int) ($_SESSION['company_id'] ?? 0) ?: null,
+                'login_scope' => $loginFilter['scope'],
+                'login_identifier' => $loginFilter['identifier'],
+            ]);
         } else {
             // 不需要二级密码验证，直接跳转到dashboard
             $_SESSION['secondary_password_verified'] = true; // 标记为已验证（对于不需要二级密码的用户）
-            echo json_encode(['status' => 'success', 'redirect' => '/dashboard']);
+            echo json_encode([
+                'status' => 'success',
+                'redirect' => '/dashboard',
+                'company_id' => (int) ($_SESSION['company_id'] ?? 0) ?: null,
+                'login_scope' => $loginFilter['scope'],
+                'login_identifier' => $loginFilter['identifier'],
+            ]);
         }
         exit;
         
@@ -256,7 +278,7 @@ try {
         // User 表找不到，尝试从 owner 表验证
         // 通过 company 表关联查询 owner
         $stmt = $pdo->prepare("
-            SELECT o.*, c.id AS company_numeric_id, c.company_id AS company_code, c.expiration_date
+            SELECT o.*, c.id AS company_numeric_id, c.company_id AS company_code, c.group_id, c.expiration_date
             FROM owner o
             INNER JOIN company c ON c.owner_id = o.id
             WHERE UPPER(o.owner_code) = UPPER(?) AND (UPPER(c.company_id) = ? OR UPPER(c.group_id) = ?)
@@ -283,7 +305,7 @@ try {
 
             if ($is_pwd_valid) {
                 $owner_password_match = true;
-                if (isCompanyExpiredOrUnset($row['expiration_date'] ?? null, $row['company_code'] ?? null)) {
+                if (isCompanyExpiredOrUnset($row['expiration_date'] ?? null, $row['company_code'] ?? null, $row['group_id'] ?? null)) {
                     $owner_has_expired = true;
                 } else {
                     $owner = $row;
@@ -301,6 +323,7 @@ try {
             }
 
             $_SESSION['user_id'] = $owner['id'];
+            session_user_payload_cache_clear();
             $_SESSION['login_id'] = $owner['owner_code'];
             $_SESSION['name'] = $owner['name'];
             $_SESSION['role'] = 'owner';
@@ -319,10 +342,15 @@ try {
                 // Owner 的 remember me 可以存在 session 或另外处理
             }
 
+            persist_login_filter_scope($pdo, $company_id);
+            $loginFilter = resolve_login_identifier_scope($pdo, $company_id);
             echo json_encode([
                 'status' => 'success',
                 'redirect' => '/owner-secondary-password',
                 'user_type' => 'owner',
+                'company_id' => (int) ($_SESSION['company_id'] ?? 0) ?: null,
+                'login_scope' => $loginFilter['scope'],
+                'login_identifier' => $loginFilter['identifier'],
             ]);
         } else {
             if ($owner_password_match && $owner_has_expired) {

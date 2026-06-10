@@ -32,6 +32,8 @@ export const ANNOUNCEMENT_I18N = {
     createdBy: "Created by: {name}",
     createdAt: "Created at: {time}",
     createNewMaintenanceContent: "Create New Maintenance Content",
+    prefixRequired: "Prefix *",
+    enterMaintenancePrefix: "e.g. System Maintenance:",
     noticeLabel: "Notice",
     maintenanceNotice: "Maintenance content already exists. Please delete the existing content before creating a new one.",
     enterMaintenanceContent: "Enter maintenance content",
@@ -43,6 +45,7 @@ export const ANNOUNCEMENT_I18N = {
     editAnnouncement: "Edit Announcement",
     close: "Close",
     saveChanges: "Save Changes",
+    saving: "Saving...",
     editMaintenanceContent: "Edit Maintenance Content",
   },
   zh: {
@@ -76,6 +79,8 @@ export const ANNOUNCEMENT_I18N = {
     createdBy: "创建者：{name}",
     createdAt: "创建时间：{time}",
     createNewMaintenanceContent: "创建新维护内容",
+    prefixRequired: "前缀 *",
+    enterMaintenancePrefix: "例如：系统维护中:",
     noticeLabel: "提示",
     maintenanceNotice: "维护内容已存在，请先删除现有内容后再创建新内容。",
     enterMaintenanceContent: "请输入维护内容",
@@ -87,6 +92,7 @@ export const ANNOUNCEMENT_I18N = {
     editAnnouncement: "编辑公告",
     close: "关闭",
     saveChanges: "保存更改",
+    saving: "保存中...",
     editMaintenanceContent: "编辑维护内容",
   },
 };

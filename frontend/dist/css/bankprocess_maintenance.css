@@ -1,4 +1,6 @@
-﻿/* bankprocess_maintenance.php - 页面样式 */
+﻿@import "./maintenance_empty_state.css";
+
+/* bankprocess_maintenance.php - 页面样式 */
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     margin: 0;
@@ -24,7 +26,7 @@ body.dashboard-page.maintenance-page {
     height: auto !important;
     min-height: 100vh !important;
     max-height: none !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
 }
 
@@ -692,33 +694,6 @@ body.dashboard-page.maintenance-page .container {
     margin: 0 !important;
 }
 
-.empty-state-container {
-    position: relative;
-    top: 10px;
-    background: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 8px;
-    padding: clamp(40px, 3.33vw, 64px);
-    margin-bottom: clamp(20px, 1.67vw, 32px);
-    margin-top: 10px;
-    max-width: 1600px;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
-    box-sizing: border-box;
-}
-
-.empty-state {
-    color: #64748b;
-    font-size: clamp(14px, 1.04vw, 20px);
-}
-
-.empty-state p {
-    margin: 0;
-    font-family: var(--font-heading-page);
-}
-
 .maintenance-notification-container {
     position: fixed;
     top: 20px;
@@ -904,20 +879,7 @@ body.maintenance-page #confirmDeleteModal .confirm-delete {
     text-align: center;
 }
 
-/* Scrollbar for long messages */
-.maintenance-confirm-message::-webkit-scrollbar {
-    width: 6px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-thumb {
-    background: #94a3b8;
-    border-radius: 10px;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 /* Button styles for confirm modal (scoped — avoid overriding sidebar .logout-btn) */
 body.maintenance-page .maintenance-modal .btn {
@@ -990,8 +952,7 @@ body.dashboard-page.maintenance-page .bankprocess-maintenance-page-root .mainten
     width: 100%;
 }
 
-body.dashboard-page.maintenance-page .bankprocess-maintenance-page-root .maintenance-list-container,
-body.dashboard-page.maintenance-page .bankprocess-maintenance-page-root .empty-state-container {
+body.dashboard-page.maintenance-page .bankprocess-maintenance-page-root .maintenance-list-container {
     max-width: none;
     width: 100%;
 }
@@ -1194,8 +1155,6 @@ body.dashboard-page.maintenance-page .bankprocess-maintenance-page-root .mainten
 }
 
 .bankprocess-maintenance-page-root .maintenance-virtual-scroll {
-    max-height: min(72vh, 900px);
-    overflow: auto;
     border-radius: 0 0 8px 8px;
     background: #fff;
 }
@@ -1305,3 +1264,44 @@ body.dashboard-page.maintenance-page .bankprocess-maintenance-page-root .mainten
     text-decoration: none;
 }
 
+/* 与 Payment Maintenance 一致：静默刷新顶栏细条 + 表体略灰 */
+.bankprocess-maintenance-table-region {
+    position: relative;
+}
+
+.bankprocess-maintenance-table-region .bankprocess-maintenance-sync-track {
+    height: 2px;
+    overflow: hidden;
+    border-radius: 2px;
+    margin-bottom: 10px;
+    background: rgba(229, 231, 235, 0.9);
+}
+
+.bankprocess-maintenance-table-region .bankprocess-maintenance-sync-bar {
+    height: 100%;
+    width: 38%;
+    max-width: 180px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.95), rgba(59, 130, 246, 0.15));
+    animation: bankprocess-maintenance-sync-slide 0.95s ease-in-out infinite;
+}
+
+@keyframes bankprocess-maintenance-sync-slide {
+    0% {
+        transform: translateX(-120%);
+    }
+
+    100% {
+        transform: translateX(420%);
+    }
+}
+
+.bankprocess-maintenance-table-region .maintenance-list-container--syncing {
+    opacity: 0.94;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.bankprocess-maintenance-page-root .maintenance-list-container--syncing .maintenance-virtual-scroll {
+    pointer-events: none;
+}

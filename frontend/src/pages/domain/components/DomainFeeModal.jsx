@@ -1,41 +1,126 @@
 import { useState, useEffect } from "react";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { showDomainAlert } from "./DomainNotification.jsx";
-import { formatDomainFeeEdit2, DEFAULT_DOMAIN_FEE_PRICE } from "../domainHelpers.js";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
+import {
+  formatDomainFeeEdit2,
+  DOMAIN_FEE_PERIOD_KEYS,
+  defaultDomainFeeSettings,
+  normalizeDomainFeeSettingsFromApi,
+} from "../domainHelpers.js";
 import { getDomainText } from "../../../translateFile/pages/domainTranslate.js";
 import DomainModalPortal from "./DomainModalPortal.jsx";
 
-/**
- * Fee Settings Modal — Group / Company price for domain list
- * Props:
- *   onClose()
- *   onFeeSaved(data) — called after successful save with { price, group_price, company_price }
- */
-/** Overlay z：与 DomainFormModal 同源内联写法，防止生产包 Tailwind arbitrary 失效时整块遮罩掉到侧栏下层，表现为「点了 Price 无反应」 */
 const FEE_MODAL_OVERLAY_Z = 2147482998;
 
-function resolveFeeEditValue(raw) {
-  const formatted = formatDomainFeeEdit2(raw);
-  return formatted !== "" ? formatted : DEFAULT_DOMAIN_FEE_PRICE;
+const PERIOD_LABEL_KEYS = {
+  "7days": "sevenDays",
+  "1month": "oneMonth",
+  "3months": "threeMonths",
+  "6months": "sixMonths",
+  "1year": "oneYear",
+};
+
+function CompanyPriceIcon() {
+  return (
+    <svg className="domain-fee-col-icon domain-fee-col-icon--company" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 21V8.5L12 3l8 5.5V21H4Z"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinejoin="round"
+      />
+      <path d="M9 21v-6h6v6" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+      <path d="M9 10h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function GroupPriceIcon() {
+  return (
+    <svg className="domain-fee-col-icon domain-fee-col-icon--group" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="9" cy="8" r="3" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        d="M3.5 19.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M16 8.5a2.5 2.5 0 1 1 0 5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14.5 19.5c.3-2.2 2-3.8 4.5-3.8 1.4 0 2.6.5 3.5 1.5"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function periodPricesToEditState(periodPrices) {
+  const next = {};
+  DOMAIN_FEE_PERIOD_KEYS.forEach((key) => {
+    const raw = periodPrices[key];
+    next[key] = raw !== "" && raw != null ? formatDomainFeeEdit2(raw) : "";
+  });
+  return next;
+}
+
+function PriceColumn({ sectionKey, title, icon, periodPrices, onUpdate, t }) {
+  return (
+    <div className={`domain-fee-split-col domain-fee-split-col--${sectionKey}`}>
+      <div className="domain-fee-split-col-header">
+        {icon}
+        <span>{title}</span>
+      </div>
+      <div className="domain-fee-split-rows">
+        {DOMAIN_FEE_PERIOD_KEYS.map((key) => (
+          <div key={key} className="domain-fee-split-row">
+            <label htmlFor={`domainFeePeriod_${sectionKey}_${key}`} className="domain-fee-split-label">
+              {t(PERIOD_LABEL_KEYS[key])}
+            </label>
+            <input
+              type="number"
+              id={`domainFeePeriod_${sectionKey}_${key}`}
+              className="domain-fee-split-input"
+              step="0.01"
+              min="0"
+              placeholder={t("pricePlaceholder")}
+              value={periodPrices[key] ?? ""}
+              onChange={(e) => onUpdate(key, e.target.value)}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
   const t = (key, params) => getDomainText(lang, key, params);
-  const [groupPrice, setGroupPrice] = useState(DEFAULT_DOMAIN_FEE_PRICE);
-  const [companyPrice, setCompanyPrice] = useState(DEFAULT_DOMAIN_FEE_PRICE);
+  const [companyPeriodPrices, setCompanyPeriodPrices] = useState(() => defaultDomainFeeSettings().company);
+  const [groupPeriodPrices, setGroupPeriodPrices] = useState(() => defaultDomainFeeSettings().group);
+  const { submitting, runGuarded } = useSubmitGuard(true);
 
   useEffect(() => {
     fetch(buildApiUrl("api/domain/domain_api.php"), {
       cache: "no-cache",
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "get_domain_fee_settings" }),
     })
       .then((r) => r.json())
       .then((res) => {
         if (res.success && res.data) {
-          setGroupPrice(resolveFeeEditValue(res.data.group_price ?? res.data.price));
-          setCompanyPrice(resolveFeeEditValue(res.data.company_price ?? res.data.price));
+          const normalized = normalizeDomainFeeSettingsFromApi(res.data);
+          setCompanyPeriodPrices(periodPricesToEditState(normalized.company));
+          setGroupPeriodPrices(periodPricesToEditState(normalized.group));
         } else {
           showDomainAlert(res.message || t("couldNotLoadSettings"), "danger");
         }
@@ -47,11 +132,15 @@ export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
     fetch(buildApiUrl("api/domain/domain_api.php"), {
       cache: "no-cache",
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "save_domain_fee_settings",
-        group_price: groupPrice,
-        company_price: companyPrice,
+        company_period_prices: companyPeriodPrices,
+        period_prices: companyPeriodPrices,
+        group_period_prices: groupPeriodPrices,
+        company_price: companyPeriodPrices["6months"] ?? "",
+        group_price: groupPeriodPrices["6months"] ?? "",
       }),
     })
       .then((r) => r.json())
@@ -70,9 +159,9 @@ export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
   return (
     <DomainModalPortal>
       <div
-        className="domain-fee-react-overlay"
+        className="domain-fee-react-overlay domain-fee-react-overlay--dual"
         style={{
-          display: "block",
+          display: "flex",
           position: "fixed",
           inset: 0,
           zIndex: FEE_MODAL_OVERLAY_Z,
@@ -85,49 +174,49 @@ export default function DomainFeeModal({ onClose, onFeeSaved, lang = "en" }) {
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <div className="domain-fee-react-modal modal-content">
-        <div className="modal-header domain-fee-modal-header">
-          <h2>{t("price")}</h2>
-          <button type="button" className="account-close" onClick={onClose} aria-label="Close" />
-        </div>
-        <div className="modal-body">
-          <p className="domain-fee-description">
-            {t("priceDescription")}
-          </p>
-          <p className="domain-fee-edit-hint">{t("editFieldHint")}</p>
-          <div className="form-group">
-            <label htmlFor="domainFeeGroupPrice">
-              {t("groupPrice")}
-            </label>
-            <input
-              type="number"
-              id="domainFeeGroupPrice"
-              className="form-group-input"
-              step="0.01"
-              placeholder={t("pricePlaceholder")}
-              value={groupPrice}
-              onChange={(e) => setGroupPrice(e.target.value)}
-            />
+        <div className="domain-fee-react-modal modal-content domain-fee-react-modal--periods domain-fee-react-modal--dual domain-fee-react-modal--split">
+          <div className="modal-header domain-fee-modal-header domain-fee-modal-header--split">
+            <h2>{t("price")}</h2>
+            <button type="button" className="account-close" onClick={onClose} aria-label="Close" />
           </div>
-          <div className="form-group">
-            <label htmlFor="domainFeeCompanyPrice">
-              {t("companyPrice")}
-            </label>
-            <input
-              type="number"
-              id="domainFeeCompanyPrice"
-              className="form-group-input"
-              step="0.01"
-              placeholder={t("pricePlaceholder")}
-              value={companyPrice}
-              onChange={(e) => setCompanyPrice(e.target.value)}
-            />
+
+          <div className="modal-body domain-fee-modal-scroll">
+            <div className="domain-fee-info-banner" role="note">
+              <span className="domain-fee-info-banner__icon" aria-hidden="true">i</span>
+              <p>{t("priceDescriptionDual")}</p>
+            </div>
+
+            <p className="domain-fee-edit-hint domain-fee-edit-hint--split">{t("editPeriodHint")}</p>
+
+            <div className="domain-fee-split-panel">
+              <PriceColumn
+                sectionKey="company"
+                title={t("companyPrice")}
+                icon={<CompanyPriceIcon />}
+                periodPrices={companyPeriodPrices}
+                onUpdate={(key, value) => setCompanyPeriodPrices((prev) => ({ ...prev, [key]: value }))}
+                t={t}
+              />
+              <div className="domain-fee-split-divider" aria-hidden="true" />
+              <PriceColumn
+                sectionKey="group"
+                title={t("groupPrice")}
+                icon={<GroupPriceIcon />}
+                periodPrices={groupPeriodPrices}
+                onUpdate={(key, value) => setGroupPeriodPrices((prev) => ({ ...prev, [key]: value }))}
+                t={t}
+              />
+            </div>
           </div>
-          <div className="form-actions">
-            <button type="button" className="btn btn-save" onClick={handleSave}>{t("save")}</button>
-            <button type="button" className="btn btn-cancel" onClick={onClose}>{t("cancel")}</button>
+
+          <div className="domain-fee-modal-footer form-actions domain-fee-modal-footer--split">
+            <button type="button" className="btn btn-cancel" onClick={onClose}>
+              {t("cancel")}
+            </button>
+            <button type="button" className="btn btn-save" disabled={submitting} onClick={() => runGuarded(handleSave)}>
+              {submitting ? t("saving") : t("save")}
+            </button>
           </div>
-        </div>
         </div>
       </div>
     </DomainModalPortal>

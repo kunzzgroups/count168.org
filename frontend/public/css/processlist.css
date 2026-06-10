@@ -264,23 +264,7 @@
     background: #f0f9ff;
 }
 
-#countrySelectionModal #existingCountries.country-list::-webkit-scrollbar,
-#countrySelectionModal .selected-countries-list::-webkit-scrollbar {
-    width: 10px;
-}
-
-#countrySelectionModal #existingCountries.country-list::-webkit-scrollbar-thumb,
-#countrySelectionModal .selected-countries-list::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 6px;
-    border: 2px solid #fff;
-}
-
-#countrySelectionModal #existingCountries.country-list::-webkit-scrollbar-track,
-#countrySelectionModal .selected-countries-list::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 6px;
-}
+/* Country modal scrollbars: app-wide — dashboard-scrollbar.css */
 
 .country-list {
     flex: 1 1 auto;
@@ -785,23 +769,7 @@
     background: #fff;
 }
 
-#bankSelectionModal #existingBanks.bank-list::-webkit-scrollbar,
-#bankSelectionModal .selected-banks-list::-webkit-scrollbar {
-    width: 10px;
-}
-
-#bankSelectionModal #existingBanks.bank-list::-webkit-scrollbar-thumb,
-#bankSelectionModal .selected-banks-list::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 6px;
-    border: 2px solid #fff;
-}
-
-#bankSelectionModal #existingBanks.bank-list::-webkit-scrollbar-track,
-#bankSelectionModal .selected-banks-list::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 6px;
-}
+/* Bank modal scrollbars: app-wide — dashboard-scrollbar.css */
 
 .bank-list {
     flex: 1 1 auto;
@@ -1654,13 +1622,13 @@
 .process-page #addBankModal .bank-actions .btn-save {
     background: var(--btn-add-gradient);
     color: #ffffff;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
 }
 
 .process-page #addBankModal .bank-actions .btn-save:hover {
     background: var(--btn-add-gradient-hover);
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    box-shadow: var(--shadow-btn-add-page-hover);
 }
 
 .process-page #addBankModal .bank-actions .btn-save:active {
@@ -1828,14 +1796,14 @@ body.ec-auth-shell .process-page #addBankModal .bank-actions .btn-cancel:hover {
     text-align: center;
     background: var(--btn-add-gradient);
     color: #ffffff;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
     --sweep-color: rgba(255, 255, 255, 0.2);
 }
 
 .process-page #addBankModal .bank-remark-actions .bank-note-open-btn:hover {
     background: var(--btn-add-gradient-hover);
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    box-shadow: var(--shadow-btn-add-page-hover);
 }
 
 .process-page #addBankModal .bank-remark-actions .bank-note-open-btn:active {
@@ -1949,6 +1917,11 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
     flex-wrap: wrap;
 }
 
+.bank-form .bank-day-start-row > .form-group {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
 .bank-form .bank-day-start-input-wrap,
 .bank-form .bank-day-end-input-wrap {
     flex: 1 1 0; /* Balanced widths */
@@ -1956,6 +1929,162 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
 
 .bank-form .bank-day-start-input-wrap .bank-input {
     width: 100%;
+}
+
+.bank-form .bank-day-end-field-group {
+    min-width: 0;
+    width: 100%;
+}
+
+.bank-form .bank-day-end-label-row,
+#addBankModal .bank-form .form-date-label-row.bank-day-end-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+    gap: 12px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-bottom: 0;
+}
+
+#addBankModal .bank-form .bank-day-end-label-row > label,
+#addBankModal .bank-form .form-date-label-row.bank-day-end-label-row > label {
+    width: auto !important;
+    flex: 0 1 auto;
+    margin-bottom: 0;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.bank-form .bank-day-end-monthly-cap-wrap {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+    margin: 0 0 0 auto;
+    padding: 0;
+    min-width: 78px;
+    white-space: nowrap;
+}
+
+.bank-form .bank-day-end-cap-label {
+    font-size: 12px;
+    font-weight: 500;
+    font-family: var(--font-heading-page, inherit);
+    color: #94a3b8;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    user-select: none;
+    line-height: 1;
+    flex: 0 0 30px;
+    width: 30px;
+    min-width: 30px;
+    max-width: 30px;
+    white-space: nowrap;
+    text-align: right;
+    box-sizing: border-box;
+}
+
+.bank-form .bank-day-end-cap-label.is-on {
+    color: #94a3b8;
+}
+
+/* Bank modal：Day end 旁 toggle — 标签左、OFF/ON + pill 右（对齐参考 UI） */
+#addBankModal .bank-day-end-cap-switch {
+    position: relative;
+    display: inline-block;
+    width: 42px;
+    height: 22px;
+    min-width: 42px;
+    min-height: 22px;
+    max-width: 42px;
+    max-height: 22px;
+    flex: 0 0 42px;
+    flex-shrink: 0;
+    cursor: pointer;
+    margin: 0;
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
+#addBankModal .bank-day-end-cap-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    inset: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+#addBankModal .bank-day-end-cap-switch__track {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #d1dbe5;
+    border-radius: 999px;
+    border: none;
+    box-sizing: border-box;
+    overflow: hidden;
+    transition: background-color 0.2s ease;
+}
+
+#addBankModal .bank-day-end-cap-switch__track::before {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
+    min-height: 16px;
+    top: 3px;
+    left: 3px;
+    transform: none;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.14);
+    transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    will-change: transform;
+}
+
+#addBankModal .bank-day-end-cap-switch input:checked + .bank-day-end-cap-switch__track {
+    background: #3b82f6;
+}
+
+#addBankModal .bank-day-end-cap-switch input:checked + .bank-day-end-cap-switch__track::before {
+    left: 3px;
+    transform: translateX(20px);
+}
+
+#addBankModal .bank-day-end-cap-switch:hover .bank-day-end-cap-switch__track {
+    background: #c5d0dc;
+}
+
+#addBankModal .bank-day-end-cap-switch:hover input:checked + .bank-day-end-cap-switch__track {
+    background: #2563eb;
+}
+
+#addBankModal .bank-day-end-cap-switch input:focus-visible + .bank-day-end-cap-switch__track {
+    outline: none;
+}
+
+#addBankModal .bank-day-end-cap-switch:has(input:focus-visible) {
+    outline: none;
+}
+
+#addBankModal .bank-day-end-cap-switch input:disabled + .bank-day-end-cap-switch__track {
+    opacity: 0.5;
+}
+
+#addBankModal .bank-day-end-cap-switch:has(input:disabled) {
+    cursor: not-allowed;
 }
 
 /* Add/Edit Bank Process + Resend modal — localized MaintenanceDateRangePicker (replaces native type="date") */
@@ -2093,8 +2222,21 @@ body.process-page .calendar-popup.calendar-popup--transaction-range {
     box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
 }
 
+/* Bank Process 顶栏：宽度由 JS 测量药丸后写入 --bank-toolbar-date-width */
+body.process-page.process-page--bank .calendar-popup.calendar-popup--transaction-range.calendar-popup--match-anchor,
+body.process-page.process-page--bank .calendar-popup.calendar-popup--transaction-range.calendar-popup--no-presets {
+    width: auto;
+    min-width: 0;
+    max-width: calc(100vw - 24px);
+}
+
 body.process-page .calendar-popup.calendar-popup--transaction-range[style*="display: block"] {
     display: grid !important;
+}
+
+/* Above Add/Edit Bank Process + Resend modals (ProcessModalPortal backdrop z-index 10050). */
+.calendar-popup.calendar-popup--bank-process-modal {
+    z-index: 10150 !important;
 }
 
 body.process-page .transaction-calendar-panel {
@@ -2284,7 +2426,7 @@ body.process-page .calendar-popup--transaction-range .calendar-year-option.is-ac
 }
 
 /* Bank Add/Edit / Resend：日历宽度与输入框一致（宽度由 JS 写入 inline style） */
-body.process-page .calendar-popup.calendar-popup--transaction-range.calendar-popup--match-anchor {
+body.process-page:not(.process-page--bank) .calendar-popup.calendar-popup--transaction-range.calendar-popup--match-anchor {
     width: auto;
     min-width: 0;
     max-width: calc(100vw - 24px);
@@ -2731,7 +2873,7 @@ body.process-page .custom-select-dropdown.custom-select-dropdown-portal .custom-
     font-family: var(--font-ui) !important;
     border: 1px solid #dbe3ee !important;
     border-radius: 0.52rem !important;
-    min-height: 2.55rem !important;
+    min-height: 4rem !important;
     box-sizing: border-box;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
     padding: 0.625rem 2.75rem 0.625rem 0.875rem !important;
@@ -3084,19 +3226,7 @@ body.process-page .custom-select-dropdown.custom-select-dropdown-portal .custom-
     background: #ffffff;
 }
 
-/* Scrollbar for the list */
-.bank-profit-sharing-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.bank-profit-sharing-list::-webkit-scrollbar-track {
-    background: #f1f5f9;
-}
-
-.bank-profit-sharing-list::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 3px;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 /* Empty State */
 .no-profit-sharing {
@@ -3198,10 +3328,5 @@ body.process-page .custom-select-dropdown.custom-select-dropdown-portal .custom-
     background: #ef4444;
     color: white;
     transform: rotate(90deg);
-}
-
-/* Process List 筛选药丸：更快的高亮切换反馈 */
-body.process-page .user-gc-inline-panel .user-gc-segment {
-    transition: background 0.06s ease, color 0.06s ease, border-color 0.06s ease;
 }
 

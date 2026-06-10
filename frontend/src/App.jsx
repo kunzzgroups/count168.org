@@ -1,29 +1,33 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { lazyWithRetry } from "./utils/routing/lazyWithRetry.js";
 import LoginPage from "./pages/login/LoginPage.jsx";
-import TransactionDashboardPage from "./pages/dashboard/TransactionDashboardPage.jsx";
-import DomainPage from "./pages/domain/DomainPage.jsx";
-import AnnouncementPage from "./pages/announcement/AnnouncementPage.jsx";
 import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx";
-import AccountListPage from "./pages/account/AccountListPage.jsx";
-import ProcessListPage from "./pages/processlist/ProcessListPage.jsx";
-import BankProcessListPage from "./pages/bankprocesslist/BankProcessListPage.jsx";
-import UserListPage from "./pages/userlist/UserListPage.jsx";
-import OwnershipPage from "./pages/ownership/OwnershipPage.jsx";
-import DataCapturePage from "./pages/datacapture/DataCapturePage.jsx";
-import DataCaptureSummaryPage from "./pages/datacapturesummary/DataCaptureSummaryPage.jsx";
-import TransactionPaymentPage from "./pages/transaction/TransactionPaymentPage.jsx";
-import CustomerReportPage from "./pages/report/customer/CustomerReportPage.jsx";
-import DomainReportPage from "./pages/report/domain/DomainReportPage.jsx";
-import CaptureMaintenancePage from "./pages/maintenance/capture/CaptureMaintenancePage.jsx";
-import TransactionMaintenancePage from "./pages/maintenance/transaction/TransactionMaintenancePage.jsx";
-import FormulaMaintenancePage from "./pages/maintenance/formula/FormulaMaintenancePage.jsx";
-import BankprocessMaintenancePage from "./pages/maintenance/bankprocess/BankprocessMaintenancePage.jsx";
-import PaymentMaintenancePage from "./pages/maintenance/payment/PaymentMaintenancePage.jsx";
 import SecondaryPasswordPage from "./pages/login/SecondaryPasswordPage.jsx";
-import MemberPage from "./pages/member/MemberPage.jsx";
 import ResetPasswordPage from "./pages/login/ResetPasswordPage.jsx";
-import UserAccessPage from "./pages/useraccess/UserAccessPage.jsx";
-import DeletedLogPage from "./pages/deletedlog/DeletedLogPage.jsx";
+
+const MemberPage = lazyWithRetry(() => import("./pages/member/MemberPage.jsx"));
+const UserListPage = lazyWithRetry(() => import("./pages/userlist/UserListPage.jsx"));
+const AccountListPage = lazyWithRetry(() => import("./pages/account/AccountListPage.jsx"));
+const ProcessListPage = lazyWithRetry(() => import("./pages/processlist/ProcessListPage.jsx"));
+const AutoRenewPage = lazyWithRetry(() => import("./pages/autorenew/AutoRenewPage.jsx"));
+const AnnouncementPage = lazyWithRetry(() => import("./pages/announcement/AnnouncementPage.jsx"));
+
+const TransactionDashboardPage = lazyWithRetry(() => import("./pages/dashboard/TransactionDashboardPage.jsx"));
+const DomainPage = lazyWithRetry(() => import("./pages/domain/DomainPage.jsx"));
+const OwnershipPage = lazyWithRetry(() => import("./pages/ownership/OwnershipPage.jsx"));
+const BankProcessListPage = lazyWithRetry(() => import("./pages/bankprocesslist/BankProcessListPage.jsx"));
+const DataCapturePage = lazyWithRetry(() => import("./pages/datacapture/DataCapturePage.jsx"));
+const DataCaptureSummaryPage = lazyWithRetry(() => import("./pages/datacapturesummary/DataCaptureSummaryPage.jsx"));
+const TransactionPaymentPage = lazyWithRetry(() => import("./pages/transaction/TransactionPaymentPage.jsx"));
+const CustomerReportPage = lazyWithRetry(() => import("./pages/report/customer/CustomerReportPage.jsx"));
+const DomainReportPage = lazyWithRetry(() => import("./pages/report/domain/DomainReportPage.jsx"));
+const CaptureMaintenancePage = lazyWithRetry(() => import("./pages/maintenance/capture/CaptureMaintenancePage.jsx"));
+const TransactionMaintenancePage = lazyWithRetry(() => import("./pages/maintenance/transaction/TransactionMaintenancePage.jsx"));
+const FormulaMaintenancePage = lazyWithRetry(() => import("./pages/maintenance/formula/FormulaMaintenancePage.jsx"));
+const BankprocessMaintenancePage = lazyWithRetry(() => import("./pages/maintenance/bankprocess/BankprocessMaintenancePage.jsx"));
+const PaymentMaintenancePage = lazyWithRetry(() => import("./pages/maintenance/payment/PaymentMaintenancePage.jsx"));
+const UserAccessPage = lazyWithRetry(() => import("./pages/useraccess/UserAccessPage.jsx"));
+const DeletedLogPage = lazyWithRetry(() => import("./pages/deletedlog/DeletedLogPage.jsx"));
 
 export default function App() {
   return (
@@ -57,6 +61,7 @@ export default function App() {
         <Route path="/payment-maintenance" element={<PaymentMaintenancePage />} />
         <Route path="/useraccess" element={<UserAccessPage />} />
         <Route path="/deleted-log" element={<DeletedLogPage />} />
+        <Route path="/auto-renew" element={<AutoRenewPage />} />
       </Route>
 
       {/* Clean URLs for non-migrated pages (still rendered by PHP) */}
@@ -96,6 +101,8 @@ export default function App() {
       <Route path="/owner_secondary_password.php" element={<Navigate to="/owner-secondary-password" replace />} />
       <Route path="/api/users/user_secondary_password.php" element={<Navigate to="/user-secondary-password" replace />} />
       <Route path="/useraccess.php" element={<Navigate to="/useraccess" replace />} />
+      <Route path="/auto_renew.php" element={<Navigate to="/auto-renew" replace />} />
+      <Route path="/auto_renew" element={<Navigate to="/auto-renew" replace />} />
 
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="*" element={<Navigate to="/login" replace />} />

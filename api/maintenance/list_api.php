@@ -37,7 +37,7 @@ function requireC168InformationManagementAccess(PDO $pdo): void {
  * 获取 C168 下所有维护记录（含创建人信息）
  */
 function fetchMaintenanceList(PDO $pdo) {
-    $sql = "SELECT m.id, m.content, m.status,
+    $sql = "SELECT m.id, m.prefix, m.content, m.status,
                    DATE_FORMAT(m.created_at, '%d/%m/%Y %H:%i:%s') as created_at,
                    COALESCE(u.name, o.name) as created_by_name,
                    COALESCE(u.login_id, o.owner_code) as created_by_login
@@ -59,6 +59,7 @@ function formatListRows(array $rows) {
     foreach ($rows as $row) {
         $list[] = [
             'id' => (int)$row['id'],
+            'prefix' => $row['prefix'] ?? '',
             'content' => $row['content'] ?? '',
             'status' => $row['status'] ?? 'active',
             'created_at' => $row['created_at'] ?? '',

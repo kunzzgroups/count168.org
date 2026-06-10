@@ -2,7 +2,6 @@ import { useMemo } from "react";
 import ProcessSelect from "../../shared/ProcessSelect.jsx";
 import {
   buildMaintenancePeriodPresets,
-  formatDmyFromYmd,
   parseDmy,
 } from "../../shared/maintenanceDateHelpers.js";
 import ReportDatePicker from "../../../report/common/ReportDatePicker.jsx";
@@ -14,17 +13,21 @@ export default function TransactionMaintenanceFilters({
   setSelectedProcess,
   dateFrom,
   dateTo,
-  setDateFrom,
-  setDateTo,
+  onDateRangeChange,
   today,
   companyId,
-  groupFilterKind,
   snapGroupIds,
   visibleCompanies,
   selectedGroup,
   onGroupClick,
+  onPickCompany,
   onPickAllGroups,
-  onSwitchCompany,
+  onPickAllInGroup,
+  onClearCompany,
+  allowClearCompany = false,
+  groupsAllMode = false,
+  groupAllMode = false,
+  processValueMode = "processName",
   m,
 }) {
   const periodPresets = useMemo(() => buildMaintenancePeriodPresets(m), [m]);
@@ -42,7 +45,8 @@ export default function TransactionMaintenanceFilters({
             </span>
             <div className="report-outlined-inner">
               <ProcessSelect
-                key={`process-select-${companyId ?? "none"}`}
+                key={`process-select-${companyId ?? "none"}-${processValueMode}`}
+                valueMode={processValueMode}
                 processes={processes}
                 selectedValue={selectedProcess}
                 onSelect={setSelectedProcess}
@@ -58,10 +62,7 @@ export default function TransactionMaintenanceFilters({
         <ReportDatePicker
           dateFrom={parseDmy(dateFrom || today)}
           dateTo={parseDmy(dateTo || today)}
-          onRangeChange={(start, end) => {
-            setDateFrom(formatDmyFromYmd(start));
-            setDateTo(formatDmyFromYmd(end));
-          }}
+          onRangeChange={(start, end) => onDateRangeChange(start, end)}
           containerClass="customer-report-filter-group"
           label={m.dateRange}
           placeholder={m.selectDateRange}
@@ -78,15 +79,20 @@ export default function TransactionMaintenanceFilters({
       <div className="maintenance-filter-row">
         <div className="maintenance-filter-left-full">
           <ReportGcFilterPanel
+            layout="dashboard"
             groupIds={snapGroupIds}
-            groupFilterKind={groupFilterKind}
-            selectedGroupKey={selectedGroup}
-            onPickAllGroups={onPickAllGroups}
+            selectedGroup={selectedGroup}
             onPickGroup={(g) => onGroupClick(g)}
+            onPickAllGroups={onPickAllGroups}
+            onPickAllInGroup={onPickAllInGroup}
+            groupsAllMode={groupsAllMode}
+            groupAllMode={groupAllMode}
             companyButtons={visibleCompanies}
             companyId={companyId}
             highlightCompanyId={companyId}
-            onSwitchCompany={onSwitchCompany}
+            onSwitchCompany={onPickCompany}
+            onClearCompany={onClearCompany}
+            allowClearCompany={allowClearCompany}
             t={(key) => {
               if (key === "groupId") return m.groupId;
               if (key === "company") return m.company;

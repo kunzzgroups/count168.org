@@ -1,21 +1,47 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { fetchDomainCompanyPermissions } from "../shared/maintenanceCompanyApi.js";
+import { fetchReportScopeCurrencies } from "../../report/shared/reportCompanyApi.js";
+import { paymentMaintenanceScopeApiParams } from "./paymentMaintenanceScope.js";
+
+function appendPaymentScopeToParams(params, scope) {
+  const {
+    companyId,
+    viewGroup,
+    groupId,
+    reportScope,
+    groupOnly,
+    groupAggregate,
+    subsidiaryAccountsOnly,
+  } = paymentMaintenanceScopeApiParams(scope);
+  if (companyId) params.append("company_id", String(companyId));
+  const vg = viewGroup ? String(viewGroup).trim().toUpperCase() : "";
+  if (vg) params.append("view_group", vg);
+  const gid = groupId ? String(groupId).trim().toUpperCase() : "";
+  if (gid) params.append("group_id", gid);
+  if (reportScope) params.append("report_scope", reportScope);
+  if (groupOnly) params.append("group_only", "1");
+  if (groupAggregate) params.append("group_aggregate", "1");
+  if (subsidiaryAccountsOnly) params.append("subsidiary_accounts_only", "1");
+}
+
+/** Default currency pill for group vs subsidiary company scope. */
+export function pickPaymentMaintenanceCurrency(currList, scope) {
+  if (!Array.isArray(currList) || currList.length === 0) return null;
+  if (scope?.mode === "company") {
+    return currList[0]?.code || null;
+  }
+  const hasMYR = currList.some((c) => String(c?.code || "").toUpperCase() === "MYR");
+  return hasMYR ? "MYR" : currList[0]?.code || null;
+}
 
 export async function fetchCompanyPermissions(companyCode) {
   return fetchDomainCompanyPermissions(companyCode, { emptyForC168: true });
 }
 
-/**
- * Fetch currencies for a specific company
- */
-export async function fetchCompanyCurrencies(companyId) {
-  const url = buildApiUrl(`api/transactions/get_company_currencies_api.php${companyId ? `?company_id=${companyId}` : ''}`);
-  const response = await fetch(url);
-  const data = await response.json();
-  if (data.success) {
-    return data.data || [];
-  }
-  return [];
+/** Currencies for active group ledger vs subsidiary company (no cross-scope bleed). */
+export async function fetchCompanyCurrencies(_companyId, scope = null) {
+  if (!scope) return [];
+  return fetchReportScopeCurrencies(scope);
 }
 
 /**
@@ -23,12 +49,23 @@ export async function fetchCompanyCurrencies(companyId) {
  * @param {object} opts
  * @param {AbortSignal} [opts.signal] — cancel in-flight request when company / filters change
  */
-export async function searchPaymentData({ dateFrom, dateTo, transactionType, companyId, currency, signal }) {
+export async function searchPaymentData({
+  dateFrom,
+  dateTo,
+  transactionType,
+  companyId,
+  currency,
+  scope,
+  signal,
+}) {
   const params = new URLSearchParams();
   params.append("date_from", dateFrom);
   params.append("date_to", dateTo);
   if (transactionType) params.append("transaction_type", transactionType);
-  if (companyId) params.append("company_id", companyId);
+  if (companyId && scope?.mode !== "group") {
+    params.append("company_id", String(companyId));
+  }
+  appendPaymentScopeToParams(params, scope);
   if (currency) params.append("currency", currency);
   
   const url = buildApiUrl(`api/payment_maintenance/search_api.php?${params.toString()}`);
@@ -46,11 +83,30 @@ export async function searchPaymentData({ dateFrom, dateTo, transactionType, com
 /**
  * Delete payment records
  */
-export async function deletePaymentRecords(transactionIds) {
-  const response = await fetch(buildApiUrl('api/payment_maintenance/delete_api.php'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ transaction_ids: transactionIds })
+export async function deletePaymentRecords(transactionIds, scope = null) {
+  const payload = { transaction_ids: transactionIds };
+  const {
+    companyId,
+    viewGroup,
+    groupId,
+    reportScope,
+    groupOnly,
+    groupAggregate,
+    subsidiaryAccountsOnly,
+  } = paymentMaintenanceScopeApiParams(scope);
+  if (companyId) payload.company_id = companyId;
+  if (viewGroup) payload.view_group = viewGroup;
+  if (groupId) payload.group_id = groupId;
+  if (reportScope) payload.report_scope = reportScope;
+  if (groupOnly) payload.group_only = "1";
+  if (groupAggregate) payload.group_aggregate = "1";
+  if (subsidiaryAccountsOnly) payload.subsidiary_accounts_only = "1";
+
+  const response = await fetch(buildApiUrl("api/payment_maintenance/delete_api.php"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
   });
   const data = await response.json();
   if (!data.success) {

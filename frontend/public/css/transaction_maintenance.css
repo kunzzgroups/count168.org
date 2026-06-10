@@ -1,4 +1,6 @@
-﻿/**
+﻿@import "./maintenance_empty_state.css";
+
+/**
  * transaction_maintenance.css - 从 transaction_maintenance.php 提取的样式
  */
 body {
@@ -27,7 +29,7 @@ body.dashboard-page.maintenance-page {
     height: auto !important;
     min-height: 100vh !important;
     max-height: none !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
 }
 
@@ -56,7 +58,7 @@ body.dashboard-page.maintenance-page {
     gap: clamp(8px, 0.83vw, 16px);
     flex-wrap: wrap;
     padding: 0;
-    margin-top: clamp(12px, 1.04vw, 20px);
+    margin-top: var(--layout-page-first-block-mt);
 }
 
 .maintenance-toggle-dropdown {
@@ -606,35 +608,6 @@ body.dashboard-page.maintenance-page {
     text-decoration: line-through;
 }
 
-/* Empty State Styles */
-.empty-state-container {
-    background: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 12px;
-    padding: clamp(48px, 4vw, 72px) clamp(24px, 2vw, 40px);
-    margin-top: 10px;
-    margin-bottom: clamp(20px, 1.67vw, 32px);
-    max-width: 1600px;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
-    box-sizing: border-box;
-}
-
-.empty-state {
-    color: #475569;
-    font-size: clamp(15px, 1.15vw, 22px);
-    line-height: 1.5;
-    font-weight: 500;
-}
-
-.empty-state p {
-    margin: 0 auto;
-    max-width: 28rem;
-    font-family: var(--font-heading-page);
-}
-
 /* Notification Styles */
 .maintenance-notification-container {
     position: fixed;
@@ -821,20 +794,7 @@ body.maintenance-page #confirmDeleteModal .confirm-delete {
     text-align: center;
 }
 
-/* Scrollbar for long messages */
-.maintenance-confirm-message::-webkit-scrollbar {
-    width: 6px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-thumb {
-    background: #94a3b8;
-    border-radius: 10px;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 /* Button styles for confirm modal (scoped — avoid overriding sidebar .logout-btn) */
 body.maintenance-page .maintenance-modal .btn {
@@ -1311,11 +1271,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 .transaction-maintenance-page-root .maintenance-virtual-scroll--body {
-    max-height: min(72vh, 900px);
-    overflow-x: hidden;
-    overflow-y: auto;
     background: #fff;
-    scrollbar-gutter: stable;
 }
 
 .transaction-maintenance-page-root .maintenance-virtual-row-wrap {
@@ -1446,3 +1402,44 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     }
 }
 
+/* 与 Payment Maintenance 一致：静默刷新顶栏细条 + 表体略灰 */
+.transaction-maintenance-table-region {
+    position: relative;
+}
+
+.transaction-maintenance-table-region .transaction-maintenance-sync-track {
+    height: 2px;
+    overflow: hidden;
+    border-radius: 2px;
+    margin-bottom: 10px;
+    background: rgba(229, 231, 235, 0.9);
+}
+
+.transaction-maintenance-table-region .transaction-maintenance-sync-bar {
+    height: 100%;
+    width: 38%;
+    max-width: 180px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.15), rgba(59, 130, 246, 0.95), rgba(59, 130, 246, 0.15));
+    animation: transaction-maintenance-sync-slide 0.95s ease-in-out infinite;
+}
+
+@keyframes transaction-maintenance-sync-slide {
+    0% {
+        transform: translateX(-120%);
+    }
+
+    100% {
+        transform: translateX(420%);
+    }
+}
+
+.transaction-maintenance-table-region .maintenance-list-container--syncing {
+    opacity: 0.94;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.transaction-maintenance-page-root .maintenance-list-container--syncing .maintenance-virtual-scroll {
+    pointer-events: none;
+}

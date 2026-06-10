@@ -1,29 +1,30 @@
 import ProcessSelect from "../../shared/ProcessSelect.jsx";
 import ReportGcFilterPanel from "../../../report/shared/ReportGcFilterPanel.jsx";
-import { normalizeMaintenanceSearchInput } from "../../shared/maintenanceSearchInput.js";
 
 export default function FormulaMaintenanceFilters({
   processes,
   selectedProcess,
   setSelectedProcess,
-  searchFilter,
-  setSearchFilter,
   companyId,
-  groupFilterKind,
   snapGroupIds,
   visibleCompanies,
   selectedGroup,
   onGroupClick,
+  onPickCompany,
+  onClearCompany,
+  allowClearCompany = true,
   onPickAllGroups,
-  onSwitchCompany,
+  onPickAllInGroup,
+  groupsAllMode = false,
+  groupAllMode = false,
   onClearFilters,
-  selectedIds,
+  deleteDisabled,
   confirmDelete,
   setConfirmDelete,
   onDelete,
   m,
 }) {
-  const showClear = Boolean(searchFilter || selectedProcess !== null);
+  const showClear = selectedProcess !== null;
 
   return (
     <div className="customer-report-filter-container">
@@ -35,6 +36,7 @@ export default function FormulaMaintenanceFilters({
             </span>
             <div className="report-outlined-inner custom-select-wrapper formula-process-control">
               <ProcessSelect
+                valueMode="id"
                 processes={processes}
                 selectedValue={selectedProcess}
                 onSelect={setSelectedProcess}
@@ -62,36 +64,13 @@ export default function FormulaMaintenanceFilters({
           </div>
         </div>
 
-        <div className="customer-report-filter-group report-outlined-anchor">
-          <div className="report-outlined-shell">
-            <span id="formula-maint-search-legend" className="report-outlined-label">
-              {m.search}
-            </span>
-            <div className="report-outlined-inner">
-              <div className="search-input-container formula-search-input-container" style={{ width: "100%", position: "relative" }}>
-                <i className="fas fa-search search-icon" aria-hidden={true} style={{ position: "absolute", left: "10px", top: "50%", transform: "translateY(-50%)" }} />
-                <input
-                  type="text"
-                  id="search_filter"
-                  className="maintenance-input"
-                  placeholder={m.searchFormulaPlaceholder}
-                  value={searchFilter}
-                  aria-labelledby="formula-maint-search-legend"
-                  onChange={(e) => setSearchFilter(normalizeMaintenanceSearchInput(e.target.value))}
-                  style={{ paddingLeft: "30px", width: "100%", border: "none", outline: "none", background: "transparent", minHeight: "38px", textTransform: "uppercase" }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div className="maintenance-actions-top">
           <button
             type="button"
             className="maintenance-delete-btn"
             id="deleteBtn"
             onClick={onDelete}
-            disabled={selectedIds.length === 0}
+            disabled={deleteDisabled}
           >
             {m.delete}
           </button>
@@ -101,15 +80,20 @@ export default function FormulaMaintenanceFilters({
       <div className="maintenance-filter-row">
         <div className="maintenance-filter-left-full">
           <ReportGcFilterPanel
+            layout="dashboard"
             groupIds={snapGroupIds}
-            groupFilterKind={groupFilterKind}
-            selectedGroupKey={selectedGroup}
-            onPickAllGroups={onPickAllGroups}
+            selectedGroup={selectedGroup}
             onPickGroup={(g) => onGroupClick(g)}
+            onPickAllGroups={onPickAllGroups}
+            onPickAllInGroup={onPickAllInGroup}
+            groupsAllMode={groupsAllMode}
+            groupAllMode={groupAllMode}
             companyButtons={visibleCompanies}
             companyId={companyId}
             highlightCompanyId={companyId}
-            onSwitchCompany={onSwitchCompany}
+            onSwitchCompany={onPickCompany}
+            onClearCompany={onClearCompany}
+            allowClearCompany={allowClearCompany}
             t={(key) => {
               if (key === "groupId") return m.groupId;
               if (key === "company") return m.company;

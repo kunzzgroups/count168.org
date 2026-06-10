@@ -45,7 +45,6 @@ const PaymentVirtualDataRow = memo(function PaymentVirtualDataRow({
       <div
         role="cell"
         className="maintenance-virtual-cell maintenance-virtual-cell--left maintenance-virtual-cell--mono maintenance-virtual-cell--created-at"
-        title={row.dts_created || "-"}
       >
         <MaintenanceCreatedAtDisplay value={row.dts_created} />
       </div>

@@ -8,8 +8,9 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
-require_once __DIR__ . '/../../includes/permissions.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/report_scope_common.php';
+require_once __DIR__ . '/../datacapture/data_capture_scope_common.php';
 
 function domainReportMoneyOut($value): string {
     return money_out($value ?? '0');
@@ -30,52 +31,77 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
 }
 
 /**
- * 解析并验证请求中的 company_id
+ * Align Domain Report scope with dual-tenant capture (group → groups.id, company → company.id).
+ *
+ * @return array<string, mixed>
  */
-function getCompanyIdForRequest(PDO $pdo) {
-    if (isset($_GET['company_id']) && $_GET['company_id'] !== '') {
-        $requestedCompanyId = (int)$_GET['company_id'];
-        $userRole = strtolower($_SESSION['role'] ?? '');
-
-        if ($userRole === 'owner') {
-            $ownerId = $_SESSION['owner_id'] ?? $_SESSION['user_id'] ?? null;
-            if (!$ownerId) {
-                throw new Exception('缺少 Owner 信息');
-            }
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ? LIMIT 1");
-            $stmt->execute([$requestedCompanyId, $ownerId]);
-            if (!$stmt->fetchColumn()) {
-                throw new Exception('无权访问该公司');
-            }
-            return $requestedCompanyId;
-        }
-
-        if (!isset($_SESSION['company_id'])) {
-            throw new Exception('缺少公司信息');
-        }
-        if ((int)$_SESSION['company_id'] !== $requestedCompanyId) {
-            throw new Exception('无权访问该公司');
-        }
-        return $requestedCompanyId;
+function resolveDomainReportCaptureScope(PDO $pdo, array $resolved, array $get): array
+{
+    $groupScope = resolveDomainReportGroupScope($pdo, $resolved, (int) ($resolved['company_id'] ?? 0));
+    $scopeHint = strtolower(trim((string) ($get['report_scope'] ?? '')));
+    if ($scopeHint === 'company') {
+        $groupScope = false;
+    } elseif ($scopeHint === 'group') {
+        $groupScope = true;
     }
 
-    if (!isset($_SESSION['company_id'])) {
-        throw new Exception('缺少公司信息');
+    $scopeResolved = [
+        'company_id' => (int) ($resolved['company_id'] ?? 0),
+        'group_id' => (string) ($resolved['group_id'] ?? ''),
+        'report_scope_hint' => $groupScope ? 'group' : 'company',
+        'is_group_scope' => $groupScope,
+    ];
+
+    $ctx = dcFinalizeDualTenantCaptureScope($pdo, $scopeResolved, $get);
+    $ctx['group_scope'] = (bool) ($ctx['is_group_scope'] ?? false);
+
+    return $ctx;
+}
+
+/** Group entity scope: SALARY/COMMISSION/BONUS only (same rules as Data Capture). */
+function resolveDomainReportGroupScope(PDO $pdo, array $resolved, int $companyId): bool
+{
+    unset($pdo, $companyId);
+    $hint = strtolower(trim((string) ($resolved['report_scope_hint'] ?? '')));
+    if ($hint === 'company') {
+        return false;
     }
-    return (int)$_SESSION['company_id'];
+    if ($hint === 'group') {
+        return true;
+    }
+    if (strtolower(trim((string) ($resolved['list_scope']['mode'] ?? ''))) === 'group') {
+        return true;
+    }
+    return dcIsGroupScopeHint($resolved);
+}
+
+/** Group Domain Report: ensure SALARY + COMMISSION + BONUS on entity, then return rows. */
+function fetchGroupDomainProcesses(PDO $pdo, int $company_id, string $groupId): array
+{
+    $g = reportNormalizeGroupId($groupId);
+    foreach (dcGroupPayrollProcessCodes() as $code) {
+        dcEnsureProcessIdByCode($pdo, $company_id, $code, true, $g !== '' ? $g : null);
+    }
+    return fetchProcesses($pdo, $company_id, true);
 }
 
 /**
  * 查询 Process 列表（id, process_id, description）
  */
-function fetchProcesses(PDO $pdo, int $company_id) {
-    $stmt = $pdo->prepare("
+function fetchProcesses(PDO $pdo, int $company_id, bool $groupScope = false) {
+    $sql = "
         SELECT p.id, p.process_id, d.name AS description
         FROM process p
         LEFT JOIN description d ON p.description_id = d.id
         WHERE p.company_id = ?
-        ORDER BY p.process_id ASC
-    ");
+    ";
+    if ($groupScope) {
+        $sql .= dcSqlGroupProcessFilter('p');
+    } else {
+        $sql .= dcSqlCompanyProcessFilter('p');
+    }
+    $sql .= ' ' . dcSqlOrderByGroupPayrollProcessField('UPPER(TRIM(p.process_id))') . ', p.process_id ASC';
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id]);
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -83,17 +109,20 @@ function fetchProcesses(PDO $pdo, int $company_id) {
 /**
  * 格式化为前端下拉所需结构
  */
-function formatProcesses(array $processes) {
-    return array_map(function ($row) {
-        $label = $row['process_id'];
-        if (!empty($row['description'])) {
+function formatProcesses(array $processes, bool $groupScope = false) {
+    return array_map(function ($row) use ($groupScope) {
+        $code = strtoupper(trim((string) ($row['process_id'] ?? '')));
+        $label = $groupScope
+            ? $code
+            : $row['process_id'];
+        if (!$groupScope && !empty($row['description'])) {
             $label .= ' (' . $row['description'] . ')';
         }
         return [
-            'id' => (int)$row['id'],
+            'id' => (int) $row['id'],
             'process' => $row['process_id'],
             'description' => $row['description'],
-            'display_text' => $label
+            'display_text' => $label,
         ];
     }, $processes);
 }
@@ -122,11 +151,26 @@ function fetchCompanyReportMeta(PDO $pdo, int $company_id): array {
  * 查询 Domain 报表原始行（按 Process 汇总 Turnover / Win / Lose）
  * 以 process 为主表，无数据的 process 也显示（0）；过滤 dcd.company_id 保证 Win/Lose 只计当前公司
  */
-function fetchDomainReportRows(PDO $pdo, int $company_id, string $date_from, string $date_to, ?int $process_id, array $currency_codes = []) {
+function fetchDomainReportRows(
+    PDO $pdo,
+    array $scopeCtx,
+    string $date_from,
+    string $date_to,
+    ?int $process_id,
+    array $currency_codes = []
+) {
     $currency_codes = array_values(array_filter(array_map(
         static fn($code) => strtoupper(trim((string)$code)),
         $currency_codes
     )));
+
+    $ledgerDc = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dc', 'data_captures');
+    $ledgerDcd = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dcd', 'data_capture_details');
+    $processCompanyId = dcCaptureProcessCompanyId($scopeCtx);
+    $companyId = (int) ($scopeCtx['company_id'] ?? 0);
+    $scopeProcessSql = (string) ($scopeCtx['scope_process_sql'] ?? '');
+    $isGroupScope = !empty($scopeCtx['is_group_scope']);
+    $groupScopeId = (int) ($scopeCtx['group_scope_id'] ?? $scopeCtx['scope_id'] ?? 0);
 
     $sql = "
         SELECT 
@@ -139,24 +183,42 @@ function fetchDomainReportRows(PDO $pdo, int $company_id, string $date_from, str
         FROM process p
         LEFT JOIN description d ON p.description_id = d.id
         LEFT JOIN data_captures dc ON dc.process_id = p.id
-          AND dc.company_id = ?
           AND dc.capture_date BETWEEN ? AND ?
+          {$ledgerDc['sql']}
         LEFT JOIN data_capture_details dcd ON dcd.capture_id = dc.id
-          AND dcd.company_id = ?
+          {$ledgerDcd['sql']}
     ";
-    $params = [$company_id, $date_from, $date_to, $company_id];
+    $params = array_merge(
+        [$date_from, $date_to],
+        dcCaptureLedgerBindParams($ledgerDc),
+        dcCaptureLedgerBindParams($ledgerDcd)
+    );
 
     if (!empty($currency_codes)) {
         $placeholders = implode(',', array_fill(0, count($currency_codes), '?'));
-        $sql .= "
+        if ($isGroupScope && !empty($scopeCtx['dual_tenant']) && $groupScopeId > 0) {
+            $sql .= "
+          AND dcd.currency_id IN (
+              SELECT c.id
+              FROM currency c
+              WHERE c.scope_type = 'group'
+                AND c.scope_id = ?
+                AND UPPER(c.code) IN ($placeholders)
+          )
+        ";
+            $params[] = $groupScopeId;
+        } else {
+            $sql .= "
           AND dcd.currency_id IN (
               SELECT c.id
               FROM currency c
               WHERE c.company_id = ?
+                AND (COALESCE(c.scope_type, '') = '' OR c.scope_type = 'company')
                 AND UPPER(c.code) IN ($placeholders)
           )
         ";
-        $params[] = $company_id;
+            $params[] = $companyId;
+        }
         foreach ($currency_codes as $code) {
             $params[] = $code;
         }
@@ -165,12 +227,13 @@ function fetchDomainReportRows(PDO $pdo, int $company_id, string $date_from, str
     $sql .= "
         WHERE p.company_id = ?
     ";
-    $params[] = $company_id;
+    $params[] = $processCompanyId;
+    $sql .= $scopeProcessSql !== '' ? $scopeProcessSql : dcSqlCompanyProcessFilter('p');
     if ($process_id !== null && $process_id > 0) {
         $sql .= " AND p.id = ? ";
         $params[] = $process_id;
     }
-    $sql .= " GROUP BY p.id, p.process_id, d.name ORDER BY p.process_id ASC ";
+    $sql .= ' GROUP BY p.id, p.process_id, d.name ' . dcSqlOrderByGroupPayrollProcessField('UPPER(TRIM(p.process_id))') . ', p.process_id ASC ';
 
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -226,16 +289,32 @@ function buildReportResult(array $rows, string $date_from, string $date_to, arra
 }
 
 try {
-    $action = isset($_GET['action']) ? trim($_GET['action']) : '';
-    $company_id = getCompanyIdForRequest($pdo);
-
-    if (!checkCompanyCategoryPermission($pdo, $company_id, 'Games')) {
-        throw new Exception('Unauthorized permission category');
+    if (!isset($_SESSION['user_id'])) {
+        throw new Exception('用户未登录');
     }
 
+    $action = isset($_GET['action']) ? trim($_GET['action']) : '';
+    $resolved = resolveReportRequestCompanyScope($pdo, $_GET);
+    $scopeCtx = resolveDomainReportCaptureScope($pdo, $resolved, $_GET);
+    $company_id = (int) ($scopeCtx['company_id'] ?? 0);
+    $groupScope = (bool) ($scopeCtx['group_scope'] ?? $scopeCtx['is_group_scope'] ?? false);
+    $processCompanyId = dcCaptureProcessCompanyId($scopeCtx);
+
     if ($action === 'processes') {
-        $processes = fetchProcesses($pdo, $company_id);
-        $formatted = formatProcesses($processes);
+        if ($groupScope) {
+            $groupIdForProcesses = reportNormalizeGroupId(
+                $resolved['group_id'] ?? ($_GET['group_id'] ?? '')
+            );
+            $processes = fetchGroupDomainProcesses($pdo, $company_id, $groupIdForProcesses);
+            $formatted = formatProcesses($processes, true);
+        } else {
+            if ($company_id > 0 && dcCompanyIdIsGroupEntity($pdo, $company_id)) {
+                $formatted = [];
+            } else {
+                $processes = fetchProcesses($pdo, $company_id, false);
+                $formatted = formatProcesses($processes, false);
+            }
+        }
         echo json_encode([
             'success' => true,
             'message' => 'OK',
@@ -246,7 +325,8 @@ try {
 
     $date_from = isset($_GET['date_from']) ? trim($_GET['date_from']) : '';
     $date_to = isset($_GET['date_to']) ? trim($_GET['date_to']) : '';
-    $process_id = isset($_GET['process_id']) ? (int)$_GET['process_id'] : null;
+    $process_id_raw = $_GET['process_id'] ?? '';
+    $process_id = ($process_id_raw !== '' && (int) $process_id_raw > 0) ? (int) $process_id_raw : null;
     $currency_raw = isset($_GET['currency']) ? trim((string)$_GET['currency']) : '';
     $currency_codes = $currency_raw !== '' ? explode(',', $currency_raw) : [];
 
@@ -263,7 +343,52 @@ try {
         throw new Exception('开始日期不能大于结束日期');
     }
 
-    $rows = fetchDomainReportRows($pdo, $company_id, $date_from, $date_to, $process_id, $currency_codes);
+    if ($process_id !== null && $process_id > 0 && $processCompanyId > 0) {
+        dcAssertProcessIdInCaptureScope($pdo, $process_id, $processCompanyId, $groupScope);
+    }
+
+    if ($groupScope && $company_id <= 0) {
+        echo json_encode([
+            'success' => true,
+            'message' => 'OK',
+            'data' => [],
+            'totals' => [
+                'turnover' => domainReportMoneyOut('0'),
+                'win' => domainReportMoneyOut('0'),
+                'lose' => domainReportMoneyOut('0'),
+                'win_lose' => domainReportMoneyOut('0'),
+            ],
+            'date_from' => $date_from,
+            'date_to' => $date_to,
+        ]);
+        exit;
+    }
+
+    if (!$groupScope && $company_id > 0 && dcCompanyIdIsGroupEntity($pdo, $company_id)) {
+        echo json_encode([
+            'success' => true,
+            'message' => 'OK',
+            'data' => [],
+            'totals' => [
+                'turnover' => domainReportMoneyOut('0'),
+                'win' => domainReportMoneyOut('0'),
+                'lose' => domainReportMoneyOut('0'),
+                'win_lose' => domainReportMoneyOut('0'),
+            ],
+            'date_from' => $date_from,
+            'date_to' => $date_to,
+        ]);
+        exit;
+    }
+
+    $rows = fetchDomainReportRows(
+        $pdo,
+        $scopeCtx,
+        $date_from,
+        $date_to,
+        $process_id,
+        $currency_codes
+    );
     $co_meta = fetchCompanyReportMeta($pdo, $company_id);
     $currency_scope = 'ALL';
     if (!empty($currency_codes)) {

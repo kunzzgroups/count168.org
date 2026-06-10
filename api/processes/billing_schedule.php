@@ -164,3 +164,45 @@ function isWithinRecurringBillingWindow(
     }
     return $todayYmd <= min($contractLastInclusive, $dayEndInc);
 }
+
+/** Week frequency：收费周期为 periodStart 起连续 7 天（含首尾共 7 日）。 */
+function weekPeriodEndInclusiveYmd(string $periodStartYmd): ?string
+{
+    try {
+        return (new DateTimeImmutable($periodStartYmd))->modify('+6 days')->format('Y-m-d');
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/** 收费周期是否与指定自然月有日期重叠。 */
+function weekPeriodOverlapsCalendarMonth(string $periodStartYmd, string $periodEndYmd, int $year, int $month): bool
+{
+    if ($month < 1 || $month > 12 || $year < 1970) {
+        return false;
+    }
+    try {
+        $monthStart = sprintf('%04d-%02d-01', $year, $month);
+        $monthEnd = (new DateTimeImmutable($monthStart))->modify('last day of this month')->format('Y-m-d');
+        return $periodStartYmd <= $monthEnd && $periodEndYmd >= $monthStart;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/** 该周收费周期（以 periodStart 为锚）是否已入账或已跳过。 */
+function hasWeeklyPostedForPeriodStart(PDO $pdo, int $companyId, int $processId, string $periodStartYmd): bool
+{
+    try {
+        $stmt = $pdo->prepare(
+            "SELECT 1 FROM process_accounting_posted
+             WHERE company_id = ? AND process_id = ? AND DATE(posted_date) = DATE(?)
+               AND period_type IN ('weekly','weekly_skipped')
+             LIMIT 1"
+        );
+        $stmt->execute([$companyId, $processId, $periodStartYmd]);
+        return (bool) $stmt->fetch();
+    } catch (Throwable $e) {
+        return false;
+    }
+}

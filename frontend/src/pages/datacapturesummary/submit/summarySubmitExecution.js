@@ -1,4 +1,6 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { appendDataCaptureScopeParams, fetchGroupProcessIdByCode } from "../../datacapture/lib/dataCaptureApi.js";
+import { normalizeGroupCaptureScope } from "../../datacapture/lib/dataCaptureScope.js";
 import { submitSummaryPayload } from "../lib/summaryApi.js";
 import { SUMMARY_SUBMIT_MAX_ROWS_PER_BATCH } from "./summarySubmitConstants.js";
 import { buildSummarySubmitPayload } from "./summarySubmitPayload.js";
@@ -12,20 +14,53 @@ function notify(title, message, type = "success") {
   pushSummaryNotification(title, message, type);
 }
 
-async function postSubmitBatch(companyId, batchData, options = {}) {
+async function ensureGroupSubmitProcessId(effectiveScope, parsedProcessData, baseData) {
+  if (!baseData || effectiveScope?.mode !== "group") return baseData;
+
+  const processCode = String(
+    parsedProcessData?.processCode ||
+      parsedProcessData?.process_code ||
+      parsedProcessData?.processName ||
+      parsedProcessData?.process_name ||
+      parsedProcessData?.process ||
+      "",
+  )
+    .trim()
+    .toUpperCase();
+
+  if (!processCode) {
+    throw new Error("Missing process code for group submit");
+  }
+
+  const resolvedProcessId = await fetchGroupProcessIdByCode(
+    effectiveScope,
+    processCode,
+    parsedProcessData?.currency,
+  );
+
+  return {
+    ...baseData,
+    processId: resolvedProcessId,
+    processName: processCode,
+  };
+}
+
+async function postSubmitBatch(captureScope, batchData, options = {}) {
+  const isGroup =
+    captureScope?.mode === "group" || batchData?.groupOnlyCapture === true;
   const payload = {
     ...batchData,
     immediateAck: options.immediateAck ? 1 : 0,
-    company_id: companyId ?? null,
+    company_id: isGroup ? null : (captureScope?.scopeCompanyId ?? null),
   };
   if (options.captureId != null) {
     payload.captureId = options.captureId;
   }
 
-  return submitSummaryPayload(companyId, payload);
+  return submitSummaryPayload(captureScope, payload);
 }
 
-async function recordSubmittedProcess(companyId, parsedProcessData) {
+async function recordSubmittedProcess(captureScope, parsedProcessData) {
   if (!parsedProcessData?.process) return;
   try {
     const formData = new FormData();
@@ -36,9 +71,11 @@ async function recordSubmittedProcess(companyId, parsedProcessData) {
       `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
     formData.append("date_submitted", selectedDate);
     formData.append("capture_date", selectedDate);
-    if (companyId != null) {
-      formData.append("company_id", String(companyId));
-    }
+    const scopeParams = new URLSearchParams();
+    appendDataCaptureScopeParams(scopeParams, captureScope);
+    scopeParams.forEach((value, key) => {
+      formData.append(key, value);
+    });
     await fetch(buildApiUrl("api/processes/submitted_processes_api.php"), {
       method: "POST",
       body: formData,
@@ -74,13 +111,20 @@ function verifySubmitPayload(submitData) {
  * React-owned summary submit execution (batching + quick-ack fallback).
  */
 export async function executeSummarySubmit({
+  captureScope,
   companyId,
   parsedProcessData,
   summaryRows,
   onProgress,
   onSuccess,
 }) {
-  const baseData = buildSummarySubmitPayload(parsedProcessData, summaryRows);
+  const effectiveScope = normalizeGroupCaptureScope(captureScope, parsedProcessData);
+  const baseDataRaw = buildSummarySubmitPayload(parsedProcessData, summaryRows);
+  const baseData = await ensureGroupSubmitProcessId(
+    effectiveScope,
+    parsedProcessData,
+    baseDataRaw,
+  );
   if (!baseData) {
     return { ok: false, message: "No process data found. Please return to Data Capture page." };
   }
@@ -92,7 +136,7 @@ export async function executeSummarySubmit({
 
   const submitBatch = async (batchData, captureId, batchNumber, totalBatches, options = {}) => {
     onProgress?.({ batchNumber, totalBatches });
-    return postSubmitBatch(companyId, batchData, {
+    return postSubmitBatch(effectiveScope, batchData, {
       captureId,
       immediateAck: options.immediateAck,
     });
@@ -101,6 +145,11 @@ export async function executeSummarySubmit({
   try {
     const quickResult = await submitBatch(baseData, null, 1, 1, { immediateAck: true });
     if (quickResult?.success && quickResult.queued) {
+      await recordSubmittedProcess(effectiveScope, {
+        ...parsedProcessData,
+        process: baseData.processId ?? parsedProcessData?.process,
+        date: baseData.captureDate ?? parsedProcessData?.date,
+      });
       notify("Success", "Data received by server. Processing in background...", "success");
       await new Promise((resolve) => window.setTimeout(resolve, QUICK_SUBMIT_REDIRECT_MS));
       onSuccess?.({ mode: "quick" });
@@ -195,7 +244,6 @@ export async function executeSummarySubmit({
     return { ok: false, message: "Submission did not return a capture ID." };
   }
 
-  window.DATACAPTURESUMMARY_CAPTURE_ID = finalCaptureId;
   try {
     localStorage.setItem("capturedCaptureId", String(finalCaptureId));
   } catch {
@@ -208,15 +256,13 @@ export async function executeSummarySubmit({
     "success"
   );
 
-  await recordSubmittedProcess(companyId, parsedProcessData);
+  await recordSubmittedProcess(effectiveScope, parsedProcessData);
 
   try {
     localStorage.removeItem("capturedCaptureId");
   } catch {
     /* ignore */
   }
-  window.DATACAPTURESUMMARY_CAPTURE_ID = null;
-
   await new Promise((resolve) => window.setTimeout(resolve, BATCH_SUCCESS_REDIRECT_MS));
   onSuccess?.({ mode: "batched", captureId: finalCaptureId, failedProblemRows });
   return { ok: true, mode: "batched", captureId: finalCaptureId, failedProblemRows };

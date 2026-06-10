@@ -16,7 +16,6 @@ function ProcessSortIcon({ column, sortColumn, sortDirection }) {
 }
 
 export default function ProcessTable({
-  tableLoading,
   showAll,
   showSelectColumn,
   pageRows,
@@ -99,22 +98,14 @@ export default function ProcessTable({
             : undefined
         }
       >
-        {tableLoading && (
-          <div className="process-card">
-            <div className="card-item" style={{ gridColumn: "1 / -1" }}>
-              {t("loadingData")}
-            </div>
-          </div>
-        )}
-        {!tableLoading && pageRows.length === 0 && (
+        {pageRows.length === 0 && (
           <div className="process-card">
             <div className="card-item" style={{ textAlign: "left", padding: 20, gridColumn: "1 / -1" }}>
               {t("noProcessData")}
             </div>
           </div>
         )}
-        {!tableLoading &&
-          pageRows.map((row, idx) => (
+        {pageRows.map((row, idx) => (
             <div
               className="process-card games-process-row"
               key={row.id}

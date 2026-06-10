@@ -1,8 +1,9 @@
 import React from "react";
 import CompanyCard from "./components/CompanyCard.jsx";
+import { countOwnershipSubsidiariesInGroup } from "../shared/ownershipHelpers.js";
 
 export default function CompanyOwnershipTab({ shell, company }) {
-  const { t, loadingList, allCompanies, readOnlyMode } = shell;
+  const { t, loadingList, allCompanies, isHistoricalView } = shell;
   const {
     groupFilter,
     setGroupFilter,
@@ -20,6 +21,7 @@ export default function CompanyOwnershipTab({ shell, company }) {
     dragRef,
     calcTotal,
     fmtPct,
+    viewOnlyMode,
     toggleCard,
     toggleCompanySelect,
     joinGroup,
@@ -40,9 +42,7 @@ export default function CompanyOwnershipTab({ shell, company }) {
           <span className="own-gfb-label">{t("group")}</span>
           <div className="own-gfb-buttons">
             {allGroupIds.map((g) => {
-              const count = allCompanies.filter(
-                (c) => c.group_id && String(c.group_id).toLowerCase() === String(g).toLowerCase(),
-              ).length;
+              const count = countOwnershipSubsidiariesInGroup(allCompanies, g);
               const active = groupFilter === g;
               return (
                 <button
@@ -61,7 +61,7 @@ export default function CompanyOwnershipTab({ shell, company }) {
           <button
             type="button"
             className={`own-select-mode-btn${selectionMode ? " active" : ""}`}
-            style={{ display: readOnlyMode ? "none" : "" }}
+            style={{ display: viewOnlyMode ? "none" : "" }}
             onClick={toggleSelectionMode}
           >
             {selectionMode ? (
@@ -120,7 +120,8 @@ export default function CompanyOwnershipTab({ shell, company }) {
               onConfirm={confirmCompany}
               onCancel={() => setExpandedCompanyId(null)}
               calcTotal={calcTotal}
-              readOnlyMode={readOnlyMode}
+              readOnlyMode={viewOnlyMode}
+              isHistoricalView={isHistoricalView}
               fmtPct={fmtPct}
               t={t}
             />

@@ -47,7 +47,7 @@ body.user-page:not(.user-page--show-all) {
 
 /* 与 processlist / account-list 一致：主区域 flex 占满一屏，中间列表不触发整页滚动 */
 .user-page .content {
-    height: calc(100vh - 22px);
+    height: calc(100vh - var(--layout-page-top-inset));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -246,7 +246,7 @@ body.user-page .user-list-table .user-card.user-list-row {
 
 .user-list-table .user-list-table-header .header-item:nth-child(9),
 .user-list-table .user-list-row .card-item--action {
-    justify-content: center;
+    justify-content: flex-start;
 }
 
 body.user-page.user-page--show-all {
@@ -263,7 +263,7 @@ body.user-page.user-page--show-all .container {
 
 body.user-page.user-page--show-all .content {
     height: auto;
-    min-height: calc(100vh - 22px);
+    min-height: calc(100vh - var(--layout-page-top-inset));
     overflow: visible;
 }
 
@@ -281,7 +281,7 @@ body.user-page.user-page--show-all .user-cards {
 }
 
 .action-buttons-container {
-    margin-top: 20px;
+    margin-top: clamp(12px, 1.04vw, 20px);
     background-color: #ffffff;
     border-radius: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -447,9 +447,20 @@ body.ec-auth-shell .user-gc-segment {
     cursor: pointer;
     white-space: nowrap;
     line-height: 1.25;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease, opacity 0.12s ease;
     display: flex;
     justify-content: center;
+}
+
+body.user-page .user-gc-segment:not(:disabled):active,
+body.account-page .user-gc-segment:not(:disabled):active,
+body.process-page .user-gc-segment:not(:disabled):active {
+    transform: scale(0.97);
+}
+
+body.user-page .user-gc-segment.is-on.is-pending,
+body.account-page .user-gc-segment.is-on.is-pending {
+    opacity: 0.88;
 }
 
 body.user-page .user-gc-segment:last-child,
@@ -516,13 +527,15 @@ body.dashboard-page .user-gc-segment:disabled {
 
 body.process-page .user-gc-segment--draggable-pill:not(:disabled),
 body.report-page .user-gc-segment--draggable-pill:not(:disabled),
-body.member-winloss-page .user-gc-segment--draggable-pill:not(:disabled) {
+body.member-winloss-page .user-gc-segment--draggable-pill:not(:disabled),
+body.dashboard-page .user-gc-segment--draggable-pill:not(:disabled) {
     cursor: grab;
 }
 
 body.process-page .user-gc-segment--draggable-pill:not(:disabled):active,
 body.report-page .user-gc-segment--draggable-pill:not(:disabled):active,
-body.member-winloss-page .user-gc-segment--draggable-pill:not(:disabled):active {
+body.member-winloss-page .user-gc-segment--draggable-pill:not(:disabled):active,
+body.dashboard-page .user-gc-segment--draggable-pill:not(:disabled):active {
     cursor: grabbing;
 }
 
@@ -801,7 +814,7 @@ body.datacapture-summary-page .btn-add {
     font-weight: var(--font-weight-semibold);
     border: none;
     border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
     --sweep-color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
     display: flex;
@@ -824,7 +837,7 @@ body.datacapture-summary-page .btn-add {
 body.datacapture-page .btn-add:hover,
 body.datacapture-summary-page .btn-add:hover {
     background: var(--btn-add-gradient-hover);
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    box-shadow: var(--shadow-btn-add-page-hover);
     transform: translateY(-1px);
 }
 
@@ -921,12 +934,20 @@ body.datacapture-summary-page .btn-delete:hover {
 }
 
 /* Read-only / disabled：顶栏 Add、Delete、行内编辑、确认删除、弹窗 Save 等 — 灰色（盖过蓝红渐变与 hover） */
+body.user-page .action-buttons .btn-add:disabled,
+body.user-page .action-buttons .btn-add:disabled:hover,
 body.user-page .user-toolbar-actions-right .btn-add:disabled,
 body.user-page .user-toolbar-actions-right .btn-add:disabled:hover,
+body.account-page .action-buttons .btn-add:disabled,
+body.account-page .action-buttons .btn-add:disabled:hover,
 body.account-page .user-toolbar-actions-right .btn-add:disabled,
 body.account-page .user-toolbar-actions-right .btn-add:disabled:hover,
+body.ec-auth-shell.user-page .action-buttons .btn-add:disabled,
+body.ec-auth-shell.user-page .action-buttons .btn-add:disabled:hover,
 body.ec-auth-shell.user-page .user-toolbar-actions-right .btn-add:disabled,
 body.ec-auth-shell.user-page .user-toolbar-actions-right .btn-add:disabled:hover,
+body.ec-auth-shell.account-page .action-buttons .btn-add:disabled,
+body.ec-auth-shell.account-page .action-buttons .btn-add:disabled:hover,
 body.ec-auth-shell.account-page .user-toolbar-actions-right .btn-add:disabled,
 body.ec-auth-shell.account-page .user-toolbar-actions-right .btn-add:disabled:hover {
     background: linear-gradient(180deg, #dde3e9 0%, #9aa5b1 100%) !important;
@@ -1439,7 +1460,9 @@ label.user-modal-col-title.acc-proc-label {
     border: none;
     padding: 0;
     margin: 0;
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(0, 45, 73, 0.38);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
     cursor: pointer;
     pointer-events: auto;
 }
@@ -1447,13 +1470,16 @@ label.user-modal-col-title.acc-proc-label {
 .user-modal-company-picker {
     position: relative;
     z-index: 1;
-    width: min(540px, 100%);
-    max-height: min(70vh, 520px);
+    width: min(520px, 100%);
+    max-height: min(72vh, 540px);
     display: flex;
     flex-direction: column;
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    box-shadow:
+        0 24px 48px -12px rgba(0, 44, 73, 0.2),
+        0 8px 20px -8px rgba(15, 23, 42, 0.12);
     overflow: hidden;
     pointer-events: auto;
 }
@@ -1462,35 +1488,43 @@ label.user-modal-col-title.acc-proc-label {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--color-border);
+    background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
     font-weight: 700;
-    color: #0f172a;
-    font-size: 15px;
+    color: var(--color-heading);
+    font-size: clamp(14px, 0.9vw, 16px);
+    flex-shrink: 0;
 }
 
 .user-modal-company-picker-close {
     border: none;
-    background: transparent;
-    font-size: 22px;
+    background: #f1f5f9;
+    font-size: 18px;
     line-height: 1;
     color: #64748b;
     cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 6px;
+    width: 28px;
+    height: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .user-modal-company-picker-close:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: #e2e8f0;
+    color: var(--color-heading);
 }
 
 .user-modal-company-picker-filter-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin: 10px 14px 0;
+    padding: 12px 16px 0;
     min-width: 0;
+    flex-shrink: 0;
 }
 
 .user-modal-company-picker-filter-row .user-modal-company-picker-search {
@@ -1501,46 +1535,120 @@ label.user-modal-col-title.acc-proc-label {
 }
 
 .user-modal-company-picker-search {
-    padding: 8px 10px;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
+    padding: 9px 12px 9px 36px;
+    border: 1.5px solid var(--color-border);
+    border-radius: 10px;
     font-size: 13px;
     box-sizing: border-box;
+    background-color: #f8fafc;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 11px center;
+    color: var(--color-body-strong);
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.user-modal-company-picker-search::placeholder {
+    color: #94a3b8;
+}
+
+.user-modal-company-picker-search:hover {
+    border-color: #cbd5e1;
+    background-color: #ffffff;
+}
+
+.user-modal-company-picker-search:focus {
+    outline: none;
+    border-color: var(--account-select-card-border-checked);
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(13, 96, 255, 0.12);
 }
 
 .user-modal-company-picker-select-all {
     flex-shrink: 0;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--color-border);
     background: #ffffff;
-    color: #1a237e;
+    color: var(--color-heading);
     font-weight: 600;
     font-size: 12px;
     cursor: pointer;
     white-space: nowrap;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .user-modal-company-picker-select-all:hover:not(:disabled) {
-    background: #f8fafc;
-    border-color: #cbd5e1;
+    background: #f0f7ff;
+    border-color: #93c5fd;
+    color: var(--account-select-label-checked);
 }
 
 .user-modal-company-picker-select-all:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: not-allowed;
+}
+
+.user-modal-company-picker-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 8px 8px 4px;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.user-modal-company-picker-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.user-modal-company-picker-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+}
+
+.user-modal-company-picker-body::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.user-modal-company-picker-section + .user-modal-company-picker-section {
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px dashed #e2e8f0;
+}
+
+.user-modal-company-picker-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-heading);
+}
+
+.user-modal-company-picker-section-title::before {
+    content: "";
+    flex-shrink: 0;
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: var(--color-primary-strong);
+}
+
+.user-modal-company-picker-list--groups {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .user-modal-company-picker-list {
     list-style: none;
-    margin: 10px 0 0;
-    padding: 0 8px 8px;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 120px;
+    margin: 0;
+    padding: 0 6px 10px;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px 8px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
     align-content: start;
 }
 
@@ -1552,13 +1660,21 @@ label.user-modal-col-title.acc-proc-label {
 .user-modal-company-picker-label {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 6px;
-    border-radius: 6px;
+    gap: 6px;
+    padding: 7px 8px;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 600;
-    color: #334155;
+    font-size: 12px;
+    color: var(--color-page-fg);
     min-width: 0;
+    border: 1.5px solid var(--account-select-card-border);
+    background: var(--account-select-card-bg);
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease,
+        box-shadow 0.15s ease;
 }
 
 .user-modal-company-picker-label > span {
@@ -1568,37 +1684,81 @@ label.user-modal-col-title.acc-proc-label {
     white-space: nowrap;
 }
 
-.user-modal-company-picker-label:hover {
-    background: #f8fafc;
+.user-modal-company-picker-label:hover:not(:has(input:disabled)) {
+    background: #e8eef5;
+    border-color: #94a3b8;
 }
 
 .user-modal-company-picker-label.is-checked {
-    background: #eff6ff;
+    background: var(--account-select-card-bg-checked);
+    border-color: var(--account-select-card-border-checked);
+    color: var(--account-select-label-checked);
+    box-shadow: 0 0 0 1px rgba(13, 96, 255, 0.1);
 }
 
-.user-modal-company-picker-label input {
+.user-modal-company-picker-label.is-checked:hover:not(:has(input:disabled)) {
+    background: #f8fbff;
+    border-color: var(--account-select-card-border-checked);
+}
+
+.user-modal-company-picker-label:has(input:disabled) {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.user-modal-company-picker-label input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
     flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    border: 2px solid #cbd5e1;
+    border-radius: 4px;
+    background: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.user-modal-company-picker-label input[type="checkbox"]:checked {
+    border-color: var(--account-select-card-border-checked);
+    background-color: var(--account-select-card-border-checked);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 6L5 8.5L9.5 3.5' stroke='white' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+.user-modal-company-picker-label input[type="checkbox"]:disabled {
+    cursor: not-allowed;
 }
 
 .user-modal-company-picker-footer {
-    padding: 12px 14px;
-    border-top: 1px solid #e2e8f0;
+    padding: 12px 16px 14px;
+    border-top: 1px solid var(--color-border);
+    background: #fafbfc;
+    flex-shrink: 0;
 }
 
 .user-modal-company-picker-done {
     width: 100%;
-    padding: 10px 14px;
+    padding: 11px 14px;
     border: none;
-    border-radius: 8px;
-    background: linear-gradient(180deg, #63c4ff 0%, #0d60ff 100%);
+    border-radius: 10px;
+    background: var(--btn-add-gradient);
     color: #ffffff;
     font-weight: 700;
     font-size: 14px;
     cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: background 0.2s ease, transform 0.1s ease;
 }
 
 .user-modal-company-picker-done:hover {
-    filter: brightness(1.02);
+    background: var(--btn-add-gradient-hover);
+}
+
+.user-modal-company-picker-done:active {
+    transform: scale(0.99);
 }
 
 /* ── Permission compact (≤1200px): same layout + summary box as Company field ── */
@@ -1904,9 +2064,9 @@ label.user-modal-col-title.acc-proc-label {
     display: grid !important;
     /* Keep items readable inside 1/3-width modal columns */
     grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-    gap: 10px;
+    gap: 8px;
     align-content: start;
-    padding: 10px 0;
+    padding: 8px 0;
 }
 
 .user-modal-col--account .account-control-buttons,
@@ -2344,7 +2504,7 @@ body.datacapture-summary-page .btn-save {
     font-weight: var(--font-weight-semibold);
     border: none;
     border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
     --sweep-color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
     display: flex;
@@ -2358,7 +2518,7 @@ body.datacapture-summary-page .btn-save {
 body.datacapture-page .btn-save:hover,
 body.datacapture-summary-page .btn-save:hover {
     background: linear-gradient(180deg, #0D60FF 0%, #63C4FF 100%) !important;
-    box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
+    box-shadow: var(--shadow-btn-add-page-hover);
     transform: translateY(-1px);
 }
 
@@ -2546,14 +2706,7 @@ body.process-page.process-page--bank .bank-process-toolbar-primary .search-conta
     max-width: clamp(200px, 18vw, 280px);
 }
 
-@media (max-width: 1699px) {
-    body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar,
-    body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar {
-        width: clamp(96px, 8vw, 140px) !important;
-        max-width: clamp(96px, 8vw, 140px) !important;
-        flex: 0 0 auto !important;
-    }
-}
+/* Bank Process <1700px search widths: processCSS .bank-process-search-bar.is-collapsed / .is-expanded */
 
 body.user-page .userlist-search-bar__icon,
 body.account-page .userlist-search-bar__icon,
@@ -2801,6 +2954,76 @@ body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-
     min-width: 6.25rem;
 }
 
+/* Bank Process 窄屏下拉：横列 chip 浮条，chip 之间留间距 */
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0;
+    margin: 0;
+    width: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip {
+    width: auto;
+    min-width: 0 !important;
+    max-width: none;
+    flex-shrink: 0;
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 5px 12px 5px 6px;
+    border-radius: 999px;
+    border-color: transparent;
+    background: rgba(255, 255, 255, 0.55);
+    box-shadow: none;
+    font-size: clamp(11px, 0.72vw, 12px);
+    font-weight: 600;
+    color: #475569;
+    transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease,
+        color 0.15s ease,
+        transform 0.12s ease;
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip:hover {
+    background: #ffffff;
+    border-color: #e2e8f0;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+    transform: translateY(-1px);
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip.is-selected {
+    background: #ffffff;
+    border-color: rgba(37, 99, 235, 0.42);
+    color: #1d4ed8;
+    box-shadow:
+        0 2px 10px rgba(37, 99, 235, 0.14),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip__dot {
+    width: 16px;
+    height: 16px;
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip__check {
+    width: 10px;
+    height: 10px;
+}
+
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip:nth-child(1),
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip:nth-child(2),
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip:nth-child(3),
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip:nth-child(4),
+body.process-page.process-page--bank .userlist-filter-chips--bank-process-dropdown .user-filter-chip:nth-child(5) {
+    min-width: 0 !important;
+}
+
 @media (min-width: 1700px) {
     body.process-page.process-page--bank .userlist-filter-chips--bank-process .user-filter-chip {
         padding: 4px 14px 4px 4px;
@@ -3001,22 +3224,6 @@ body.user-page:not(.user-page--show-all) .user-card.show-card {
     display: grid !important;
 }
 
-.user-cards--settling .user-card.show-card {
-    animation: userlist-row-settle 180ms ease-out both;
-}
-
-@keyframes userlist-row-settle {
-    from {
-        opacity: 0.88;
-        transform: translateY(2px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 /* Zebra striping for cards - 基于索引而不是 DOM 位置 */
 .user-card.row-even {
     background: #cceeff99;
@@ -3082,45 +3289,8 @@ body.ec-auth-shell.user-page .user-card .card-item--select {
     min-height: 48px;
 }
 
-/* Company switch / refetch: multi-row skeleton keeps table height & grid stable (avoids single “Loading…” strip). */
-.user-card.user-card--skeleton {
-    pointer-events: none;
-    user-select: none;
-}
-
-.user-card.user-card--skeleton .userlist-skeleton-bar {
-    display: block;
-    height: clamp(10px, 1.1vw, 14px);
-    max-width: 100%;
-    border-radius: 6px;
-    background: linear-gradient(90deg, #e4dcf1 0%, #f6f1fc 42%, #ebe3f5 100%);
-    background-size: 220% 100%;
-    animation: userlist-skeleton-shimmer 1.05s ease-in-out infinite;
-}
-
-@keyframes userlist-skeleton-shimmer {
-    0% {
-        background-position: 100% 0;
-    }
-
-    100% {
-        background-position: -100% 0;
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .user-cards--settling .user-card.show-card {
-        animation: none;
-    }
-
-    .user-card.user-card--skeleton .userlist-skeleton-bar {
-        animation: none;
-        background: #e8e0f2;
-    }
-}
-
-/* 分页样式 - 修改为图片中的设计 */
-.pagination-container {
+/* 分页样式 - 仅 User List 页固定右下角（勿污染 Bank Process / Games Process 等页的 pagination-container） */
+body.user-page .pagination-container {
     position: fixed;
     bottom: max(20px, env(safe-area-inset-bottom, 0px));
     right: max(40px, env(safe-area-inset-right, 0px));
@@ -3291,24 +3461,7 @@ body.ec-auth-shell.user-page .user-card .card-item--select {
     margin-top: clamp(18px, 1.67vw, 32px);
 }
 
-/* Scrollbar for long user lists */
-.confirm-message::-webkit-scrollbar {
-    width: 6px;
-}
-
-.confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.confirm-message::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 10px;
-}
-
-.confirm-message::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 /* Company Buttons Style (from transaction.php) */
 .transaction-company-filter {
@@ -3367,7 +3520,7 @@ body.ec-auth-shell.user-page .user-card .card-item--select {
     background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
     color: #fff;
     border-color: transparent;
-    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+    box-shadow: var(--shadow-btn-add-page);
 }
 
 /* Account and Process item hover styles */
@@ -3387,8 +3540,9 @@ body.ec-auth-shell.user-page .user-card .card-item--select {
 
 /* User modal — Account / Process：未选中灰底灰边；选中时底/边/字色为你指定（checkbox 仅逻辑用） */
 #userModal .account-grid--four {
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    grid-auto-rows: minmax(55px, auto);
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    grid-auto-rows: minmax(48px, auto);
+    gap: 8px;
 }
 
 #userModal .user-modal-select-card {
@@ -3400,11 +3554,11 @@ body.ec-auth-shell.user-page .user-card .card-item--select {
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
-    min-height: 55px;
+    min-height: 48px;
     margin: 0;
     overflow: hidden;
-    border-radius: 10px;
-    padding: 8px 10px;
+    border-radius: 8px;
+    padding: 6px 8px;
     background: var(--account-select-card-bg);
     border: 1.5px solid var(--account-select-card-border);
     box-shadow: none;

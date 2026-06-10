@@ -4,7 +4,7 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function applyTextTransformations(text, removeWord, replaceWordFrom, replaceWordTo) {
+function applyTextTransformations(text, removeWord, replaceWordFrom, replaceWordTo) {
   if (!text || typeof text !== "string") return text;
 
   let result = text;

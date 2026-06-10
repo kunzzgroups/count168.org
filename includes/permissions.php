@@ -166,7 +166,12 @@ function getCurrentUserProcessPermissions($pdo) {
     return [];
 }
 
-function filterProcessesByPermissions($pdo, $baseQuery, $params = []) {
+/**
+ * @param int|null $permissionCompanyId Company for user_company_permissions lookup.
+ *   When the list/query targets a company via ?company_id=, pass that id so permissions
+ *   match the requested company — not a stale $_SESSION['company_id'] (e.g. Bank CX → Games 95).
+ */
+function filterProcessesByPermissions($pdo, $baseQuery, $params = [], $permissionCompanyId = null) {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
@@ -179,7 +184,12 @@ function filterProcessesByPermissions($pdo, $baseQuery, $params = []) {
 
     // 获取当前用户ID和公司ID
     $currentUserId = $_SESSION['user_id'] ?? $_SESSION['login_id'] ?? null;
-    $companyId = $_SESSION['company_id'] ?? null;
+    $companyId = $permissionCompanyId !== null && $permissionCompanyId !== ''
+        ? (int) $permissionCompanyId
+        : ($_SESSION['company_id'] ?? null);
+    if ($companyId !== null && $companyId <= 0) {
+        $companyId = null;
+    }
 
     if (!$currentUserId || !$companyId) {
         // 如果没有用户ID或公司ID，不添加过滤条件，显示所有流程

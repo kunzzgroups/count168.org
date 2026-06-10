@@ -1,5 +1,7 @@
 /** Ownership page — shared helpers (parity with ownership.js / ownership-group.js) */
 
+import { companyRowIsGroupEntityAnyShape } from "../../../utils/company/sharedCompanyFilter.js";
+
 export function isApiSuccess(res) {
   return res && (res.success === true || res.status === "success");
 }
@@ -29,4 +31,19 @@ export function rebuildGroupIds(allCompanies) {
         .filter((g) => g && String(g).trim() !== "")
     ),
   ].sort();
+}
+
+/** Subsidiary companies under a group — excludes AP/IG group-entity rows. */
+export function ownershipSubsidiariesInGroup(allCompanies, groupId) {
+  if (!groupId) return [];
+  const g = String(groupId).trim().toLowerCase();
+  return (allCompanies || []).filter((c) => {
+    const gid = c.group_id ? String(c.group_id).trim().toLowerCase() : "";
+    if (gid !== g) return false;
+    return !companyRowIsGroupEntityAnyShape(c);
+  });
+}
+
+export function countOwnershipSubsidiariesInGroup(allCompanies, groupId) {
+  return ownershipSubsidiariesInGroup(allCompanies, groupId).length;
 }

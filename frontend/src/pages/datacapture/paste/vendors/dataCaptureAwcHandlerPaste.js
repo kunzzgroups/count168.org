@@ -4,7 +4,8 @@ import { parseAWCPatternBasedData, parseAndFillHtmlTableForAwc } from "./dataCap
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 
 /** @returns {boolean} */
 export function handleAwcPaste(e, pastedData) {
@@ -79,61 +80,13 @@ export function handleAwcPaste(e, pastedData) {
 
                     // 填充到表格（包括空白单元格）
                     if (dataMatrix.length > 0 && maxCols > 0) {
-                        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                        const startCol = parseInt(startCell.dataset.col);
-
-                        const currentRows = document.querySelectorAll('#tableBody tr').length;
-                        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                        const requiredRows = startRow + dataMatrix.length;
-                        const requiredCols = startCol + maxCols;
-
-                        if (requiredRows > currentRows || requiredCols > currentCols) {
-                            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                            const targetCols = Math.max(currentCols, requiredCols);
-                            ensurePasteGrid(targetRows, targetCols);
-                        }
-
-                        const tableBody = document.getElementById('tableBody');
-                        const currentPasteChanges = [];
-                        let successCount = 0;
-
-                        dataMatrix.forEach((rowData, rowIndex) => {
-                            const actualRowIndex = startRow + rowIndex;
-                            const tableRow = tableBody.children[actualRowIndex];
-                            if (!tableRow) return;
-
-                            rowData.forEach((cellData, colIndex) => {
-                                const actualColIndex = startCol + colIndex;
-                                const cell = tableRow.children[actualColIndex + 1];
-
-                                if (cell && cell.contentEditable === 'true') {
-                                    // 保留空白单元格：即使cellData是空字符串，也要设置
-                                    // trim()不会影响空字符串，但会去除空格
-                                    const cellValue = (cellData !== null && cellData !== undefined) ? String(cellData).trim() : '';
-
-                                    currentPasteChanges.push({
-                                        row: actualRowIndex,
-                                        col: actualColIndex,
-                                        oldValue: cell.textContent,
-                                        newValue: cellValue
-                                    });
-
-                                    // 明确设置单元格内容（包括空字符串以保持空白单元格）
-                                    cell.textContent = cellValue;
-
-                                    // 即使单元格是空的，也要计入（因为我们保留了空白单元格的位置）
-                                    if (cellValue !== '') {
-                                        successCount++;
-                                    }
-                                }
-                            });
+                        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                            trimValues: true,
                         });
 
-                        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
                         if (successCount > 0) {
-                            window.showNotification?.(`AWC (2.7): 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持表格行格式!`, 'success');
-                            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                            notifyPasteUser(`AWC (2.7): 成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已保持表格行格式!`, 'success');
+                            recomputeSubmitStateAfterPaste();
                             return true; // 成功处理，直接返回
                         }
                     }
@@ -153,55 +106,13 @@ export function handleAwcPaste(e, pastedData) {
                         });
 
                         // 填充到表格
-                        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                        const startCol = parseInt(startCell.dataset.col);
-
-                        const currentRows = document.querySelectorAll('#tableBody tr').length;
-                        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                        const requiredRows = startRow + dataMatrix.length;
-                        const requiredCols = startCol + maxCols;
-
-                        if (requiredRows > currentRows || requiredCols > currentCols) {
-                            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                            const targetCols = Math.max(currentCols, requiredCols);
-                            ensurePasteGrid(targetRows, targetCols);
-                        }
-
-                        const tableBody = document.getElementById('tableBody');
-                        const currentPasteChanges = [];
-                        let successCount = 0;
-
-                        dataMatrix.forEach((rowData, rowIndex) => {
-                            const actualRowIndex = startRow + rowIndex;
-                            const tableRow = tableBody.children[actualRowIndex];
-                            if (!tableRow) return;
-
-                            rowData.forEach((cellData, colIndex) => {
-                                const actualColIndex = startCol + colIndex;
-                                const cell = tableRow.children[actualColIndex + 1];
-
-                                if (cell && cell.contentEditable === 'true') {
-                                    const cellValue = (cellData || '').trim();
-                                    currentPasteChanges.push({
-                                        row: actualRowIndex,
-                                        col: actualColIndex,
-                                        oldValue: cell.textContent,
-                                        newValue: cellValue
-                                    });
-
-                                    cell.textContent = cellValue;
-                                    if (cellValue) {
-                                        successCount++;
-                                    }
-                                }
-                            });
+                        const { successCount, maxRows, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, startCell, {
+                            trimValues: true,
                         });
 
-                        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
                         if (successCount > 0) {
-                            window.showNotification?.(`AWC (2.7): 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已根据数据模式智能分组!`, 'success');
-                            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                            notifyPasteUser(`AWC (2.7): 成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已根据数据模式智能分组!`, 'success');
+                            recomputeSubmitStateAfterPaste();
                             return true; // 成功处理，直接返回
                         }
                     }

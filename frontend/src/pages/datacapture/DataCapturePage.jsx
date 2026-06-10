@@ -1,29 +1,61 @@
 import { Component, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { notifyCompanySessionUpdated } from "../../utils/company/companySessionEvents.js";
 import { injectStylesheet } from "../../utils/core/injectStylesheet.js";
 import {
-  applySharedGroupClickWithCompanySwitch,
+  companiesInGroupList,
+  companyBelongsToGroup,
   dedupeOwnerCompaniesByCode,
   filterCompaniesWithDisplayId,
-  isCompanyVisibleForSharedFilter,
+  isExplicitCompanySelection,
   normalizeOwnerCompanyRow,
+  isDashboardGroupOnlyMode,
+  persistDashboardFilterState,
   persistDashboardGroupFilter,
+  notifyDashboardGroupFilterChanged,
+  persistDashboardGroupOnlyMode,
+  persistDashboardSelectedCompany,
+  readDashboardSelectedCompanyId,
+  readPersistedDashboardGcFilter,
+  resolveBootCompanyId,
   resolveInitialSelectedGroupFromSession,
-  sortedUniqueGroupIds,
+  filterCompaniesForLoginScope,
+  fetchOwnerCompaniesAll,
 } from "../../utils/company/sharedCompanyFilter.js";
+import { filterCompaniesForGamesPills } from "../../utils/company/companyCategoryFlags.js";
+import { syncCompanySessionApi } from "../../utils/company/companySessionSync.js";
+import { canUseGroupOnlyMode, isGroupLogin } from "../../utils/company/loginScope.js";
+import { useGcFilterWithAllModes } from "../../utils/company/useGcFilterWithAllModes.js";
+import GcInlineFilterPanel from "../../components/GcInlineFilterPanel.jsx";
 
 import "../../../public/css/userlist.css";
 import "../../../public/css/global-13inch.css";
 import "../../../public/css/datacapture.css";
 
-import { formatSubmittedProcessDateTime } from "./lib/dataCaptureApi.js";
+import {
+  formatGroupSubmittedProcessLabel,
+  formatSubmittedProcessDateTime,
+} from "./lib/dataCaptureApi.js";
+import { readCaptureSessionMeta } from "./lib/dataCaptureStorage.js";
+import {
+  dataCaptureScopeCacheKey,
+  dataCaptureScopeIsReady,
+  normalizeGroupCaptureScope,
+  resolveDataCaptureScope,
+} from "./lib/dataCaptureScope.js";
+import { resolveGroupEntityRowFromSnap } from "../transaction/lib/transactionScope.js";
 import {
   DATA_CAPTURE_HOME_PATH,
   resolveCompanyGamesAccess,
+  sessionUserHasCompanyCategoryAccess,
+  sessionUserHasGamblingAccess,
   syncDataCaptureCompanySession,
 } from "./lib/dataCaptureCompanyAccess.js";
+import {
+  getGroupOnlyProcessOptions,
+  isGroupOnlyProcessId,
+} from "./lib/dataCaptureGroupOnlyProcesses.js";
 import DataCaptureContextMenus from "./components/DataCaptureContextMenus.jsx";
 import DataCaptureDeleteDialog from "./components/DataCaptureDeleteDialog.jsx";
 import DataCaptureTableSection from "./components/DataCaptureTableSection.jsx";
@@ -32,56 +64,21 @@ import ProcessNotificationContainer from "./components/ProcessNotificationContai
 import { useDataCaptureCategoryPermissions } from "./hooks/useDataCaptureCategoryPermissions.js";
 import { useDataCaptureFormEngine } from "./hooks/useDataCaptureFormEngine.js";
 import { useDataCaptureGrid } from "./hooks/useDataCaptureGrid.js";
-import { useDataCaptureGridInteraction } from "./hooks/useDataCaptureGridInteraction.js";
 import { useDataCapturePaste } from "./hooks/useDataCapturePaste.js";
 import { useDataCaptureCaptureType } from "./hooks/useDataCaptureCaptureType.js";
-import { useDataCaptureFormatPaste } from "./hooks/useDataCaptureFormatPaste.js";
-import { useDataCaptureFormatDisplay } from "./hooks/useDataCaptureFormatDisplay.js";
-import { useDataCaptureGlobalShims } from "./hooks/useDataCaptureGlobalShims.js";
-import { useDataCaptureGridHeader } from "./hooks/useDataCaptureGridHeader.js";
-import { useDataCaptureLegacyChrome } from "./hooks/useDataCaptureLegacyChrome.js";
+import { useDataCaptureFormat } from "./hooks/useDataCaptureFormat.js";
+import { useDataCapturePageLifecycle } from "./hooks/useDataCapturePageLifecycle.js";
+import { useDataCaptureDeleteDialog } from "./hooks/useDataCaptureDeleteDialog.js";
 import { useDataCaptureSubmitReset } from "./hooks/useDataCaptureSubmitReset.js";
+import { useGroupOnlyTableDraftAutosave } from "./hooks/useGroupOnlyTableDraftAutosave.js";
 import { usePartnershipAuditReadOnlyLocked } from "../../utils/audit/partnershipAuditReadOnly.js";
 import { useDataCaptureSubmittedList } from "./hooks/useDataCaptureSubmittedList.js";
-import { useDataCaptureSubmittedPanelHeight } from "./hooks/useDataCaptureSubmittedPanelHeight.js";
-import PageContentLoader from "../../components/PageContentLoader.jsx";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
-import { preloadSummaryLegacyScriptsInBackground } from "../datacapturesummary/lib/preloadSummaryLegacyScripts.js";
 import { getDataCaptureText } from "../../translateFile/pages/dataCaptureTranslate.js";
-
-/** Avoid hanging when a script tag already fired `load` before listeners attach (SPA revisit / cache). */
-function loadScriptOnce(src, isAlreadyLoaded) {
-  return new Promise((resolve, reject) => {
-    const clean = src.split(/[?#]/)[0];
-    const finish = (node) => {
-      node.dataset.loaded = "1";
-      resolve();
-    };
-    const nodes = document.querySelectorAll("script[src]");
-    for (let i = 0; i < nodes.length; i += 1) {
-      const n = nodes[i];
-      const ns = n.getAttribute("src") || "";
-      if (ns.split(/[?#]/)[0] !== clean) continue;
-      if (n.dataset.loaded === "1") {
-        resolve();
-        return;
-      }
-      n.addEventListener("load", () => finish(n), { once: true });
-      n.addEventListener("error", () => reject(new Error(`Failed to load script: ${src}`)), { once: true });
-      queueMicrotask(() => {
-        if (n.dataset.loaded === "1") return;
-        if (typeof isAlreadyLoaded === "function" && isAlreadyLoaded()) finish(n);
-      });
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = src;
-    s.async = false;
-    s.onload = () => finish(s);
-    s.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    document.head.appendChild(s);
-  });
-}
+import { DataCaptureProvider, useDataCaptureContext } from "./context/DataCaptureContext.jsx";
+import { callDataCaptureRuntime, getDataCaptureState } from "./lib/dataCaptureRuntime.js";
+import { updateActiveContextMenuPosition } from "./lib/dataCaptureContextMenu.js";
+import { setTableActive } from "./grid/dataCaptureGridMeta.js";
 
 class DataCaptureErrorBoundary extends Component {
   constructor(props) {
@@ -117,8 +114,9 @@ class DataCaptureErrorBoundary extends Component {
   }
 }
 
-export default function DataCapturePage() {
+function DataCapturePageContent() {
   const navigate = useNavigate();
+  const { confirmDescriptions, clearSelectedDescriptions } = useDataCaptureContext();
   const [searchParams] = useSearchParams();
   const { me, sessionReady } = useAuthSession();
   const companyIdFromUrl = searchParams.get("company_id");
@@ -142,23 +140,18 @@ export default function DataCapturePage() {
   }, []);
 
   const [bootLoading, setBootLoading] = useState(true);
-  const [engineError, setEngineError] = useState("");
-  const [scriptsReady, setScriptsReady] = useState(false);
   const [companies, setCompanies] = useState([]);
   const [companyId, setCompanyId] = useState(null);
   const [selectedGroup, setSelectedGroup] = useState(null);
+  const bootCompletedRef = useRef(false);
+  const prevGroupOnlyGroupRef = useRef(null);
+  const prevProcessCompanyRef = useRef(undefined);
+  const prevScopeKeyRef = useRef(null);
+  /** Tracks anchor session sync per group (sidebar flags follow PHP session company). */
+  const groupAnchorSessionRef = useRef({ group: null, companyId: null });
 
-  /** Set as soon as this route mounts (including Loading…), before scripts run — legacy uses it to skip DOM that React owns. */
   useLayoutEffect(() => {
-    window.__DATA_CAPTURE_SPA_BOOTSTRAP__ = true;
     window.isNavigatingAwayByBackOrSubmit = false;
-    return () => {
-      try {
-        delete window.__DATA_CAPTURE_SPA_BOOTSTRAP__;
-      } catch {
-        window.__DATA_CAPTURE_SPA_BOOTSTRAP__ = undefined;
-      }
-    };
   }, []);
 
   const companiesNormalized = useMemo(() => companies.map(normalizeOwnerCompanyRow), [companies]);
@@ -168,26 +161,127 @@ export default function DataCapturePage() {
     [companiesNormalized, companyId]
   );
 
-  const groups = useMemo(() => sortedUniqueGroupIds(companiesDeduped), [companiesDeduped]);
-
   /** Full list: deduped strips rows without display code; URL session can still target a valid numeric id. */
   const currentCompanyRow = useMemo(
     () => companiesNormalized.find((c) => Number(c.id) === Number(companyId)) || null,
     [companiesNormalized, companyId]
   );
 
+  const isCompanySelected = useMemo(
+    () => isExplicitCompanySelection(companyId, currentCompanyRow, selectedGroup),
+    [companyId, currentCompanyRow, selectedGroup]
+  );
+
+  const anchorCompanyRow = useMemo(() => {
+    if (isCompanySelected) return currentCompanyRow;
+    const inGroup = companiesInGroupList(companiesDeduped, selectedGroup);
+    return inGroup[0] ?? null;
+  }, [isCompanySelected, currentCompanyRow, companiesDeduped, selectedGroup]);
+
+  const groupOnlyTable = !isCompanySelected && canUseGroupOnlyMode(me);
+
+  const onClearCompanyRef = useRef(() => {});
+  const onSelectCompanyRef = useRef(async () => {});
+  const onPrepareCompanySelectRef = useRef(() => {});
+
+  const {
+    groupIds,
+    companiesForPicker,
+    groupsAllMode,
+    groupAllMode,
+    handlePickAllGroups,
+    handlePickAllInGroup,
+    handlePickGroup,
+    handlePickCompany,
+  } = useGcFilterWithAllModes({
+    companies: companiesDeduped,
+    companyId,
+    selectedGroup,
+    setSelectedGroup,
+    onPrepareCompanySelect: (comp) => onPrepareCompanySelectRef.current(comp),
+    onSelectCompany: (comp) => onSelectCompanyRef.current(comp),
+    onClearCompany: (...args) => onClearCompanyRef.current(...args),
+    preferredCompanyId: companyId,
+    enableGroupAnchorSession: false,
+    autoPickCompanyWhenEmpty: false,
+    broadcastFilterToLayout: false,
+    me,
+  });
+
+  const captureScope = useMemo(() => {
+    const resolved = resolveDataCaptureScope({
+      companies: companiesNormalized,
+      selectedGroup,
+      companyId,
+      groupOnlyMode: groupOnlyTable,
+      groupsAllMode,
+      groupAllMode,
+    });
+    if (groupOnlyTable && resolved?.mode === "group") {
+      return normalizeGroupCaptureScope(resolved, {
+        groupOnlyCapture: true,
+        captureSelectedGroup: selectedGroup,
+      });
+    }
+    return resolved;
+  }, [
+    companiesNormalized,
+    selectedGroup,
+    companyId,
+    groupOnlyTable,
+    groupsAllMode,
+    groupAllMode,
+  ]);
+
+  const scopeCompanyId =
+    captureScope?.scopeCompanyId != null && Number(captureScope.scopeCompanyId) > 0
+      ? Number(captureScope.scopeCompanyId)
+      : null;
+
+  const groupEntityRow = useMemo(
+    () =>
+      selectedGroup ? resolveGroupEntityRowFromSnap(companiesDeduped, selectedGroup) : null,
+    [companiesDeduped, selectedGroup],
+  );
+
+  /** API + storage company id (group entity vs subsidiary). */
+  const effectiveCompanyId = scopeCompanyId;
+
+  /** PHP session sync: group entity in group-only mode. */
+  const sessionSyncCompanyId = isCompanySelected
+    ? companyId
+    : groupEntityRow?.id ?? anchorCompanyRow?.id ?? null;
+
+  const engineReady = useMemo(
+    () => !bootLoading && !!me && dataCaptureScopeIsReady(captureScope),
+    [bootLoading, me, captureScope],
+  );
+
   const companyCode = useMemo(() => {
-    const raw = currentCompanyRow?.company_id;
+    if (isCompanySelected) {
+      const raw = currentCompanyRow?.company_id;
+      if (raw != null && String(raw).trim() !== "") return String(raw).trim();
+    } else if (groupOnlyTable && selectedGroup) {
+      return String(selectedGroup).trim().toUpperCase();
+    }
+    const raw = anchorCompanyRow?.company_id;
     if (raw != null && String(raw).trim() !== "") return String(raw).trim();
-    if (companyId != null && Number(companyId) > 0) return String(companyId);
+    if (scopeCompanyId != null && Number(scopeCompanyId) > 0) return String(scopeCompanyId);
     return "";
-  }, [currentCompanyRow, companyId]);
+  }, [isCompanySelected, currentCompanyRow, groupOnlyTable, selectedGroup, anchorCompanyRow, scopeCompanyId]);
 
-  const form = useDataCaptureFormEngine(companyId);
+  const form = useDataCaptureFormEngine(captureScope, {
+    applyCompanyOnlyFields: isCompanySelected,
+    selectedGroup,
+    engineReady,
+  });
 
-  const { submittedItems } = useDataCaptureSubmittedList(companyId, form.captureDate);
+  const groupOnlyProcessOptions = useMemo(() => getGroupOnlyProcessOptions(t), [t]);
 
-  const { topSectionRef, formColumnRef } = useDataCaptureSubmittedPanelHeight();
+  const { submittedItems, refreshSubmitted } = useDataCaptureSubmittedList(captureScope, form.captureDate);
+
+  const topSectionRef = useRef(null);
+  const formColumnRef = useRef(null);
 
   const { permissions, selectedPermission, selectPermission, showPermissionFilter } =
     useDataCaptureCategoryPermissions(companyCode);
@@ -196,6 +290,7 @@ export default function DataCapturePage() {
     captureType,
     citibetMode,
     formatGridReady,
+    applyCaptureType,
     handleCaptureTypeChange,
   } = useDataCaptureCaptureType();
 
@@ -205,36 +300,41 @@ export default function DataCapturePage() {
     setDeleteOption,
     handleConfirmDelete,
     closeDeleteDialog,
-  } = useDataCaptureLegacyChrome();
+  } = useDataCaptureDeleteDialog();
 
   const mutationsBlocked = usePartnershipAuditReadOnlyLocked(me);
   const submitReset = useDataCaptureSubmitReset({
-    companyId,
+    captureScope,
     form,
     captureType,
     mutationsBlocked,
     navigate,
     t,
+    requireDescriptions: isCompanySelected,
+    groupOnlyCapture: groupOnlyTable,
+    selectedGroup,
   });
-
-  useDataCaptureGrid(scriptsReady);
-  useDataCaptureGridInteraction(scriptsReady);
+  const { ensureGridReady } = useDataCaptureGrid(engineReady, groupOnlyTable);
+  useGroupOnlyTableDraftAutosave({
+    enabled: groupOnlyTable && !mutationsBlocked,
+    captureScope,
+    selectedGroup,
+    selectedProcessId: form.selectedProcess?.id,
+    currencyId: form.currencyId,
+    captureType,
+  });
   useDataCapturePaste();
-  useDataCaptureFormatPaste();
-  useDataCaptureFormatDisplay();
-  useDataCaptureGlobalShims();
+  useDataCaptureFormat();
 
   useEffect(() => {
-    if (!scriptsReady) return;
+    if (!engineReady) return;
 
     const pageReadyTimer = setTimeout(() => {
       document.body.classList.add("page-ready");
     }, 50);
 
     const updateMenuPosition = () => {
-      if (typeof window.updateActiveContextMenuPosition === "function") {
-        window.updateActiveContextMenuPosition();
-      }
+      updateActiveContextMenuPosition();
     };
 
     const scrollContainer = document.querySelector(".excel-table-container");
@@ -246,9 +346,7 @@ export default function DataCapturePage() {
       scrollContainer?.removeEventListener("scroll", updateMenuPosition);
       window.removeEventListener("resize", updateMenuPosition);
     };
-  }, [scriptsReady]);
-  useDataCaptureGridHeader();
-
+  }, [engineReady]);
   const [descriptionModalOpen, setDescriptionModalOpen] = useState(false);
 
   const openDescriptionModal = useCallback(() => {
@@ -259,33 +357,13 @@ export default function DataCapturePage() {
   const closeDescriptionModal = useCallback(() => setDescriptionModalOpen(false), []);
 
   const handleDescriptionsConfirmed = useCallback((names) => {
-    window.selectedDescriptions = [...names];
-    if (typeof window.__DC_ON_DESCRIPTIONS_CONFIRMED__ === "function") {
-      window.__DC_ON_DESCRIPTIONS_CONFIRMED__(names);
-    }
+    confirmDescriptions(names);
+    callDataCaptureRuntime("onDescriptionsConfirmed", names);
     setTimeout(() => {
-      if (typeof window.updateSubmitButtonState === "function") window.updateSubmitButtonState();
+      callDataCaptureRuntime("recomputeSubmitState");
     }, 0);
     setDescriptionModalOpen(false);
-  }, []);
-
-  useLayoutEffect(() => {
-    window.__DC_OPEN_DESCRIPTION_MODAL__ = openDescriptionModal;
-    window.__DC_CLOSE_DESCRIPTION_MODAL__ = closeDescriptionModal;
-    /** Legacy onclick / scripts expect expandDescription() */
-    window.expandDescription = openDescriptionModal;
-    return () => {
-      try {
-        delete window.__DC_OPEN_DESCRIPTION_MODAL__;
-        delete window.__DC_CLOSE_DESCRIPTION_MODAL__;
-        delete window.expandDescription;
-      } catch {
-        window.__DC_OPEN_DESCRIPTION_MODAL__ = undefined;
-        window.__DC_CLOSE_DESCRIPTION_MODAL__ = undefined;
-        window.expandDescription = undefined;
-      }
-    };
-  }, [openDescriptionModal, closeDescriptionModal]);
+  }, [confirmDescriptions]);
 
   useEffect(() => {
     if (!form.processOpen) return;
@@ -310,6 +388,7 @@ export default function DataCapturePage() {
 
   useEffect(() => {
     if (!sessionReady || !me) return;
+    if (bootCompletedRef.current) return;
 
     let cancelled = false;
     setBootLoading(true);
@@ -321,33 +400,65 @@ export default function DataCapturePage() {
       }
       try {
         const u = me;
-        const companiesRes = await fetch(buildApiUrl("api/transactions/get_owner_companies_api.php?all=1"), {
-          credentials: "include",
-        });
-        const companiesJson = await companiesRes.json();
+        const raw = filterCompaniesForLoginScope(await fetchOwnerCompaniesAll(), u);
 
-        const perms = Array.isArray(u.company_permissions) ? u.company_permissions : [];
+        const url = new URL(window.location.href);
+        const queryCompany = url.searchParams.get("company_id");
+        const restoreFromUrl = url.searchParams.get("restore") === "1";
+        const submittedFromUrl = url.searchParams.get("submitted") === "1";
+        const queryGroupOnly = url.searchParams.get("group_only") === "1";
+        const sessionMeta = restoreFromUrl ? readCaptureSessionMeta() : null;
+        const allowGroupOnly = canUseGroupOnlyMode(u);
+        const persistedGc = readPersistedDashboardGcFilter();
+        const savedCompanyId = readDashboardSelectedCompanyId();
+        const groupOnlyBoot =
+          allowGroupOnly &&
+          !queryCompany &&
+          (queryGroupOnly ||
+            (sessionMeta?.groupOnlyCapture && restoreFromUrl) ||
+            (submittedFromUrl && queryGroupOnly) ||
+            isDashboardGroupOnlyMode() ||
+            persistedGc.groupOnly ||
+            (canUseGroupOnlyMode(u) &&
+              (isDashboardGroupOnlyMode() || persistedGc.groupOnly || savedCompanyId == null)));
+
         if (cancelled) return;
-        if (perms.length === 0) {
+
+        if (groupOnlyBoot) {
+          if (!sessionUserHasGamblingAccess(u)) {
+            navigate(DATA_CAPTURE_HOME_PATH, { replace: true });
+            return;
+          }
+          if (sessionMeta?.captureSelectedGroup) {
+            persistDashboardGroupFilter(sessionMeta.captureSelectedGroup);
+          }
+          persistDashboardGroupOnlyMode(true);
+          persistDashboardSelectedCompany(null);
+          setCompanies(raw);
+          setCompanyId(null);
+          setSelectedGroup(
+            (sessionMeta?.captureSelectedGroup &&
+              String(sessionMeta.captureSelectedGroup).trim().toUpperCase()) ||
+              resolveInitialSelectedGroupFromSession(raw, null)
+          );
+          return;
+        }
+
+        if (!sessionUserHasCompanyCategoryAccess(u)) {
           navigate("/process-list?error=no_permission", { replace: true });
           return;
         }
 
-        const raw = Array.isArray(companiesJson?.data) ? companiesJson.data.map(normalizeOwnerCompanyRow) : [];
-
-        const url = new URL(window.location.href);
-        const queryCompany = url.searchParams.get("company_id");
-        let effectiveCompany = queryCompany || u.company_id || raw[0]?.id || null;
-        effectiveCompany = effectiveCompany ? Number(effectiveCompany) : null;
+        let effectiveCompany = resolveBootCompanyId({
+          urlCompanyId: queryCompany,
+          sessionCompanyId: u.company_id,
+          defaultRowId: raw[0]?.id,
+        });
 
         if (queryCompany && effectiveCompany && Number(effectiveCompany) !== Number(u.company_id)) {
           try {
-            const syncRes = await fetch(
-              buildApiUrl(`api/session/update_company_session_api.php?company_id=${effectiveCompany}`),
-              { credentials: "include" }
-            );
-            const syncJson = await syncRes.json();
-            if (!syncJson.success) {
+            const syncJson = await syncCompanySessionApi(effectiveCompany);
+            if (!syncJson?.success) {
               effectiveCompany = u.company_id ? Number(u.company_id) : effectiveCompany;
             }
           } catch {
@@ -382,7 +493,10 @@ export default function DataCapturePage() {
       } catch {
         if (!cancelled) navigate("/login", { replace: true });
       } finally {
-        if (!cancelled) setBootLoading(false);
+        if (!cancelled) {
+          setBootLoading(false);
+          bootCompletedRef.current = true;
+        }
       }
     })();
     return () => {
@@ -391,14 +505,43 @@ export default function DataCapturePage() {
   }, [sessionReady, me, navigate]);
 
   useEffect(() => {
-    if (bootLoading || !companyIdFromUrl || companies.length === 0) return;
+    return () => {
+      bootCompletedRef.current = false;
+      document.getElementById("dataCaptureForm")?.removeAttribute("data-dc-page-init");
+    };
+  }, []);
+
+  useEffect(() => {
+    if (bootLoading || companies.length === 0) return;
+    if (isDashboardGroupOnlyMode()) {
+      if (companyIdFromUrl) {
+        const params = new URLSearchParams(searchParams);
+        params.delete("company_id");
+        const qs = params.toString();
+        navigate(`/datacapture${qs ? `?${qs}` : ""}`, { replace: true });
+      }
+      return;
+    }
+    if (!companyIdFromUrl) return;
     const id = Number(companyIdFromUrl);
     if (!Number.isFinite(id) || id <= 0) return;
-    const allowed = companies.some((c) => Number(c.id) === id);
-    if (!allowed || Number(companyId) === id) return;
+    const row = companiesNormalized.find((c) => Number(c.id) === id) || null;
+    if (!row) return;
+    if (selectedGroup && !companyBelongsToGroup(row, selectedGroup)) {
+      navigate("/datacapture", { replace: true });
+      return;
+    }
+    if (
+      Number(companyId) === id &&
+      isExplicitCompanySelection(companyId, row, selectedGroup)
+    ) {
+      return;
+    }
 
     let cancelled = false;
     (async () => {
+      persistDashboardGroupOnlyMode(false);
+      persistDashboardSelectedCompany(id);
       try {
         const syncJson = await syncDataCaptureCompanySession(id);
         if (!syncJson.success) return;
@@ -418,7 +561,88 @@ export default function DataCapturePage() {
     return () => {
       cancelled = true;
     };
-  }, [bootLoading, companyIdFromUrl, companies, companyId]);
+  }, [bootLoading, companyIdFromUrl, companies, companiesNormalized, companyId, selectedGroup, navigate]);
+
+  useEffect(() => {
+    if (!companyId || !selectedGroup) return;
+    if (!currentCompanyRow) return;
+    if (companyBelongsToGroup(currentCompanyRow, selectedGroup)) return;
+    setCompanyId(null);
+    navigate("/datacapture", { replace: true });
+    form.clearCompanyOnlyFields?.();
+    form.clearProcessSelection?.();
+  }, [companyId, selectedGroup, currentCompanyRow, navigate, form.clearCompanyOnlyFields, form.clearProcessSelection]);
+
+  /** Sidebar menu flags follow group/company filter (page-owned broadcast; avoids GC hook auto-pick loop). */
+  useLayoutEffect(() => {
+    if (bootLoading) return;
+    const code =
+      currentCompanyRow?.company_id != null && String(currentCompanyRow.company_id).trim() !== ""
+        ? String(currentCompanyRow.company_id).trim()
+        : null;
+    notifyDashboardGroupFilterChanged(selectedGroup, companyId, {
+      companyCode: code,
+      ignoreGroupOnly: true,
+    });
+  }, [bootLoading, selectedGroup, companyId, currentCompanyRow?.company_id]);
+
+  /** Group-only UI: sync PHP session to group entity so Summary/API match scope. */
+  useEffect(() => {
+    if (bootLoading || isCompanySelected || !selectedGroup) return;
+    const anchorId =
+      sessionSyncCompanyId != null ? Number(sessionSyncCompanyId) : Number.NaN;
+    if (!Number.isFinite(anchorId) || anchorId <= 0) return;
+
+    const g = String(selectedGroup).trim().toUpperCase();
+    const prev = groupAnchorSessionRef.current;
+    if (prev.group === g && prev.companyId === anchorId) return;
+    if (me?.company_id != null && Number(me.company_id) === anchorId && prev.group === g) {
+      groupAnchorSessionRef.current = { group: g, companyId: anchorId };
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const syncJson = await syncDataCaptureCompanySession(anchorId);
+        if (!syncJson.success || cancelled) return;
+        if (
+          syncJson.data?.has_gambling === false &&
+          !sessionUserHasGamblingAccess(me)
+        ) {
+          navigate(DATA_CAPTURE_HOME_PATH, { replace: true });
+          return;
+        }
+        groupAnchorSessionRef.current = { group: g, companyId: anchorId };
+        notifyCompanySessionUpdated();
+      } catch {
+        /* ignore */
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    bootLoading,
+    isCompanySelected,
+    selectedGroup,
+    sessionSyncCompanyId,
+    me?.company_id,
+    navigate,
+  ]);
+
+  useEffect(() => {
+    const scopeKey = dataCaptureScopeCacheKey(captureScope);
+    const prev = prevScopeKeyRef.current;
+    if (prev != null && prev !== scopeKey) {
+      callDataCaptureRuntime("clearCaptureTable");
+      callDataCaptureRuntime("reactFormReset");
+      clearSelectedDescriptions();
+      void callDataCaptureRuntime("refreshSubmittedProcesses");
+    }
+    prevScopeKeyRef.current = scopeKey || null;
+  }, [captureScope, clearSelectedDescriptions]);
 
   const switchCompanySessionAndNavigate = useCallback(async (nextCompanyId) => {
     const id = Number(nextCompanyId);
@@ -428,7 +652,7 @@ export default function DataCapturePage() {
       const syncJson = await syncDataCaptureCompanySession(id);
       if (!syncJson.success) return;
 
-      notifyCompanySessionUpdated();
+      notifyCompanySessionUpdated(syncJson.data ?? null);
 
       if (syncJson.data?.has_gambling === false) {
         navigate(DATA_CAPTURE_HOME_PATH, { replace: true });
@@ -439,106 +663,130 @@ export default function DataCapturePage() {
       return;
     }
 
+    persistDashboardGroupOnlyMode(false);
+    persistDashboardSelectedCompany(id);
+    groupAnchorSessionRef.current = {
+      group: selectedGroup ? String(selectedGroup).trim().toUpperCase() : null,
+      companyId: id,
+    };
+    setCompanyId(id);
     navigate(`/datacapture?company_id=${encodeURIComponent(id)}`, { replace: true });
-  }, [navigate]);
+  }, [navigate, selectedGroup]);
 
-  useEffect(() => {
-    if (bootLoading || !me || !companyId) return;
+  const handleClearCompany = useCallback(() => {
+    setCompanyId(null);
+    groupAnchorSessionRef.current = { group: null, companyId: null };
+    navigate("/datacapture", { replace: true });
+    form.clearCompanyOnlyFields?.();
+    form.clearProcessSelection?.();
+  }, [navigate, form.clearCompanyOnlyFields, form.clearProcessSelection]);
 
-    window.DATACAPTURE_COMPANY_ID = companyId;
-    window.DATACAPTURE_USER_ROLE = String(me.role || "").toLowerCase();
-    window.DATACAPTURE_COMPANY_CODE = companyCode || String(companyId);
+  const onPrepareCompanySelect = useCallback(
+    (comp) => {
+      const id = Number(comp?.id);
+      if (!id) return;
+      const gid = comp.group_id ? String(comp.group_id).toUpperCase().trim() : null;
+      form.clearProcessSelection?.();
+      flushSync(() => {
+        setCompanyId(id);
+        if (gid) setSelectedGroup(gid);
+      });
+    },
+    [form.clearProcessSelection]
+  );
 
-    window.__DATA_CAPTURE_SPA_NAVIGATE_COMPANY__ = async (rawId) => {
-      await switchCompanySessionAndNavigate(Number(rawId));
-    };
-
-    window.onSharedCompanyFilterChanged = (cid) => {
-      if (cid) window.switchDataCaptureCompany?.(Number(cid));
-    };
-
-    let alive = true;
-    setEngineError("");
-    setScriptsReady(false);
-
-    (async () => {
-      try {
-        await loadScriptOnce(buildApiUrl("js/decimal.min.js"), () => typeof window.Decimal !== "undefined");
-        await loadScriptOnce(buildApiUrl("js/money-decimal.js"), () => typeof window.MoneyDecimal !== "undefined");
-        if (!alive) return;
-        if (typeof window.__DC_SPA_INIT_PAGE__ === "function") {
-          await window.__DC_SPA_INIT_PAGE__();
-        }
-        if (!alive) return;
-        if (typeof window.__DC_ENSURE_GRID_READY__ === "function") {
-          window.__DC_ENSURE_GRID_READY__(26, 20);
-        }
-        if (typeof window.__DC_RECOMPUTE_SUBMIT_STATE__ === "function") {
-          window.__DC_RECOMPUTE_SUBMIT_STATE__();
-        }
-        if (alive) setScriptsReady(true);
-      } catch (e) {
-        if (!alive) return;
-        console.error(e);
-        setEngineError("Failed to load Data Capture scripts.");
-        setScriptsReady(false);
-      }
-    })();
-
-    return () => {
-      alive = false;
-      setScriptsReady(false);
-      document.getElementById("dataCaptureForm")?.removeAttribute("data-dc-page-init");
-      try {
-        delete window.__DATA_CAPTURE_SPA_NAVIGATE_COMPANY__;
-      } catch {
-        window.__DATA_CAPTURE_SPA_NAVIGATE_COMPANY__ = undefined;
-      }
-      try {
-        delete window.onSharedCompanyFilterChanged;
-      } catch {
-        window.onSharedCompanyFilterChanged = undefined;
-      }
-    };
-  }, [bootLoading, me, companyId, switchCompanySessionAndNavigate]);
-
-  useEffect(() => {
-    if (!scriptsReady) return;
-    preloadSummaryLegacyScriptsInBackground();
-  }, [scriptsReady]);
-
-  useEffect(() => {
-    if (!companyId) return;
-    window.DATACAPTURE_COMPANY_ID = companyId;
-    window.DATACAPTURE_COMPANY_CODE = companyCode || String(companyId);
-  }, [companyId, companyCode]);
-
-  const onGroupClick = async (gid) => {
-    await applySharedGroupClickWithCompanySwitch({
-      clickedGroupId: gid,
-      currentSelectedGroup: selectedGroup,
-      companies: companiesDeduped,
-      currentCompanyId: companyId,
-      setSelectedGroup,
-      switchCompany: async (comp) => switchCompanySessionAndNavigate(comp.id),
-    });
+  onClearCompanyRef.current = handleClearCompany;
+  onPrepareCompanySelectRef.current = onPrepareCompanySelect;
+  onSelectCompanyRef.current = async (comp) => {
+    if (comp?.id) void switchCompanySessionAndNavigate(comp.id);
   };
 
-  const onCompanyClick = async (comp) => {
-    if (!comp?.id) return;
-    persistDashboardGroupFilter(selectedGroup);
-    await switchCompanySessionAndNavigate(comp.id);
-  };
+  useEffect(() => {
+    if (isCompanySelected) return;
+    form.clearCompanyOnlyFields?.();
+  }, [isCompanySelected, form.clearCompanyOnlyFields]);
 
-  if (bootLoading) {
-    return <PageContentLoader />;
-  }
+  useEffect(() => {
+    if (getDataCaptureState().isRestoring) return;
+    if (new URLSearchParams(window.location.search).get("restore") === "1") return;
+    const id = form.selectedProcess?.id;
+    if (!id) return;
+    if (!isCompanySelected && !isGroupOnlyProcessId(id)) {
+      form.clearProcessSelection();
+    } else if (isCompanySelected && isGroupOnlyProcessId(id)) {
+      form.clearProcessSelection();
+    }
+  }, [isCompanySelected, form.selectedProcess?.id, form.clearProcessSelection]);
 
-  const list = filterCompaniesWithDisplayId(companiesDeduped);
+  useEffect(() => {
+    if (bootLoading) return;
+    if (getDataCaptureState().isRestoring) return;
+    if (new URLSearchParams(window.location.search).get("restore") === "1") return;
+    const prev = prevProcessCompanyRef.current;
+    if (prev === undefined) {
+      prevProcessCompanyRef.current = companyId;
+      return;
+    }
+    if (prev !== companyId) {
+      form.clearProcessSelection?.();
+      prevProcessCompanyRef.current = companyId;
+    }
+  }, [bootLoading, companyId, form.clearProcessSelection]);
+
+  useEffect(() => {
+    if (isCompanySelected) {
+      prevGroupOnlyGroupRef.current = selectedGroup;
+      return;
+    }
+    const prev = prevGroupOnlyGroupRef.current;
+    if (prev != null && prev !== selectedGroup) {
+      form.clearProcessSelection?.();
+      form.clearCompanyOnlyFields?.();
+    }
+    prevGroupOnlyGroupRef.current = selectedGroup;
+  }, [selectedGroup, isCompanySelected, form.clearProcessSelection, form.clearCompanyOnlyFields]);
+
+  useEffect(() => {
+    if (bootLoading || !me || !engineReady) return;
+
+    const syncCompanyContext = async () => {
+      try {
+        await callDataCaptureRuntime("refreshSubmittedProcesses");
+      } catch {
+        /* ignore */
+      }
+      callDataCaptureRuntime("recomputeSubmitState");
+    };
+
+    void syncCompanyContext();
+  }, [bootLoading, me, engineReady]);
+
+  useDataCapturePageLifecycle({
+    engineReady,
+    groupOnlyGrid: groupOnlyTable,
+    submit: submitReset.submit,
+    reset: submitReset.reset,
+    recomputeSubmitState: submitReset.recomputeSubmitState,
+    refreshSubmittedProcesses: refreshSubmitted,
+    applyGroupOnlyPersistedForm: () => callDataCaptureRuntime("applyGroupOnlyPersistedForm"),
+    applyCaptureType,
+    ensureGridReady,
+  });
+
+  useEffect(() => {
+    if (!engineReady) return;
+    submitReset.restoreFromStorage();
+  }, [engineReady, submitReset.restoreFromStorage]);
+
+  const list = filterCompaniesForGamesPills(
+    filterCompaniesWithDisplayId(companiesForPicker),
+    companyId
+  );
+  const pageShellKey = dataCaptureScopeCacheKey(captureScope) || "pending";
 
   return (
-    <DataCaptureErrorBoundary key={companyId ?? "none"}>
-      <div className="container" key={companyId ?? "none"}>
+    <DataCaptureErrorBoundary key={pageShellKey}>
+      <div className="container" key={pageShellKey}>
       <div className="dc-page-toolbar">
 
         <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
@@ -565,75 +813,34 @@ export default function DataCapturePage() {
         </div>
       </div>
 
-      {engineError ? (
-        <div style={{ marginBottom: 12, color: "#b91c1c" }} role="alert">
-          {engineError}
-        </div>
-      ) : null}
-
       <div className="top-section" ref={topSectionRef}>
         <div className="form-column" ref={formColumnRef}>
           <div className="form-container">
             <form
               id="dataCaptureForm"
               data-ezc-spa="1"
-              className="process-form"
+              className={`process-form${isCompanySelected ? "" : " dc-form--group-only"}`.trim()}
               method="POST"
               onSubmit={(e) => {
                 e.preventDefault();
               }}
             >
-              {(groups.length > 0 || list.length > 0) && (
+              {(groupIds.length > 0 || list.length > 0) && (
                 <div className="user-gc-inline-panel dc-data-capture-gc-panel">
-                  {groups.length > 0 ? (
-                    <div id="group-buttons-wrapper" className="user-gc-inline-row shared-group-wrapper">
-                      <span className="user-gc-inline-label">{t("groupId")}</span>
-                      <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
-                        <div id="group-buttons-container" className="user-gc-segment-group" role="group" aria-label={t("groupAria")}>
-                          {groups.map((gid) => (
-                            <button
-                              key={gid}
-                              type="button"
-                              className={`user-gc-segment shared-group-btn ${selectedGroup === gid ? "active is-on" : ""}`.trim()}
-                              data-group-id={gid}
-                              onClick={() => void onGroupClick(gid)}
-                            >
-                              {gid}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {list.length > 0 ? (
-                    <div id="company-buttons-wrapper" className="user-gc-inline-row shared-company-wrapper">
-                      <span className="user-gc-inline-label">{t("company")}</span>
-                      <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
-                        <div id="company-buttons-container" className="user-gc-segment-group" role="group" aria-label={t("companyAria")}>
-                          {list.map((comp) => {
-                            const gid = String(comp.group_id || "").trim().toUpperCase();
-                            const visible = isCompanyVisibleForSharedFilter(comp, selectedGroup, false, "follow");
-                            const active = Number(comp.id) === Number(companyId);
-                            return (
-                              <button
-                                key={comp.id}
-                                type="button"
-                                style={{ display: visible ? undefined : "none" }}
-                                className={`user-gc-segment shared-company-btn ${active ? "active is-on" : ""}`.trim()}
-                                data-company-id={comp.id}
-                                data-group-id={gid}
-                                data-company-code={comp.company_id || ""}
-                                onClick={() => void onCompanyClick(comp)}
-                              >
-                                {comp.company_id}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
+                  <GcInlineFilterPanel
+                    embedded
+                    t={t}
+                    groupIds={groupIds}
+                    groupsAllMode={groupsAllMode}
+                    selectedGroup={selectedGroup}
+                    onPickAllGroups={handlePickAllGroups}
+                    onPickGroup={handlePickGroup}
+                    companiesForPicker={list}
+                    groupAllMode={groupAllMode}
+                    pickerCompanyId={companyId}
+                    onPickAllInGroup={handlePickAllInGroup}
+                    onPickCompany={handlePickCompany}
+                  />
                 </div>
               )}
 
@@ -651,104 +858,120 @@ export default function DataCapturePage() {
 
                 <div className="form-group">
                   <label htmlFor="capture_process">{t("process")}</label>
-                  <div className="custom-select-wrapper">
-                    <button
-                      type="button"
-                      className={`custom-select-button${form.processOpen ? " open" : ""}`.trim()}
-                      id="capture_process"
-                      data-placeholder={t("selectProcess")}
-                      name="process"
-                      {...(form.selectedProcess?.id
-                        ? {
-                            "data-value": form.selectedProcess.id,
-                            "data-process-code": form.selectedProcess.process_id || "",
-                            ...(form.selectedProcess.description_name
-                              ? { "data-description-name": form.selectedProcess.description_name }
-                              : {}),
-                          }
-                        : {})}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (typeof window.tableActive !== "undefined") window.tableActive = false;
-                        form.setProcessOpen((o) => !o);
-                      }}
-                    >
-                      {form.selectedProcess?.displayText || t("selectProcess")}
-                    </button>
-                    <div
-                      className={`custom-select-dropdown${form.processOpen ? " show" : ""}`.trim()}
-                      id="capture_process_dropdown"
-                    >
-                      <div className="custom-select-search">
-                        <input
-                          ref={form.processSearchInputRef}
-                          type="text"
-                          placeholder={t("searchProcess")}
-                          autoComplete="off"
-                          value={form.processFilter}
-                          onChange={(e) => form.setProcessFilter(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") {
-                              form.setProcessOpen(false);
-                            } else if (e.key === "Enter") {
-                              e.preventDefault();
-                              const first = form.filteredProcesses[0];
-                              if (first) void form.selectProcessRow(first);
+                  {isCompanySelected ? (
+                    <div className="custom-select-wrapper">
+                      <button
+                        type="button"
+                        className={`custom-select-button${form.processOpen ? " open" : ""}`.trim()}
+                        id="capture_process"
+                        data-placeholder={t("selectProcess")}
+                        name="process"
+                        {...(form.selectedProcess?.id
+                          ? {
+                              "data-value": form.selectedProcess.id,
+                              "data-process-code": form.selectedProcess.process_id || "",
+                              ...(form.selectedProcess.description_name
+                                ? { "data-description-name": form.selectedProcess.description_name }
+                                : {}),
                             }
-                          }}
-                        />
-                      </div>
-                      {/* Legacy `loadProcessesByDate` clears the first `.custom-select-options` — keep an empty decoy. */}
+                          : {})}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTableActive(false);
+                          form.setProcessOpen((o) => !o);
+                        }}
+                      >
+                        {form.selectedProcess?.displayText || t("selectProcess")}
+                      </button>
                       <div
-                        className="custom-select-options dc-legacy-process-options-host"
-                        aria-hidden="true"
-                        style={{ display: "none" }}
-                      />
-                      <div className="custom-select-options dc-react-process-options">
-                        {form.processListTruncated ? (
-                          <div className="custom-select-option custom-select-option--hint" style={{ cursor: "default", opacity: 0.85 }}>
-                            {t("typeToSearchProcesses", { count: form.processRowsCount })}
-                          </div>
-                        ) : null}
-                        {form.visibleProcesses.map((row) => (
-                          <div
-                            key={row.id}
-                            role="presentation"
-                            className="custom-select-option"
-                            onClick={() => void form.selectProcessRow(row)}
-                          >
-                            {form.displayTextFromProcessRow(row)}
-                          </div>
-                        ))}
+                        className={`custom-select-dropdown${form.processOpen ? " show" : ""}`.trim()}
+                        id="capture_process_dropdown"
+                      >
+                        <div className="custom-select-search">
+                          <input
+                            ref={form.processSearchInputRef}
+                            type="text"
+                            placeholder={t("searchProcess")}
+                            autoComplete="off"
+                            value={form.processFilter}
+                            onChange={(e) => form.setProcessFilter(e.target.value.toUpperCase())}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                form.setProcessOpen(false);
+                              } else if (e.key === "Enter") {
+                                e.preventDefault();
+                                const first = form.filteredProcesses[0];
+                                if (first) void form.selectProcessRow(first);
+                              }
+                            }}
+                          />
+                        </div>
+                        <div className="custom-select-options dc-react-process-options">
+                          {form.processListTruncated ? (
+                            <div className="custom-select-option custom-select-option--hint" style={{ cursor: "default", opacity: 0.85 }}>
+                              {t("typeToSearchProcesses", { count: form.processRowsCount })}
+                            </div>
+                          ) : null}
+                          {form.visibleProcesses.map((row) => (
+                            <div
+                              key={row.id}
+                              role="presentation"
+                              className="custom-select-option"
+                              onClick={() => void form.selectProcessRow(row)}
+                            >
+                              {form.displayTextFromProcessRow(row)}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  ) : (
+                    <select
+                      id="capture_process"
+                      name="process"
+                      value={form.selectedProcess?.id || ""}
+                      onChange={(e) => {
+                        const opt = groupOnlyProcessOptions.find((o) => o.id === e.target.value);
+                        if (opt) form.selectGroupOnlyProcess(opt);
+                        else form.clearProcessSelection();
+                      }}
+                    >
+                      <option value="">{t("selectProcess")}</option>
+                      {groupOnlyProcessOptions.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {o.displayText}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
 
               <div className="dc-form-two-col dc-form-two-col--stacked">
-                <div className="form-group">
-                  <label htmlFor="capture_description">{t("description")}</label>
-                  <div className="input-with-icon">
-                    <input
-                      type="text"
-                      id="capture_description"
-                      name="description"
-                      required
-                      readOnly
-                      placeholder={t("clickToSelectDescriptions")}
-                      value={form.descriptionDisplay}
-                    />
-                    <button
-                      type="button"
-                      className="add-icon"
-                      onClick={() => openDescriptionModal()}
-                      title={t("selectDescriptions")}
-                    >
-                      +
-                    </button>
+                {isCompanySelected ? (
+                  <div className="form-group">
+                    <label htmlFor="capture_description">{t("description")}</label>
+                    <div className="input-with-icon">
+                      <input
+                        type="text"
+                        id="capture_description"
+                        name="description"
+                        required
+                        readOnly
+                        placeholder={t("clickToSelectDescriptions")}
+                        value={form.descriptionDisplay}
+                      />
+                      <button
+                        type="button"
+                        className="add-icon"
+                        onClick={() => openDescriptionModal()}
+                        title={t("selectDescriptions")}
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
                 <div className="form-group">
                   <label htmlFor="capture_currency">{t("currency")}</label>
@@ -758,7 +981,7 @@ export default function DataCapturePage() {
                     value={form.currencyId}
                     onChange={(e) => {
                       form.setCurrencyId(e.target.value);
-                      setTimeout(() => window.updateSubmitButtonState?.(), 0);
+                      setTimeout(() => callDataCaptureRuntime("recomputeSubmitState"), 0);
                     }}
                   >
                     <option value="">{t("selectCurrency")}</option>
@@ -769,63 +992,79 @@ export default function DataCapturePage() {
                     ))}
                   </select>
                 </div>
-              </div>
 
-              <div className="dc-form-bottom-block">
-                <div className="form-group replace-word-group dc-replace-word-field">
-                  <label htmlFor="capture_replace_word_from">{t("replaceWord")}</label>
-                  <div className="replace-word-fields">
+                {!isCompanySelected ? (
+                  <div className="form-group">
+                    <label htmlFor="capture_remark">{t("remark")}</label>
                     <input
                       type="text"
-                      id="capture_replace_word_from"
-                      name="replace_word_from"
-                      placeholder={t("oldWord")}
-                      value={form.replaceFrom}
-                      onChange={(e) => form.setReplaceFrom(e.target.value.toUpperCase())}
-                    />
-                    <span className="replace-arrow">→</span>
-                    <input
-                      type="text"
-                      id="capture_replace_word_to"
-                      name="replace_word_to"
-                      placeholder={t("newWord")}
-                      value={form.replaceTo}
-                      onChange={(e) => form.setReplaceTo(e.target.value.toUpperCase())}
+                      id="capture_remark"
+                      name="remark"
+                      placeholder={t("enterRemark")}
+                      value={form.remark}
+                      onChange={(e) => form.setRemark(e.target.value.toUpperCase())}
                     />
                   </div>
-                </div>
-
-                <div className="dc-form-remove-remark-grid">
-                  <label htmlFor="capture_remove_word" className="dc-remove-remark__label dc-remove-remark__label--rm">
-                    {t("removeWord")}
-                  </label>
-                  <label htmlFor="capture_remark" className="dc-remove-remark__label dc-remove-remark__label--mk">
-                    {t("remark")}
-                  </label>
-                  <input
-                    type="text"
-                    id="capture_remove_word"
-                    name="remove_word"
-                    className="dc-remove-remark__input dc-remove-remark__input--rm"
-                    placeholder={t("enterWordsToRemove")}
-                    value={form.removeWord}
-                    onChange={(e) => form.setRemoveWord(e.target.value.toUpperCase())}
-                  />
-                  <input
-                    type="text"
-                    id="capture_remark"
-                    name="remark"
-                    className="dc-remove-remark__input dc-remove-remark__input--mk"
-                    placeholder={t("enterRemark")}
-                    value={form.remark}
-                    onChange={(e) => form.setRemark(e.target.value.toUpperCase())}
-                  />
-                  <small className="field-help dc-remove-remark__help" style={{ display: "block", marginTop: 0, fontStyle: "italic", color: "#666" }}>
-                    {t("removeWordHelp")}
-                  </small>
-                  <div className="dc-remove-remark__slot" aria-hidden="true" />
-                </div>
+                ) : null}
               </div>
+
+              {isCompanySelected ? (
+              <div className="dc-form-bottom-block">
+                  <div className="form-group replace-word-group dc-replace-word-field">
+                    <label htmlFor="capture_replace_word_from">{t("replaceWord")}</label>
+                    <div className="replace-word-fields">
+                      <input
+                        type="text"
+                        id="capture_replace_word_from"
+                        name="replace_word_from"
+                        placeholder={t("oldWord")}
+                        value={form.replaceFrom}
+                        onChange={(e) => form.setReplaceFrom(e.target.value.toUpperCase())}
+                      />
+                      <span className="replace-arrow">→</span>
+                      <input
+                        type="text"
+                        id="capture_replace_word_to"
+                        name="replace_word_to"
+                        placeholder={t("newWord")}
+                        value={form.replaceTo}
+                        onChange={(e) => form.setReplaceTo(e.target.value.toUpperCase())}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="dc-form-remove-remark-grid">
+                    <label htmlFor="capture_remove_word" className="dc-remove-remark__label dc-remove-remark__label--rm">
+                      {t("removeWord")}
+                    </label>
+                    <label htmlFor="capture_remark" className="dc-remove-remark__label dc-remove-remark__label--mk">
+                      {t("remark")}
+                    </label>
+                    <input
+                      type="text"
+                      id="capture_remove_word"
+                      name="remove_word"
+                      className="dc-remove-remark__input dc-remove-remark__input--rm"
+                      placeholder={t("enterWordsToRemove")}
+                      value={form.removeWord}
+                      onChange={(e) => form.setRemoveWord(e.target.value.toUpperCase())}
+                    />
+                    <input
+                      type="text"
+                      id="capture_remark"
+                      name="remark"
+                      className="dc-remove-remark__input dc-remove-remark__input--mk"
+                      placeholder={t("enterRemark")}
+                      value={form.remark}
+                      onChange={(e) => form.setRemark(e.target.value.toUpperCase())}
+                    />
+                    <small className="field-help dc-remove-remark__help" style={{ display: "block", marginTop: 0, fontStyle: "italic", color: "#666" }}>
+                      {t("removeWordHelp")}
+                    </small>
+                    <div className="dc-remove-remark__slot" aria-hidden="true" />
+                  </div>
+              </div>
+              ) : null}
             </form>
           </div>
         </div>
@@ -834,8 +1073,6 @@ export default function DataCapturePage() {
           <div className="submitted-container">
             <h2 className="submitted-title">{t("submittedProcesses")}</h2>
             <div className="submitted-list">
-              {/* Legacy `renderSubmittedProcesses` sets innerHTML on `#submittedProcessesList` — decoy only. */}
-              <div id="submittedProcessesList" className="dc-legacy-submitted-host" aria-hidden="true" style={{ display: "none" }} />
               <div className="dc-react-submitted-list">
               {submittedItems.length === 0 ? (
                 <div className="no-data">{t("noProcessesSubmitted")}</div>
@@ -843,17 +1080,20 @@ export default function DataCapturePage() {
                 submittedItems.map((process, index) => (
                   <div
                     key={
-                      process.id != null
-                        ? String(process.id)
-                        : `sub-${index}-${process.process_code}-${process.created_at || ""}-${process.submitted_by || ""}`
+                      process.capture_id != null
+                        ? `cap-${process.capture_id}`
+                        : process.id != null
+                          ? String(process.id)
+                          : `sub-${index}-${process.process_code}-${process.created_at || ""}-${process.submitted_by || ""}`
                     }
                     className="submitted-item"
                   >
                     <div className="submitted-details">
                       <div className="detail-row">
                         <strong>
-                          {process.process_code}
-                          {process.description_name ? ` (${process.description_name})` : ""}
+                          {captureScope?.mode === "group"
+                            ? formatGroupSubmittedProcessLabel(process)
+                            : `${process.process_code}${process.description_name ? ` (${process.description_name})` : ""}`}
                         </strong>
                         <div className="submitted-meta">
                           <span className="submitted-by">{process.submitted_by}</span>
@@ -875,19 +1115,25 @@ export default function DataCapturePage() {
         captureType={captureType}
         citibetMode={citibetMode}
         formatGridReady={formatGridReady}
+        hideCaptureTypeSelector={groupOnlyTable}
+        groupOnlyTable={groupOnlyTable}
         onCaptureTypeChange={handleCaptureTypeChange}
         submitDisabled={submitReset.submitDisabled || mutationsBlocked}
+        isSubmitting={submitReset.isSubmitting}
         onSubmit={() => void submitReset.submit()}
         onReset={submitReset.reset}
+        engineReady={engineReady}
       />
 
-      <DescriptionSelectionModal
-        t={t}
-        open={descriptionModalOpen}
-        onClose={closeDescriptionModal}
-        companyId={companyId}
-        onConfirm={handleDescriptionsConfirmed}
-      />
+      {isCompanySelected ? (
+        <DescriptionSelectionModal
+          t={t}
+          open={descriptionModalOpen}
+          onClose={closeDescriptionModal}
+          companyId={companyId}
+          onConfirm={handleDescriptionsConfirmed}
+        />
+      ) : null}
 
       <ProcessNotificationContainer />
 
@@ -903,5 +1149,13 @@ export default function DataCapturePage() {
       />
     </div>
     </DataCaptureErrorBoundary>
+  );
+}
+
+export default function DataCapturePage() {
+  return (
+    <DataCaptureProvider>
+      <DataCapturePageContent />
+    </DataCaptureProvider>
   );
 }

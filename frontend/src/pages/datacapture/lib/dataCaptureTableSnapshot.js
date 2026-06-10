@@ -1,237 +1,98 @@
-import { convertBracketedToNegative } from "./dataCaptureBracket.js";
-import { normalizeStoredCaptureType } from "./dataCaptureStorage.js";
-
-const FORMAT_LABEL_FIRST_COLUMNS = new Set(["AGENT", "PLAYER", "MEMBER", "USER"]);
-
-function resolveSnapshotCaptureType(captureType) {
-  return (
-    normalizeStoredCaptureType(captureType) ||
-    normalizeStoredCaptureType(window.__DC_GET_CAPTURE_TYPE__?.()) ||
-    "1.Text"
-  );
-}
-
-function readEditableCellValue(cell) {
-  if (!cell) return "";
-  const text = (cell.textContent || cell.innerText || "").trim();
-  if (text) return text;
-  const html = cell.innerHTML || "";
-  if (!html.includes("<")) return "";
-  const temp = document.createElement("div");
-  temp.innerHTML = html;
-  return (temp.textContent || temp.innerText || "").trim();
-}
-
-function isPlaceholderIdColumn(value) {
-  const trimmed = String(value || "").trim();
-  if (!trimmed) return true;
-  if (/^\d{1,2}$/.test(trimmed)) return true;
-  return FORMAT_LABEL_FIRST_COLUMNS.has(trimmed.toUpperCase());
-}
-
-function swapRowDataCells(a, b) {
-  const tempValue = a.value;
-  a.value = b.value;
-  b.value = tempValue;
-  const tempColspan = a.colspan;
-  a.colspan = b.colspan;
-  b.colspan = tempColspan;
-  const tempCol = a.col;
-  a.col = b.col;
-  b.col = tempCol;
-}
-
-/** Move first real id product into column A for Text / Format / Return rows. */
-function normalizeIdProductColumnForRow(rowData, captureType, rowIndex) {
-  if (!["1.Text", "2.Format", "4.RETURN"].includes(captureType) || rowData.length <= 1) {
-    return;
-  }
-
-  const firstDataCell = rowData[1];
-  if (firstDataCell?.type !== "data") return;
-
-  if (isPlaceholderIdColumn(firstDataCell.value)) {
-    for (let i = 2; i < rowData.length; i += 1) {
-      const cell = rowData[i];
-      if (cell?.type !== "data") continue;
-      const candidate = String(cell.value || "").trim();
-      if (!candidate || FORMAT_LABEL_FIRST_COLUMNS.has(candidate.toUpperCase())) continue;
-      swapRowDataCells(firstDataCell, cell);
-      console.log(
-        `${captureType}: Row ${rowIndex} - adjusted id product from column ${cell.col + 1} (value: "${candidate}") to first column`
-      );
-      return;
-    }
-  }
-}
-
-/**
- * Reads the Excel grid DOM for submit / restore snapshots.
- */
-export function captureTableDataFromDom(captureType) {
-  const currentDataCaptureType = resolveSnapshotCaptureType(captureType);
-  const table = document.getElementById("dataTable");
-  const tableData = {
-    headers: [],
-    rows: [],
-    rowCount: 0,
-    colCount: 0,
-  };
-
-  if (!table) return tableData;
-
-  const headerRow = table.querySelector("thead tr");
-  if (headerRow) {
-    headerRow.querySelectorAll("th").forEach((header) => {
-      tableData.headers.push(header.textContent);
-    });
-  }
-
-  const tbody = table.querySelector("tbody");
-  if (!tbody) return tableData;
-
-  const rows = tbody.querySelectorAll("tr");
-  tableData.rowCount = rows.length;
-
-  let maxDataCols = 0;
-  const allRowData = [];
-
-  rows.forEach((row, rowIndex) => {
-    const rowData = [];
-    const cells = row.querySelectorAll("td");
-
-    cells.forEach((cell, colIndex) => {
-      if (colIndex === 0) {
-        rowData.push({ type: "header", value: cell.textContent });
-        return;
-      }
-
-      const hidden = cell.style.display === "none";
-      const rawValue = readEditableCellValue(cell);
-      if (hidden && !rawValue) return;
-
-      let cellValue = convertBracketedToNegative(rawValue.toUpperCase());
-      const colspan = parseInt(cell.getAttribute("colspan") || "1", 10);
-
-      rowData.push({
-        type: "data",
-        value: cellValue,
-        col: colIndex - 1,
-        colspan: colspan > 1 ? colspan : undefined,
-      });
-    });
-
-    normalizeIdProductColumnForRow(rowData, currentDataCaptureType, rowIndex);
-
-    const dataCols = rowData.length - 1;
-    if (dataCols > maxDataCols) maxDataCols = dataCols;
-    allRowData.push(rowData);
-  });
-
-  allRowData.forEach((rowData) => {
-    const currentDataCols = rowData.length - 1;
-    if (currentDataCols < maxDataCols) {
-      for (let i = currentDataCols; i < maxDataCols; i += 1) {
-        rowData.push({ type: "data", value: "", col: i });
-      }
-    }
-  });
-
-  tableData.colCount = maxDataCols + 1;
-
-  if (headerRow) {
-    const currentHeaderCount = tableData.headers.length;
-    if (currentHeaderCount < tableData.colCount) {
-      for (let i = currentHeaderCount; i < tableData.colCount; i += 1) {
-        tableData.headers.push(i === 0 ? "" : String(i));
-      }
-    } else if (currentHeaderCount > tableData.colCount) {
-      tableData.headers = tableData.headers.slice(0, tableData.colCount);
-    }
-  }
-
-  tableData.rows = allRowData;
-  return tableData;
-}
-
-export function tableSnapshotHasData(tableData) {
-  if (!tableData?.rows?.length) return false;
-  return tableData.rows.some((row) => rowHasSnapshotData(row));
-}
-
-function rowHasSnapshotData(rowData) {
-  return rowData.some((cell) => cell.type === "data" && String(cell.value || "").trim() !== "");
-}
-
-/** Count tbody rows that contain at least one non-empty data cell. */
-export function countFilledSnapshotRows(tableData) {
-  if (!tableData?.rows?.length) return 0;
-  return tableData.rows.filter((row) => rowHasSnapshotData(row)).length;
-}
-
-/** Last row index (inclusive) with any data cell content. */
-export function findLastFilledSnapshotRowIndex(tableData) {
-  if (!tableData?.rows?.length) return -1;
-  for (let i = tableData.rows.length - 1; i >= 0; i -= 1) {
-    if (rowHasSnapshotData(tableData.rows[i])) return i;
-  }
-  return -1;
-}
-
-/** Drop trailing empty rows; keep rowCount aligned with saved rows. */
-export function trimSnapshotToFilledRows(tableData) {
-  if (!tableData?.rows?.length) return tableData;
-  const lastFilled = findLastFilledSnapshotRowIndex(tableData);
-  if (lastFilled < 0) return tableData;
-
-  const rows = tableData.rows.slice(0, lastFilled + 1);
-  return {
-    ...tableData,
-    rows,
-    rowCount: rows.length,
-  };
-}
-
-/** Prefer the snapshot that contains more filled data rows. */
-export function pickRicherTableSnapshot(primary, secondary) {
-  const a = primary || { rows: [] };
-  const b = secondary || { rows: [] };
-  const aFilled = countFilledSnapshotRows(a);
-  const bFilled = countFilledSnapshotRows(b);
-  if (bFilled > aFilled) return trimSnapshotToFilledRows(b);
-  return trimSnapshotToFilledRows(a);
-}
-
-/** DOM column index for a snapshot data cell (children[0] is row header). */
-export function snapshotDataCellDomIndex(cellData, rowDataIndex) {
-  if (cellData?.type !== "data") return null;
-  if (typeof cellData.col === "number") return cellData.col + 1;
-  return rowDataIndex >= 1 ? rowDataIndex : null;
-}
-
-/** Build 2.Format preview HTML from snapshot — data cells only, no row labels. */
-export function buildFormatPreviewHtmlFromTableSnapshot(tableData) {
-  if (!tableData?.rows?.length) return "";
-
-  let html = '<table border="1" cellspacing="0" cellpadding="2"><tbody>';
-  tableData.rows.forEach((rowData) => {
-    html += "<tr>";
-    rowData.forEach((cell) => {
-      if (cell.type !== "data") return;
-      const v =
-        cell.value != null ? String(cell.value) : "";
-      html += `<td>${v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`;
-    });
-    html += "</tr>";
-  });
-  html += "</tbody></table>";
-  return html;
-}
-
-export function domGridHasEditableData() {
-  const tableBody = document.getElementById("tableBody");
-  if (!tableBody) return false;
-  return Array.from(tableBody.querySelectorAll('td[contenteditable="true"]')).some((cell) =>
-    String(cell.textContent || "").trim()
-  );
-}
+import { createEmptyGrid, gridModelHasEditableData, gridToSnapshot } from "../grid/gridModel.js";
+import { normalizeStoredCaptureType } from "./dataCaptureStorage.js";
+import { getBridgeCaptureType, getPasteGridModel } from "./dataCaptureBridge.js";
+
+function resolveSnapshotCaptureType(captureType) {
+  return (
+    normalizeStoredCaptureType(captureType) ||
+    normalizeStoredCaptureType(getBridgeCaptureType("")) ||
+    "1.Text"
+  );
+}
+
+/** Build a submit/validation snapshot from the React grid model. */
+export function captureTableSnapshot(captureType, grid = null) {
+  const resolvedType = resolveSnapshotCaptureType(captureType);
+  const workingGrid = grid ?? getPasteGridModel() ?? createEmptyGrid();
+  return gridToSnapshot(workingGrid, resolvedType);
+}
+
+export function tableSnapshotHasData(tableData) {
+  if (!tableData?.rows?.length) return false;
+  return tableData.rows.some((row) => rowHasSnapshotData(row));
+}
+
+function rowHasSnapshotData(rowData) {
+  return rowData.some((cell) => cell.type === "data" && String(cell.value || "").trim() !== "");
+}
+
+/** Count tbody rows that contain at least one non-empty data cell. */
+export function countFilledSnapshotRows(tableData) {
+  if (!tableData?.rows?.length) return 0;
+  return tableData.rows.filter((row) => rowHasSnapshotData(row)).length;
+}
+
+/** Last row index (inclusive) with any data cell content. */
+export function findLastFilledSnapshotRowIndex(tableData) {
+  if (!tableData?.rows?.length) return -1;
+  for (let i = tableData.rows.length - 1; i >= 0; i -= 1) {
+    if (rowHasSnapshotData(tableData.rows[i])) return i;
+  }
+  return -1;
+}
+
+/** Drop trailing empty rows; keep rowCount aligned with saved rows. */
+export function trimSnapshotToFilledRows(tableData) {
+  if (!tableData?.rows?.length) return tableData;
+  const lastFilled = findLastFilledSnapshotRowIndex(tableData);
+  if (lastFilled < 0) return tableData;
+
+  const rows = tableData.rows.slice(0, lastFilled + 1);
+  return {
+    ...tableData,
+    rows,
+    rowCount: rows.length,
+  };
+}
+
+/** Prefer the snapshot that contains more filled data rows. */
+export function pickRicherTableSnapshot(primary, secondary) {
+  const a = primary || { rows: [] };
+  const b = secondary || { rows: [] };
+  const aFilled = countFilledSnapshotRows(a);
+  const bFilled = countFilledSnapshotRows(b);
+  if (bFilled > aFilled) return trimSnapshotToFilledRows(b);
+  return trimSnapshotToFilledRows(a);
+}
+
+/** DOM column index for a snapshot data cell (children[0] is row header). */
+export function snapshotDataCellDomIndex(cellData, rowDataIndex) {
+  if (cellData?.type !== "data") return null;
+  if (typeof cellData.col === "number") return cellData.col + 1;
+  return rowDataIndex >= 1 ? rowDataIndex : null;
+}
+
+/** Build 2.Format preview HTML from snapshot — data cells only, no row labels. */
+export function buildFormatPreviewHtmlFromTableSnapshot(tableData) {
+  if (!tableData?.rows?.length) return "";
+
+  let html = '<table border="1" cellspacing="0" cellpadding="2"><tbody>';
+  tableData.rows.forEach((rowData) => {
+    html += "<tr>";
+    rowData.forEach((cell) => {
+      if (cell.type !== "data") return;
+      const v =
+        cell.value != null ? String(cell.value) : "";
+      html += `<td>${v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>`;
+    });
+    html += "</tr>";
+  });
+  html += "</tbody></table>";
+  return html;
+}
+
+/** Whether the grid model has any non-empty cell. */
+export function domGridHasEditableData() {
+  const grid = getPasteGridModel();
+  return grid ? gridModelHasEditableData(grid) : false;
+}

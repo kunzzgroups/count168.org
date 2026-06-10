@@ -1,5 +1,6 @@
 import { parseBalanceValue } from "./transactionFormat.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
+import { resolveSavedCurrencyOrder } from "../../../utils/company/currencyDisplayOrder.js";
 
 export const TRANSACTION_CURRENCY_FILTER_KEY_PREFIX = "transaction_currency_filter_v1_";
 export const TX_LIST_SESSION_PREFIX = "count168_txlist_v1_";
@@ -107,6 +108,18 @@ export function dedupeRowsByAccountAndCurrency(rows) {
 }
 
 /** 去重左右表并按行重算 totals（修复竞态/缓存叠行导致的重复 CAPITAL 等）。 */
+/** Merge multiple search_api payloads (group/company All modes). */
+export function mergeSearchApiDataList(dataList) {
+  const left = [];
+  const right = [];
+  for (const d of dataList) {
+    if (!d || typeof d !== "object") continue;
+    if (Array.isArray(d.left_table)) left.push(...d.left_table);
+    if (Array.isArray(d.right_table)) right.push(...d.right_table);
+  }
+  return sanitizeSearchApiData({ left_table: left, right_table: right });
+}
+
 export function sanitizeSearchApiData(data) {
   if (!data || typeof data !== "object") return data;
   const left = dedupeRowsByAccountAndCurrency(data.left_table);
@@ -125,39 +138,21 @@ export function sanitizeSearchApiData(data) {
   };
 }
 
-export function rowPassesHideZeroBalanceFilter(showZero, row) {
-  if (showZero) return true;
+/** True when ending balance is non-zero (2dp display tolerance). */
+export function rowHasNonZeroBalance(row) {
   const num = parseBalanceValue(row.balance);
   if (num === null) return true;
   try {
-    if (MoneyDecimal.toDecimal(String(num), 0).abs().gt("0.00001")) return true;
+    return MoneyDecimal.toDecimal(String(num), 0).abs().gt("0.00001");
   } catch {
-    if (Math.abs(num) > 1e-5) return true;
+    return Math.abs(num) > 1e-5;
   }
-  const flagToBool = (v) => {
-    if (typeof v === "boolean") return v;
-    if (typeof v === "number") return v !== 0;
-    return parseInt(String(v || "0"), 10) !== 0;
-  };
-  const absVal = (v) => {
-    try {
-      return MoneyDecimal.toDecimal(String(v ?? "0").replace(/,/g, "").trim() || "0", 0).abs();
-    } catch {
-      return MoneyDecimal.toDecimal("0", 0).abs();
-    }
-  };
-  const eps = "0.00001";
-  const wlProbe =
-    row.win_loss_full !== undefined && row.win_loss_full !== null && String(row.win_loss_full).trim() !== ""
-      ? String(row.win_loss_full).replace(/,/g, "").trim()
-      : String(row.win_loss || "0").replace(/,/g, "").trim();
-  const hasAnyMoneyColumn = absVal(row.bf).gt(eps) || absVal(wlProbe).gt(eps) || absVal(row.cr_dr).gt(eps);
-  if (hasAnyMoneyColumn) return true;
-  const hasTxnFlag =
-    flagToBool(row.has_win_loss_transactions) ||
-    flagToBool(row.has_crdr_transactions) ||
-    flagToBool(row.has_period_id_product_rows);
-  return hasTxnFlag;
+}
+
+/** @deprecated Prefer {@link applyZeroBalanceFilter} — kept for legacy callers. */
+export function rowPassesHideZeroBalanceFilter(showZero, row) {
+  if (showZero) return true;
+  return rowHasNonZeroBalance(row);
 }
 
 export function normalizeRateRowsByCrDr(leftRows, rightRows, isRate) {
@@ -238,21 +233,29 @@ export function applyPaymentWinLossFilters(rawLeft, rawRight, { showPaymentOnly,
     }
   };
 
+  const winLossAmountNonZero = (row) => {
+    const probeFull =
+      row.win_loss_full !== undefined && row.win_loss_full !== null && String(row.win_loss_full).trim() !== ""
+        ? String(row.win_loss_full).replace(/,/g, "").trim()
+        : null;
+    const probes = probeFull != null ? [probeFull, row.win_loss] : [row.win_loss];
+    for (const candidate of probes) {
+      const wl = parseBalanceValue(candidate);
+      if (wl === null) continue;
+      try {
+        if (MoneyDecimal.toDecimal(wl, 0).abs().gt(eps)) return true;
+      } catch {
+        if (Math.abs(wl) > 1e-5) return true;
+      }
+    }
+    return false;
+  };
+
   const hasWinLoss = (row) => {
     if (flagToBool(row.has_win_loss_transactions) || flagToBool(row.has_period_id_product_rows)) {
       return true;
     }
-    const rawWinLoss =
-      row.win_loss_full !== undefined && row.win_loss_full !== null && String(row.win_loss_full).trim() !== ""
-        ? String(row.win_loss_full).replace(/,/g, "").trim()
-        : row.win_loss;
-    const wl = parseBalanceValue(rawWinLoss);
-    if (wl === null) return false;
-    try {
-      return MoneyDecimal.toDecimal(wl, 0).abs().gt(eps);
-    } catch {
-      return Math.abs(wl) > 1e-5;
-    }
+    return winLossAmountNonZero(row);
   };
 
   let shouldShow = () => true;
@@ -272,11 +275,20 @@ export function applyPaymentWinLossFilters(rawLeft, rawRight, { showPaymentOnly,
   };
 }
 
-export function applyZeroBalanceFilter(filteredLeft, filteredRight, showZeroBalance) {
-  const fn = (row) => rowPassesHideZeroBalanceFilter(showZeroBalance, row);
+export function applyZeroBalanceFilter(
+  filteredLeft,
+  filteredRight,
+  showZeroBalance,
+  { showCaptureOnly = false, showPaymentOnly = false } = {},
+) {
+  // Any visibility toggle: keep upstream rows (incl. balance 0.00 when W/L or Payment filter matched).
+  if (showZeroBalance || showCaptureOnly || showPaymentOnly) {
+    return { left: filteredLeft, right: filteredRight };
+  }
+  // Default: hide rows whose ending balance is 0.00.
   return {
-    left: filteredLeft.filter(fn),
-    right: filteredRight.filter(fn),
+    left: filteredLeft.filter(rowHasNonZeroBalance),
+    right: filteredRight.filter(rowHasNonZeroBalance),
   };
 }
 
@@ -408,30 +420,51 @@ export function resolveGridRowToAccountOption(row, accountOptions) {
   };
 }
 
+/** One row per currency code (scope APIs may return same code with different currency ids). */
+export function dedupeCurrencyRowsByCode(rows) {
+  const byCode = new Map();
+  for (const row of rows) {
+    const code = String(row?.code || row?.currency || "")
+      .trim()
+      .toUpperCase();
+    if (!code || byCode.has(code)) continue;
+    byCode.set(code, { ...row, code });
+  }
+  return [...byCode.values()];
+}
+
 /**
  * Apply saved API/global/local order to currency rows from get_company_currencies_api.
  */
-export function orderCurrencyRows(orderedData, orderData) {
-  let ordered = [...orderedData];
+export function orderCurrencyRows(orderedData, orderData, explicitCompanyId = null) {
+  let ordered = dedupeCurrencyRowsByCode(orderedData);
   try {
-    let saved = null;
-    if (orderData && orderData.success && Array.isArray(orderData.data?.order) && orderData.data.order.length > 0) {
-      saved = JSON.stringify(orderData.data.order);
-    }
-    if (!saved) return ordered;
-
-    const order = JSON.parse(saved);
-    if (!Array.isArray(order) || order.length === 0) return ordered;
+    const companyId =
+      explicitCompanyId != null && explicitCompanyId !== ""
+        ? Number(explicitCompanyId)
+        : orderData?.data?.company_id;
+    const savedOrder = resolveSavedCurrencyOrder(
+      companyId,
+      orderData?.success ? orderData?.data?.order : null,
+    );
+    if (!savedOrder?.length) return ordered;
 
     const normalized = [];
-    order.forEach((code) => {
+    savedOrder.forEach((code) => {
       const upper = String(code || "")
         .trim()
         .toUpperCase();
       if (!upper || upper === "ALL") return;
       if (!normalized.includes(upper)) normalized.push(upper);
     });
-    const byCode = new Map(ordered.map((c) => [String(c.code || "").trim().toUpperCase(), c]));
+    const byCode = new Map(
+      ordered.map((c) => [
+        String(c.code || c.currency || "")
+          .trim()
+          .toUpperCase(),
+        c,
+      ]),
+    );
     const out = [];
     normalized.forEach((upper) => {
       if (byCode.has(upper)) {
@@ -471,7 +504,10 @@ export function countDisplayedRows(rawSearchData, searchState, txType) {
     showCaptureOnly: searchState.showCaptureOnly,
     showZeroBalance: searchState.showZeroBalance,
   });
-  const z = applyZeroBalanceFilter(pf.filteredLeft, pf.filteredRight, searchState.showZeroBalance);
+  const z = applyZeroBalanceFilter(pf.filteredLeft, pf.filteredRight, searchState.showZeroBalance, {
+    showCaptureOnly: searchState.showCaptureOnly,
+    showPaymentOnly: searchState.showPaymentOnly,
+  });
   const norm = normalizeRateRowsByCrDr(z.left, z.right, txType === "RATE");
   return (norm.leftRows?.length || 0) + (norm.rightRows?.length || 0);
 }

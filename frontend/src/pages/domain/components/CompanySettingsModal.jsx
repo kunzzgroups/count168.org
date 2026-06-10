@@ -1,6 +1,17 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { notifySessionRefreshRequested } from "../../../utils/company/companySessionEvents.js";
 import { showDomainAlert } from "./DomainNotification.jsx";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
+import FormDateField from "../../../components/FormDateField.jsx";
+import MaintenanceCalendarPopup from "../../../components/MaintenanceCalendarPopup.jsx";
+import {
+  bindMaintenanceCalendarDismissListeners,
+  closeMaintenanceCalendarPopup,
+  ensureMaintenanceDateRangePicker,
+} from "../../../utils/date/dateRangePicker.js";
+import { parseDdMmYyyyToYmd } from "../../../utils/date/dateUtils.js";
 import {
   SINGLE_CATEGORY_MODE,
   calculateExpirationDate,
@@ -13,6 +24,8 @@ import {
   sumFeeShareRolePercentages,
   computeShareTotals,
   formatShareRowAmount2,
+  resolveDomainFeePriceForPeriod,
+  forceUppercaseValue,
 } from "../domainHelpers.js";
 import AddAccountModal from "./AddAccountModal.jsx";
 import { getDomainText } from "../../../translateFile/pages/domainTranslate.js";
@@ -27,36 +40,101 @@ const PERMISSION_LIST = [
 ];
 
 const SHARE_ROLES = ["profit", "sales", "cs", "it"];
+const START_DATE_FIELD_KEY = "company_exp_start_date";
+const START_DATE_FROM_ID = `${START_DATE_FIELD_KEY}_drp_from`;
+
+const MONTH_LABELS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_LABELS_ZH = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
+const WEEKDAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WEEKDAYS_ZH = ["日", "一", "二", "三", "四", "五", "六"];
 
 /**
  * Company Settings Modal — expiration date + permissions + share %
  *
  * Props:
  *   company          — the tempCompanies entry being edited (snapshot for cancel)
- *   domainFeePrice   — number, for share amount calculation
+ *   domainPeriodPrices — { 7days, 1month, … } for share amount by selected period
  *   sessionCompanyId — fallback if company.company_id is missing
  *   sessionCompanyCode — used for adding accounts
+ *   excludeOwnerId — edit domain: exclude current owner from global code check
+ *   siblingGroupCodes — other group IDs in the form (for local rename validation)
+ *   siblingCompanyCodes — other company IDs in the form (for local rename validation)
  *   onSave(updatedCompany) — callback with updated company data
  *   onClose()
  */
 export default function CompanySettingsModal({
   lang = "en",
+  tenantType = "company",
   company: initCompany,
-  domainFeePrice,
+  domainPeriodPrices,
   sessionCompanyId,
   sessionCompanyCode,
+  excludeOwnerId = null,
+  siblingGroupCodes = [],
+  siblingCompanyCodes = [],
   onSave,
   onClose,
 }) {
+  const isGroup = tenantType === "group";
+  const originalEntityCode = isGroup
+    ? String(initCompany?.group_code ?? initCompany?.company_id ?? "").trim().toUpperCase()
+    : String(initCompany?.company_id ?? "").trim().toUpperCase();
+  const renameLocked = originalEntityCode === "C168";
+  const { submitting, runGuarded } = useSubmitGuard(true);
+  const [entityCodeInput, setEntityCodeInput] = useState(originalEntityCode);
   const isZh = lang === "zh";
   const t = (key, params) => getDomainText(lang, key, params);
   // Local copy of company being edited
   const [company, setCompany] = useState(() => JSON.parse(JSON.stringify(initCompany)));
-  const [period, setPeriod] = useState("");
-  const [startDate, setStartDate] = useState(initCompany.startDate || new Date().toISOString().split("T")[0]);
+  const [period, setPeriod] = useState(initCompany.selectedPeriod || "");
+  const [startDate, setStartDate] = useState(() => {
+    const raw = initCompany.startDate || "";
+    const ymd = raw.includes("-") ? raw.split("T")[0] : parseDdMmYyyyToYmd(raw);
+    return ymd || new Date().toISOString().split("T")[0];
+  });
   const [expDisplay, setExpDisplay] = useState(initCompany.expiration_date ? formatDate(initCompany.expiration_date) : t("notSet"));
-  const [permissions, setPermissions] = useState(Array.isArray(initCompany.permissions) ? initCompany.permissions : []);
+  const [permissions, setPermissions] = useState(
+    isGroup ? [] : (Array.isArray(initCompany.permissions) ? initCompany.permissions : [])
+  );
   const [chargeOnSave, setChargeOnSave] = useState(!!initCompany.apply_commission_payments_on_domain_save);
+  const startDateHandlerRef = useRef(null);
+
+  const monthLabels = isZh ? MONTH_LABELS_ZH : MONTH_LABELS_EN;
+  const weekdaysShort = isZh ? WEEKDAYS_ZH : WEEKDAYS_EN;
+
+  useEffect(() => {
+    startDateHandlerRef.current = (iso) => {
+      if (iso) setStartDate(iso);
+    };
+  });
+
+  useEffect(() => {
+    bindMaintenanceCalendarDismissListeners();
+    ensureMaintenanceDateRangePicker();
+    window.MaintenanceDateRangePicker?.init?.({
+      allowEmpty: false,
+      placeholder: t("selectStartDateHint"),
+      clearDateLabel: t("clearDate"),
+      monthLabels,
+      onChange: () => {
+        const binding = window.MaintenanceDateRangePicker?.getActiveRangeBinding?.() || {};
+        if (binding.dateFromId !== START_DATE_FROM_ID) return;
+        const fromDmy = document.getElementById(START_DATE_FROM_ID)?.value?.trim() || "";
+        const iso = parseDdMmYyyyToYmd(fromDmy);
+        startDateHandlerRef.current?.(iso);
+      },
+    });
+    window.MaintenanceDateRangePicker?.bindPickers?.();
+    window.MaintenanceDateRangePicker?.setLocaleStrings?.({
+      placeholder: t("selectStartDateHint"),
+      clearDateLabel: t("clearDate"),
+      monthLabels,
+    });
+
+    return () => {
+      closeMaintenanceCalendarPopup();
+    };
+  }, [monthLabels, t]);
 
   // Share %
   const [shareAccounts, setShareAccounts] = useState([]);       // for sales/cs/it
@@ -70,12 +148,18 @@ export default function CompanySettingsModal({
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [addAccountRole, setAddAccountRole] = useState("");
 
+  const sharePickerCompanyCode = "C168";
+
   const loadAccounts = useCallback(() => {
     fetch(buildApiUrl("api/domain/domain_api.php"), {
       cache: "no-cache",
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "get_company_share_settings", company_id: company.company_id }),
+      body: JSON.stringify({
+        action: "get_company_share_settings",
+        // 账户下拉始终来自 C168；Group 不传 group_code，避免误用集团账本账户列表
+        company_id: isGroup ? sharePickerCompanyCode : company.company_id,
+      }),
     })
       .then((r) => r.json())
       .then((res) => {
@@ -87,13 +171,16 @@ export default function CompanySettingsModal({
         }
       })
       .catch(() => { setShareAccounts([]); setShareAccountsProfit([]); });
-  }, [company.company_id, fsa]);
+  }, [company.company_id, fsa, isGroup]);
 
   // Load share accounts from API
   useEffect(() => {
     loadAccounts();
 
-    // Load permissions if not cached
+    if (isGroup) {
+      return;
+    }
+
     if (!Array.isArray(initCompany.permissions) || initCompany.permissions.length === 0) {
       fetch(buildApiUrl("api/domain/domain_api.php"), {
         cache: "no-cache",
@@ -120,8 +207,11 @@ export default function CompanySettingsModal({
     const base = startDate || new Date().toISOString().split("T")[0];
     const exp = calculateExpirationDate(period, base);
     setExpDisplay(formatDate(exp));
-    setCompany((prev) => ({ ...prev, expiration_date: exp, selectedPeriod: period }));
-  }, [period, startDate, company.expiration_date, t]);
+    setCompany((prev) => {
+      if (prev.expiration_date === exp && prev.selectedPeriod === period) return prev;
+      return { ...prev, expiration_date: exp, selectedPeriod: period };
+    });
+  }, [period, startDate, t]);
 
   function togglePermission(val) {
     if (SINGLE_CATEGORY_MODE) {
@@ -133,8 +223,91 @@ export default function CompanySettingsModal({
     }
   }
 
+  async function validateEntityCodeForSave() {
+    const newCode = entityCodeInput.trim().toUpperCase();
+    if (!newCode) {
+      showDomainAlert(isGroup ? t("pleaseEnterGroupId") : t("pleaseEnterCompanyId"), "danger");
+      return null;
+    }
+    if (renameLocked) {
+      if (newCode !== originalEntityCode) {
+        showDomainAlert(t("cannotRenameC168"), "danger");
+      }
+      return originalEntityCode;
+    }
+    if (newCode === "C168") {
+      showDomainAlert(t("cannotRenameToC168"), "danger");
+      return null;
+    }
+    if (newCode === originalEntityCode) {
+      return newCode;
+    }
+
+    const groupSet = new Set((siblingGroupCodes || []).map((c) => String(c || "").trim().toUpperCase()).filter(Boolean));
+    const companySet = new Set((siblingCompanyCodes || []).map((c) => String(c || "").trim().toUpperCase()).filter(Boolean));
+
+    if (isGroup) {
+      if (companySet.has(newCode)) {
+        showDomainAlert(t("cannotAddGroupUsesCompanyId", { id: newCode }), "danger");
+        return null;
+      }
+      if (groupSet.has(newCode)) {
+        showDomainAlert(t("groupIdAlreadyExists"), "danger");
+        return null;
+      }
+    } else {
+      if (groupSet.has(newCode)) {
+        showDomainAlert(t("cannotAddCompanyUsesGroupId", { id: newCode }), "danger");
+        return null;
+      }
+      if (companySet.has(newCode)) {
+        showDomainAlert(t("companyIdAlreadyAdded"), "danger");
+        return null;
+      }
+    }
+
+    try {
+      const payload = {
+        action: "validate_domain_code",
+        code: newCode,
+      };
+      if (excludeOwnerId !== undefined && excludeOwnerId !== null && excludeOwnerId !== "") {
+        payload.exclude_owner_id = Number(excludeOwnerId);
+      }
+      const res = await fetch(buildApiUrl("api/domain/domain_api.php"), {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        showDomainAlert(json.message || t("operationFailed"), "danger");
+        return null;
+      }
+    } catch {
+      showDomainAlert(t("validateDomainCodeUnavailable"), "danger");
+      return null;
+    }
+
+    return newCode;
+  }
+
+  function buildRenameFields(newCode) {
+    if (newCode === originalEntityCode) {
+      return {};
+    }
+    const renameFrom = String(
+      (isGroup ? initCompany?.previous_group_code : initCompany?.previous_company_id) ?? originalEntityCode
+    ).trim().toUpperCase();
+    return isGroup
+      ? { previous_group_code: renameFrom }
+      : { previous_company_id: renameFrom };
+  }
+
   function handleReset() {
     const today = new Date().toISOString().split("T")[0];
+    setEntityCodeInput(originalEntityCode);
     setStartDate(today);
     setPeriod("");
     setExpDisplay(t("notSet"));
@@ -148,19 +321,26 @@ export default function CompanySettingsModal({
     setFsa(defaultFeeShareAllocations());
     setChargeOnSave(false);
     setExpandedCards({});
-    if (SINGLE_CATEGORY_MODE) {
+    if (isGroup) {
+      setPermissions([]);
+    } else if (SINGLE_CATEGORY_MODE) {
       setPermissions(["Games"]);
     } else {
       setPermissions(["Games", "Bank", "Loan", "Rate", "Money"]);
     }
   }
 
-  function handleSave() {
-    // Validate permissions
-    if (SINGLE_CATEGORY_MODE) {
+  async function handleSave() {
+    // Validate permissions (company only — groups do not use Process List / Data Capture categories)
+    if (!isGroup && SINGLE_CATEGORY_MODE) {
       if (permissions.length === 0) { showDomainAlert(t("pleaseSelectOneCategory"), "danger"); return; }
       if (permissions.length > 1)  { showDomainAlert(t("onlyOneCategoryAtTime"), "danger"); return; }
     }
+
+    const newEntityCode = await validateEntityCodeForSave();
+    if (!newEntityCode) return;
+    const apiEntityCode = originalEntityCode;
+    const renameFields = buildRenameFields(newEntityCode);
 
     let expDate = company.expiration_date || null;
     if (period) {
@@ -170,13 +350,34 @@ export default function CompanySettingsModal({
 
     const cleanFsa = pruneEmptyShareRows(fsa);
 
+    if (isGroup) {
+      const updated = {
+        ...company,
+        group_code: newEntityCode,
+        company_id: newEntityCode,
+        ...renameFields,
+        expiration_date: expDate,
+        selectedPeriod: period || company.selectedPeriod,
+        startDate,
+        isExtending: company.isExtending,
+        originalExpirationDate: company.originalExpirationDate,
+        permissions: [],
+        fee_share_allocations: cleanFsa,
+        apply_commission_payments_on_domain_save: chargeOnSave,
+      };
+      showDomainAlert(t("groupUpdatedShareAfterSave"));
+      onSave(updated);
+      notifySessionRefreshRequested();
+      return;
+    }
+
     const permReq = fetch(buildApiUrl("api/domain/domain_api.php"), {
       cache: "no-cache",
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "update_company_permissions",
-        company_id: company.company_id,
+        company_id: apiEntityCode,
         permissions,
         expiration_date: expDate || null,
       }),
@@ -188,7 +389,7 @@ export default function CompanySettingsModal({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "save_company_share_settings",
-        company_id: company.company_id,
+        company_id: apiEntityCode,
         fee_share_allocations: cleanFsa,
         apply_commission_payments: chargeOnSave,
       }),
@@ -214,6 +415,8 @@ export default function CompanySettingsModal({
         }
         onSave({
           ...company,
+          company_id: newEntityCode,
+          ...renameFields,
           expiration_date: expDate,
           selectedPeriod: period || company.selectedPeriod,
           startDate,
@@ -223,15 +426,28 @@ export default function CompanySettingsModal({
           fee_share_allocations: cleanFsa,
           apply_commission_payments_on_domain_save: chargeOnSave,
         });
+        notifySessionRefreshRequested();
       })
       .catch(() => {
         showDomainAlert(t("serverUnreachableChangesKept"), "danger");
-        onSave({ ...company, permissions: [...permissions], fee_share_allocations: pruneEmptyShareRows(fsa), apply_commission_payments_on_domain_save: chargeOnSave });
+        onSave({
+          ...company,
+          company_id: newEntityCode,
+          ...renameFields,
+          permissions: [...permissions],
+          fee_share_allocations: pruneEmptyShareRows(fsa),
+          apply_commission_payments_on_domain_save: chargeOnSave,
+        });
       });
   }
 
-  // ─── Share % helpers ───────────────────────────────────────────────────────
-  const totals = computeShareTotals(fsa, domainFeePrice);
+  // ─── Share % helpers（周期变更时按 Price 中对应金额重算，含 C168 行） ─────
+  const effectiveFeePrice = resolveDomainFeePriceForPeriod(
+    domainPeriodPrices,
+    period,
+    isGroup ? "group" : "company"
+  );
+  const totals = computeShareTotals(fsa, effectiveFeePrice);
 
   function updateShareRow(role, idx, field, value) {
     setFsa((prev) => {
@@ -287,6 +503,7 @@ export default function CompanySettingsModal({
   const companySettingsOverlayZ = 2147483001;
 
   return (
+    <>
     <DomainModalPortal>
       <div
         style={{
@@ -302,8 +519,10 @@ export default function CompanySettingsModal({
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
         <div className="company-settings-react-modal modal-content company-settings-modal-content--split relative mx-auto mt-[2%] overflow-hidden rounded-2xl border-0 bg-white shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)]">
-        <div className="modal-header company-settings-modal-header border-b border-slate-200 bg-slate-50 px-[clamp(22px,1.67vw,32px)] py-[clamp(10px,1.04vw,20px)]">
-          <h2 className="m-0 text-[clamp(14px,1.25vw,24px)] font-bold text-slate-800">{t("companySettings")}</h2>
+        <div className="modal-header company-settings-modal-header">
+          <h2 className="m-0 bg-transparent p-0">
+            {isGroup ? t("groupSettings") : t("companySettings")}
+          </h2>
           <button
             type="button"
             className="account-close"
@@ -315,40 +534,60 @@ export default function CompanySettingsModal({
           <div className="company-settings-split">
             {/* ── Left: General ── */}
             <div id="companySettingsPanelGeneral" className="company-settings-split-left">
-              <h3 className="company-settings-column-title">{t("companySettingsLower")}</h3>
+              <h3 className="company-settings-column-title">
+                {isGroup ? t("groupSettingsLower") : t("companySettingsLower")}
+              </h3>
               <div className="mb-[clamp(6px,0.625vw,12px)]">
-                <label id="expDateCompanyName" className="company-settings-company-name-label">
-                  {t("companyPrefix")}{company.company_id}
+                <label htmlFor="entityCodeRename" className="cs-company-field-label">
+                  {isGroup ? t("groupIdLabel") : t("companyIdLabel")}
                 </label>
+                <input
+                  id="entityCodeRename"
+                  type="text"
+                  className="company-settings-date-row-control company-settings-rename-input"
+                  value={entityCodeInput}
+                  disabled={renameLocked}
+                  placeholder={t("renameIdPlaceholder")}
+                  onChange={(e) => setEntityCodeInput(forceUppercaseValue(e.target.value))}
+                />
               </div>
               {/* Start Date + Period */}
               <div className="company-settings-date-row">
-                <div className="form-group company-settings-field-half">
-                  <label className="cs-company-field-label" htmlFor="expDateStartDate">{t("startDate")}</label>
-                  <input
-                    type="date"
-                    id="expDateStartDate"
+                <div className="company-settings-field-half company-settings-start-date-field">
+                  <FormDateField
+                    fieldKey={START_DATE_FIELD_KEY}
+                    htmlFor="expDateStartDate"
+                    label={t("startDate")}
+                    labelClassName="cs-company-field-label"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    placeholder={t("pickDate")}
+                    allowClear={false}
+                    onValueChange={setStartDate}
+                    className="company-settings-form-date-field"
+                    wrapClassName="company-settings-form-datepicker-wrap"
+                    inputClassName="company-settings-date-row-control company-settings-form-datepicker-input"
                   />
                   <small id="expDateStartDateHelp" className="company-settings-start-hint">
                     {t("selectStartDateHint")}
                   </small>
                 </div>
-                <div className="form-group company-settings-field-half company-settings-field-half--period">
+                <div className="company-settings-field-half company-settings-field-half--period">
                   <label className="cs-company-field-label" htmlFor="expDatePeriod">{t("period")}</label>
-                  <select
-                    id="expDatePeriod"
-                    value={period}
-                    onChange={(e) => setPeriod(e.target.value)}
-                  >
+                  <div className="company-settings-period-wrap">
+                    <select
+                      id="expDatePeriod"
+                      className="company-settings-date-row-control company-settings-period-select"
+                      value={period}
+                      onChange={(e) => setPeriod(e.target.value)}
+                    >
                     <option value="">{t("selectPeriod")}</option>
                     <option value="7days">{t("sevenDays")}</option>
                     <option value="1month">{t("oneMonth")}</option>
                     <option value="3months">{t("threeMonths")}</option>
                     <option value="6months">{t("sixMonths")}</option>
                     <option value="1year">{t("oneYear")}</option>
-                  </select>
+                    </select>
+                  </div>
                   <small className="company-settings-start-hint company-settings-start-hint--align-spacer" aria-hidden="true">
                     &#8203;
                   </small>
@@ -361,8 +600,9 @@ export default function CompanySettingsModal({
                   {expDisplay}
                 </div>
               </div>
-              {/* Permissions */}
-              <div className="mb-2">
+              {/* Permissions — company only */}
+              {!isGroup && (
+              <div className="company-settings-permissions-block">
                 <label className="cs-company-field-label company-settings-permissions-label">{t("permissionsLabel")}</label>
                 <div className="permission-toggle-row">
                   {PERMISSION_LIST.map(({ value, id, labelSuffix }) => (
@@ -386,6 +626,7 @@ export default function CompanySettingsModal({
                 </div>
                 <p className="company-settings-permissions-hint">{t("permissionsHintLine")}</p>
               </div>
+              )}
             </div>
 
             <div className="company-settings-split-divider" role="separator" aria-orientation="vertical" aria-hidden="true" />
@@ -557,7 +798,7 @@ export default function CompanySettingsModal({
               </div>
 
               {shareAccounts.length === 0 && shareAccountsProfit.length === 0 && (
-                <div style={{ display: "block", color: "#64748b", fontSize: 12, marginTop: 8 }}>
+                <div className="company-settings-empty-hint">
                   {t("noLinkedAccounts")}
                 </div>
               )}
@@ -566,7 +807,9 @@ export default function CompanySettingsModal({
 
           {/* Footer actions — 与量测图：Save 蓝 / Reset 红 / Cancel 灰 */}
           <div className="form-actions company-settings-form-actions">
-            <button type="button" className="btn btn-save" onClick={handleSave}>{t("save")}</button>
+            <button type="button" className="btn btn-save" disabled={submitting} onClick={() => runGuarded(handleSave)}>
+              {submitting ? t("saving") : t("save")}
+            </button>
             <button type="button" className="btn btn-reset-company" onClick={handleReset}>{t("reset")}</button>
             <button type="button" className="btn btn-cancel" onClick={onClose}>{t("cancel")}</button>
           </div>
@@ -576,8 +819,8 @@ export default function CompanySettingsModal({
         {showAddAccount && (
           <AddAccountModal
             lang={lang}
-            companyId={company.id || sessionCompanyId}
-            companyCode={company.company_id || sessionCompanyCode}
+            companyId={sessionCompanyId}
+            companyCode={sharePickerCompanyCode}
             preferredRole={addAccountRole}
             onClose={() => setShowAddAccount(false)}
             onSuccess={() => {
@@ -587,5 +830,17 @@ export default function CompanySettingsModal({
         )}
       </div>
     </DomainModalPortal>
+    {typeof document !== "undefined"
+      ? createPortal(
+          <MaintenanceCalendarPopup
+            className="calendar-popup--domain-company-settings"
+            monthLabels={monthLabels}
+            weekdaysShort={weekdaysShort}
+            clearLabel={t("clearDate")}
+          />,
+          document.body
+        )
+      : null}
+    </>
   );
 }

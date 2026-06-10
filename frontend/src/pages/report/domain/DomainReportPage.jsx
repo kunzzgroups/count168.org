@@ -1,12 +1,27 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
-import { notifyCompanySessionUpdated } from "../../../utils/company/companySessionEvents.js";
 import {
   getCachedOwnerCompanies,
-  loadOwnerCompaniesCached,
-  normalizeOwnerCompanyRow,
-  persistDashboardGroupFilter,
+  DASHBOARD_GROUP_FILTER_KEY,
+  DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
+  isDashboardGroupOnlyMode,
+  persistDashboardFilterState,
+  persistDashboardGroupOnlyMode,
+  resolveBootCompanyId,
+  resolveGcFilterBootCompanyId,
+  readPersistedDashboardGcFilter,
+  readDashboardSelectedCompanyId,
+  companiesInGroupList,
+  resolveInitialSelectedGroupFromSession,
+  sortedUniqueGroupIds,
+  fetchOwnerCompaniesAll,
 } from "../../../utils/company/sharedCompanyFilter.js";
+import {
+  resolveReportCompanyWhenClosingGroup,
+  resolveReportGroupOnlyBoot,
+} from "../shared/reportGcBoot.js";
+import { useReportGroupCompanyFilter } from "../shared/useReportGroupCompanyFilter.js";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import "../../../../public/css/accountCSS.css";
 import "../../../../public/css/transaction.css";
@@ -18,15 +33,17 @@ import "../../../../public/css/date-range-picker.css";
 import "../../../../public/css/maintenance_notifications.css";
 import { fetchDomainReport, fetchProcesses } from "./domainReportApi.js";
 import {
+  isDomainGroupProcessSelection,
+  mapDomainGroupProcesses,
+} from "./domainReportGroupProcesses.js";
+import {
   fetchCompanyPermissions,
-  fetchCurrencies,
   isBankOnlyCategoryCompany,
 } from "../shared/reportCompanyApi.js";
 import { formatYmd } from "../../../utils/date/dateUtils.js";
 import { getReportText, REPORT_I18N } from "../../../translateFile/pages/reportTranslate.js";
 import DomainReportFilters from "./DomainReportFilters.jsx";
 import DomainReportTable from "./DomainReportTable.jsx";
-import { useReportGcSwitcher } from "../shared/useReportGcSwitcher.js";
 import { reportToastMaintenanceVariant } from "../shared/reportAmountFormat.js";
 import {
   buildReportSnapshotKey,
@@ -34,17 +51,27 @@ import {
   setReportSnapshot,
 } from "../shared/reportPageSnapshotCache.js";
 import { useReportAbortSeq } from "../shared/useReportAbortSeq.js";
+import { customerReportScopeCacheKey } from "../shared/reportScope.js";
+import {
+  domainReportScopeIsReady,
+  domainReportUsesSalaryBonusProcesses,
+  resolveDomainReportScope,
+} from "./domainReportScope.js";
 import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
+import { canUseGroupOnlyMode } from "../../../utils/company/loginScope.js";
+import { syncCompanySessionInBackground } from "../../../utils/company/companySessionSwitchCore.js";
 
 const REPORT_PAGE_KEY = "domain";
 const REPORT_FETCH_DEBOUNCE_MS = 150;
 
-function resolveInitialCompanyId() {
+function resolveReportBootCompanyId() {
   const cached = getCachedOwnerCompanies();
   const url = new URL(window.location.href);
   const queryCompany = url.searchParams.get("company_id");
-  const id = queryCompany || cached?.[0]?.id || null;
-  return id ? Number(id) : null;
+  return resolveBootCompanyId({
+    urlCompanyId: queryCompany,
+    defaultRowId: cached?.[0]?.id,
+  });
 }
 
 export default function DomainReportPage() {
@@ -56,22 +83,20 @@ export default function DomainReportPage() {
 
   const [companies, setCompanies] = useState(() => getCachedOwnerCompanies() || []);
 
-  const [companyId, setCompanyId] = useState(resolveInitialCompanyId);
-  const [groupFilterKind, setGroupFilterKind] = useState("follow");
-  const [companyHighlightId, setCompanyHighlightId] = useState(null);
-  const switchCompanySeqRef = useRef(0);
+  const [companyId, setCompanyId] = useState(resolveReportBootCompanyId);
+  const [selectedGroup, setSelectedGroup] = useState(() => {
+    const g = sessionStorage.getItem(DASHBOARD_GROUP_FILTER_KEY);
+    return g ? String(g).trim().toUpperCase() : null;
+  });
+  const companySessionAbortRef = useRef(null);
   const [processId, setProcessId] = useState("");
-  const [selectedCurrencies, setSelectedCurrencies] = useState([]);
-  const [showAllCurrencies, setShowAllCurrencies] = useState(false);
-  /** Avoid report fetch before currency filter is resolved (prevents double load on entry). */
-  const [currencyFilterReady, setCurrencyFilterReady] = useState(false);
+  const [metaReady, setMetaReady] = useState(false);
 
   const today = useMemo(() => new Date(), []);
   const [dateFrom, setDateFrom] = useState(formatYmd(today));
   const [dateTo, setDateTo] = useState(formatYmd(today));
 
   const [processes, setProcesses] = useState([]);
-  const [currencyList, setCurrencyList] = useState([]);
   const [reportData, setReportData] = useState(null);
   const reportDataRef = useRef(null);
   const [reportSyncing, setReportSyncing] = useState(false);
@@ -85,28 +110,10 @@ export default function DomainReportPage() {
     useReportAbortSeq();
   const pageBootOnceRef = useRef(false);
   const prevCompanyIdRef = useRef(null);
-  /** Per-company currency filter: { [companyId]: { selectedCurrencies, showAllCurrencies } } */
-  const currencyPrefsByCompanyRef = useRef({});
-  const selectedCurrenciesRef = useRef(selectedCurrencies);
-  const showAllCurrenciesRef = useRef(showAllCurrencies);
-
-  useEffect(() => {
-    selectedCurrenciesRef.current = selectedCurrencies;
-  }, [selectedCurrencies]);
-
-  useEffect(() => {
-    showAllCurrenciesRef.current = showAllCurrencies;
-  }, [showAllCurrencies]);
-
+  const prevScopeKeyRef = useRef(null);
   useEffect(() => {
     reportDataRef.current = reportData;
   }, [reportData]);
-
-  const { allCompanyButtons, groupIds, selectedGroupKey, companyButtons } = useReportGcSwitcher(
-    companies,
-    companyId,
-    groupFilterKind,
-  );
 
   useEffect(() => {
     const onStorage = (e) => {
@@ -157,9 +164,13 @@ export default function DomainReportPage() {
     const cached = getCachedOwnerCompanies();
     const url = new URL(window.location.href);
     const queryCompany = url.searchParams.get("company_id");
-    let effective = queryCompany || me.company_id || cached?.[0]?.id || null;
-    effective = effective ? Number(effective) : null;
-    if (effective) setCompanyId(effective);
+    const effective = resolveBootCompanyId({
+      urlCompanyId: queryCompany,
+      sessionCompanyId: me.company_id,
+      defaultRowId: cached?.[0]?.id,
+    });
+    if (isDashboardGroupOnlyMode()) return;
+    if (effective != null) setCompanyId(effective);
   }, [me, companyId]);
 
   useEffect(() => {
@@ -179,25 +190,65 @@ export default function DomainReportPage() {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await loadOwnerCompaniesCached(async () => {
-          const compRes = await fetch(buildApiUrl("api/transactions/get_owner_companies_api.php?all=1"), {
-            credentials: "include",
-          });
-          const compJson = await compRes.json();
-          return Array.isArray(compJson?.data) ? compJson.data.map(normalizeOwnerCompanyRow) : [];
-        });
+        const rows = await fetchOwnerCompaniesAll();
         if (cancelled) return;
         setCompanies(rows);
 
         const url = new URL(window.location.href);
         const queryCompany = url.searchParams.get("company_id");
-        let effective = queryCompany || u.company_id || rows[0]?.id || null;
-        effective = effective ? Number(effective) : null;
-        if (effective) {
-          setCompanyId((prev) => (prev != null ? prev : effective));
-          setGroupFilterKind("follow");
-          void checkBankOnly(effective);
+        const persistedGc = readPersistedDashboardGcFilter();
+        const savedCompanyId = readDashboardSelectedCompanyId();
+        const bootGc = resolveGcFilterBootCompanyId({
+          urlCompanyId: queryCompany,
+          sessionCompanyId: u.company_id,
+          defaultRowId: rows[0]?.id,
+        });
+        const groupFilterOptOut =
+          typeof sessionStorage !== "undefined" &&
+          sessionStorage.getItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY) === "1";
+        let bootGroup = groupFilterOptOut
+          ? null
+          : persistedGc.selectedGroup ||
+            bootGc.selectedGroup ||
+            resolveInitialSelectedGroupFromSession(rows, null, u);
+        const groupOnlyBoot = groupFilterOptOut
+          ? false
+          : resolveReportGroupOnlyBoot(u, bootGc, persistedGc, bootGroup);
+        let nextCompanyId =
+          companyId != null ? companyId : groupOnlyBoot ? null : bootGc.companyId;
+        if (groupFilterOptOut && nextCompanyId == null) {
+          const pick = resolveReportCompanyWhenClosingGroup(
+            u,
+            rows,
+            null,
+            sortedUniqueGroupIds(rows),
+          );
+          if (pick?.id != null) nextCompanyId = Number(pick.id);
         }
+        if (nextCompanyId == null && savedCompanyId != null && bootGroup && !groupOnlyBoot) {
+          const inGroup = companiesInGroupList(rows, bootGroup).some(
+            (c) => Number(c.id) === Number(savedCompanyId),
+          );
+          if (inGroup) nextCompanyId = savedCompanyId;
+        }
+        if (nextCompanyId != null) {
+          persistDashboardGroupOnlyMode(false);
+          if (bootGroup) {
+            persistDashboardFilterState(bootGroup, nextCompanyId, { allowGroupOnly: false });
+          }
+        } else if (groupOnlyBoot) {
+          persistDashboardGroupOnlyMode(true);
+        }
+        const row =
+          nextCompanyId != null
+            ? rows.find((c) => Number(c.id) === Number(nextCompanyId)) || null
+            : null;
+        if (!groupFilterOptOut) {
+          bootGroup = resolveInitialSelectedGroupFromSession(rows, row, u) || bootGroup;
+        }
+        setCompanyId((prev) => (prev != null ? prev : nextCompanyId));
+        setSelectedGroup(groupFilterOptOut ? null : bootGroup);
+        if (nextCompanyId != null) void checkBankOnly(nextCompanyId);
       } catch {
         if (!cancelled) navigate("/login", { replace: true });
       }
@@ -205,22 +256,152 @@ export default function DomainReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionReady, me, navigate]);
+  }, [sessionReady, me, navigate, companyId]);
+
+  useEffect(() => {
+    if (!companies.length) return;
+    const groupFilterOptOut =
+      typeof sessionStorage !== "undefined" &&
+      sessionStorage.getItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY) === "1";
+    if (groupFilterOptOut) {
+      setSelectedGroup((prev) => (prev == null ? prev : null));
+      return;
+    }
+    const row =
+      companyId != null
+        ? companies.find((c) => Number(c.id) === Number(companyId)) || null
+        : null;
+    setSelectedGroup((prev) => {
+      const resolved = resolveInitialSelectedGroupFromSession(companies, row, me);
+      if (resolved) return resolved;
+      const g = prev ? String(prev).trim().toUpperCase() : "";
+      if (g && sortedUniqueGroupIds(companies).includes(g)) return g;
+      return prev;
+    });
+  }, [companies, companyId, me]);
+
+  const checkBankOnly = useCallback(async (compId) => {
+    if (!compId) return;
+    try {
+      const comp = companies.find(c => Number(c.id) === Number(compId));
+      const perms = await fetchCompanyPermissions(comp?.company_id || "");
+      if (isBankOnlyCategoryCompany(perms)) {
+        window.location.assign(new URL("/process-list", window.location.origin).href);
+      }
+    } catch (err) {
+      console.error("Bank only check error:", err);
+    }
+  }, [companies]);
+
+  const handleClearCompany = useCallback(
+    (groupForScope) => {
+      const groupKey = String(groupForScope || selectedGroup || "")
+        .trim()
+        .toUpperCase();
+      persistDashboardFilterState(groupKey || null, null);
+      invalidateReportFetch();
+      flushSync(() => setCompanyId(null));
+      setError("");
+      setProcessId("");
+      if (reportDataRef.current != null) setReportSyncing(true);
+      setMetaReady(false);
+    },
+    [invalidateReportFetch, selectedGroup],
+  );
+
+  const onPrepareCompanySelect = useCallback((c) => {
+    const nextId = Number(c?.id);
+    if (!nextId) return;
+    const groupForPersist = c?.group_id ? String(c.group_id).trim().toUpperCase() : null;
+    persistDashboardFilterState(groupForPersist, nextId, { allowGroupOnly: false });
+    persistDashboardGroupOnlyMode(false);
+    flushSync(() => setCompanyId(nextId));
+    if (reportDataRef.current != null) setReportSyncing(true);
+    startTransition(() => {
+      setProcessId("");
+      setMetaReady(false);
+    });
+  }, []);
+
+  const onSwitchCompany = useCallback(
+    async (c) => {
+      if (!c?.id) return;
+      const nextId = Number(c.id);
+      const previousCompanyId = companyId;
+      void checkBankOnly(nextId);
+
+      companySessionAbortRef.current?.abort();
+      const ac = new AbortController();
+      companySessionAbortRef.current = ac;
+
+      const ok = await syncCompanySessionInBackground({
+        companyId: nextId,
+        sessionCompanyId: me?.company_id,
+        signal: ac.signal,
+        layoutSilent: true,
+        onFailure: () => {
+          if (previousCompanyId != null && Number(previousCompanyId) !== nextId) {
+            flushSync(() => setCompanyId(previousCompanyId));
+          }
+          setReportSyncing(false);
+          notify(t("switchFailed"), "danger");
+        },
+      });
+      if (!ok) return;
+    },
+    [checkBankOnly, companyId, me?.company_id, notify, t],
+  );
+
+  const {
+    groupIds,
+    companiesForPicker: companyButtons,
+    groupsAllMode,
+    groupAllMode,
+    handlePickAllGroups,
+    handlePickAllInGroup,
+    handlePickGroup,
+    handlePickCompany,
+    allowClearCompany,
+  } = useReportGroupCompanyFilter({
+    companies,
+    companyId,
+    selectedGroup,
+    setSelectedGroup,
+    onPrepareCompanySelect,
+    onSelectCompany: onSwitchCompany,
+    onClearCompany: handleClearCompany,
+    switchingCompany: false,
+    preferredCompanyId: companyId,
+  });
+
+  const reportScope = useMemo(
+    () =>
+      resolveDomainReportScope({
+        companies,
+        selectedGroup,
+        companyId,
+        groupsAllMode,
+        groupAllMode,
+      }),
+    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode],
+  );
+
+  const isGroupScope = domainReportUsesSalaryBonusProcesses(reportScope);
 
   const reportParams = useMemo(
     () => ({
       processId,
       dateFrom,
       dateTo,
-      companyId,
-      selectedCurrencies,
-      showAllCurrencies,
+      reportScope,
+      showAllCurrencies: true,
+      scopeKey: customerReportScopeCacheKey(reportScope),
     }),
-    [processId, dateFrom, dateTo, companyId, selectedCurrencies, showAllCurrencies],
+    [processId, dateFrom, dateTo, reportScope],
   );
 
   const loadReport = useCallback(async () => {
-    if (!companyId || !dateFrom || !dateTo) return;
+    if (!domainReportScopeIsReady(reportScope) || !dateFrom || !dateTo) return;
     const { signal, seq } = beginReportFetch();
     const quietRefresh = reportDataRef.current != null;
     if (quietRefresh) setReportSyncing(true);
@@ -248,91 +429,28 @@ export default function DomainReportPage() {
         setReportSyncing(false);
       }
     }
-  }, [companyId, dateFrom, dateTo, reportParams, beginReportFetch, isReportFetchCurrent, t, notify]);
-
-  const checkBankOnly = useCallback(async (compId) => {
-    if (!compId) return;
-    try {
-      const comp = companies.find(c => Number(c.id) === Number(compId));
-      const perms = await fetchCompanyPermissions(comp?.company_id || "");
-      if (isBankOnlyCategoryCompany(perms)) {
-        window.location.assign(new URL("/process-list", window.location.origin).href);
-      }
-    } catch (err) {
-      console.error("Bank only check error:", err);
-    }
-  }, [companies]);
-
-  const persistCurrencyPrefs = useCallback((compId, currencies, showAll) => {
-    if (!compId) return;
-    currencyPrefsByCompanyRef.current[Number(compId)] = {
-      selectedCurrencies: currencies,
-      showAllCurrencies: showAll,
-    };
-  }, []);
-
-  const applySavedCurrencyPrefs = useCallback((compId, curs) => {
-    const saved = currencyPrefsByCompanyRef.current[Number(compId)];
-    if (!saved) return false;
-    if (saved.showAllCurrencies) {
-      setShowAllCurrencies(true);
-      setSelectedCurrencies([]);
-      return true;
-    }
-    if (saved.selectedCurrencies?.length > 0) {
-      const valid = saved.selectedCurrencies.filter((code) =>
-        curs.some((c) => c.code === code),
-      );
-      if (valid.length > 0) {
-        setSelectedCurrencies(valid);
-        setShowAllCurrencies(false);
-        return true;
-      }
-    }
-    return false;
-  }, []);
+  }, [reportScope, dateFrom, dateTo, reportParams, beginReportFetch, isReportFetchCurrent, t, notify]);
 
   const loadMetaData = useCallback(async () => {
-    if (!companyId) return;
+    if (!domainReportScopeIsReady(reportScope)) return;
     const { signal, seq } = beginMetaFetch();
     try {
-      const [procs, curs] = await Promise.all([
-        fetchProcesses(companyId, { signal }),
-        fetchCurrencies(companyId, { signal }),
-      ]);
+      const procsRaw = await fetchProcesses(reportScope, { signal });
       if (!isMetaFetchCurrent(seq)) return;
+      const procs = isGroupScope ? mapDomainGroupProcesses(procsRaw) : procsRaw;
       setProcesses(procs);
-      setCurrencyList(curs);
-
-      if (applySavedCurrencyPrefs(companyId, curs)) return;
-
-      if (
-        curs.length > 0 &&
-        selectedCurrenciesRef.current.length === 0 &&
-        !showAllCurrenciesRef.current
-      ) {
-        const myr = curs.find((c) => c.code === "MYR");
-        const def = myr || curs[0];
-        const codes = [def.code];
-        setSelectedCurrencies(codes);
-        setShowAllCurrencies(false);
-        persistCurrencyPrefs(companyId, codes, false);
+      if (isGroupScope && !isDomainGroupProcessSelection(processId, procs)) {
+        setProcessId("");
       }
     } catch (err) {
       if (err?.name === "AbortError" || !isMetaFetchCurrent(seq)) return;
       console.error("Meta data load error:", err);
     } finally {
       if (isMetaFetchCurrent(seq)) {
-        setCurrencyFilterReady(true);
+        setMetaReady(true);
       }
     }
-  }, [
-    companyId,
-    applySavedCurrencyPrefs,
-    persistCurrencyPrefs,
-    beginMetaFetch,
-    isMetaFetchCurrent,
-  ]);
+  }, [reportScope, isGroupScope, processId, beginMetaFetch, isMetaFetchCurrent]);
 
   useEffect(() => {
     if (!companyId) return;
@@ -340,44 +458,42 @@ export default function DomainReportPage() {
     if (prev != null && Number(prev) !== Number(companyId)) {
       invalidateReportFetch();
       setReportSyncing(false);
-      persistCurrencyPrefs(
-        prev,
-        selectedCurrenciesRef.current,
-        showAllCurrenciesRef.current,
-      );
-      const saved = currencyPrefsByCompanyRef.current[Number(companyId)];
-      if (saved?.showAllCurrencies) {
-        setShowAllCurrencies(true);
-        setSelectedCurrencies([]);
-        setCurrencyFilterReady(true);
-      } else if (saved?.selectedCurrencies?.length) {
-        setSelectedCurrencies([...saved.selectedCurrencies]);
-        setShowAllCurrencies(false);
-        setCurrencyFilterReady(true);
-      } else {
-        setSelectedCurrencies([]);
-        setShowAllCurrencies(false);
-        setCurrencyFilterReady(false);
-      }
+      setMetaReady(false);
       setProcessId("");
       if (reportDataRef.current != null) setReportSyncing(true);
     }
     prevCompanyIdRef.current = companyId;
-  }, [companyId, persistCurrencyPrefs, invalidateReportFetch]);
+  }, [companyId, invalidateReportFetch]);
 
   useEffect(() => {
-    if (!currencyFilterReady) {
+    if (!metaReady) {
       invalidateReportFetch();
       setReportSyncing(false);
     }
-  }, [currencyFilterReady, invalidateReportFetch]);
+  }, [metaReady, invalidateReportFetch]);
 
   useEffect(() => {
-    if (companyId) loadMetaData();
-  }, [companyId, loadMetaData]);
+    if (!domainReportScopeIsReady(reportScope)) {
+      setMetaReady(false);
+      return;
+    }
+    setMetaReady(false);
+    loadMetaData();
+  }, [reportScope, loadMetaData]);
 
   useEffect(() => {
-    if (!companyId || !currencyFilterReady) return undefined;
+    const scopeKey = customerReportScopeCacheKey(reportScope);
+    const prev = prevScopeKeyRef.current;
+    if (prev != null && prev !== scopeKey) {
+      invalidateReportFetch();
+      setError("");
+      setProcessId("");
+    }
+    prevScopeKeyRef.current = scopeKey || null;
+  }, [reportScope, invalidateReportFetch]);
+
+  useEffect(() => {
+    if (!domainReportScopeIsReady(reportScope) || !metaReady) return undefined;
     const handler = window.setTimeout(() => {
       loadReport();
     }, REPORT_FETCH_DEBOUNCE_MS);
@@ -385,10 +501,10 @@ export default function DomainReportPage() {
       window.clearTimeout(handler);
       invalidateReportFetch();
     };
-  }, [companyId, currencyFilterReady, loadReport, invalidateReportFetch]);
+  }, [reportScope, metaReady, loadReport, invalidateReportFetch]);
 
   useEffect(() => {
-    if (!companyId || !currencyFilterReady) return;
+    if (!domainReportScopeIsReady(reportScope) || !metaReady) return;
     const key = buildReportSnapshotKey(reportParams);
     const snap = getReportSnapshot(REPORT_PAGE_KEY);
     if (snap?.key === key && snap.data && reportDataRef.current == null) {
@@ -397,104 +513,29 @@ export default function DomainReportPage() {
         setReportData(snap.data);
       });
     }
-  }, [companyId, currencyFilterReady, reportParams]);
-
-  const onSwitchCompany = useCallback(async (c) => {
-    const effectiveId = companyHighlightId ?? companyId;
-    if (!c?.id || Number(c.id) === Number(effectiveId)) return;
-    const reqId = ++switchCompanySeqRef.current;
-    setCompanyHighlightId(Number(c.id));
-    try {
-      const res = await fetch(buildApiUrl(`api/session/update_company_session_api.php?company_id=${c.id}`), { credentials: "include" });
-      const json = await res.json();
-      if (reqId !== switchCompanySeqRef.current) return;
-      if (!json.success) {
-        setCompanyHighlightId(null);
-        notify(json.error || t("switchFailed"), "danger");
-        return;
-      }
-      if (reportDataRef.current != null) setReportSyncing(true);
-      setCompanyId(Number(c.id));
-      setGroupFilterKind((prev) => (prev === "all" || prev === "ungrouped" ? prev : "follow"));
-      const newGroup = c.group_id ? String(c.group_id).toUpperCase().trim() : null;
-      persistDashboardGroupFilter(newGroup || null);
-      setCompanyHighlightId(null);
-      void checkBankOnly(c.id);
-      notifyCompanySessionUpdated();
-    } catch {
-      if (reqId === switchCompanySeqRef.current) setCompanyHighlightId(null);
-      notify(t("switchFailed"), "danger");
-    }
-  }, [companyId, companyHighlightId, notify, t, checkBankOnly]);
-
-  const handlePickGroup = useCallback(
-    (gid) => {
-      const g = String(gid || "").trim().toUpperCase();
-      if (!g) return;
-      if (groupFilterKind === "follow" && g === selectedGroupKey) {
-        setGroupFilterKind("ungrouped");
-        persistDashboardGroupFilter(null);
-        return;
-      }
-      setGroupFilterKind("follow");
-      persistDashboardGroupFilter(g);
-      if (g === selectedGroupKey) return;
-      const first = allCompanyButtons.find((row) => String(row.group_id || "").trim().toUpperCase() === g);
-      if (first) void onSwitchCompany(first);
-    },
-    [allCompanyButtons, groupFilterKind, onSwitchCompany, selectedGroupKey],
-  );
-
-  const handlePickAllGroups = useCallback(() => {
-    setGroupFilterKind((k) => (k === "all" ? "ungrouped" : "all"));
-  }, []);
-
-  const toggleCurrency = (code) => {
-    setShowAllCurrencies(false);
-    setSelectedCurrencies((prev) => {
-      const next = prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code];
-      persistCurrencyPrefs(companyId, next, false);
-      return next;
-    });
-  };
-
-  const toggleAllCurrencies = () => {
-    const nextAll = !showAllCurrencies;
-    setShowAllCurrencies(nextAll);
-    if (nextAll) {
-      setSelectedCurrencies([]);
-      persistCurrencyPrefs(companyId, [], true);
-    } else {
-      persistCurrencyPrefs(companyId, selectedCurrenciesRef.current, false);
-    }
-  };
-
-  if (!sessionReady || !me) return null;
+  }, [reportScope, metaReady, reportParams]);
 
   return (
     <div className="container">
       <div className="content">
-        <div className="report-header">
-        </div>
-
         <DomainReportFilters
           companyId={companyId}
-          highlightCompanyId={companyHighlightId}
-          onSwitchCompany={onSwitchCompany}
+          highlightCompanyId={companyId}
+          onSwitchCompany={handlePickCompany}
+          onClearCompany={handleClearCompany}
+          allowClearCompany={allowClearCompany}
           groupIds={groupIds}
-          groupFilterKind={groupFilterKind}
-          selectedGroupKey={selectedGroupKey}
-          onPickAllGroups={handlePickAllGroups}
+          selectedGroup={selectedGroup}
           onPickGroup={handlePickGroup}
+          onPickAllGroups={handlePickAllGroups}
+          onPickAllInGroup={handlePickAllInGroup}
+          groupsAllMode={groupsAllMode}
+          groupAllMode={groupAllMode}
           companyButtons={companyButtons}
           processId={processId}
           setProcessId={setProcessId}
           processes={processes}
-          currencyList={currencyList}
-          selectedCurrencies={selectedCurrencies}
-          toggleCurrency={toggleCurrency}
-          showAllCurrencies={showAllCurrencies}
-          toggleAllCurrencies={toggleAllCurrencies}
+          isGroupScope={isGroupScope}
           dateFrom={dateFrom}
           dateTo={dateTo}
           onRangeChange={(s, e) => { setDateFrom(s); setDateTo(e); }}
@@ -513,6 +554,7 @@ export default function DomainReportPage() {
             reportData={reportData}
             reportSyncing={reportSyncing}
             error={error}
+            isGroupScope={isGroupScope}
             t={t}
           />
         </div>

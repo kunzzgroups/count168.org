@@ -4,6 +4,7 @@ export const PROCESS_LIST_I18N = {
   en: {
     pageTitle: "Process List",
     addProcess: "Add Process",
+    saving: "Saving...",
     search: "Search",
     showAll: "Show All",
     showInactive: "Show Inactive",
@@ -123,6 +124,7 @@ export const PROCESS_LIST_I18N = {
   zh: {
     pageTitle: "流程列表",
     addProcess: "新增流程",
+    saving: "保存中...",
     search: "搜索",
     showAll: "显示全部",
     showInactive: "显示停用",

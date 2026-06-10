@@ -28,6 +28,7 @@ export default function CompanyCard({
   onCancel,
   calcTotal,
   readOnlyMode,
+  isHistoricalView,
   fmtPct,
   t,
 }) {
@@ -168,6 +169,16 @@ export default function CompanyCard({
           </button>
         </div>
       </div>
+      {isHistoricalView && !expanded && st?.rows?.length > 0 ? (
+        <div className="own-history-preview">
+          {st.rows.map((row, idx) => (
+            <span key={`${id}-hist-${idx}-${String(row.account_id)}`} className="own-history-preview-chip">
+              <span className="own-history-preview-name">{row.account_label || row.account_id}</span>
+              <span className="own-history-preview-pct">{fmtPct(row.percentage)}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div className="own-card-body" id={`card-body-${id}`}>
         {expanded && loading && !st ? (
           <div className="own-loader-container" id={`loader-${id}`}>

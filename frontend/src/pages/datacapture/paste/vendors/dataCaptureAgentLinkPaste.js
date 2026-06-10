@@ -4,7 +4,8 @@ import { parseAgentLinkTableFormat } from "./dataCaptureAgentLinkParser.js";
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 
 /** @returns {boolean} */
 export function handleAgentLinkPaste(e, pastedData) {
@@ -23,7 +24,7 @@ export function handleAgentLinkPaste(e, pastedData) {
             const filled = parseGenericHtmlTable(htmlDataFromDetect, startCell);
             if (filled) {
                 console.log('PS3838: Successfully filled using parseAndFillHTMLTable');
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             } else {
                 console.log('PS3838: parseAndFillHTMLTable returned false, trying manual HTML parsing');
@@ -169,66 +170,17 @@ export function handleAgentLinkPaste(e, pastedData) {
 
         if (agentLinkParsed) {
             const { dataMatrix, maxRows, maxCols } = agentLinkParsed;
-
-            const startCell = e.target;
-            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-            // PS3838 格式：强制从第一列（Column 1）开始粘贴
-            const startCol = 0;
-
-            const currentRows = document.querySelectorAll('#tableBody tr').length;
-            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-
-            const requiredRows = startRow + maxRows;
-            const requiredCols = startCol + maxCols;
-
-            if (requiredRows > currentRows || requiredCols > currentCols) {
-                const targetRows = Math.max(currentRows, Math.min(requiredRows, 702)); // ZZ = 702 rows
-                const targetCols = Math.max(currentCols, requiredCols);
-                ensurePasteGrid(targetRows, targetCols);
-            }
-
-            const tableBody = document.getElementById('tableBody');
-            const currentPasteChanges = [];
-            let successCount = 0;
-
-            dataMatrix.forEach((rowData, rowIndex) => {
-                const actualRowIndex = startRow + rowIndex;
-                const tableRow = tableBody.children[actualRowIndex];
-                if (!tableRow) return;
-
-                rowData.forEach((cellData, colIndex) => {
-                    // 每行数据都从第一列（Column 1）开始
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                    if (cell && cell.contentEditable === 'true') {
-                        const trimmedData = (cellData || '').trim();
-                        currentPasteChanges.push({
-                            row: actualRowIndex,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: trimmedData
-                        });
-
-                        // 保持原始数据，不做任何转换
-                        cell.textContent = trimmedData;
-
-                        if (trimmedData) {
-                            successCount++;
-                        }
-                    }
-                });
+            const { successCount } = applyParsedMatrixToGrid(dataMatrix, e.target, {
+                startColOverride: 0,
+                trimValues: true,
             });
 
-            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
             if (successCount > 0) {
-                window.showNotification?.(`Successfully pasted PS3838 data (${maxRows} rows x ${maxCols} cols)!`, 'success');
+                notifyPasteUser(`Successfully pasted PS3838 data (${maxRows} rows x ${maxCols} cols)!`, 'success');
             } else {
-                window.showNotification?.('No cells were pasted from PS3838 format.', 'danger');
+                notifyPasteUser('No cells were pasted from PS3838 format.', 'danger');
             }
 
-            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
             return true;
         } else {
             // PS3838 模式下解析失败，给出提示但不阻止（让用户知道）

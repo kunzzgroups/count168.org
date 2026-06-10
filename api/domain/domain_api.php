@@ -3,12 +3,29 @@ session_start();
 // session_write_close() 将在 session 写入（回填 company_code）完成后调用
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/email_validation.php';
+require_once __DIR__ . '/../../includes/tenant_scope.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
+require_once __DIR__ . '/domain_groups_helpers.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+
+function domain_api_clear_session_user_cache(): void
+{
+    static $loaded = false;
+    if (!$loaded) {
+        $path = __DIR__ . '/../../includes/session_user_payload_cache.php';
+        if (is_file($path)) {
+            require_once $path;
+        }
+        $loaded = true;
+    }
+    if (function_exists('session_user_payload_cache_clear')) {
+        session_user_payload_cache_clear();
+    }
+}
 
 // Get JSON input
 $json = file_get_contents('php://input');
@@ -128,6 +145,285 @@ function deleteByIds(PDO $pdo, string $table, string $column, array $ids): void
     $stmt->execute($ids);
 }
 
+function domainApiTableExists(PDO $pdo, string $table): bool
+{
+    try {
+        $stmt = $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table));
+        return $stmt && $stmt->fetchColumn() !== false;
+    } catch (PDOException $e) {
+        return false;
+    }
+}
+
+function domainApiDeleteRowsByCompanyIds(PDO $pdo, string $table, array $companyDbIds): void
+{
+    deleteByIds($pdo, $table, 'company_id', $companyDbIds);
+}
+
+/**
+ * Remove domain-provisioned MEMBER accounts on C168 when a tenant company code is deleted.
+ *
+ * @param string[] $codes
+ */
+function domainApiDeleteC168ProvisionedMemberAccountsByCodes(PDO $pdo, array $codes): void
+{
+    $codes = array_values(array_unique(array_filter(array_map(
+        static fn ($raw) => strtoupper(trim((string) $raw)),
+        $codes
+    ), static fn ($c) => $c !== '' && $c !== 'C168')));
+    if ($codes === []) {
+        return;
+    }
+
+    $c168Pk = resolveC168TargetCompanyId($pdo) ?? getMasterC168CompanyNumericId($pdo);
+    if (!$c168Pk || (int) $c168Pk <= 0) {
+        return;
+    }
+    $c168Pk = (int) $c168Pk;
+
+    $findStmt = $pdo->prepare("
+        SELECT a.id
+        FROM account a
+        INNER JOIN account_company ac ON ac.account_id = a.id
+        WHERE ac.company_id = ?
+          AND UPPER(TRIM(a.account_id)) = ?
+        LIMIT 1
+    ");
+
+    foreach ($codes as $code) {
+        $findStmt->execute([$c168Pk, $code]);
+        $accId = (int) ($findStmt->fetchColumn() ?: 0);
+        if ($accId <= 0 || !domainApiAccountLooksLikeDomainProvisionedMember($pdo, $accId)) {
+            continue;
+        }
+        deleteByIds($pdo, 'account_link', 'account_id_1', [$accId]);
+        deleteByIds($pdo, 'account_link', 'account_id_2', [$accId]);
+        deleteByIds($pdo, 'account_company', 'account_id', [$accId]);
+        deleteByIds($pdo, 'account', 'id', [$accId]);
+    }
+}
+
+/**
+ * Returns a user-facing reason when company still has ledger / operational data and must not be removed from domain.
+ */
+function domainApiCompanyOperationalBlockReason(PDO $pdo, int $companyDbId, string $companyCode = ''): ?string
+{
+    if ($companyDbId <= 0) {
+        return null;
+    }
+
+    $label = strtoupper(trim($companyCode));
+    if ($label === '') {
+        $label = 'ID ' . $companyDbId;
+    }
+
+    $countFor = static function (PDO $pdo, string $table, string $whereSql, array $params): int {
+        if (!domainApiTableExists($pdo, $table)) {
+            return 0;
+        }
+        try {
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE {$whereSql}");
+            $stmt->execute($params);
+            return (int) $stmt->fetchColumn();
+        } catch (PDOException $e) {
+            return 0;
+        }
+    };
+
+    $parts = [];
+    $txCount = $countFor($pdo, 'transactions', 'company_id = ?', [$companyDbId]);
+    if ($txCount > 0) {
+        $parts[] = $txCount . ' transaction(s) (Transaction Payment / ledger)';
+    }
+    $accCount = $countFor($pdo, 'account_company', 'company_id = ?', [$companyDbId]);
+    if ($accCount > 0) {
+        $parts[] = $accCount . ' linked account(s)';
+    }
+    $capCount = $countFor($pdo, 'data_captures', 'company_id = ?', [$companyDbId]);
+    if ($capCount > 0) {
+        $parts[] = $capCount . ' data capture(s)';
+    }
+    $procCount = $countFor($pdo, 'process', 'company_id = ?', [$companyDbId]);
+    if ($procCount > 0) {
+        $parts[] = $procCount . ' process(es)';
+    }
+    if (domainApiTableExists($pdo, 'bank_process')) {
+        $bpCount = $countFor($pdo, 'bank_process', 'company_id = ?', [$companyDbId]);
+        if ($bpCount > 0) {
+            $parts[] = $bpCount . ' bank process(es)';
+        }
+    }
+    if (domainApiTableExists($pdo, 'company_ownership')) {
+        $ownCount = $countFor($pdo, 'company_ownership', 'company_id = ?', [$companyDbId]);
+        if ($ownCount > 0) {
+            $parts[] = $ownCount . ' ownership record(s)';
+        }
+    }
+
+    if ($parts === []) {
+        return null;
+    }
+
+    return 'Cannot remove company "' . $label . '" from domain — it still has '
+        . implode(', ', $parts)
+        . '. It will be detached from this domain; accounts and payment history are kept.';
+}
+
+function domainApiCompanyHasOperationalData(PDO $pdo, int $companyDbId): bool
+{
+    return domainApiCompanyOperationalBlockReason($pdo, $companyDbId, '') !== null;
+}
+
+/**
+ * @param array<int, array<string, mixed>> $companyRows
+ * @return array{0: array<int, array<string, mixed>>, 1: array<int, array<string, mixed>>}
+ */
+function domainApiPartitionCompaniesForDomainRemoval(PDO $pdo, array $companyRows): array
+{
+    $detach = [];
+    $hardDelete = [];
+    foreach ($companyRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        if (domainApiCompanyHasOperationalData($pdo, (int) ($row['id'] ?? 0))) {
+            $detach[] = $row;
+        } else {
+            $hardDelete[] = $row;
+        }
+    }
+    return [$detach, $hardDelete];
+}
+
+function ensureCompanyOwnerIdNullable(PDO $pdo): void
+{
+    try {
+        $col = $pdo->query("SHOW COLUMNS FROM company LIKE 'owner_id'")->fetch(PDO::FETCH_ASSOC);
+        if (!$col || stripos((string) ($col['Null'] ?? ''), 'YES') !== false) {
+            return;
+        }
+        $fkName = $pdo->query("
+            SELECT CONSTRAINT_NAME
+            FROM information_schema.KEY_COLUMN_USAGE
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'company'
+              AND COLUMN_NAME = 'owner_id'
+              AND REFERENCED_TABLE_NAME = 'owner'
+            LIMIT 1
+        ")->fetchColumn();
+        if ($fkName) {
+            $safeFk = str_replace('`', '', (string) $fkName);
+            $pdo->exec("ALTER TABLE company DROP FOREIGN KEY `{$safeFk}`");
+        }
+        $pdo->exec("ALTER TABLE company MODIFY owner_id int UNSIGNED NULL COMMENT 'FK to owner.id; NULL when detached from domain'");
+        $pdo->exec('ALTER TABLE company ADD CONSTRAINT fk_company_owner FOREIGN KEY (owner_id) REFERENCES owner(id) ON DELETE CASCADE ON UPDATE CASCADE');
+    } catch (PDOException $e) {
+        error_log('ensureCompanyOwnerIdNullable: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Detach companies from domain: clear owner_id / group_id, keep accounts + transactions + captures.
+ *
+ * @param int[] $companyDbIds
+ */
+function domainApiDetachCompaniesFromOwner(PDO $pdo, array $companyDbIds, int $ownerId): void
+{
+    ensureCompanyOwnerIdNullable($pdo);
+
+    $companyDbIds = normalizeIds($companyDbIds);
+    if ($companyDbIds === [] || $ownerId <= 0) {
+        return;
+    }
+
+    $placeholders = buildInPlaceholders(count($companyDbIds));
+    $stmt = $pdo->prepare("SELECT id FROM company WHERE owner_id = ? AND id IN ($placeholders)");
+    $stmt->execute(array_merge([$ownerId], $companyDbIds));
+    $allowedIds = normalizeIds($stmt->fetchAll(PDO::FETCH_COLUMN));
+    if ($allowedIds === []) {
+        return;
+    }
+
+    $in = buildInPlaceholders(count($allowedIds));
+    $upd = $pdo->prepare("UPDATE company SET owner_id = NULL, group_id = NULL WHERE owner_id = ? AND id IN ($in)");
+    $upd->execute(array_merge([$ownerId], $allowedIds));
+
+    if (domainApiTableExists($pdo, 'group_company_map')) {
+        deleteByIds($pdo, 'group_company_map', 'company_id', $allowedIds);
+    }
+}
+
+function domainApiFindDetachedCompanyPk(PDO $pdo, string $companyCode): ?int
+{
+    $code = strtoupper(trim($companyCode));
+    if ($code === '') {
+        return null;
+    }
+    ensureCompanyOwnerIdNullable($pdo);
+    try {
+        $stmt = $pdo->prepare('SELECT id FROM company WHERE UPPER(TRIM(company_id)) = ? AND owner_id IS NULL LIMIT 1');
+        $stmt->execute([$code]);
+        $pk = $stmt->fetchColumn();
+        return ($pk !== false && $pk !== null) ? (int) $pk : null;
+    } catch (PDOException $e) {
+        return null;
+    }
+}
+
+/**
+ * @param array<int, array<string, mixed>> $companyRows rows with id + company_id
+ */
+function domainApiAssertCompaniesRemovableFromDomain(PDO $pdo, array $companyRows): ?string
+{
+    foreach ($companyRows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $reason = domainApiCompanyOperationalBlockReason(
+            $pdo,
+            (int) ($row['id'] ?? 0),
+            (string) ($row['company_id'] ?? '')
+        );
+        if ($reason !== null) {
+            return $reason;
+        }
+    }
+    return null;
+}
+
+/**
+ * Remove domain registration for unused companies only (no transactions / accounts / captures).
+ * Does NOT delete account rows or transaction payment ledger.
+ *
+ * @param int[] $companyDbIds numeric company.id
+ * @param string[] $companyCodeStrings business codes (company.company_id) for C168 member cleanup
+ */
+function domainApiCascadeDeleteCompanies(PDO $pdo, array $companyDbIds, array $companyCodeStrings = []): void
+{
+    $companyDbIds = normalizeIds($companyDbIds);
+    if ($companyDbIds === []) {
+        return;
+    }
+
+    domainApiDeleteRowsByCompanyIds($pdo, 'description', $companyDbIds);
+    domainApiDeleteRowsByCompanyIds($pdo, 'currency', $companyDbIds);
+    domainApiDeleteRowsByCompanyIds($pdo, 'account_link', $companyDbIds);
+    domainApiDeleteRowsByCompanyIds($pdo, 'account_company', $companyDbIds);
+
+    if (domainApiTableExists($pdo, 'company_auto_renew_request')) {
+        domainApiDeleteRowsByCompanyIds($pdo, 'company_auto_renew_request', $companyDbIds);
+    }
+
+    domainApiDeleteRowsByCompanyIds($pdo, 'user_company_map', $companyDbIds);
+    if (domainApiTableExists($pdo, 'user_company_permissions')) {
+        domainApiDeleteRowsByCompanyIds($pdo, 'user_company_permissions', $companyDbIds);
+    }
+
+    domainApiDeleteC168ProvisionedMemberAccountsByCodes($pdo, $companyCodeStrings);
+
+    deleteByIds($pdo, 'company', 'id', $companyDbIds);
+}
+
 /**
  * 检查公司是否为 C168（用于二级密码等权限判断）
  */
@@ -137,6 +433,23 @@ function deleteByIds(PDO $pdo, string $table, string $column, array $ids): void
  * 表已存在时必须跳过 CREATE，否则在 beginTransaction 之后的入账逻辑里再调用会触发
  * “There is no active transaction”。
  */
+function domainListFeeSettingsCreateTableSql(): string
+{
+    return "
+        CREATE TABLE IF NOT EXISTS `domain_list_fee_settings` (
+            `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
+            `price` DECIMAL(25,8) NULL DEFAULT NULL COMMENT 'Legacy single price (synced from company 6-month)',
+            `group_price` DECIMAL(25,8) NULL DEFAULT NULL COMMENT 'Default fee for group tenants (6-month fallback)',
+            `company_price` DECIMAL(25,8) NULL DEFAULT NULL COMMENT 'Default fee for company tenants (6-month fallback)',
+            `company_period_prices` LONGTEXT NULL DEFAULT NULL COMMENT 'Company per-period prices JSON',
+            `group_period_prices` LONGTEXT NULL DEFAULT NULL COMMENT 'Group per-period prices JSON',
+            `period_prices` LONGTEXT NULL DEFAULT NULL COMMENT 'Unified JSON {company,group} for legacy readers',
+            `maintenance_fee` DECIMAL(14,4) NULL DEFAULT NULL,
+            `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ";
+}
+
 function ensureDomainListFeeSettingsTable(PDO $pdo): void {
     static $ensured = false;
     if ($ensured) {
@@ -158,13 +471,7 @@ function ensureDomainListFeeSettingsTable(PDO $pdo): void {
     } catch (Exception $e) {
         // 继续尝试建表
     }
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS `domain_list_fee_settings` (
-            `id` TINYINT UNSIGNED NOT NULL PRIMARY KEY,
-            `price` DECIMAL(25,8) NULL DEFAULT NULL,
-            `updated_at` TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ");
+    $pdo->exec(domainListFeeSettingsCreateTableSql());
     try {
         $pdo->exec("ALTER TABLE `domain_list_fee_settings` MODIFY COLUMN `price` DECIMAL(25,8) NULL DEFAULT NULL");
     } catch (Exception $e) {
@@ -179,38 +486,265 @@ function ensureDomainListFeeSettingsTable(PDO $pdo): void {
  * domain_list_fee_settings：分组价 / 公司价（与旧 price 列并存，price 同步为公司价）
  */
 function ensureDomainListFeePriceColumns(PDO $pdo): void {
-    static $columnsEnsured = false;
-    if ($columnsEnsured) {
-        return;
-    }
     ensureDomainListFeeSettingsTable($pdo);
-    foreach (['group_price', 'company_price'] as $col) {
+    foreach (['group_price', 'company_price', 'company_period_prices', 'period_prices', 'group_period_prices'] as $col) {
+        if (tableHasColumn($pdo, 'domain_list_fee_settings', $col)) {
+            continue;
+        }
         try {
-            $pdo->exec("ALTER TABLE `domain_list_fee_settings` ADD COLUMN `{$col}` DECIMAL(25,8) NULL DEFAULT NULL");
+            if (in_array($col, ['period_prices', 'company_period_prices', 'group_period_prices'], true)) {
+                $pdo->exec("ALTER TABLE `domain_list_fee_settings` ADD COLUMN `{$col}` LONGTEXT NULL DEFAULT NULL");
+            } else {
+                $pdo->exec("ALTER TABLE `domain_list_fee_settings` ADD COLUMN `{$col}` DECIMAL(25,8) NULL DEFAULT NULL");
+            }
         } catch (Exception $e) {
             // Column may already exist.
         }
     }
-    $columnsEnsured = true;
+}
+
+/** @return list<string> */
+function domainListFeePeriodKeys(): array
+{
+    return ['7days', '1month', '3months', '6months', '1year'];
 }
 
 /**
- * @return array{price: ?string, group_price: ?string, company_price: ?string}
+ * @param array<string, mixed>|null $raw
+ * @return array<string, ?string>
+ */
+function normalizeDomainListFeePeriodPrices(?array $raw): array
+{
+    $out = [];
+    foreach (domainListFeePeriodKeys() as $key) {
+        $out[$key] = null;
+    }
+    if (!is_array($raw)) {
+        return $out;
+    }
+    foreach (domainListFeePeriodKeys() as $key) {
+        if (!array_key_exists($key, $raw)) {
+            continue;
+        }
+        $val = normalizeOptionalDecimal($raw[$key]);
+        if ($val === false) {
+            return [];
+        }
+        $out[$key] = $val !== null ? money_out($val) : null;
+    }
+    return $out;
+}
+
+/** @return array<string, mixed>|null */
+function decodeDomainListFeeJsonColumn($value): ?array
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+    if (is_array($value)) {
+        return $value;
+    }
+    if (!is_string($value)) {
+        return null;
+    }
+    $decoded = json_decode($value, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * @param array<string, mixed>|null $decoded
+ * @param 'company'|'group' $kind
+ * @return array<string, ?string>|null
+ */
+function extractDomainListFeePeriodPricesFromPayload(?array $decoded, string $kind): ?array
+{
+    if (!is_array($decoded)) {
+        return null;
+    }
+    if ($kind === 'company' && isset($decoded['company']) && is_array($decoded['company'])) {
+        $parsed = normalizeDomainListFeePeriodPrices($decoded['company']);
+        return $parsed === [] ? null : $parsed;
+    }
+    if ($kind === 'group' && isset($decoded['group']) && is_array($decoded['group'])) {
+        $parsed = normalizeDomainListFeePeriodPrices($decoded['group']);
+        return $parsed === [] ? null : $parsed;
+    }
+    if ($kind === 'company') {
+        foreach (domainListFeePeriodKeys() as $key) {
+            if (array_key_exists($key, $decoded)) {
+                $parsed = normalizeDomainListFeePeriodPrices($decoded);
+                return $parsed === [] ? null : $parsed;
+            }
+        }
+    }
+    if ($kind === 'group') {
+        if (!isset($decoded['company']) && !isset($decoded['group'])) {
+            foreach (domainListFeePeriodKeys() as $key) {
+                if (array_key_exists($key, $decoded)) {
+                    $parsed = normalizeDomainListFeePeriodPrices($decoded);
+                    return $parsed === [] ? null : $parsed;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * @param array<string, ?string> $periodPrices
+ * @return array<string, ?string>
+ */
+function applyDomainListFeeLegacyFlatPrice(array $periodPrices, ?string $legacyFlat): array
+{
+    $hasAny = false;
+    foreach ($periodPrices as $v) {
+        if ($v !== null && $v !== '' && money_cmp($v, '0') > 0) {
+            $hasAny = true;
+            break;
+        }
+    }
+    if (!$hasAny && $legacyFlat !== null && $legacyFlat !== '' && money_cmp($legacyFlat, '0') > 0) {
+        $periodPrices['6months'] = money_out($legacyFlat);
+    }
+    return $periodPrices;
+}
+
+/**
+ * @param mixed $rawCompanyPeriodPrices
+ * @param mixed $rawPeriodPrices
+ * @param array<string, mixed> $row
+ * @return array<string, ?string>
+ */
+function decodeDomainListFeePeriodPricesFromRow($rawCompanyPeriodPrices, $rawPeriodPrices, array $row): array
+{
+    $periodPrices = normalizeDomainListFeePeriodPrices(null);
+    $parsed = null;
+
+    $companyDecoded = decodeDomainListFeeJsonColumn($rawCompanyPeriodPrices);
+    if ($companyDecoded !== null) {
+        $parsed = extractDomainListFeePeriodPricesFromPayload($companyDecoded, 'company');
+        if ($parsed === null && !isset($companyDecoded['company']) && !isset($companyDecoded['group'])) {
+            $flat = normalizeDomainListFeePeriodPrices($companyDecoded);
+            $parsed = $flat === [] ? null : $flat;
+        }
+    }
+
+    if ($parsed === null) {
+        $decoded = decodeDomainListFeeJsonColumn($rawPeriodPrices);
+        $parsed = extractDomainListFeePeriodPricesFromPayload($decoded, 'company');
+    }
+    if (is_array($parsed)) {
+        $periodPrices = $parsed;
+    }
+    $legacy = $row['company_price'] ?? $row['price'] ?? null;
+    return applyDomainListFeeLegacyFlatPrice(
+        $periodPrices,
+        $legacy !== null && $legacy !== '' ? (string) $legacy : null
+    );
+}
+
+/**
+ * @param mixed $rawGroupPeriodPrices
+ * @param mixed $rawPeriodPrices
+ * @param array<string, mixed> $row
+ * @return array<string, ?string>
+ */
+function decodeDomainListFeeGroupPeriodPricesFromRow($rawGroupPeriodPrices, $rawPeriodPrices, array $row): array
+{
+    $periodPrices = normalizeDomainListFeePeriodPrices(null);
+    $parsed = null;
+
+    $groupDecoded = decodeDomainListFeeJsonColumn($rawGroupPeriodPrices);
+    if ($groupDecoded !== null) {
+        $parsed = extractDomainListFeePeriodPricesFromPayload($groupDecoded, 'group');
+        if ($parsed === null && !isset($groupDecoded['company']) && !isset($groupDecoded['group'])) {
+            $flat = normalizeDomainListFeePeriodPrices($groupDecoded);
+            $parsed = $flat === [] ? null : $flat;
+        }
+    }
+
+    if ($parsed === null) {
+        $periodDecoded = decodeDomainListFeeJsonColumn($rawPeriodPrices);
+        if (is_array($periodDecoded) && isset($periodDecoded['group']) && is_array($periodDecoded['group'])) {
+            $parsed = extractDomainListFeePeriodPricesFromPayload($periodDecoded, 'group');
+        }
+    }
+
+    if (is_array($parsed)) {
+        $periodPrices = $parsed;
+    }
+
+    $legacy = $row['group_price'] ?? null;
+    return applyDomainListFeeLegacyFlatPrice(
+        $periodPrices,
+        $legacy !== null && $legacy !== '' ? (string) $legacy : null
+    );
+}
+
+/** @param mixed $raw */
+function parseDomainListFeePeriodInput($raw): ?array
+{
+    if ($raw === null || $raw === '') {
+        return null;
+    }
+    if (is_string($raw)) {
+        $decoded = json_decode($raw, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($decoded)) {
+            return null;
+        }
+        return $decoded;
+    }
+    return is_array($raw) ? $raw : null;
+}
+
+/**
+ * @return array{price: ?string, group_price: ?string, company_price: ?string, company_period_prices: array<string, ?string>, period_prices: array<string, ?string>, group_period_prices: array<string, ?string>}
  */
 function fetchDomainListFeeSettingsRow(PDO $pdo): array
 {
     ensureDomainListFeePriceColumns($pdo);
-    $stmt = $pdo->query("SELECT `price`, `group_price`, `company_price` FROM `domain_list_fee_settings` WHERE `id` = 1");
+    $cols = ['price', 'group_price', 'company_price'];
+    if (tableHasColumn($pdo, 'domain_list_fee_settings', 'company_period_prices')) {
+        $cols[] = 'company_period_prices';
+    }
+    $cols[] = 'period_prices';
+    if (tableHasColumn($pdo, 'domain_list_fee_settings', 'group_period_prices')) {
+        $cols[] = 'group_period_prices';
+    }
+    $sql = 'SELECT `' . implode('`, `', $cols) . '` FROM `domain_list_fee_settings` WHERE `id` = 1';
+    $stmt = $pdo->query($sql);
     $row = $stmt ? $stmt->fetch(PDO::FETCH_ASSOC) : false;
     if (!$row) {
-        return ['price' => null, 'group_price' => null, 'company_price' => null];
+        return [
+            'price' => null,
+            'group_price' => null,
+            'company_price' => null,
+            'company_period_prices' => normalizeDomainListFeePeriodPrices(null),
+            'period_prices' => normalizeDomainListFeePeriodPrices(null),
+            'group_period_prices' => normalizeDomainListFeePeriodPrices(null),
+        ];
     }
+    $rawCompanyPeriodPrices = $row['company_period_prices'] ?? null;
+    $rawPeriodPrices = $row['period_prices'] ?? null;
+    $rawGroupPeriodPrices = $row['group_period_prices'] ?? null;
     foreach (['price', 'group_price', 'company_price'] as $key) {
         if ($row[$key] !== null && $row[$key] !== '') {
             $row[$key] = money_out($row[$key]);
         } else {
             $row[$key] = null;
         }
+    }
+    $row['company_period_prices'] = decodeDomainListFeePeriodPricesFromRow($rawCompanyPeriodPrices, $rawPeriodPrices, $row);
+    $row['group_period_prices'] = decodeDomainListFeeGroupPeriodPricesFromRow($rawGroupPeriodPrices, $rawPeriodPrices, $row);
+    $row['period_prices'] = $row['company_period_prices'];
+    $syncCompany = $row['company_period_prices']['6months'] ?? null;
+    if ($syncCompany !== null && $syncCompany !== '') {
+        $row['company_price'] = $syncCompany;
+        $row['price'] = $syncCompany;
+    }
+    $syncGroup = $row['group_period_prices']['6months'] ?? null;
+    if ($syncGroup !== null && $syncGroup !== '') {
+        $row['group_price'] = $syncGroup;
     }
     return $row;
 }
@@ -361,6 +895,57 @@ function resolveShareProfitTargetAccountId(PDO $pdo, string $sourceCompanyCode):
     return null;
 }
 
+function resolveShareProfitTargetAccountIdForGroup(PDO $pdo, string $groupCode): ?int
+{
+    $src = strtoupper(trim($groupCode));
+    if ($src === '' || !domainApiHasGroupsTable($pdo)) {
+        return null;
+    }
+    $c168Pk = getC168CompanyPk($pdo);
+    if (!$c168Pk) {
+        return null;
+    }
+    try {
+        $st = $pdo->prepare('SELECT fee_share_allocations FROM `groups` WHERE UPPER(TRIM(group_code)) = ? LIMIT 1');
+        $st->execute([$src]);
+        $allocRaw = $st->fetchColumn();
+        $normalized = normalizeFeeShareAllocationsInput($allocRaw);
+        $profitRows = $normalized['profit'] ?? [];
+        if (!is_array($profitRows)) {
+            return null;
+        }
+        foreach ($profitRows as $row) {
+            $aid = isset($row['account_id']) ? (int) $row['account_id'] : 0;
+            if ($aid <= 0) {
+                continue;
+            }
+            $chk = $pdo->prepare("
+                SELECT COUNT(*)
+                FROM account a
+                INNER JOIN account_company ac ON ac.account_id = a.id
+                WHERE a.id = ?
+                  AND ac.company_id = ?
+                  AND LOWER(TRIM(COALESCE(a.role, ''))) = 'profit'
+            ");
+            $chk->execute([$aid, $c168Pk]);
+            if ((int) $chk->fetchColumn() > 0) {
+                return $aid;
+            }
+        }
+    } catch (PDOException $e) {
+        return null;
+    }
+    return null;
+}
+
+function resolveShareProfitTargetAccountIdForTenant(PDO $pdo, string $sourceCode, string $tenantKind = 'company'): ?int
+{
+    if ($tenantKind === 'group') {
+        return resolveShareProfitTargetAccountIdForGroup($pdo, $sourceCode);
+    }
+    return resolveShareProfitTargetAccountId($pdo, $sourceCode);
+}
+
 function collectUniqueAccountIdsFromFeeShare(array $normalized): array {
     $ids = [];
     foreach (['profit', 'sales', 'cs', 'it'] as $role) {
@@ -402,18 +987,52 @@ function getCompanyPkByCode(PDO $pdo, string $companyCode): ?int {
 }
 
 /**
- * Share % 下拉数据：始终仅列出 C168 旗下的 Account（与当前编辑的公司无关），且 role 只能是 staff/agent。
+ * Share % 账户排除：Group 账本 / domain 自动建账 / MEMBER，仅保留 C168 公司本体账户。
+ */
+function domainApiFeeShareExcludeNonC168CompanyAccountsSql(PDO $pdo, string $accountAlias = 'a'): string
+{
+    $sql = " AND LOWER(TRIM(COALESCE({$accountAlias}.role, ''))) <> 'member'";
+    if (domainApiHasAccountCreatedSourceColumn($pdo)) {
+        $sql .= " AND ({$accountAlias}.created_source IS NULL OR TRIM({$accountAlias}.created_source) = ''"
+            . " OR LOWER(TRIM({$accountAlias}.created_source)) <> 'domain_auto')";
+    }
+    try {
+        if ($pdo->query("SHOW TABLES LIKE 'account_group_map'")->rowCount() > 0) {
+            $sql .= " AND NOT EXISTS (SELECT 1 FROM account_group_map agm WHERE agm.account_id = {$accountAlias}.id)";
+        }
+    } catch (PDOException $e) {
+        // ignore
+    }
+    return $sql;
+}
+
+function domainApiResolveFeeShareC168CompanyPk(PDO $pdo): ?int
+{
+    $target = resolveC168TargetCompanyId($pdo);
+    if ($target !== null && $target > 0) {
+        return $target;
+    }
+    return getC168CompanyPk($pdo);
+}
+
+/**
+ * Share % 下拉数据：始终仅列出 C168 公司本体 Account（排除 Group 账本账户），role 只能是 staff/agent。
  */
 function fetchFeeSharePickerAccounts(PDO $pdo): array {
     $rows = [];
-    $c168Pk = getC168CompanyPk($pdo);
+    $c168Pk = domainApiResolveFeeShareC168CompanyPk($pdo);
     if ($c168Pk) {
+        $subsidiaryOnly = tenant_sql_account_company_subsidiary_only($pdo, 'ac');
+        $excludeNonC168 = domainApiFeeShareExcludeNonC168CompanyAccountsSql($pdo, 'a');
         $accStmt = $pdo->prepare("
             SELECT DISTINCT a.id, a.account_id, a.name
             FROM account a
             INNER JOIN account_company ac ON ac.account_id = a.id
             WHERE ac.company_id = ?
+              {$subsidiaryOnly}
               AND LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent')
+              {$excludeNonC168}
+              AND (a.status IS NULL OR LOWER(TRIM(a.status)) = 'active')
             ORDER BY a.account_id ASC
         ");
         $accStmt->execute([$c168Pk]);
@@ -430,18 +1049,23 @@ function fetchFeeSharePickerAccounts(PDO $pdo): array {
 }
 
 /**
- * Share % Profit 池下拉：C168 旗下且 role 为 profit 的 Account（与 staff/agent 列表分离）。
+ * Share % Profit 池下拉：C168 公司本体且 role 为 profit（排除 Group 账本账户）。
  */
 function fetchFeeShareProfitPickerAccounts(PDO $pdo): array {
     $rows = [];
-    $c168Pk = getC168CompanyPk($pdo);
+    $c168Pk = domainApiResolveFeeShareC168CompanyPk($pdo);
     if ($c168Pk) {
+        $subsidiaryOnly = tenant_sql_account_company_subsidiary_only($pdo, 'ac');
+        $excludeNonC168 = domainApiFeeShareExcludeNonC168CompanyAccountsSql($pdo, 'a');
         $accStmt = $pdo->prepare("
             SELECT DISTINCT a.id, a.account_id, a.name
             FROM account a
             INNER JOIN account_company ac ON ac.account_id = a.id
             WHERE ac.company_id = ?
+              {$subsidiaryOnly}
               AND LOWER(TRIM(COALESCE(a.role, ''))) = 'profit'
+              {$excludeNonC168}
+              AND (a.status IS NULL OR LOWER(TRIM(a.status)) = 'active')
             ORDER BY a.account_id ASC
         ");
         $accStmt->execute([$c168Pk]);
@@ -461,7 +1085,9 @@ function fetchFeeShareProfitPickerAccounts(PDO $pdo): array {
  * 校验：C168 旗下；Profit 池仅 profit role；Sales/CS/IT 仅 staff/agent。
  */
 function feeShareAllocationsTargetsValid(PDO $pdo, array $normalized): bool {
-    $c168Pk = getC168CompanyPk($pdo);
+    $c168Pk = domainApiResolveFeeShareC168CompanyPk($pdo);
+    $subsidiaryOnly = tenant_sql_account_company_subsidiary_only($pdo, 'ac');
+    $excludeNonC168 = domainApiFeeShareExcludeNonC168CompanyAccountsSql($pdo, 'a');
 
     $profitIds = [];
     foreach (($normalized['profit'] ?? []) as $row) {
@@ -499,6 +1125,8 @@ function feeShareAllocationsTargetsValid(PDO $pdo, array $normalized): bool {
             FROM account a
             INNER JOIN account_company ac ON ac.account_id = a.id
             WHERE ac.company_id = ?
+              {$subsidiaryOnly}
+              {$excludeNonC168}
               AND a.id IN ($placeholders)
               AND LOWER(TRIM(COALESCE(a.role, ''))) = 'profit'
         ";
@@ -519,6 +1147,8 @@ function feeShareAllocationsTargetsValid(PDO $pdo, array $normalized): bool {
             FROM account a
             INNER JOIN account_company ac ON ac.account_id = a.id
             WHERE ac.company_id = ?
+              {$subsidiaryOnly}
+              {$excludeNonC168}
               AND a.id IN ($placeholders)
               AND LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent')
         ";
@@ -577,6 +1207,38 @@ function getDomainFeePrice(PDO $pdo): ?string
         return null;
     }
     return money_normalize($legacy);
+}
+
+function getGroupDomainFeePrice(PDO $pdo): ?string
+{
+    $row = fetchDomainListFeeSettingsRow($pdo);
+    $group = $row['group_price'] ?? null;
+    if ($group !== null && $group !== '') {
+        return money_normalize($group);
+    }
+    return null;
+}
+
+function getDomainFeePriceForTenant(PDO $pdo, string $tenantKind = 'company'): ?string
+{
+    return $tenantKind === 'group'
+        ? getGroupDomainFeePrice($pdo)
+        : getDomainFeePrice($pdo);
+}
+
+/** SMS 标记：Group 用 GROUP| 前缀，与 Company 付款去重/报表隔离 */
+function domainFeeSmsMarker(string $markerType, string $sourceCode, string $tenantKind = 'company'): string
+{
+    $codeU = strtoupper(trim($sourceCode));
+    if ($tenantKind === 'group') {
+        return '[' . $markerType . '|GROUP|' . $codeU . ']';
+    }
+    return '[' . $markerType . '|' . $codeU . ']';
+}
+
+function domainFeeSmsLikePattern(string $markerType, string $sourceCode, string $tenantKind = 'company'): string
+{
+    return domainFeeSmsMarker($markerType, $sourceCode, $tenantKind) . '%';
 }
 
 function domainApiClearTransactionSearchCache(): void
@@ -759,7 +1421,8 @@ function createDomainNetProfitPayment(
     string $commissionTotal,
     ?int $fromPoolAccountId,
     ?int $createdByUser,
-    ?int $createdByOwner
+    ?int $createdByOwner,
+    string $tenantKind = 'company'
 ): array {
     $out = [
         'created' => false,
@@ -778,9 +1441,10 @@ function createDomainNetProfitPayment(
         return $out;
     }
 
+    $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
     $today = date('Y-m-d');
     $srcU = strtoupper(trim($sourceCompanyCode));
-    $smsMarker = '[DOMAIN_NET_PROFIT|' . $srcU . ']';
+    $smsMarker = domainFeeSmsMarker('DOMAIN_NET_PROFIT', $srcU, $tenantKind);
     $dupStmt = $pdo->prepare("
         SELECT id FROM transactions
         WHERE company_id = ? AND transaction_type = 'PAYMENT'
@@ -797,7 +1461,7 @@ function createDomainNetProfitPayment(
     }
 
     // 目标优先使用来源公司 Share% 里配置的 Profit 账号（必须为 C168 且 role=profit）
-    $profitAccId = resolveShareProfitTargetAccountId($pdo, $srcU);
+    $profitAccId = resolveShareProfitTargetAccountIdForTenant($pdo, $srcU, $tenantKind);
     if (!$profitAccId || $profitAccId <= 0) {
         $profitAccId = resolveC168ProfitRoleAccountId($pdo, $c168Pk, 0);
     }
@@ -915,24 +1579,33 @@ function resolveC168DomainFeeReceiverAccountId(PDO $pdo, int $c168Pk, int $exclu
  */
 function resolveC168DomainProvisionedMemberByCompanyCode(PDO $pdo, int $c168Pk, string $customerCompanyCode, int $excludeAccountId = 0): ?int
 {
-    $src = strtoupper(trim($customerCompanyCode));
+    return resolveC168DomainProvisionedMemberByTenantCode($pdo, $c168Pk, $customerCompanyCode, $excludeAccountId, 'company');
+}
+
+function resolveC168DomainProvisionedMemberByTenantCode(PDO $pdo, int $c168Pk, string $tenantCode, int $excludeAccountId, string $tenantKind): ?int
+{
+    $src = strtoupper(trim($tenantCode));
     if ($c168Pk <= 0 || $src === '') {
         return null;
     }
     $ownerUpper = '';
-    try {
-        $st = $pdo->prepare("
-            SELECT UPPER(TRIM(COALESCE(o.owner_code, ''))) AS oc
-            FROM company c
-            INNER JOIN owner o ON o.id = c.owner_id
-            WHERE UPPER(TRIM(c.company_id)) = ?
-            ORDER BY c.id ASC
-            LIMIT 1
-        ");
-        $st->execute([$src]);
-        $ownerUpper = strtoupper(trim((string) ($st->fetchColumn() ?: '')));
-    } catch (PDOException $e) {
-        return null;
+    if ($tenantKind === 'group') {
+        $ownerUpper = domainApiGetGroupOwnerCodeByGroupCode($pdo, $src);
+    } else {
+        try {
+            $st = $pdo->prepare("
+                SELECT UPPER(TRIM(COALESCE(o.owner_code, ''))) AS oc
+                FROM company c
+                INNER JOIN owner o ON o.id = c.owner_id
+                WHERE UPPER(TRIM(c.company_id)) = ?
+                ORDER BY c.id ASC
+                LIMIT 1
+            ");
+            $st->execute([$src]);
+            $ownerUpper = strtoupper(trim((string) ($st->fetchColumn() ?: '')));
+        } catch (PDOException $e) {
+            return null;
+        }
     }
     if ($ownerUpper === '') {
         return null;
@@ -969,7 +1642,7 @@ function resolveC168DomainProvisionedMemberByCompanyCode(PDO $pdo, int $c168Pk, 
     }
 }
 
-function resolveDomainFeeSourceAccountId(PDO $pdo, int $c168Pk, string $customerCompanyCode, int $excludeAccountId = 0): ?int
+function resolveDomainFeeSourceAccountId(PDO $pdo, int $c168Pk, string $customerCompanyCode, int $excludeAccountId = 0, string $tenantKind = 'company'): ?int
 {
     $srcCode = strtoupper(trim($customerCompanyCode));
     if ($srcCode === '') {
@@ -981,7 +1654,7 @@ function resolveDomainFeeSourceAccountId(PDO $pdo, int $c168Pk, string $customer
         return $fromC168CompanyCode;
     }
 
-    $fromProvisioned = resolveC168DomainProvisionedMemberByCompanyCode($pdo, $c168Pk, $srcCode, $excludeAccountId);
+    $fromProvisioned = resolveC168DomainProvisionedMemberByTenantCode($pdo, $c168Pk, $srcCode, $excludeAccountId, $tenantKind);
     if ($fromProvisioned && $fromProvisioned > 0) {
         return $fromProvisioned;
     }
@@ -1121,7 +1794,8 @@ function createDomainListFeePayment(
     PDO $pdo,
     string $customerCompanyCode,
     ?int $createdByUser,
-    ?int $createdByOwner
+    ?int $createdByOwner,
+    string $tenantKind = 'company'
 ): array {
     $out = [
         'created' => false,
@@ -1133,24 +1807,32 @@ function createDomainListFeePayment(
         'amount' => '0',
         'pool_account_id' => null,
     ];
-    $feePrice = getDomainFeePrice($pdo);
+    $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
+    $feePrice = getDomainFeePriceForTenant($pdo, $tenantKind);
     if ($feePrice === null || money_cmp($feePrice, '0') <= 0) {
         $out['skipped_no_price'] = true;
         return $out;
     }
     $out['amount'] = money_normalize($feePrice, 2);
-    $customerPk = getCompanyPkByCode($pdo, $customerCompanyCode);
-    if (!$customerPk) {
-        $out['skipped_no_customer'] = true;
-        return $out;
+    $custCodeU = strtoupper(trim($customerCompanyCode));
+    if ($tenantKind === 'group') {
+        if (!domainApiGroupExistsByCode($pdo, $custCodeU)) {
+            $out['skipped_no_customer'] = true;
+            return $out;
+        }
+    } else {
+        $customerPk = getCompanyPkByCode($pdo, $customerCompanyCode);
+        if (!$customerPk) {
+            $out['skipped_no_customer'] = true;
+            return $out;
+        }
     }
     $c168Pk = getC168CompanyPk($pdo);
     if (!$c168Pk) {
         $out['skipped_no_c168'] = true;
         return $out;
     }
-    $custCodeU = strtoupper(trim($customerCompanyCode));
-    $poolEarly = resolveShareProfitTargetAccountId($pdo, $custCodeU);
+    $poolEarly = resolveShareProfitTargetAccountIdForTenant($pdo, $custCodeU, $tenantKind);
     if (!$poolEarly || $poolEarly <= 0) {
         $poolEarly = resolveC168ProfitRoleAccountId($pdo, $c168Pk, 0);
     }
@@ -1158,7 +1840,7 @@ function createDomainListFeePayment(
         $out['pool_account_id'] = (int) $poolEarly;
     }
     $today = date('Y-m-d');
-    $feeSms = '[DOMAIN_LIST_FEE|' . $custCodeU . ']';
+    $feeSms = domainFeeSmsMarker('DOMAIN_LIST_FEE', $custCodeU, $tenantKind);
     $dupStmt = $pdo->prepare("
         SELECT id FROM transactions
         WHERE company_id = ? AND transaction_type = 'PAYMENT'
@@ -1179,7 +1861,7 @@ function createDomainListFeePayment(
         $out['skipped_no_accounts'] = true;
         return $out;
     }
-    $fromCustomer = resolveDomainFeeSourceAccountId($pdo, $c168Pk, $customerCompanyCode, (int)$toC168Pool);
+    $fromCustomer = resolveDomainFeeSourceAccountId($pdo, $c168Pk, $customerCompanyCode, (int)$toC168Pool, $tenantKind);
     if (!$fromCustomer || $fromCustomer === $toC168Pool) {
         $out['skipped_no_accounts'] = true;
         return $out;
@@ -1188,7 +1870,7 @@ function createDomainListFeePayment(
     if ($c168OwnerCode === '') {
         $c168OwnerCode = 'C168';
     }
-    $desc = 'Pay Domain Fee';
+    $desc = $tenantKind === 'group' ? 'Pay Domain Fee (Group)' : 'Pay Domain Fee';
 
     $now = date('Y-m-d H:i:s');
     $hasCurrencyId = tableHasColumn($pdo, 'transactions', 'currency_id');
@@ -1248,7 +1930,8 @@ function createDomainShareCommissionPayments(
     array $normalizedAllocations,
     ?int $c168SourceAccountId,
     ?int $createdByUser,
-    ?int $createdByOwner
+    ?int $createdByOwner,
+    string $tenantKind = 'company'
 ): array {
     $result = [
         'created_count' => 0,
@@ -1259,7 +1942,8 @@ function createDomainShareCommissionPayments(
         'commission_total' => '0',
     ];
 
-    $feePrice = getDomainFeePrice($pdo);
+    $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
+    $feePrice = getDomainFeePriceForTenant($pdo, $tenantKind);
     if ($feePrice === null || money_cmp($feePrice, '0') <= 0) {
         return $result;
     }
@@ -1338,7 +2022,8 @@ function createDomainShareCommissionPayments(
                 continue;
             }
 
-            $smsMarker = '[DOMAIN_SHARE_COMMISSION|' . $srcU . '|ROLE:' . strtoupper($role) . '|AID:' . $aid . ']';
+            $smsMarker = rtrim(domainFeeSmsMarker('DOMAIN_SHARE_COMMISSION', $srcU, $tenantKind), ']')
+                . '|ROLE:' . strtoupper($role) . '|AID:' . $aid . ']';
             $dupStmt = $pdo->prepare("
                 SELECT id
                 FROM transactions
@@ -1407,7 +2092,7 @@ function createDomainShareCommissionPayments(
     return $result;
 }
 
-function hasDomainNetProfitTransactionExecuted(PDO $pdo, string $sourceCompanyCode): bool
+function hasDomainNetProfitTransactionExecuted(PDO $pdo, string $sourceCompanyCode, string $tenantKind = 'company'): bool
 {
     $srcU = strtoupper(trim($sourceCompanyCode));
     if ($srcU === '') {
@@ -1417,6 +2102,7 @@ function hasDomainNetProfitTransactionExecuted(PDO $pdo, string $sourceCompanyCo
     if (!$c168Pk) {
         return false;
     }
+    $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
     try {
         $st = $pdo->prepare("
             SELECT 1
@@ -1426,7 +2112,7 @@ function hasDomainNetProfitTransactionExecuted(PDO $pdo, string $sourceCompanyCo
               AND t.sms LIKE ?
             LIMIT 1
         ");
-        $st->execute([$c168Pk, '[DOMAIN_NET_PROFIT|' . $srcU . '%']);
+        $st->execute([$c168Pk, domainFeeSmsLikePattern('DOMAIN_NET_PROFIT', $srcU, $tenantKind)]);
         return $st->fetchColumn() !== false;
     } catch (PDOException $e) {
         return false;
@@ -1666,6 +2352,98 @@ function domainApiApplyDomainListFeePaymentsFromPayload(PDO $pdo, $companies, bo
     }
 }
 
+/**
+ * EDIT DOMAIN Confirm：對 groups 中標記 apply_commission_payments_on_domain_save 的 Group
+ * 寫入 domain list fee / Share% 佣金 / 淨利潤（與 Company 流程一致，SMS 含 GROUP| 前綴隔離）。
+ */
+function domainApiApplyGroupDomainListFeePaymentsFromPayload(PDO $pdo, $groups, bool $hasC168Context, bool $domainActorAllowed): void {
+    if (!$hasC168Context || !$domainActorAllowed || !isset($_SESSION['user_id'])) {
+        return;
+    }
+    $rows = domainApiNormalizeGroupsPayload($groups);
+    $createdByUser = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner'
+        ? null
+        : (int) ($_SESSION['user_id'] ?? 0);
+    $createdByOwner = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner'
+        ? (int) ($_SESSION['owner_id'] ?? $_SESSION['user_id'] ?? 0)
+        : null;
+    $u = $createdByUser > 0 ? $createdByUser : null;
+    $o = $createdByOwner > 0 ? $createdByOwner : null;
+    $any = false;
+    foreach ($rows as $row) {
+        $gid = strtoupper(trim((string) ($row['group_code'] ?? '')));
+        if ($gid === '' || $gid === 'C168') {
+            continue;
+        }
+        $apply = filter_var($row['apply_commission_payments_on_domain_save'] ?? false, FILTER_VALIDATE_BOOLEAN);
+        if (!$apply) {
+            continue;
+        }
+        $normalized = normalizeFeeShareAllocationsInput($row['fee_share_allocations'] ?? null);
+        if (domainApiHasGroupsTable($pdo)) {
+            try {
+                $stAlloc = $pdo->prepare('SELECT fee_share_allocations FROM `groups` WHERE UPPER(TRIM(group_code)) = ? LIMIT 1');
+                $stAlloc->execute([$gid]);
+                $dbAllocRaw = $stAlloc->fetchColumn();
+                $dbNormalized = normalizeFeeShareAllocationsInput($dbAllocRaw);
+                $dbHasAny = !empty($dbNormalized['profit']) || !empty($dbNormalized['sales']) || !empty($dbNormalized['cs']) || !empty($dbNormalized['it']);
+                if ($dbHasAny) {
+                    $normalized = $dbNormalized;
+                }
+            } catch (Exception $e) {
+                // keep payload normalization
+            }
+        }
+        $feeResult = createDomainListFeePayment($pdo, $gid, $u, $o, 'group');
+        $poolId = isset($feeResult['pool_account_id']) ? (int) $feeResult['pool_account_id'] : null;
+        if ($poolId <= 0) {
+            $poolId = null;
+        }
+        $commissionResult = createDomainShareCommissionPayments($pdo, $gid, $normalized, $poolId, $u, $o, 'group');
+        $profitResult = createDomainNetProfitPayment(
+            $pdo,
+            $gid,
+            (string) ($feeResult['amount'] ?? '0'),
+            (string) ($commissionResult['commission_total'] ?? '0'),
+            $poolId,
+            $u,
+            $o,
+            'group'
+        );
+        if (
+            !empty($feeResult['created'])
+            || (($commissionResult['created_count'] ?? 0) > 0)
+            || !empty($profitResult['created'])
+        ) {
+            $any = true;
+        }
+    }
+    if ($any) {
+        domainApiClearTransactionSearchCache();
+    }
+}
+
+/**
+ * 在 C168 下为 Domain 表单中的 company / group 代码幂等创建 MEMBER 账号。
+ */
+function domainApiProvisionC168MemberAccountsForTenantCodes(
+    PDO $pdo,
+    bool $hasC168Context,
+    bool $domainActorAllowed,
+    string $ownerDisplayName,
+    string $ownerCodeUpper,
+    array $tenantCodes
+): void {
+    if (empty($tenantCodes) || !domainApiMayProvisionC168MemberAccounts($pdo, $hasC168Context, $domainActorAllowed)) {
+        return;
+    }
+    $targetC168 = resolveC168TargetCompanyId($pdo);
+    if ($targetC168 === null) {
+        return;
+    }
+    domainApiAutoCreateMemberAccountsUnderC168Company($pdo, $targetC168, $ownerDisplayName, $tenantCodes, $ownerCodeUpper);
+}
+
 function isC168Company(PDO $pdo, $company_id): bool {
     if (!$company_id) return false;
     try {
@@ -1692,6 +2470,96 @@ function getMasterC168CompanyNumericId(PDO $pdo): ?int {
         return ($v2 !== false && $v2 !== null) ? (int) $v2 : null;
     } catch (PDOException $e) {
         return null;
+    }
+}
+
+/**
+ * Rename domain-provisioned MEMBER account on C168 when company/group code changes.
+ */
+function domainApiRenameC168MemberAccountCode(PDO $pdo, string $oldCode, string $newCode): void
+{
+    $oldCode = strtoupper(trim($oldCode));
+    $newCode = strtoupper(trim($newCode));
+    if ($oldCode === '' || $newCode === '' || $oldCode === $newCode || $oldCode === 'C168' || $newCode === 'C168') {
+        return;
+    }
+
+    $c168Pk = resolveC168TargetCompanyId($pdo) ?? getMasterC168CompanyNumericId($pdo);
+    if (!$c168Pk || (int) $c168Pk <= 0) {
+        return;
+    }
+    $c168Pk = (int) $c168Pk;
+
+    $findStmt = $pdo->prepare("
+        SELECT a.id
+        FROM account a
+        INNER JOIN account_company ac ON ac.account_id = a.id
+        WHERE ac.company_id = ?
+          AND UPPER(TRIM(a.account_id)) = ?
+        LIMIT 1
+    ");
+    $findStmt->execute([$c168Pk, $oldCode]);
+    $accId = (int) ($findStmt->fetchColumn() ?: 0);
+    if ($accId <= 0 || !domainApiAccountLooksLikeDomainProvisionedMember($pdo, $accId)) {
+        return;
+    }
+
+    $conflictStmt = $pdo->prepare("
+        SELECT a.id
+        FROM account a
+        INNER JOIN account_company ac ON ac.account_id = a.id
+        WHERE ac.company_id = ?
+          AND UPPER(TRIM(a.account_id)) = ?
+          AND a.id <> ?
+        LIMIT 1
+    ");
+    $conflictStmt->execute([$c168Pk, $newCode, $accId]);
+    if ($conflictStmt->fetchColumn() !== false) {
+        return;
+    }
+
+    $pdo->prepare('UPDATE account SET account_id = ? WHERE id = ?')->execute([$newCode, $accId]);
+}
+
+/**
+ * Apply company_id renames before add/delete sync on domain update.
+ *
+ * @param array<int, array<string, mixed>> $newCompaniesData
+ * @param array<int, array<string, mixed>> $existingCompanies
+ * @param string[] $existingCompanyKeys
+ */
+function domainApiApplyCompanyRenamesFromPayload(
+    PDO $pdo,
+    array $newCompaniesData,
+    array &$existingCompanies,
+    array &$existingCompanyKeys
+): void {
+    foreach ($newCompaniesData as $newCompany) {
+        $prev = strtoupper(trim((string) ($newCompany['previous_company_id'] ?? '')));
+        $next = strtoupper(trim((string) ($newCompany['company_id'] ?? $newCompany['key'] ?? '')));
+        if ($prev === '' || $next === '' || $prev === $next) {
+            continue;
+        }
+
+        foreach ($existingCompanies as &$existing) {
+            $existingKey = strtoupper(trim((string) ($existing['company_id'] ?? '')));
+            if ($existingKey !== $prev) {
+                continue;
+            }
+            $companyPk = (int) ($existing['id'] ?? 0);
+            if ($companyPk <= 0) {
+                break;
+            }
+            $pdo->prepare('UPDATE company SET company_id = ? WHERE id = ?')->execute([$next, $companyPk]);
+            domainApiRenameC168MemberAccountCode($pdo, $prev, $next);
+            $existing['company_id'] = $next;
+            $idx = array_search($prev, $existingCompanyKeys, true);
+            if ($idx !== false) {
+                $existingCompanyKeys[$idx] = $next;
+            }
+            break;
+        }
+        unset($existing);
     }
 }
 
@@ -1774,7 +2642,22 @@ function domainApiNormalizeCompaniesPayload($companies): array {
 }
 
 /**
- * Group ID 与 Company ID 不得使用相同代码（同一 owner 提交的 companies payload）
+ * Group 实体行（company_id 与 group_id 相同，或仅 group 占位）：与 addaccountapi ensureGroupEntityCompanyId 一致，不参与互斥。
+ */
+function domainApiRowIsGroupEntity(array $row): bool
+{
+    $gidRaw = $row['group_id'] ?? null;
+    $gid = ($gidRaw !== null && trim((string) $gidRaw) !== '') ? strtoupper(trim((string) $gidRaw)) : '';
+    if ($gid === '') {
+        return false;
+    }
+    $cid = strtoupper(trim((string) ($row['company_id'] ?? '')));
+
+    return $cid === $gid || $cid === '';
+}
+
+/**
+ * Group ID 与 Company ID 不得使用相同代码（同一 owner 提交的 companies payload；排除 group 实体行）
  */
 function domainApiValidateGroupCompanyIdMutualExclusivity(array $rows): ?string
 {
@@ -1787,7 +2670,7 @@ function domainApiValidateGroupCompanyIdMutualExclusivity(array $rows): ?string
         $cid = strtoupper(trim((string) ($row['company_id'] ?? '')));
         $gidRaw = $row['group_id'] ?? null;
         $gid = ($gidRaw !== null && trim((string) $gidRaw) !== '') ? strtoupper(trim((string) $gidRaw)) : '';
-        if ($cid !== '') {
+        if ($cid !== '' && !domainApiRowIsGroupEntity($row)) {
             $companyKeys[$cid] = true;
         }
         if ($gid !== '') {
@@ -1836,13 +2719,11 @@ function domainApiValidateCompanyGroupCodesUniqueWithinPayload(array $rows): ?st
 }
 
 /**
- * 全局唯一：payload 中出现的每个非空代码（任一行的 company_id 或 group_id）在数据库中不可再出现在
- * 任意 owner 的 company 行上（company_id 与 group_id 同一命名空间）。
- * create：与全库比对；update：传入 $excludeOwnerId，排除该 owner 当前已有 company 行，便于整单重存而不误报「与自身冲突」。
+ * 从 company 行中提取所有非空 company_id / group_id（同一命名空间，大写去重）。
  *
- * （须与 domainApiValidateGroupCompanyIdMutualExclusivity、domainApiValidateCompanyGroupCodesUniqueWithinPayload 配合。）
+ * @return string[]
  */
-function domainApiValidateCrossOwnerCompanyGroupExclusivity(PDO $pdo, array $rows, ?int $excludeOwnerId): ?string
+function domainApiCollectCompanyGroupCodesFromRows(array $rows): array
 {
     $codesSet = [];
     foreach ($rows as $row) {
@@ -1859,10 +2740,60 @@ function domainApiValidateCrossOwnerCompanyGroupExclusivity(PDO $pdo, array $row
             $codesSet[$gid] = true;
         }
     }
-    if ($codesSet === []) {
+    return array_keys($codesSet);
+}
+
+/**
+ * 读取某 owner 当前已占用的 company_id / group_id 代码集合。
+ *
+ * @return string[]
+ */
+function domainApiLoadOwnerCompanyGroupCodes(PDO $pdo, int $ownerId): array
+{
+    if ($ownerId <= 0) {
+        return [];
+    }
+    $stmt = $pdo->prepare('SELECT company_id, group_id FROM company WHERE owner_id = ?');
+    $stmt->execute([$ownerId]);
+    return domainApiCollectCompanyGroupCodesFromRows($stmt->fetchAll(PDO::FETCH_ASSOC));
+}
+
+/**
+ * update 保存前：仅保留 payload 中相对该 owner 数据库快照「新出现」的代码行（供跨 owner 唯一性校验）。
+ */
+function domainApiFilterRowsToNewCompanyGroupCodes(PDO $pdo, int $ownerId, array $rows): array
+{
+    $existingSet = array_flip(domainApiLoadOwnerCompanyGroupCodes($pdo, $ownerId));
+    $filtered = [];
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $cid = strtoupper(trim((string) ($row['company_id'] ?? '')));
+        $gidRaw = $row['group_id'] ?? null;
+        $gid = ($gidRaw !== null && trim((string) $gidRaw) !== '') ? strtoupper(trim((string) $gidRaw)) : '';
+        $hasNewCode = ($cid !== '' && !isset($existingSet[$cid])) || ($gid !== '' && !isset($existingSet[$gid]));
+        if ($hasNewCode) {
+            $filtered[] = $row;
+        }
+    }
+    return $filtered;
+}
+
+/**
+ * 全局唯一：payload 中出现的每个非空代码（任一行的 company_id 或 group_id）在数据库中不可再出现在
+ * 任意 owner 的 company 行上（company_id 与 group_id 同一命名空间）。
+ * create：与全库比对；update：仅校验相对该 owner 新增加的代码（见 domainApiFilterRowsToNewCompanyGroupCodes）。
+ * validate_domain_code：单码添加前校验，可传 $excludeOwnerId 排除当前 owner 已有行。
+ *
+ * （须与 domainApiValidateGroupCompanyIdMutualExclusivity、domainApiValidateCompanyGroupCodesUniqueWithinPayload 配合。）
+ */
+function domainApiValidateCrossOwnerCompanyGroupExclusivity(PDO $pdo, array $rows, ?int $excludeOwnerId): ?string
+{
+    $codes = domainApiCollectCompanyGroupCodesFromRows($rows);
+    if ($codes === []) {
         return null;
     }
-    $codes = array_keys($codesSet);
     $in = implode(',', array_fill(0, count($codes), '?'));
 
     /*
@@ -2305,20 +3236,32 @@ function domainApiAutoCreateMemberAccountsUnderC168Company(PDO $pdo, int $c168Nu
  * 根据 owner_id 获取 owner 及其公司列表（含到期日）
  */
 function getOwnerWithCompanies(PDO $pdo, $owner_id) {
+    $ownerId = (int) $owner_id;
+    $groupCodes = domainApiOwnerGroupIdsForList($pdo, $ownerId);
+    $groupIdsStr = $groupCodes !== [] ? implode(', ', $groupCodes) : null;
+
     $stmt = $pdo->prepare("
         SELECT o.id, o.owner_code, o.name, o.email, o.created_by,
-               GROUP_CONCAT(DISTINCT NULLIF(TRIM(c.group_id), '') ORDER BY c.group_id SEPARATOR ', ') as group_ids,
                GROUP_CONCAT(NULLIF(TRIM(c.company_id), '') ORDER BY c.company_id SEPARATOR ', ') as companies
         FROM owner o
         LEFT JOIN company c ON o.id = c.owner_id
         WHERE o.id = ?
         GROUP BY o.id
     ");
-    $stmt->execute([$owner_id]);
+    $stmt->execute([$ownerId]);
     $owner = $stmt->fetch(PDO::FETCH_ASSOC);
-    if (!$owner) return null;
-    $stmt2 = $pdo->prepare("SELECT company_id, expiration_date, group_id FROM company WHERE owner_id = ? ORDER BY company_id");
-    $stmt2->execute([$owner_id]);
+    if (!$owner) {
+        return null;
+    }
+    $owner['group_ids'] = $groupIdsStr;
+    $stmt2 = $pdo->prepare("
+        SELECT company_id, expiration_date, group_id
+        FROM company
+        WHERE owner_id = ?
+          AND company_id IS NOT NULL AND TRIM(company_id) <> ''
+        ORDER BY company_id
+    ");
+    $stmt2->execute([$ownerId]);
     $owner['companies_full'] = $stmt2->fetchAll(PDO::FETCH_ASSOC);
     return $owner;
 }
@@ -2353,7 +3296,6 @@ try {
                         o.email,
                         o.created_by,
                         o.created_at,
-                        GROUP_CONCAT(DISTINCT NULLIF(TRIM(c.group_id), '') ORDER BY c.group_id SEPARATOR ', ') as group_ids,
                         GROUP_CONCAT(NULLIF(TRIM(c.company_id), '') ORDER BY c.company_id SEPARATOR ', ') as companies
                     FROM owner o
                     LEFT JOIN company c ON o.id = c.owner_id
@@ -2363,8 +3305,17 @@ try {
                 $domains = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
                 foreach ($domains as &$domain) {
-                    $stmt2 = $pdo->prepare("SELECT company_id, expiration_date FROM company WHERE owner_id = ? ORDER BY company_id");
-                    $stmt2->execute([$domain['id']]);
+                    $oid = (int) $domain['id'];
+                    $gCodes = domainApiOwnerGroupIdsForList($pdo, $oid);
+                    $domain['group_ids'] = $gCodes !== [] ? implode(', ', $gCodes) : null;
+                    $stmt2 = $pdo->prepare("
+                        SELECT company_id, expiration_date
+                        FROM company
+                        WHERE owner_id = ?
+                          AND company_id IS NOT NULL AND TRIM(company_id) <> ''
+                        ORDER BY company_id
+                    ");
+                    $stmt2->execute([$oid]);
                     $domain['companies_full'] = $stmt2->fetchAll(PDO::FETCH_ASSOC);
                 }
                 unset($domain);
@@ -2383,23 +3334,22 @@ try {
             // Create new owner
             $owner_code = strtoupper(trim($data['owner_code'] ?? ''));
             $name = trim($data['name'] ?? '');
-            $email = strtolower(trim($data['email'] ?? ''));
+            $emailValidation = validate_email($data['email'] ?? '');
+            if (!$emailValidation['ok']) {
+                echo json_encode(['success' => false, 'message' => 'Invalid email format', 'data' => null]);
+                exit;
+            }
+            $email = $emailValidation['normalized'];
             $password = $data['password'] ?? '';
             $secondary_password = $data['secondary_password'] ?? '';
             $companies = $data['companies'] ?? '';
+            $groups = $data['groups'] ?? '';
             
             // Validate required fields
             if (empty($owner_code) || empty($name) || empty($email) || empty($password) || empty($secondary_password)) {
                 echo json_encode(['success' => false, 'message' => 'All fields are required', 'data' => null]);
                 exit;
             }
-
-            $emailResult = validate_email_format($email);
-            if (!$emailResult['valid']) {
-                echo json_encode(['success' => false, 'message' => 'Invalid email format', 'data' => null]);
-                exit;
-            }
-            $email = $emailResult['email'];
             
             // 验证二级密码：必须是6位数字
             if (!preg_match('/^\d{6}$/', $secondary_password)) {
@@ -2407,10 +3357,17 @@ try {
                 exit;
             }
 
-            $companies_data = domainApiNormalizeCompaniesPayload($companies);
-            $overlapErr = domainApiValidateGroupCompanyIdMutualExclusivity($companies_data);
+            $groups_data = domainApiNormalizeGroupsPayload($groups);
+            $companies_data = domainApiFilterRealCompaniesPayload(domainApiNormalizeCompaniesPayload($companies));
+            $overlapErr = domainApiValidateGroupsAndCompaniesExclusivity($groups_data, $companies_data);
             if ($overlapErr !== null) {
                 echo json_encode(['success' => false, 'message' => $overlapErr, 'data' => null]);
+                exit;
+            }
+
+            $dupGroupErr = domainApiValidateGroupCodesUniqueWithinPayload($groups_data);
+            if ($dupGroupErr !== null) {
+                echo json_encode(['success' => false, 'message' => $dupGroupErr, 'data' => null]);
                 exit;
             }
 
@@ -2420,7 +3377,7 @@ try {
                 exit;
             }
 
-            $crossOwnerErr = domainApiValidateCrossOwnerCompanyGroupExclusivity($pdo, $companies_data, null);
+            $crossOwnerErr = domainApiValidateCrossOwnerCodesIncludingGroups($pdo, $groups_data, $companies_data, null);
             if ($crossOwnerErr !== null) {
                 echo json_encode(['success' => false, 'message' => $crossOwnerErr, 'data' => null]);
                 exit;
@@ -2434,6 +3391,7 @@ try {
             ensureCompanyFeeShareColumn($pdo);
             ensureDomainListFeeSettingsTable($pdo);
             ensureAccountCreatedSourceColumn($pdo);
+            ensureCompanyOwnerIdNullable($pdo);
 
             // Start transaction
             $pdo->beginTransaction();
@@ -2444,33 +3402,57 @@ try {
                 $stmt->execute([$owner_code, $name, $email, $hashed_password, $hashed_secondary_password, $_SESSION['login_id'] ?? 'system']);
                 
                 $owner_id = $pdo->lastInsertId();
+                $loginId = $_SESSION['login_id'] ?? 'system';
+
+                domainApiSaveOwnerGroups($pdo, (int) $owner_id, $groups_data, $loginId);
                 
-                // Insert companies if any（companies 可为 JSON 字符串或已解析数组）
+                // Insert companies if any（仅真实 company_id，不含 group 占位行）
                 if (!empty($companies_data)) {
-                    $stmt = $pdo->prepare("INSERT INTO company (company_id, owner_id, created_by, expiration_date, permissions, group_id, fee_share_allocations) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $insert = $pdo->prepare("INSERT INTO company (company_id, owner_id, created_by, expiration_date, permissions, group_id, fee_share_allocations) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $reattach = $pdo->prepare("UPDATE company SET owner_id = ?, expiration_date = ?, permissions = ?, group_id = ?, fee_share_allocations = ? WHERE id = ? AND owner_id IS NULL");
                     foreach ($companies_data as $company) {
                         $company_id = strtoupper(trim((string) ($company['company_id'] ?? '')));
+                        if ($company_id === '') {
+                            continue;
+                        }
                         $expiration_date = !empty($company['expiration_date']) ? $company['expiration_date'] : null;
                         $permissions = (isset($company['permissions']) && is_array($company['permissions'])) ? json_encode($company['permissions']) : null;
                         $group_id = !empty($company['group_id']) ? strtoupper(trim((string) $company['group_id'])) : null;
                         $fee_share_json = feeShareAllocationsToJson(normalizeFeeShareAllocationsInput($company['fee_share_allocations'] ?? null));
-                        if (!empty($company_id) || !empty($group_id)) {
-                            $db_company_id = !empty($company_id) ? $company_id : '';
-                            $stmt->execute([$db_company_id, $owner_id, $_SESSION['login_id'] ?? 'system', $expiration_date, $permissions, $group_id, $fee_share_json]);
+                        $detachedPk = domainApiFindDetachedCompanyPk($pdo, $company_id);
+                        if ($detachedPk !== null) {
+                            $reattach->execute([$owner_id, $expiration_date, $permissions, $group_id, $fee_share_json, $detachedPk]);
+                            continue;
                         }
+                        $insert->execute([$company_id, $owner_id, $loginId, $expiration_date, $permissions, $group_id, $fee_share_json]);
                     }
                 }
+
+                domainApiSyncGroupCompanyMap($pdo, (int) $owner_id);
+                domainApiDeleteGroupOnlyCompanyRows($pdo, (int) $owner_id);
 
                 // 复用已标准化的 companies 数组，避免原始 JSON 字符串格式差异导致只提取到部分 company
                 $provisionCompanyIds = domainApiExtractProvisionCompanyIds($companies_data);
-                if (!empty($provisionCompanyIds) && isset($hasC168Context) && domainApiMayProvisionC168MemberAccounts($pdo, $hasC168Context, $canUseC168DomainActions)) {
-                    $targetC168 = resolveC168TargetCompanyId($pdo);
-                    if ($targetC168 !== null) {
-                        domainApiAutoCreateMemberAccountsUnderC168Company($pdo, $targetC168, $name, $provisionCompanyIds, $owner_code);
-                    }
-                }
+                domainApiProvisionC168MemberAccountsForTenantCodes(
+                    $pdo,
+                    (bool) $hasC168Context,
+                    (bool) $canUseC168DomainActions,
+                    $name,
+                    $owner_code,
+                    $provisionCompanyIds
+                );
+                $provisionGroupIds = domainApiExtractProvisionGroupIds($groups_data);
+                domainApiProvisionC168MemberAccountsForTenantCodes(
+                    $pdo,
+                    (bool) $hasC168Context,
+                    (bool) $canUseC168DomainActions,
+                    $name,
+                    $owner_code,
+                    $provisionGroupIds
+                );
 
                 domainApiApplyDomainListFeePaymentsFromPayload($pdo, $companies, $hasC168Context, $canUseC168DomainActions);
+                domainApiApplyGroupDomainListFeePaymentsFromPayload($pdo, $groups, $hasC168Context, $canUseC168DomainActions);
 
                 $pdo->commit();
 
@@ -2497,22 +3479,21 @@ try {
             // Update existing owner
             $id = $data['id'] ?? 0;
             $name = trim($data['name'] ?? '');
-            $email = strtolower(trim($data['email'] ?? ''));
+            $emailValidation = validate_email($data['email'] ?? '');
+            if (!$emailValidation['ok']) {
+                echo json_encode(['success' => false, 'message' => 'Invalid email format', 'data' => null]);
+                exit;
+            }
+            $email = $emailValidation['normalized'];
             $password = $data['password'] ?? '';
             $secondary_password = $data['secondary_password'] ?? '';
             $companies = $data['companies'] ?? '';
+            $groups = $data['groups'] ?? '';
             
             if (empty($id) || empty($name) || empty($email)) {
                 echo json_encode(['success' => false, 'message' => 'Required fields are missing', 'data' => null]);
                 exit;
             }
-
-            $emailResult = validate_email_format($email);
-            if (!$emailResult['valid']) {
-                echo json_encode(['success' => false, 'message' => 'Invalid email format', 'data' => null]);
-                exit;
-            }
-            $email = $emailResult['email'];
             
             // 如果提供了二级密码，验证格式（只有C168的owner/admin可以修改）
             if (!empty($secondary_password)) {
@@ -2528,10 +3509,17 @@ try {
                 }
             }
 
-            $companies_data = domainApiNormalizeCompaniesPayload($companies);
-            $overlapErr = domainApiValidateGroupCompanyIdMutualExclusivity($companies_data);
+            $groups_data = domainApiNormalizeGroupsPayload($groups);
+            $companies_data = domainApiFilterRealCompaniesPayload(domainApiNormalizeCompaniesPayload($companies));
+            $overlapErr = domainApiValidateGroupsAndCompaniesExclusivity($groups_data, $companies_data);
             if ($overlapErr !== null) {
                 echo json_encode(['success' => false, 'message' => $overlapErr, 'data' => null]);
+                exit;
+            }
+
+            $dupGroupErr = domainApiValidateGroupCodesUniqueWithinPayload($groups_data);
+            if ($dupGroupErr !== null) {
+                echo json_encode(['success' => false, 'message' => $dupGroupErr, 'data' => null]);
                 exit;
             }
 
@@ -2541,16 +3529,23 @@ try {
                 exit;
             }
 
-            $crossOwnerErr = domainApiValidateCrossOwnerCompanyGroupExclusivity($pdo, $companies_data, (int) $id);
-            if ($crossOwnerErr !== null) {
-                echo json_encode(['success' => false, 'message' => $crossOwnerErr, 'data' => null]);
-                exit;
+            // 编辑保存：仅对新添加的 Company/Group ID 做跨 domain 唯一性校验（与前端 Add 按钮行为一致）
+            $newGroupRows = domainApiFilterGroupsToNewCodes($pdo, (int) $id, $groups_data);
+            $newCodeRows = domainApiFilterRowsToNewCompanyGroupCodes($pdo, (int) $id, $companies_data);
+            if ($newGroupRows !== [] || $newCodeRows !== []) {
+                // 排除当前 owner 已有 company/groups 行，避免重命名 Group 时关联公司的既有 company_id 误判为跨 domain 冲突
+                $crossOwnerErr = domainApiValidateCrossOwnerCodesIncludingGroups($pdo, $newGroupRows, $newCodeRows, (int) $id);
+                if ($crossOwnerErr !== null) {
+                    echo json_encode(['success' => false, 'message' => $crossOwnerErr, 'data' => null]);
+                    exit;
+                }
             }
             
             // DDL 在 MySQL 中会隐式提交并结束当前事务，须在 beginTransaction 之前执行
             ensureCompanyFeeShareColumn($pdo);
             ensureDomainListFeeSettingsTable($pdo);
             ensureAccountCreatedSourceColumn($pdo);
+            ensureCompanyOwnerIdNullable($pdo);
 
             // Start transaction
             $pdo->beginTransaction();
@@ -2583,169 +3578,69 @@ try {
                 $sql = "UPDATE owner SET " . implode(', ', $updateFields) . " WHERE id = ?";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute($updateValues);
+
+                $loginId = $_SESSION['login_id'] ?? 'system';
+                domainApiSaveOwnerGroups($pdo, (int) $id, $groups_data, $loginId);
                 
-                // Get existing companies for this owner
-                $stmt = $pdo->prepare("SELECT id, company_id, group_id FROM company WHERE owner_id = ?");
+                // Get existing companies for this owner (real companies only)
+                $stmt = $pdo->prepare("
+                    SELECT id, company_id, group_id FROM company
+                    WHERE owner_id = ?
+                      AND company_id IS NOT NULL AND TRIM(company_id) <> ''
+                ");
                 $stmt->execute([$id]);
                 $existing_companies = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                $existing_company_keys = array_map(function($c) { 
-                    return !empty($c['company_id']) ? strtoupper($c['company_id']) : 'GROUPONLY:' . strtoupper($c['group_id']); 
+                $existing_company_keys = array_map(function ($c) {
+                    return strtoupper(trim((string) ($c['company_id'] ?? '')));
                 }, $existing_companies);
                 
-                // Get new company IDs from input（companies 可为 JSON 字符串或已解析数组）
                 $new_companies_data = [];
                 foreach ($companies_data as $company) {
                     $company_id = strtoupper(trim((string) ($company['company_id'] ?? '')));
-                    $group_id = !empty($company['group_id']) ? strtoupper(trim((string) $company['group_id'])) : null;
-                    if (!empty($company_id) || !empty($group_id)) {
-                        $db_company_id = !empty($company_id) ? $company_id : '';
-                        $key = $db_company_id !== '' ? $db_company_id : 'GROUPONLY:' . $group_id;
-                        $new_companies_data[] = [
-                            'key' => $key,
-                            'company_id' => $db_company_id,
-                            'expiration_date' => !empty($company['expiration_date']) ? $company['expiration_date'] : null,
-                            'permissions' => (isset($company['permissions']) && is_array($company['permissions'])) ? $company['permissions'] : [],
-                            'group_id' => $group_id,
-                            'fee_share_allocations' => $company['fee_share_allocations'] ?? null,
-                        ];
+                    if ($company_id === '') {
+                        continue;
                     }
+                    $group_id = !empty($company['group_id']) ? strtoupper(trim((string) $company['group_id'])) : null;
+                    $new_companies_data[] = [
+                        'key' => $company_id,
+                        'company_id' => $company_id,
+                        'previous_company_id' => strtoupper(trim((string) ($company['previous_company_id'] ?? ''))),
+                        'expiration_date' => !empty($company['expiration_date']) ? $company['expiration_date'] : null,
+                        'permissions' => (isset($company['permissions']) && is_array($company['permissions'])) ? $company['permissions'] : [],
+                        'group_id' => $group_id,
+                        'fee_share_allocations' => $company['fee_share_allocations'] ?? null,
+                    ];
                 }
                 $new_company_keys = array_column($new_companies_data, 'key');
+
+                domainApiApplyCompanyRenamesFromPayload($pdo, $new_companies_data, $existing_companies, $existing_company_keys);
+                $new_company_keys = array_column($new_companies_data, 'key');
                 
-                // Find companies to delete (existing but not in new list)
                 $companies_to_delete = [];
                 foreach ($existing_companies as $existing) {
-                    $key = !empty($existing['company_id']) ? strtoupper($existing['company_id']) : 'GROUPONLY:' . strtoupper($existing['group_id']);
-                    if (!in_array($key, $new_company_keys)) {
+                    $key = strtoupper(trim((string) ($existing['company_id'] ?? '')));
+                    if ($key !== '' && !in_array($key, $new_company_keys, true)) {
                         $companies_to_delete[] = $existing;
                     }
                 }
                 
-                // 级联删除公司及其相关数据
+                // 从 Domain 移除：有账务 → 软解除（保留公司与 Payment）；无账务 → 物理清理
                 if (!empty($companies_to_delete)) {
-                    $delete_db_ids = normalizeIds(array_column($companies_to_delete, 'id'));
-                    
-                    if (!empty($delete_db_ids)) {
-                        $companyPlaceholders = buildInPlaceholders(count($delete_db_ids));
-                        
-                        // 1. account 及其关联的 transactions
-                        // account 表已不再直接持有 company_id，通过 account_company 关系表获取账户
-                        $accountStmt = $pdo->prepare("
-                            SELECT DISTINCT ac.account_id 
-                            FROM account_company ac
-                            WHERE ac.company_id IN ($companyPlaceholders)
-                        ");
-                        $accountStmt->execute($delete_db_ids);
-                        $accountIds = normalizeIds($accountStmt->fetchAll(PDO::FETCH_COLUMN));
-                        
-                        if (!empty($accountIds)) {
-                            // 先删除与这些账户相关的交易
-                            deleteByIds($pdo, 'transactions', 'account_id', $accountIds);
-                            deleteByIds($pdo, 'transactions', 'from_account_id', $accountIds);
-                        }
-                        
-                        // 2. process 相关
-                        $processStmt = $pdo->prepare("SELECT id FROM process WHERE company_id IN ($companyPlaceholders)");
-                        $processStmt->execute($delete_db_ids);
-                        $processIds = normalizeIds($processStmt->fetchAll(PDO::FETCH_COLUMN));
-                        
-                        if (!empty($processIds)) {
-                            deleteByIds($pdo, 'process_day', 'process_id', $processIds);
-                            deleteByIds($pdo, 'submitted_processes', 'process_id', $processIds);
-                            
-                            // data_capture -> details
-                            $processPlaceholders = buildInPlaceholders(count($processIds));
-                            $captureStmt = $pdo->prepare("SELECT id FROM data_captures WHERE process_id IN ($processPlaceholders)");
-                            $captureStmt->execute($processIds);
-                            $captureIds = normalizeIds($captureStmt->fetchAll(PDO::FETCH_COLUMN));
-                            
-                            if (!empty($captureIds)) {
-                                deleteByIds($pdo, 'data_capture_details', 'capture_id', $captureIds);
-                                deleteByIds($pdo, 'data_captures', 'id', $captureIds);
-                            }
-                            
-                            deleteByIds($pdo, 'process', 'id', $processIds);
-                        }
-                        
-                        // 3. 其他含 company_id 的表
-                        // data_captures 和 data_capture_details（直接包含 company_id 的情况）
-                        $directCaptureStmt = $pdo->prepare("SELECT id FROM data_captures WHERE company_id IN ($companyPlaceholders)");
-                        $directCaptureStmt->execute($delete_db_ids);
-                        $directCaptureIds = normalizeIds($directCaptureStmt->fetchAll(PDO::FETCH_COLUMN));
-                        
-                        if (!empty($directCaptureIds)) {
-                            deleteByIds($pdo, 'data_capture_details', 'capture_id', $directCaptureIds);
-                            deleteByIds($pdo, 'data_captures', 'id', $directCaptureIds);
-                        }
-                        
-                        // data_capture_details（直接包含 company_id 的情况）
-                        deleteByIds($pdo, 'data_capture_details', 'company_id', $delete_db_ids);
-                        
-                        // data_capture_templates
-                        deleteByIds($pdo, 'data_capture_templates', 'company_id', $delete_db_ids);
-                        
-                        // submitted_processes（直接包含 company_id 的情况）
-                        deleteByIds($pdo, 'submitted_processes', 'company_id', $delete_db_ids);
-                        
-                        // 4. 其他含 company / user 关系的表
-                        // 由于 user 不再直接持有 company_id（改为 user_company_map 关系表），
-                        // 这里通过 user_company_map 找到与这些 company 关联的用户，仅清理其相关数据，用户本身暂不删除。
-                        $userStmt = $pdo->prepare("
-                            SELECT DISTINCT u.id
-                            FROM user u
-                            INNER JOIN user_company_map ucm ON u.id = ucm.user_id
-                            WHERE ucm.company_id IN ($companyPlaceholders)
-                        ");
-                        $userStmt->execute($delete_db_ids);
-                        $userIds = normalizeIds($userStmt->fetchAll(PDO::FETCH_COLUMN));
-                        
-                        if (!empty($userIds)) {
-                            deleteByIds($pdo, 'submitted_processes', 'user_id', $userIds);
-                            deleteByIds($pdo, 'transactions', 'created_by', $userIds);
-                            
-                            $userPlaceholder = buildInPlaceholders(count($userIds));
-                            $captureByUserStmt = $pdo->prepare("SELECT id FROM data_captures WHERE created_by IN ($userPlaceholder)");
-                            $captureByUserStmt->execute($userIds);
-                            $userCaptureIds = normalizeIds($captureByUserStmt->fetchAll(PDO::FETCH_COLUMN));
-                            
-                            if (!empty($userCaptureIds)) {
-                                deleteByIds($pdo, 'data_capture_details', 'capture_id', $userCaptureIds);
-                                deleteByIds($pdo, 'data_captures', 'id', $userCaptureIds);
-                            }
-                        }
-                        
-                        // 5. 删除其他直接包含 company_id 的表
-                        deleteByIds($pdo, 'description', 'company_id', $delete_db_ids);
-                        deleteByIds($pdo, 'currency', 'company_id', $delete_db_ids);
-                        
-                        // 6. 删除 account_company 中与这些 company 关联的记录
-                        deleteByIds($pdo, 'account_company', 'company_id', $delete_db_ids);
-                        
-                        // 7. 删除不再关联任何公司的账户本身
-                        if (!empty($accountIds)) {
-                            $accountPlaceholder = buildInPlaceholders(count($accountIds));
-                            $orphanStmt = $pdo->prepare("
-                                SELECT id 
-                                FROM account 
-                                WHERE id IN ($accountPlaceholder)
-                                  AND NOT EXISTS (
-                                      SELECT 1 FROM account_company ac 
-                                      WHERE ac.account_id = account.id
-                                  )
-                            ");
-                            $orphanStmt->execute($accountIds);
-                            $orphanAccountIds = normalizeIds($orphanStmt->fetchAll(PDO::FETCH_COLUMN));
-                            
-                            if (!empty($orphanAccountIds)) {
-                                deleteByIds($pdo, 'account', 'id', $orphanAccountIds);
-                            }
-                        }
-                        
-                        // 8. 删除 user 与这些 company 的映射关系
-                        deleteByIds($pdo, 'user_company_map', 'company_id', $delete_db_ids);
-                        
-                        // 9. 最后删除公司本身
-                        deleteByIds($pdo, 'company', 'id', $delete_db_ids);
+                    [$toDetach, $toHardDelete] = domainApiPartitionCompaniesForDomainRemoval($pdo, $companies_to_delete);
+                    if ($toDetach !== []) {
+                        domainApiDetachCompaniesFromOwner(
+                            $pdo,
+                            normalizeIds(array_column($toDetach, 'id')),
+                            (int) $id
+                        );
+                    }
+                    if ($toHardDelete !== []) {
+                        $delete_db_ids = normalizeIds(array_column($toHardDelete, 'id'));
+                        $delete_code_strings = array_map(
+                            static fn ($row) => (string) ($row['company_id'] ?? ''),
+                            $toHardDelete
+                        );
+                        domainApiCascadeDeleteCompanies($pdo, $delete_db_ids, $delete_code_strings);
                     }
                 }
                 
@@ -2759,19 +3654,32 @@ try {
                 
                 // Insert new companies
                 if (!empty($companies_to_add)) {
-                    $stmt = $pdo->prepare("INSERT INTO company (company_id, owner_id, created_by, expiration_date, permissions, group_id, fee_share_allocations) VALUES (?, ?, ?, ?, ?, ?, ?)");
-                    
+                    $insert = $pdo->prepare("INSERT INTO company (company_id, owner_id, created_by, expiration_date, permissions, group_id, fee_share_allocations) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                    $reattach = $pdo->prepare("UPDATE company SET owner_id = ?, expiration_date = ?, permissions = ?, group_id = ?, fee_share_allocations = ? WHERE id = ? AND owner_id IS NULL");
+
                     foreach ($companies_to_add as $company_data) {
                         $permissions_json = !empty($company_data['permissions']) && is_array($company_data['permissions']) ? json_encode($company_data['permissions']) : null;
                         $fee_share_json = feeShareAllocationsToJson(normalizeFeeShareAllocationsInput($company_data['fee_share_allocations'] ?? null));
-                        $stmt->execute([
-                            $company_data['company_id'], 
-                            $id, 
+                        $detachedPk = domainApiFindDetachedCompanyPk($pdo, $company_data['company_id']);
+                        if ($detachedPk !== null) {
+                            $reattach->execute([
+                                $id,
+                                $company_data['expiration_date'],
+                                $permissions_json,
+                                $company_data['group_id'],
+                                $fee_share_json,
+                                $detachedPk,
+                            ]);
+                            continue;
+                        }
+                        $insert->execute([
+                            $company_data['company_id'],
+                            $id,
                             $_SESSION['login_id'] ?? 'system',
                             $company_data['expiration_date'],
                             $permissions_json,
                             $company_data['group_id'],
-                            $fee_share_json
+                            $fee_share_json,
                         ]);
                     }
                 }
@@ -2779,21 +3687,31 @@ try {
                 // 对该 domain 表单中所有带 company_id 的公司同步 C168 下 MEMBER（幂等；便于历史数据补建）
                 // 统一使用已标准化后的数组，确保批量公司都能触发自动建账
                 $provisionFromUpdate = domainApiExtractProvisionCompanyIds($new_companies_data);
-                if (!empty($provisionFromUpdate) && isset($hasC168Context) && domainApiMayProvisionC168MemberAccounts($pdo, $hasC168Context, $canUseC168DomainActions)) {
-                    $targetC168 = resolveC168TargetCompanyId($pdo);
-                    if ($targetC168 !== null) {
-                        $ocStmt = $pdo->prepare('SELECT UPPER(TRIM(owner_code)) FROM owner WHERE id = ? LIMIT 1');
-                        $ocStmt->execute([$id]);
-                        $updateOwnerCode = (string) ($ocStmt->fetchColumn() ?: '');
-                        domainApiAutoCreateMemberAccountsUnderC168Company($pdo, $targetC168, $name, $provisionFromUpdate, $updateOwnerCode);
-                    }
-                }
+                $ocStmt = $pdo->prepare('SELECT UPPER(TRIM(owner_code)) FROM owner WHERE id = ? LIMIT 1');
+                $ocStmt->execute([$id]);
+                $updateOwnerCode = (string) ($ocStmt->fetchColumn() ?: '');
+                domainApiProvisionC168MemberAccountsForTenantCodes(
+                    $pdo,
+                    (bool) $hasC168Context,
+                    (bool) $canUseC168DomainActions,
+                    $name,
+                    $updateOwnerCode,
+                    $provisionFromUpdate
+                );
+                $provisionGroupFromUpdate = domainApiExtractProvisionGroupIds($groups_data);
+                domainApiProvisionC168MemberAccountsForTenantCodes(
+                    $pdo,
+                    (bool) $hasC168Context,
+                    (bool) $canUseC168DomainActions,
+                    $name,
+                    $updateOwnerCode,
+                    $provisionGroupFromUpdate
+                );
                 
-                // Update existing companies' expiration dates and permissions if changed
                 foreach ($new_companies_data as $new_company) {
-                    if (in_array($new_company['key'], $existing_company_keys)) {
+                    if (in_array($new_company['key'], $existing_company_keys, true)) {
                         foreach ($existing_companies as $existing) {
-                            $existing_key = !empty($existing['company_id']) ? strtoupper($existing['company_id']) : 'GROUPONLY:' . strtoupper($existing['group_id']);
+                            $existing_key = strtoupper(trim((string) ($existing['company_id'] ?? '')));
                             if ($existing_key === $new_company['key']) {
                                 $permissions_json = !empty($new_company['permissions']) && is_array($new_company['permissions']) ? json_encode($new_company['permissions']) : null;
                                 $fee_share_json = feeShareAllocationsToJson(normalizeFeeShareAllocationsInput($new_company['fee_share_allocations'] ?? null));
@@ -2805,10 +3723,15 @@ try {
                     }
                 }
 
+                domainApiSyncGroupCompanyMap($pdo, (int) $id);
+                domainApiDeleteGroupOnlyCompanyRows($pdo, (int) $id);
+
                 domainApiApplyDomainListFeePaymentsFromPayload($pdo, $companies, $hasC168Context, $canUseC168DomainActions);
+                domainApiApplyGroupDomainListFeePaymentsFromPayload($pdo, $groups, $hasC168Context, $canUseC168DomainActions);
                 
                 $pdo->commit();
-                
+                domain_api_clear_session_user_cache();
+
                 $owner = getOwnerWithCompanies($pdo, $id);
                 echo json_encode([
                     'success' => true,
@@ -2836,113 +3759,31 @@ try {
                 echo json_encode(['success' => false, 'message' => 'Invalid ID', 'data' => null]);
                 exit;
             }
+
+            ensureCompanyOwnerIdNullable($pdo);
             
             // Start transaction
             $pdo->beginTransaction();
             
             try {
-                // 获取 owner 旗下的所有公司
-                $stmt = $pdo->prepare("SELECT id FROM company WHERE owner_id = ?");
+                // 获取 owner 旗下的所有公司并安全级联删除
+                $stmt = $pdo->prepare("SELECT id, company_id FROM company WHERE owner_id = ?");
                 $stmt->execute([$id]);
-                $companyIds = normalizeIds($stmt->fetchAll(PDO::FETCH_COLUMN));
-                
-                if (!empty($companyIds)) {
-                    $companyPlaceholders = buildInPlaceholders(count($companyIds));
-                    
-                    // 1. account 及其关联的 transactions
-                    // account 表已不再直接持有 company_id，通过 account_company 关系表获取账户
-                    $accountStmt = $pdo->prepare("
-                        SELECT DISTINCT ac.account_id 
-                        FROM account_company ac
-                        WHERE ac.company_id IN ($companyPlaceholders)
-                    ");
-                    $accountStmt->execute($companyIds);
-                    $accountIds = normalizeIds($accountStmt->fetchAll(PDO::FETCH_COLUMN));
-                    
-                    if (!empty($accountIds)) {
-                        // 先删除与这些账户相关的交易
-                        deleteByIds($pdo, 'transactions', 'account_id', $accountIds);
-                        deleteByIds($pdo, 'transactions', 'from_account_id', $accountIds);
-                    }
-                    
-                    // 2. process 相关
-                    $processStmt = $pdo->prepare("SELECT id FROM process WHERE company_id IN ($companyPlaceholders)");
-                    $processStmt->execute($companyIds);
-                    $processIds = normalizeIds($processStmt->fetchAll(PDO::FETCH_COLUMN));
-                    
-                    if (!empty($processIds)) {
-                        deleteByIds($pdo, 'process_day', 'process_id', $processIds);
-                        deleteByIds($pdo, 'submitted_processes', 'process_id', $processIds);
-                        
-                        // data_capture -> details
-                        $processPlaceholders = buildInPlaceholders(count($processIds));
-                        $captureStmt = $pdo->prepare("SELECT id FROM data_captures WHERE process_id IN ($processPlaceholders)");
-                        $captureStmt->execute($processIds);
-                        $captureIds = normalizeIds($captureStmt->fetchAll(PDO::FETCH_COLUMN));
-                        
-                        if (!empty($captureIds)) {
-                            deleteByIds($pdo, 'data_capture_details', 'capture_id', $captureIds);
-                            deleteByIds($pdo, 'data_captures', 'id', $captureIds);
-                        }
-                        
-                        deleteByIds($pdo, 'process', 'id', $processIds);
-                    }
-                    
-                    // 3. 其他含 company / user 关系的表
-                    // 由于 user 不再直接持有 company_id（改为 user_company_map 关系表），
-                    // 这里通过 user_company_map 找到与这些 company 关联的用户，仅清理其相关数据，用户本身暂不删除。
-                    $userStmt = $pdo->prepare("
-                        SELECT DISTINCT u.id
-                        FROM user u
-                        INNER JOIN user_company_map ucm ON u.id = ucm.user_id
-                        WHERE ucm.company_id IN ($companyPlaceholders)
-                    ");
-                    $userStmt->execute($companyIds);
-                    $userIds = normalizeIds($userStmt->fetchAll(PDO::FETCH_COLUMN));
-                    
-                    if (!empty($userIds)) {
-                        deleteByIds($pdo, 'submitted_processes', 'user_id', $userIds);
-                        deleteByIds($pdo, 'transactions', 'created_by', $userIds);
-                        
-                        $userPlaceholder = buildInPlaceholders(count($userIds));
-                        $captureByUserStmt = $pdo->prepare("SELECT id FROM data_captures WHERE created_by IN ($userPlaceholder)");
-                        $captureByUserStmt->execute($userIds);
-                        $userCaptureIds = normalizeIds($captureByUserStmt->fetchAll(PDO::FETCH_COLUMN));
-                        
-                        if (!empty($userCaptureIds)) {
-                            deleteByIds($pdo, 'data_capture_details', 'capture_id', $userCaptureIds);
-                            deleteByIds($pdo, 'data_captures', 'id', $userCaptureIds);
-                        }
-                    }
-                    
-                    deleteByIds($pdo, 'description', 'company_id', $companyIds);
-                    deleteByIds($pdo, 'currency', 'company_id', $companyIds);
-                    
-                    // 删除 account_company 中与这些 company 关联的记录
-                    deleteByIds($pdo, 'account_company', 'company_id', $companyIds);
-                    
-                    // 删除不再关联任何公司的账户本身
-                    if (!empty($accountIds)) {
-                        $accountPlaceholder = buildInPlaceholders(count($accountIds));
-                        $orphanStmt = $pdo->prepare("
-                            SELECT id 
-                            FROM account 
-                            WHERE id IN ($accountPlaceholder)
-                              AND NOT EXISTS (
-                                  SELECT 1 FROM account_company ac 
-                                  WHERE ac.account_id = account.id
-                              )
-                        ");
-                        $orphanStmt->execute($accountIds);
-                        $orphanAccountIds = normalizeIds($orphanStmt->fetchAll(PDO::FETCH_COLUMN));
-                        
-                        if (!empty($orphanAccountIds)) {
-                            deleteByIds($pdo, 'account', 'id', $orphanAccountIds);
-                        }
-                    }
-                    
-                    // 删除 user 与这些 company 的映射关系
-                    deleteByIds($pdo, 'user_company_map', 'company_id', $companyIds);
+                $ownerCompanyRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                [$toDetach, $toHardDelete] = domainApiPartitionCompaniesForDomainRemoval($pdo, $ownerCompanyRows);
+                if ($toDetach !== []) {
+                    domainApiDetachCompaniesFromOwner(
+                        $pdo,
+                        normalizeIds(array_column($toDetach, 'id')),
+                        (int) $id
+                    );
+                }
+                if ($toHardDelete !== []) {
+                    domainApiCascadeDeleteCompanies(
+                        $pdo,
+                        normalizeIds(array_column($toHardDelete, 'id')),
+                        array_map(static fn ($row) => (string) ($row['company_id'] ?? ''), $toHardDelete)
+                    );
                 }
                 
                 // 删除 owner 直接创建的数据 (data_captures / transactions)
@@ -2997,9 +3838,9 @@ try {
                 jsonResponse(false, 'Code is required', ['available' => false], 400);
                 exit;
             }
-            // 单列即可：校验逻辑会把 code 拿去匹配库中 company_id 与 group_id 两列
-            $pseudoRows = [['company_id' => $code, 'group_id' => null]];
-            $err = domainApiValidateCrossOwnerCompanyGroupExclusivity($pdo, $pseudoRows, $excludeOwnerId);
+            $pseudoGroups = [['group_code' => $code]];
+            $pseudoCompanies = [['company_id' => $code, 'group_id' => null]];
+            $err = domainApiValidateCrossOwnerCodesIncludingGroups($pdo, $pseudoGroups, $pseudoCompanies, $excludeOwnerId);
             if ($err !== null) {
                 jsonResponse(false, $err, ['available' => false, 'code' => $code], 200);
                 exit;
@@ -3018,11 +3859,20 @@ try {
             
             try {
                 ensureCompanyFeeShareColumn($pdo);
-                $stmt = $pdo->prepare("SELECT company_id, expiration_date, permissions, group_id, fee_share_allocations FROM company WHERE owner_id = ? ORDER BY company_id");
+                $stmt = $pdo->prepare("
+                    SELECT company_id, expiration_date, permissions, group_id, fee_share_allocations
+                    FROM company
+                    WHERE owner_id = ?
+                      AND company_id IS NOT NULL AND TRIM(company_id) <> ''
+                    ORDER BY company_id
+                ");
                 $stmt->execute([$owner_id]);
                 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
                 $companies = [];
                 foreach ($rows as $row) {
+                    if (domainApiRowIsGroupEntity($row)) {
+                        continue;
+                    }
                     $perms = $row['permissions'];
                     if ($perms !== null && $perms !== '') {
                         $decoded = json_decode($perms, true);
@@ -3043,6 +3893,29 @@ try {
                     'success' => false,
                     'message' => 'Error: ' . $e->getMessage(),
                     'data' => null
+                ]);
+            }
+            break;
+
+        case 'get_groups':
+            $owner_id = $data['owner_id'] ?? ($_GET['owner_id'] ?? 0);
+            if (empty($owner_id)) {
+                echo json_encode(['success' => false, 'message' => 'Invalid owner ID', 'data' => null]);
+                exit;
+            }
+            try {
+                ensureCompanyFeeShareColumn($pdo);
+                $groups = domainApiFetchOwnerGroupsFormatted($pdo, (int) $owner_id);
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'OK',
+                    'data' => ['groups' => $groups],
+                ]);
+            } catch (Exception $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error: ' . $e->getMessage(),
+                    'data' => null,
                 ]);
             }
             break;
@@ -3124,6 +3997,7 @@ try {
                         : null;
                     $stmt = $pdo->prepare("UPDATE company SET permissions = ?, expiration_date = ? WHERE company_id = ?");
                     $stmt->execute([$permissions_json, $expiration_date_val, strtoupper($company_id)]);
+                    domain_api_clear_session_user_cache();
                 } else {
                     // 旧调用方式兼容：未传 expiration_date 时只更新权限
                     $stmt = $pdo->prepare("UPDATE company SET permissions = ? WHERE company_id = ?");
@@ -3257,24 +4131,63 @@ try {
                 jsonResponse(false, 'Forbidden', null, 403);
                 exit;
             }
-            $groupPrice = normalizeOptionalDecimal($data['group_price'] ?? ($data['price'] ?? null));
-            $companyPrice = normalizeOptionalDecimal($data['company_price'] ?? ($data['price'] ?? null));
+            $companyPeriodInput = parseDomainListFeePeriodInput($data['company_period_prices'] ?? null);
+            if ($companyPeriodInput === null) {
+                $companyPeriodInput = parseDomainListFeePeriodInput($data['period_prices'] ?? null);
+            }
+            $groupPeriodInput = parseDomainListFeePeriodInput($data['group_period_prices'] ?? null);
+            $companyPeriodPrices = normalizeDomainListFeePeriodPrices($companyPeriodInput);
+            $groupPeriodPrices = normalizeDomainListFeePeriodPrices($groupPeriodInput);
+            if ($companyPeriodPrices === [] || $groupPeriodPrices === []) {
+                jsonResponse(false, 'Price must be a number or empty', null);
+                exit;
+            }
+            $groupPrice = normalizeOptionalDecimal(
+                $data['group_price'] ?? ($groupPeriodPrices['6months'] ?? null)
+            );
+            $companyPrice = normalizeOptionalDecimal(
+                $data['company_price']
+                ?? ($companyPeriodPrices['6months'] ?? ($data['price'] ?? null))
+            );
             if ($groupPrice === false || $companyPrice === false) {
                 jsonResponse(false, 'Price must be a number or empty', null);
                 exit;
             }
+            if ($companyPrice === null && ($companyPeriodPrices['6months'] ?? null) !== null) {
+                $companyPrice = $companyPeriodPrices['6months'];
+            }
+            if ($groupPrice === null && ($groupPeriodPrices['6months'] ?? null) !== null) {
+                $groupPrice = $groupPeriodPrices['6months'];
+            }
             try {
                 ensureDomainListFeePriceColumns($pdo);
+                $unifiedPeriodJson = json_encode([
+                    'company' => $companyPeriodPrices,
+                    'group' => $groupPeriodPrices,
+                ], JSON_UNESCAPED_UNICODE);
+                $companyPeriodJson = json_encode($companyPeriodPrices, JSON_UNESCAPED_UNICODE);
+                $groupPeriodJson = json_encode($groupPeriodPrices, JSON_UNESCAPED_UNICODE);
                 $stmt = $pdo->prepare("
                     UPDATE `domain_list_fee_settings`
-                    SET `group_price` = ?, `company_price` = ?, `price` = ?
+                    SET `group_price` = ?, `company_price` = ?, `price` = ?,
+                        `company_period_prices` = ?, `group_period_prices` = ?, `period_prices` = ?
                     WHERE `id` = 1
                 ");
-                $stmt->execute([$groupPrice, $companyPrice, $companyPrice]);
+                $stmt->execute([
+                    $groupPrice,
+                    $companyPrice,
+                    $companyPrice,
+                    $companyPeriodJson,
+                    $groupPeriodJson,
+                    $unifiedPeriodJson,
+                ]);
                 jsonResponse(true, 'Saved successfully', [
                     'price' => $companyPrice !== null ? money_out($companyPrice) : null,
                     'group_price' => $groupPrice !== null ? money_out($groupPrice) : null,
                     'company_price' => $companyPrice !== null ? money_out($companyPrice) : null,
+                    'company_period_prices' => $companyPeriodPrices,
+                    'period_prices' => $companyPeriodPrices,
+                    'group_period_prices' => $groupPeriodPrices,
                 ]);
             } catch (Exception $e) {
                 jsonResponse(false, 'Error: ' . $e->getMessage(), null);

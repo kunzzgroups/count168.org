@@ -138,7 +138,7 @@ export default function BankProcessTable({
   };
 
   const bankHeaderDefs = [
-    { key: "no", labelText: t("no"), sortable: true },
+    { key: "no", labelText: t("no"), sortable: false },
     { key: "supplier", labelText: t("supplier"), sortable: true },
     { key: "ccy", labelText: t("country"), sortable: true },
     { key: "bank", labelText: t("bank"), sortable: true },
@@ -204,13 +204,6 @@ export default function BankProcessTable({
   };
 
   const tableShellClass = `bank-virtual-table${showSelectColumn ? " bank-virtual-table--select-col" : ""}`;
-  /** <1700px：超过此行数时列表区固定高度并纵向滚动，避免行与行文字重叠 */
-  const BANK_LIST_SCROLL_CAP_ROWS = 9;
-  const capListScroll =
-    !tableLoading && pageRows.length > BANK_LIST_SCROLL_CAP_ROWS;
-  const scrollClipClass = `bank-virtual-scroll-clip${
-    capListScroll ? " bank-virtual-scroll-clip--cap-rows" : ""
-  }`;
   /** Last N visible rows: status menu opens upward to avoid pagination/footer overlap. */
   const STATUS_MENU_UP_LAST_ROWS = 3;
 
@@ -253,7 +246,7 @@ export default function BankProcessTable({
               })}
             </div>
           </div>
-          <div className={scrollClipClass}>
+          <div className="bank-virtual-scroll-clip">
             <div className="bank-virtual-scroll-shell">
             <div className="process-cards bank-mode bank-virtual-scroll">
             {tableLoading && pageRows.length === 0 && (

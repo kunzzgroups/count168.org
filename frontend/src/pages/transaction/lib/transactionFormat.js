@@ -44,13 +44,28 @@ export function formatPaymentHistoryMoney(value) {
   return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-/** Main grid + footers: half-up to cents then thousands (align `js/transaction.js` formatPaymentHistoryMoneyHalfUp). */
+/** Payment History modal: half-up to cents then thousands; zero displays as "-". */
 export function formatPaymentHistoryMoneyHalfUp(value) {
+  if (value === "-" || value === null || value === undefined) return "-";
+  const cleaned = String(value).replace(/,/g, "").trim();
+  if (cleaned === "" || cleaned === "-") return "-";
+  try {
+    const rounded = MoneyDecimal.formatFixedHalfUp(cleaned, 2);
+    if (MoneyDecimal.toDecimal(rounded).isZero()) return "-";
+    return MoneyDecimal.formatThousands(rounded, 2);
+  } catch {
+    return "-";
+  }
+}
+
+/** Transaction main grid + footers: same rounding as history; zero displays as "0.00". */
+export function formatTransactionGridMoneyHalfUp(value) {
   if (value === "-" || value === null || value === undefined) return "-";
   const cleaned = String(value).replace(/,/g, "").trim();
   if (cleaned === "" || cleaned === "-") return "0.00";
   try {
-    const rounded = MoneyDecimal.formatFixedHalfUp(cleaned === "-" ? "0" : cleaned, 2);
+    const rounded = MoneyDecimal.formatFixedHalfUp(cleaned, 2);
+    if (MoneyDecimal.toDecimal(rounded).isZero()) return "0.00";
     return MoneyDecimal.formatThousands(rounded, 2);
   } catch {
     return "0.00";

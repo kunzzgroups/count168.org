@@ -150,6 +150,89 @@ body.dashboard-page {
     background: linear-gradient(135deg, #45b8e0, #003dd4);
 }
 
+.dashboard-alert-modal-overlay--elevated {
+    z-index: 2147483000;
+}
+
+.dashboard-alert-modal-icon-wrap--warning {
+    background: rgba(249, 115, 22, 0.12);
+}
+
+.dashboard-alert-modal-icon-wrap--yellow {
+    background: rgba(250, 204, 21, 0.2);
+    animation: exp-modal-icon-pulse 1.8s ease-in-out infinite;
+}
+
+.dashboard-alert-modal-icon-wrap--orange {
+    background: rgba(251, 146, 60, 0.22);
+    animation: exp-modal-icon-pulse 1.45s ease-in-out infinite;
+}
+
+.dashboard-alert-modal-icon-wrap--critical {
+    background: rgba(239, 68, 68, 0.18);
+    animation: exp-modal-icon-pulse 1.05s ease-in-out infinite;
+}
+
+.dashboard-alert-modal-icon--warning,
+.dashboard-alert-modal-icon--clock {
+    width: 42px;
+    height: 42px;
+    color: #ea580c;
+}
+
+.dashboard-alert-modal-icon-wrap--yellow .dashboard-alert-modal-icon--clock {
+    color: #ca8a04;
+}
+
+.dashboard-alert-modal-icon-wrap--orange .dashboard-alert-modal-icon--clock {
+    color: #ea580c;
+}
+
+.dashboard-alert-modal-icon-wrap--critical .dashboard-alert-modal-icon--clock {
+    color: #dc2626;
+}
+
+.expiration-reminder-modal-box.dashboard-alert-modal-box--yellow {
+    border: 2px solid rgba(250, 204, 21, 0.55);
+    box-shadow: 0 16px 40px rgba(234, 179, 8, 0.22), var(--scd-shadow-lg);
+}
+
+.expiration-reminder-modal-box.dashboard-alert-modal-box--orange {
+    border: 2px solid rgba(251, 146, 60, 0.58);
+    box-shadow: 0 16px 40px rgba(249, 115, 22, 0.24), var(--scd-shadow-lg);
+}
+
+.expiration-reminder-modal-box.dashboard-alert-modal-box--critical {
+    border: 2px solid rgba(248, 113, 113, 0.62);
+    box-shadow: 0 16px 44px rgba(239, 68, 68, 0.28), var(--scd-shadow-lg);
+    animation: exp-modal-box-pulse 1.05s ease-in-out infinite;
+}
+
+@keyframes exp-modal-icon-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    50% { transform: scale(1.04); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0.12); }
+}
+
+@keyframes exp-modal-box-pulse {
+    0%, 100% { box-shadow: 0 16px 44px rgba(239, 68, 68, 0.22), var(--scd-shadow-lg); }
+    50% { box-shadow: 0 16px 48px rgba(239, 68, 68, 0.38), var(--scd-shadow-lg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-alert-modal-icon-wrap--yellow,
+    .dashboard-alert-modal-icon-wrap--orange,
+    .dashboard-alert-modal-icon-wrap--critical,
+    .expiration-reminder-modal-box.dashboard-alert-modal-box--critical,
+    .dashboard-summary-pie-chart-shell.is-enter,
+    .dashboard-summary-pie-chart-shell.is-enter::before,
+    .dashboard-summary-pie-center.is-enter,
+    .dashboard-panel-chart-body.is-enter,
+    .dashboard-summary-pie-chart-shell.is-enter::after,
+    .dashboard-summary-pie-wrap.is-flow-idle .dashboard-summary-pie-chart-shell {
+        animation: none;
+    }
+}
+
 .dashboard-container {
     max-width: none;
     margin: 0;
@@ -336,7 +419,7 @@ body.dashboard-page {
 
 /* 与 User List .action-buttons-container 同款白卡 */
 body.dashboard-page .dashboard-filter-panel.action-buttons-container {
-    margin-top: 10px;
+    margin-top: var(--layout-page-first-block-mt);
     background: var(--color-surface, #ffffff);
     border: 1px solid var(--color-border, #e5e7eb);
     box-shadow: var(--shadow-card, 0 2px 8px rgba(0, 0, 0, 0.1));
@@ -742,11 +825,13 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 
 /* Currency 拖动（与 Transaction List / Member Win/Loss 一致） */
-#currency-buttons-container .transaction-company-btn.transaction-currency-dragging {
+#currency-buttons-container .transaction-company-btn.transaction-currency-dragging,
+#currency-buttons-container .user-gc-segment.transaction-currency-dragging {
     opacity: 0.6;
 }
 
-#currency-buttons-container .transaction-company-btn.transaction-currency-drag-over {
+#currency-buttons-container .transaction-company-btn.transaction-currency-drag-over,
+#currency-buttons-container .user-gc-segment.transaction-currency-drag-over {
     outline: 2px dashed var(--scd-primary);
     outline-offset: 2px;
 }
@@ -849,7 +934,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 .kpi-card-head-label {
     font-size: clamp(13px, 0.95vw, 15px);
     font-weight: 700;
-    color: #6b7280;
+    color: #111827;
     font-family: var(--font-heading-page);
     letter-spacing: 0.01em;
     white-space: nowrap;
@@ -936,6 +1021,10 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .dashboard-kpi-card--expense .kpi-card-head-icon {
     color: #ef4444;
+}
+
+.dashboard-kpi-card--net .kpi-card-head-icon {
+    color: #10b981;
 }
 
 .dashboard-kpi-card--positive .kpi-card-head-icon {
@@ -1053,14 +1142,65 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     width: 100%;
 }
 
+.dashboard-panel-chart-body.is-enter {
+    animation: dashboard-trend-chart-in 0.76s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dashboard-panel-chart-body.is-flow-active .dashboard-trend-area-base .recharts-area-curve {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.dashboard-panel-chart-body.is-flow-idle .dashboard-trend-area-base .recharts-area-curve {
+    filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.28));
+}
+
+.dashboard-panel-chart-body.is-flow-idle .dashboard-trend-area-flow .recharts-area-area {
+    mix-blend-mode: soft-light;
+    opacity: 0.55;
+}
+
+.dashboard-chart-flow-pulses .dashboard-chart-flow-pulse-group {
+    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.35));
+}
+
+.dashboard-chart-flow-travelers circle {
+    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.85));
+}
+
+@keyframes dashboard-trend-chart-in {
+    0% {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 .dashboard-panel-card--chart {
     padding-bottom: clamp(6px, 0.5vw, 10px);
 }
 
 .dashboard-panel-card--summary {
+    --summary-font: var(--font-heading-page);
+    --summary-text-primary: #111827;
+    --summary-text-secondary: #6b7280;
+    --summary-text-muted: #64748b;
+    --summary-size-caption: clamp(11px, 0.78vw, 12px);
+    --summary-size-body: clamp(12px, 0.85vw, 14px);
+    --summary-size-hero: clamp(24px, 1.85vw, 32px);
+    --summary-size-pie-pct: clamp(22px, 1.65vw, 28px);
+    font-family: var(--summary-font);
     gap: clamp(8px, 0.65vw, 12px);
     padding: clamp(14px, 1.1vw, 18px) clamp(16px, 1.2vw, 20px);
     overflow: visible;
+}
+
+.dashboard-panel-card--summary .dashboard-summary-layout,
+.dashboard-panel-card--summary .dashboard-summary-rate-footnote {
+    font-family: var(--summary-font);
 }
 
 .dashboard-summary-hero {
@@ -1115,11 +1255,77 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .dashboard-summary-pie-chart-shell {
     position: relative;
-    width: 100%;
-    height: clamp(168px, 15vw, 180px);
+    width: min(100%, 220px);
+    height: clamp(172px, 16vw, 220px);
     max-width: 100%;
+    margin-inline: auto;
     flex-shrink: 0;
     overflow: visible;
+}
+
+.dashboard-summary-pie-chart-shell::before {
+    content: "";
+    position: absolute;
+    inset: 20%;
+    border-radius: 50%;
+    border: 1px solid rgba(147, 197, 253, 0.55);
+    pointer-events: none;
+    z-index: 4;
+}
+
+.dashboard-summary-pie-chart-shell.is-enter {
+    animation: dashboard-pie-shell-in 0.78s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dashboard-summary-pie-chart-shell.is-enter::before {
+    animation: dashboard-pie-ring-pulse 0.92s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dashboard-summary-pie-chart-shell.is-enter::after {
+    content: "";
+    position: absolute;
+    inset: 6%;
+    border-radius: 50%;
+    background: conic-gradient(
+        from 200deg,
+        transparent 0deg,
+        rgba(255, 255, 255, 0.72) 24deg,
+        rgba(147, 197, 253, 0.45) 42deg,
+        transparent 68deg,
+        transparent 360deg
+    );
+    pointer-events: none;
+    z-index: 7;
+    mix-blend-mode: soft-light;
+    animation: dashboard-pie-shine-orbit 1.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.dashboard-summary-pie-wrap.is-flow-idle .dashboard-summary-pie-chart-shell {
+    animation: dashboard-pie-idle-glow 2.8s ease-in-out infinite;
+}
+
+@keyframes dashboard-pie-idle-glow {
+    0%,
+    100% {
+        filter: drop-shadow(0 4px 14px rgba(59, 130, 246, 0.08));
+    }
+    50% {
+        filter: drop-shadow(0 6px 22px rgba(96, 165, 250, 0.28));
+    }
+}
+
+@keyframes dashboard-pie-shine-orbit {
+    0% {
+        opacity: 0;
+        transform: rotate(-130deg) scale(0.82);
+    }
+    35% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: rotate(250deg) scale(1.02);
+    }
 }
 
 .dashboard-summary-pie-wrap .recharts-responsive-container,
@@ -1137,30 +1343,31 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-hero-caption {
-    font-size: var(--text-tiny, clamp(11px, 0.78vw, 13px));
-    font-weight: 500;
-    color: var(--color-muted-fg, #6b7280);
-    font-family: var(--font-heading-page);
-    letter-spacing: 0.02em;
+    font-size: var(--summary-size-caption);
+    font-weight: 600;
+    color: var(--summary-text-primary);
+    font-family: var(--summary-font);
+    letter-spacing: 0.04em;
     text-transform: uppercase;
 }
 
 .dashboard-summary-hero-value {
-    font-size: clamp(24px, 1.85vw, 32px);
+    font-size: var(--summary-size-hero);
     font-weight: 700;
-    color: var(--color-text-ink-strong, #111827);
-    font-family: var(--font-heading-page);
+    color: var(--summary-text-primary);
+    font-family: var(--summary-font);
     line-height: 1.1;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
+    min-height: 1.15em;
 }
 
 .dashboard-summary-hero-conversion-note {
     margin-top: 2px;
-    font-size: var(--text-tiny, clamp(10px, 0.68vw, 11px));
-    font-weight: 400;
-    color: var(--color-text-caption, #64748b);
-    font-family: var(--font-ui);
+    font-size: var(--summary-size-caption);
+    font-weight: 500;
+    color: var(--summary-text-muted);
+    font-family: var(--summary-font);
     line-height: 1.3;
 }
 
@@ -1224,50 +1431,94 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 3px;
+    padding: 0 12px;
+    text-align: center;
     pointer-events: none;
     z-index: 6;
-    animation: dashboard-pie-center-in 0.48s var(--ease-out-soft, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
 }
 
-.dashboard-summary-pie-center-badge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    min-width: 52px;
-    padding: 6px 10px;
-    border-radius: 999px;
-    background: var(--color-surface, #ffffff);
-    box-shadow: 0 0 0 5px var(--color-surface, #ffffff);
+.dashboard-summary-pie-center.is-enter {
+    animation: dashboard-pie-center-in 0.68s cubic-bezier(0.34, 1.35, 0.64, 1) 0.28s both;
 }
 
 .dashboard-summary-pie-center-pct {
-    font-size: clamp(18px, 1.35vw, 22px);
+    font-size: var(--summary-size-pie-pct);
     font-weight: 700;
-    color: var(--color-text-ink-strong, #111827);
-    font-family: var(--font-heading-page);
-    line-height: 1.1;
+    color: var(--summary-text-primary);
+    font-family: var(--summary-font);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
 }
 
 .dashboard-summary-pie-center-code {
-    font-size: var(--text-tiny, clamp(10px, 0.72vw, 12px));
+    font-size: var(--summary-size-caption);
     font-weight: 600;
-    color: var(--color-text-caption, #64748b);
-    font-family: var(--font-heading-page);
-    letter-spacing: 0.04em;
+    color: var(--summary-text-secondary);
+    font-family: var(--summary-font);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.dashboard-summary-pie-center-caption {
+    font-size: var(--summary-size-caption);
+    font-weight: 500;
+    color: var(--summary-text-muted);
+    font-family: var(--summary-font);
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+}
+
+@keyframes dashboard-pie-shell-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.78) rotate(-14deg);
+        filter: drop-shadow(0 0 0 rgba(59, 130, 246, 0));
+    }
+    70% {
+        opacity: 1;
+        transform: scale(1.04) rotate(2deg);
+        filter: drop-shadow(0 10px 28px rgba(59, 130, 246, 0.22));
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+        filter: drop-shadow(0 6px 18px rgba(59, 130, 246, 0.12));
+    }
+}
+
+@keyframes dashboard-pie-ring-pulse {
+    0% {
+        opacity: 0;
+        transform: scale(0.62);
+        border-color: rgba(96, 165, 250, 0.15);
+    }
+    45% {
+        opacity: 1;
+        transform: scale(1.08);
+        border-color: rgba(96, 165, 250, 0.85);
+    }
+    100% {
+        opacity: 0.65;
+        transform: scale(1);
+        border-color: rgba(147, 197, 253, 0.55);
+    }
 }
 
 @keyframes dashboard-pie-center-in {
-    from {
+    0% {
         opacity: 0;
-        transform: scale(0.88);
+        transform: scale(0.62) rotate(-6deg);
     }
-    to {
+    65% {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1.08) rotate(2deg);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
     }
 }
 
@@ -1275,7 +1526,16 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 .dashboard-summary-pie-chart-shell .recharts-pie-sector {
     outline: none;
     cursor: default;
-    transition: opacity var(--duration-fast, 0.2s) var(--ease-out-soft, ease);
+    transition:
+        opacity var(--duration-fast, 0.2s) var(--ease-out-soft, ease),
+        filter var(--duration-fast, 0.25s) var(--ease-out-soft, ease),
+        transform var(--duration-fast, 0.25s) var(--ease-out-soft, ease);
+    transform-origin: center center;
+}
+
+.dashboard-summary-pie-wrap .recharts-pie-sector:hover,
+.dashboard-summary-pie-chart-shell .recharts-pie-sector:hover {
+    filter: brightness(1.1) drop-shadow(0 3px 10px rgba(59, 130, 246, 0.35));
 }
 
 .dashboard-summary-pie-wrap .recharts-responsive-container,
@@ -1353,9 +1613,9 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     background: var(--color-surface, #ffffff);
     border: 1px solid var(--color-border, #e5e7eb);
     box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.06));
-    font-family: var(--font-ui);
-    font-size: var(--text-tiny, clamp(10px, 0.72vw, 12px));
-    color: var(--color-body-strong, #1f2937);
+    font-family: var(--summary-font, var(--font-heading-page));
+    font-size: var(--summary-size-caption);
+    color: var(--summary-text-primary, #111827);
     line-height: 1.35;
     white-space: nowrap;
 }
@@ -1412,35 +1672,35 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-pie-tooltip-label {
-    font-weight: var(--font-weight-semibold, 600);
-    color: var(--color-heading, #002c49);
+    font-weight: 600;
+    color: var(--summary-text-primary, #111827);
     margin-bottom: 2px;
 }
 
 .dashboard-summary-pie-tooltip-value {
     font-weight: 600;
-    color: var(--color-text-ink-strong, #111827);
+    color: var(--summary-text-primary, #111827);
     font-variant-numeric: tabular-nums;
 }
 
 .dashboard-summary-pie-tooltip-converted {
     margin-top: 1px;
-    font-size: var(--text-tiny, clamp(10px, 0.68vw, 11px));
-    font-weight: 400;
-    color: var(--color-text-caption, #64748b);
+    font-size: var(--summary-size-caption);
+    font-weight: 500;
+    color: var(--summary-text-muted, #64748b);
     font-variant-numeric: tabular-nums;
 }
 
 .dashboard-summary-pie-tooltip-pct {
     margin-top: 2px;
-    font-size: var(--text-tiny, clamp(10px, 0.68vw, 11px));
-    font-weight: 600;
-    color: var(--color-text-caption, #64748b);
+    font-size: var(--summary-size-caption);
+    font-weight: 500;
+    color: var(--summary-text-muted, #64748b);
     font-variant-numeric: tabular-nums;
 }
 
 .dashboard-summary-currency-list {
-    --breakdown-cols: minmax(3.75rem, auto) minmax(0, 1fr) minmax(4.75rem, 5.25rem);
+    --breakdown-cols: minmax(3.5rem, auto) minmax(0, 1fr) minmax(6.25rem, max-content);
     grid-column: 2;
     grid-row: 1;
     flex: 1;
@@ -1470,11 +1730,11 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-currency-list-head span {
-    font-size: var(--text-tiny, clamp(11px, 0.78vw, 13px));
-    font-weight: 500;
-    color: var(--color-muted-fg, #6b7280);
-    font-family: var(--font-heading-page);
-    letter-spacing: 0.02em;
+    font-size: var(--summary-size-caption);
+    font-weight: 600;
+    color: var(--summary-text-primary);
+    font-family: var(--summary-font);
+    letter-spacing: 0.04em;
     text-transform: uppercase;
     white-space: nowrap;
 }
@@ -1486,6 +1746,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 .dashboard-summary-currency-list-body {
     flex: 1;
     min-height: 0;
+    overflow-x: auto;
     overflow-y: auto;
     padding: 4px 2px 0 0;
     display: flex;
@@ -1500,7 +1761,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     column-gap: 10px;
     padding: 6px 8px;
     border-radius: var(--radius-panel, 8px);
-    font-family: var(--font-heading-page);
+    font-family: var(--summary-font);
     border-left: none;
     background: transparent;
     transition: background-color var(--duration-fast, 0.2s) var(--ease-out-soft, ease);
@@ -1515,7 +1776,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-currency-row.is-active .dashboard-summary-currency-code {
-    color: var(--color-text-ink-strong, #111827);
+    color: var(--summary-text-primary);
     font-weight: 700;
 }
 
@@ -1534,10 +1795,10 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-currency-code {
-    font-size: clamp(12px, 0.82vw, 13px);
+    font-size: var(--summary-size-body);
     font-weight: 600;
-    color: var(--color-text-label, #374151);
-    letter-spacing: 0.03em;
+    color: var(--summary-text-primary);
+    letter-spacing: 0.02em;
     white-space: nowrap;
 }
 
@@ -1554,9 +1815,9 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-currency-amount {
-    font-size: clamp(12px, 0.85vw, 14px);
+    font-size: var(--summary-size-body);
     font-weight: 600;
-    color: var(--color-text-ink-strong, #111827);
+    color: var(--summary-text-primary);
     white-space: nowrap;
     line-height: 1.25;
     font-variant-numeric: tabular-nums;
@@ -1566,44 +1827,55 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-currency-converted {
-    font-size: var(--text-tiny, clamp(10px, 0.72vw, 12px));
-    font-weight: 400;
-    color: var(--color-text-caption, #64748b);
-    font-family: var(--font-heading-page);
+    font-size: var(--summary-size-caption);
+    font-weight: 500;
+    color: var(--summary-text-muted);
+    font-family: var(--summary-font);
     white-space: nowrap;
     line-height: 1.15;
     font-variant-numeric: tabular-nums;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
+    min-height: 1.15em;
+}
+
+.dashboard-summary-currency-converted.is-placeholder {
+    visibility: hidden;
+}
+
+.dashboard-summary-currency-list.is-multi-currency .dashboard-summary-currency-row:not(.is-active) .dashboard-summary-currency-amount-col {
+    min-height: 2.45em;
 }
 
 .dashboard-summary-currency-rate {
-    font-size: var(--text-tiny, clamp(10px, 0.68vw, 11px));
-    font-weight: 600;
-    color: var(--color-text-caption, #64748b);
-    font-family: var(--font-heading-page);
+    font-size: clamp(11px, 0.78vw, 13px);
+    font-weight: 500;
+    color: var(--summary-text-primary);
+    font-family: var(--summary-font);
     text-align: right;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    justify-self: stretch;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    justify-self: end;
+    min-width: max-content;
+    overflow: visible;
+    text-overflow: clip;
+    padding-left: 4px;
 }
 
 .dashboard-summary-rate-footnote {
     margin-top: 0;
     padding: 5px 8px;
-    font-size: var(--text-tiny, clamp(10px, 0.68vw, 11px));
-    font-weight: 400;
-    color: var(--color-text-caption, #64748b);
-    font-family: var(--font-ui);
+    font-size: var(--summary-size-caption);
+    font-weight: 500;
+    color: var(--summary-text-muted);
+    font-family: var(--summary-font);
     line-height: 1.35;
     background: var(--color-surface-slate-100, #f1f5f9);
     border: 1px solid var(--color-border-slate, #e2e8f0);
     border-radius: var(--radius-panel, 8px);
     flex-shrink: 0;
+    min-height: 2.2em;
 }
 
 .dashboard-summary-rate-footnote.is-warn {
@@ -1734,19 +2006,65 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     height: auto;
 }
 
-/* 1024px：仅微调间距与字号，布局与大屏一致 */
-@media (max-width: 1200px) {
+/* Laptop 1025–1366：双栏面板 + 紧凑收益环图 */
+@media (min-width: 1025px) and (max-width: 1366px) {
+    .dashboard-content {
+        --dashboard-section-gap: 12px;
+        gap: 12px;
+    }
+
+    .dashboard-kpi-grid,
+    .dashboard-kpi-grid--with-earnings {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    .dashboard-panels-row {
+        grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.82fr);
+        min-height: 320px;
+        gap: 12px;
+    }
+
+    .dashboard-panel-chart-body {
+        min-height: 200px;
+    }
+
+    .dashboard-summary-layout {
+        grid-template-columns: minmax(118px, 42%) minmax(0, 1fr);
+        gap: 0 10px;
+    }
+
+    .dashboard-summary-pie-chart-shell {
+        width: min(100%, 196px);
+        height: clamp(156px, 14vw, 188px);
+    }
+
+    .dashboard-summary-pie-center-pct {
+        font-size: clamp(20px, 1.5vw, 24px);
+    }
+
+    .dashboard-summary-hero-value {
+        font-size: clamp(20px, 1.55vw, 26px);
+    }
+
+    .dashboard-summary-currency-list {
+        --breakdown-cols: minmax(3.25rem, auto) minmax(0, 1fr) minmax(5.75rem, max-content);
+    }
+}
+
+/* Tablet ≤1024：面板纵向堆叠，环图与列表同排 */
+@media (max-width: 1024px) {
     .dashboard-container {
         padding-left: var(--layout-main-offset);
-        padding-right: 20px;
+        padding-right: 16px;
         padding-top: var(--layout-page-top-gap);
         padding-bottom: 16px;
         max-width: 100vw;
-
     }
 
     .dashboard-content {
-        gap: 8px;
+        gap: 10px;
+        overflow-y: auto;
     }
 
     .dashboard-card--filters .dashboard-card-body {
@@ -1764,8 +2082,8 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     }
 
     .dashboard-chart-container {
-        height: 350px;
-        min-height: 250px;
+        height: 320px;
+        min-height: 220px;
     }
 
     .transaction-company-filter {
@@ -1778,13 +2096,10 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
         gap: var(--user-gc-inline-pills-gap, 4px);
     }
 
-    .dashboard-kpi-grid {
-        gap: 10px;
-        grid-template-columns: repeat(2, 1fr);
-    }
-
+    .dashboard-kpi-grid,
     .dashboard-kpi-grid--with-earnings {
-        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .dashboard-kpi-card {
@@ -1804,10 +2119,42 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     .dashboard-panels-row {
         grid-template-columns: 1fr;
         min-height: 0;
+        gap: 12px;
+    }
+
+    .dashboard-panel-card--summary {
+        min-height: 0;
     }
 
     .dashboard-panel-chart-body {
-        min-height: 220px;
+        min-height: 240px;
+    }
+
+    .dashboard-summary-layout {
+        grid-template-columns: minmax(132px, 40%) minmax(0, 1fr);
+        gap: 0 12px;
+        align-items: stretch;
+    }
+
+    .dashboard-summary-pie-wrap {
+        min-height: 148px;
+    }
+
+    .dashboard-summary-pie-chart-shell {
+        width: min(100%, 180px);
+        height: clamp(148px, 38vw, 176px);
+    }
+
+    .dashboard-summary-pie-center-pct {
+        font-size: clamp(18px, 4.2vw, 22px);
+    }
+
+    .dashboard-summary-pie-center-caption {
+        font-size: 10px;
+    }
+
+    .dashboard-summary-currency-list-body {
+        max-height: min(220px, 32vh);
     }
 
     .dashboard-chart-section {
@@ -1835,9 +2182,51 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
         font-size: clamp(9px, 0.82vw, 15px);
     }
 
-    /* 年份选择：1024 下每行 2 个 */
     #month-date-picker .year-grid {
         grid-template-columns: repeat(2, minmax(38px, 1fr)) !important;
+    }
+}
+
+/* 窄平板 / 小屏：收益区改为上下布局 */
+@media (max-width: 900px) {
+    .dashboard-summary-layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto minmax(0, 1fr);
+        gap: 12px 0;
+    }
+
+    .dashboard-summary-left-col {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(140px, 42%);
+        grid-template-rows: auto;
+        align-items: center;
+        gap: 12px 16px;
+    }
+
+    .dashboard-summary-hero--compact {
+        grid-column: 1;
+        padding-bottom: 0;
+    }
+
+    .dashboard-summary-pie-wrap {
+        grid-column: 2;
+        grid-row: 1;
+        min-height: 140px;
+    }
+
+    .dashboard-summary-pie-chart-shell {
+        width: min(100%, 168px);
+        height: clamp(140px, 36vw, 168px);
+    }
+
+    .dashboard-summary-currency-list {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        max-height: none;
+    }
+
+    .dashboard-summary-currency-list-body {
+        max-height: min(200px, 28vh);
     }
 }
 
@@ -1924,6 +2313,27 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
     .dashboard-panel-chart-body {
         min-height: 160px;
+    }
+
+    .dashboard-summary-pie-chart-shell {
+        width: min(100%, 150px);
+        height: 140px;
+    }
+
+    .dashboard-summary-pie-center-pct {
+        font-size: 17px;
+    }
+
+    .dashboard-summary-pie-center-code {
+        font-size: 10px;
+    }
+
+    .dashboard-summary-pie-center-caption {
+        font-size: 9px;
+    }
+
+    .dashboard-summary-currency-list-body {
+        max-height: 120px;
     }
 
     .dashboard-chart-header {

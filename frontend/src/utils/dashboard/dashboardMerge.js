@@ -29,7 +29,7 @@ export function mergeGroupData(dataList, dateRange) {
 
   dataList.forEach((d) => {
     capital += parseFloat(d.capital || 0);
-    expenses += parseFloat(d.expenses || 0);
+    expenses += parseFloat(d?.period_total?.expenses ?? 0);
     profit += parseFloat(d.profit || 0);
 
     if (d.period_total) {
@@ -95,7 +95,7 @@ export function mergeGroupData(dataList, dateRange) {
 
   return {
     capital,
-    expenses,
+    expenses: periodExpenses,
     profit,
     period_total: { capital: periodCapital, expenses: periodExpenses, profit: periodProfit },
     initial_balance: { capital: bfCapital, expenses: bfExpenses, profit: bfProfit },
@@ -112,4 +112,30 @@ export function mergeGroupData(dataList, dateRange) {
     group_equity_percentage: 0,
     group_account_percentage: 0,
   };
+}
+
+/** Sum per-currency earnings rows from multiple company scopes (group "All"). */
+export function mergeEarningsByCurrency(lists, codes = null) {
+  const codeSet = new Set();
+  for (const list of lists) {
+    for (const row of list || []) {
+      const c = String(row?.code || "").toUpperCase();
+      if (c) codeSet.add(c);
+    }
+  }
+  const ordered = codes?.length
+    ? codes.map((c) => String(c).toUpperCase())
+    : [...codeSet];
+  return ordered.map((code) => {
+    let sum = 0;
+    let found = false;
+    for (const list of lists) {
+      const row = (list || []).find((r) => String(r.code).toUpperCase() === code);
+      if (row?.earnings != null) {
+        sum += Number(row.earnings) || 0;
+        found = true;
+      }
+    }
+    return { code, earnings: found ? sum : null };
+  });
 }

@@ -5,6 +5,7 @@ import { applyLoginLang, useLoginLang } from "../../utils/i18n/useLoginLang.js";
 import { MAINTENANCE_I18N } from "../../translateFile/pages/maintenanceTranslate.js";
 import { formatMemberRowDescription, getMemberText } from "../../translateFile/pages/memberTranslate.js";
 import SidebarLangSwitch from "../../components/SidebarLangSwitch.jsx";
+import SidebarMenuTooltip from "../../components/SidebarMenuTooltip.jsx";
 import ReportDatePicker from "../report/common/ReportDatePicker.jsx";
 import {
   buildMaintenancePeriodPresets,
@@ -13,14 +14,18 @@ import {
   parseDmy,
 } from "../maintenance/shared/maintenanceDateHelpers.js";
 import "../../../public/css/member.css";
+import "../../../public/css/sidebar.css";
 import "../../../public/css/userlist.css";
 import "../../../public/css/date-range-picker.css";
 import "../../../public/css/report-outlined-fields.css";
 import "../../../public/css/transaction.css";
+import AvatarPickerModal from "../../components/AvatarPickerModal.jsx";
 import ConfirmLogoutModal from "../../components/ConfirmLogoutModal.jsx";
-import MemberMiniGrid, { MemberMiniGridTotals } from "./components/MemberMiniGrid.jsx";
+import ExpirationReminderModal from "../../components/ExpirationReminderModal.jsx";
+import SidebarExpirationCountdown from "../../components/SidebarExpirationCountdown.jsx";
+import MemberMiniGrid from "./components/MemberMiniGrid.jsx";
 import MemberMoneyCell from "./components/MemberMoneyCell.jsx";
-import MemberLinkedFilterModal from "./components/MemberLinkedFilterModal.jsx";
+import MemberGridAccountPills from "./components/MemberGridAccountPills.jsx";
 import {
   computeTableTotals,
   WINLOSS_ACCOUNT_SEGMENT_MAX_BUTTONS,
@@ -30,14 +35,25 @@ import {
 } from "./memberPageHelpers.js";
 import { useMemberWinLoss } from "./useMemberWinLoss.js";
 import { useMemberPageShell } from "./useMemberPageShell.js";
+import { useSidebarTabletCollapse } from "../../hooks/useSidebarTabletCollapse.js";
+import { DASHBOARD_I18N } from "../../translateFile/shell/dashboardTranslate.js";
 
 export default function MemberPage() {
   const navigate = useNavigate();
   const lang = useLoginLang();
   const t = useCallback((key, params) => getMemberText(lang, key, params), [lang]);
   const maintenanceLocale = useMemo(() => MAINTENANCE_I18N[lang] || MAINTENANCE_I18N.en, [lang]);
+  const shellI18n = useMemo(() => DASHBOARD_I18N[lang] || DASHBOARD_I18N.en, [lang]);
+  const {
+    isTabletViewport,
+    sidebarIconOnly,
+    sidebarTabletExpanded,
+    collapseSidebar,
+    onHamburgerClick,
+  } = useSidebarTabletCollapse();
 
   const wlFiltersColRef = useRef(null);
+  const wlMatrixColRef = useRef(null);
   const [wlFiltersSyncPx, setWlFiltersSyncPx] = useState(null);
   const [accountNarrowViewport, setAccountNarrowViewport] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -62,6 +78,7 @@ export default function MemberPage() {
     dateTo,
     setDateTo,
     linkedAccounts,
+    viewGridAccounts,
     wlGridSelectedIds,
     linkedAccountCurrenciesMap,
     linkedCurrenciesLoaded,
@@ -70,6 +87,7 @@ export default function MemberPage() {
     availableCurrencies,
     miniGridDisplayCurrencies,
     miniGridShell,
+    miniGridLoading,
     miniGridBalances,
     miniGridTotals,
     miniGridHint,
@@ -77,8 +95,6 @@ export default function MemberPage() {
     showMiniRail,
     groupedRows,
     loadingTable,
-    showLinkedFilterModal,
-    setShowLinkedFilterModal,
     initSession,
     switchCompany,
     switchAccount,
@@ -111,7 +127,6 @@ export default function MemberPage() {
     setSelectedGender,
     showAvatarOptions,
     setShowAvatarOptions,
-    avatarContainerRef,
     handleSelectAvatar,
     showNotifications,
     toggleNotifications,
@@ -122,6 +137,7 @@ export default function MemberPage() {
     logoutLoading,
     performLogout,
     logoutI18n,
+    expirationReminder,
   } = useMemberPageShell({
     navigate,
     initSession,
@@ -152,7 +168,7 @@ export default function MemberPage() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  /** Currency 多段：每段最多 8 格（含 All），每满一行新开一条 segment 白底条，列仍按 8 列对齐 */
+  /** Currency 多段：每段最多 8 格（含 All），满一行自动换到下一排 segment 白底条 */
   const currencyFilterBands = useMemo(() => {
     const codes = Array.isArray(availableCurrencies) ? availableCurrencies : [];
     const showAllBtn = codes.length === 0 || codes.length > 1;
@@ -197,10 +213,20 @@ export default function MemberPage() {
   );
 
   useLayoutEffect(() => {
-    document.body.classList.remove("bg", "dashboard-page");
-    document.body.classList.add("transaction-page", "member-winloss-page", "ec-auth-shell");
+    document.body.classList.remove("bg");
+    document.body.classList.add(
+      "dashboard-page",
+      "transaction-page",
+      "member-winloss-page",
+      "ec-auth-shell",
+    );
     return () => {
-      document.body.classList.remove("transaction-page", "member-winloss-page", "ec-auth-shell");
+      document.body.classList.remove(
+        "dashboard-page",
+        "transaction-page",
+        "member-winloss-page",
+        "ec-auth-shell",
+      );
     };
   }, []);
 
@@ -209,33 +235,35 @@ export default function MemberPage() {
       setWlFiltersSyncPx(null);
       return undefined;
     }
-    const el = wlFiltersColRef.current;
-    const mq = window.matchMedia("(min-width: 1181px)");
+    const filtersEl = wlFiltersColRef.current;
+    const matrixEl = wlMatrixColRef.current;
+    const mq = window.matchMedia("(min-width: 1025px)");
     const update = () => {
       if (!showMiniRail || !mq.matches || !wlFiltersColRef.current) {
         setWlFiltersSyncPx(null);
         return;
       }
-      setWlFiltersSyncPx(Math.ceil(wlFiltersColRef.current.scrollHeight));
+      const filtersH = wlFiltersColRef.current.scrollHeight;
+      const matrixH = wlMatrixColRef.current?.scrollHeight ?? 0;
+      setWlFiltersSyncPx(Math.ceil(Math.max(filtersH, matrixH)));
     };
     update();
-    let ro;
-    if (el) {
-      ro = new ResizeObserver(() => update());
-      ro.observe(el);
-    }
+    const ro = new ResizeObserver(() => update());
+    if (filtersEl) ro.observe(filtersEl);
+    if (matrixEl) ro.observe(matrixEl);
     mq.addEventListener("change", update);
     window.addEventListener("resize", update);
     return () => {
       mq.removeEventListener("change", update);
       window.removeEventListener("resize", update);
-      ro?.disconnect();
+      ro.disconnect();
     };
   }, [
     showMiniRail,
     lang,
     companies,
     linkedAccounts,
+    availableCurrencies,
     currencyFilterBands,
     dateFrom,
     dateTo,
@@ -243,49 +271,57 @@ export default function MemberPage() {
     viewAccountId,
     miniGridDisplayCurrencies.length,
     selectedCurrencies.length,
+    miniGridAccounts.length,
+    wlGridSelectedIds.length,
+    miniGridLoading,
   ]);
 
   if (loading || !me) return null;
 
   return (
     <>
-      <div className="informationmenu-overlay" style={{ display: "none" }} />
-      <div className="informationmenu">
+      <div
+        className={`informationmenu-overlay sidebar-dismiss-overlay${sidebarTabletExpanded ? " show" : ""}`}
+        onClick={collapseSidebar}
+        aria-hidden={!sidebarTabletExpanded}
+      />
+      <div className={`informationmenu${sidebarIconOnly ? " is-collapsed" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="informationmenu-header">
           <div className="header-logo-section">
+            {isTabletViewport && sidebarIconOnly && (
+              <SidebarMenuTooltip label={shellI18n.sidebarExpand} enabled={sidebarIconOnly}>
+                <button
+                  type="button"
+                  className="sidebar-hamburger-toggle"
+                  onClick={onHamburgerClick}
+                  aria-label={shellI18n.sidebarExpand}
+                  aria-expanded={false}
+                >
+                  <span className="sidebar-hamburger-box" aria-hidden="true">
+                    <span className="sidebar-hamburger-line" />
+                    <span className="sidebar-hamburger-line" />
+                    <span className="sidebar-hamburger-line" />
+                  </span>
+                </button>
+              </SidebarMenuTooltip>
+            )}
             <img src={assetUrl("images/count_whitelogo.png")} alt="EAZYCOUNT Logo" className="header-logo" />
-            <div className="notification-bell" title={t("notifications")} onClick={toggleNotifications}>
+            <div className={`notification-bell${expirationReminder.hasBellBadge ? " has-unread" : ""}`} title={t("notifications")} onClick={toggleNotifications}>
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 2C10.34 2 9 3.34 9 5V5.29C6.72 6.15 5.12 8.39 5.01 11L5 11V16L3 18V19H21V18L19 16V11C18.88 8.39 17.28 6.15 15 5.29V5C15 3.34 13.66 2 12 2ZM12 22C10.9 22 10 21.1 10 20H14C14 21.1 13.1 22 12 22Z" />
               </svg>
             </div>
           </div>
           <div className="user-info-container">
-            <div className="avatar-selector-container" ref={avatarContainerRef}>
-              <div className="current-avatar" onClick={() => setShowAvatarOptions((prev) => !prev)}>
+            <div className="avatar-selector-container">
+              <button
+                type="button"
+                className="current-avatar"
+                aria-label={t("chooseAvatar")}
+                onClick={() => setShowAvatarOptions(true)}
+              >
                 <img id="currentAvatarImg" className="current-avatar-img" src={avatarSrc} alt="Avatar" />
-              </div>
-              <div className={`avatar-options ${showAvatarOptions ? "show" : ""}`} id="avatarOptions">
-                <div className="options-title">{t("chooseAvatar")}</div>
-                <div className="gender-selection">
-                  <button type="button" className={`gender-btn ${selectedGender === "male" ? "active" : ""}`} onClick={() => setSelectedGender("male")}>{t("male")}</button>
-                  <button type="button" className={`gender-btn ${selectedGender === "female" ? "active" : ""}`} onClick={() => setSelectedGender("female")}>{t("female")}</button>
-                </div>
-                <div className={`avatar-list ${selectedGender === "male" ? "show" : ""}`}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                    <div key={`male-${num}`} className={`avatar-option ${selectedAvatarId === `male${num}` ? "selected" : ""}`} onClick={() => handleSelectAvatar(`male${num}`)}>
-                      <img src={assetUrl(`images/avatar${num}.png`)} alt={`Male Avatar ${num}`} className="avatar-option-img" />
-                    </div>
-                  ))}
-                </div>
-                <div className={`avatar-list ${selectedGender === "female" ? "show" : ""}`}>
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                    <div key={`female-${num}`} className={`avatar-option ${selectedAvatarId === `female${num}` ? "selected" : ""}`} onClick={() => handleSelectAvatar(`female${num}`)}>
-                      <img src={assetUrl(`images/female${num}.png`)} alt={`Female Avatar ${num}`} className="avatar-option-img" />
-                    </div>
-                  ))}
-                </div>
-              </div>
+              </button>
             </div>
             <div className="user-avatar-dropdown">
               <div className="user-info">
@@ -299,30 +335,41 @@ export default function MemberPage() {
         <div className="informationmenu-content">
           <div className="content-separator" />
           <div className="informationmenu-section">
-            <div className="informationmenu-section-title current-page">{t("winLoss")}</div>
+            <SidebarMenuTooltip label={t("winLoss")} enabled={sidebarIconOnly}>
+              <div className="informationmenu-section-title current-page">
+                <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z" />
+                </svg>
+                <span className="sidebar-menu-label">{t("winLoss")}</span>
+              </div>
+            </SidebarMenuTooltip>
           </div>
         </div>
         <div className="informationmenu-footer">
-          <div className={`company-expiration-countdown ${me?.expiration_status || "normal"}`}>
-            <svg className="expiration-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            <div className="expiration-content">
-              <span className="expiration-label">{t("exp")}</span>
-              <span className={`expiration-countdown-text ${me?.expiration_status || "normal"}`}>{me?.expiration_hint || "-"}</span>
-            </div>
-          </div>
-          <button className="btn logout-btn" onClick={() => setShowLogoutConfirm(true)} type="button">{t("logout")}</button>
+          <SidebarExpirationCountdown
+            status={me?.expiration_status || "normal"}
+            label={t("exp")}
+            hint={me?.expiration_hint || "-"}
+          />
+          <button className="btn logout-btn" onClick={() => setShowLogoutConfirm(true)} type="button">
+            {sidebarIconOnly ? (
+              <svg className="logout-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="16 17 21 12 16 7" strokeLinecap="round" strokeLinejoin="round" />
+                <line x1="21" y1="12" x2="9" y2="12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : (
+              t("logout")
+            )}
+          </button>
         </div>
       </div>
 
       <div className="transaction-container">
-        <div className="transaction-separator-line" />
         <div className="transaction-main-content member-winloss-dash">
           <div className="transaction-search-section member-dash-unified-bar">
             <div
-              className={`member-dash-columns${showMiniRail ? " member-dash-columns--three-col" : " member-dash-columns--no-mini-rail"}${showMiniRail && miniGridDisplayCurrencies.length === 1 ? " member-dash-columns--single-ccy-rail" : ""}${wlFiltersSyncPx != null ? " member-dash-columns--wl-sync-h" : ""}`}
+              className={`member-dash-columns${showMiniRail ? " member-dash-columns--two-col" : " member-dash-columns--no-mini-rail"}${wlFiltersSyncPx != null ? " member-dash-columns--wl-sync-h" : ""}${miniGridLoading ? " member-dash-columns--grid-loading" : ""}`}
               style={wlFiltersSyncPx != null ? { ["--member-winloss-filters-h"]: `${wlFiltersSyncPx}px` } : undefined}
             >
               <div className="member-dash-col member-dash-col-filters" ref={wlFiltersColRef}>
@@ -433,7 +480,7 @@ export default function MemberPage() {
                             type="button"
                             draggable
                             data-currency={cell.code}
-                            className={`user-gc-segment user-gc-segment--draggable-pill${selectedCurrencies.includes(cell.code) ? " is-on" : ""}`}
+                            className={`user-gc-segment user-gc-segment--draggable-pill${isAllSelected || selectedCurrencies.includes(cell.code) ? " is-on" : ""}`}
                             onDragStart={(e) => {
                               e.dataTransfer.setData("text/plain", cell.code);
                               e.dataTransfer.effectAllowed = "move";
@@ -444,7 +491,7 @@ export default function MemberPage() {
                           >
                             {cell.code}
                           </button>
-                        )
+                        ),
                       )}
                     </div>
                   ))}
@@ -454,49 +501,37 @@ export default function MemberPage() {
               </div>
               {showMiniRail && (
                 <>
-                  <div className="member-dash-col member-dash-col-matrix" aria-hidden="false">
-                    {linkedAccounts.length > 0 && (
+                  <div className="member-dash-col member-dash-col-matrix" ref={wlMatrixColRef} aria-hidden="false">
+                    {(viewGridAccounts.length > 0 || linkedAccounts.length > 0) && (
                       <div className="member-dash-rail-toolbar member-dash-matrix-toolbar">
-                        <button
-                          type="button"
-                          className="member-dash-filter-trigger"
-                          id="member_linked_filter_btn"
-                          title={t("accountsFilterTitle")}
-                          onClick={() => setShowLinkedFilterModal(true)}
-                        >
-                          <i className="fas fa-filter" aria-hidden="true" />
-                          <span>{t("accounts")}</span>
-                        </button>
+                        <MemberGridAccountPills
+                          linkedAccounts={viewGridAccounts.length ? viewGridAccounts : linkedAccounts}
+                          selectedIds={wlGridSelectedIds}
+                          onApply={applyWlGridSelection}
+                          onNotify={showNotification}
+                          t={t}
+                        />
                       </div>
                     )}
                     <div className="member-dash-matrix-center-wrap">
                       <div className="member-dash-rail-matrix">
-                        <MemberMiniGrid
-                          shellMode={miniGridShell}
-                          currencies={miniGridDisplayCurrencies}
-                          accounts={miniGridAccounts}
-                          balanceMap={miniGridBalances}
-                          hint={miniGridHint}
-                          linkedCurrenciesLoaded={linkedCurrenciesLoaded}
-                          linkedAccountCurrenciesMap={linkedAccountCurrenciesMap}
-                          t={t}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="member-dash-col member-dash-col-total">
-                    <div className="member-dash-rail-total">
-                      <div className="member-dash-total-matrix" role="region" aria-label={t("balanceTotalsAria")}>
-                        <div className="member-dash-total-matrix-hd">{t("total")}</div>
-                        <div className="member-dash-total-matrix-body">
-                          <div id="member_balance_total_value" className="member-dash-total-values" aria-live="polite">
-                            <MemberMiniGridTotals
-                              currencyOrder={miniGridDisplayCurrencies}
-                              totalsByCu={miniGridTotals}
-                              t={t}
-                            />
-                          </div>
-                        </div>
+                        {miniGridLoading ? (
+                          <p className="member-dash-matrix-loading" role="status">
+                            {t("loading")}
+                          </p>
+                        ) : (
+                          <MemberMiniGrid
+                            shellMode={miniGridShell}
+                            currencies={miniGridDisplayCurrencies}
+                            accounts={miniGridAccounts}
+                            balanceMap={miniGridBalances}
+                            totalsByCu={miniGridTotals}
+                            hint={miniGridHint}
+                            linkedCurrenciesLoaded={linkedCurrenciesLoaded}
+                            linkedAccountCurrenciesMap={linkedAccountCurrenciesMap}
+                            t={t}
+                          />
+                        )}
                       </div>
                     </div>
                   </div>
@@ -622,7 +657,10 @@ export default function MemberPage() {
             <div className="notification-empty"><p>{t("loadingAnnouncements")}</p></div>
           ) : announcements.length > 0 ? (
             announcements.map((a, idx) => (
-              <div key={`${a.title || "announcement"}-${idx}`} className="notification-item unread">
+              <div
+                key={a.id ?? `${a.title || "announcement"}-${idx}`}
+                className={`notification-item unread${a.isExpirationReminder ? " expiration-reminder-item" : ""}`}
+              >
                 <div className="notification-title">{a.title}</div>
                 <div className="notification-message">{a.content}</div>
                 <div className="notification-time">{a.created_at}</div>
@@ -639,14 +677,26 @@ export default function MemberPage() {
         </div>
       </div>
 
-      <MemberLinkedFilterModal
-        open={showLinkedFilterModal}
-        linkedAccounts={linkedAccounts}
-        selectedIds={wlGridSelectedIds}
-        onClose={() => setShowLinkedFilterModal(false)}
-        onApply={applyWlGridSelection}
-        onNotify={showNotification}
-        t={t}
+      <ExpirationReminderModal
+        open={expirationReminder.showModal}
+        title={expirationReminder.modalTitle}
+        message={expirationReminder.modalMessage}
+        confirmLabel={expirationReminder.modalI18n.confirm}
+        onConfirm={expirationReminder.dismissModal}
+        urgencyTier={expirationReminder.reminder?.tier || "yellow"}
+      />
+
+      <AvatarPickerModal
+        open={showAvatarOptions}
+        onClose={() => setShowAvatarOptions(false)}
+        selectedAvatarId={selectedAvatarId}
+        selectedGender={selectedGender}
+        onGenderChange={setSelectedGender}
+        onSelect={handleSelectAvatar}
+        title={t("chooseAvatar")}
+        maleLabel={t("male")}
+        femaleLabel={t("female")}
+        cancelLabel={t("cancel")}
       />
 
       <ConfirmLogoutModal

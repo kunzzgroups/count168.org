@@ -4,6 +4,8 @@ export const transactionQueryKeys = {
   searchRoot: () => ["tx-search"],
   search: ({
     companyId,
+    viewGroup,
+    subsidiaryAccountsOnly,
     dateFrom,
     dateTo,
     showInactive,
@@ -15,6 +17,8 @@ export const transactionQueryKeys = {
     "tx-search",
     {
       companyId: Number(companyId ?? 0),
+      viewGroup: viewGroup ? String(viewGroup).trim().toUpperCase() : "",
+      subsidiaryAccountsOnly: !!subsidiaryAccountsOnly,
       dateFrom: String(dateFrom || ""),
       dateTo: String(dateTo || ""),
       showInactive: !!showInactive,
@@ -25,19 +29,29 @@ export const transactionQueryKeys = {
     },
   ],
   categories: () => ["tx-categories"],
-  accounts: (companyId) => ["tx-accounts", Number(companyId ?? 0)],
-  companyCurrencies: (companyId) => ["tx-company-currencies", Number(companyId ?? 0)],
+  /** scopeKey from transactionScopeCacheKey — separates group-only vs subsidiary drill-down. */
+  accounts: (scopeKey) => ["tx-accounts", String(scopeKey || "")],
+  companyCurrencies: (scopeKey) => ["tx-company-currencies", String(scopeKey || "")],
   userCurrencyOrder: () => ["tx-user-currency-order"],
-  history: ({ companyId, accountDbId, dateFrom, dateTo, currency, virtualCompanyCode }) => [
+  history: ({ companyId, viewGroup, groupId, groupAggregate, accountDbId, dateFrom, dateTo, currency, virtualCompanyCode }) => [
     "tx-history",
     Number(companyId ?? 0),
+    viewGroup ? String(viewGroup).trim().toUpperCase() : "",
+    groupId ? String(groupId).trim().toUpperCase() : "",
+    groupAggregate ? "g" : "c",
     String(accountDbId || ""),
     String(dateFrom || ""),
     String(dateTo || ""),
     String(currency || "").toUpperCase().trim(),
     String(virtualCompanyCode || "").toUpperCase().trim(),
   ],
-  contraInbox: (companyId) => ["tx-contra-inbox", Number(companyId ?? 0)],
+  contraInbox: ({ companyId, viewGroup, groupId, groupAggregate } = {}) => [
+    "tx-contra-inbox",
+    Number(companyId ?? 0),
+    viewGroup ? String(viewGroup).trim().toUpperCase() : "",
+    groupId ? String(groupId).trim().toUpperCase() : "",
+    groupAggregate ? "g" : "c",
+  ],
   contraInboxRoot: () => ["tx-contra-inbox"],
 };
 
@@ -54,35 +68,108 @@ export async function getCategories() {
   return safeJson(res);
 }
 
-export async function getAccounts({ companyId, role, status = "active", currency } = {}) {
+function appendViewGroup(params, viewGroup) {
+  const vg = viewGroup != null ? String(viewGroup).trim().toUpperCase() : "";
+  if (vg) params.set("view_group", vg);
+}
+
+/** Append company_id / view_group / group_id (same rules as transactionScopeApiParams). */
+function appendTransactionScope(
+  target,
+  { companyId, viewGroup, groupId, groupAggregate, subsidiaryAccountsOnly },
+  kind = "params",
+) {
+  const cid = companyId != null && companyId !== "" ? Number(companyId) : 0;
+  if (Number.isFinite(cid) && cid > 0) {
+    if (kind === "form") target.append("company_id", String(cid));
+    else target.set("company_id", String(cid));
+  }
+  const vg = viewGroup != null ? String(viewGroup).trim().toUpperCase() : "";
+  if (vg) {
+    if (kind === "form") target.append("view_group", vg);
+    else target.set("view_group", vg);
+  }
+  const gid = groupId != null ? String(groupId).trim().toUpperCase() : "";
+  if (gid) {
+    if (kind === "form") target.append("group_id", gid);
+    else target.set("group_id", gid);
+  }
+  if (groupAggregate) {
+    if (kind === "form") target.append("group_aggregate", "1");
+    else target.set("group_aggregate", "1");
+  }
+  if (subsidiaryAccountsOnly) {
+    if (kind === "form") target.append("subsidiary_accounts_only", "1");
+    else target.set("subsidiary_accounts_only", "1");
+  }
+}
+
+export async function getAccounts({ companyId, viewGroup, groupId, role, status = "active", currency, signal } = {}) {
   const params = new URLSearchParams();
-  if (companyId != null) params.set("company_id", String(companyId));
+  appendTransactionScope(params, { companyId, viewGroup, groupId });
   if (role) params.set("role", role);
   if (status) params.set("status", status);
   if (currency) params.set("currency", currency);
-  const res = await fetch(buildApiUrl(`api/transactions/get_accounts_api.php?${params.toString()}`), { credentials: "include" });
+  const res = await fetch(buildApiUrl(`api/transactions/get_accounts_api.php?${params.toString()}`), {
+    credentials: "include",
+    signal,
+  });
   return safeJson(res);
 }
 
-export async function getCompanyCurrencies({ companyId } = {}) {
+export async function getCompanyCurrencies({
+  companyId,
+  viewGroup,
+  groupId,
+  groupAggregate,
+  subsidiaryAccountsOnly,
+  signal,
+} = {}) {
   const params = new URLSearchParams();
-  if (companyId != null) params.set("company_id", String(companyId));
-  const res = await fetch(buildApiUrl(`api/transactions/get_company_currencies_api.php?${params.toString()}`), { credentials: "include" });
+  appendTransactionScope(params, {
+    companyId,
+    viewGroup,
+    groupId,
+    groupAggregate,
+    subsidiaryAccountsOnly,
+  });
+  const cid = companyId != null && companyId !== "" ? Number(companyId) : 0;
+  const useScopeCurrencyApi =
+    (groupAggregate && !(Number.isFinite(cid) && cid > 0) && (viewGroup || groupId)) ||
+    (Number.isFinite(cid) && cid > 0 && subsidiaryAccountsOnly);
+  const path = useScopeCurrencyApi
+    ? "api/transactions/get_scope_account_currencies_api.php"
+    : "api/transactions/get_company_currencies_api.php";
+  const res = await fetch(buildApiUrl(`${path}?${params.toString()}`), {
+    credentials: "include",
+    signal,
+  });
   return safeJson(res);
 }
 
-export async function getUserCurrencyOrder() {
-  const res = await fetch(buildApiUrl(`api/transactions/user_currency_order_api.php?_t=${Date.now()}`), { credentials: "include" });
+export async function getUserCurrencyOrder({ companyId, signal } = {}) {
+  const params = new URLSearchParams({ _t: String(Date.now()) });
+  const cid = companyId != null && companyId !== "" ? Number(companyId) : 0;
+  if (Number.isFinite(cid) && cid > 0) params.set("company_id", String(cid));
+  const res = await fetch(
+    buildApiUrl(`api/transactions/user_currency_order_api.php?${params.toString()}`),
+    { credentials: "include", signal },
+  );
   return safeJson(res);
 }
 
 /** Same contract as legacy JS: POST JSON `{ order: string[] }` (see api/transactions/user_currency_order_api.php). */
-export async function saveUserCurrencyOrder(order) {
+export async function saveUserCurrencyOrder(order, { companyId } = {}) {
   const codes = Array.isArray(order) ? order.map((c) => String(c || "").trim()).filter(Boolean) : [];
+  const body = { order: codes };
+  const cid = companyId != null && companyId !== "" ? Number(companyId) : 0;
+  if (Number.isFinite(cid) && cid > 0) {
+    body.company_id = cid;
+  }
   const res = await fetch(buildApiUrl("api/transactions/user_currency_order_api.php"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ order: codes }),
+    body: JSON.stringify(body),
     credentials: "include",
   });
   return safeJson(res);
@@ -127,6 +214,10 @@ function logTxSearchResponse(body) {
 
 export async function searchTransactions({
   companyId,
+  viewGroup,
+  groupId,
+  groupAggregate,
+  subsidiaryAccountsOnly,
   dateFrom,
   dateTo,
   showInactive,
@@ -137,7 +228,13 @@ export async function searchTransactions({
   signal,
 } = {}) {
   const params = new URLSearchParams();
-  if (companyId != null) params.set("company_id", String(companyId));
+  appendTransactionScope(params, {
+    companyId,
+    viewGroup,
+    groupId,
+    groupAggregate,
+    subsidiaryAccountsOnly,
+  });
   params.set("date_from", String(dateFrom || ""));
   params.set("date_to", String(dateTo || ""));
   params.set("show_inactive", showInactive ? "1" : "0");
@@ -161,9 +258,16 @@ export async function searchTransactions({
   return body;
 }
 
-export async function submitTransaction({ companyId, payload, clientRequestId }) {
+export async function submitTransaction({
+  companyId,
+  viewGroup,
+  groupId,
+  groupAggregate,
+  payload,
+  clientRequestId,
+}) {
   const fd = new FormData();
-  if (companyId != null) fd.append("company_id", String(companyId));
+  appendTransactionScope(fd, { companyId, viewGroup, groupId, groupAggregate }, "form");
   if (clientRequestId) fd.append("client_request_id", clientRequestId);
   Object.entries(payload || {}).forEach(([k, v]) => {
     if (v === undefined || v === null) return;
@@ -179,6 +283,9 @@ export async function submitTransaction({ companyId, payload, clientRequestId })
 
 export async function getHistory({
   companyId,
+  viewGroup,
+  groupId,
+  groupAggregate,
   accountId,
   dateFrom,
   dateTo,
@@ -187,7 +294,7 @@ export async function getHistory({
   signal,
 } = {}) {
   const params = new URLSearchParams();
-  if (companyId != null) params.set("company_id", String(companyId));
+  appendTransactionScope(params, { companyId, viewGroup, groupId, groupAggregate });
   if (accountId != null && accountId !== "") params.set("account_id", String(accountId));
   if (dateFrom) params.set("date_from", String(dateFrom));
   if (dateTo) params.set("date_to", String(dateTo));
@@ -219,9 +326,9 @@ export async function getHistory({
   return body;
 }
 
-export async function loadContraInbox({ companyId, signal } = {}) {
+export async function loadContraInbox({ companyId, viewGroup, groupId, groupAggregate, signal } = {}) {
   const params = new URLSearchParams();
-  if (companyId != null) params.set("company_id", String(companyId));
+  appendTransactionScope(params, { companyId, viewGroup, groupId, groupAggregate });
   const res = await fetch(buildApiUrl(`api/transactions/contra_inbox_api.php?${params.toString()}`), {
     credentials: "include",
     cache: "no-cache",
@@ -230,18 +337,18 @@ export async function loadContraInbox({ companyId, signal } = {}) {
   return safeJson(res);
 }
 
-export async function approveContra({ transactionId, companyId }) {
+export async function approveContra({ transactionId, companyId, viewGroup, groupId, groupAggregate }) {
   const fd = new FormData();
   fd.append("transaction_id", String(transactionId));
-  if (companyId != null) fd.append("company_id", String(companyId));
+  appendTransactionScope(fd, { companyId, viewGroup, groupId, groupAggregate }, "form");
   const res = await fetch(buildApiUrl("api/transactions/contra_approve_api.php"), { method: "POST", body: fd, credentials: "include" });
   return safeJson(res);
 }
 
-export async function rejectContra({ transactionId, companyId }) {
+export async function rejectContra({ transactionId, companyId, viewGroup, groupId, groupAggregate }) {
   const fd = new FormData();
   fd.append("transaction_id", String(transactionId));
-  if (companyId != null) fd.append("company_id", String(companyId));
+  appendTransactionScope(fd, { companyId, viewGroup, groupId, groupAggregate }, "form");
   const res = await fetch(buildApiUrl("api/transactions/contra_reject_api.php"), { method: "POST", body: fd, credentials: "include" });
   return safeJson(res);
 }

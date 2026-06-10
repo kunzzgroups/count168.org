@@ -34,7 +34,6 @@ export function DashboardKpiGrid({ i18n, kpi, kpiCompareLabel, kpiFooter, loadin
         compareLabel={kpiCompareLabel}
         fallbackFoot={kpiFooter}
         loading={kpiLoading}
-        tone={kpi.netProfit >= 0 ? "positive" : "negative"}
       />
       {kpi.showEarnings && (
         <DashboardKpiCard

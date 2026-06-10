@@ -3,8 +3,22 @@ import {
   formatSummaryProcessDescriptions,
 } from "../lib/summaryTransform.js";
 
-export default function SummaryProcessInfo({ t, processData, visible = true }) {
+function resolveHeaderCurrency(processData, rows) {
+  const fromProcess = formatSummaryProcessCurrency(processData);
+  if (fromProcess && fromProcess !== "-") return fromProcess;
+  if (!Array.isArray(rows)) return fromProcess;
+  for (const row of rows) {
+    const text = String(row.currency || "")
+      .replace(/[()]/g, "")
+      .trim();
+    if (text && !/^select\s*curren/i.test(text)) return text;
+  }
+  return fromProcess;
+}
+
+export default function SummaryProcessInfo({ t, processData, rows = [], visible = true }) {
   if (!visible || !processData) return null;
+  const currencyDisplay = resolveHeaderCurrency(processData, rows);
 
   return (
     <div className="process-info-container" id="processInfoContainer">
@@ -30,7 +44,7 @@ export default function SummaryProcessInfo({ t, processData, visible = true }) {
         <div className="process-info-item">
           <span className="process-info-label">{t("currency")}</span>
           <span className="process-info-value" id="processInfoCurrency">
-            {formatSummaryProcessCurrency(processData)}
+            {currencyDisplay}
           </span>
         </div>
         <div className="process-info-item">

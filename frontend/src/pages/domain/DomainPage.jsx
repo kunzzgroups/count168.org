@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { assetUrl, buildApiUrl } from "../../utils/core/apiUrl.js";
 import "../../../public/css/domain.css";
+import "../../../public/css/date-range-picker.css";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
 import {
@@ -9,8 +10,8 @@ import {
   MAX_VISIBLE_CHIPS,
   hasProtectedCompany,
   forceSearchValue,
-  formatDomainFeeDisplay2,
-  formatDomainFeeEdit2,
+  normalizeDomainFeeSettingsFromApi,
+  formatDomainFeeToolbarChip,
 } from "./domainHelpers.js";
 
 // Sub-components
@@ -21,7 +22,7 @@ import CompanyExpirationModal from "./components/CompanyExpirationModal.jsx";
 import DomainFormModal from "./components/DomainFormModal.jsx";
 import { getDomainText } from "../../translateFile/pages/domainTranslate.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
-import PageContentLoader from "../../components/PageContentLoader.jsx";
+import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
 
 export default function DomainPage() {
   const navigate = useNavigate();
@@ -30,7 +31,6 @@ export default function DomainPage() {
   const t = (key, params) => getDomainText(lang, key, params);
 
   // ── Boot / domain data ───────────────────────────────────────────────────────
-  const [bootDone, setBootDone] = useState(false);
   const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
@@ -77,19 +77,25 @@ export default function DomainPage() {
   const [feeModal, setFeeModal] = useState(false);
   const [expModal, setExpModal] = useState(null);       // companies array
 
-  // ── Domain fee price (for share calc) ─────────────────────────────────────
-  const [domainFeePrice, setDomainFeePrice] = useState(0);
-  const [feeInlineSummary, setFeeInlineSummary] = useState("");
+  // ── Domain fee price (for share calc + toolbar chips) ─────────────────────
+  const [domainPeriodPrices, setDomainPeriodPrices] = useState(null);
+  const feeChipCompany = useMemo(
+    () => (domainPeriodPrices ? formatDomainFeeToolbarChip(domainPeriodPrices.company) : ""),
+    [domainPeriodPrices]
+  );
+  const feeChipGroup = useMemo(
+    () => (domainPeriodPrices ? formatDomainFeeToolbarChip(domainPeriodPrices.group) : ""),
+    [domainPeriodPrices]
+  );
 
   // ── Initial data load (session from AuthenticatedLayout) ─────────────────────
   useEffect(() => {
     if (!sessionReady || !me) return;
 
     let cancelled = false;
-    setBootDone(false);
     (async () => {
       try {
-        if (!me.has_c168_domain_page_access) {
+        if (!canAccessC168DomainPages(me)) {
           navigate("/dashboard", { replace: true });
           return;
         }
@@ -109,8 +115,6 @@ export default function DomainPage() {
         refreshFeeSummary();
       } catch {
         if (!cancelled) setLoadError(t("failedToLoadDomainData"));
-      } finally {
-        if (!cancelled) setBootDone(true);
       }
     })();
     return () => {
@@ -128,14 +132,7 @@ export default function DomainPage() {
       .then((r) => r.json())
       .then((res) => {
         if (res.success && res.data) {
-          const g = formatDomainFeeDisplay2(res.data.group_price ?? res.data.price);
-          const c = formatDomainFeeDisplay2(res.data.company_price ?? res.data.price);
-          if (g !== "—" && c !== "—") {
-            setFeeInlineSummary(t("feeInlineSummary", { group: g, company: c }));
-          } else {
-            setFeeInlineSummary("");
-          }
-          setDomainFeePrice(Number(res.data.company_price ?? res.data.price) || 0);
+          setDomainPeriodPrices(normalizeDomainFeeSettingsFromApi(res.data));
         }
       })
       .catch(() => {});
@@ -257,8 +254,6 @@ export default function DomainPage() {
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  if (!bootDone) return <PageContentLoader />;
-
   const isOwnerOrAdmin = ["owner", "admin"].includes(String(me?.role || "").toLowerCase());
 
   return (
@@ -305,9 +300,26 @@ export default function DomainPage() {
             >
               {t("price")}
             </button>
-            <span id="domainFeeInlineSummary" className="domain-fee-inline-summary" aria-live="polite">
-              {feeInlineSummary}
-            </span>
+            {domainPeriodPrices && (
+              <div className="domain-fee-price-chips" aria-label={t("displayPrices")}>
+                <button
+                  type="button"
+                  className="domain-fee-price-chip domain-fee-price-chip--company"
+                  title={t("feeChipCompanyAria")}
+                  onClick={() => setFeeModal(true)}
+                >
+                  C {feeChipCompany}
+                </button>
+                <button
+                  type="button"
+                  className="domain-fee-price-chip domain-fee-price-chip--group"
+                  title={t("feeChipGroupAria")}
+                  onClick={() => setFeeModal(true)}
+                >
+                  G {feeChipGroup}
+                </button>
+              </div>
+            )}
           </div>
           <div className="domain-toolbar-right">
             <button
@@ -454,11 +466,11 @@ export default function DomainPage() {
           lang={lang}
           isEditMode={isEditMode}
           editingDomain={editingDomain}
-          hasC168Context={!!me?.has_c168_domain_page_access}
+          hasC168Context={canAccessC168DomainPages(me)}
           isOwnerOrAdmin={isOwnerOrAdmin}
           sessionCompanyId={me?.company_id ?? null}
           sessionCompanyCode={String(me?.company_code || "")}
-          domainFeePrice={domainFeePrice}
+          domainPeriodPrices={domainPeriodPrices}
           onClose={() => setShowDomainForm(false)}
           onSaved={handleDomainSaved}
         />
@@ -478,14 +490,7 @@ export default function DomainPage() {
           lang={lang}
           onClose={() => setFeeModal(false)}
           onFeeSaved={(data) => {
-            const g = formatDomainFeeDisplay2(data.group_price ?? data.price);
-            const c = formatDomainFeeDisplay2(data.company_price ?? data.price);
-            if (g !== "—" && c !== "—") {
-              setFeeInlineSummary(t("feeInlineSummary", { group: g, company: c }));
-            } else {
-              setFeeInlineSummary("");
-            }
-            setDomainFeePrice(Number(data.company_price ?? data.price) || 0);
+            setDomainPeriodPrices(normalizeDomainFeeSettingsFromApi(data));
           }}
         />
       )}

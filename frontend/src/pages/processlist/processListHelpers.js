@@ -1,4 +1,20 @@
-export const PAGE_SIZE = 20;
+import {
+  filterCompaniesForBankPills,
+  filterCompaniesForGamesPills,
+} from "../../utils/company/companyCategoryFlags.js";
+import { excludeGroupLabelsFromCompanyPicker } from "../../utils/company/sharedCompanyFilter.js";
+
+export const PAGE_SIZE = 25;
+
+/** Description 名称：输入与保存统一大写 */
+export function normalizeDescriptionName(raw) {
+  return String(raw ?? "").trim().toUpperCase();
+}
+
+/** Process 表单文本：输入时统一大写（不 trim，避免打字中途删空格） */
+export function toProcessFormUpperInput(raw) {
+  return String(raw ?? "").toUpperCase();
+}
 
 export const EMPTY_FORM = {
   id: "",
@@ -29,7 +45,65 @@ export function normalizeRows(data) {
   return Array.isArray(data) ? data : [];
 }
 
-/** One pill per display `company_id`; API duplicates collapse. Prefer the row whose `id` matches `preferredPk`. */
+export function rowCurrencyCodesFromRows(rows) {
+  const set = new Set();
+  for (const row of rows || []) {
+    const code = String(row?.currency || "").trim().toUpperCase();
+    if (code) set.add(code);
+  }
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+/** Prefer a currency that actually has process rows; fall back to company pill list. */
+export function resolveProcessCurrencyFilter(preferredCode, rows, companyCurrencyCodes = []) {
+  const preferred = String(preferredCode || "").trim().toUpperCase();
+  const fromRows = rowCurrencyCodesFromRows(rows);
+  if (preferred && fromRows.includes(preferred)) return preferred;
+  if (fromRows.length) return fromRows[0];
+  const companyCodes = (companyCurrencyCodes || [])
+    .map((c) => String(c).trim().toUpperCase())
+    .filter(Boolean);
+  if (preferred && companyCodes.includes(preferred)) return preferred;
+  return companyCodes[0] || "";
+}
+
+/** In-memory cache is only reusable when it contains at least one row (never treat [] as a hit). */
+export function processListCacheHasRows(cached) {
+  return Array.isArray(cached?.rows) && cached.rows.length > 0;
+}
+
+/** Process / Bank Process company pills: in-group list without group labels (AP, IG, …). */
+export function filterProcessPageCompanyButtons(
+  allCompanyButtons,
+  { groupFilterKind, groupIds, selectedGroupKey, pillCategory = null, preferredCompanyId = null } = {}
+) {
+  let list;
+  if (groupFilterKind === "ungrouped") {
+    list = allCompanyButtons.filter((c) => !String(c.group_id || "").trim());
+  } else if (groupIds.length === 0) {
+    list = allCompanyButtons;
+  } else if (!selectedGroupKey) {
+    const ung = allCompanyButtons.filter((c) => !String(c.group_id || "").trim());
+    list = ung.length ? ung : allCompanyButtons;
+  } else {
+    const g = selectedGroupKey;
+    const inG = allCompanyButtons.filter((c) => {
+      const native = String(c.group_id || "").trim().toUpperCase();
+      const link = String(c.link_source_group || "").trim().toUpperCase();
+      return native === g || link === g;
+    });
+    list = inG.length ? inG : allCompanyButtons;
+  }
+  list = excludeGroupLabelsFromCompanyPicker(list, groupIds);
+  if (pillCategory === "games") {
+    return filterCompaniesForGamesPills(list, preferredCompanyId);
+  }
+  if (pillCategory === "bank") {
+    return filterCompaniesForBankPills(list, preferredCompanyId);
+  }
+  return list;
+}
+
 export function dedupeCompanyRowsForSwitcher(companies, preferredPk) {
   const filtered = normalizeRows(companies).filter((c) => c.company_id && String(c.company_id).trim() !== "");
   const byLabel = new Map();

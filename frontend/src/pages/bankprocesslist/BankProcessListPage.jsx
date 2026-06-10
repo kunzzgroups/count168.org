@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import AccountModal from "../../components/AccountModal.jsx";
 import { accountModalOverlayZIndex, processNotificationAboveAccountZIndex, processNotificationZIndex } from "../../components/ProcessModalPortal.jsx";
@@ -19,8 +19,8 @@ import ProfitSharingModal from "./components/ProfitSharingModal.jsx";
 import { BankNoteModal, BankRemarkModal } from "./components/bankProcessTextModals.jsx";
 import AccountingDueModal from "./components/AccountingDueModal.jsx";
 import ResendModal from "./components/ResendModal.jsx";
-import PageContentLoader from "../../components/PageContentLoader.jsx";
-import { bankProcessFrequencyNormalized } from "./lib/bankProcessHelpers.js";
+import MaintenanceCalendarPopup from "../../components/MaintenanceCalendarPopup.jsx";
+import { bankProcessFrequencyNormalized, normalizeBankProcessStatus, isoToDmy } from "./lib/bankProcessHelpers.js";
 import { useBankProcessListPage } from "./hooks/useBankProcessListPage.js";
 
 export default function BankProcessListPage() {
@@ -35,7 +35,6 @@ export default function BankProcessListPage() {
     apiMsg,
     tAccount,
     handleDatePickerChange,
-    cssReady,
     loading,
     setLoading,
     tableLoading,
@@ -46,8 +45,6 @@ export default function BankProcessListPage() {
     setCompanyId,
     groupFilterKind,
     setGroupFilterKind,
-    switchingCompany,
-    setSwitchingCompany,
     rows,
     setRows,
     currentPage,
@@ -66,6 +63,7 @@ export default function BankProcessListPage() {
     setShowEInvoice,
     showBlock,
     setShowBlock,
+    clearBankProcessFilters,
     deleteConfirmOpen,
     setDeleteConfirmOpen,
     deleteSubmitting,
@@ -169,6 +167,8 @@ export default function BankProcessListPage() {
     setCurrencyListOrdered,
     currencyFilterCode,
     setCurrencyFilterCode,
+    handlePickCurrency,
+    handlePickAllCurrencies,
     currencyPillDisplayOrder,
     setCurrencyPillDisplayOrder,
     skipNextCurrencyPillClickRef,
@@ -194,7 +194,8 @@ export default function BankProcessListPage() {
     handleBankStatusUpdated,
     loadAccountingInbox,
     resetForm,
-    onSwitchCompany,
+    onPickCompanyPill,
+    warmBankProcessListCompanyCache,
     openAdd,
     persistSelectedCountries,
     persistSelectedBanksByCountry,
@@ -235,20 +236,79 @@ export default function BankProcessListPage() {
   } = useBankProcessListPage();
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [isNarrowToolbar, setIsNarrowToolbar] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 1699px)").matches,
+  );
   const filterToolbarRef = useRef(null);
+  const searchBarRef = useRef(null);
+  const searchInputRef = useRef(null);
   const hasActiveFilters = showInactive || showAll || showOfficial || showEInvoice || showBlock;
+  const isSearchCollapsed = isNarrowToolbar && !searchExpanded && !search.trim();
+
+  const hasDeletableRows = useMemo(
+    () => visibleRows.some((r) => normalizeBankProcessStatus(r.status) === "inactive" && !r.has_transactions),
+    [visibleRows],
+  );
 
   useEffect(() => {
-    if (!filterPanelOpen) return undefined;
+    const mq = window.matchMedia("(max-width: 1699px)");
+    const onChange = () => {
+      setIsNarrowToolbar(mq.matches);
+      if (!mq.matches) {
+        setSearchExpanded(false);
+        setFilterPanelOpen(false);
+      }
+    };
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    if (!searchExpanded || !isNarrowToolbar) return undefined;
+    const id = window.requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => window.cancelAnimationFrame(id);
+  }, [searchExpanded, isNarrowToolbar]);
+
+  useEffect(() => {
+    if (!filterPanelOpen || !isNarrowToolbar) return undefined;
     const onDoc = (e) => {
       if (filterToolbarRef.current?.contains(e.target)) return;
       setFilterPanelOpen(false);
     };
+    const onKey = (e) => {
+      if (e.key === "Escape") setFilterPanelOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [filterPanelOpen, isNarrowToolbar]);
+
+  const handleFilterToggleClick = (e) => {
+    if (e.detail > 1) return;
+    setFilterPanelOpen((open) => !open);
+  };
+
+  const handleFilterToggleDoubleClick = (e) => {
+    e.preventDefault();
+    if (!hasActiveFilters) return;
+    clearBankProcessFilters();
+    setFilterPanelOpen(false);
+  };
+
+  useEffect(() => {
+    if (!isNarrowToolbar || !searchExpanded || search.trim()) return undefined;
+    const onDoc = (e) => {
+      if (searchBarRef.current?.contains(e.target)) return;
+      setSearchExpanded(false);
+    };
     document.addEventListener("mousedown", onDoc);
     return () => document.removeEventListener("mousedown", onDoc);
-  }, [filterPanelOpen]);
-
-  if (loading || !cssReady) return <PageContentLoader />;
+  }, [isNarrowToolbar, searchExpanded, search]);
 
   return (
     <div className="container">
@@ -276,7 +336,11 @@ export default function BankProcessListPage() {
           <div className="action-buttons">
             <div className="bank-process-toolbar-main">
               <div className="bank-process-toolbar-top-row">
-                <div className="action-controls-row bank-process-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div className="action-controls-row bank-process-toolbar-primary" style={{ display: "flex", alignItems: "center" }}>
+                  <button type="button" className="btn btn-add" onClick={openAdd}>
+                    <AddProcessIcon />
+                    {t("addProcess")}
+                  </button>
                   <div className="process-list-date-filter transaction-date-range-group" id="processListDateFilter" style={{ display: "inline-flex" }}>
                     <div
                       className="date-range-picker"
@@ -289,63 +353,130 @@ export default function BankProcessListPage() {
                       <i className="fas fa-calendar-alt" aria-hidden="true" />
                       {/* Text is driven by MaintenanceDateRangePicker (must not set React children or they overwrite picker + stale i18n). */}
                       <span id="date-range-display" aria-live="polite" />
-                      <button type="button" className="process-list-date-clear" id="processListDateClearBtn" title={t("clearDateRange")} aria-label={t("clearDateRange")} style={{ display: "none" }}>&times;</button>
+                      <button type="button" className="process-list-date-clear" id="processListDateClearBtn" title={t("clearDateRange")} aria-label={t("clearDateRange")}>&times;</button>
                       <i className="fas fa-chevron-down transaction-date-range-chevron" aria-hidden="true" />
                     </div>
-                    <input type="hidden" id="date_from" defaultValue="" />
-                    <input type="hidden" id="date_to" defaultValue="" />
-                  </div>
-                  <div className="search-container userlist-search-bar">
-                    <span className="userlist-search-bar__icon" aria-hidden="true">
-                      <svg fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
-                      </svg>
-                    </span>
                     <input
-                      type="text"
-                      className="search-input userlist-search-input"
-                      placeholder={t("search")}
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
+                      type="hidden"
+                      id="date_from"
+                      readOnly
+                      value={dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) ? isoToDmy(dateFrom) : ""}
                     />
+                    <input
+                      type="hidden"
+                      id="date_to"
+                      readOnly
+                      value={dateTo && /^\d{4}-\d{2}-\d{2}$/.test(dateTo) ? isoToDmy(dateTo) : ""}
+                    />
+                  </div>
+                  <div
+                    ref={searchBarRef}
+                    className={[
+                      "search-container userlist-search-bar bank-process-search-bar",
+                      isNarrowToolbar && isSearchCollapsed ? "is-collapsed" : "",
+                      isNarrowToolbar && !isSearchCollapsed ? "is-expanded" : "",
+                    ].filter(Boolean).join(" ")}
+                  >
+                    {isSearchCollapsed ? (
+                      <button
+                        type="button"
+                        className="bank-process-search-toggle"
+                        aria-label={t("search")}
+                        aria-expanded={false}
+                        onClick={() => setSearchExpanded(true)}
+                      >
+                        <span className="userlist-search-bar__icon" aria-hidden="true">
+                          <svg fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                          </svg>
+                        </span>
+                      </button>
+                    ) : (
+                      <>
+                        <span className="userlist-search-bar__icon" aria-hidden="true">
+                          <svg fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                          </svg>
+                        </span>
+                        <input
+                          ref={searchInputRef}
+                          type="text"
+                          className="search-input userlist-search-input"
+                          placeholder={t("search")}
+                          value={search}
+                          aria-expanded={isNarrowToolbar ? searchExpanded || Boolean(search.trim()) : undefined}
+                          onChange={(e) => setSearch(e.target.value)}
+                          onBlur={() => {
+                            if (isNarrowToolbar && !search.trim()) setSearchExpanded(false);
+                          }}
+                        />
+                      </>
+                    )}
                   </div>
                   <div ref={filterToolbarRef} className="bank-process-filter-toolbar-slot">
                     <button
                       type="button"
-                      className={`bank-process-filter-toggle${filterPanelOpen ? " is-open" : ""}${hasActiveFilters ? " has-active-filters" : ""}`}
+                      className={[
+                        "bank-process-filter-toggle",
+                        filterPanelOpen ? "is-open" : "",
+                        hasActiveFilters ? "has-active-filters" : "",
+                        isNarrowToolbar ? "bank-process-filter-toggle--icon-only" : "",
+                      ].filter(Boolean).join(" ")}
                       aria-expanded={filterPanelOpen}
                       aria-controls="bank-process-filter-panel"
-                      onClick={() => setFilterPanelOpen((open) => !open)}
+                      aria-label={t("filter")}
+                      title={hasActiveFilters ? t("filterDoubleClickClear") : t("filter")}
+                      onClick={handleFilterToggleClick}
+                      onDoubleClick={handleFilterToggleDoubleClick}
                     >
-                      <i className="fas fa-filter" aria-hidden="true" />
-                      <span>{t("filter")}</span>
+                      <span className="bank-process-filter-toggle__icon" aria-hidden="true">
+                        <svg fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M4.25 6h15.5c.41 0 .64.47.4.8L14 13.2v5.3a.75.75 0 0 1-1.1.67l-2.9-1.45a.75.75 0 0 1-.4-.67v-4.3L3.85 6.8a.75.75 0 0 1 .4-1.2z" />
+                        </svg>
+                      </span>
+                      <span className="bank-process-filter-toggle__label">{t("filter")}</span>
                     </button>
                     <div
                       id="bank-process-filter-panel"
-                      className={`bank-process-filter-panel${filterPanelOpen ? " is-open" : ""}`}
+                      className={[
+                        "bank-process-filter-panel",
+                        filterPanelOpen ? "is-open" : "",
+                        isNarrowToolbar ? "bank-process-filter-panel--dropdown" : "",
+                      ].filter(Boolean).join(" ")}
                     >
-                      <BankProcessFilterChips
-                        t={t}
-                        showInactive={showInactive}
-                        setShowInactive={setShowInactive}
-                        showAll={showAll}
-                        setShowAll={setShowAll}
-                        showOfficial={showOfficial}
-                        setShowOfficial={setShowOfficial}
-                        showEInvoice={showEInvoice}
-                        setShowEInvoice={setShowEInvoice}
-                        showBlock={showBlock}
-                        setShowBlock={setShowBlock}
-                      />
+                      <div className="bank-process-filter-dropdown">
+                        <BankProcessFilterChips
+                          t={t}
+                          layout={isNarrowToolbar ? "dropdown" : "inline"}
+                          showInactive={showInactive}
+                          setShowInactive={setShowInactive}
+                          showAll={showAll}
+                          setShowAll={setShowAll}
+                          showOfficial={showOfficial}
+                          setShowOfficial={setShowOfficial}
+                          showEInvoice={showEInvoice}
+                          setShowEInvoice={setShowEInvoice}
+                          showBlock={showBlock}
+                          setShowBlock={setShowBlock}
+                        />
+                        {isNarrowToolbar && hasActiveFilters ? (
+                          <button
+                            type="button"
+                            className="bank-process-filter-dropdown__clear"
+                            onClick={() => {
+                              clearBankProcessFilters();
+                              setFilterPanelOpen(false);
+                            }}
+                          >
+                            {t("filterClearAll")}
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div className="user-toolbar-actions-right" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
                   <button type="button" className="btn btn-delete" id="processDeleteSelectedBtn" disabled={!selectedIds.size} title={t("delete")} onClick={deleteSelected}>{t("delete")}</button>
-                  <button type="button" className="btn btn-add" onClick={openAdd}>
-                    <AddProcessIcon />
-                    {t("addProcess")}
-                  </button>
                 </div>
               </div>
             </div>
@@ -356,13 +487,6 @@ export default function BankProcessListPage() {
                 <span className="user-gc-inline-label">{t("groupId")}</span>
                 <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
                   <div className="user-gc-segment-group" role="group" aria-label={t("groupId")}>
-                    <button
-                      type="button"
-                      className={`user-gc-segment${groupFilterKind === "all" ? " is-on" : ""}`}
-                      onClick={handlePickAllGroups}
-                    >
-                      {t("groupFilterAll")}
-                    </button>
                     {groupIds.map((g) => (
                       <button
                         key={g}
@@ -388,10 +512,9 @@ export default function BankProcessListPage() {
                         key={c.id}
                         type="button"
                         className={`user-gc-segment${active ? " is-on" : ""}`}
-                        onClick={() => {
-                          if (switchingCompany) return;
-                          if (!active) void onSwitchCompany(c);
-                        }}
+                        onMouseEnter={() => warmBankProcessListCompanyCache(c.id)}
+                        onFocus={() => warmBankProcessListCompanyCache(c.id)}
+                        onClick={() => onPickCompanyPill(c)}
                       >
                         {String(c.company_id || "").toUpperCase()}
                       </button>
@@ -400,7 +523,7 @@ export default function BankProcessListPage() {
                 </div>
               </div>
             </div>
-            {currencyPillCodes.length > 0 && (
+            {currencyListOrdered.length > 0 && (
               <div className="user-gc-inline-row">
                 <span className="user-gc-inline-label">{t("currency")}</span>
                 <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
@@ -408,7 +531,7 @@ export default function BankProcessListPage() {
                     <button
                       type="button"
                       className={`user-gc-segment${!currencyFilterCode ? " is-on" : ""}`}
-                      onClick={() => setCurrencyFilterCode("")}
+                      onClick={handlePickAllCurrencies}
                     >
                       {t("groupFilterAll")}
                     </button>
@@ -430,7 +553,7 @@ export default function BankProcessListPage() {
                             skipNextCurrencyPillClickRef.current = false;
                             return;
                           }
-                          setCurrencyFilterCode(code);
+                          handlePickCurrency(code);
                         }}
                       >
                         {code}
@@ -448,13 +571,13 @@ export default function BankProcessListPage() {
           <BankProcessTable
             tableLoading={tableLoading}
             showAll={showAll}
-            showSelectColumn={showInactive || showAll || showOfficial || showEInvoice || showBlock}
+            showSelectColumn={showAll || showInactive || showOfficial || showEInvoice || showBlock || hasDeletableRows}
             pageRows={pageRows}
             currentPage={currentPage}
             PAGE_SIZE={PAGE_SIZE}
             selectedIds={selectedIds}
             setSelectedIds={setSelectedIds}
-            showHeaderSelectAll={showInactive || showOfficial || showEInvoice || showBlock}
+            showHeaderSelectAll={showAll || showInactive || showOfficial || showEInvoice || showBlock}
             notify={notify}
             fetchRows={fetchRows}
             onBankStatusUpdated={handleBankStatusUpdated}
@@ -471,7 +594,9 @@ export default function BankProcessListPage() {
               setResendDayStart(String(row.day_start || row.date || "").slice(0, 10));
               const seedFq = bankProcessFrequencyNormalized(row.day_start_frequency);
               setResendFrequency(seedFq);
-              setResendDayEnd(seedFq === "once" ? "" : String(row.day_end || "").slice(0, 10));
+              setResendDayEnd(
+                seedFq === "once" || seedFq === "monthly" ? "" : String(row.day_end || "").slice(0, 10),
+              );
               setResendModalOpen(true);
             }}
             sortColumn={sortColumn}
@@ -483,7 +608,7 @@ export default function BankProcessListPage() {
           />
         </div>
         {!showAll && (
-          <div className="pagination-container bank-process-pagination">
+          <div className="pagination-container">
             <button type="button" className="pagination-btn" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
               ◀
             </button>
@@ -673,35 +798,17 @@ export default function BankProcessListPage() {
         onClose={closeAccountModal}
         t={tAccount}
       />
-      <div className="calendar-popup calendar-popup--transaction-range calendar-popup--no-presets" id="calendar-popup" style={{ display: "none" }}>
-        <div className="transaction-calendar-panel">
-          <div className="calendar-header">
-            <button type="button" className="calendar-nav-btn" onClick={(e) => { e.stopPropagation(); window.changeMonth?.(-1); }}><i className="fas fa-chevron-left" /></button>
-            <div className="calendar-month-year" onClick={(e) => e.stopPropagation()} role="presentation">
-              <button type="button" id="calendar-month-select" className="calendar-month-trigger" aria-label="Month">
-                {bpLocale.monthsShort[new Date().getMonth()]}
-              </button>
-              <button type="button" id="calendar-year-select" className="calendar-year-trigger" aria-label="Year">
-                {String(new Date().getFullYear())}
-              </button>
-            </div>
-            <button type="button" className="calendar-nav-btn" onClick={(e) => { e.stopPropagation(); window.changeMonth?.(1); }}><i className="fas fa-chevron-right" /></button>
-          </div>
-          <div className="calendar-weekdays">
-            {bpLocale.weekdaysShort.map((d) => (
-              <div key={d} className="calendar-weekday">
-                {d}
-              </div>
-            ))}
-          </div>
-          <div className="calendar-days" id="calendar-days" />
-          <div className="calendar-popup-clear-wrap" id="calendar-popup-clear-wrap" style={{ display: "none" }} aria-hidden="true">
-            <button type="button" className="calendar-popup-clear-btn" id="calendar-popup-clear-btn">
-              {t("clearDate")}
-            </button>
-          </div>
-        </div>
-      </div>
+      {typeof document !== "undefined"
+        ? createPortal(
+            <MaintenanceCalendarPopup
+              className="calendar-popup--bank-process-modal"
+              monthLabels={bpLocale.monthsShort}
+              weekdaysShort={bpLocale.weekdaysShort}
+              clearLabel={t("clearDate")}
+            />,
+            document.body
+          )
+        : null}
       {toast && typeof document !== "undefined" && document.body
         ? createPortal(
             <div

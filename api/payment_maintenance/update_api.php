@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 
 /**
@@ -57,6 +58,11 @@ try {
         throw new Exception('缺少公司信息');
     }
     $company_id = (int) $_SESSION['company_id'];
+    gc_assert_api_company_access(
+        $pdo,
+        $company_id,
+        gc_is_group_login() ? gc_session_login_identifier() : null
+    );
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('只支持 POST 请求');

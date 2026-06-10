@@ -9,12 +9,12 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../deleted_log/deleted_log.php';
+require_once __DIR__ . '/../datacapture/data_capture_scope_common.php';
 
 try {
-    if (!isset($_SESSION['company_id'])) {
-        throw new Exception('缺少公司信息');
+    if (!isset($_SESSION['user_id'])) {
+        throw new Exception('用户未登录');
     }
-    $company_id = (int)$_SESSION['company_id'];
 
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new Exception('只支持 POST 请求');
@@ -24,6 +24,38 @@ try {
     if (!is_array($payload)) {
         throw new Exception('无效的请求数据');
     }
+
+    $maintenance_scope_group = false;
+    $hasExplicitScope = dcRequestHasExplicitScope($payload);
+
+    if ($hasExplicitScope) {
+        $scopeResolved = resolveDataCaptureRequestScope($pdo, $payload);
+        $scopeCtx = dcFinalizeCaptureMaintenanceScope($pdo, $scopeResolved, $payload);
+        $company_id = (int) $scopeCtx['company_id'];
+        $maintenance_scope_group = (bool) $scopeCtx['is_group_scope'];
+        $viewGroupForAccess = dcNormalizeGroupId(
+            $payload['view_group'] ?? $payload['group_id'] ?? ''
+        );
+        dcAssertUserCanAccessCompany(
+            $pdo,
+            $company_id,
+            $viewGroupForAccess !== '' ? $viewGroupForAccess : null
+        );
+    } else {
+        if (!isset($_SESSION['company_id'])) {
+            throw new Exception('缺少公司信息');
+        }
+        $company_id = (int) $_SESSION['company_id'];
+        $maintenance_scope_group = dcIsGroupScopeHint([
+            'company_id' => $company_id,
+            'group_id' => dcNormalizeGroupId($payload['view_group'] ?? $payload['group_id'] ?? ''),
+            'report_scope_hint' => '',
+        ]);
+    }
+
+    $scopeProcessFilter = $maintenance_scope_group
+        ? dcSqlGroupProcessFilter('p')
+        : dcSqlCompanyProcessFilter('p');
 
     $date_from = $payload['date_from'] ?? null;
     $date_to   = $payload['date_to']   ?? null;
@@ -105,6 +137,7 @@ try {
           AND p.company_id = ?
           AND t.id IN ($ph)
           AND t.transaction_date BETWEEN ? AND ?
+          $scopeProcessFilter
     ";
     $verifyParams = array_merge([$company_id, $company_id], $transactionIds, [$date_from_db, $date_to_db]);
     $verifyStmt = $pdo->prepare($verifySql);
@@ -164,6 +197,7 @@ try {
         WHERE t.id IN ($validPh)
           AND t.company_id = ?
           AND p.company_id = ?
+          $scopeProcessFilter
     ";
     $logParams = array_merge(
         [$deletedByUserId, $deletedByOwnerId],

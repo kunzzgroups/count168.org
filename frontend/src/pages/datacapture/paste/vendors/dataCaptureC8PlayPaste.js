@@ -1,10 +1,11 @@
 /** C8PLAY paste. */
+import { notifyPasteUser } from "../../lib/dataCaptureBridge.js";
 import { detectHtmlTableInClipboard } from "../core/dataCaptureClipboard.js";
 import { formatNumberToTwoDecimals } from "../core/dataCapturePasteMoneyUtils.js";
 
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid } from "../core/dataCapturePasteApply.js";
 
 /** @returns {boolean} */
 export function handleC8PlayPaste(e, pastedData) {
@@ -121,60 +122,12 @@ export function handleC8PlayPaste(e, pastedData) {
 
                             console.log('C8PLAY: HTML parsing successful -', dataMatrix.length, 'rows x', maxCols, 'cols');
 
-                            // 填充到表格
-                            // C8PLAY 格式：强制从第一列（Column 1）开始粘贴
-                            const startCell = e.target;
-                            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                            const startCol = 0; // C8PLAY: 强制从第一列开始
-
-                            const currentRows = document.querySelectorAll('#tableBody tr').length;
-                            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                            const requiredRows = startRow + dataMatrix.length;
-                            const requiredCols = startCol + maxCols;
-
-                            if (requiredRows > currentRows || requiredCols > currentCols) {
-                                const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                                const targetCols = Math.max(currentCols, requiredCols);
-                                ensurePasteGrid(targetRows, targetCols);
-                            }
-
-                            const tableBody = document.getElementById('tableBody');
-                            const currentPasteChanges = [];
-                            let successCount = 0;
-
-                            dataMatrix.forEach((rowData, rowIndex) => {
-                                const actualRowIndex = startRow + rowIndex;
-                                const tableRow = tableBody.children[actualRowIndex];
-                                if (!tableRow) return;
-
-                                rowData.forEach((cellData, colIndex) => {
-                                    // 每行数据都从第一列（Column 1）开始
-                                    const actualColIndex = startCol + colIndex;
-                                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                    if (cell && cell.contentEditable === 'true') {
-                                        const cellValue = cellData || '';
-                                        currentPasteChanges.push({
-                                            row: actualRowIndex,
-                                            col: actualColIndex,
-                                            oldValue: cell.textContent,
-                                            newValue: cellValue
-                                        });
-
-                                        cell.textContent = cellValue;
-                                        if (cellValue) {
-                                            successCount++;
-                                        }
-                                    }
-                                });
+                            const { successCount, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, e.target, {
+                                startColOverride: 0,
                             });
-
-                            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
                             if (successCount > 0) {
-                                console.log('C8PLAY: HTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                                window.showNotification?.(`C8PLAY: 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                                console.log('C8PLAY: HTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', cols, 'cols');
+                                notifyPasteUser(`C8PLAY: 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
                                 return true;
                             }
                         }
@@ -227,59 +180,12 @@ export function handleC8PlayPaste(e, pastedData) {
                             }
                         });
 
-                        // C8PLAY 格式：强制从第一列（Column 1）开始粘贴
-                        const startCell = e.target;
-                        const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                        const startCol = 0; // C8PLAY: 强制从第一列开始
-
-                        const currentRows = document.querySelectorAll('#tableBody tr').length;
-                        const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                        const requiredRows = startRow + dataMatrix.length;
-                        const requiredCols = startCol + maxCols;
-
-                        if (requiredRows > currentRows || requiredCols > currentCols) {
-                            const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                            const targetCols = Math.max(currentCols, requiredCols);
-                            ensurePasteGrid(targetRows, targetCols);
-                        }
-
-                        const tableBody = document.getElementById('tableBody');
-                        const currentPasteChanges = [];
-                        let successCount = 0;
-
-                        dataMatrix.forEach((rowData, rowIndex) => {
-                            const actualRowIndex = startRow + rowIndex;
-                            const tableRow = tableBody.children[actualRowIndex];
-                            if (!tableRow) return;
-
-                            rowData.forEach((cellData, colIndex) => {
-                                // 每行数据都从第一列（Column 1）开始
-                                const actualColIndex = startCol + colIndex;
-                                const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                                if (cell && cell.contentEditable === 'true') {
-                                    const cellValue = cellData || '';
-                                    currentPasteChanges.push({
-                                        row: actualRowIndex,
-                                        col: actualColIndex,
-                                        oldValue: cell.textContent,
-                                        newValue: cellValue
-                                    });
-
-                                    cell.textContent = cellValue;
-                                    if (cellValue) {
-                                        successCount++;
-                                    }
-                                }
-                            });
+                        const { successCount, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, e.target, {
+                            startColOverride: 0,
                         });
-
-                        window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
                         if (successCount > 0) {
-                            console.log('C8PLAY: detectAndParseHTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                            window.showNotification?.(`C8PLAY: 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                            window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                            console.log('C8PLAY: detectAndParseHTML paste successful -', successCount, 'cells in', dataMatrix.length, 'rows x', cols, 'cols');
+                            notifyPasteUser(`C8PLAY: 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
                             return true;
                         }
                     }
@@ -429,63 +335,13 @@ export function handleC8PlayPaste(e, pastedData) {
             }
         });
 
-        // 填充到表格，保持行格式
-        // C8PLAY 格式：强制从第一列（Column 1）开始粘贴，每行数据都从第一列开始
         if (dataMatrix.length > 0 && maxCols > 0) {
-            const startCell = e.target;
-            const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-            const startCol = 0; // C8PLAY: 强制从第一列开始
-
-            console.log('C8PLAY: Starting paste at row', startRow, 'col', startCol);
-
-            const currentRows = document.querySelectorAll('#tableBody tr').length;
-            const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-            const requiredRows = startRow + dataMatrix.length;
-            const requiredCols = startCol + maxCols;
-
-            if (requiredRows > currentRows || requiredCols > currentCols) {
-                const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                const targetCols = Math.max(currentCols, requiredCols);
-                ensurePasteGrid(targetRows, targetCols);
-            }
-
-            const tableBody = document.getElementById('tableBody');
-            const currentPasteChanges = [];
-            let successCount = 0;
-
-            dataMatrix.forEach((rowData, rowIndex) => {
-                const actualRowIndex = startRow + rowIndex;
-                const tableRow = tableBody.children[actualRowIndex];
-                if (!tableRow) return;
-
-                rowData.forEach((cellData, colIndex) => {
-                    // 每行数据都从第一列（Column 1）开始
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                    if (cell && cell.contentEditable === 'true') {
-                        const cellValue = cellData || '';
-                        currentPasteChanges.push({
-                            row: actualRowIndex,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: cellValue
-                        });
-
-                        cell.textContent = cellValue;
-                        if (cellValue) {
-                            successCount++;
-                        }
-                    }
-                });
+            const { successCount, maxCols: cols } = applyParsedMatrixToGrid(dataMatrix, e.target, {
+                startColOverride: 0,
             });
-
-            window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
             if (successCount > 0) {
-                console.log('C8PLAY: Successfully pasted', successCount, 'cells in', dataMatrix.length, 'rows x', maxCols, 'cols');
-                window.showNotification?.(`C8PLAY: 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                console.log('C8PLAY: Successfully pasted', successCount, 'cells in', dataMatrix.length, 'rows x', cols, 'cols');
+                notifyPasteUser(`C8PLAY: 成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${cols} 列)，已保持行格式并格式化数值为2位小数!`, 'success');
                 return true;
             }
         }

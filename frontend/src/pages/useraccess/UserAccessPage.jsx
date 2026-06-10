@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
-import PageContentLoader from "../../components/PageContentLoader.jsx";
 
 const PERMISSION_OPTIONS = [
   "home",
@@ -251,8 +250,6 @@ export default function UserAccessPage() {
   function clearAllProcesses() {
     setSelectedProcessIds(new Set());
   }
-
-  if (!sessionReady || loading) return <PageContentLoader />;
 
   return (
     <div style={{ marginLeft: 260, padding: 16 }}>

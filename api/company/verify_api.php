@@ -21,7 +21,7 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
 }
 
 function getCompanyByCode(PDO $pdo, $company_id) {
-    $stmt = $pdo->prepare("SELECT id, name FROM company WHERE UPPER(company_id) = UPPER(?) OR UPPER(group_id) = UPPER(?) LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, company_id FROM company WHERE UPPER(company_id) = UPPER(?) OR UPPER(group_id) = UPPER(?) LIMIT 1");
     $stmt->execute([$company_id, $company_id]);
     return $stmt->fetch(PDO::FETCH_ASSOC);
 }
@@ -45,7 +45,7 @@ try {
 
     $company = getCompanyByCode($pdo, $company_id);
     if ($company) {
-        jsonResponse(true, '公司ID有效', ['company_name' => $company['name'] ?? '']);
+        jsonResponse(true, '公司ID有效', ['company_name' => $company['company_id'] ?? '']);
     } else {
         jsonResponse(false, '公司ID不存在', null, 404);
     }

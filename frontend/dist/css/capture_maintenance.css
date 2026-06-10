@@ -1,4 +1,6 @@
-﻿/* capture_maintenance.php - 提取的页面样式 */
+﻿@import "./maintenance_empty_state.css";
+
+/* capture_maintenance.php - 提取的页面样式 */
 /* 限定在 maintenance 路由，便于在 SPA 中 static import 而不污染登录页等 body.bg */
 body.dashboard-page.maintenance-page {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -26,7 +28,7 @@ body.dashboard-page.maintenance-page {
     height: auto !important;
     min-height: 100vh !important;
     max-height: none !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
     overflow-x: hidden !important;
 }
 
@@ -708,33 +710,6 @@ body.dashboard-page.maintenance-page {
     line-height: 1;
 }
 
-.empty-state-container {
-    position: relative;
-    top: 10px;
-    background: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 8px;
-    padding: clamp(40px, 3.33vw, 64px);
-    margin-bottom: clamp(20px, 1.67vw, 32px);
-    margin-top: 10px;
-    max-width: none;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
-    box-sizing: border-box;
-}
-
-.empty-state {
-    color: #64748b;
-    font-size: clamp(14px, 1.04vw, 20px);
-}
-
-.empty-state p {
-    margin: 0;
-    font-family: var(--font-heading-page);
-}
-
 .maintenance-notification-container {
     position: fixed;
     top: 20px;
@@ -920,20 +895,7 @@ body.maintenance-page #confirmDeleteModal .confirm-delete {
     text-align: center;
 }
 
-/* Scrollbar for long messages */
-.maintenance-confirm-message::-webkit-scrollbar {
-    width: 6px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 10px;
-}
-
-.maintenance-confirm-message::-webkit-scrollbar-thumb {
-    background: #94a3b8;
-    border-radius: 10px;
-}
+/* Scrollbars: app-wide — dashboard-scrollbar.css */
 
 /* Button styles for confirm modal (scoped — avoid overriding sidebar .logout-btn) */
 body.maintenance-page .maintenance-modal .btn {
@@ -1251,33 +1213,6 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     line-height: 1;
 }
 
-.capture-maintenance-page-root .empty-state-container {
-    position: relative;
-    top: 10px;
-    background: #ffffff;
-    border: 1px solid #d0d7de;
-    border-radius: 8px;
-    padding: clamp(40px, 3.33vw, 64px);
-    margin-bottom: clamp(20px, 1.67vw, 32px);
-    margin-top: 10px;
-    max-width: none;
-    width: 100%;
-    margin-left: auto;
-    margin-right: auto;
-    text-align: center;
-    box-sizing: border-box;
-}
-
-.capture-maintenance-page-root .empty-state {
-    color: #64748b;
-    font-size: clamp(14px, 1.04vw, 20px);
-}
-
-.capture-maintenance-page-root .empty-state p {
-    margin: 0;
-    font-family: var(--font-heading-page);
-}
-
 /* 勾选列：thead th 与 tbody td 的 padding 来源不同（th 无 maintenance-table-cell），纵向看勾选框易左右错位；对称 padding + 全宽 flex 内层与表头/行共用 */
 .capture-maintenance-page-root .maintenance-list-container .maintenance-table>thead>tr>th.maintenance-select-all-header,
 .capture-maintenance-page-root .maintenance-list-container .maintenance-table>tbody>tr>td.maintenance-cell-checkbox {
@@ -1301,6 +1236,16 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     .capture-maintenance-page-root .maintenance-table-cell {
         white-space: normal;
     }
+}
+
+/* Filter panel: same width alignment as Transaction Maintenance */
+.capture-maintenance-page-root .customer-report-filter-container,
+.capture-maintenance-page-root .capture-maintenance-table-region {
+    width: 100%;
+    max-width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box;
 }
 
 /* Virtual table (aligned with payment maintenance) */
@@ -1392,8 +1337,6 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 .capture-maintenance-page-root .maintenance-virtual-scroll {
-    max-height: min(72vh, 900px);
-    overflow: auto;
     border-radius: 8px;
     background: #fff;
 }

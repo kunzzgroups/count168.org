@@ -9,6 +9,9 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
+require_once __DIR__ . '/../../includes/tenant_scope.php';
+require_once __DIR__ . '/../transactions/transaction_scope.php';
 require_once __DIR__ . '/../deleted_log/deleted_log.php';
 
 /**
@@ -38,40 +41,27 @@ function hasAccountCompanyTable($pdo) {
 }
 
 /**
- * 验证账户是否属于当前公司（通过 account_company）
+ * @return array{mode: 'group'|'company', group_pk: int, company_id: int, group_code: string}
  */
-function dbAccountBelongsToCompany($pdo, $account_id, $company_id) {
-    $stmt = $pdo->prepare("
-        SELECT a.id FROM account a
-        INNER JOIN account_company ac ON a.id = ac.account_id
-        WHERE a.id = ? AND ac.company_id = ?
-    ");
-    $stmt->execute([$account_id, $company_id]);
-    return (bool) $stmt->fetchColumn();
-}
+function accountCurrencyResolveContext(PDO $pdo): array
+{
+    $params = [
+        'group_id' => $_GET['group_id'] ?? null,
+        'view_group' => $_GET['view_group'] ?? null,
+        'company_id' => $_GET['company_id'] ?? null,
+        'group_only' => $_GET['group_only'] ?? null,
+        'session_company_id' => $_SESSION['company_id'] ?? null,
+    ];
 
-/**
- * 获取当前公司 ID（支持 GET company_id 覆盖，仅 owner）
- */
-function resolveCompanyId($pdo) {
-    $company_id = $_SESSION['company_id'] ?? null;
-    $requested = isset($_GET['company_id']) ? (int)$_GET['company_id'] : null;
-    if (!$requested) {
-        return $company_id;
-    }
-    $user_id = $_SESSION['user_id'];
-    $role = $_SESSION['role'] ?? '';
-    if ($role === 'owner') {
-        $owner_id = $_SESSION['owner_id'] ?? $user_id;
-        $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ?");
-        $stmt->execute([$requested, $owner_id]);
-        if ($stmt->fetchColumn()) {
-            return $requested;
+    $accountId = isset($_GET['account_id']) ? (int) $_GET['account_id'] : 0;
+    if ($accountId > 0) {
+        $accountCtx = tenant_resolve_currency_context_for_account($pdo, $accountId);
+        if ($accountCtx !== null) {
+            return $accountCtx;
         }
-    } elseif ($requested === (int)$_SESSION['company_id']) {
-        return $requested;
     }
-    return $company_id;
+
+    return tenant_resolve_currency_context_from_request($pdo, $params);
 }
 
 /**
@@ -86,23 +76,38 @@ function accountCurrencyTableExists(PDO $pdo): bool {
     }
 }
 
-function dbGetAccountCurrencies($pdo, $account_id, $company_id) {
-    $sql = "SELECT ac.id, ac.account_id, ac.currency_id, c.code AS currency_code
-            FROM account_currency ac
-            INNER JOIN currency c ON ac.currency_id = c.id
-            WHERE ac.account_id = ? AND c.company_id = ?
-            ORDER BY ac.created_at ASC";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$account_id, $company_id]);
+function dbGetAccountCurrencies(PDO $pdo, int $account_id, array $ctx): array
+{
+    if (($ctx['mode'] ?? '') === 'group' && tenant_table_has_scope_columns($pdo, 'currency')) {
+        $sql = "SELECT ac.id, ac.account_id, ac.currency_id, c.code AS currency_code
+                FROM account_currency ac
+                INNER JOIN currency c ON ac.currency_id = c.id
+                WHERE ac.account_id = ? AND c.scope_type = 'group' AND c.scope_id = ?
+                ORDER BY ac.created_at ASC";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$account_id, (int) ($ctx['group_pk'] ?? 0)]);
+    } else {
+        $company_id = (int) ($ctx['company_id'] ?? 0);
+        $sql = "SELECT ac.id, ac.account_id, ac.currency_id, c.code AS currency_code
+                FROM account_currency ac
+                INNER JOIN currency c ON ac.currency_id = c.id
+                WHERE ac.account_id = ? AND c.company_id = ?"
+            . tenant_sql_currency_subsidiary_only($pdo, 'c')
+            . ' ORDER BY ac.created_at ASC';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$account_id, $company_id]);
+    }
+
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
 /**
  * Member Win/Loss 等：返回账户在当前公司下拥有的全部币别（含无 account_currency 行时的 account.currency_id 兜底）
  */
-function dbGetAccountOwnedCurrenciesResolved(PDO $pdo, int $account_id, int $company_id): array {
+function dbGetAccountOwnedCurrenciesResolved(PDO $pdo, int $account_id, array $ctx): array
+{
     if (accountCurrencyTableExists($pdo)) {
-        $rows = dbGetAccountCurrencies($pdo, $account_id, $company_id);
+        $rows = dbGetAccountCurrencies($pdo, $account_id, $ctx);
         if (!empty($rows)) {
             return $rows;
         }
@@ -110,14 +115,26 @@ function dbGetAccountOwnedCurrenciesResolved(PDO $pdo, int $account_id, int $com
     try {
         $check = $pdo->query("SHOW COLUMNS FROM account LIKE 'currency_id'");
         if ($check && $check->rowCount() > 0) {
-            $stmt = $pdo->prepare("
-                SELECT c.id AS currency_id, c.code AS currency_code
-                FROM account a
-                INNER JOIN currency c ON a.currency_id = c.id
-                WHERE a.id = ? AND c.company_id = ?
-                LIMIT 1
-            ");
-            $stmt->execute([$account_id, $company_id]);
+            if (($ctx['mode'] ?? '') === 'group' && tenant_table_has_scope_columns($pdo, 'currency')) {
+                $stmt = $pdo->prepare("
+                    SELECT c.id AS currency_id, c.code AS currency_code
+                    FROM account a
+                    INNER JOIN currency c ON a.currency_id = c.id
+                    WHERE a.id = ? AND c.scope_type = 'group' AND c.scope_id = ?
+                    LIMIT 1
+                ");
+                $stmt->execute([$account_id, (int) ($ctx['group_pk'] ?? 0)]);
+            } else {
+                $company_id = (int) ($ctx['company_id'] ?? 0);
+                $stmt = $pdo->prepare("
+                    SELECT c.id AS currency_id, c.code AS currency_code
+                    FROM account a
+                    INNER JOIN currency c ON a.currency_id = c.id
+                    WHERE a.id = ? AND c.company_id = ?"
+                    . tenant_sql_currency_subsidiary_only($pdo, 'c')
+                    . ' LIMIT 1');
+                $stmt->execute([$account_id, $company_id]);
+            }
             $one = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($one && !empty($one['currency_code'])) {
                 return [[
@@ -135,12 +152,11 @@ function dbGetAccountOwnedCurrenciesResolved(PDO $pdo, int $account_id, int $com
 }
 
 /**
- * 获取当前公司所有货币
+ * 获取当前 scope 下所有货币（集团账本 vs 子公司）
  */
-function dbGetCompanyCurrencies($pdo, $company_id) {
-    $stmt = $pdo->prepare("SELECT id, code FROM currency WHERE company_id = ? ORDER BY code ASC");
-    $stmt->execute([$company_id]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+function dbGetScopeCurrencies(PDO $pdo, array $ctx): array
+{
+    return tenant_fetch_currencies($pdo, $ctx);
 }
 
 /**
@@ -152,13 +168,9 @@ function dbGetLinkedCurrencyIds($pdo, $account_id) {
     return array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'currency_id');
 }
 
-/**
- * 验证货币属于当前公司
- */
-function dbCurrencyBelongsToCompany($pdo, $currency_id, $company_id) {
-    $stmt = $pdo->prepare("SELECT id FROM currency WHERE id = ? AND company_id = ?");
-    $stmt->execute([$currency_id, $company_id]);
-    return (bool) $stmt->fetchColumn();
+function dbCurrencyBelongsToScope(PDO $pdo, int $currency_id, array $ctx): bool
+{
+    return tenant_currency_belongs_to_context($pdo, $currency_id, $ctx);
 }
 
 /**
@@ -197,21 +209,33 @@ function dbRemoveAccountCurrency($pdo, $account_id, $currency_id) {
 }
 
 try {
-    if (!isset($_SESSION['company_id'])) {
+    if (!isset($_SESSION['user_id'])) {
         jsonResponse(false, '用户未登录或缺少公司信息', null, 401);
         exit;
     }
 
-    $company_id = resolveCompanyId($pdo);
-    if (!$company_id) {
+    try {
+        $currencyCtx = accountCurrencyResolveContext($pdo);
+    } catch (Exception $e) {
+        jsonResponse(false, $e->getMessage(), null, 400);
+        exit;
+    }
+
+    $permCompanyId = (int) ($currencyCtx['company_id'] ?? 0);
+    if ($permCompanyId <= 0) {
         jsonResponse(false, '用户未登录或缺少公司信息', null, 401);
         exit;
+    }
+
+    $groupCode = (string) ($currencyCtx['group_code'] ?? '');
+    if ($groupCode !== '' && gc_is_group_login()) {
+        gc_assert_company_id_allowed_for_login_scope($pdo, $permCompanyId, $groupCode);
     }
 
     $method = $_SERVER['REQUEST_METHOD'];
     $action = $_GET['action'] ?? '';
-    $verifyAccount = function($account_id) use ($pdo, $company_id) {
-        return dbAccountBelongsToCompany($pdo, $account_id, $company_id);
+    $verifyAccount = function ($account_id) use ($pdo, $currencyCtx) {
+        return tenant_account_belongs_to_context($pdo, (int) $account_id, $currencyCtx);
     };
 
     if ($method === 'GET') {
@@ -225,14 +249,14 @@ try {
                 jsonResponse(false, '账户不存在或无权限访问', null, 403);
                 exit;
             }
-            $currencies = dbGetAccountOwnedCurrenciesResolved($pdo, $account_id, $company_id);
+            $currencies = dbGetAccountOwnedCurrenciesResolved($pdo, $account_id, $currencyCtx);
             jsonResponse(true, '', $currencies);
             exit;
         }
 
         if ($action === 'get_available_currencies') {
             $account_id = isset($_GET['account_id']) ? (int)$_GET['account_id'] : 0;
-            $all = dbGetCompanyCurrencies($pdo, $company_id);
+            $all = dbGetScopeCurrencies($pdo, $currencyCtx);
             $linked_ids = $account_id ? dbGetLinkedCurrencyIds($pdo, $account_id) : [];
             $result = array_map(function($c) use ($linked_ids) {
                 return [
@@ -276,7 +300,7 @@ try {
                     jsonResponse(false, '无法识别会话', null, 403);
                     exit;
                 }
-                $allowed = member_linked_member_closure_ids($pdo, $loginId, (int) $company_id);
+                $allowed = member_linked_member_closure_ids($pdo, $loginId, $permCompanyId);
                 $allowedMap = [];
                 foreach ($allowed as $x) {
                     $allowedMap[(int) $x] = true;
@@ -287,10 +311,10 @@ try {
                 if ($allowedMap !== null && empty($allowedMap[$aid])) {
                     continue;
                 }
-                if (!dbAccountBelongsToCompany($pdo, $aid, (int) $company_id)) {
+                if (!tenant_account_belongs_to_context($pdo, $aid, $currencyCtx)) {
                     continue;
                 }
-                $rows = dbGetAccountOwnedCurrenciesResolved($pdo, $aid, (int) $company_id);
+                $rows = dbGetAccountOwnedCurrenciesResolved($pdo, $aid, $currencyCtx);
                 $clist = [];
                 foreach ($rows as $r) {
                     $clist[] = [
@@ -327,7 +351,7 @@ try {
                 jsonResponse(false, '账户不存在或无权限访问', null, 403);
                 exit;
             }
-            if (!dbCurrencyBelongsToCompany($pdo, $currency_id, $company_id)) {
+            if (!dbCurrencyBelongsToScope($pdo, $currency_id, $currencyCtx)) {
                 jsonResponse(false, '货币不存在或无权限访问', null, 403);
                 exit;
             }
@@ -367,7 +391,7 @@ try {
                     (string) $acRow['id'],
                     'DELETE',
                     null,
-                    (string) $company_id
+                    (string) $permCompanyId
                 );
             }
             $deleted = dbRemoveAccountCurrency($pdo, $account_id, $currency_id);

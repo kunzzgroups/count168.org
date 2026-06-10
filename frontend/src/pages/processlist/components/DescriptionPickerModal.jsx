@@ -1,5 +1,8 @@
 import React, { useState, useMemo } from "react";
+import ConfirmDeleteModal, { CONFIRM_DELETE_NESTED_Z_INDEX } from "../../../components/ConfirmDeleteModal.jsx";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
+import { normalizeDescriptionName } from "../processListHelpers.js";
+import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
 export default function DescriptionPickerModal({
   descriptions,
@@ -12,6 +15,7 @@ export default function DescriptionPickerModal({
   t,
 }) {
   const ro = Boolean(readOnly);
+  const { submitting: addingDesc, guardSubmit } = useSubmitGuard(true);
   const [search, setSearch] = useState("");
   const [newDescName, setNewDescName] = useState("");
   const [localSelected, setLocalSelected] = useState(() => [...(form.selected_descriptions || [])]);
@@ -34,13 +38,14 @@ export default function DescriptionPickerModal({
   const handleAdd = async (e) => {
     e.preventDefault();
     if (ro) return;
-    if (!newDescName.trim()) return;
-    const added = await onAddDescription(newDescName.trim());
+    const name = normalizeDescriptionName(newDescName);
+    if (!name) return;
+    const added = await onAddDescription(name);
     setNewDescName("");
     if (added?.id != null) {
       setLocalSelected((prev) => {
         if (prev.some((item) => String(item.id) === String(added.id))) return prev;
-        return [...prev, { id: added.id, name: added.name }];
+        return [...prev, { id: added.id, name: normalizeDescriptionName(added.name) }];
       });
     }
   };
@@ -54,13 +59,16 @@ export default function DescriptionPickerModal({
 
   return (
     <ProcessModalPortal>
-    <div className="modal" style={{ ...processModalBackdropStyle, zIndex: 10100 }} role="dialog" aria-modal="true">
+    <div
+      id="descriptionPickerModal"
+      className="modal show"
+      style={{ ...processModalBackdropStyle, zIndex: 10100 }}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="modal-content description-selection-modal">
-        <div className="modal-header">
+        <div className="modal-header description-selection-modal-header">
           <h2>{t("selectOrAddDescription")}</h2>
-          <span className="close" onClick={onClose} role="presentation">
-            &times;
-          </span>
         </div>
         <div className="modal-body">
           <div className="description-selection-container">
@@ -68,9 +76,7 @@ export default function DescriptionPickerModal({
               <h3>{t("selectedDescriptions")}</h3>
               <div className="selected-descriptions-list" id="selectedDescriptionsInModal">
                 {localSelected.length === 0 ? (
-                  <div style={{ padding: "20px", textAlign: "center", color: "#999", fontStyle: "italic" }}>
-                    {t("noDescriptionsSelected")}
-                  </div>
+                  <div className="no-descriptions">{t("noDescriptionsSelected")}</div>
                 ) : (
                   localSelected.map((item) => (
                     <div key={item.id} className="selected-description-modal-item">
@@ -87,18 +93,19 @@ export default function DescriptionPickerModal({
             <div className="available-descriptions-section">
               <div className="add-description-bar">
                 <h3>{t("addNewDescription")}</h3>
-                <form className="add-description-form" onSubmit={handleAdd}>
+                <form className="add-description-form" onSubmit={guardSubmit(handleAdd)}>
                   <div className="add-description-input-group">
                     <input
                       type="text"
                       placeholder={t("enterNewDescriptionName")}
                       value={newDescName}
                       disabled={ro}
-                      onChange={(e) => setNewDescName(e.target.value)}
+                      onChange={(e) => setNewDescName(e.target.value.toUpperCase())}
+                      style={{ textTransform: "uppercase" }}
                       required
                     />
-                    <button type="submit" className="btn btn-save" disabled={ro}>
-                      {t("add")}
+                    <button type="submit" className="btn btn-save" disabled={ro || addingDesc}>
+                      {addingDesc ? t("saving") : t("add")}
                     </button>
                   </div>
                 </form>
@@ -108,9 +115,11 @@ export default function DescriptionPickerModal({
               <div className="description-search">
                 <input
                   type="text"
+                  className="description-search-input"
                   placeholder={t("searchDescriptions")}
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => setSearch(e.target.value.toUpperCase())}
+                  style={{ textTransform: "uppercase" }}
                 />
               </div>
               <div className="description-list" id="existingDescriptions">
@@ -118,17 +127,18 @@ export default function DescriptionPickerModal({
                   const isSelected = localSelected.some((item) => String(item.id) === String(d.id));
                   return (
                     <div key={d.id} className="description-item">
-                      <input
-                        type="checkbox"
-                        id={`desc_checkbox_${d.id}`}
-                        checked={isSelected}
-                        onChange={() => toggleSelect(d)}
-                        style={{ margin: 0 }}
-                      />
-                      <label htmlFor={`desc_checkbox_${d.id}`}>{String(d.name || "").toUpperCase()}</label>
+                      <div className="description-item-left">
+                        <input
+                          type="checkbox"
+                          id={`desc_checkbox_${d.id}`}
+                          checked={isSelected}
+                          onChange={() => toggleSelect(d)}
+                        />
+                        <label htmlFor={`desc_checkbox_${d.id}`}>{String(d.name || "").toUpperCase()}</label>
+                      </div>
                       <button
                         type="button"
-                        className="remove-description"
+                        className="description-delete-btn"
                         disabled={ro}
                         onClick={(e) => {
                           if (ro) return;
@@ -136,6 +146,7 @@ export default function DescriptionPickerModal({
                           setDeleteConfirmId(d.id);
                         }}
                         title={t("deleteDescription")}
+                        aria-label={t("deleteDescription")}
                       >
                         &times;
                       </button>
@@ -156,22 +167,17 @@ export default function DescriptionPickerModal({
         </div>
       </div>
 
-      {deleteConfirmId != null && (
-        <div className="process-modal" style={{ display: "block", zIndex: 10060 }} role="dialog" aria-modal="true">
-          <div className="process-confirm-modal-content" style={{ maxWidth: 420 }}>
-            <h2 className="process-confirm-title">{t("deleteDescriptionTitle")}</h2>
-            <p className="process-confirm-message">{t("deleteDescriptionConfirm")}</p>
-            <div className="process-confirm-actions">
-              <button type="button" className="process-btn process-btn-cancel" onClick={() => setDeleteConfirmId(null)}>
-                {t("cancel")}
-              </button>
-              <button type="button" className="process-btn process-btn-delete" disabled={ro} onClick={() => !ro && void runDelete()}>
-                {t("delete")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDeleteModal
+        open={deleteConfirmId != null}
+        title={t("deleteDescriptionTitle")}
+        message={t("deleteDescriptionConfirm")}
+        cancelLabel={t("cancel")}
+        confirmLabel={t("delete")}
+        zIndex={CONFIRM_DELETE_NESTED_Z_INDEX}
+        confirmDisabled={ro}
+        onClose={() => setDeleteConfirmId(null)}
+        onConfirm={() => void runDelete()}
+      />
     </div>
     </ProcessModalPortal>
   );

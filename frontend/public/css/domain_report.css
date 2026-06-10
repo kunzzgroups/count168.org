@@ -34,7 +34,7 @@ body.dashboard-page.report-page .container {
     background: white;
     border-radius: 12px;
     padding: clamp(12px, 1.25vw, 20px);
-    margin-top: clamp(16px, 1.35vw, 26px);
+    margin-top: var(--layout-page-first-block-mt, 10px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -172,7 +172,7 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
 .domain-report-card,
 .domain-report-total {
     display: grid;
-    grid-template-columns: 1.55fr 0.68fr 0.74fr 0.82fr 1fr 1fr 1fr 1fr;
+    grid-template-columns: 1.55fr 1fr 1fr 1fr 1fr;
     gap: 15px;
     min-width: 0;
 }
@@ -187,10 +187,10 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     font-size: clamp(10px, 0.89vw, 17px);
 }
 
-.domain-report-table-header > div:nth-child(5),
-.domain-report-table-header > div:nth-child(6),
-.domain-report-table-header > div:nth-child(7),
-.domain-report-table-header > div:nth-child(8) {
+.domain-report-table-header > div:nth-child(2),
+.domain-report-table-header > div:nth-child(3),
+.domain-report-table-header > div:nth-child(4),
+.domain-report-table-header > div:nth-child(5) {
     text-align: right;
 }
 
@@ -239,13 +239,23 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     font-weight: 500;
 }
 
+.domain-report-card-item.domain-report-amount.win,
+.domain-report-total .domain-report-amount.win {
+    color: #172a9f;
+}
+
+.domain-report-card-item.domain-report-amount.lose,
+.domain-report-total .domain-report-amount.lose {
+    color: #b91c1c;
+}
+
 .domain-report-win-lose-positive {
-    color: #10b981;
+    color: #172a9f;
     /* font-weight: bold; */
 }
 
 .domain-report-win-lose-negative {
-    color: #DC143C;
+    color: #b91c1c;
     /* font-weight: bold; */
 }
 
@@ -261,7 +271,7 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
 }
 
 .domain-report-total-label {
-    grid-column: 1 / 5;
+    grid-column: 1 / 2;
     font-weight: bold;
 }
 
@@ -278,8 +288,14 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     justify-content: flex-start;
     gap: clamp(10px, 0.83vw, 16px);
     flex-wrap: wrap;
-    margin-top: clamp(12px, 1.04vw, 20px);
-    margin-bottom: clamp(16px, 1.35vw, 26px);
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+}
+
+/* 与 customer_report 一致：空占位 header 不占顶距 */
+body.dashboard-page.report-page .content > .report-header:empty {
+    display: none;
 }
 
 

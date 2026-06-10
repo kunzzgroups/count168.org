@@ -48,7 +48,7 @@ body.transaction-page .transaction-container {
 .transaction-page .transaction-main {
     display: flex;
     flex-direction: column;
-    gap: clamp(16px, 1.25vw, 24px);
+    gap: 0;
     width: 100%;
     min-height: 0;
 }
@@ -377,6 +377,27 @@ body.transaction-page .transaction-bottom-filters .user-gc-segment.is-on {
     background: linear-gradient(180deg, #63c4ff 0%, #0d60ff 100%);
     color: #ffffff;
     border-right-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Company row: instant highlight move when switching companies in the same group */
+body.transaction-page .transaction-bottom-filters .user-gc-inline-row--company .user-gc-segment {
+    transition: none;
+    opacity: 1;
+}
+
+body.transaction-page .transaction-bottom-filters .user-gc-inline-row--company .user-gc-segment.is-on {
+    transition: none;
+}
+
+body.transaction-page .transaction-bottom-filters .user-gc-inline-row--company .user-gc-segment-label {
+    display: inline-block;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+}
+
+body.transaction-page .transaction-bottom-filters .user-gc-inline-row--company .user-gc-segment-group {
+    contain: layout style;
 }
 
 body.transaction-page .transaction-bottom-filters .user-gc-segment:disabled {
@@ -1468,6 +1489,33 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
     font-weight: var(--font-weight-bold);
 }
 
+.transaction-page .transaction-amount {
+    font-variant-numeric: tabular-nums;
+}
+
+.transaction-page .transaction-amount--pos {
+    color: #172a9f;
+}
+
+.transaction-page .transaction-amount--neg {
+    color: #b91c1c;
+}
+
+/* Payment History modal (portaled to body): same signed amount colors as main grid */
+body.transaction-page #historyModal .transaction-amount--pos,
+.transaction-page #historyModal .transaction-amount--pos {
+    color: #172a9f;
+}
+
+body.transaction-page #historyModal .transaction-amount--neg,
+.transaction-page #historyModal .transaction-amount--neg {
+    color: #b91c1c;
+}
+
+.transaction-page .transaction-table tbody .transaction-table-row.transaction-alert-row .transaction-amount {
+    color: white !important;
+}
+
 .transaction-page .transaction-table-row:hover td {
     background-color: #bfc9ff;
 }
@@ -2269,11 +2317,6 @@ body.transaction-page #historyModal .transaction-history-modal .transaction-moda
 /**
  * transaction.css - 原根目录 transaction.css 已移入此文件夹，并包含 transaction.php 页面专用样式
  */
-/* Bold transaction workspace only — sidebar is outside .transaction-container */
-body.transaction-page .transaction-container,
-body.transaction-page .transaction-container * {
-    font-weight: 700;
-}
 
 /* ==================== Contra Approval Inbox ==================== */
 .transaction-header-bar {
@@ -2283,7 +2326,7 @@ body.transaction-page .transaction-container * {
     gap: 12px;
 }
 
-/* Title + Contra Inbox share one row; top spacing lives on the row, not the h1. */
+/* Title + Contra Inbox share one row; top spacing on .transaction-header-bar (see globals.css). */
 body.ec-auth-shell.transaction-page .transaction-header-left,
 body.transaction-page .transaction-header-left {
     display: flex;
@@ -2291,7 +2334,7 @@ body.transaction-page .transaction-header-left {
     gap: clamp(12px, 1.04vw, 20px);
     min-width: 0;
     flex-wrap: nowrap;
-    margin-top: var(--text-page-title-mt) !important;
+    margin-top: 0 !important;
 }
 
 .contra-inbox-wrap {
@@ -2838,7 +2881,7 @@ body.transaction-page .transaction-header-left {
 
 .transaction-table th,
 .transaction-table td {
-    padding: clamp(2px, 0.21vw, 4px) 8px;
+    padding: 2px 8px;
     line-height: 1.1;
     font-weight: 600;
     font-size: clamp(9px, 0.73vw, 14px);
@@ -3788,5 +3831,49 @@ body.transaction-page .transaction-add-section .transaction-account-inputs--to-o
 body.transaction-page .transaction-add-section .transaction-account-inputs--to-only > .custom-select-wrapper {
     flex: 1 1 auto;
     max-width: none;
+}
+
+/* Unlock native page scroll — dashboard-page sets body overflow:hidden + height:100vh */
+html:has(body.dashboard-page.transaction-page:not(.member-winloss-page)) {
+    height: auto;
+    overflow-y: auto;
+}
+
+body.dashboard-page.transaction-page:not(.member-winloss-page),
+body.ec-auth-shell.dashboard-page.transaction-page:not(.member-winloss-page) {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
+
+body.dashboard-page.transaction-page:not(.member-winloss-page) #root {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.transaction-page:not(.member-winloss-page) .ec-page-shell,
+body.dashboard-page.transaction-page:not(.member-winloss-page) .ec-page-shell__content {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.transaction-page:not(.member-winloss-page) .transaction-container {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow: visible !important;
+    padding-bottom: clamp(24px, 3vh, 48px) !important;
+}
+
+body.dashboard-page.transaction-page:not(.member-winloss-page) .transaction-main,
+body.dashboard-page.transaction-page:not(.member-winloss-page) .transaction-tables-section {
+    overflow: visible !important;
+    max-height: none !important;
 }
 

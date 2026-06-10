@@ -4,6 +4,8 @@
  * Prevents code duplication and ensures consistent filtering.
  */
 
+require_once __DIR__ . '/../includes/group_scope_resolve.php';
+
 if (!function_exists('getCompaniesByUser')) {
     /**
      * @param bool $includeGroupLinkVirtualRows
@@ -16,7 +18,7 @@ if (!function_exists('getCompaniesByUser')) {
     function getCompaniesByUser(PDO $pdo, int $userId, bool $fetchAll = false, bool $includeGroupLinkVirtualRows = false): array {
         if ($fetchAll) {
             $stmt = $pdo->prepare("
-                SELECT DISTINCT c.id, c.company_id, c.group_id, c.expiration_date
+                SELECT DISTINCT c.id, c.company_id, c.group_id AS native_group_id, c.group_id, c.expiration_date, c.permissions
                 FROM company c
                 INNER JOIN user_company_map ucm ON c.id = ucm.company_id
                 WHERE ucm.user_id = ? AND c.company_id != ''
@@ -24,6 +26,30 @@ if (!function_exists('getCompaniesByUser')) {
             ");
             $stmt->execute([$userId]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            // Domain "Selected Companies" (e.g. independent ABC) live under the same owner_id
+            // as mapped group subsidiaries — include the full owner portfolio for dashboard pills.
+            $ownerScopeStmt = $pdo->prepare("
+                SELECT DISTINCT c.id, c.company_id, c.group_id AS native_group_id, c.group_id, c.expiration_date, c.permissions
+                FROM company c
+                WHERE c.company_id != ''
+                  AND c.owner_id IN (
+                    SELECT DISTINCT c2.owner_id
+                    FROM company c2
+                    INNER JOIN user_company_map ucm ON c2.id = ucm.company_id
+                    WHERE ucm.user_id = ? AND c2.owner_id IS NOT NULL
+                  )
+                ORDER BY c.company_id ASC
+            ");
+            $ownerScopeStmt->execute([$userId]);
+            $ownerRows = $ownerScopeStmt->fetchAll(PDO::FETCH_ASSOC);
+            if (!empty($ownerRows)) {
+                $byId = [];
+                foreach (array_merge($rows, $ownerRows) as $r) {
+                    $byId[(int) ($r['id'] ?? 0)] = $r;
+                }
+                $rows = array_values($byId);
+            }
 
             if ($includeGroupLinkVirtualRows) {
                 // Derive the set of owner ids this admin is managing via user_company_map
@@ -322,6 +348,7 @@ if (!function_exists('getCompaniesByOwner')) {
         if ($fetchAll) {
             $sql = "
                 SELECT DISTINCT c.id, c.company_id, c.expiration_date,
+                       c.group_id AS native_group_id,
                        COALESCE(co.partner_group_id, c.group_id) as group_id,
                        IF(c.owner_id = ?, 0, 1) as is_external
                 FROM company c
@@ -340,6 +367,8 @@ if (!function_exists('getCompaniesByOwner')) {
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $rows = gc_enrich_owner_company_rows_with_group_map($pdo, $ownerId, $rows);
 
             if ($includeGroupLinkVirtualRows) {
                 // Real-owner session — only their own group-links produce virtual rows.

@@ -184,6 +184,13 @@ try {
 
     // Sort by account_name
     $combined = array_values($accountMap);
+    // External linked owners belong in Link Partner only, not "+ Add Account".
+    $combined = array_values(array_filter($combined, static function ($row) {
+        if (strtolower((string) ($row['type'] ?? '')) !== 'owner') {
+            return true;
+        }
+        return (int) ($row['is_main_owner'] ?? 0) === 1;
+    }));
     usort($combined, function ($a, $b) {
         return strcmp($a['account_name'], $b['account_name']);
     });

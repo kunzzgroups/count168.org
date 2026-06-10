@@ -6,10 +6,18 @@ import {
   readInitialCaptureType,
 } from "../lib/dataCaptureFormRules.js";
 import { domGridHasEditableData } from "../lib/dataCaptureTableSnapshot.js";
+import {
+  callDataCaptureRuntime,
+  registerDataCaptureRuntime,
+  unregisterDataCaptureRuntime,
+} from "../lib/dataCaptureRuntime.js";
+import {
+  parseHtmlFormat,
+  toggleBridgeFormatDisplay,
+} from "../lib/dataCaptureBridge.js";
 
 /**
  * Phase 2: Capture type switching + 2.Format view orchestration in React.
- * Legacy still owns paste parsing, grid fill, and iframe srcdoc rendering.
  */
 export function useDataCaptureCaptureType() {
   const [captureType, setCaptureType] = useState(readInitialCaptureType);
@@ -39,43 +47,37 @@ export function useDataCaptureCaptureType() {
 
     if (t === "2.Format") {
       const previewHtml = getFormatPreviewHtml();
-      const legacyReady =
-        typeof window.__DC_GET_FORMAT_GRID_READY__ === "function"
-          ? window.__DC_GET_FORMAT_GRID_READY__()
-          : false;
+      const legacyReady = callDataCaptureRuntime("getFormatGridReady") === true;
 
       if (domGridHasEditableData()) {
-        window.__DC_SYNC_FORMAT_PREVIEW_FROM_DOM__?.();
-        window.__DC_SET_FORMAT_GRID_READY__?.(true);
+        callDataCaptureRuntime("syncFormatPreviewFromDom");
+        callDataCaptureRuntime("setFormatGridReady", true);
         setFormatGridReady(true);
       } else if (previewHtml && shouldRestoreFormatFromPreview()) {
-        const filled =
-          typeof window.__DC_PARSE_HTML_FORMAT__ === "function"
-            ? window.__DC_PARSE_HTML_FORMAT__(previewHtml)
-            : false;
+        const filled = parseHtmlFormat(previewHtml);
         if (filled || legacyReady) {
-          window.__DC_SET_FORMAT_GRID_READY__?.(true);
+          callDataCaptureRuntime("setFormatGridReady", true);
           setFormatGridReady(true);
         } else {
-          window.__DC_SET_FORMAT_GRID_READY__?.(false);
+          callDataCaptureRuntime("setFormatGridReady", false);
           setFormatGridReady(false);
         }
       } else if (legacyReady) {
         setFormatGridReady(true);
       } else {
-        window.__DC_SET_FORMAT_GRID_READY__?.(false);
+        callDataCaptureRuntime("setFormatGridReady", false);
         setFormatGridReady(false);
       }
     } else {
-      window.__DC_SET_FORMAT_GRID_READY__?.(false);
+      callDataCaptureRuntime("setFormatGridReady", false);
       setFormatGridReady(false);
       if (previous === "2.Format") {
-        window.__DC_CLEAR_FORMAT_STYLES__?.();
+        callDataCaptureRuntime("clearFormatStyles");
       }
     }
 
-    window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
-    window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+    toggleBridgeFormatDisplay();
+    callDataCaptureRuntime("recomputeSubmitState");
   }, []);
 
   const handleCaptureTypeChange = useCallback(
@@ -89,25 +91,23 @@ export function useDataCaptureCaptureType() {
   handlersRef.current = { applyCaptureType };
 
   useLayoutEffect(() => {
-    window.__DC_APPLY_CAPTURE_TYPE__ = (t) => handlersRef.current.applyCaptureType(t);
-    window.__DC_GET_CAPTURE_TYPE__ = () => captureTypeRef.current;
-    window.__DC_ON_FORMAT_GRID_READY__ = (ready) => setFormatGridReady(Boolean(ready));
-    window.__DC_ON_CAPTURE_TYPE_APPLIED__ = (t) => {
-      const s = normalizeCaptureType(t) || "1.Text";
-      setCaptureType(s);
-      captureTypeRef.current = s;
+    const api = {
+      applyCaptureType: (type) => handlersRef.current.applyCaptureType(type),
+      getCaptureType: () => captureTypeRef.current,
+      onFormatGridReady: (ready) => setFormatGridReady(Boolean(ready)),
+      onCaptureTypeApplied: (t) => {
+        const s = normalizeCaptureType(t) || "1.Text";
+        setCaptureType(s);
+        captureTypeRef.current = s;
+      },
     };
 
-    return () => {
-      delete window.__DC_APPLY_CAPTURE_TYPE__;
-      delete window.__DC_GET_CAPTURE_TYPE__;
-      delete window.__DC_ON_FORMAT_GRID_READY__;
-      delete window.__DC_ON_CAPTURE_TYPE_APPLIED__;
-    };
+    registerDataCaptureRuntime(api);
+    return () => unregisterDataCaptureRuntime(Object.keys(api));
   }, []);
 
   useLayoutEffect(() => {
-    window.__DC_TOGGLE_FORMAT_DISPLAY__?.();
+    toggleBridgeFormatDisplay();
   }, [captureType, formatGridReady]);
 
   return {

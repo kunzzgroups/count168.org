@@ -9,6 +9,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/formula_fields_helper.php';
+require_once __DIR__ . '/formula_maintenance_scope.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -25,31 +26,13 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
  * 从请求（GET/POST）中解析并验证 company_id
  */
 function getCompanyIdForRequest(PDO $pdo) {
-    $requested = isset($_GET['company_id']) ? trim($_GET['company_id']) : '';
-    if ($requested === '' && isset($_POST['company_id'])) {
-        $requested = trim((string)$_POST['company_id']);
+    $params = $_GET;
+    if (isset($_POST['company_id'])) {
+        $params['company_id'] = $_POST['company_id'];
     }
-    if ($requested !== '') {
-        $requested = (int)$requested;
-        $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
-        if ($userRole === 'owner') {
-            $owner_id = $_SESSION['owner_id'] ?? $_SESSION['user_id'];
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ?");
-            $stmt->execute([$requested, $owner_id]);
-            if ($stmt->fetchColumn()) {
-                return $requested;
-            }
-            throw new Exception('无权访问该公司');
-        }
-        if (!isset($_SESSION['company_id']) || (int)$_SESSION['company_id'] !== $requested) {
-            throw new Exception('无权访问该公司');
-        }
-        return (int)$_SESSION['company_id'];
-    }
-    if (!isset($_SESSION['company_id'])) {
-        throw new Exception('缺少公司信息');
-    }
-    return (int)$_SESSION['company_id'];
+    $scope = formulaMaintenanceResolveRequestScope($pdo, $params);
+
+    return (int) $scope['company_id'];
 }
 
 /**
@@ -57,7 +40,16 @@ function getCompanyIdForRequest(PDO $pdo) {
  * 直接 JOIN process 表，避免 GROUP BY 导致同一 process 代码下多条 process 行时只匹配 MIN(id)、
  * 其余模板在 Maintenance 不显示却在 Data Capture Summary 仍显示的问题。
  */
-function fetchFormulaListRaw(PDO $pdo, int $companyId, string $search, string $processFilter) {
+function fetchFormulaListRaw(
+    PDO $pdo,
+    array $scopeCtx,
+    string $search,
+    ?int $processIdFilter,
+    string $scopeProcessSql = '',
+    bool $isGroupScope = false
+) {
+    $companyId = (int) ($scopeCtx['company_id'] ?? 0);
+    $ledger = formulaMaintenanceBuildTemplateLedgerFilter($pdo, $scopeCtx);
     $sql = "SELECT 
                 dct.id,
                 dct.process_id,
@@ -80,24 +72,21 @@ function fetchFormulaListRaw(PDO $pdo, int $companyId, string $search, string $p
                 p.process_id AS process_code,
                 p.description_id,
                 d.name AS description_name,
+                " . formulaMaintenanceSqlProcessOnGroupEntityFlag('p') . " AS process_on_group_entity,
                 a.account_id AS account_code,
                 a.name AS account_name,
                 c.code AS currency_code
             FROM data_capture_templates dct
-            INNER JOIN process p ON p.company_id = dct.company_id
-                AND (
-                    (dct.process_id REGEXP '^[0-9]+$' AND p.id = CAST(dct.process_id AS UNSIGNED))
-                    OR (dct.process_id = p.process_id)
-                )
+            " . formulaMaintenanceSqlTemplateProcessJoin($pdo, $companyId, $processIdFilter, $isGroupScope) . "
             LEFT JOIN description d ON p.description_id = d.id
             LEFT JOIN account a ON dct.account_id = a.id
             LEFT JOIN currency c ON dct.currency_id = c.id
-            WHERE dct.company_id = ?";
-    $params = [$companyId];
-    if ($processFilter !== '') {
-        $sql .= " AND p.process_id = ?";
-        $params[] = $processFilter;
+            WHERE 1=1 {$ledger['sql']}";
+    $params = $ledger['params'];
+    if ($scopeProcessSql !== '') {
+        $sql .= $scopeProcessSql;
     }
+    // processIdFilter is enforced in formulaMaintenanceSqlTemplateProcessJoin().
     if ($search !== '') {
         $like = '%' . $search . '%';
         $sql .= " AND (
@@ -122,7 +111,7 @@ function fetchFormulaListRaw(PDO $pdo, int $companyId, string $search, string $p
 /**
  * 将原始行转换为前端需要的格式（no, process, account, source, formula 等）
  */
-function mapRowsToDisplay(array $rows) {
+function mapRowsToDisplay(array $rows, bool $isGroupScope = false) {
     // 以「界面上能看到的字段」为维度去重，
     // 确保同一 Process 下，Maintenance - Formula 的可见行数与 Data Summary 一致，
     // 但不影响底层 data_capture_templates 中的所有记录（仅列表展示去重）。
@@ -136,10 +125,13 @@ function mapRowsToDisplay(array $rows) {
         $formulaEdit = buildFormulaEditFromRow($row);
         $processCode = $row['process_code'] ?? '';
         $descriptionName = $row['description_name'] ?? '';
-        $processDisplay = $processCode;
-        if ($descriptionName !== '') {
-            $processDisplay = $processCode . ' (' . $descriptionName . ')';
-        }
+        $processOnGroupEntity = !empty($row['process_on_group_entity']);
+        $processDisplay = formulaMaintenanceFormatProcessDisplay(
+            $processCode,
+            $descriptionName,
+            $processOnGroupEntity,
+            $isGroupScope
+        );
         $accountDisplay = $row['account_code'] ?? ($row['account_display'] ?? '');
         $currencyDisplay = $row['currency_code'] ?? ($row['currency_display'] ?? '');
         $product = $row['id_product'] ?? '';
@@ -219,7 +211,22 @@ try {
     if (!isset($_SESSION['user_id'])) {
         throw new Exception('用户未登录');
     }
-    $companyId = getCompanyIdForRequest($pdo);
+    $scopeParams = array_merge($_GET, $_POST);
+    $scopeCtx = formulaMaintenanceResolveRequestScope($pdo, $scopeParams);
+    $companyId = (int) $scopeCtx['company_id'];
+    $formula_scope_group = (bool) $scopeCtx['is_group_scope'];
+    $scopeProcessSql = (string) $scopeCtx['scope_process_sql'];
+
+    if ($formula_scope_group) {
+        if ($companyId <= 0) {
+            jsonResponse(true, 'success', ['list' => [], 'total' => 0]);
+            exit;
+        }
+    } elseif ($companyId > 0 && dcCompanyIdIsGroupEntity($pdo, $companyId)) {
+        jsonResponse(true, 'success', ['list' => [], 'total' => 0]);
+        exit;
+    }
+
     $category = trim($_GET['category'] ?? $_GET['permission'] ?? '');
     $catUpper = $category !== '' ? strtoupper($category) : '';
     if (in_array($catUpper, ['LOAN', 'RATE', 'MONEY'], true)) {
@@ -231,12 +238,26 @@ try {
     if ($search === '' && isset($_POST['search'])) {
         $search = trim((string)$_POST['search']);
     }
-    $processFilter = isset($_GET['process']) ? trim((string)$_GET['process']) : '';
-    if ($processFilter === '' && isset($_POST['process'])) {
-        $processFilter = trim((string)$_POST['process']);
+    $processParam = isset($_GET['process']) ? trim((string) $_GET['process']) : '';
+    if ($processParam === '' && isset($_POST['process'])) {
+        $processParam = trim((string) $_POST['process']);
     }
-    $rows = fetchFormulaListRaw($pdo, $companyId, $search, $processFilter);
-    $list = mapRowsToDisplay($rows);
+    $processResolved = formulaMaintenanceResolveProcessFilter(
+        $pdo,
+        $processParam,
+        $companyId,
+        $formula_scope_group
+    );
+    $processIdFilter = $processResolved['process_id'];
+    if ($processParam !== '' && $processIdFilter === null && $processResolved['legacy_code'] !== null) {
+        jsonResponse(true, 'success', ['list' => [], 'total' => 0]);
+        exit;
+    }
+    if ($processIdFilter !== null && $processIdFilter > 0) {
+        dcFixGroupPayrollProcessDescription($pdo, $processIdFilter);
+    }
+    $rows = fetchFormulaListRaw($pdo, $scopeCtx, $search, $processIdFilter, $scopeProcessSql, $formula_scope_group);
+    $list = mapRowsToDisplay($rows, $formula_scope_group);
     jsonResponse(true, 'success', ['list' => $list, 'total' => count($list)]);
 } catch (PDOException $e) {
     jsonResponse(false, '数据库错误: ' . $e->getMessage(), null, 500);

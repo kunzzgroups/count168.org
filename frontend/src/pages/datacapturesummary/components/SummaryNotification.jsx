@@ -3,6 +3,7 @@ import { summaryNotificationCssType } from "../lib/summaryNotificationNormalize.
 export default function SummaryNotification({ notification, shown, onClose }) {
   const { open, title, message, type } = notification;
   const typeClass = summaryNotificationCssType(type);
+  const body = String(message || "").trim();
 
   if (!open) return null;
 
@@ -14,7 +15,7 @@ export default function SummaryNotification({ notification, shown, onClose }) {
       role="status"
       aria-live="polite"
     >
-      <div className="notification-header">
+      <div className={`notification-header${body ? "" : " notification-header--solo"}`}>
         <span className="notification-title" id="notificationTitle">
           {title}
         </span>
@@ -22,9 +23,11 @@ export default function SummaryNotification({ notification, shown, onClose }) {
           &times;
         </button>
       </div>
-      <div className="notification-message" id="notificationMessage">
-        {message}
-      </div>
+      {body ? (
+        <div className="notification-message" id="notificationMessage">
+          {body}
+        </div>
+      ) : null}
     </div>
   );
 }

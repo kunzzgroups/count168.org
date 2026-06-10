@@ -20,8 +20,8 @@ import "../../../public/css/report-outlined-fields.css";
 import "../../../public/css/transaction.css";
 import "../../../public/css/userlist.css";
 import { useLoginLang } from "../../utils/i18n/useLoginLang.js";
-import PageContentLoader from "../../components/PageContentLoader.jsx";
 import { getTransactionText, TRANSACTION_I18N } from "../../translateFile/pages/transactionTranslate.js";
+import { transactionScopeApiParams } from "./lib/transactionScope.js";
 
 /** Cleared on mount so SPA navigation cannot leave stale route classes on `body` before paint (e.g. Process uses `useEffect`; this page uses `useLayoutEffect`, which runs first). */
 const ROUTE_BODY_CLASSES_TO_CLEAR = [
@@ -55,7 +55,8 @@ export default function TransactionPaymentPage() {
 
   // 2. Data & Auth
   const data = useTransactionData({ todayDmy });
-  const { filterSnapshot, currencyRowsOrdered, loading, forbidden } = data;
+  const { filterSnapshot, transactionScope, currencyRowsOrdered, loading, forbidden } = data;
+  const scopeApi = useMemo(() => transactionScopeApiParams(transactionScope), [transactionScope]);
 
   // 3. Form Logic
   const formSearchRef = useRef(null);
@@ -69,6 +70,7 @@ export default function TransactionPaymentPage() {
     onSearch: onFormSearch,
     refreshContraInboxBadge: ui.refreshContraInboxBadge,
     filterSnapshot,
+    transactionScope,
     accountOptions: data.accountOptions,
     m,
     t,
@@ -77,6 +79,8 @@ export default function TransactionPaymentPage() {
   // 4. Search Logic
   const search = useTransactionSearch({
     filterSnapshot,
+    transactionScope,
+    currencyScopeBundle: data.currencyScopeBundle,
     todayDmy,
     pushToast,
     txType: form.txType,
@@ -92,7 +96,8 @@ export default function TransactionPaymentPage() {
     loading,
     forbidden,
     filterSnapshot,
-    currencyRowsOrdered,
+    transactionScope,
+    currencyScopeBundle: data.currencyScopeBundle,
     todayDmy,
     search,
     form,
@@ -122,6 +127,7 @@ export default function TransactionPaymentPage() {
 
   useTransactionSync({
     filterSnapshot,
+    transactionScope,
     effectiveDateFrom: search.effectiveDateFrom,
     effectiveDateTo: search.effectiveDateTo,
     selectedCategories: search.selectedCategories,
@@ -152,7 +158,7 @@ export default function TransactionPaymentPage() {
   /** Re-apply after company switch or stale passive cleanups (e.g. Home dashboard unmount re-adds `bg`). */
   useEffect(() => {
     applyTransactionBodyClasses();
-  }, [applyTransactionBodyClasses, filterSnapshot?.companyId]);
+  }, [applyTransactionBodyClasses, transactionScope?.scopeCompanyId, transactionScope?.viewGroup]);
 
   useEffect(() => {
     return installTransactionExcelCopy();
@@ -207,29 +213,24 @@ export default function TransactionPaymentPage() {
   }, [ui.setContraInbox]);
 
   const refreshContraInbox = useCallback(() => {
-    void ui.refreshContraInboxBadge(filterSnapshot?.companyId);
-  }, [ui.refreshContraInboxBadge, filterSnapshot?.companyId]);
+    void ui.refreshContraInboxBadge(scopeApi);
+  }, [ui.refreshContraInboxBadge, scopeApi]);
 
   const onApproveContra = useCallback(
-    (opts) => ui.onApproveContra(opts.transactionId, opts.companyId, search.runSearch),
-    [ui.onApproveContra, search.runSearch],
+    (opts) => ui.onApproveContra(opts.transactionId, scopeApi, search.runSearch),
+    [ui.onApproveContra, scopeApi, search.runSearch],
   );
 
   const onRejectContra = useCallback(
-    (opts) => ui.onRejectContra(opts.transactionId, opts.companyId),
-    [ui.onRejectContra],
+    (opts) => ui.onRejectContra(opts.transactionId, scopeApi),
+    [ui.onRejectContra, scopeApi],
   );
 
   if (forbidden) {
     return <Navigate to="/dashboard" replace />;
   }
-  if (loading || !filterSnapshot) {
-    return (
-      <div className="transaction-container transaction-container--boot">
-        <PageContentLoader label={m.loadingData || m.loading || "Loading…"} />
-      </div>
-    );
-  }
+
+  const booting = loading || !filterSnapshot;
 
   return (
     <div className="container-fluid transaction-container">
@@ -241,13 +242,15 @@ export default function TransactionPaymentPage() {
         refreshContraInbox={refreshContraInbox}
         approveContra={onApproveContra}
         rejectContra={onRejectContra}
-        fsCompanyId={filterSnapshot?.companyId}
+        scopeApi={scopeApi}
         mutationsBlocked={Boolean(filterSnapshot?.mutationsBlocked)}
         m={m}
         t={t}
       />
 
       <main className="transaction-main">
+        {!booting ? (
+          <>
         {txWlTolBannerActive ? (
           <div
             className="transaction-tx-wl-tol-banner"
@@ -275,8 +278,6 @@ export default function TransactionPaymentPage() {
             removeCategoryTag={search.removeCategoryTag}
             searchState={search.searchState}
             setSearchState={search.setSearchState}
-            showAllCurrencies={search.showAllCurrencies}
-            setShowAllCurrencies={search.setShowAllCurrencies}
             selectedCurrencies={search.selectedCurrencies}
             setSelectedCurrencies={search.setSelectedCurrencies}
             currencyOptions={data.currencyOptions}
@@ -284,10 +285,11 @@ export default function TransactionPaymentPage() {
             onSearch={onSearch}
             fs={filterSnapshot}
             onGroupButtonClick={data.onGroupButtonClick}
-            onGroupFilterAllClick={data.onGroupFilterAllClick}
             onCompanyButtonClick={data.onCompanyButtonClick}
+            onPickAllGroups={data.onPickAllGroups}
+            onPickAllInGroup={data.onPickAllInGroup}
+            allowCompanyDeselect={data.allowCompanyDeselect}
             currencyRowsOrdered={currencyRowsOrdered}
-            toggleAllCurrenciesBtn={search.toggleAllCurrenciesBtn}
             onCurrencyDragStart={search.onCurrencyDragStart}
             onCurrencyDropOn={search.onCurrencyDropOn}
             toggleCurrencyBtn={search.toggleCurrencyBtn}
@@ -359,7 +361,7 @@ export default function TransactionPaymentPage() {
           getRoleClass={getRoleClass}
           fallbackRoleClass={singleCategoryFallbackRoleClass}
           openHistory={(row) =>
-            ui.onViewHistory(row, search.effectiveDateFrom, search.effectiveDateTo, filterSnapshot?.companyId, {
+            ui.onViewHistory(row, search.effectiveDateFrom, search.effectiveDateTo, scopeApi, {
               selectedCurrencies: search.selectedCurrencies,
               showAllCurrencies: search.showAllCurrencies,
             })
@@ -368,6 +370,8 @@ export default function TransactionPaymentPage() {
           m={m}
           t={t}
         />
+          </>
+        ) : null}
       </main>
 
       {/* Same date logic as legacy page, with Transaction-specific range picker layout. */}

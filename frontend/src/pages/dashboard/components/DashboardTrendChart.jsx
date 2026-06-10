@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -9,8 +10,23 @@ import {
   YAxis,
 } from "recharts";
 import { DashboardChartBaseline } from "../lib/dashboardChart.jsx";
+import {
+  DashboardChartFlowTravelers,
+  DashboardChartSeriesPulse,
+  DashboardTrendFlowDefs,
+  resolveTrendFlowFill,
+} from "../lib/dashboardChartFx.jsx";
 import { formatChartTooltipLabel } from "../lib/dashboardDateUtils.js";
 import { formatCurrency } from "../lib/dashboardFormat.js";
+
+function DashboardTrendFlowLayers(props) {
+  return (
+    <>
+      <DashboardChartSeriesPulse {...props} />
+      <DashboardChartFlowTravelers {...props} />
+    </>
+  );
+}
 
 export function DashboardTrendChart({
   i18n,
@@ -21,6 +37,20 @@ export function DashboardTrendChart({
   chartDateRangeText,
   chartXAxisLayout,
 }) {
+  const [chartVisitKey] = useState(() => Date.now());
+  const [flowIdle, setFlowIdle] = useState(false);
+  const chartAnimReady = chartRows.length > 0;
+  const chartAnimKey = `${chartVisitKey}-${chartDateRangeText}-${chartAnimReady ? "ready" : "pending"}`;
+
+  useEffect(() => {
+    if (!chartAnimReady) {
+      setFlowIdle(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setFlowIdle(true), 1150);
+    return () => window.clearTimeout(timer);
+  }, [chartAnimKey, chartAnimReady]);
+
   return (
     <div className="dashboard-panel-card dashboard-panel-card--chart">
       <div className="dashboard-panel-head">
@@ -43,30 +73,18 @@ export function DashboardTrendChart({
           {chartDateRangeText}
         </div>
       </div>
-      <div className="dashboard-panel-chart-body">
+      <div
+        className={`dashboard-panel-chart-body${chartAnimReady ? " is-enter is-flow-active" : ""}${
+          flowIdle ? " is-flow-idle" : ""
+        }`}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
+            key={chartAnimKey}
             data={chartRows}
             margin={{ top: 8, right: 16, left: 0, bottom: chartXAxisLayout.marginBottom }}
           >
-            <defs>
-              <linearGradient id="gProfit" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(59,130,246,0.35)" />
-                <stop offset="100%" stopColor="rgba(59,130,246,0.02)" />
-              </linearGradient>
-              <linearGradient id="gExp" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(239,68,68,0.35)" />
-                <stop offset="100%" stopColor="rgba(239,68,68,0.02)" />
-              </linearGradient>
-              <linearGradient id="gNet" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(16,185,129,0.35)" />
-                <stop offset="100%" stopColor="rgba(16,185,129,0.02)" />
-              </linearGradient>
-              <linearGradient id="gEarn" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(245,158,11,0.35)" />
-                <stop offset="100%" stopColor="rgba(245,158,11,0.02)" />
-              </linearGradient>
-            </defs>
+            <DashboardTrendFlowDefs />
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <Customized component={DashboardChartBaseline} />
             <XAxis
@@ -87,20 +105,61 @@ export function DashboardTrendChart({
                 return formatChartTooltipLabel(d, i18n.locale);
               }}
             />
-            {chartSeries.map(
-              (s) =>
-                chartVisible[s.idx] && (
+            {chartSeries.flatMap((s) => {
+              if (!chartVisible[s.idx]) return [];
+              const flowFill = resolveTrendFlowFill(s.dataKey);
+              const baseFill = flowFill?.base || s.fill;
+              const seriesKey = `${s.dataKey}-${chartAnimKey}`;
+              const begin = 80 + s.idx * 120;
+
+              const layers = [
+                <Area
+                  key={`${seriesKey}-base`}
+                  type="monotone"
+                  dataKey={s.dataKey}
+                  name={s.label}
+                  stroke={s.color}
+                  fill={baseFill}
+                  strokeWidth={2.5}
+                  isAnimationActive={chartAnimReady}
+                  animationBegin={begin}
+                  animationDuration={1050}
+                  animationEasing="ease-out"
+                  className="dashboard-trend-area-base"
+                />,
+              ];
+
+              if (flowFill?.flow) {
+                layers.push(
                   <Area
-                    key={s.dataKey}
+                    key={`${seriesKey}-flow`}
                     type="monotone"
                     dataKey={s.dataKey}
-                    name={s.label}
-                    stroke={s.color}
-                    fill={s.fill}
-                    strokeWidth={2}
+                    legendType="none"
+                    tooltipType="none"
+                    stroke="none"
+                    fill={flowFill.flow}
+                    fillOpacity={0.38}
+                    isAnimationActive={chartAnimReady}
+                    animationBegin={begin + 180}
+                    animationDuration={980}
+                    animationEasing="ease-out"
+                    className="dashboard-trend-area-flow"
                   />
-                )
-            )}
+                );
+              }
+
+              return layers;
+            })}
+            <Customized
+              component={(props) => (
+                <DashboardTrendFlowLayers
+                  {...props}
+                  flowActive={flowIdle}
+                  chartAnimKey={chartAnimKey}
+                />
+              )}
+            />
           </AreaChart>
         </ResponsiveContainer>
       </div>

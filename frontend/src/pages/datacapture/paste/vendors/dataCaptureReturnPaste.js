@@ -8,7 +8,12 @@ import {
 } from "../core/dataCaptureApiReturnParsers.js";
 
 
-import { ensurePasteGrid, parseGenericHtmlTable } from "../core/dataCapturePasteApply.js";
+import { applyParsedMatrixToGrid } from "../core/dataCapturePasteApply.js";
+import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
+
+function fillReturnDataMatrix(dataMatrix, anchorCell) {
+  return applyParsedMatrixToGrid(dataMatrix, anchorCell, { trimValues: true });
+}
 
 /** @returns {boolean} */
 export function handleApiReturnPaste(e, pastedData) {
@@ -244,60 +249,15 @@ export function handleApiReturnPaste(e, pastedData) {
             });
 
             if (hasValidRow && dataMatrix.length > 0 && maxCols > 0) {
-                const startCell = e.target;
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = parseInt(startCell.dataset.col);
-
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredRows = startRow + dataMatrix.length;
-                const requiredCols = startCol + maxCols;
-
-                if (requiredRows > currentRows || requiredCols > currentCols) {
-                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(targetRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                dataMatrix.forEach((rowData, rowIndex) => {
-                    const actualRowIndex = startRow + rowIndex;
-                    const tableRow = tableBody.children[actualRowIndex];
-                    if (!tableRow) return;
-
-                    rowData.forEach((cellData, colIndex) => {
-                        const actualColIndex = startCol + colIndex;
-                        const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                        if (cell && cell.contentEditable === 'true') {
-                            const trimmedData = (cellData || '').trim();
-                            currentPasteChanges.push({
-                                row: actualRowIndex,
-                                col: actualColIndex,
-                                oldValue: cell.textContent,
-                                newValue: trimmedData
-                            });
-
-                            cell.textContent = trimmedData;
-                            if (trimmedData) {
-                                successCount++;
-                            }
-                        }
-                    });
-                });
-
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                const { successCount, maxRows, maxCols: cols } = fillReturnDataMatrix(dataMatrix, e.target);
 
                 if (successCount > 0) {
-                    window.showNotification?.(`成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)! 按 Ctrl+Z 可撤销`, 'success');
+                    notifyPasteUser(`成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)! 按 Ctrl+Z 可撤销`, 'success');
                 } else {
-                    window.showNotification?.('No cells were pasted from API-RETURN format.', 'danger');
+                    notifyPasteUser('No cells were pasted from API-RETURN format.', 'danger');
                 }
 
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             }
         } else {
@@ -371,55 +331,15 @@ export function handleApiReturnPaste(e, pastedData) {
             if (apiReturnParsed) {
                 const { columns, columnCount } = apiReturnParsed;
 
-                const startCell = e.target;
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = parseInt(startCell.dataset.col);
-
-                // 确保表格有足够的列
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredCols = startCol + columnCount;
-
-                if (requiredCols > currentCols) {
-                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(currentRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const tableRow = tableBody.children[startRow];
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                columns.forEach((cellData, colIndex) => {
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                    if (cell && cell.contentEditable === 'true') {
-                        const trimmedData = (cellData || '').trim();
-                        currentPasteChanges.push({
-                            row: startRow,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: trimmedData
-                        });
-
-                        // 保持原始格式，不做任何转换
-                        cell.textContent = trimmedData;
-                        if (trimmedData) {
-                            successCount++;
-                        }
-                    }
-                });
-
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                const { successCount } = fillReturnDataMatrix([columns], e.target);
 
                 if (successCount > 0) {
-                    window.showNotification?.(`Successfully pasted ${successCount} cells in ${columnCount} columns!`, 'success');
+                    notifyPasteUser(`Successfully pasted ${successCount} cells in ${columnCount} columns!`, 'success');
                 } else {
-                    window.showNotification?.('No cells were pasted from API-RETURN format.', 'danger');
+                    notifyPasteUser('No cells were pasted from API-RETURN format.', 'danger');
                 }
 
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             }
         }
@@ -680,62 +600,17 @@ export function handle4ReturnPaste(e, pastedData) {
             });
 
             if (hasValidRow && dataMatrix.length > 0 && maxCols > 0) {
-                const startCell = e.target;
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = parseInt(startCell.dataset.col);
+                const { successCount, maxRows, maxCols: cols } = fillReturnDataMatrix(dataMatrix, e.target);
 
-                const currentRows = document.querySelectorAll('#tableBody tr').length;
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredRows = startRow + dataMatrix.length;
-                const requiredCols = startCol + maxCols;
-
-                if (requiredRows > currentRows || requiredCols > currentCols) {
-                    const targetRows = Math.max(currentRows, Math.min(requiredRows, 702));
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(targetRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                dataMatrix.forEach((rowData, rowIndex) => {
-                    const actualRowIndex = startRow + rowIndex;
-                    const tableRow = tableBody.children[actualRowIndex];
-                    if (!tableRow) return;
-
-                    rowData.forEach((cellData, colIndex) => {
-                        const actualColIndex = startCol + colIndex;
-                        const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                        if (cell && cell.contentEditable === 'true') {
-                            const trimmedData = (cellData || '').trim();
-                            currentPasteChanges.push({
-                                row: actualRowIndex,
-                                col: actualColIndex,
-                                oldValue: cell.textContent,
-                                newValue: trimmedData
-                            });
-
-                            cell.textContent = trimmedData;
-                            if (trimmedData) {
-                                successCount++;
-                            }
-                        }
-                    });
-                });
-
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
-
-                console.log('4.RETURN: Multi-line processing completed. Success count:', successCount, 'Rows:', dataMatrix.length, 'Cols:', maxCols);
+                console.log('4.RETURN: Multi-line processing completed. Success count:', successCount, 'Rows:', maxRows, 'Cols:', cols);
                 if (successCount > 0) {
-                    window.showNotification?.(`成功粘贴 ${successCount} 个单元格 (${dataMatrix.length} 行 x ${maxCols} 列)! 按 Ctrl+Z 可撤销`, 'success');
+                    notifyPasteUser(`成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)! 按 Ctrl+Z 可撤销`, 'success');
                 } else {
                     console.log('4.RETURN: No cells were pasted from multi-line format.');
-                    window.showNotification?.('No cells were pasted from 4.RETURN format.', 'danger');
+                    notifyPasteUser('No cells were pasted from 4.RETURN format.', 'danger');
                 }
 
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             }
         } else {
@@ -790,55 +665,15 @@ export function handle4ReturnPaste(e, pastedData) {
             if (apiReturnParsed) {
                 const { columns, columnCount } = apiReturnParsed;
 
-                const startCell = e.target;
-                const startRow = Array.from(startCell.parentNode.parentNode.children).indexOf(startCell.parentNode);
-                const startCol = parseInt(startCell.dataset.col);
-
-                // 确保表格有足够的列
-                const currentCols = document.querySelectorAll('#tableHeader th').length - 1;
-                const requiredCols = startCol + columnCount;
-
-                if (requiredCols > currentCols) {
-                    const currentRows = document.querySelectorAll('#tableBody tr').length;
-                    const targetCols = Math.max(currentCols, requiredCols);
-                    ensurePasteGrid(currentRows, targetCols);
-                }
-
-                const tableBody = document.getElementById('tableBody');
-                const tableRow = tableBody.children[startRow];
-                const currentPasteChanges = [];
-                let successCount = 0;
-
-                columns.forEach((cellData, colIndex) => {
-                    const actualColIndex = startCol + colIndex;
-                    const cell = tableRow.children[actualColIndex + 1]; // +1 跳过行号列
-
-                    if (cell && cell.contentEditable === 'true') {
-                        const trimmedData = (cellData || '').trim();
-                        currentPasteChanges.push({
-                            row: startRow,
-                            col: actualColIndex,
-                            oldValue: cell.textContent,
-                            newValue: trimmedData
-                        });
-
-                        // 保持原始格式，不做任何转换
-                        cell.textContent = trimmedData;
-                        if (trimmedData) {
-                            successCount++;
-                        }
-                    }
-                });
-
-                window.__DC_PUSH_PASTE_HISTORY__?.(currentPasteChanges);
+                const { successCount } = fillReturnDataMatrix([columns], e.target);
 
                 if (successCount > 0) {
-                    window.showNotification?.(`Successfully pasted ${successCount} cells in ${columnCount} columns!`, 'success');
+                    notifyPasteUser(`Successfully pasted ${successCount} cells in ${columnCount} columns!`, 'success');
                 } else {
-                    window.showNotification?.('No cells were pasted from 4.RETURN format.', 'danger');
+                    notifyPasteUser('No cells were pasted from 4.RETURN format.', 'danger');
                 }
 
-                window.__DC_RECOMPUTE_SUBMIT_STATE__?.();
+                recomputeSubmitStateAfterPaste();
                 return true;
             }
         }

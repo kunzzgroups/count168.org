@@ -1,9 +1,29 @@
 import { Link } from "react-router-dom";
 import CapturedReferenceTable from "./CapturedReferenceTable.jsx";
 import SummaryTableRow from "./SummaryTableRow.jsx";
+import {
+  computeSummaryTotal,
+  formatSummaryTotalDisplay,
+  getSummaryTotalColor,
+} from "../table/summaryRowData.js";
 
-export default function SummaryTable({ t, tableData, rows = [], visible = false }) {
+export default function SummaryTable({
+  t,
+  tableData,
+  rows = [],
+  visible = false,
+  onRowChange,
+  onNewFormula,
+  onEditFormula,
+  onInlineEditSave,
+  onCapturedCellClick,
+  globalRateInput = "",
+}) {
   if (!visible || !tableData) return null;
+
+  const total = computeSummaryTotal(rows, globalRateInput);
+  const totalDisplay = formatSummaryTotalDisplay(total);
+  const totalColor = getSummaryTotalColor(total);
 
   return (
     <>
@@ -28,26 +48,27 @@ export default function SummaryTable({ t, tableData, rows = [], visible = false 
             {rows.map((row) => (
               <SummaryTableRow
                 key={row.key}
-                rowKey={row.key}
-                idProduct={row.idProduct}
-                rowIndex={row.rowIndex}
-                productType={row.productType}
-                parentIdProduct={row.parentIdProduct}
-                parentRowIndex={row.parentRowIndex}
+                row={row}
+                onRowChange={onRowChange}
+                onNewFormula={onNewFormula}
+                onEditFormula={onEditFormula}
+                onInlineEditSave={onInlineEditSave}
               />
             ))}
           </tbody>
           <tfoot>
             <tr id="summaryTotalRow">
               <td colSpan={8} className="summary-total-label" />
-              <td id="summaryTotalAmount">0.00</td>
+              <td id="summaryTotalAmount" style={{ color: totalColor }}>
+                {totalDisplay}
+              </td>
               <td />
               <td />
             </tr>
           </tfoot>
         </table>
       </div>
-      <CapturedReferenceTable tableData={tableData} />
+      <CapturedReferenceTable tableData={tableData} onCapturedCellClick={onCapturedCellClick} />
     </>
   );
 }

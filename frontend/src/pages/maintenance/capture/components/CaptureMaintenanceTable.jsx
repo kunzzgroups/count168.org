@@ -81,7 +81,6 @@ export default function CaptureMaintenanceTable({
       className={`maintenance-list-container maintenance-virtual-table capture-virtual-table${
         listSyncing ? " maintenance-list-container--syncing" : ""
       }`}
-      style={{ display: "block" }}
     >
       <div className="maintenance-virtual-table-inner capture-virtual-table-inner" role="table">
         <CaptureVirtualRows

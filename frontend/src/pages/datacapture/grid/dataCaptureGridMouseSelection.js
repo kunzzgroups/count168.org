@@ -2,7 +2,7 @@
  * Cell/column/row drag selection — extracted from js/datacapture.js (Phase 5f).
  * Re-run: node frontend/scripts/extract-grid-mouse-selection.mjs
  */
-import { highlightHeadersForCell } from "./dataCaptureGridActiveCell.js";
+import { highlightHeadersForCell } from "./gridCellInteraction.js";
 import { setTableActive } from "./dataCaptureGridMeta.js";
 import {
   clearAllSelections,

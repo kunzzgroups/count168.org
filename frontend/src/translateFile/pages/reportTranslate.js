@@ -8,6 +8,7 @@ export const REPORT_I18N = {
 
     account: "Account",
     allAccounts: "All Accounts",
+    accountDisabledGroupScope: "Select a company to filter by account",
     searchAccount: "Search account...",
     noResultsFound: "No results found",
 
@@ -35,6 +36,7 @@ export const REPORT_I18N = {
     all: "All",
 
     process: "Process",
+    selectProcess: "Select Process",
     allProcess: "All Process",
     searchProcess: "Search process...",
 
@@ -69,6 +71,7 @@ export const REPORT_I18N = {
 
     account: "账号",
     allAccounts: "全部账号",
+    accountDisabledGroupScope: "请先选择公司以按账户筛选",
     searchAccount: "搜索账号...",
     noResultsFound: "无匹配结果",
 
@@ -96,6 +99,7 @@ export const REPORT_I18N = {
     all: "ALL",
 
     process: "流程",
+    selectProcess: "选择流程",
     allProcess: "全部流程",
     searchProcess: "搜索流程...",
 

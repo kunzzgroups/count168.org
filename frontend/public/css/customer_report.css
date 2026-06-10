@@ -37,7 +37,7 @@ body.dashboard-page.report-page .container {
     background: white;
     border-radius: 12px;
     padding: clamp(12px, 1.25vw, 20px);
-    margin-top: clamp(16px, 1.35vw, 26px);
+    margin-top: var(--layout-page-first-block-mt, 10px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
@@ -286,6 +286,44 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
     text-align: right;
 }
 
+/* Group scope: Group ID | Company | Currency | Win | Lose */
+.customer-report-list-container--group .customer-report-table-header,
+.customer-report-list-container--group .customer-report-card,
+.customer-report-list-container--group .customer-report-total {
+    grid-template-columns: 0.72fr 0.82fr 0.72fr 1.05fr 1.05fr;
+}
+
+.customer-report-list-container--group .customer-report-table-header > div:nth-child(4),
+.customer-report-list-container--group .customer-report-table-header > div:nth-child(5),
+.customer-report-list-container--group .customer-report-card-item:nth-child(4),
+.customer-report-list-container--group .customer-report-card-item:nth-child(5) {
+    text-align: right;
+    justify-content: flex-end;
+}
+
+.customer-report-list-container--group .customer-report-total-label {
+    grid-column: 1 / 4;
+}
+
+/* Company scope: Account | Name | Currency | Win | Lose */
+.customer-report-list-container--company .customer-report-table-header,
+.customer-report-list-container--company .customer-report-card,
+.customer-report-list-container--company .customer-report-total {
+    grid-template-columns: 1.35fr 1.45fr 0.72fr 1.05fr 1.05fr;
+}
+
+.customer-report-list-container--company .customer-report-table-header > div:nth-child(4),
+.customer-report-list-container--company .customer-report-table-header > div:nth-child(5),
+.customer-report-list-container--company .customer-report-card-item:nth-child(4),
+.customer-report-list-container--company .customer-report-card-item:nth-child(5) {
+    text-align: right;
+    justify-content: flex-end;
+}
+
+.customer-report-list-container--company .customer-report-total-label {
+    grid-column: 1 / 4;
+}
+
 .customer-report-cards {
     display: flex;
     flex-direction: column;
@@ -353,11 +391,11 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
 }
 
 .customer-report-total-win {
-    color: #10b981;
+    color: #172a9f;
 }
 
 .customer-report-total-lose {
-    color: #ef4444;
+    color: #b91c1c;
 }
 
 .customer-report-amount {
@@ -365,12 +403,14 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
     justify-content: flex-end;
 }
 
+.customer-report-card-item.customer-report-amount.win,
 .customer-report-amount.win {
-    color: #10b981;
+    color: #172a9f;
 }
 
+.customer-report-card-item.customer-report-amount.lose,
 .customer-report-amount.lose {
-    color: #ef4444;
+    color: #b91c1c;
 }
 
 .report-header {
@@ -379,6 +419,14 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
     justify-content: flex-start;
     gap: clamp(10px, 0.83vw, 16px);
     flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    min-height: 0;
+}
+
+/* 标题已移除：占位 header 不参与顶距计算 */
+body.dashboard-page.report-page .content > .report-header:empty {
+    display: none;
 }
 
 /* Report Date Range：字号、颜色、框的 border 与 Account 一致 */
