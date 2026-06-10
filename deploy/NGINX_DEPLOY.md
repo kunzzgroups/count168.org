@@ -27,7 +27,7 @@
 在 PowerShell 里，项目目录下：
 
 ```powershell
-cd C:\Users\kunzz\OneDrive\Desktop\count168test\frontend
+cd C:\Users\kunzz\OneDrive\Desktop\count168.org\frontend
 npm run build
 ```
 
@@ -46,7 +46,7 @@ npm run build
    `/var/www/count168/`
 
 3. 在**左侧（本地）**打开项目根目录：  
-   `C:\Users\kunzz\OneDrive\Desktop\count168test`
+   `C:\Users\kunzz\OneDrive\Desktop\count168.org`
 
 4. 把下面这些**拖到服务器** `/var/www/count168/` 里（保持文件夹结构）：
 
@@ -103,15 +103,15 @@ ls /run/php/php*-fpm.sock
 **方式 A — WinSCP（推荐）**
 
 1. 把本地的  
-   `deploy\nginx\count168.site.conf`  
+   `deploy\nginx\count168.org.conf`  
    上传到服务器：  
-   `/etc/nginx/sites-available/count168.site`
+   `/etc/nginx/sites-available/count168.org`
 
 2. 在 WinSCP 里右键该文件 → 编辑，确认三处：
 
    ```nginx
    root /var/www/count168;                    # 与步骤 2 上传目录一致
-   server_name count168.site www.count168.site;
+   server_name count168.org www.count168.org;
    fastcgi_pass unix:/run/php/php8.2-fpm.sock;  # 改成步骤 4 查到的路径
    ```
 
@@ -120,17 +120,17 @@ ls /run/php/php*-fpm.sock
 **方式 B — SSH 里手动创建**
 
 ```bash
-sudo nano /etc/nginx/sites-available/count168.site
+sudo nano /etc/nginx/sites-available/count168.org
 ```
 
-粘贴 `deploy/nginx/count168.site.conf` 的内容，改好 `root`、`server_name`、`fastcgi_pass`，保存：`Ctrl+O` 回车，`Ctrl+X` 退出。
+粘贴 `deploy/nginx/count168.org.conf` 的内容，改好 `root`、`server_name`、`fastcgi_pass`，保存：`Ctrl+O` 回车，`Ctrl+X` 退出。
 
 ---
 
 ### 步骤 6：启用站点（必须在 SSH 里执行）
 
 ```bash
-sudo ln -sf /etc/nginx/sites-available/count168.site /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/count168.org /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
@@ -145,8 +145,8 @@ sudo systemctl reload nginx
 
 | 地址 | 预期 |
 |------|------|
-| `http://count168.site/` | 跳转到 `/login` |
-| `http://count168.site/member` | React 会员页（不再是 Welcome to nginx!） |
+| `http://count168.org/` | 跳转到 `/login` |
+| `http://count168.org/member` | React 会员页（不再是 Welcome to nginx!） |
 | F12 → Network → `/api/session/...` | 返回 JSON，不是 502 |
 
 ---
@@ -206,7 +206,7 @@ Nginx 配置里已设 `client_max_body_size 64M;`。改 php.ini 后：`sudo syst
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-仓库里的 `deploy/nginx/count168.site.conf` 已包含：
+仓库里的 `deploy/nginx/count168.org.conf` 已包含：
 
 - **gzip** — 压缩 JS/CSS/JSON，减少传输体积
 - **静态资源缓存** — `/frontend/dist/assets/` 长期缓存；`/images/`、`/js/` 短期缓存
@@ -235,7 +235,7 @@ sudo systemctl restart php8.2-fpm
 
 ### 启用 HTTPS + HTTP/2（可选，进一步加速多资源加载）
 
-用 Certbot 申请免费证书后，在 Nginx 里启用 `listen 443 ssl http2;`（见 `count168.site.conf` 顶部注释）。
+用 Certbot 申请免费证书后，在 Nginx 里启用 `listen 443 ssl http2;`（见 `count168.org.conf` 顶部注释）。
 
 ### 验证是否生效
 

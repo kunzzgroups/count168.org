@@ -26,7 +26,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';
 
 CREATE DATABASE IF NOT EXISTS `easycount` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `u857194726_c168site`;
+USE `u857194726_c168org`;
 -- Generated from u857194726_count168_no_definer.sql
 -- Target: u857194726_Games
 -- Excluded: transactions*, transaction_*, bank_process*, process*, submitted_processes*

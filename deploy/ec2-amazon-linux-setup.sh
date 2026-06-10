@@ -36,7 +36,7 @@ fi
 
 echo "==> 5/7 Nginx 站点（替换默认 Welcome 页）"
 rm -f /etc/nginx/conf.d/default.conf
-cp "${APP_ROOT}/deploy/nginx/count168.site.amazon-linux.conf" /etc/nginx/conf.d/count168.site.conf
+cp "${APP_ROOT}/deploy/nginx/count168.org.amazon-linux.conf" /etc/nginx/conf.d/count168.org.conf
 nginx -t
 systemctl reload nginx
 
@@ -69,11 +69,11 @@ cat <<EOF
 
 2) 验证
    curl -I http://127.0.0.1/login
-   浏览器打开 http://count168.site/login
+   浏览器打开 http://count168.org/login
 
 3) HTTPS（推荐）
    sudo dnf install -y certbot python3-certbot-nginx
-   sudo certbot --nginx -d count168.site -d www.count168.site
+   sudo certbot --nginx -d count168.org -d www.count168.org
 
 4) AWS 安全组：入站 80、443 已开放
 ========================================

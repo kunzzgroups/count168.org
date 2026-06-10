@@ -1,6 +1,6 @@
 -- Transaction amount guards (ADJUSTMENT signed amount; other types non-negative).
 -- Not included in easycount_schema.sql (structure-only export). Run after schema import
--- when you do not import dumps/count168_site_routines_mysql.sql.
+-- when you do not import dumps/count168_org_routines_mysql.sql.
 
 DROP TRIGGER IF EXISTS `tr_transactions_amount_guard_bi`;
 DROP TRIGGER IF EXISTS `tr_transactions_amount_guard_bu`;

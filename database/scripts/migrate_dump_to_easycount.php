@@ -1,6 +1,6 @@
 <?php
 /**
- * Copy data from backup dump (imported into c168site_src) into easycount,
+ * Copy data from backup dump (imported into c168org_src) into easycount,
  * keeping easycount table definitions (easycount_fresh_install.sql).
  *
  * Usage:
@@ -11,7 +11,7 @@
 
 declare(strict_types=1);
 
-$srcDb = 'c168site_src';
+$srcDb = 'c168org_src';
 $dstDb = 'easycount';
 $skipImport = in_array('--skip-import', $argv, true);
 
