@@ -3,7 +3,7 @@
 // 默认连接参数（可被 config.local.php 覆盖，服务器上请用 config.local.php 放真实密码）
 
 $host = '127.0.0.1';
-$dbname = 'u857194726_c168org';
+$dbname = 'u857194726_c168_org';
 $dbuser = 'admin';
 $dbpass = 'C168_org';
 
