@@ -108,7 +108,7 @@ sudo chcon -R -t httpd_sys_content_t /var/www/count168.org
 
 ```bash
 sudo systemctl status mariadb
-mysql -u admin -p -h 127.0.0.1 u857194726_c168org -e "SELECT 1"
+mysql -u org_admin -p -h 127.0.0.1 u857194726_c168_org -e "SELECT 1"
 ```
 
 推荐在服务器创建 `includes/config.local.php`（已在 .gitignore，不会被 git pull 覆盖）：

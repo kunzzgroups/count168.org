@@ -4,7 +4,7 @@
 
 $host = '127.0.0.1';
 $dbname = 'u857194726_c168_org';
-$dbuser = 'admin';
+$dbuser = 'org_admin';
 $dbpass = 'C168_org';
 
 if (is_readable(__DIR__ . '/config.local.php')) {
