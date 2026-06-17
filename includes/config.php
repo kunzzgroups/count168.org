@@ -4,9 +4,9 @@
 // EC2 org 环境请复制 includes/config.local.php.example → config.local.php 覆盖，勿改本文件。
 
 $host = '127.0.0.1';
-$dbname = 'u857194726_c168site';
-$dbuser = 'admin';
-$dbpass = 'C168_site';
+$dbname = 'u857194726_c168_org';
+$dbuser = 'org_admin';
+$dbpass = 'C168_org';
 
 
 $configLocal = __DIR__ . '/config.local.php';
