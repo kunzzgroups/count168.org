@@ -784,6 +784,7 @@ function fetchBankProcessesByIds(PDO $pdo, array $ids, int $companyId): array
         return [];
     }
     bmp_ensureBankProcessAccountingResendScheduleColumns($pdo);
+    bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
     $placeholders = implode(',', array_fill(0, count($ids), '?'));
     $hasFrequency = tableHasColumn($pdo, 'bank_process', 'day_start_frequency');
     $hasIssueFlagColumn = tableHasColumn($pdo, 'bank_process', 'issue_flag');
@@ -791,12 +792,14 @@ function fetchBankProcessesByIds(PDO $pdo, array $ids, int $companyId): array
     $hasResendRelax = tableHasColumn($pdo, 'bank_process', 'accounting_resend_relax_created_floor');
     $hasDayEndTailCol = tableHasColumn($pdo, 'bank_process', 'day_end_monthly_cap_enabled');
     $hasSchedCols = bmp_bankProcessHasResendScheduleColumns($pdo);
+    $hasOpenAnchorsCol = bmp_resend_tableHasColumn($pdo, 'bank_process', 'accounting_resend_open_anchors');
     $issueFlagSql = getBankProcessIssueFlagSql('bp', $hasIssueFlagColumn, $hasFlagColumn);
     $sql = "SELECT bp.id, bp.name, bp.bank, bp.country, bp.cost, bp.price, bp.profit, bp.day_start, bp.day_end, bp.contract, bp.status,
             bp.dts_created" . ($hasFrequency ? ", bp.day_start_frequency" : "") .
         ($hasResendRelax ? ", bp.accounting_resend_relax_created_floor" : "") .
         ($hasDayEndTailCol ? ", bp.day_end_monthly_cap_enabled" : "") .
-        ($hasSchedCols ? ", bp.accounting_resend_schedule_day_start, bp.accounting_resend_schedule_day_end, bp.accounting_resend_schedule_frequency" : "") . ",
+        ($hasSchedCols ? ", bp.accounting_resend_schedule_day_start, bp.accounting_resend_schedule_day_end, bp.accounting_resend_schedule_frequency" : "") .
+        ($hasOpenAnchorsCol ? ", bp.accounting_resend_open_anchors" : "") . ",
             bp.card_merchant_id, bp.customer_id, bp.profit_account_id, bp.company_id, bp.profit_sharing, c.owner_id
             FROM bank_process bp
             LEFT JOIN company c ON bp.company_id = c.id
@@ -1252,7 +1255,8 @@ try {
         $pairPostedTxn = false;
         $monthlyProrationPsRatio = null;
         $dayEndTailAnchorYmd = null;
-        $periodType = trim((string) ($pair['period_type'] ?? 'monthly'));
+        $origPeriodType = trim((string) ($pair['period_type'] ?? 'monthly'));
+        $periodType = $origPeriodType;
         if ($periodType === 'resend_monthly_reopen') {
             $periodType = 'monthly';
         }
@@ -1948,19 +1952,20 @@ try {
         }
 
         if ($has_resend_relax_col && !empty($p['accounting_resend_relax_created_floor'])) {
-            if (bmp_bankProcessHasResendScheduleColumns($pdo)) {
-                $clr = $pdo->prepare(
-                    'UPDATE bank_process SET accounting_resend_relax_created_floor = 0,
-                        accounting_resend_schedule_day_start = NULL,
-                        accounting_resend_schedule_day_end = NULL,
-                        accounting_resend_schedule_frequency = NULL,
-                        dts_modified = NOW() WHERE id = ? AND company_id = ?'
-                );
-            } else {
-                $clr = $pdo->prepare('UPDATE bank_process SET accounting_resend_relax_created_floor = 0, dts_modified = NOW() WHERE id = ? AND company_id = ?');
+            if ($origPeriodType === 'resend_consolidated_range') {
+                bmp_clearResendRelaxState($pdo, (int) $p['id'], $companyId);
+                $p['accounting_resend_relax_created_floor'] = 0;
+            } elseif ($origPeriodType === 'resend_monthly_reopen') {
+                $resendAnchorYmd = null;
+                $bmPost = trim((string) ($pair['billing_month'] ?? ''));
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bmPost)) {
+                    $resendAnchorYmd = $bmPost;
+                }
+                bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, (int) $p['id'], $companyId, $resendAnchorYmd);
+                if (empty(bmp_loadResendOpenAnchorsFromDb($pdo, (int) $p['id'], $companyId))) {
+                    $p['accounting_resend_relax_created_floor'] = 0;
+                }
             }
-            $clr->execute([(int) $p['id'], $companyId]);
-            $p['accounting_resend_relax_created_floor'] = 0;
         }
 
         // manual_inactive 入账后：保持 inactive；1+1/1+2/1+3 时给 day_end 加对应月数（与 Frequency 无关，1st of every month 与 monthly 行为一致，仅算账日不同）

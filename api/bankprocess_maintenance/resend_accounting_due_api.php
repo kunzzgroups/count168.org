@@ -245,8 +245,9 @@ try {
 
     $targetYear = (int) substr($effectiveDayStartYmd, 0, 4);
     $targetMonth = (int) substr($effectiveDayStartYmd, 5, 2);
-    // 弹窗同时填 day_start + day_end：清除该区间内各月 monthly 及 partial / tail / 合并期标记，便于生成单笔合并账单。
-    if ($scheduleFromClient && $newDayStart !== null && $newDayEnd !== null) {
+    // Monthly 弹窗同时填 day_start + day_end：清除该区间内各月 monthly 及 partial / tail / 合并期标记，便于生成单笔合并账单。
+    // 1st_of_every_month 不走此分支，避免误删同月正常流程账单。
+    if ($scheduleFromClient && $newDayStart !== null && $newDayEnd !== null && $newFrequency === 'monthly') {
         $startYmInt = (int) substr($newDayStart, 0, 4) * 100 + (int) substr($newDayStart, 5, 2);
         $endYmInt = (int) substr($newDayEnd, 0, 4) * 100 + (int) substr($newDayEnd, 5, 2);
         $delMonthPap = $pdo->prepare(
@@ -297,15 +298,22 @@ try {
         );
         $delDayPap->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
         $removedPap = $delDayPap->rowCount();
-    } elseif ($scheduleFromClient && $newFrequency === 'monthly') {
-        // Monthly：仅清除该应付日锚点的 monthly，避免 Resend 6/12 误删同月 6/15 正常流程账单。
+    } elseif ($scheduleFromClient && ($newFrequency === 'monthly' || $newFrequency === '1st_of_every_month')) {
+        // Monthly / 1st_of_every_month：仅清除该应付日锚点的 monthly，避免误删同月正常流程账单。
+        $deleteAnchorYmd = $effectiveDayStartYmd;
+        if ($newFrequency === 'monthly') {
+            $dueAnchorTry = bmp_monthlyDueYmdFromBillingAnchor($effectiveDayStartYmd, $effectiveDayStartYmd, 'monthly');
+            if ($dueAnchorTry !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueAnchorTry)) {
+                $deleteAnchorYmd = $dueAnchorTry;
+            }
+        }
         $delMonthlyPap = $pdo->prepare(
             "DELETE FROM process_accounting_posted
              WHERE company_id = ? AND process_id = ?
                AND (period_type IN ('monthly','monthly_skipped') OR period_type IS NULL OR period_type = '')
                AND DATE(posted_date) = ?"
         );
-        $delMonthlyPap->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
+        $delMonthlyPap->execute([$company_id, $bankProcessId, $deleteAnchorYmd]);
         $removedPap = $delMonthlyPap->rowCount();
         $delAnchorConsolidated = $pdo->prepare(
             "DELETE FROM process_accounting_posted
@@ -313,7 +321,7 @@ try {
                AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped')
                AND DATE(posted_date) = ?"
         );
-        $delAnchorConsolidated->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
+        $delAnchorConsolidated->execute([$company_id, $bankProcessId, $deleteAnchorYmd]);
         $removedPap += $delAnchorConsolidated->rowCount();
     } else {
         // 仅清除 day_start 所在月份的 posted 标记，避免一次 Resend 把整合同期都补回。
@@ -384,6 +392,12 @@ try {
             'UPDATE bank_process SET accounting_resend_relax_created_floor = 1, dts_modified = NOW() WHERE id = ? AND company_id = ?'
         );
         $flg->execute([$bankProcessId, $company_id]);
+    }
+    // Monthly / 1st_of_every_month 单期 Resend：累积锚点，保留原正常流程账单与各次 Resend 独立行。
+    if ($scheduleFromClient
+        && ($newFrequency === 'monthly' || $newFrequency === '1st_of_every_month')
+        && !($newFrequency === 'monthly' && $newDayStart !== null && $newDayEnd !== null)) {
+        bmp_appendResendOpenAnchor($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd);
     }
     $pdo->commit();
     jsonResponse(true, 'Done: This process can appear in Accounting Due again.', [

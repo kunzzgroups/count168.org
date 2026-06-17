@@ -108,31 +108,26 @@ function isProcessInResendConsolidatedMode(PDO $pdo, int $companyId, int $proces
 /** 专用 Dismiss 锁：按 process + period_type + anchor_date 标记已从 Accounting Due 移除 */
 function ensureAccountingDueDismissedTable(PDO $pdo): void
 {
-    $pdo->exec(
-        "CREATE TABLE IF NOT EXISTS process_accounting_due_dismissed (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            company_id INT NOT NULL,
-            process_id INT NOT NULL,
-            period_type VARCHAR(64) NOT NULL,
-            anchor_date DATE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE KEY uq_pad_dismissed (company_id, process_id, period_type, anchor_date)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
-    );
+    bmp_ensureAccountingDueDismissedTable($pdo);
 }
 
 function upsertAccountingDueDismissed(PDO $pdo, int $companyId, int $processId, string $periodType, string $anchorDate): void
 {
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorDate)) {
-        return;
+    bmp_upsertAccountingDueDismissed($pdo, $companyId, $processId, $periodType, $anchorDate);
+}
+
+/** 正常流程 Delete：仅软移除，Refresh 可恢复。Resend 账单永久移除。 */
+function isPermanentAccountingDueDismiss(string $origPeriodType, string $resolvedPeriodType): bool
+{
+    return $origPeriodType === 'resend_monthly_reopen' || $resolvedPeriodType === 'resend_consolidated_range';
+}
+
+function accountingDueDismissPeriodTypeForSoftDismiss(string $origPeriodType, string $resolvedPeriodType): string
+{
+    if ($origPeriodType === 'daily_consolidated') {
+        return 'daily';
     }
-    $stmt = $pdo->prepare(
-        "INSERT INTO process_accounting_due_dismissed
-         (company_id, process_id, period_type, anchor_date)
-         VALUES (?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP"
-    );
-    $stmt->execute([$companyId, $processId, $periodType, $anchorDate]);
+    return bmp_normalizePeriodType($origPeriodType !== '' ? $origPeriodType : $resolvedPeriodType);
 }
 
 try {
@@ -212,7 +207,8 @@ try {
     );
     foreach ($pairs as $p) {
         $processId = $p['id'];
-        $periodType = $p['period_type'];
+        $origPeriodType = $p['period_type'];
+        $periodType = $origPeriodType;
         if ($periodType === 'resend_monthly_reopen') {
             $periodType = 'monthly';
         }
@@ -251,20 +247,19 @@ try {
         if ($periodType === 'daily_consolidated') {
             $rangeDailyDismiss = dailyParseConsolidatedBillingRange(trim((string) ($p['billing_month'] ?? '')));
             if ($rangeDailyDismiss !== null) {
-                $skippedType = toSkippedPeriodType('daily');
+                $dismissPtDaily = accountingDueDismissPeriodTypeForSoftDismiss($origPeriodType, $periodType);
                 $d = $rangeDailyDismiss['start'];
                 while ($d !== '' && $d <= $rangeDailyDismiss['end']) {
-                    $insPap->execute([$companyId, $processId, $d, $skippedType]);
-                    if ($insPap->rowCount() > 0) {
-                        $inserted++;
-                    }
+                    upsertAccountingDueDismissed($pdo, $companyId, $processId, $dismissPtDaily, $d);
+                    $inserted++;
                     $next = dailyNextDayYmd($d);
                     if ($next === null) {
                         break;
                     }
                     $d = $next;
                 }
-                $processIdsForPrune[] = $processId;
+                bmp_clearAccountingResendDailyGuardForDayStart($pdo, $companyId, $processId, $rangeDailyDismiss['start']);
+                $processIdsForPrune[$processId] = true;
                 continue;
             }
         }
@@ -295,6 +290,20 @@ try {
                 }
             }
         }
+        $anchorYmd = bmp_normalizeSqlDateYmd($postDate);
+        $permanentResendDismiss = isPermanentAccountingDueDismiss($origPeriodType, $periodType);
+
+        if (!$permanentResendDismiss) {
+            $softDismissPt = accountingDueDismissPeriodTypeForSoftDismiss($origPeriodType, $periodType);
+            if ($anchorYmd !== null) {
+                upsertAccountingDueDismissed($pdo, $companyId, $processId, $softDismissPt, $anchorYmd);
+                $inserted++;
+                bmp_clearAccountingResendDailyGuardForDayStart($pdo, $companyId, $processId, $anchorYmd);
+                $processIdsForPrune[$processId] = true;
+            }
+            continue;
+        }
+
         $insPap->execute([$companyId, $processId, $postDate, $skippedType]);
         $papId = 0;
         if ($insPap->rowCount() > 0) {
@@ -366,14 +375,19 @@ try {
         if ($periodType === 'resend_consolidated_range') {
             upsertAccountingDueDismissed($pdo, $companyId, $processId, 'resend_consolidated_range', $postDate);
         }
+        if ($origPeriodType === 'resend_monthly_reopen' && $anchorYmd !== null) {
+            upsertAccountingDueDismissed($pdo, $companyId, $processId, 'resend_monthly_reopen', $anchorYmd);
+        }
         if ($papId > 0) {
             $ptNorm = bmp_normalizePeriodType($periodType);
             $insRp->execute([$companyId, $processId, $papId, $ptNorm, $postDate]);
         }
-        $anchorYmd = bmp_normalizeSqlDateYmd($postDate);
         if ($anchorYmd !== null) {
             bmp_clearAccountingResendDailyGuardForDayStart($pdo, $companyId, $processId, $anchorYmd);
             $processIdsForPrune[$processId] = true;
+        }
+        if ($origPeriodType === 'resend_monthly_reopen' && $anchorYmd !== null) {
+            bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $anchorYmd);
         }
     }
 
