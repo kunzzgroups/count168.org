@@ -28,10 +28,10 @@ if command -v chcon >/dev/null 2>&1; then
 fi
 
 # 同步 Nginx 站点配置（git pull 不会自动更新 /etc/nginx/）
-NGINX_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux.conf"
-NGINX_DST="/etc/nginx/conf.d/count168.org.conf"
+NGINX_SRC="$APP_ROOT/deploy/nginx/count168.site.amazon-linux.conf"
+NGINX_DST="/etc/nginx/conf.d/count168.site.conf"
 if [[ -f "$NGINX_SRC" ]]; then
-  echo "==> sync nginx org config"
+  echo "==> sync nginx site config"
   sudo cp "$NGINX_SRC" "$NGINX_DST"
   sudo rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
   sudo nginx -t
