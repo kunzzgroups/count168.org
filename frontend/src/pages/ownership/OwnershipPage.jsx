@@ -33,10 +33,12 @@ export default function OwnershipPage() {
     <>
       <div className="own-container">
         <div className="own-page-head">
-          <div className="own-tab-bar">
+          <div className="page-tabs" role="tablist">
             <button
               type="button"
-              className={`own-tab-btn${activeTab === "account-ownership" ? " active" : ""}`}
+              role="tab"
+              aria-selected={activeTab === "account-ownership"}
+              className={`page-tab${activeTab === "account-ownership" ? " active" : ""}`}
               onClick={() => setActiveTab("account-ownership")}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -49,7 +51,9 @@ export default function OwnershipPage() {
             </button>
             <button
               type="button"
-              className={`own-tab-btn${activeTab === "group-earnings" ? " active" : ""}`}
+              role="tab"
+              aria-selected={activeTab === "group-earnings"}
+              className={`page-tab${activeTab === "group-earnings" ? " active" : ""}`}
               onClick={() => setActiveTab("group-earnings")}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

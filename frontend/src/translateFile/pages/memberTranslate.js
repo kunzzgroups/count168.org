@@ -8,7 +8,7 @@ export const MEMBER_I18N = {
     company: "Company:",
     account: "Account:",
     currency: "Currency:",
-    all: "All",
+    all: "ALL",
     accounts: "Accounts",
     accountsFilterTitle: "Choose which linked accounts appear in the grid",
     total: "Total",

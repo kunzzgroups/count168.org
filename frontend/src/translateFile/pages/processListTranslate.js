@@ -10,7 +10,7 @@ export const PROCESS_LIST_I18N = {
     showInactive: "Show Inactive",
     delete: "Delete",
     deleteWithCount: "Delete ({count})",
-    groupId: "GroupID:",
+    groupId: "Group ID:",
     groupFilterAll: "ALL",
     currency: "Currency:",
     currencyDragHint: "Drag to reorder · Click to filter",

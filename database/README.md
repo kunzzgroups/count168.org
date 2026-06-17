@@ -50,4 +50,4 @@ mysql -u root easycount < ..\schema\triggers_transactions_amount_guard.sql
 
 ## 与 `includes/config.php` 的关系
 
-应用使用 `u857194726_c168org`（EC2，见 `includes/config.php`）。导入 `dumps/` 后无需改代码；仅需保证 `includes/config.php` 中 host/user/password 与目标 MySQL 一致。
+应用使用 `u857194726_count168_site`。导入 `dumps/` 后无需改代码；仅需保证 `includes/config.php` 中 host/user/password 与目标 MySQL 一致。

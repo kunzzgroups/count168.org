@@ -3,7 +3,7 @@ import AccountModal from "../../../components/AccountModal.jsx";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { showDomainAlert } from "./DomainNotification.jsx";
 import { getAccountText } from "../../../translateFile/pages/accountTranslate.js";
-import { DEFAULT_FORM, toUpper, normalizeAlertAmount, getOrderedRoles } from "../../account/accountLogic.js";
+import { DEFAULT_FORM, toUpper, normalizeAlertAmount, getAccountModalOrderedRoles } from "../../account/accountLogic.js";
 import DomainModalPortal from "./DomainModalPortal.jsx";
 
 /**
@@ -23,7 +23,7 @@ export default function AddAccountModal({ companyId, companyCode, preferredRole,
   const [currencyInput, setCurrencyInput] = useState("");
   const [hiddenCurrencyIds, setHiddenCurrencyIds] = useState([]);
 
-  const orderedRoles = useMemo(() => getOrderedRoles(roles), [roles]);
+  const orderedRoles = useMemo(() => getAccountModalOrderedRoles(roles), [roles]);
 
   const accountModalCurrencies = useMemo(() => {
     const hidden = new Set(hiddenCurrencyIds.map(Number));

@@ -27,7 +27,7 @@
 在 PowerShell 里，项目目录下：
 
 ```powershell
-cd C:\Users\kunzz\OneDrive\Desktop\count168.org\frontend
+cd C:\Users\kunzz\OneDrive\Desktop\count168test\frontend
 npm run build
 ```
 
@@ -43,26 +43,26 @@ npm run build
    - 用户名 / 密码：你的 SSH 账号  
 
 2. 连接后，在**右侧（服务器）**进入或新建目录，例如：  
-   `/var/www/count168.org/`
+   `/var/www/count168/`
 
 3. 在**左侧（本地）**打开项目根目录：  
-   `C:\Users\kunzz\OneDrive\Desktop\count168.org`
+   `C:\Users\kunzz\OneDrive\Desktop\count168test`
 
-4. 把下面这些**拖到服务器** `/var/www/count168.org/` 里（保持文件夹结构）：
+4. 把下面这些**拖到服务器** `/var/www/count168/` 里（保持文件夹结构）：
 
    | 本地文件夹/文件 | 服务器上应变成 |
    |----------------|----------------|
-   | `api/` | `/var/www/count168.org/api/` |
-   | `includes/` | `/var/www/count168.org/includes/` |
-   | `frontend/dist/` | `/var/www/count168.org/frontend/dist/` |
-   | `images/` | `/var/www/count168.org/images/` |
-   | `js/` | `/var/www/count168.org/js/` |
-   | `favicon.ico` | `/var/www/count168.org/favicon.ico` |
+   | `api/` | `/var/www/count168/api/` |
+   | `includes/` | `/var/www/count168/includes/` |
+   | `frontend/dist/` | `/var/www/count168/frontend/dist/` |
+   | `images/` | `/var/www/count168/images/` |
+   | `js/` | `/var/www/count168/js/` |
+   | `favicon.ico` | `/var/www/count168/favicon.ico` |
 
 5. **不要上传**：`node_modules/`、`.git/`、`frontend/src/`（可选）
 
 6. 在 WinSCP 里编辑服务器上的  
-   `/var/www/count168.org/includes/config.php`  
+   `/var/www/count168/includes/config.php`  
    改成该服务器的 MySQL 主机、库名、用户名、密码。
 
 ---
@@ -103,15 +103,15 @@ ls /run/php/php*-fpm.sock
 **方式 A — WinSCP（推荐）**
 
 1. 把本地的  
-   `deploy\nginx\count168.org.conf`  
+   `deploy\nginx\count168.site.conf`  
    上传到服务器：  
-   `/etc/nginx/sites-available/count168.org`
+   `/etc/nginx/sites-available/count168.site`
 
 2. 在 WinSCP 里右键该文件 → 编辑，确认三处：
 
    ```nginx
-   root /var/www/count168.org;                    # 与步骤 2 上传目录一致
-   server_name count168.org www.count168.org;
+   root /var/www/count168;                    # 与步骤 2 上传目录一致
+   server_name count168.site www.count168.site;
    fastcgi_pass unix:/run/php/php8.2-fpm.sock;  # 改成步骤 4 查到的路径
    ```
 
@@ -120,17 +120,17 @@ ls /run/php/php*-fpm.sock
 **方式 B — SSH 里手动创建**
 
 ```bash
-sudo nano /etc/nginx/sites-available/count168.org
+sudo nano /etc/nginx/sites-available/count168.site
 ```
 
-粘贴 `deploy/nginx/count168.org.conf` 的内容，改好 `root`、`server_name`、`fastcgi_pass`，保存：`Ctrl+O` 回车，`Ctrl+X` 退出。
+粘贴 `deploy/nginx/count168.site.conf` 的内容，改好 `root`、`server_name`、`fastcgi_pass`，保存：`Ctrl+O` 回车，`Ctrl+X` 退出。
 
 ---
 
 ### 步骤 6：启用站点（必须在 SSH 里执行）
 
 ```bash
-sudo ln -sf /etc/nginx/sites-available/count168.org /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/count168.site /etc/nginx/sites-enabled/
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t
 sudo systemctl reload nginx
@@ -145,8 +145,8 @@ sudo systemctl reload nginx
 
 | 地址 | 预期 |
 |------|------|
-| `http://count168.org/` | 跳转到 `/login` |
-| `http://count168.org/member` | React 会员页（不再是 Welcome to nginx!） |
+| `http://count168.site/` | 跳转到 `/login` |
+| `http://count168.site/member` | React 会员页（不再是 Welcome to nginx!） |
 | F12 → Network → `/api/session/...` | 返回 JSON，不是 502 |
 
 ---
@@ -167,7 +167,7 @@ WinSCP 只覆盖上传 **`frontend/dist/`** 到服务器同名目录即可。
 ## 目录结构速查
 
 ```
-/var/www/count168.org/          ← Nginx root
+/var/www/count168/          ← Nginx root
 ├── api/                    ← PHP 接口
 ├── includes/config.php     ← 数据库配置
 ├── frontend/dist/          ← npm run build 产物
@@ -206,7 +206,7 @@ Nginx 配置里已设 `client_max_body_size 64M;`。改 php.ini 后：`sudo syst
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-仓库里的 `deploy/nginx/count168.org.conf` 已包含：
+仓库里的 `deploy/nginx/count168.site.conf` 已包含：
 
 - **gzip** — 压缩 JS/CSS/JSON，减少传输体积
 - **静态资源缓存** — `/frontend/dist/assets/` 长期缓存；`/images/`、`/js/` 短期缓存
@@ -235,7 +235,7 @@ sudo systemctl restart php8.2-fpm
 
 ### 启用 HTTPS + HTTP/2（可选，进一步加速多资源加载）
 
-用 Certbot 申请免费证书后，在 Nginx 里启用 `listen 443 ssl http2;`（见 `count168.org.conf` 顶部注释）。
+用 Certbot 申请免费证书后，在 Nginx 里启用 `listen 443 ssl http2;`（见 `count168.site.conf` 顶部注释）。
 
 ### 验证是否生效
 
@@ -259,11 +259,11 @@ sudo systemctl restart php8.2-fpm
 
 **仍显示 “Welcome to nginx!”**  
 - 默认站点没删：确认执行了 `rm sites-enabled/default`  
-- `root` 指错：应是 `/var/www/count168.org`，不是 `/usr/share/nginx/html`  
+- `root` 指错：应是 `/var/www/count168`，不是 `/usr/share/nginx/html`  
 - 域名没指到这个 server 块：检查 `server_name`
 
 **页面白屏 / CSS 404**  
-检查服务器上是否存在 `/var/www/count168.org/frontend/dist/css/style.css`。
+检查服务器上是否存在 `/var/www/count168/frontend/dist/css/style.css`。
 
 **API 502**  
 `fastcgi_pass` 路径不对，或 php-fpm 未运行：`sudo systemctl status php8.2-fpm`。

@@ -27,6 +27,7 @@ function tableHasColumn(PDO $pdo, string $table, string $column): bool {
 function fetchPendingContras(PDO $pdo, array $scope): array {
     $hasCurrencyId = tableHasColumn($pdo, 'transactions', 'currency_id');
     $hasCreatedAt = tableHasColumn($pdo, 'transactions', 'created_at');
+    $hasSourceBankProcessId = tableHasColumn($pdo, 'transactions', 'source_bank_process_id');
     $scopeWhere = tx_sql_transaction_scope_where($scope, 't');
     $scopeBind = tx_bind_transaction_scope_id($scope);
     $sql = "SELECT t.id, DATE_FORMAT(t.transaction_date, '%d/%m/%Y') AS transaction_date, t.amount,
@@ -45,8 +46,11 @@ function fetchPendingContras(PDO $pdo, array $scope): array {
         ? " ORDER BY t.transaction_date ASC, t.created_at ASC, t.id ASC"
         : " ORDER BY t.transaction_date ASC, t.id ASC";
     $sql .= " WHERE {$scopeWhere} AND UPPER(TRIM(COALESCE(t.approval_status, ''))) = 'PENDING'
-              AND t.transaction_type IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','PROFIT','WIN','LOSE')"
-        . $orderBy;
+              AND t.transaction_type IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','PROFIT','WIN','LOSE')";
+    if ($hasSourceBankProcessId) {
+        $sql .= " AND (t.source_bank_process_id IS NULL OR t.source_bank_process_id = 0)";
+    }
+    $sql .= $orderBy;
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$scopeBind]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

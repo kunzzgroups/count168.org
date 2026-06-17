@@ -7,6 +7,7 @@ import { ensureMaintenanceDateRangePicker } from "../../../utils/date/dateRangeP
 import { useMaintenanceGroupCompanyFilter } from "../shared/useMaintenanceGroupCompanyFilter.js";
 import { runMaintenanceCompanySwitch, syncMaintenanceBootSidebar } from "../shared/maintenanceCompanySwitch.js";
 import { useMaintenancePageScrollLock } from "../shared/useMaintenancePageScrollLock.js";
+import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import {
   isDashboardGroupOnlyMode,
   persistDashboardFilterState,
@@ -15,12 +16,12 @@ import {
 } from "../../../utils/company/sharedCompanyFilter.js";
 import "../../../../public/css/accountCSS.css";
 import "../../../../public/css/userlist.css";
-import "../../../../public/css/maintenance_unified_filters.css";
 import "../../../../public/css/date-range-picker.css";
 import "../../../../public/css/customer_report.css";
 import "../../../../public/css/report-outlined-fields.css";
 import "../../../../public/css/bankprocess_maintenance.css";
 import "../../../../public/css/maintenance_notifications.css";
+import "../../../../public/css/maintenance_unified_filters.css";
 import BankprocessMaintenanceFilters from "./components/BankprocessMaintenanceFilters.jsx";
 import BankprocessMaintenanceTable from "./components/BankprocessMaintenanceTable.jsx";
 import MaintenanceDeleteConfirmModal from "../shared/MaintenanceDeleteConfirmModal.jsx";
@@ -150,14 +151,14 @@ export default function BankprocessMaintenancePage() {
 
         const user = me;
         if (String(user.user_type || "").toLowerCase() === "member") {
-          window.location.assign(new URL("/member", window.location.origin).href);
+          window.location.assign(new URL(spaPath("member"), window.location.origin).href);
           return;
         }
         const userPerms = Array.isArray(user.permissions) ? user.permissions : [];
         const hasFull = userPerms.length === 0;
         const canMaintenance = hasFull || userPerms.includes("maintenance");
         if (!canMaintenance || !user.company_has_bank) {
-          navigate("/dashboard", { replace: true });
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
 
@@ -220,7 +221,7 @@ export default function BankprocessMaintenancePage() {
           sessionStorage.removeItem("dashboard_group_filter");
         }
       } catch {
-        if (!cancelled) navigate("/login", { replace: true });
+        if (!cancelled) navigate(spaPath("login"), { replace: true });
       } finally {
         if (!cancelled) setBootLoading(false);
       }
@@ -486,6 +487,34 @@ export default function BankprocessMaintenancePage() {
   followGroupRef.current = () => {};
 
   const groupedIds = groupedIdsFromHook;
+
+  // 纯 Bank 组：无 Bank 公司的组不显示；当前组无公司时自动切组并选中首个 Bank 公司。
+  useEffect(() => {
+    if (bootLoading || !companies.length) return;
+
+    if (visibleCompanies.length > 0) {
+      const cid = Number(companyId);
+      const activeOk = visibleCompanies.some((c) => Number(c.id) === cid);
+      if (!activeOk) void handlePickCompany(visibleCompanies[0]);
+      return;
+    }
+
+    if (!groupedIds.length) return;
+    const fallbackGroup = groupedIds[0];
+    if (!fallbackGroup) return;
+    if (String(selectedGroup || "").trim().toUpperCase() !== fallbackGroup) {
+      void onGroupClick(fallbackGroup);
+    }
+  }, [
+    bootLoading,
+    companies.length,
+    groupedIds,
+    visibleCompanies,
+    companyId,
+    selectedGroup,
+    onGroupClick,
+    handlePickCompany,
+  ]);
 
   const toggleBankprocessCurrency = useCallback((code) => {
     if (!code) return;

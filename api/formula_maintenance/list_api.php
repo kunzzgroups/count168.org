@@ -253,9 +253,6 @@ try {
         jsonResponse(true, 'success', ['list' => [], 'total' => 0]);
         exit;
     }
-    if ($processIdFilter !== null && $processIdFilter > 0) {
-        dcFixGroupPayrollProcessDescription($pdo, $processIdFilter);
-    }
     $rows = fetchFormulaListRaw($pdo, $scopeCtx, $search, $processIdFilter, $scopeProcessSql, $formula_scope_group);
     $list = mapRowsToDisplay($rows, $formula_scope_group);
     jsonResponse(true, 'success', ['list' => $list, 'total' => count($list)]);

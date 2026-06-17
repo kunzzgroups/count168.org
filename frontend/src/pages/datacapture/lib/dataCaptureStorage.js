@@ -8,11 +8,13 @@ import {
   persistDashboardGroupOnlyMode,
   persistDashboardSelectedCompany,
 } from "../../../utils/company/sharedCompanyFilter.js";
-import { saveGroupOnlyProcessPrefsFromProcessData } from "./dataCaptureGroupOnlyProcessPersistence.js";
+import { isGroupLedgerCapture } from "../../../utils/company/c168CaptureChannel.js";
 import {
   dataCaptureScopeCacheCompanyKey,
   resolveDataCaptureScopeFromSessionMeta,
 } from "./dataCaptureScope.js";
+import { saveGroupOnlyProcessPrefsFromProcessData } from "./dataCaptureGroupOnlyProcessPersistence.js";
+import { replaceBrowserPathOnly } from "../../../utils/routing/privateBrowserUrl.js";
 
 export const CAPTURE_TABLE_STORAGE_KEY = "capturedTableData";
 export const CAPTURE_PROCESS_STORAGE_KEY = "capturedProcessData";
@@ -77,7 +79,9 @@ function migrateLegacyStorageToScope(scope) {
 
 export function saveCaptureSession(tableData, processData, captureType, context = {}) {
   const type = normalizeStoredCaptureType(captureType || processData?.dataCaptureType) || "1.Text";
-  const groupOnlyCapture = context.groupOnly === true;
+  const groupPayrollUi = context.groupPayrollUi === true || context.groupOnly === true;
+  const groupLedgerCapture = context.groupOnly === true && context.groupPayrollCapture !== true;
+  const groupPayrollCapture = context.groupPayrollCapture === true;
   const captureSelectedGroup = context.selectedGroup
     ? String(context.selectedGroup).trim().toUpperCase()
     : null;
@@ -88,13 +92,19 @@ export function saveCaptureSession(tableData, processData, captureType, context 
       : context.scopeCompanyId != null && Number(context.scopeCompanyId) > 0
         ? Number(context.scopeCompanyId)
         : null;
+  const payrollPrefsKey =
+    context.payrollPrefsKey ||
+    (groupPayrollCapture && scopeCompanyId ? `company:${scopeCompanyId}` : captureSelectedGroup);
 
   const enrichedProcess = {
     ...processData,
     dataCaptureType: type,
-    groupOnlyCapture,
+    groupPayrollUi,
+    groupPayrollCapture,
+    groupOnlyCapture: groupLedgerCapture,
     captureSelectedGroup,
-    captureScopeMode: scope?.mode || (groupOnlyCapture ? "group" : "company"),
+    payrollPrefsKey,
+    captureScopeMode: scope?.mode || (groupLedgerCapture ? "group" : "company"),
     scopeCompanyId,
   };
 
@@ -108,8 +118,8 @@ export function saveCaptureSession(tableData, processData, captureType, context 
     localStorage.setItem(CAPTURE_SCOPE_POINTER_KEY, String(cacheKey));
   }
 
-  if (groupOnlyCapture) {
-    saveGroupOnlyProcessPrefsFromProcessData(enrichedProcess, captureSelectedGroup);
+  if (groupPayrollUi) {
+    saveGroupOnlyProcessPrefsFromProcessData(enrichedProcess, payrollPrefsKey);
   }
 }
 
@@ -124,7 +134,10 @@ export function readCaptureSessionMeta(scope = null) {
     if (!processDataStr) return null;
     const processData = JSON.parse(processDataStr);
     return {
+      groupPayrollUi: processData.groupPayrollUi === true,
+      groupPayrollCapture: processData.groupPayrollCapture === true,
       groupOnlyCapture: processData.groupOnlyCapture === true,
+      payrollPrefsKey: processData.payrollPrefsKey || null,
       captureSelectedGroup: processData.captureSelectedGroup
         ? String(processData.captureSelectedGroup).trim().toUpperCase()
         : null,
@@ -143,6 +156,7 @@ export function isGroupOnlyCaptureRestoreRequested() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("group_only") === "1") return true;
   const meta = readCaptureSessionMeta();
+  if (meta?.groupPayrollCapture) return false;
   if (meta?.groupOnlyCapture) return true;
   return isDashboardGroupOnlyMode() && params.get("restore") === "1";
 }
@@ -156,7 +170,7 @@ export function applyGroupOnlyCaptureRestoreFilter(processData) {
   if (group) persistDashboardGroupFilter(group);
   persistDashboardGroupOnlyMode(true);
   persistDashboardSelectedCompany(null);
-  stripSearchParamsFromUrl(["company_id", "group_only"]);
+  replaceBrowserPathOnly();
   return group;
 }
 
@@ -229,8 +243,17 @@ export function captureSessionMatchesScope(session, scope) {
   const savedGroup = pd.captureSelectedGroup
     ? String(pd.captureSelectedGroup).trim().toUpperCase()
     : "";
+  if (pd.groupPayrollCapture === true || (pd.groupPayrollUi && pd.captureScopeMode === "company")) {
+    const savedCid =
+      pd.scopeCompanyId != null ? Number(pd.scopeCompanyId) : Number(pd.companyId);
+    if (Number.isFinite(savedCid) && savedCid > 0 && Number(scope.scopeCompanyId) !== savedCid) {
+      return false;
+    }
+    if (expectedGroup && savedGroup && expectedGroup !== savedGroup) return false;
+    return scope.mode === "company";
+  }
   if (scope.mode === "group") {
-    if (pd.groupOnlyCapture !== true) return false;
+    if (!isGroupLedgerCapture(scope, pd)) return false;
     if (expectedGroup && savedGroup && expectedGroup !== savedGroup) return false;
     return true;
   }
@@ -249,19 +272,13 @@ export function shouldRestoreFromUrl() {
 }
 
 export function stripRestoreParamFromUrl() {
-  stripSearchParamsFromUrl(["restore"]);
+  replaceBrowserPathOnly();
 }
 
+/** @deprecated Prefer replaceBrowserPathOnly — strips private query keys from the address bar. */
 export function stripSearchParamsFromUrl(keys) {
   if (!Array.isArray(keys) || keys.length === 0) return;
-  try {
-    const url = new URL(window.location.href);
-    keys.forEach((key) => url.searchParams.delete(key));
-    const qs = url.searchParams.toString();
-    window.history.replaceState({}, "", `${url.pathname}${qs ? `?${qs}` : ""}${url.hash}`);
-  } catch {
-    /* ignore */
-  }
+  replaceBrowserPathOnly();
 }
 
 /** @deprecated legacy global meta read — prefer readCaptureSessionMeta(scope) */

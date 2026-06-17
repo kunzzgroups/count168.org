@@ -1,6 +1,10 @@
 /** Fixed process choices when Group is selected without Company (Data Capture group-only mode). */
 
-export const GROUP_ONLY_PROCESS_IDS = new Set(["salary", "commission", "bonus"]);
+export const GROUP_ONLY_PROCESS_CODES = ["SALARY", "COMMISSION", "BONUS"];
+
+export const GROUP_ONLY_PROCESS_IDS = new Set(
+  GROUP_ONLY_PROCESS_CODES.map((code) => code.toLowerCase()),
+);
 
 export function isGroupOnlyProcessId(id) {
   return GROUP_ONLY_PROCESS_IDS.has(String(id || "").toLowerCase());
@@ -8,16 +12,16 @@ export function isGroupOnlyProcessId(id) {
 
 /** Group-only Process dropdown labels: uppercase codes only (no "1." / "2." prefix). */
 export function getGroupOnlyProcessOptions() {
-  return [
-    { id: "salary", process_id: "SALARY", displayText: "SALARY" },
-    { id: "commission", process_id: "COMMISSION", displayText: "COMMISSION" },
-    { id: "bonus", process_id: "BONUS", displayText: "BONUS" },
-  ];
+  return GROUP_ONLY_PROCESS_CODES.map((code) => ({
+    id: code.toLowerCase(),
+    process_id: code,
+    displayText: code,
+  }));
 }
 
 /**
- * Map saved capture session process fields to dropdown shape (salary/bonus ids).
- * Submit stores API numeric process id; dropdown uses salary/bonus.
+ * Map saved capture session process fields to dropdown shape (salary/commission/bonus ids).
+ * Submit stores API numeric process id; dropdown uses salary/commission/bonus.
  */
 export function selectedProcessFromGroupOnlySession(processData) {
   if (!processData) return null;

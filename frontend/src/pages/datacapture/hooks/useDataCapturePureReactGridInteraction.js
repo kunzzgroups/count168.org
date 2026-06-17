@@ -37,6 +37,7 @@ import {
   showRowContextMenu,
 } from "../lib/dataCaptureContextMenu.js";
 import { pushDataCaptureNotification } from "../lib/dataCaptureNotify.js";
+import { getDataCaptureText } from "../../../translateFile/pages/dataCaptureTranslate.js";
 import { MAX_GRID_ROWS } from "../grid/dataCaptureGridMeta.js";
 import {
   callDataCaptureRuntime,
@@ -49,7 +50,7 @@ function isGroupOnlyFixedGrid() {
   return getDataCaptureState().isGroupOnlyGrid === true;
 }
 
-/** Group-only: columns stay fixed; row insert/delete via context menu stays disabled. */
+/** Group-only: columns stay fixed; row context menu remains available. */
 function isGroupOnlyFixedColumns() {
   return isGroupOnlyFixedGrid();
 }
@@ -175,10 +176,14 @@ export function useDataCapturePureReactGridInteraction(engineReady) {
     };
 
     const insertRowAbove = () => {
-      if (isGroupOnlyFixedGrid()) return;
       const row = getContextMenuRowIndex();
       const grid = getGrid();
       if (row === null || row < 0 || !grid) return;
+      if (grid.rows >= MAX_GRID_ROWS) {
+        pushDataCaptureNotification("Cannot add more rows", "danger");
+        hideContextMenu();
+        return;
+      }
       apiRef.current.replaceGrid(insertRowInGrid(grid, row));
       hideContextMenu();
       clearAllSelections();
@@ -186,10 +191,14 @@ export function useDataCapturePureReactGridInteraction(engineReady) {
     };
 
     const insertRowBelow = () => {
-      if (isGroupOnlyFixedGrid()) return;
       const row = getContextMenuRowIndex();
       const grid = getGrid();
       if (row === null || row < 0 || !grid) return;
+      if (grid.rows >= MAX_GRID_ROWS) {
+        pushDataCaptureNotification("Cannot add more rows", "danger");
+        hideContextMenu();
+        return;
+      }
       apiRef.current.replaceGrid(insertRowInGrid(grid, row + 1));
       hideContextMenu();
       clearAllSelections();
@@ -197,7 +206,6 @@ export function useDataCapturePureReactGridInteraction(engineReady) {
     };
 
     const deleteRow = () => {
-      if (isGroupOnlyFixedGrid()) return;
       const grid = getGrid();
       if (!grid) return;
       const indices = getSelectedRowIndices();
@@ -221,6 +229,38 @@ export function useDataCapturePureReactGridInteraction(engineReady) {
       apiRef.current.replaceGrid(clearRowsInGrid(grid, indices));
       hideContextMenu();
       recomputeSubmitState();
+    };
+
+    const deleteSelectedRowData = () => {
+      const grid = getGrid();
+      if (!grid) return;
+      const rowIndices = getSelectedRowIndices();
+      const colIndices = getSelectedColumnIndices();
+      const lang = localStorage.getItem("login_lang") === "zh" ? "zh" : "en";
+      if (!rowIndices.length && !colIndices.length) {
+        pushDataCaptureNotification(getDataCaptureText(lang, "selectRowToDeleteData"), "danger");
+        return;
+      }
+      let nextGrid = grid;
+      if (rowIndices.length) {
+        nextGrid = clearRowsInGrid(nextGrid, rowIndices);
+      }
+      if (colIndices.length) {
+        nextGrid = clearColumnsInGrid(nextGrid, colIndices);
+      }
+      apiRef.current.replaceGrid(nextGrid);
+      hideContextMenu();
+      clearAllSelections();
+      recomputeSubmitState();
+
+      if (getDataCaptureState().isGroupOnlyGrid === true) {
+        void (async () => {
+          const flushed = await callDataCaptureRuntime("flushGroupOnlyTableDraftNow", nextGrid);
+          if (flushed === false) {
+            pushDataCaptureNotification(getDataCaptureText(lang, "draftFlushNeedsProcessCurrency"), "danger");
+          }
+        })();
+      }
     };
 
     const appendGridRow = () => {
@@ -256,6 +296,7 @@ export function useDataCapturePureReactGridInteraction(engineReady) {
       insertRowBelow,
       deleteRow,
       clearRow,
+      deleteSelectedRowData,
       addNewRow: appendGridRow,
       addNewColumn: appendGridColumn,
       undoLastPaste: handleUndoLastPaste,

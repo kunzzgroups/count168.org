@@ -546,6 +546,19 @@ try {
         exit;
     }
 
+    if (
+        ($currencyCtx['mode'] ?? '') === 'group'
+        && tenant_table_has_sync_source_column($pdo)
+        && strtolower(trim((string) ($currency['sync_source'] ?? 'manual'))) === 'subsidiary'
+    ) {
+        jsonResponse(
+            false,
+            'Cannot delete currency synced from subsidiary companies',
+            ['sync_source' => 'subsidiary', 'deletable' => false]
+        );
+        exit;
+    }
+
     [$usageMessages, $debugInfo] = collectCurrencyUsage($pdo, $currencyId, $currencyCtx, (string) $currency['code']);
 
     // force=true: skip historical usage (data capture, transactions, templates); still block on linked accounts.
@@ -608,6 +621,14 @@ try {
             jsonResponse(false, 'Failed to delete currency. Please check database constraints or permissions.', null);
         }
         exit;
+    }
+
+    if (($currencyCtx['mode'] ?? '') === 'company') {
+        tenant_reconcile_groups_after_company_currency_deleted(
+            $pdo,
+            (int) ($currencyCtx['company_id'] ?? $company_id),
+            (string) ($currency['code'] ?? '')
+        );
     }
 
     jsonResponse(true, 'Currency deleted successfully', null);

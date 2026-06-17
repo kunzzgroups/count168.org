@@ -6,6 +6,40 @@ import { filterBankPickAccounts, formatBankAccountDisplay } from "../lib/bankPro
 
 const PORTAL_MIN_WIDTH = 180;
 const ACCOUNT_PICK_MIN_WIDTH = 220;
+const PORTAL_EDGE_PAD = 16;
+const PORTAL_GAP = 2;
+const ACCOUNT_SEARCH_RESERVE = 52;
+/** 下拉首选总高度上限（含搜索框）；不撑满视口，列表内滚动查看全部 */
+const PORTAL_DROPDOWN_CAP_SIMPLE = 260;
+const PORTAL_DROPDOWN_CAP_ACCOUNT = 280;
+
+function layoutPortalDropdown(buttonEl, wrapEl, { minWidth, searchReserve = 0, minMenu = 160, dropdownCap }) {
+  const rect = buttonEl.getBoundingClientRect();
+  const width = Math.max(rect.width, minWidth);
+  const spaceBelow = window.innerHeight - rect.bottom - PORTAL_EDGE_PAD;
+  const spaceAbove = rect.top - PORTAL_EDGE_PAD;
+  const openBelow = spaceBelow >= minMenu || spaceBelow >= spaceAbove;
+  const viewportFit = Math.max(minMenu, openBelow ? spaceBelow : spaceAbove);
+  const dropdownMaxHeight = Math.min(dropdownCap, viewportFit);
+  const optionsMaxHeight = Math.max(100, dropdownMaxHeight - searchReserve);
+
+  return {
+    optionsMaxHeight,
+    menuStyle: {
+      position: "fixed",
+      left: `${rect.left}px`,
+      width: `${width}px`,
+      minWidth: `${width}px`,
+      maxWidth: `${width}px`,
+      maxHeight: `${dropdownMaxHeight}px`,
+      display: "flex",
+      flexDirection: "column",
+      top: openBelow ? `${rect.bottom + PORTAL_GAP}px` : "auto",
+      bottom: openBelow ? "auto" : `${window.innerHeight - rect.top + PORTAL_GAP}px`,
+      zIndex: getProcessModalDropdownZIndex(wrapEl),
+    },
+  };
+}
 
 export function BankSimpleSelect({
   id,
@@ -34,23 +68,13 @@ export function BankSimpleSelect({
   const positionMenu = useCallback(() => {
     const btn = buttonRef.current;
     if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    const width = Math.max(rect.width, PORTAL_MIN_WIDTH);
-    const spaceBelow = window.innerHeight - rect.bottom - 24;
-    const spaceAbove = rect.top - 24;
-    const openBelow = spaceBelow >= 160 || spaceBelow >= spaceAbove;
-    const maxOpt = Math.max(120, Math.min(320, (openBelow ? spaceBelow : spaceAbove) - 16));
-    setOptionsMaxHeight(maxOpt);
-    setMenuStyle({
-      position: "fixed",
-      left: `${rect.left}px`,
-      width: `${width}px`,
-      minWidth: `${width}px`,
-      maxWidth: `${width}px`,
-      top: openBelow ? `${rect.bottom + 2}px` : "auto",
-      bottom: openBelow ? "auto" : `${window.innerHeight - rect.top + 2}px`,
-      zIndex: getProcessModalDropdownZIndex(wrapRef.current),
-    });
+    const { menuStyle: nextMenuStyle, optionsMaxHeight: nextOptionsMaxHeight } = layoutPortalDropdown(
+      btn,
+      wrapRef.current,
+      { minWidth: PORTAL_MIN_WIDTH, minMenu: 160, dropdownCap: PORTAL_DROPDOWN_CAP_SIMPLE },
+    );
+    setOptionsMaxHeight(nextOptionsMaxHeight);
+    setMenuStyle(nextMenuStyle);
   }, []);
 
   useLayoutEffect(() => {
@@ -101,7 +125,10 @@ export function BankSimpleSelect({
       role="listbox"
       id={id ? `${id}_dropdown` : undefined}
     >
-      <div className="custom-select-options" style={{ maxHeight: optionsMaxHeight }}>
+      <div
+        className="custom-select-options"
+        style={usePortal ? { flex: "1 1 auto", minHeight: 0 } : { maxHeight: optionsMaxHeight }}
+      >
         {includeEmptyOption ? (
           <div
             className={`custom-select-option${!value ? " selected" : ""}`}
@@ -161,11 +188,12 @@ export function BankSimpleSelect({
 
 /** Bank Process modal wrapper — same calendar as FormDateField, bank-specific CSS classes. */
 export function BankFormDateField(props) {
-  const { wrapClassName = "", ...rest } = props;
+  const { wrapClassName = "", disabled = false, ...rest } = props;
   return (
     <FormDateField
       {...rest}
-      wrapClassName={`bank-form-datepicker-wrap ${wrapClassName}`.trim()}
+      disabled={disabled}
+      wrapClassName={`bank-form-datepicker-wrap${disabled ? " bank-form-datepicker-wrap--disabled" : ""} ${wrapClassName}`.trim()}
       inputClassName="bank-input bank-form-datepicker-input"
       hitboxClassName="bank-form-datepicker-hitbox"
       clearClassName="bank-form-datepicker-clear"
@@ -200,24 +228,18 @@ export function BankSearchableAccountPick({ value, onChange, accounts, disabled,
   const positionMenu = useCallback(() => {
     const btn = buttonRef.current;
     if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    const width = Math.max(rect.width, ACCOUNT_PICK_MIN_WIDTH);
-    const spaceBelow = window.innerHeight - rect.bottom - 24;
-    const spaceAbove = rect.top - 24;
-    const searchHeight = 50;
-    const openBelow = spaceBelow >= 200 || spaceBelow >= spaceAbove;
-    const maxOpt = Math.max(160, Math.min(320, (openBelow ? spaceBelow : spaceAbove) - searchHeight - 16));
-    setOptionsMaxHeight(maxOpt);
-    setMenuStyle({
-      position: "fixed",
-      left: `${rect.left}px`,
-      width: `${width}px`,
-      minWidth: `${width}px`,
-      maxWidth: `${width}px`,
-      top: openBelow ? `${rect.bottom + 2}px` : "auto",
-      bottom: openBelow ? "auto" : `${window.innerHeight - rect.top + 2}px`,
-      zIndex: getProcessModalDropdownZIndex(wrapRef.current),
-    });
+    const { menuStyle: nextMenuStyle, optionsMaxHeight: nextOptionsMaxHeight } = layoutPortalDropdown(
+      btn,
+      wrapRef.current,
+      {
+        minWidth: ACCOUNT_PICK_MIN_WIDTH,
+        searchReserve: ACCOUNT_SEARCH_RESERVE,
+        minMenu: 180,
+        dropdownCap: PORTAL_DROPDOWN_CAP_ACCOUNT,
+      },
+    );
+    setOptionsMaxHeight(nextOptionsMaxHeight);
+    setMenuStyle(nextMenuStyle);
   }, []);
 
   useLayoutEffect(() => {
@@ -299,7 +321,10 @@ export function BankSearchableAccountPick({ value, onChange, accounts, disabled,
           }}
         />
       </div>
-      <div className="custom-select-options" style={{ maxHeight: optionsMaxHeight }}>
+      <div
+        className="custom-select-options"
+        style={usePortal ? { flex: "1 1 auto", minHeight: 0 } : { maxHeight: optionsMaxHeight }}
+      >
         <div
           className={`custom-select-option${!value ? " selected" : ""}`}
           role="option"

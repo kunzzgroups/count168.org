@@ -82,10 +82,17 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     width: 100%;
     max-width: 100%;
     min-height: clamp(32px, 2.25vw, 36px) !important;
-    padding: clamp(4px, 0.3vw, 6px) clamp(8px, 0.75vw, 12px) clamp(4px, 0.3vw, 6px) 0;
-    border-radius: clamp(5px, 0.42vw, 7px);
+    padding: 0 clamp(8px, 0.75vw, 12px) 0 0 !important;
+    border-radius: 0 !important;
+    gap: clamp(8px, 0.7vw, 12px);
     background: #ffffff !important;
     box-shadow: none !important;
+    overflow: hidden;
+}
+
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner:has(.transaction-date-range-group) {
+    overflow: hidden;
+    border-radius: inherit;
 }
 
 body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker:hover {
@@ -101,11 +108,10 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-label--t
     left: clamp(46px, 3.35vw, 58px);
 }
 
+/* Calendar icon pill — shared with dashboard via transaction.css; outlined shell clips left corner */
 body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
-    position: relative;
+    border-radius: clamp(6px, 0.52vw, 8px) 0 0 clamp(6px, 0.52vw, 8px);
     z-index: 5;
-    border-radius: clamp(5px, 0.42vw, 7px) 0 0 clamp(5px, 0.42vw, 7px);
-    box-shadow: none !important;
 }
 
 /* Match Transaction Capture Date: `date-range-picker.css` `.calendar-month-year select` */

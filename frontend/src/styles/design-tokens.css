@@ -85,7 +85,7 @@
   --user-gc-segment-padding: 4px clamp(10px, 1.2vw, 18px);
   /* Group / Company / Currency 展示间距：标签列↔胶囊、行间距、胶囊组间距（全站 4px） */
   --user-gc-inline-column-gap: 4px;
-  --user-gc-inline-row-gap: 4px;
+  --user-gc-inline-row-gap: 8px;
   --user-gc-inline-pills-gap: 4px;
 
   /* --- 语义色 --- */
@@ -153,7 +153,7 @@
    * Add Process — Multi-Process 三列勾选列表（.process-checkboxes）
    * 字号走 --text-small（与表单控件一致）；间距仍用 --desc-modal-list-*。
    */
-  --process-form-modal-multi-list-text: var(--process-form-modal-control-size);
+  --process-form-modal-multi-list-text: var(--text-small);
   /* 嵌入 Add Process 左栏：固定上限，仅列表内滚动，不撑高 modal（勿用 --desc-modal-list-min-h） */
   --process-form-modal-multi-list-max-h: clamp(6.5rem, 14vh, 9.5rem);
   --process-form-modal-multi-list-pad: var(--desc-modal-list-pad);
@@ -178,7 +178,7 @@
   --desc-modal-pad-inline: var(--process-form-modal-pad);
   --desc-modal-title-size: var(--process-form-modal-title-size);
   --desc-modal-section-size: var(--process-form-modal-section-size);
-  --desc-modal-list-text: var(--text-tiny);
+  --desc-modal-list-text: var(--text-small);
   --desc-modal-body-size: var(--text-tiny);
   --desc-modal-empty-size: var(--text-tiny);
   --desc-modal-control-text: var(--text-tiny);
@@ -224,6 +224,18 @@
   --table-header-height: 6px 22px;
 
   /*
+   * Customer / Domain Report 列表行高（Maintenance 虚拟表与之对齐）
+   */
+  --report-list-row-padding-block: 1px;
+  --report-list-row-padding-inline: 22px;
+  --report-list-cell-min-height: clamp(20px, 2.1vw, 20px);
+  --report-list-header-padding-block-start: clamp(0px, 0.78vw, 15px);
+  --report-list-header-padding-block-end: 12px;
+  --report-list-header-padding-inline: 20px;
+  --report-list-header-min-height: clamp(30px, 2.4vw, 42px);
+  --report-list-grid-gap: 15px;
+
+  /*
    * Contra Inbox popover grid（Transaction Payment）
    * Header / cell 共用 --contra-inbox-text-cell，表头仅 uppercase + 字重区分
    */
@@ -243,9 +255,28 @@
   --contra-inbox-header-border: #e8edf5;
 
   /*
+   * Payment History（Transaction 账目历史表 — 全页 / popup 分屏共用；改 --text-* 阶梯即连带缩放）
+   */
+  --txn-history-text-title: var(--text-h2);
+  --txn-history-text-close: var(--text-h2);
+  --txn-history-text-loading: var(--text-medium);
+  --txn-history-text-table: var(--text-medium);
+  --txn-history-text-table-head: var(--text-base);
+  --txn-history-text-table-head-compact: var(--text-small);
+  --txn-history-split-max-width: 960px;
+  --txn-history-text-error: var(--text-medium);
+  --txn-history-line-height: 1.35;
+  --txn-history-head-line-height: 1.3;
+  --txn-history-cell-pad-block: clamp(0.35rem, 0.32vw, 0.5rem);
+  --txn-history-cell-pad-inline: clamp(0.45rem, 0.4vw, 0.55rem);
+  --txn-history-cell-pad-inline-full: clamp(0.55rem, 0.52vw, 0.65rem);
+  --txn-history-cell-min-height: clamp(2.4rem, 2.2vw, 2.75rem);
+  --txn-history-row-height-full: clamp(2.6rem, 2.4vw, 2.75rem);
+
+  /*
    * Accounting Due inbox (Bank Process List) — grid + spacing aligned with Contra Inbox
    */
-  --accounting-due-grid-cols: 60px 56px minmax(0, 0.7fr) minmax(0, 1.08fr) minmax(0, 0.56fr) minmax(0, 0.8fr) 60px;
+  --accounting-due-grid-cols: 60px 56px minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1.08fr) minmax(0, 0.56fr) minmax(0, 0.8fr) 60px;
   --accounting-due-grid-gap: 0;
   --accounting-due-cell-pad-y: clamp(0.58rem, 0.5vw, 0.75rem);
   --accounting-due-cell-pad-x: clamp(0.5rem, 0.42vw, 0.65rem);

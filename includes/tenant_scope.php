@@ -166,6 +166,8 @@ function tenant_load_group_tenant_currency_map(PDO $pdo, string $groupCode): arr
         return [];
     }
 
+    tenant_reconcile_group_currencies_from_subsidiaries($pdo, $g);
+
     $map = [];
     if (tenant_table_has_scope_columns($pdo, 'currency')) {
         $stmt = $pdo->prepare("
@@ -299,6 +301,305 @@ function tenant_promote_currency_to_group_scope(PDO $pdo, int $currencyId, array
     return $stmt->rowCount() > 0;
 }
 
+function tenant_table_has_sync_source_column(PDO $pdo): bool
+{
+    static $cache = [];
+    $key = spl_object_hash($pdo);
+    if (array_key_exists($key, $cache)) {
+        return $cache[$key];
+    }
+    try {
+        $cache[$key] = $pdo->query("SHOW COLUMNS FROM `currency` LIKE 'sync_source'")->rowCount() > 0;
+    } catch (Throwable $e) {
+        $cache[$key] = false;
+    }
+
+    return $cache[$key];
+}
+
+/**
+ * @return list<string> uppercase group codes for a subsidiary company.id
+ */
+function tenant_group_codes_for_company(PDO $pdo, int $companyId): array
+{
+    if ($companyId <= 0) {
+        return [];
+    }
+
+    $codes = [];
+    $stmt = $pdo->prepare('SELECT UPPER(TRIM(COALESCE(group_id, ""))) FROM company WHERE id = ? LIMIT 1');
+    $stmt->execute([$companyId]);
+    $native = gc_normalize_group_code((string) ($stmt->fetchColumn() ?: ''));
+    if ($native !== '') {
+        $codes[$native] = true;
+    }
+
+    if (function_exists('gc_has_groups_table') && gc_has_groups_table($pdo)) {
+        try {
+            $mapStmt = $pdo->prepare('
+                SELECT UPPER(TRIM(g.group_code))
+                FROM group_company_map gcm
+                INNER JOIN `groups` g ON g.id = gcm.group_id
+                WHERE gcm.company_id = ?
+            ');
+            $mapStmt->execute([$companyId]);
+            foreach ($mapStmt->fetchAll(PDO::FETCH_COLUMN) as $groupCode) {
+                $norm = gc_normalize_group_code((string) $groupCode);
+                if ($norm !== '') {
+                    $codes[$norm] = true;
+                }
+            }
+        } catch (Throwable $e) {
+            // ignore
+        }
+    }
+
+    return array_keys($codes);
+}
+
+/**
+ * @return list<string> uppercase currency codes on subsidiaries under a group
+ */
+function tenant_subsidiary_currency_codes_for_group(PDO $pdo, string $groupCode): array
+{
+    $groupCode = gc_normalize_group_code($groupCode);
+    if ($groupCode === '') {
+        return [];
+    }
+
+    $codes = [];
+    foreach (gc_company_numeric_ids_for_group_code($pdo, $groupCode) as $companyId) {
+        $stmt = $pdo->prepare(
+            'SELECT UPPER(TRIM(code)) AS code FROM currency WHERE company_id = ?'
+            . tenant_sql_currency_subsidiary_only($pdo)
+        );
+        $stmt->execute([(int) $companyId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $code) {
+            $up = strtoupper(trim((string) $code));
+            if ($up !== '') {
+                $codes[$up] = true;
+            }
+        }
+    }
+
+    return array_keys($codes);
+}
+
+function tenant_subsidiary_has_currency_code(PDO $pdo, string $groupCode, string $code): bool
+{
+    $code = strtoupper(trim($code));
+    if ($code === '') {
+        return false;
+    }
+
+    foreach (gc_company_numeric_ids_for_group_code($pdo, $groupCode) as $companyId) {
+        $stmt = $pdo->prepare(
+            'SELECT 1 FROM currency WHERE company_id = ? AND UPPER(TRIM(code)) = ?'
+            . tenant_sql_currency_subsidiary_only($pdo)
+            . ' LIMIT 1'
+        );
+        $stmt->execute([(int) $companyId, $code]);
+        if ($stmt->fetchColumn()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Ensure a group-ledger currency exists because a subsidiary added it (sync_source=subsidiary).
+ */
+function tenant_ensure_group_currency_from_subsidiary(PDO $pdo, string $groupCode, string $code): void
+{
+    if (!tenant_dual_tenant_enabled($pdo)) {
+        return;
+    }
+
+    $code = strtoupper(trim($code));
+    $groupCode = gc_normalize_group_code($groupCode);
+    if ($code === '' || $groupCode === '') {
+        return;
+    }
+
+    $groupPk = gc_resolve_group_pk_by_code($pdo, $groupCode);
+    if ($groupPk <= 0) {
+        return;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT id FROM currency
+        WHERE scope_type = 'group' AND scope_id = ? AND UPPER(TRIM(code)) = ?
+        LIMIT 1
+    ");
+    $stmt->execute([$groupPk, $code]);
+    if ($stmt->fetchColumn()) {
+        return;
+    }
+
+    $anchorId = gc_resolve_group_anchor_company_id($pdo, $groupCode);
+    if ($anchorId <= 0) {
+        return;
+    }
+
+    $ctx = [
+        'mode' => 'group',
+        'group_pk' => $groupPk,
+        'company_id' => $anchorId,
+        'group_code' => $groupCode,
+        'sync_source' => 'subsidiary',
+    ];
+
+    try {
+        tenant_create_currency($pdo, $code, $ctx);
+    } catch (Exception $e) {
+        // Row may have been created concurrently or manual row already exists.
+    }
+}
+
+/** Propagate a new subsidiary currency to parent group ledger rows. */
+function tenant_sync_company_currency_to_parent_groups(PDO $pdo, int $companyId, string $code): void
+{
+    $code = strtoupper(trim($code));
+    if ($companyId <= 0 || $code === '') {
+        return;
+    }
+
+    foreach (tenant_group_codes_for_company($pdo, $companyId) as $groupCode) {
+        tenant_ensure_group_currency_from_subsidiary($pdo, $groupCode, $code);
+    }
+}
+
+/**
+ * When no subsidiary holds a code anymore, subsidiary-synced group rows become manual (deletable).
+ */
+function tenant_reconcile_group_currency_sync_source(PDO $pdo, string $groupCode, string $code): void
+{
+    if (!tenant_table_has_sync_source_column($pdo) || !tenant_dual_tenant_enabled($pdo)) {
+        return;
+    }
+
+    $code = strtoupper(trim($code));
+    $groupCode = gc_normalize_group_code($groupCode);
+    if ($code === '' || $groupCode === '') {
+        return;
+    }
+
+    if (tenant_subsidiary_has_currency_code($pdo, $groupCode, $code)) {
+        return;
+    }
+
+    $groupPk = gc_resolve_group_pk_by_code($pdo, $groupCode);
+    if ($groupPk <= 0) {
+        return;
+    }
+
+    $stmt = $pdo->prepare("
+        UPDATE currency
+        SET sync_source = 'manual'
+        WHERE scope_type = 'group'
+          AND scope_id = ?
+          AND UPPER(TRIM(code)) = ?
+          AND sync_source = 'subsidiary'
+    ");
+    $stmt->execute([$groupPk, $code]);
+}
+
+function tenant_reconcile_groups_after_company_currency_deleted(PDO $pdo, int $companyId, string $code): void
+{
+    foreach (tenant_group_codes_for_company($pdo, $companyId) as $groupCode) {
+        tenant_reconcile_group_currency_sync_source($pdo, $groupCode, $code);
+    }
+}
+
+/**
+ * Lazy reconcile on group-ledger reads: mirror subsidiary Currency Setting rows into scope_type=group.
+ */
+function tenant_reconcile_group_currencies_from_subsidiaries(PDO $pdo, string $groupCode): void
+{
+    if (!tenant_dual_tenant_enabled($pdo)) {
+        return;
+    }
+
+    $groupCode = gc_normalize_group_code($groupCode);
+    if ($groupCode === '') {
+        return;
+    }
+
+    $groupPk = gc_resolve_group_pk_by_code($pdo, $groupCode);
+    if ($groupPk <= 0) {
+        return;
+    }
+
+    $hasSyncSource = tenant_table_has_sync_source_column($pdo);
+
+    foreach (tenant_subsidiary_currency_codes_for_group($pdo, $groupCode) as $code) {
+        $existingStmt = $pdo->prepare("
+            SELECT id, sync_source
+            FROM currency
+            WHERE scope_type = 'group'
+              AND scope_id = ?
+              AND UPPER(TRIM(code)) = ?
+            LIMIT 1
+        ");
+        $existingStmt->execute([$groupPk, $code]);
+        $existing = $existingStmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$existing) {
+            tenant_ensure_group_currency_from_subsidiary($pdo, $groupCode, $code);
+            continue;
+        }
+
+        if (
+            $hasSyncSource
+            && strtolower(trim((string) ($existing['sync_source'] ?? 'manual'))) !== 'subsidiary'
+            && tenant_subsidiary_has_currency_code($pdo, $groupCode, $code)
+        ) {
+            $upd = $pdo->prepare("
+                UPDATE currency
+                SET sync_source = 'subsidiary'
+                WHERE id = ?
+                  AND scope_type = 'group'
+                  AND scope_id = ?
+            ");
+            $upd->execute([(int) ($existing['id'] ?? 0), $groupPk]);
+        }
+    }
+}
+
+function tenant_currency_sync_source_is_deletable(?string $syncSource, array $ctx): bool
+{
+    if (($ctx['mode'] ?? '') !== 'group') {
+        return true;
+    }
+
+    return strtolower(trim((string) ($syncSource ?? 'manual'))) !== 'subsidiary';
+}
+
+/**
+ * @param array{id: int, code: string, sync_source?: string} $row
+ * @return array{id: int, code: string, sync_source?: string, deletable: bool}
+ */
+function tenant_enrich_currency_row_meta(PDO $pdo, array $row, array $ctx): array
+{
+    $hasSyncSource = tenant_table_has_sync_source_column($pdo);
+    $syncSource = 'manual';
+    if ($hasSyncSource && isset($row['sync_source'])) {
+        $syncSource = strtolower(trim((string) $row['sync_source'])) === 'subsidiary' ? 'subsidiary' : 'manual';
+    }
+
+    $out = [
+        'id' => (int) ($row['id'] ?? 0),
+        'code' => strtoupper(trim((string) ($row['code'] ?? ''))),
+        'deletable' => tenant_currency_sync_source_is_deletable($syncSource, $ctx),
+    ];
+    if ($hasSyncSource) {
+        $out['sync_source'] = $syncSource;
+    }
+
+    return $out;
+}
+
 /**
  * Create currency on group tenant (scope_type=group). company_id column keeps anchor subsidiary for NOT NULL FK.
  *
@@ -317,6 +618,10 @@ function tenant_create_currency(PDO $pdo, string $code, array $ctx): array
     }
 
     $hasScope = tenant_table_has_scope_columns($pdo, 'currency');
+    $requestedSyncSource = strtolower(trim((string) ($ctx['sync_source'] ?? 'manual'))) === 'subsidiary'
+        ? 'subsidiary'
+        : 'manual';
+
     if (($ctx['mode'] ?? '') === 'group' && $hasScope) {
         $groupPk = (int) ($ctx['group_pk'] ?? 0);
         $stmt = $pdo->prepare("
@@ -336,16 +641,28 @@ function tenant_create_currency(PDO $pdo, string $code, array $ctx): array
             }
             $legacyId = (int) ($legacyRow['id'] ?? 0);
             if ($legacyId > 0 && tenant_promote_currency_to_group_scope($pdo, $legacyId, $ctx)) {
+                if (tenant_table_has_sync_source_column($pdo)) {
+                    $upd = $pdo->prepare('UPDATE currency SET sync_source = ? WHERE id = ?');
+                    $upd->execute([$requestedSyncSource, $legacyId]);
+                }
                 return ['id' => $legacyId, 'code' => $code];
             }
         }
 
         try {
-            $stmt = $pdo->prepare("
-                INSERT INTO currency (code, company_id, scope_type, scope_id)
-                VALUES (?, ?, 'group', ?)
-            ");
-            $stmt->execute([$code, $companyId, $groupPk]);
+            if (tenant_table_has_sync_source_column($pdo)) {
+                $stmt = $pdo->prepare("
+                    INSERT INTO currency (code, company_id, scope_type, scope_id, sync_source)
+                    VALUES (?, ?, 'group', ?, ?)
+                ");
+                $stmt->execute([$code, $companyId, $groupPk, $requestedSyncSource]);
+            } else {
+                $stmt = $pdo->prepare("
+                    INSERT INTO currency (code, company_id, scope_type, scope_id)
+                    VALUES (?, ?, 'group', ?)
+                ");
+                $stmt->execute([$code, $companyId, $groupPk]);
+            }
         } catch (PDOException $e) {
             if ((string) $e->getCode() === '23000') {
                 $findStmt = $pdo->prepare("
@@ -382,6 +699,7 @@ function tenant_create_currency(PDO $pdo, string $code, array $ctx): array
         }
         $stmt = $pdo->prepare('INSERT INTO currency (code, company_id) VALUES (?, ?)');
         $stmt->execute([$code, $companyId]);
+        tenant_sync_company_currency_to_parent_groups($pdo, $companyId, $code);
     }
 
     return ['id' => (int) $pdo->lastInsertId(), 'code' => $code];
@@ -395,7 +713,8 @@ function tenant_get_currency_row(PDO $pdo, int $currencyId, array $ctx): ?array
     if (!tenant_currency_belongs_to_context($pdo, $currencyId, $ctx)) {
         return null;
     }
-    $stmt = $pdo->prepare('SELECT code FROM currency WHERE id = ? LIMIT 1');
+    $cols = tenant_table_has_sync_source_column($pdo) ? 'code, sync_source' : 'code';
+    $stmt = $pdo->prepare("SELECT {$cols} FROM currency WHERE id = ? LIMIT 1");
     $stmt->execute([$currencyId]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -512,17 +831,22 @@ function tenant_fetch_currencies(PDO $pdo, array $ctx): array
         return [];
     }
 
+    $syncCol = tenant_table_has_sync_source_column($pdo) ? ', sync_source' : '';
     if (($ctx['mode'] ?? '') === 'group' && tenant_table_has_scope_columns($pdo, 'currency')) {
+        $groupCode = gc_normalize_group_code((string) ($ctx['group_code'] ?? ''));
+        if ($groupCode !== '') {
+            tenant_reconcile_group_currencies_from_subsidiaries($pdo, $groupCode);
+        }
         $groupPk = (int) ($ctx['group_pk'] ?? 0);
         $stmt = $pdo->prepare("
-            SELECT id, code FROM currency
+            SELECT id, code{$syncCol} FROM currency
             WHERE scope_type = 'group' AND scope_id = ?
             ORDER BY code ASC
         ");
         $stmt->execute([$groupPk]);
     } else {
         $stmt = $pdo->prepare(
-            'SELECT id, code FROM currency WHERE company_id = ?'
+            'SELECT id, code' . $syncCol . ' FROM currency WHERE company_id = ?'
             . tenant_sql_currency_subsidiary_only($pdo)
             . ' ORDER BY code ASC'
         );
@@ -537,10 +861,11 @@ function tenant_fetch_currencies(PDO $pdo, array $ctx): array
             continue;
         }
         $seenCodes[$code] = true;
-        $rows[] = [
+        $rows[] = tenant_enrich_currency_row_meta($pdo, [
             'id' => (int) $row['id'],
             'code' => $code,
-        ];
+            'sync_source' => $row['sync_source'] ?? 'manual',
+        ], $ctx);
     }
 
     if (($ctx['mode'] ?? '') === 'group' && tenant_table_has_scope_columns($pdo, 'currency')) {
@@ -550,7 +875,11 @@ function tenant_fetch_currencies(PDO $pdo, array $ctx): array
                 continue;
             }
             $seenCodes[$code] = true;
-            $rows[] = $legacyRow;
+            $rows[] = tenant_enrich_currency_row_meta($pdo, [
+                'id' => (int) $legacyRow['id'],
+                'code' => $code,
+                'sync_source' => 'manual',
+            ], $ctx);
         }
         usort($rows, static function (array $a, array $b): int {
             return strcmp((string) ($a['code'] ?? ''), (string) ($b['code'] ?? ''));

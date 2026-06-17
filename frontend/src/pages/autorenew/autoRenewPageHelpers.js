@@ -1,4 +1,4 @@
-import { calculateCountdown } from "../domain/domainHelpers.js";
+import { calculateCountdown, resolveDomainFeePriceForPeriod } from "../domain/domainHelpers.js";
 
 export const AUTO_RENEW_PAGE_SIZE = 20;
 
@@ -155,7 +155,7 @@ export function getRowDraftValues(row, drafts) {
   return {
     period: draft.period ?? row.period ?? "",
     fromAccountId: draft.fromAccountId ?? row.from_account_id ?? row.default_from_account_id ?? "",
-    toAccountId: draft.toAccountId ?? row.to_account_id ?? "",
+    toAccountId: draft.toAccountId ?? row.to_account_id ?? row.default_to_account_id ?? "",
   };
 }
 
@@ -176,11 +176,64 @@ export function rowStableKey(row) {
   if (row?.is_payment_deleted && row.deleted_payment_id) {
     return `deleted-${row.deleted_payment_id}`;
   }
-  return String(row?.request_id ?? "");
+  const entity = row?.entity_type === "group" ? "group" : "company";
+  return `${entity}-${String(row?.request_id ?? "")}`;
 }
 
-export function canApproveRow(row, drafts) {
-  if (row.status !== "pending" || !row.can_approve) return false;
+export function resolveAutoRenewDisplayPrice(row, drafts, feeSettings) {
+  const isPendingEditable = row.status === "pending" && !row.is_payment_deleted;
+  if (!isPendingEditable) {
+    const saved = Number(row.price);
+    return Number.isFinite(saved) && saved > 0 ? saved : 0;
+  }
+
+  const { period } = getRowDraftValues(row, drafts);
+  if (!period || !feeSettings) return 0;
+
+  const feeKind = row?.entity_type === "group" ? "group" : "company";
+  return resolveDomainFeePriceForPeriod(feeSettings, period, feeKind);
+}
+
+export function canDeleteRow(row) {
+  return (
+    row?.status === "approved" &&
+    Boolean(row?.can_delete) &&
+    Number(row?.request_id) > 0 &&
+    !row?.is_payment_deleted
+  );
+}
+
+export function canApproveRow(row, drafts, feeSettings) {
+  if (row.status !== "pending" || row.is_payment_deleted) return false;
   const { period, fromAccountId, toAccountId } = getRowDraftValues(row, drafts);
-  return Boolean(period && fromAccountId && toAccountId && row.price);
+  const price = resolveAutoRenewDisplayPrice(row, drafts, feeSettings);
+  return Boolean(period && fromAccountId && toAccountId && price > 0);
+}
+
+export function getAutoRenewApproveDisabledReason(row, drafts, feeSettings, t) {
+  if (row.status !== "pending" || row.is_payment_deleted) return "";
+  const { period, fromAccountId, toAccountId } = getRowDraftValues(row, drafts);
+  const price = resolveAutoRenewDisplayPrice(row, drafts, feeSettings);
+  if (!period) return t("selectPeriod");
+  if (!fromAccountId || !toAccountId) return t("accountsNotResolved");
+  if (price <= 0) return t("noPriceHint");
+  return "";
+}
+
+export function formatAutoRenewAccountLabel(acc) {
+  const code = String(acc?.account_code ?? "").trim();
+  const name = String(acc?.name ?? "").trim();
+  if (code && name) return `${code} (${name})`;
+  return code || name || "";
+}
+
+export function formatAutoRenewRowAccountLabel(row, accountId, accounts, kind = "from") {
+  const id = accountId != null && accountId !== "" ? Number(accountId) : null;
+  if (id) {
+    const acc = (accounts || []).find((a) => Number(a.id) === id);
+    if (acc) return formatAutoRenewAccountLabel(acc);
+  }
+  const code = kind === "to" ? row?.to_account_code : row?.from_account_code;
+  if (code) return String(code);
+  return "";
 }

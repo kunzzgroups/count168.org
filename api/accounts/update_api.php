@@ -228,6 +228,7 @@ try {
                         if (!$currencyId) {
                             $insertCurrencyStmt->execute([$normalizedCode, $targetCompanyId]);
                             $currencyId = $pdo->lastInsertId();
+                            tenant_sync_company_currency_to_parent_groups($pdo, (int) $targetCompanyId, $normalizedCode);
                         }
                         $checkLinkedStmt->execute([$id, $currencyId]);
                         if (!$checkLinkedStmt->fetchColumn()) {

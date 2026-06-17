@@ -6,7 +6,7 @@
  * History tables (*_history, effective_month = YYYY-MM-01) = frozen past months for the Ownership UI.
  *
  * On save: update live first, then snapshot ONLY the current calendar month in history.
- * Past months are never overwritten unless retrofill_months is passed explicitly.
+ * Past months can be updated explicitly via batch save with a month=YYYY-MM parameter.
  */
 
 function ownership_history_ensure_tables(PDO $pdo): void
@@ -561,4 +561,132 @@ function ownership_history_group_meta(PDO $pdo, string $groupId, string $effecti
         'saved_at' => $cnt > 0 ? (string) $row['saved_at'] : null,
         'has_snapshot' => $cnt > 0,
     ];
+}
+
+/**
+ * @param list<array<string,mixed>> $owners
+ * @param array<int,string|null> $existingGroups
+ * @param array<int,int> $existingReadOnly
+ * @return list<array{account_id:int,owner_type:string,percentage:string,partner_group_id:?string,read_only:int}>
+ */
+function ownership_build_company_history_rows_from_payload(array $owners, array $existingGroups = [], array $existingReadOnly = []): array
+{
+    require_once __DIR__ . '/money_decimal.php';
+
+    $historyRows = [];
+    foreach ($owners as $owner) {
+        $raw_id = (string) ($owner['account_id'] ?? '');
+        $owner_type = 'account';
+        $real_id = $raw_id;
+        $is_group_entry = false;
+        $group_ref = null;
+        $isExternal = !empty($owner['is_external_partner']);
+
+        if (strpos($raw_id, 'G_') === 0) {
+            $owner_type = 'group';
+            $real_id = 0;
+            $group_ref = substr($raw_id, 2);
+            $is_group_entry = true;
+        } elseif (strpos($raw_id, 'O_') === 0) {
+            $owner_type = 'owner';
+            $real_id = substr($raw_id, 2);
+        } elseif (strpos($raw_id, 'U_') === 0) {
+            $owner_type = 'user';
+            $real_id = substr($raw_id, 2);
+        } elseif (strpos($raw_id, 'A_') === 0) {
+            $owner_type = 'account';
+            $real_id = substr($raw_id, 2);
+        }
+
+        $pgid = null;
+        $roVal = isset($owner['read_only']) ? (int) $owner['read_only'] : 1;
+
+        if ($is_group_entry) {
+            $pgid = $group_ref;
+        } elseif ($owner_type === 'owner' && isset($existingGroups[(int) $real_id])) {
+            $pgid = $existingGroups[(int) $real_id];
+            if (!isset($owner['read_only'])) {
+                $roVal = $existingReadOnly[(int) $real_id] ?? 1;
+            }
+        }
+
+        $pctRaw = $isExternal ? '0' : ($owner['percentage'] ?? 0);
+        $pctOut = money_out(money_normalize($pctRaw, 2), 2);
+
+        $historyRows[] = [
+            'account_id' => (int) $real_id,
+            'owner_type' => $owner_type,
+            'percentage' => $pctOut,
+            'partner_group_id' => $pgid,
+            'read_only' => $roVal,
+        ];
+    }
+
+    return $historyRows;
+}
+
+/**
+ * @param list<array<string,mixed>> $owners
+ * @param array<int,string|null> $existingGroups
+ * @param array<int,int> $existingReadOnly
+ * @param array<string,int> $existingGroupReadOnly partner_group_id (upper) => read_only
+ * @return list<array{account_id:int,owner_type:string,percentage:string,partner_group_id:?string,read_only:int}>
+ */
+function ownership_build_group_history_rows_from_payload(
+    array $owners,
+    array $existingGroups = [],
+    array $existingReadOnly = [],
+    array $existingGroupReadOnly = []
+): array {
+    require_once __DIR__ . '/money_decimal.php';
+
+    $historyRows = [];
+    foreach ($owners as $owner) {
+        $raw_id = (string) ($owner['account_id'] ?? '');
+        $owner_type = 'owner';
+        $real_id = 0;
+        $pgid = null;
+        $roVal = isset($owner['read_only']) ? (int) $owner['read_only'] : 1;
+        $isExternal = !empty($owner['is_external_partner']);
+
+        if (strpos($raw_id, 'G_') === 0) {
+            $owner_type = 'group';
+            $real_id = 0;
+            $pgid = substr($raw_id, 2);
+            if (!isset($owner['read_only'])) {
+                $key = strtoupper(trim((string) $pgid));
+                if ($key !== '' && isset($existingGroupReadOnly[$key])) {
+                    $roVal = $existingGroupReadOnly[$key];
+                }
+            }
+        } elseif (strpos($raw_id, 'O_') === 0) {
+            $owner_type = 'owner';
+            $real_id = (int) substr($raw_id, 2);
+            if (isset($existingGroups[$real_id])) {
+                $pgid = $existingGroups[$real_id];
+                if (!isset($owner['read_only'])) {
+                    $roVal = $existingReadOnly[$real_id] ?? 1;
+                }
+            }
+        } elseif (strpos($raw_id, 'U_') === 0) {
+            $owner_type = 'user';
+            $real_id = (int) substr($raw_id, 2);
+        } else {
+            $owner_type = 'owner';
+            $real_id = (int) $raw_id;
+        }
+
+        $pctRaw = $isExternal ? '0' : ($owner['percentage'] ?? 0);
+        $pctOut = money_out(money_normalize($pctRaw, 2), 2);
+
+        $historyRows[] = [
+            'account_id' => $real_id,
+            'owner_type' => $owner_type,
+            'percentage' => $pctOut,
+            'partner_group_id' => $pgid,
+            'read_only' => $roVal,
+        ];
+    }
+
+    return $historyRows;
 }

@@ -5,7 +5,7 @@
 #   sudo bash deploy/ec2-amazon-linux-setup.sh
 set -euo pipefail
 
-APP_ROOT="${APP_ROOT:-/var/www/count168.org}"
+APP_ROOT="${APP_ROOT:-/var/www/count168}"
 REPO_URL="${REPO_URL:-https://github.com/kunzzgroups/count168test.git}"
 BRANCH="${BRANCH:-main}"
 
@@ -60,12 +60,13 @@ cat <<EOF
 ========================================
 基础环境已装好。还需你手动完成：
 
-1) 数据库
+1) 数据库（org 专用，勿改 includes/config.php — 那是 live 默认）
    sudo mysql_secure_installation
-   sudo mysql -e "CREATE DATABASE count168 CHARACTER SET utf8mb4;"
-   sudo mysql -e "CREATE USER 'count168'@'localhost' IDENTIFIED BY '你的密码';"
-   sudo mysql -e "GRANT ALL ON count168.* TO 'count168'@'localhost';"
-   导入 dump 后编辑: ${APP_ROOT}/includes/config.php
+   sudo mysql -e "CREATE DATABASE u857194726_c168org CHARACTER SET utf8mb4;"
+   sudo mysql -e "CREATE USER 'admin'@'localhost' IDENTIFIED BY 'C168_org';"
+   sudo mysql -e "GRANT ALL ON u857194726_c168org.* TO 'admin'@'localhost';"
+   导入 dump 后:
+   sudo cp ${APP_ROOT}/includes/config.local.php.example ${APP_ROOT}/includes/config.local.php
 
 2) 验证
    curl -I http://127.0.0.1/login

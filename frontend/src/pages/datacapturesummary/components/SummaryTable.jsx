@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import CapturedReferenceTable from "./CapturedReferenceTable.jsx";
 import SummaryTableRow from "./SummaryTableRow.jsx";
 import {
@@ -27,7 +28,7 @@ export default function SummaryTable({
 
   return (
     <>
-      <div className="table-wrapper">
+      <div className="summary-table-x-scroll">
         <table className="summary-table" id="summaryTable">
           <thead>
             <tr>
@@ -81,7 +82,7 @@ export function SummaryEmptyState({ t }) {
       </div>
       <div className="empty-state">
         <p>{t("emptyStateHint")}</p>
-        <Link to="/datacapture" className="btn btn-save">
+        <Link to={spaPath("datacapture")} className="btn btn-save">
           {t("goToDataCapture")}
         </Link>
       </div>

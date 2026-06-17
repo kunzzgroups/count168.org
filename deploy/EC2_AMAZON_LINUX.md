@@ -1,4 +1,6 @@
-# Amazon Linux 2023 (EC2) 部署 count168
+# Amazon Linux 2023 (EC2) 部署 count168.org
+
+> **org vs live**：本仓库 `includes/config.php` 与 `database/HOSTINGER_IMPORT.md` 保持 **live (Hostinger count168.site)** 默认值，git pull 不会影响线上。EC2 org 只用 `includes/config.local.php`（git 忽略）和 `deploy/nginx/count168.org.*`。
 
 你的实例：**Amazon Linux 2023 ARM64**（t4g.medium），公网 IP 示例：`56.68.48.190`。
 
@@ -24,8 +26,8 @@ SSH / Instance Connect 登录后：
 
 ```bash
 sudo dnf install -y git
-sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git /var/www/count168.org
-cd /var/www/count168.org
+sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git /var/www/count168
+cd /var/www/count168
 sudo bash deploy/ec2-amazon-linux-setup.sh
 ```
 
@@ -42,31 +44,42 @@ cd frontend
 npm run build
 ```
 
-用 WinSCP / FileZilla 把 `frontend/dist/` 整个目录上传到服务器 `/var/www/count168.org/frontend/dist/`。
+用 WinSCP / FileZilla 把 `frontend/dist/` 整个目录上传到服务器 `/var/www/count168/frontend/dist/`。
 
 **方式 B — 在 EC2 上 build**
 
 ```bash
 sudo dnf install -y nodejs npm
-cd /var/www/count168.org/frontend
+cd /var/www/count168/frontend
 npm ci
 npm run build
 ```
 
-## 五、数据库
+## 五、数据库（org）
 
-1. 编辑 `/var/www/count168.org/includes/config.php`（Hostinger 的库名/密码要改成 EC2 本地 MySQL）。
-2. 导入数据：见 `database/HOSTINGER_IMPORT.md`。
+1. 在 EC2 MariaDB 建库 `u857194726_c168org` 并导入测试数据（**勿改** `includes/config.php`）。
+2. 复制 org 覆盖配置：
+   ```bash
+   sudo cp /var/www/count168/includes/config.local.php.example /var/www/count168/includes/config.local.php
+   ```
+3. live 导入流程见 `database/HOSTINGER_IMPORT.md`（仅 Hostinger，与 org 无关）。
 
 ## 六、验证
 
 ```bash
-curl -I http://127.0.0.1/login
-ls /var/www/count168.org/frontend/dist/index.html
+curl -I http://127.0.0.1/p/05659e0a-5121-427b-b5f2-7bbc43e14b23
+ls /var/www/count168/frontend/dist/index.html
 sudo systemctl status nginx php-fpm
 ```
 
-浏览器：`http://count168.org/login` — 应看到登录页，**不是** Welcome to nginx。
+浏览器：`https://count168.org/p/05659e0a-5121-427b-b5f2-7bbc43e14b23` — 应看到登录页，**不是** Welcome to nginx / 404。
+
+**UUID 路由更新后**（git pull 含 nginx 变更）：
+
+```bash
+sudo cp /var/www/count168/deploy/nginx/count168.org.amazon-linux.conf /etc/nginx/conf.d/count168.org.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ## 七、HTTPS
 
@@ -81,7 +94,7 @@ sudo certbot --nginx -d count168.org -d www.count168.org
 
 ```bash
 sudo rm -f /etc/nginx/conf.d/default.conf
-sudo cp /var/www/count168.org/deploy/nginx/count168.org.amazon-linux.conf /etc/nginx/conf.d/count168.org.conf
+sudo cp /var/www/count168/deploy/nginx/count168.org.amazon-linux.conf /etc/nginx/conf.d/count168.org.conf
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
@@ -95,12 +108,12 @@ sudo systemctl restart php-fpm nginx
 **403 / 权限**
 
 ```bash
-sudo chcon -R -t httpd_sys_content_t /var/www/count168.org
+sudo chcon -R -t httpd_sys_content_t /var/www/count168
 ```
 
 **API 数据库连接失败**
 
-检查 `includes/config.php` 与 MariaDB 是否已建库、导入。
+检查 `includes/config.local.php` 与 MariaDB 是否已建库、导入。
 
 **登录弹窗 “An error occurred during login” / 接口 HTTP 500**
 
@@ -108,14 +121,14 @@ sudo chcon -R -t httpd_sys_content_t /var/www/count168.org
 
 ```bash
 sudo systemctl status mariadb
-mysql -u org_admin -p -h 127.0.0.1 u857194726_c168_org -e "SELECT 1"
+mysql -u admin -p -h 127.0.0.1 u857194726_c168org -e "SELECT 1"
 ```
 
 推荐在服务器创建 `includes/config.local.php`（已在 .gitignore，不会被 git pull 覆盖）：
 
 ```bash
-sudo cp /var/www/count168.org/includes/config.local.php.example /var/www/count168.org/includes/config.local.php
-sudo nano /var/www/count168.org/includes/config.local.php
+sudo cp /var/www/count168/includes/config.local.php.example /var/www/count168/includes/config.local.php
+sudo nano /var/www/count168/includes/config.local.php
 ```
 
 填入 EC2 本地 MySQL 的 `$dbname` / `$dbuser` / `$dbpass`，保存后测试：
@@ -149,20 +162,36 @@ push 后 GitHub Actions 会自动 SSH 到 EC2 执行 `deploy/deploy.sh`（`git p
 | `EC2_USER` | `ec2-user` |
 | `EC2_SSH_KEY` | 登录 EC2 用的 **私钥** 全文（`.pem` 文件内容） |
 
-EC2 上需已 `git clone` 到 `/var/www/count168.org`，且能 `git pull`（公开仓库即可；私有仓库要在 EC2 配 deploy key 或 PAT）。
+EC2 上需已 `git clone` 到 `/var/www/count168`，且能 `git pull`（公开仓库即可；私有仓库要在 EC2 配 deploy key 或 PAT）。
 
 手动部署（备用）：
 
 ```bash
-cd /var/www/count168.org
+cd /var/www/count168
 bash deploy/deploy.sh
 ```
 
 ## 日常更新（手动 pull，无 Actions 时）
 
 ```bash
-cd /var/www/count168.org
+cd /var/www/count168
 git pull origin main
 # 若前端有改：本地 build 后只覆盖 frontend/dist/
 sudo systemctl reload nginx
 ```
+
+## 部署失败：`insufficient permission for adding an object to repository database .git/objects`
+
+原因：仓库当初用 `sudo git clone` 装过，`.git` 归 **root**，`ec2-user` 和 GitHub Actions 无法 `git fetch`。
+
+**一次性修复**（EC2 Instance Connect 粘贴）：
+
+```bash
+sudo chown -R ec2-user:nginx /var/www/count168
+bash /var/www/count168/deploy/deploy.sh
+grep index- /var/www/count168/frontend/dist/index.html
+```
+
+最后一行应显示 `index-CujfxkOl.js`（或更新的 hash），**不是** `index-Bn_oqep5.js`。
+
+也可在 GitHub → Actions → 最新失败的 **Deploy to EC2** → **Re-run all jobs**（需先把上面 chown 跑一遍，或等 `deploy.sh` 已含自动修复并 push 后再 rerun）。

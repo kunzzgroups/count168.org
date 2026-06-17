@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import { SUMMARY_NOTIFICATION_AUTO_HIDE_MS } from "../submit/summarySubmitConstants.js";
-
-import { normalizeSummaryNotificationArgs } from "../lib/summaryNotificationNormalize.js";
+import { SUMMARY_NOTIFICATION_AUTO_HIDE_MS, normalizeSummaryNotificationArgs } from "../lib/summaryNotify.js";
 
 import { registerSummaryRuntime, unregisterSummaryRuntime } from "../lib/summaryRuntime.js";
 

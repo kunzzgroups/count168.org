@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/deleted-log.css";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 
 function buildListUrl(searchParams) {
   const u = new URL(buildApiUrl("api/deleted_log_list_api.php"));
@@ -78,7 +79,7 @@ export default function DeletedLogPage() {
       }
       if (!res.ok || json.success === false) {
         if (res.status === 403) {
-          navigate("/dashboard", { replace: true });
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
         setFetchError(json.message || json.error || "Load failed");

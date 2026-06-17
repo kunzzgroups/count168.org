@@ -1,4 +1,5 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { isC168CompanyCode } from "../../../utils/company/c168CaptureChannel.js";
 import { companiesNativeInGroupList } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   fetchDomainCompanyPermissions,
@@ -6,6 +7,7 @@ import {
 } from "../shared/maintenanceCompanyApi.js";
 import { fetchProcesses as fetchDomainReportProcesses } from "../../report/domain/domainReportApi.js";
 import { mapDomainGroupProcesses } from "../../report/domain/domainReportGroupProcesses.js";
+import { GROUP_ONLY_PROCESS_CODES } from "../../datacapture/lib/dataCaptureGroupOnlyProcesses.js";
 import {
   captureMaintenanceScopeApiParams,
   captureMaintenanceUsesGroupProcesses,
@@ -39,17 +41,30 @@ function appendScopeToParams(params, scope) {
 }
 
 export async function fetchCompanyPermissions(companyCode) {
-  return fetchDomainCompanyPermissions(companyCode);
+  const code = String(companyCode ?? "").trim().toUpperCase();
+  if (isC168CompanyCode(code)) {
+    return ["Games", "Gambling"];
+  }
+  const perms = await fetchDomainCompanyPermissions(companyCode);
+  return perms.length > 0 ? perms : ["Games", "Gambling", "Bank", "Loan", "Rate", "Money"];
 }
 
 export async function fetchProcesses(companyId, scope = null) {
-  if (scope && captureMaintenanceUsesGroupProcesses(scope)) {
+  const c168Channel = Boolean(scope?.c168Channel);
+  if (scope && captureMaintenanceUsesGroupProcesses(scope) && !c168Channel) {
     const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
     return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList));
   }
   const effectiveId = scope?.scopeCompanyId ?? companyId;
   const rows = await fetchMaintenanceProcesses(effectiveId, { credentials: "include" });
-  return mapProcessesForMaintenanceSelect(rows);
+  let mapped = mapProcessesForMaintenanceSelect(rows);
+  if (c168Channel) {
+    const payrollCodes = new Set(GROUP_ONLY_PROCESS_CODES);
+    mapped = mapped.filter((p) =>
+      payrollCodes.has(String(p.process_name ?? "").trim().toUpperCase()),
+    );
+  }
+  return mapped;
 }
 
 /**

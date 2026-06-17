@@ -22,6 +22,7 @@ require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/../includes/member_linked_closure.php';
 require_once __DIR__ . '/bank_process_bill_display.php';
 require_once __DIR__ . '/dcd_processed_quant.php';
+require_once __DIR__ . '/../includes/transaction_approval.php';
 
 /**
  * 审批过滤：过滤未批准的审批交易（向后兼容：若无字段则不过滤）
@@ -38,14 +39,7 @@ function historyHasContraApprovalColumns(PDO $pdo): bool
 
 function historyContraApprovedWhere(PDO $pdo, string $alias = 't'): string
 {
-    if (!historyHasContraApprovalColumns($pdo)) {
-        return '';
-    }
-    $a = $alias !== '' ? $alias . '.' : '';
-    return " AND ((
-                {$a}transaction_type IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT')
-                AND {$a}approval_status = 'APPROVED'
-            ) OR {$a}transaction_type NOT IN ('CONTRA','PAYMENT','RECEIVE','CLAIM','CLEAR','ADJUSTMENT','WIN','LOSE','PROFIT'))";
+    return tx_sql_transaction_approval_where($pdo, $alias);
 }
 
 /** Set by main handler after tx_resolve_transaction_list_scope. */
@@ -525,6 +519,63 @@ function historyParseDomainListFeeSourceCompany(string $sms): string
     return '';
 }
 
+function historyIsAutoRenewFeeSms(string $sms): bool
+{
+    $s = trim($sms);
+    return stripos($s, '[AUTO_RENEW|') === 0
+        && stripos($s, '[AUTO_RENEW|COMMISSION|') !== 0
+        && stripos($s, '[AUTO_RENEW|NET_PROFIT|') !== 0;
+}
+
+function historyParseAutoRenewFeeTenantCode(string $sms): string
+{
+    $s = trim($sms);
+    if (preg_match('/^\[AUTO_RENEW\|GROUP\|([^|\]]+)/i', $s, $m)) {
+        return strtoupper(trim((string) ($m[1] ?? '')));
+    }
+    if (preg_match('/^\[AUTO_RENEW\|([^|\]]+)/i', $s, $m)) {
+        $code = strtoupper(trim((string) ($m[1] ?? '')));
+        if (in_array($code, ['COMMISSION', 'NET_PROFIT', 'GROUP'], true)) {
+            return '';
+        }
+        return $code;
+    }
+    return '';
+}
+
+function historyParseAutoRenewCommissionTenantCode(string $sms): ?string
+{
+    $s = trim($sms);
+    if ($s === '') {
+        return null;
+    }
+    if (preg_match('/^\[AUTO_RENEW\|COMMISSION\|GROUP\|([^|\]]+)/i', $s, $m)) {
+        $v = strtoupper(trim((string) ($m[1] ?? '')));
+        return $v !== '' ? $v : null;
+    }
+    if (preg_match('/^\[AUTO_RENEW\|COMMISSION\|([^|\]]+)/i', $s, $m)) {
+        $v = strtoupper(trim((string) ($m[1] ?? '')));
+        return $v !== '' ? $v : null;
+    }
+    return null;
+}
+
+/** Auto Renew 佣金来源：被续费公司（与 Domain「Commission From 客户公司」口径一致） */
+function historyResolveAutoRenewCommissionSourceCompany(string $smsText, string $descText): string
+{
+    $tenant = historyParseAutoRenewCommissionTenantCode($smsText);
+    if ($tenant !== null && $tenant !== '') {
+        return $tenant;
+    }
+    if (preg_match('/Commision\s+for\s+([A-Za-z0-9_-]+)/i', $descText, $mFor)) {
+        $code = strtoupper(trim((string) ($mFor[1] ?? '')));
+        if ($code !== '') {
+            return $code;
+        }
+    }
+    return 'LAG';
+}
+
 /**
  * Share% Profit 池账号：将「入账 List Fee + 同源 Sales/CS/IT 佣金划出」合并为一条净 Profit 行（Payment History 展示口径）。
  * @return array skip=txn id 集合, rollups=合并行元数据
@@ -547,7 +598,9 @@ function historyCollectDomainHubProfitRollup(array $transactions, array $account
             continue;
         }
         $sms = trim((string) ($t['sms'] ?? ''));
-        if (stripos($sms, '[DOMAIN_LIST_FEE|') !== 0) {
+        $isDomainListFee = stripos($sms, '[DOMAIN_LIST_FEE|') === 0;
+        $isAutoRenewFee = historyIsAutoRenewFeeSms($sms);
+        if (!$isDomainListFee && !$isAutoRenewFee) {
             continue;
         }
         $hubId = (int) ($t['account_id'] ?? 0);
@@ -558,7 +611,7 @@ function historyCollectDomainHubProfitRollup(array $transactions, array $account
         if ($feeId <= 0) {
             continue;
         }
-        $src = historyParseDomainListFeeSourceCompany($sms);
+        $src = $isDomainListFee ? historyParseDomainListFeeSourceCompany($sms) : historyParseAutoRenewFeeTenantCode($sms);
         if ($src === '') {
             continue;
         }
@@ -570,15 +623,24 @@ function historyCollectDomainHubProfitRollup(array $transactions, array $account
                 continue;
             }
             $sms2 = trim((string) ($t2['sms'] ?? ''));
-            if (stripos($sms2, '[DOMAIN_SHARE_COMMISSION|') !== 0) {
+            $isDomainComm = stripos($sms2, '[DOMAIN_SHARE_COMMISSION|') === 0;
+            $isAutoRenewComm = stripos($sms2, '[AUTO_RENEW|COMMISSION|') === 0;
+            if (!$isDomainComm && !$isAutoRenewComm) {
                 continue;
             }
             if ((int) ($t2['from_account_id'] ?? 0) !== $hubId) {
                 continue;
             }
-            $src2 = historyParseDomainShareCommissionSourceCompanyCode($sms2);
-            if ($src2 === null || strtoupper((string) $src2) !== $src) {
-                continue;
+            if ($isDomainComm) {
+                $src2 = historyParseDomainShareCommissionSourceCompanyCode($sms2);
+                if ($src2 === null || strtoupper((string) $src2) !== $src) {
+                    continue;
+                }
+            } else {
+                $src2 = historyParseAutoRenewCommissionTenantCode($sms2);
+                if ($src2 === null || strtoupper((string) $src2) !== $src) {
+                    continue;
+                }
             }
             if (!preg_match('/\|ROLE:(SALES|CS|IT)\|/i', $sms2)) {
                 continue;
@@ -1823,6 +1885,7 @@ try {
                     if (
                         stripos($smsPay, '[DOMAIN_SHARE_COMMISSION|') === 0
                         || $smsPay === '[DOMAIN_SHARE_COMMISSION]'
+                        || stripos($smsPay, '[AUTO_RENEW|COMMISSION|') === 0
                     ) {
                         $cr_dr = $t['amount'] ?? '0';
                     } elseif (
@@ -1831,6 +1894,7 @@ try {
                         || stripos($descPay, 'Domain list fee FROM ') === 0
                         || stripos($descPay, 'Pay Domain Fee') === 0
                         || stripos($descPay, 'Pay Domain Fee To ') === 0
+                        || historyIsAutoRenewFeeSms($smsPay)
                     ) {
                         $cr_dr = $t['amount'] ?? '0';
                     } else {
@@ -1839,6 +1903,7 @@ try {
                 } else {
                     if (
                         stripos($smsPay, '[DOMAIN_NET_PROFIT|') === 0
+                        || stripos($smsPay, '[AUTO_RENEW|NET_PROFIT|') === 0
                         || stripos($descPay, 'Profit By ') === 0
                     ) {
                         $cr_dr = '0';
@@ -1848,6 +1913,7 @@ try {
                         || stripos($descPay, 'Domain list fee FROM ') === 0
                         || stripos($descPay, 'Pay Domain Fee') === 0
                         || stripos($descPay, 'Pay Domain Fee To ') === 0
+                        || historyIsAutoRenewFeeSms($smsPay)
                     ) {
                         // 与 search_api calculateCrDrByCurrency / txn_crdr_from bulk：List Fee、Pay Domain Fee 付款方记 -amount
                         $cr_dr = historyNeg($t['amount']);
@@ -2175,6 +2241,7 @@ try {
         if (
             $smsText === '[DOMAIN_SHARE_COMMISSION]'
             || stripos($smsText, '[DOMAIN_SHARE_COMMISSION|') === 0
+            || stripos($smsText, '[AUTO_RENEW|COMMISSION|') === 0
             || stripos($descText, 'Commision FROM ') === 0
             || stripos($descText, 'Commision for ') === 0
             || preg_match('/^Profit\s+(Commision|Commission|for)\b/i', $descText)
@@ -2184,11 +2251,13 @@ try {
         }
         $isDomainNetProfit = (
             stripos($smsText, '[DOMAIN_NET_PROFIT|') === 0
+            || stripos($smsText, '[AUTO_RENEW|NET_PROFIT|') === 0
             || stripos($descText, 'Profit By ') === 0
         );
         if (
             $smsText === '[DOMAIN_LIST_FEE]'
             || stripos($smsText, '[DOMAIN_LIST_FEE|') === 0
+            || historyIsAutoRenewFeeSms($smsText)
             || stripos($descText, 'Domain list fee FROM ') === 0
             || stripos($descText, 'Pay Domain Fee') === 0
             || stripos($descText, 'Pay Domain Fee To ') === 0
@@ -2201,15 +2270,23 @@ try {
         }
         $domainShareProductKind = null;
         if ($isDomainShareCommission) {
-            $srcCompany = historyParseDomainShareCommissionSourceCompanyCode($smsText);
-            if ($srcCompany === null || $srcCompany === '') {
-                $srcCompany = 'LAG';
-            }
             $roleLabel = historyResolveDomainShareRoleLabel((string) $description, $smsText);
-            if ($roleLabel === 'PROFIT') {
+            if (stripos($smsText, '[AUTO_RENEW|COMMISSION|') === 0) {
+                $srcCompany = historyResolveAutoRenewCommissionSourceCompany($smsText, $descText);
+                $description = $roleLabel . ' Commission From ' . $srcCompany;
+                $domainShareProductKind = 'Commission';
+            } elseif ($roleLabel === 'PROFIT') {
+                $srcCompany = historyParseDomainShareCommissionSourceCompanyCode($smsText);
+                if ($srcCompany === null || $srcCompany === '') {
+                    $srcCompany = 'LAG';
+                }
                 $description = historyAppendDomainGroupLabel('Profit From ' . strtoupper($srcCompany), $smsText);
                 $domainShareProductKind = 'Profit';
             } else {
+                $srcCompany = historyParseDomainShareCommissionSourceCompanyCode($smsText);
+                if ($srcCompany === null || $srcCompany === '') {
+                    $srcCompany = 'LAG';
+                }
                 $description = historyAppendDomainGroupLabel(
                     $roleLabel . ' Commission From ' . strtoupper($srcCompany),
                     $smsText
@@ -2859,9 +2936,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
                         WHEN transaction_type = 'CONTRA' THEN -t.amount
                         WHEN transaction_type = 'CLEAR' THEN -t.amount
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN t.amount
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' OR t.sms LIKE '[AUTO_RENEW|COMMISSION|%') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_NET_PROFIT|%' OR t.sms LIKE '[AUTO_RENEW|NET_PROFIT|%') THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %' OR (t.sms LIKE '[AUTO_RENEW|%' AND t.sms NOT LIKE '[AUTO_RENEW|COMMISSION|%' AND t.sms NOT LIKE '[AUTO_RENEW|NET_PROFIT|%')) THEN t.amount
                         WHEN transaction_type = 'PAYMENT' THEN -t.amount
                         ELSE 0
                     END), 0) as cr_dr
@@ -2903,8 +2980,8 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                         WHEN transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
                         WHEN transaction_type = 'CONTRA' THEN -t.amount
                         WHEN transaction_type = 'CLEAR' THEN -t.amount
-                        WHEN transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN t.amount
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_NET_PROFIT|%' OR t.sms LIKE '[AUTO_RENEW|NET_PROFIT|%') THEN 0
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %' OR (t.sms LIKE '[AUTO_RENEW|%' AND t.sms NOT LIKE '[AUTO_RENEW|COMMISSION|%' AND t.sms NOT LIKE '[AUTO_RENEW|NET_PROFIT|%')) THEN t.amount
                         WHEN transaction_type = 'PAYMENT' THEN -t.amount
                         ELSE 0
                     END), 0) as cr_dr
@@ -2934,7 +3011,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                     COALESCE(SUM(CASE 
                         WHEN transaction_type = 'CONTRA' THEN t.amount
                         WHEN transaction_type = 'CLEAR' THEN t.amount
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %' OR (t.sms LIKE '[AUTO_RENEW|%' AND t.sms NOT LIKE '[AUTO_RENEW|COMMISSION|%' AND t.sms NOT LIKE '[AUTO_RENEW|NET_PROFIT|%')) THEN -t.amount
                         WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN t.amount
                         ELSE 0
                     END), 0) as cr_dr
@@ -2945,7 +3022,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')"
             . " AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_SHARE_COMMISSION|%'"
+            . " AND COALESCE(t.sms, '') NOT LIKE '[AUTO_RENEW|COMMISSION|%'"
             . " AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_NET_PROFIT|%'"
+            . " AND COALESCE(t.sms, '') NOT LIKE '[AUTO_RENEW|NET_PROFIT|%'"
             . historyContraApprovedWhere($pdo, 't');
 
         $stmt = $pdo->prepare($sql);
@@ -2955,7 +3034,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                     COALESCE(SUM(CASE 
                         WHEN transaction_type = 'CONTRA' THEN t.amount
                         WHEN transaction_type = 'CLEAR' THEN t.amount
-                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %') THEN -t.amount
+                        WHEN transaction_type = 'PAYMENT' AND (t.sms LIKE '[DOMAIN_LIST_FEE|%' OR UPPER(TRIM(COALESCE(t.description, ''))) LIKE 'DOMAIN LIST FEE FROM %' OR (t.sms LIKE '[AUTO_RENEW|%' AND t.sms NOT LIKE '[AUTO_RENEW|COMMISSION|%' AND t.sms NOT LIKE '[AUTO_RENEW|NET_PROFIT|%')) THEN -t.amount
                         WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM') THEN t.amount
                         ELSE 0
                     END), 0) as cr_dr
@@ -2965,7 +3044,9 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   AND t.transaction_date < ?
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
                   AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_SHARE_COMMISSION|%'
+                  AND COALESCE(t.sms, '') NOT LIKE '[AUTO_RENEW|COMMISSION|%'
                   AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_NET_PROFIT|%'
+                  AND COALESCE(t.sms, '') NOT LIKE '[AUTO_RENEW|NET_PROFIT|%'
                   AND EXISTS (
                       SELECT 1
                       FROM data_capture_details dcd
@@ -3019,7 +3100,7 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
                   AND t.from_account_id = ?
                   AND t.transaction_date < ?
                   AND t.currency_id = ?
-                  AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'
+                  AND (t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' OR t.sms LIKE '[AUTO_RENEW|COMMISSION|%')
             ");
             $adjStmt->execute([historyApiTxnWhereBind(), $account_id, $date_from, $currency_id]);
             // SUM 保留符号：佣金合计为正则扣减 B/F；若存在负数冲正则代数相减

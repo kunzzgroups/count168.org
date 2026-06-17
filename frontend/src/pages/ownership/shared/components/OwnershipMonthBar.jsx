@@ -153,7 +153,10 @@ export default function OwnershipMonthBar({
           {historyBanner.empty
             ? t("noSnapshotShort")
             : t("snapshotSavedShort", { savedAt: historyBanner.savedAt })}
+          {isHistoricalView ? ` · ${t("historicalEditHint")}` : null}
         </p>
+      ) : isHistoricalView ? (
+        <p className="own-month-hint">{t("historicalEditHint")}</p>
       ) : null}
     </div>
   );

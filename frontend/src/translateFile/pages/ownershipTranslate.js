@@ -74,6 +74,7 @@ export const OWNERSHIP_I18N = {
     historicalSnapshotSaved: "{month} snapshot (saved {savedAt})",
     noSnapshotShort: "No snapshot this month",
     snapshotSavedShort: "Saved {savedAt}",
+    historicalEditHint: "Adjust accounts and percentages, then confirm to save this month.",
   },
   zh: {
     accountOwnership: "账号归属",
@@ -148,6 +149,7 @@ export const OWNERSHIP_I18N = {
     historicalSnapshotSaved: "{month} 存档（保存于 {savedAt}）",
     noSnapshotShort: "该月无存档",
     snapshotSavedShort: "保存于 {savedAt}",
+    historicalEditHint: "可调整账户与比例，确认后保存至该月。",
   },
 };
 

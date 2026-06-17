@@ -120,6 +120,14 @@ function formulaMaintenanceRowLooksLikeGroupPayroll(array $row): bool
  */
 function formulaMaintenanceClassifyPayrollProcessIds(PDO $pdo, int $companyId): array
 {
+    static $cache = [];
+    if ($companyId <= 0) {
+        return ['group' => [], 'subsidiary' => []];
+    }
+    if (isset($cache[$companyId])) {
+        return $cache[$companyId];
+    }
+
     $rows = formulaMaintenanceFetchPayrollProcessRows($pdo, $companyId);
     $group = [];
     $subsidiary = [];
@@ -163,10 +171,12 @@ function formulaMaintenanceClassifyPayrollProcessIds(PDO $pdo, int $companyId): 
         }
     }
 
-    return [
+    $cache[$companyId] = [
         'group' => array_values(array_unique(array_filter($group, static fn (int $id): bool => $id > 0))),
         'subsidiary' => array_values(array_unique(array_filter($subsidiary, static fn (int $id): bool => $id > 0))),
     ];
+
+    return $cache[$companyId];
 }
 
 function formulaMaintenanceSqlProcessIdInList(array $ids, string $processAlias = 'p'): string
@@ -714,9 +724,9 @@ function formulaMaintenanceSqlTemplateProcessJoin(
 
     $class = formulaMaintenanceClassifyPayrollProcessIds($pdo, $companyId);
     $pool = $isGroupScope ? $class['group'] : $class['subsidiary'];
-    $poolSql = '1=0';
+    $poolInSql = '0';
     if ($pool !== []) {
-        $poolSql = 'p2.id IN (' . implode(',', array_map('intval', $pool)) . ')';
+        $poolInSql = implode(',', array_map('intval', $pool));
     }
 
     return "INNER JOIN process p ON p.company_id = dct.company_id
@@ -727,15 +737,7 @@ function formulaMaintenanceSqlTemplateProcessJoin(
                 AND UPPER(TRIM(dct.process_id)) = UPPER(TRIM(p.process_id))
                 AND (
                     UPPER(TRIM(dct.process_id)) NOT IN (" . dcSqlQuotedGroupPayrollProcessCodes() . ")
-                    OR p.id = (
-                        SELECT p2.id
-                        FROM process p2
-                        WHERE p2.company_id = dct.company_id
-                          AND UPPER(TRIM(p2.process_id)) = UPPER(TRIM(dct.process_id))
-                          AND {$poolSql}
-                        ORDER BY p2.id ASC
-                        LIMIT 1
-                    )
+                    OR p.id IN ({$poolInSql})
                 )
             )
         )";

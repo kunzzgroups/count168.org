@@ -8,6 +8,9 @@
     "prebuild": "node ./scripts/warn-dist-css-edits.mjs",
     "build": "vite build",
     "postbuild": "node ./scripts/cleanup-dist-css.mjs",
+    "prebuild:site": "node ./scripts/warn-dist-css-edits.mjs",
+    "build:site": "vite build",
+    "postbuild:site": "node ./scripts/cleanup-dist-css.mjs",
     "prebuild:watch": "node ./scripts/warn-dist-css-edits.mjs",
     "build:watch": "vite build --watch",
     "preview": "vite preview"

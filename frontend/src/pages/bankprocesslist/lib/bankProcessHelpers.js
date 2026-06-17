@@ -1,7 +1,10 @@
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { formatDmy, parseDdMmYyyyToYmd, parseYmd } from "../../../utils/date/dateUtils.js";
 
-export const PAGE_SIZE = 25;
+/** Auto page size bounds (actual count from useAutoListPageSize). */
+export const PAGE_SIZE_MIN = 4;
+export const PAGE_SIZE_MAX = 80;
 
 /** Bank Process 金额：固定两位小数（如 300.00）. */
 export function isValidBankMoneyInput(value) {
@@ -169,8 +172,9 @@ export function isBankInactiveLike(status, issueFlag) {
 
 /**
  * Bank list client-side row filter (legacy bank_process_list.js matchesCurrentBankFilters).
- * - showAll: keep everything (date-range still applied by caller)
- * - any of showInactive/showOfficial/showEInvoice/showBlock: union of those exact buckets
+ * - showAll only: default visible active rows
+ * - showAll + sub-filters: union of selected buckets (inactive / official / e_invoice / block)
+ * - no showAll, sub-filters only: union of those buckets (paginated mode)
  * - none: only "default visible" rows = active AND issue_flag NOT IN (official, e_invoice, block)
  *
  * "Plain inactive" means status==='inactive' AND issue_flag NOT IN (official, e_invoice, block).
@@ -201,21 +205,24 @@ export function filterBankProcessRowsBySearch(rows, searchTerm) {
 export function matchesCurrentBankFilters(row, filters) {
   if (!row) return false;
   const { showAll, showInactive, showOfficial, showEInvoice, showBlock } = filters || {};
-  if (showAll) return true;
   const status = normalizeBankProcessStatus(row.status);
   const issueFlag = normalizeBankIssueFlag(row.issue_flag);
   const isPlainInactive =
     status === "inactive" && issueFlag !== "official" && issueFlag !== "e_invoice" && issueFlag !== "block";
+  const isDefaultActive =
+    status === "active" && issueFlag !== "official" && issueFlag !== "e_invoice" && issueFlag !== "block";
   const matches = [];
   if (showInactive) matches.push(isPlainInactive);
   if (showOfficial) matches.push(issueFlag === "official");
   if (showEInvoice) matches.push(issueFlag === "e_invoice");
   if (showBlock) matches.push(issueFlag === "block");
-  if (matches.length === 0) {
-    return (
-      status === "active" && issueFlag !== "official" && issueFlag !== "e_invoice" && issueFlag !== "block"
-    );
+
+  if (showAll) {
+    if (matches.length === 0) return isDefaultActive;
+    return matches.some(Boolean);
   }
+
+  if (matches.length === 0) return isDefaultActive;
   return matches.some(Boolean);
 }
 
@@ -424,6 +431,15 @@ export function notifyTransactionDataChanged(sourceTag) {
 }
 
 const bankCategoryCompanyCache = new Map();
+
+/** When session company matches, skip domain API for bank-only vs games routing. */
+export function resolveBankOnlyCategoryHint(sessionMe, companyNumericId) {
+  if (!sessionMe || companyNumericId == null) return null;
+  if (Number(sessionMe.company_id) !== Number(companyNumericId)) return null;
+  if (sessionMe.company_has_bank && !sessionMe.company_has_gambling) return true;
+  if (sessionMe.company_has_gambling) return false;
+  return null;
+}
 
 export async function isBankCategoryCompany(companyCode, buildApiUrl) {
   const cacheKey = String(companyCode || "").trim().toUpperCase();
@@ -725,6 +741,7 @@ export function accountingDuePeriodType(r) {
   if (r.is_daily) return "daily";
   if (r.is_manual_inactive) return "manual_inactive";
   if (r.is_resend_consolidated_range) return "resend_consolidated_range";
+  if (r.is_resend_monthly_reopen) return "resend_monthly_reopen";
   if (r.is_partial_first_month) return "partial_first_month";
   if (r.is_day_end_tail) return "day_end_tail";
   return "monthly";
@@ -736,4 +753,41 @@ export function accountingDueBillingMonth(r) {
     return String(r.monthly_billing_month || r.daily_billing_start || "").trim();
   }
   return String(r.weekly_billing_start || r.monthly_billing_month || "").trim();
+}
+
+/** Accounting Due 表格行唯一键（同 process 多账期可并列展示）。 */
+export function accountingDueRowKey(r) {
+  const id = Number(r?.id);
+  if (!Number.isFinite(id) || id <= 0) return "";
+  return `${id}|${accountingDuePeriodType(r)}|${accountingDueBillingMonth(r)}`;
+}
+
+/** Accounting Due 表格日期：统一 DD/MM/YYYY（与 Start Date 列一致）。 */
+export function formatAccountingDueDisplayDate(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const d = parseYmd(s.substring(0, 10));
+    return d ? formatDmy(d) : s;
+  }
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+  const ymd = parseDdMmYyyyToYmd(s);
+  if (ymd) {
+    const d = parseYmd(ymd);
+    return d ? formatDmy(d) : s;
+  }
+  return s;
+}
+
+/** Accounting Due：Start Date 固定为流程 day_start（DD/MM/YYYY）。 */
+export function formatAccountingDueProcessDayStart(row) {
+  return formatAccountingDueDisplayDate(row?.day_start) || "-";
+}
+
+/** Accounting Due：Billing Date 展示应付日（Monthly 先付）或服务区间开始日（其他频率）。 */
+export function formatAccountingDueBillingPeriod(row) {
+  const start = String(row?.billing_period_start || "").trim();
+  const end = String(row?.billing_period_end || "").trim();
+  const display = formatAccountingDueDisplayDate(start || end);
+  return display || "-";
 }

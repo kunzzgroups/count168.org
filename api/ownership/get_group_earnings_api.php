@@ -7,6 +7,7 @@ require_once '../../includes/session_check.php';
 require_once '../../includes/config.php';
 require_once '../includes/money_decimal.php';
 require_once '../includes/ownership_history.php';
+require_once '../includes/ownership_schema.php';
 
 header('Content-Type: application/json');
 
@@ -20,23 +21,7 @@ $parsedMonth = ownership_history_parse_month_param($_GET['month'] ?? null);
 $useHistory = $parsedMonth !== null && ownership_history_is_past_month($parsedMonth['month_key']);
 
 try {
-    // Auto-create group_ownership table if it doesn't exist
-    $pdo->exec("
-        CREATE TABLE IF NOT EXISTS group_ownership (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            group_id VARCHAR(50) NOT NULL,
-            owner_id INT NOT NULL,
-            account_id INT NOT NULL,
-            owner_type ENUM('owner','user','group') NOT NULL DEFAULT 'owner',
-            percentage DECIMAL(6,2) NOT NULL DEFAULT 0.00,
-            partner_group_id VARCHAR(50) DEFAULT NULL,
-            read_only TINYINT(1) NOT NULL DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-    ");
-    try { $pdo->exec("ALTER TABLE group_ownership MODIFY COLUMN owner_type ENUM('owner','user','group') NOT NULL DEFAULT 'owner'"); } catch (Exception $e) {}
-    try { $pdo->exec("ALTER TABLE group_ownership DROP INDEX uq_group_account"); } catch (Exception $e) {}
+    ownership_ensure_group_ownership_table($pdo);
 
     // Get companies with groups for this user
     require_once '../get_companies_helper.php';

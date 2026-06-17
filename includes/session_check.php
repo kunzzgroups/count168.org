@@ -28,6 +28,7 @@ $isApiRequest = (
 );
 
 require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth_invalidation.php';
 
 // 统一的超时时间（秒）- 1小时
 define('SESSION_TIMEOUT', 3600);
@@ -79,6 +80,9 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
             // 更新最后登录时间
             $stmt = $pdo->prepare("UPDATE user SET last_login = NOW() WHERE id = ?");
             $stmt->execute([$user['id']]);
+            if (!empty($user['password'])) {
+                auth_store_password_fingerprint((string) $user['password']);
+            }
         } else {
             // Token无效或过期，清除cookie
             setcookie('remember_token', '', time() - 3600, "/", "", false, true);
@@ -90,6 +94,10 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
 
 // 检查用户是否已登录
 if (isset($_SESSION['user_id'])) {
+    if ($pdo instanceof PDO && auth_session_password_stale($pdo)) {
+        auth_force_logout_session($pdo, $isApiRequest);
+    }
+
     // 检查session超时（如果没有remember me的话）
     if (
         isset($_SESSION['last_activity']) &&

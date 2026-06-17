@@ -1,16 +1,12 @@
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { measureMaintenanceVirtualRow } from "../../shared/measureMaintenanceVirtualRow.js";
 import {
-  useMaintenanceCyclicScrollExtent,
-  useMaintenanceCyclicScrollObserver,
-} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
+  pickMaintenanceVirtualOverscan,
+  useMaintenanceTableScrollExtent,
+  useMaintenanceVirtualScrollReset,
+} from "../../shared/maintenanceVirtualScroll.js";
 import CaptureVirtualDataRow from "./CaptureVirtualDataRow.jsx";
-
-function pickOverscan(count) {
-  if (count > 2000) return 2;
-  if (count > 800) return 3;
-  return 4;
-}
 
 function isRowDeleted(row) {
   return row.is_deleted === 1 || row.is_deleted === "1" || row.is_deleted === true;
@@ -66,6 +62,8 @@ export default function CaptureVirtualRows({
   rows,
   rowHeight,
   rowKeyPrefix,
+  scrollResetKey = "",
+  listSyncing = false,
   selectedSet,
   onToggleRow,
   alreadyDeletedTitle,
@@ -76,14 +74,7 @@ export default function CaptureVirtualRows({
   disableSelectAll,
 }) {
   const scrollRef = useRef(null);
-  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
-  const rowsRef = useRef(rows);
-
-  if (rowsRef.current !== rows) {
-    sizeCacheRef.current.clear();
-    rowsRef.current = rows;
-  }
 
   const getItemKey = useCallback(
     (index) => {
@@ -99,9 +90,7 @@ export default function CaptureVirtualRows({
     (el) => {
       if (!el) return rowHeight;
       const idx = Number(el.dataset?.index);
-      const inner = el.querySelector(".capture-virtual-data-row");
-      const target = inner ?? el;
-      const h = Math.max(rowHeight, Math.ceil(target.scrollHeight || target.getBoundingClientRect().height || rowHeight));
+      const h = measureMaintenanceVirtualRow(el, rowHeight, ".capture-virtual-data-row");
       if (Number.isFinite(idx)) {
         sizeCacheRef.current.set(idx, h);
       }
@@ -114,29 +103,28 @@ export default function CaptureVirtualRows({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => sizeCacheRef.current.get(index) ?? rowHeight,
-    overscan: pickOverscan(rows.length),
+    overscan: pickMaintenanceVirtualOverscan(rows.length),
     getItemKey,
     measureElement,
-    observeElementOffset,
+  });
+
+  useMaintenanceVirtualScrollReset({
+    scrollRef,
+    scrollResetKey,
+    rowVirtualizer,
+    sizeCacheRef,
   });
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceTableScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: rowHeight,
-    resetDeps: [rows],
-    contentOffsetRef,
+    scrollResetKey,
+    listSyncing,
   });
-
-  useLayoutEffect(() => {
-    contentOffsetRef.current = 0;
-    scrollRef.current?.scrollTo(0, 0);
-    sizeCacheRef.current.clear();
-    rowVirtualizer.measure();
-  }, [rows, rowVirtualizer]);
 
   return (
     <div ref={scrollRef} className="maintenance-virtual-scroll" tabIndex={0}>

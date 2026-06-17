@@ -2,6 +2,11 @@ import { normalizeSummaryIdProductText } from "../lib/summaryIdProductUtils.js";
 import { evaluateFormulaExpression } from "../formula/summaryFormulaReference.js";
 import { formatNegativeNumbersInFormula } from "../formula/summaryFormulaParseUtils.js";
 import { resolveTemplateFormulaDisplay } from "../formula/summaryTemplateFormulaDisplay.js";
+import {
+  buildFormulaDisplayParenFromRow,
+  resolveEffectiveSourcePercentForRow,
+  resolveTemplateFormulaBaseAndPercent,
+} from "../../../shared/formula/index.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import {
   computeRowFinalAmountForTotal,
@@ -145,11 +150,12 @@ function resolveFormulaDisplay(row, formulaOperators) {
 export function applyMainTemplateToRowModel(row, mainTemplate, templateKey) {
   if (!row || !mainTemplate) return row;
 
-  const sourcePercentRaw =
-    mainTemplate.source_percent != null ? String(mainTemplate.source_percent).trim() : "1";
-  const sourcePercent = sourcePercentRaw || "1";
+  const { source, enable } = resolveEffectiveSourcePercentForRow(mainTemplate);
+  const sourcePercent = source || "1";
+  const enableSourcePercent = enable ? true : sourcePercent.trim() !== "";
+  const [resolvedOperators] = resolveTemplateFormulaBaseAndPercent(mainTemplate);
   const formulaOperators = String(
-    mainTemplate.formula_operators || mainTemplate.formulaOperators || ""
+    resolvedOperators || mainTemplate.formula_operators || mainTemplate.formulaOperators || ""
   ).trim();
   const sourceColumns = String(mainTemplate.source_columns || "").trim();
   const next = {
@@ -178,7 +184,7 @@ export function applyMainTemplateToRowModel(row, mainTemplate, templateKey) {
     sourceColumns,
     formulaOperators,
     sourcePercent,
-    enableSourcePercent: sourcePercent.trim() !== "",
+    enableSourcePercent,
     inputMethod: String(mainTemplate.input_method || row.inputMethod || "").trim(),
     enableInputMethod: Boolean(mainTemplate.input_method || row.enableInputMethod),
     clickedColumns: String(mainTemplate.clicked_columns || mainTemplate.clickedColumns || row.clickedColumns || "").trim(),
@@ -187,14 +193,22 @@ export function applyMainTemplateToRowModel(row, mainTemplate, templateKey) {
     ).trim(),
   };
 
-  const formulaDisplay = resolveTemplateFormulaDisplay({
-    row: next,
-    template: mainTemplate,
-    sourceColumns,
-    formulaOperators,
-    sourcePercent,
-    enableSourcePercent: sourcePercent.trim() !== "",
-  });
+  const dbFormulaDisplay = buildFormulaDisplayParenFromRow(mainTemplate);
+  const templateForDisplay = {
+    ...mainTemplate,
+    formula_display: dbFormulaDisplay || mainTemplate.formula_display,
+  };
+
+  const formulaDisplay =
+    resolveTemplateFormulaDisplay({
+      row: next,
+      template: templateForDisplay,
+      sourceColumns,
+      formulaOperators,
+      sourcePercent,
+      enableSourcePercent,
+    }) || dbFormulaDisplay;
+
   next.formulaDisplay = formulaDisplay;
   next.formula = formulaOperators || formulaDisplay;
   if (mainTemplate.batch_selection == 1) {

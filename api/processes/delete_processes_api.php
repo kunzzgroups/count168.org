@@ -5,8 +5,10 @@
  */
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../../includes/permissions.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
+require_once __DIR__ . '/../includes/process_modified_by.php';
 require_once __DIR__ . '/../deleted_log/deleted_log.php';
 require_once __DIR__ . '/../api_response.php';
 if (session_status() === PHP_SESSION_NONE) {
@@ -98,6 +100,18 @@ try {
     }
 
     $company_id_session = (int) $_SESSION['company_id'];
+    if ($company_id_session <= 0) {
+        api_error('User not logged in or company not selected', 401);
+        exit;
+    }
+
+    try {
+        $viewGroup = gc_is_group_login() ? gc_session_login_identifier() : null;
+        gc_assert_api_company_access($pdo, $company_id_session, $viewGroup);
+    } catch (RuntimeException $e) {
+        api_error('No permission to access this company', 403);
+        exit;
+    }
 
     if ($permission === 'Bank') {
         $placeholders = str_repeat('?,', count($ids) - 1) . '?';
@@ -152,28 +166,24 @@ try {
     }
 
     $placeholders = str_repeat('?,', count($ids) - 1) . '?';
-    $stmt = $pdo->prepare("SELECT id, process_id, company_id FROM process WHERE id IN ($placeholders) AND status = 'inactive'");
-    $stmt->execute($ids);
+    $gamesParams = array_merge($ids, [$company_id_session]);
+    $stmt = $pdo->prepare(
+        "SELECT id, process_id, company_id FROM process WHERE id IN ($placeholders) AND company_id = ? AND status = 'inactive'"
+    );
+    $stmt->execute($gamesParams);
     $processesToDelete = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if (empty($processesToDelete)) {
+    if (empty($processesToDelete) || count($processesToDelete) !== count($ids)) {
         api_error('No inactive processes to delete', 400, ['error' => 'no_inactive_processes']);
         exit;
     }
 
     $processIds = array_column($processesToDelete, 'id');
-    $processCompanyIds = array_unique(array_column($processesToDelete, 'company_id'));
     $formulaCount = 0;
     if (!empty($processIds)) {
         $idPlaceholders = str_repeat('?,', count($processIds) - 1) . '?';
-        $formulaCheckParams = $processIds;
-        if (!empty($processCompanyIds)) {
-            $companyPlaceholders = str_repeat('?,', count($processCompanyIds) - 1) . '?';
-            $formulaCheckSql = "SELECT COUNT(*) as count FROM data_capture_templates WHERE process_id IN ($idPlaceholders) AND company_id IN ($companyPlaceholders)";
-            $formulaCheckParams = array_merge($formulaCheckParams, $processCompanyIds);
-        } else {
-            $formulaCheckSql = "SELECT COUNT(*) as count FROM data_capture_templates WHERE process_id IN ($idPlaceholders)";
-        }
+        $formulaCheckSql = "SELECT COUNT(*) as count FROM data_capture_templates WHERE process_id IN ($idPlaceholders) AND company_id = ?";
+        $formulaCheckParams = array_merge($processIds, [$company_id_session]);
         $stmt = $pdo->prepare($formulaCheckSql);
         $stmt->execute($formulaCheckParams);
         $formulaCount = (int) $stmt->fetch(PDO::FETCH_ASSOC)['count'];
@@ -191,8 +201,10 @@ try {
     } catch (PDOException $e) { /* ignore */ }
     if ($hasProcessIdCol) {
         $txnPlaceholders = str_repeat('?,', count($processIds) - 1) . '?';
-        $stmt = $pdo->prepare("SELECT process_id FROM transactions WHERE process_id IN ($txnPlaceholders) LIMIT 1");
-        $stmt->execute($processIds);
+        $stmt = $pdo->prepare(
+            "SELECT process_id FROM transactions WHERE company_id = ? AND process_id IN ($txnPlaceholders) LIMIT 1"
+        );
+        $stmt->execute(array_merge([$company_id_session], $processIds));
         if ($stmt->fetch()) {
             api_error('Process has transactions', 400, ['error' => 'process_has_transactions']);
             exit;
@@ -204,9 +216,18 @@ try {
     // 这里改为软删除（status: inactive -> waiting），不执行物理 DELETE。
     // processlist API 仅展示 active / inactive，因此 waiting 不会在列表中出现。
     $pdo->beginTransaction();
+    $modifier = resolveProcessModifierFromSession($pdo);
     $softDeletePlaceholders = str_repeat('?,', count($processIds) - 1) . '?';
-    $stmt = $pdo->prepare("UPDATE process SET status = 'waiting' WHERE id IN ($softDeletePlaceholders) AND status = 'inactive'");
-    $stmt->execute($processIds);
+    $stmt = $pdo->prepare(
+        "UPDATE process SET status = 'waiting'"
+        . processModifiedBySqlSuffix()
+        . " WHERE id IN ($softDeletePlaceholders) AND company_id = ? AND status = 'inactive'"
+    );
+    $stmt->execute(array_merge(
+        processModifiedByBindParams($modifier),
+        $processIds,
+        [$company_id_session]
+    ));
     $deletedCount = $stmt->rowCount();
     $pdo->commit();
     api_success(

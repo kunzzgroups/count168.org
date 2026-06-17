@@ -29,7 +29,7 @@ export const REPORT_I18N = {
     lastYear: "Last Year",
 
     showAll: "Show All",
-    groupId: "GroupID:",
+    groupId: "Group ID:",
     groupFilterAll: "ALL",
     company: "Company:",
     currency: "Currency:",

@@ -4,6 +4,7 @@ import { fetchSummaryFormCatalog } from "../lib/summaryApi.js";
 import {
   addSelectedDescriptionToForm,
   applyCalculatorToForm,
+  formatSummaryAccountDisplay,
   buildFormulaDataGridItems,
   buildFormulaSavePatchFromForm,
   buildIdProductSelectOptions,
@@ -114,14 +115,6 @@ export function useSummaryEditFormulaPure({
   const saveInFlightRef = useRef(false);
   const [saving, setSaving] = useState(false);
 
-  const usedAccountIds = useMemo(
-    () =>
-      rows
-        .filter((r) => r.accountId && r.account?.trim())
-        .map((r) => String(r.accountId)),
-    [rows]
-  );
-
   const idProductSelectOptions = useMemo(
     () => buildIdProductSelectOptions(tableData),
     [tableData]
@@ -199,7 +192,7 @@ export function useSummaryEditFormulaPure({
         const match = next.find((a) => String(a.id) === String(newAccountId));
         if (!match) return;
         const id = String(match.id);
-        const label = String(match.account_display || match.account || match.name || id);
+        const label = formatSummaryAccountDisplay(match, id);
         setForm((prev) => (prev ? { ...prev, accountId: id, accountText: label } : prev));
         void loadCurrenciesForAccount(id);
       } catch (e) {
@@ -441,7 +434,6 @@ export function useSummaryEditFormulaPure({
     form,
     accounts,
     currencies,
-    usedAccountIds,
     idProductOptions: idProductSelectOptions,
     rowDataOptions,
     formulaDataGridItems,

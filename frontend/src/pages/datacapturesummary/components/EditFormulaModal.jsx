@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EDIT_FORMULA_INPUT_METHODS, CALCULATOR_KEYPAD } from "../formula/editFormulaConstants.js";
+import { formatSummaryAccountDisplay } from "../formula/editFormulaFormState.js";
 import { getSummaryInputMethodLabel } from "../../../translateFile/pages/dataCaptureSummaryTranslate.js";
+import { portalToDocumentBody } from "../../../components/ProcessModalPortal.jsx";
 
 function CalcButton({ value, action, className = "", clearLabel = "Clr", onPress }) {
   const isOperator = ["/", "*", "-", "+"].includes(value);
@@ -32,7 +34,6 @@ export default function EditFormulaModal({
   idProductOptions = [],
   rowDataOptions = [],
   formulaDataGridItems = [],
-  usedAccountIds = [],
   saveDisabled = false,
   saving = false,
   onClose,
@@ -47,7 +48,6 @@ export default function EditFormulaModal({
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountSearch, setAccountSearch] = useState("");
   const accountWrapperRef = useRef(null);
-  const currentAccountId = form?.accountId ?? "";
 
   useEffect(() => {
     if (!accountOpen) return undefined;
@@ -60,21 +60,14 @@ export default function EditFormulaModal({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [accountOpen]);
 
-  const usedSet = useMemo(
-    () => new Set((usedAccountIds || []).map((id) => String(id))),
-    [usedAccountIds]
-  );
-
   const filteredAccounts = useMemo(() => {
     const q = accountSearch.trim().toLowerCase();
     return accounts.filter((acc) => {
-      const id = String(acc.id ?? "");
-      if (usedSet.has(id) && id !== String(currentAccountId || "")) return false;
       if (!q) return true;
-      const label = String(acc.account_display || acc.account || acc.name || "").toLowerCase();
+      const label = formatSummaryAccountDisplay(acc).toLowerCase();
       return label.includes(q);
     });
-  }, [accounts, accountSearch, usedSet, currentAccountId]);
+  }, [accounts, accountSearch]);
 
   if (!open || !form) return null;
 
@@ -90,7 +83,7 @@ export default function EditFormulaModal({
 
   const selectAccount = (acc) => {
     const id = String(acc.id ?? "");
-    const label = String(acc.account_display || acc.account || acc.name || id);
+    const label = formatSummaryAccountDisplay(acc, id);
     setField({ accountId: id, accountText: label, currencyId: "", currencyLabel: "" });
     onAccountSelect?.(id);
     setAccountOpen(false);
@@ -106,7 +99,7 @@ export default function EditFormulaModal({
     });
   };
 
-  return (
+  return portalToDocumentBody(
     <div
       id="editFormulaModal"
       className="summary-modal"
@@ -174,7 +167,7 @@ export default function EditFormulaModal({
                                   if (e.key === "Enter" || e.key === " ") selectAccount(acc);
                                 }}
                               >
-                                {acc.account_display || acc.account || acc.name || acc.id}
+                                {formatSummaryAccountDisplay(acc)}
                               </div>
                             ))}
                           </div>

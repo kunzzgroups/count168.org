@@ -57,15 +57,24 @@ export function companyMatchesGamesPillScope(companyRow) {
 
 export function companyMatchesBankPillScope(companyRow) {
   const flags = resolveCompanyCategoryFlags(companyRow);
-  if (!flags) return true;
+  if (!flags) return false;
   return flags.hasBank;
+}
+
+/** Bank-only (e.g. CX): has Bank, no Games/Gambling — same rule as Process bank redirect. */
+export function companyMatchesBankOnlyPillScope(companyRow) {
+  const flags = resolveCompanyCategoryFlags(companyRow);
+  if (!flags) return false;
+  return flags.hasBank && !flags.hasGambling;
 }
 
 function filterCompaniesByPillCategory(companies, matchesScope, preferredCompanyId = null) {
   if (!Array.isArray(companies)) return [];
   const pref = Number(preferredCompanyId);
   return companies.filter((c) => {
-    if (Number.isFinite(pref) && pref > 0 && Number(c.id) === pref) return true;
+    if (Number.isFinite(pref) && pref > 0 && Number(c.id) === pref) {
+      return matchesScope(c);
+    }
     return matchesScope(c);
   });
 }
@@ -75,7 +84,12 @@ export function filterCompaniesForGamesPills(companies, preferredCompanyId = nul
   return filterCompaniesByPillCategory(companies, companyMatchesGamesPillScope, preferredCompanyId);
 }
 
-/** Bank pages (Bank Process List, bank maintenance, …): hide games-only companies. */
+/** Has Bank permission (incl. Games+Bank). */
 export function filterCompaniesForBankPills(companies, preferredCompanyId = null) {
   return filterCompaniesByPillCategory(companies, companyMatchesBankPillScope, preferredCompanyId);
+}
+
+/** Bank-only companies (CX): hide pure Games and Games+Bank hybrids on bank process maintenance. */
+export function filterCompaniesForBankOnlyPills(companies, preferredCompanyId = null) {
+  return filterCompaniesByPillCategory(companies, companyMatchesBankOnlyPillScope, preferredCompanyId);
 }

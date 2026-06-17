@@ -1,19 +1,15 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  useMaintenanceCyclicScrollExtent,
-  useMaintenanceCyclicScrollObserver,
-} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
+  pickMaintenanceVirtualOverscan,
+  useMaintenanceTableScrollExtent,
+  useMaintenanceVirtualScrollReset,
+} from "../../shared/maintenanceVirtualScroll.js";
+import { measureMaintenanceVirtualRow } from "../../shared/measureMaintenanceVirtualRow.js";
 import { formulaRowIdsMatch } from "../formulaMaintenanceLogic.js";
 import FormulaVirtualDataRow from "./FormulaVirtualDataRow.jsx";
 
-function pickOverscan(count) {
-  if (count > 2000) return 2;
-  if (count > 800) return 3;
-  return 4;
-}
-
-function FormulaVirtualTableHead({ selectAllRef, selectAllChecked, onToggleSelectAll, m }) {
+export function FormulaVirtualTableHead({ selectAllRef, selectAllChecked, onToggleSelectAll, m, disableSelectAll = false }) {
   const headerLabels = [
     m.tblNo,
     m.tblProcess,
@@ -31,9 +27,10 @@ function FormulaVirtualTableHead({ selectAllRef, selectAllChecked, onToggleSelec
       type="checkbox"
       ref={selectAllRef}
       className="maintenance-row-checkbox"
-      checked={selectAllChecked}
+      checked={disableSelectAll ? false : selectAllChecked}
       onChange={onToggleSelectAll}
       title={m.selectAll}
+      disabled={disableSelectAll}
     />
   );
 
@@ -76,23 +73,19 @@ export default function FormulaVirtualRows({
   onScrollingChange,
   scrollRestoreRowId = null,
   onScrollRestoreComplete,
+  scrollResetKey = "",
+  listSyncing = false,
   listHydrating = false,
   selectAllRef,
   selectAllChecked,
   onToggleSelectAll,
 }) {
   const scrollRef = useRef(null);
-  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
-  const rowsRef = useRef(rows);
   const prevRowsRef = useRef(rows);
   const prevEditingIdRef = useRef(null);
+  const scrollResetKeyRef = useRef(scrollResetKey);
   const scrollAnchorIdRef = useRef(null);
-
-  if (rowsRef.current !== rows) {
-    sizeCacheRef.current.clear();
-    rowsRef.current = rows;
-  }
 
   const getItemKey = useCallback((index) => {
     const row = rows[index];
@@ -105,9 +98,7 @@ export default function FormulaVirtualRows({
       const idx = Number(el.dataset?.index);
       const row = Number.isFinite(idx) ? rows[idx] : null;
       const minH = row?.id != null && formulaRowIdsMatch(row.id, editingId) ? editRowHeight : rowHeight;
-      const inner = el.querySelector(".formula-virtual-data-row");
-      const target = inner ?? el;
-      const h = Math.max(minH, Math.ceil(target.scrollHeight || target.getBoundingClientRect().height || minH));
+      const h = measureMaintenanceVirtualRow(el, minH, ".formula-virtual-data-row");
       if (Number.isFinite(idx)) {
         sizeCacheRef.current.set(idx, h);
       }
@@ -124,10 +115,9 @@ export default function FormulaVirtualRows({
       if (row?.id != null && formulaRowIdsMatch(row.id, editingId)) return editRowHeight;
       return sizeCacheRef.current.get(index) ?? rowHeight;
     },
-    overscan: pickOverscan(rows.length),
+    overscan: pickMaintenanceVirtualOverscan(rows.length),
     getItemKey,
     measureElement,
-    observeElementOffset,
   });
 
   const hasScrollRestorePending = useCallback(() => {
@@ -141,13 +131,13 @@ export default function FormulaVirtualRows({
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceTableScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: rowHeight,
-    resetDeps: [rows],
-    contentOffsetRef,
+    scrollResetKey,
+    listSyncing,
   });
 
   const scrollToRowId = useCallback(
@@ -194,22 +184,25 @@ export default function FormulaVirtualRows({
   useLayoutEffect(() => {
     const prevEditing = prevEditingIdRef.current;
     prevEditingIdRef.current = editingId;
+    const queryChanged = scrollResetKeyRef.current !== scrollResetKey;
+    if (queryChanged) {
+      scrollResetKeyRef.current = scrollResetKey;
+    }
     const rowsChanged = prevRowsRef.current !== rows;
     prevRowsRef.current = rows;
 
-    sizeCacheRef.current.clear();
-    rowVirtualizer.measure();
-
-    if (rowsChanged) {
-      contentOffsetRef.current = 0;
-      if (tryRestoreScrollAnchor("center")) {
-        return;
-      }
-      if (hasScrollRestorePending()) {
-        return;
-      }
+    if (queryChanged) {
+      sizeCacheRef.current.clear();
+      rowVirtualizer.measure();
+      if (tryRestoreScrollAnchor("center")) return;
+      if (hasScrollRestorePending()) return;
       scrollRef.current?.scrollTo(0, 0);
       return;
+    }
+
+    if (rowsChanged || prevEditing !== editingId) {
+      sizeCacheRef.current.clear();
+      rowVirtualizer.measure();
     }
 
     if (prevEditing != null && editingId == null) {
@@ -217,7 +210,7 @@ export default function FormulaVirtualRows({
         scrollAnchorIdRef.current = prevEditing;
       }
     }
-  }, [rows, editingId, rowVirtualizer, tryRestoreScrollAnchor, hasScrollRestorePending]);
+  }, [rows, editingId, scrollResetKey, rowVirtualizer, tryRestoreScrollAnchor, hasScrollRestorePending]);
 
   useEffect(() => {
     if (!hasScrollRestorePending() || editingId != null) return;

@@ -85,7 +85,53 @@ if (money_cmp($total_percentage, '100', 2) > 0) {
     exit();
 }
 
+$monthRaw = $inputData['month'] ?? null;
+$parsedMonth = ownership_history_parse_month_param($monthRaw);
+$saveHistoryOnly = $parsedMonth !== null && ownership_history_is_past_month($parsedMonth['month_key']);
+
 $hasOwnerType = $pdo->query("SHOW COLUMNS FROM company_ownership LIKE 'owner_type'")->rowCount() > 0;
+
+if ($saveHistoryOnly) {
+    try {
+        ownership_history_ensure_tables($pdo);
+        $effectiveMonth = $parsedMonth['effective_month'];
+        $companyIdInt = (int) $company_id;
+
+        $existingGroups = [];
+        $existingReadOnly = [];
+        $stmtGroups = $pdo->prepare("
+            SELECT account_id, partner_group_id, COALESCE(read_only, 1) as read_only
+            FROM company_ownership_history
+            WHERE company_id = ? AND effective_month = ? AND owner_type = 'owner'
+        ");
+        $stmtGroups->execute([$companyIdInt, $effectiveMonth]);
+        while ($row = $stmtGroups->fetch(PDO::FETCH_ASSOC)) {
+            $existingGroups[(int) $row['account_id']] = $row['partner_group_id'];
+            $existingReadOnly[(int) $row['account_id']] = (int) $row['read_only'];
+        }
+
+        $historyRows = ownership_build_company_history_rows_from_payload($owners, $existingGroups, $existingReadOnly);
+        $savedBy = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+
+        $pdo->beginTransaction();
+        ownership_history_save_company_for_month($pdo, $companyIdInt, $historyRows, $savedBy, $effectiveMonth);
+        $pdo->commit();
+
+        echo json_encode([
+            'status' => 'success',
+            'message' => 'Historical ownership saved successfully',
+        ]);
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        echo json_encode([
+            'status' => 'error',
+            'message' => 'Database error: ' . $e->getMessage(),
+        ]);
+    }
+    exit();
+}
 
 try {
     // Auto-add 'group' to owner_type ENUM if not present

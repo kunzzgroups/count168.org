@@ -1,7 +1,3 @@
-import {
-  filterCompaniesForBankPills,
-  filterCompaniesForGamesPills,
-} from "../../utils/company/companyCategoryFlags.js";
 import { excludeGroupLabelsFromCompanyPicker } from "../../utils/company/sharedCompanyFilter.js";
 
 export const PAGE_SIZE = 25;
@@ -72,10 +68,34 @@ export function processListCacheHasRows(cached) {
   return Array.isArray(cached?.rows) && cached.rows.length > 0;
 }
 
+/** Cache entry exists (including confirmed-empty lists for the same filter key). */
+export function processListCacheHasEntry(cached) {
+  return cached != null && Array.isArray(cached.rows);
+}
+
+/**
+ * Process list API scope: in ungrouped mode only independent companies (no group_id) may load rows.
+ */
+export function resolveProcessListActiveCompanyId(
+  companyId,
+  companies,
+  { groupFilterKind = "follow", groupIds = [] } = {},
+) {
+  const id = Number(companyId);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  if (groupFilterKind !== "ungrouped") return id;
+
+  const buttons = filterProcessPageCompanyButtons(
+    dedupeCompanyRowsForSwitcher(companies, id),
+    { groupFilterKind: "ungrouped", groupIds, selectedGroupKey: "" },
+  );
+  return buttons.some((c) => Number(c.id) === id) ? id : null;
+}
+
 /** Process / Bank Process company pills: in-group list without group labels (AP, IG, …). */
 export function filterProcessPageCompanyButtons(
   allCompanyButtons,
-  { groupFilterKind, groupIds, selectedGroupKey, pillCategory = null, preferredCompanyId = null } = {}
+  { groupFilterKind, groupIds, selectedGroupKey } = {}
 ) {
   let list;
   if (groupFilterKind === "ungrouped") {
@@ -94,14 +114,7 @@ export function filterProcessPageCompanyButtons(
     });
     list = inG.length ? inG : allCompanyButtons;
   }
-  list = excludeGroupLabelsFromCompanyPicker(list, groupIds);
-  if (pillCategory === "games") {
-    return filterCompaniesForGamesPills(list, preferredCompanyId);
-  }
-  if (pillCategory === "bank") {
-    return filterCompaniesForBankPills(list, preferredCompanyId);
-  }
-  return list;
+  return excludeGroupLabelsFromCompanyPicker(list, groupIds);
 }
 
 export function dedupeCompanyRowsForSwitcher(companies, preferredPk) {

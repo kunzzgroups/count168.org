@@ -85,6 +85,13 @@ export function resolveDataCaptureScope({
  * Used by Summary submit and boot when groupOnlyCapture is set.
  */
 export function normalizeGroupCaptureScope(scope, processMeta = null) {
+  if (processMeta?.groupPayrollCapture === true) return scope;
+  if (
+    processMeta?.groupPayrollUi === true &&
+    String(processMeta?.captureScopeMode || "").toLowerCase() === "company"
+  ) {
+    return scope;
+  }
   const isGroup =
     scope?.mode === "group" ||
     processMeta?.groupOnlyCapture === true ||

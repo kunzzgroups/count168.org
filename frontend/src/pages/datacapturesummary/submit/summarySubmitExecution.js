@@ -1,10 +1,38 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { appendDataCaptureScopeParams, fetchGroupProcessIdByCode } from "../../datacapture/lib/dataCaptureApi.js";
 import { normalizeGroupCaptureScope } from "../../datacapture/lib/dataCaptureScope.js";
+import { isGroupLedgerCapture } from "../../../utils/company/c168CaptureChannel.js";
 import { submitSummaryPayload } from "../lib/summaryApi.js";
-import { SUMMARY_SUBMIT_MAX_ROWS_PER_BATCH } from "./summarySubmitConstants.js";
-import { buildSummarySubmitPayload } from "./summarySubmitPayload.js";
+import { SUMMARY_SUBMIT_MAX_ROWS_PER_BATCH } from "./summarySubmitTotalPure.js";
 import { pushSummaryNotification } from "../lib/summaryNotify.js";
+
+function buildSummarySubmitPayload(processData, summaryRows) {
+  if (!processData) return null;
+  const groupPayrollCapture = processData.groupPayrollCapture === true;
+  const groupLedger =
+    processData.groupOnlyCapture === true && !groupPayrollCapture;
+  return {
+    captureDate: processData.date,
+    processId: processData.process,
+    processName: processData.processName,
+    processCode: processData.processCode || processData.process_code || "",
+    currencyId: processData.currency,
+    currencyName: processData.currencyName,
+    remark: processData.remark || "",
+    groupPayrollUi: processData.groupPayrollUi === true || groupLedger || groupPayrollCapture,
+    groupPayrollCapture,
+    groupOnlyCapture: groupLedger,
+    captureSelectedGroup: groupLedger || groupPayrollCapture
+      ? String(processData.captureSelectedGroup || "").trim().toUpperCase()
+      : undefined,
+    captureScopeMode: groupLedger ? "group" : "company",
+    scopeCompanyId:
+      processData.scopeCompanyId != null && Number(processData.scopeCompanyId) > 0
+        ? Number(processData.scopeCompanyId)
+        : undefined,
+    summaryRows: Array.isArray(summaryRows) ? summaryRows : [],
+  };
+}
 
 const BATCH_DELAY_MS = 300;
 const QUICK_SUBMIT_REDIRECT_MS = 600;
@@ -15,7 +43,7 @@ function notify(title, message, type = "success") {
 }
 
 async function ensureGroupSubmitProcessId(effectiveScope, parsedProcessData, baseData) {
-  if (!baseData || effectiveScope?.mode !== "group") return baseData;
+  if (!baseData || !isGroupLedgerCapture(effectiveScope, parsedProcessData)) return baseData;
 
   const processCode = String(
     parsedProcessData?.processCode ||
@@ -46,8 +74,7 @@ async function ensureGroupSubmitProcessId(effectiveScope, parsedProcessData, bas
 }
 
 async function postSubmitBatch(captureScope, batchData, options = {}) {
-  const isGroup =
-    captureScope?.mode === "group" || batchData?.groupOnlyCapture === true;
+  const isGroup = isGroupLedgerCapture(captureScope, batchData);
   const payload = {
     ...batchData,
     immediateAck: options.immediateAck ? 1 : 0,

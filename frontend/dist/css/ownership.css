@@ -1,4 +1,6 @@
-﻿:root {
+﻿@import url("./page-pill-tabs.css");
+
+:root {
     --own-primary-blue: #0d60ff;
     --own-primary-blue-hover: #63c4ff;
     --own-primary-light: #e9f1ff;
@@ -23,6 +25,33 @@ body.ownership-page {
     overflow-x: hidden;
 }
 
+/* 覆盖 dashboard-page 的 100vh / overflow:hidden，整页统一滚动（与 announcement / domain 一致） */
+body.dashboard-page.ownership-page {
+    height: auto !important;
+    min-height: 100vh;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
+
+body.dashboard-page.ownership-page #root {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+}
+
+body.dashboard-page.ownership-page .own-container {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
+}
+
+body.dashboard-page.ownership-page #companyCardsContainer,
+body.dashboard-page.ownership-page #groupEarningsContainer,
+body.dashboard-page.ownership-page .own-tab-panel {
+    overflow: visible !important;
+    max-height: none !important;
+}
+
 .own-container *,
 .own-container *::before,
 .own-container *::after {
@@ -40,6 +69,7 @@ body.ownership-page {
     color: var(--color-body-strong);
     display: flex;
     flex-direction: column;
+    overflow: visible;
 }
 
 /* Separator Line extending beyond container */
@@ -76,7 +106,7 @@ body.ownership-page {
 .own-allocation-percentage,
 .own-allocation-label,
 .own-table-headers,
-.own-tab-btn,
+.page-tab,
 .own-gfb-label,
 .own-gfb-btn,
 .own-select-mode-btn,
@@ -1548,13 +1578,7 @@ body.ownership-page {
     flex-shrink: 0;
 }
 
-.own-tab-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 0;
-    flex-shrink: 0;
-}
+/* Tab switcher track — see page-pill-tabs.css */
 
 .own-month-picker-wrap {
     display: flex;
@@ -1846,41 +1870,6 @@ body.ownership-page .own-month-back-btn:active {
         text-align: left;
         max-width: none;
     }
-}
-
-.own-tab-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 9px 22px;
-    border: 1px solid var(--own-gray-border);
-    border-radius: 999px;
-    background: var(--own-gray-light);
-    color: var(--own-dark-text);
-    font-size: var(--own-text-label);
-    font-weight: var(--font-weight-bold);
-    cursor: pointer;
-    transition: all 0.22s ease;
-    white-space: nowrap;
-    height: 36px;
-}
-
-.own-tab-btn:hover {
-    background: var(--own-gray-bg);
-    border-color: var(--account-select-card-border-checked, var(--own-primary-blue));
-}
-
-.own-tab-btn.active {
-    background-color: #0d60ff;
-    background-image: var(--btn-add-gradient);
-    background-repeat: no-repeat;
-    color: #fff;
-    border: none;
-    box-shadow: 0 2px 8px rgba(13, 96, 255, 0.35);
-}
-
-.own-tab-btn svg {
-    flex-shrink: 0;
 }
 
 /* Tab panels */

@@ -14,6 +14,7 @@ try {
     require_once __DIR__ . '/../../includes/expiration_status.php';
     require_once __DIR__ . '/../../includes/group_company_access.php';
     require_once __DIR__ . '/../../includes/session_user_payload_cache.php';
+    require_once __DIR__ . '/../../includes/auth_invalidation.php';
 } catch (Throwable $e) {
     // Do not fail bootstrap because of DB wiring errors; session data is still enough for routing.
     error_log('current_user_api config load failed: ' . $e->getMessage());
@@ -53,6 +54,9 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token']) && $pdo in
             $updateStmt->execute([(int) $user['id']]);
             $_SESSION['read_only'] = isset($user['read_only']) ? (int) $user['read_only'] : 1;
             session_user_payload_cache_clear();
+            if (!empty($user['password'])) {
+                auth_store_password_fingerprint((string) $user['password']);
+            }
         } else {
             setcookie('remember_token', '', time() - 3600, "/", "", false, true);
         }
@@ -66,6 +70,10 @@ if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Not logged in', 'data' => null], JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+if ($pdo instanceof PDO && auth_session_password_stale($pdo)) {
+    auth_force_logout_session($pdo, true);
 }
 
 $cachedPayload = function_exists('session_user_payload_cache_get')

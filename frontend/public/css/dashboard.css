@@ -224,9 +224,7 @@ body.dashboard-page {
     .dashboard-alert-modal-icon-wrap--critical,
     .expiration-reminder-modal-box.dashboard-alert-modal-box--critical,
     .dashboard-summary-pie-chart-shell.is-enter,
-    .dashboard-summary-pie-chart-shell.is-enter::before,
     .dashboard-summary-pie-center.is-enter,
-    .dashboard-panel-chart-body.is-enter,
     .dashboard-summary-pie-chart-shell.is-enter::after,
     .dashboard-summary-pie-wrap.is-flow-idle .dashboard-summary-pie-chart-shell {
         animation: none;
@@ -239,6 +237,7 @@ body.dashboard-page {
     padding: var(--layout-page-top-gap) clamp(12px, 1.5vw, 40px) clamp(8px, 1vw, 12px) var(--layout-main-offset);
     width: 100%;
     height: 100vh;
+    height: 100dvh;
     box-sizing: border-box;
     overflow: hidden;
     display: flex;
@@ -266,14 +265,14 @@ body.dashboard-page {
     border-radius: 8px;
     min-height: 30px;
     padding: 2px 8px;
-    font-size: 12px;
+    font-size: var(--drp-trigger-icon, var(--text-medium));
 }
 
 .dashboard-date-range-bar__range {
     text-align: center;
     font-weight: 600;
     color: var(--scd-card-foreground);
-    font-size: clamp(12px, 1vw, 15px);
+    font-size: var(--drp-trigger-text, var(--text-medium));
     line-height: 1.3;
     background: transparent;
     border: none;
@@ -341,7 +340,7 @@ body.dashboard-page {
 
 .dashboard-date-range-bar__range-line {
     display: block;
-    font-size: clamp(11px, 0.85vw, 13px);
+    font-size: var(--drp-trigger-text, var(--text-medium));
 }
 
 @media (max-width: 640px) {
@@ -444,7 +443,7 @@ body.dashboard-page .dashboard-filter-panel.action-buttons-container {
 
 /* 与 transaction-range 日历弹窗同宽（transaction.css / maintenanceDateRangePicker） */
 body.dashboard-page {
-    --dashboard-date-range-w: clamp(316px, 22vw, 336px);
+    --dashboard-date-range-w: var(--drp-popup-width, clamp(316px, 22vw, 336px));
 }
 
 /* 日期行：与 user-gc-inline-panel 同款 label 列 + 日期条 */
@@ -840,7 +839,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     flex: 1;
     min-height: 0;
     overflow-x: visible;
-    overflow-y: auto;
+    overflow-y: hidden;
     display: flex;
     flex-direction: column;
     --dashboard-section-gap: clamp(12px, 1.5vw, 20px);
@@ -886,16 +885,19 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     padding: clamp(8px, 1vw, 12px) clamp(14px, 1.2vw, 24px);
 }
 
-/* KPI 網格：預設三欄；含 Earnings 時四欄 */
+/* KPI 網格：flex 單行，小屏不換行（3 或 4 張均分） */
 .dashboard-kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
     gap: clamp(12px, 1.5vw, 20px);
     flex-shrink: 0;
+    min-width: 0;
 }
 
-.dashboard-kpi-grid--with-earnings {
-    grid-template-columns: repeat(4, 1fr);
+.dashboard-kpi-grid .dashboard-kpi-card {
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 /* === KPI 卡片（图二：顶栏图标+标题 / 大号数值 / 底部说明） === */
@@ -958,6 +960,41 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     line-height: 1.15;
     letter-spacing: -0.02em;
     white-space: nowrap;
+}
+
+.dashboard-animated-value {
+    display: inline-block;
+    font-variant-numeric: tabular-nums;
+}
+
+.dashboard-animated-value.is-rising {
+    animation: dashboard-value-rise 0.9s var(--ease-out-soft, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+
+.dashboard-animated-value.is-falling {
+    animation: dashboard-value-fall 0.9s var(--ease-out-soft, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+}
+
+@keyframes dashboard-value-rise {
+    from {
+        transform: translateY(0.35em);
+        opacity: 0.55;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes dashboard-value-fall {
+    from {
+        transform: translateY(-0.35em);
+        opacity: 0.55;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .kpi-card-foot {
@@ -1046,7 +1083,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 /* 图二：底部双卡片（Statistics + Period Summary） */
 .dashboard-panels-row {
     flex: 1;
-    min-height: 380px;
+    min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(260px, 0.75fr);
     gap: var(--dashboard-section-gap, clamp(12px, 1.5vw, 20px));
@@ -1138,49 +1175,89 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .dashboard-panel-chart-body {
     flex: 1;
-    min-height: 260px;
+    min-height: 0;
     width: 100%;
 }
 
-.dashboard-panel-chart-body.is-enter {
-    animation: dashboard-trend-chart-in 0.76s cubic-bezier(0.22, 1, 0.36, 1) both;
+.dashboard-panel-chart-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: inherit;
 }
 
-.dashboard-panel-chart-body.is-flow-active .dashboard-trend-area-base .recharts-area-curve {
+.dashboard-panel-chart-body.is-scope-morph {
+    transition: opacity 0.28s ease;
+}
+
+.dashboard-panel-chart-body .dashboard-trend-area .recharts-area-curve {
     stroke-linecap: round;
     stroke-linejoin: round;
 }
 
-.dashboard-panel-chart-body.is-flow-idle .dashboard-trend-area-base .recharts-area-curve {
-    filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.28));
-}
-
-.dashboard-panel-chart-body.is-flow-idle .dashboard-trend-area-flow .recharts-area-area {
-    mix-blend-mode: soft-light;
-    opacity: 0.55;
-}
-
-.dashboard-chart-flow-pulses .dashboard-chart-flow-pulse-group {
-    filter: drop-shadow(0 0 6px rgba(59, 130, 246, 0.35));
-}
-
-.dashboard-chart-flow-travelers circle {
-    filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.85));
-}
-
-@keyframes dashboard-trend-chart-in {
-    0% {
-        opacity: 0;
-        transform: translateY(14px);
-    }
-    100% {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.dashboard-chart-zero-line {
+    stroke: #cbd5e1;
 }
 
 .dashboard-panel-card--chart {
     padding-bottom: clamp(6px, 0.5vw, 10px);
+}
+
+.dashboard-summary-view-tabs {
+    display: inline-flex;
+    align-items: stretch;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-bottom: clamp(6px, 0.5vw, 10px);
+    padding: 3px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    width: fit-content;
+    max-width: 100%;
+}
+
+.dashboard-summary-view-tab {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: #64748b;
+    font-family: var(--font-heading-page);
+    font-size: clamp(11px, 0.78vw, 12px);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.dashboard-summary-view-tab.is-active {
+    background: #fff;
+    color: #1d4ed8;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.dashboard-summary-view-tab:not(.is-active):hover {
+    color: #334155;
+}
+
+.dashboard-summary-currency-list.is-company-profit .dashboard-summary-currency-list-head,
+.dashboard-summary-currency-list.is-company-profit .dashboard-summary-currency-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-summary-currency-code-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.dashboard-summary-company-group {
+    font-size: clamp(10px, 0.72vw, 11px);
+    color: #94a3b8;
+    font-weight: 500;
+    line-height: 1.1;
 }
 
 .dashboard-panel-card--summary {
@@ -1192,6 +1269,13 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     --summary-size-body: clamp(12px, 0.85vw, 14px);
     --summary-size-hero: clamp(24px, 1.85vw, 32px);
     --summary-size-pie-pct: clamp(22px, 1.65vw, 28px);
+    --summary-content-inset: clamp(8px, 0.65vw, 10px);
+    --summary-pie-size: clamp(210px, 26vh, 270px);
+    --summary-pie-col: minmax(150px, 48%);
+    --summary-currency-max: clamp(130px, 24vh, 200px);
+    --breakdown-cols-3: repeat(3, minmax(0, 1fr));
+    --breakdown-cols-4: repeat(4, minmax(0, 1fr));
+    --breakdown-col-gap: clamp(8px, 0.65vw, 10px);
     font-family: var(--summary-font);
     gap: clamp(8px, 0.65vw, 12px);
     padding: clamp(14px, 1.1vw, 18px) clamp(16px, 1.2vw, 20px);
@@ -1212,24 +1296,56 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .dashboard-summary-layout {
     display: grid;
-    grid-template-columns: minmax(130px, 46%) minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr);
-    gap: 0 clamp(8px, 0.85vw, 14px);
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, min(var(--summary-currency-max), 1fr));
+    gap: clamp(6px, 0.5vw, 10px) 0;
     flex: 1;
     min-height: 0;
     align-items: stretch;
     overflow: visible;
 }
 
-.dashboard-summary-left-col {
+.dashboard-summary-top-row {
     grid-column: 1;
     grid-row: 1;
-    display: flex;
-    flex-direction: column;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--summary-pie-col);
+    grid-template-rows: min(var(--summary-pie-size));
+    align-items: center;
+    gap: 0 clamp(8px, 0.85vw, 14px);
     min-width: 0;
-    min-height: 0;
-    height: 100%;
-    overflow: visible;
+    flex-shrink: 0;
+}
+
+.dashboard-summary-top-row .dashboard-summary-view-tabs {
+    position: absolute;
+    top: 0;
+    left: var(--summary-content-inset);
+    z-index: 2;
+    margin-bottom: 0;
+    width: fit-content;
+    max-width: calc(100% - clamp(150px, 48%, 280px));
+}
+
+.dashboard-summary-top-row .dashboard-summary-hero--compact {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    min-width: 0;
+    padding-left: var(--summary-content-inset);
+}
+
+.dashboard-summary-top-row .dashboard-summary-pie-wrap {
+    grid-column: 2;
+    grid-row: 1;
+    flex: none;
+    align-self: center;
+    justify-self: center;
+    width: 100%;
+    height: var(--summary-pie-size);
+    min-height: var(--summary-pie-size);
+    max-height: var(--summary-pie-size);
 }
 
 .dashboard-summary-hero--compact {
@@ -1238,47 +1354,44 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     gap: 2px;
     flex-shrink: 0;
     padding-bottom: clamp(4px, 0.35vw, 8px);
+    padding-left: var(--summary-content-inset);
+}
+
+.dashboard-summary-top-row .dashboard-summary-pie-chart-shell {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
 }
 
 .dashboard-summary-pie-wrap {
     flex: 1;
     width: 100%;
     min-width: 0;
-    min-height: clamp(140px, 12vw, 180px);
+    min-height: 0;
+    max-height: 100%;
     position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: visible;
+    overflow: hidden;
     user-select: none;
 }
 
 .dashboard-summary-pie-chart-shell {
     position: relative;
-    width: min(100%, 220px);
-    height: clamp(172px, 16vw, 220px);
+    width: min(100%, var(--summary-pie-size));
+    height: min(100%, var(--summary-pie-size));
     max-width: 100%;
+    max-height: 100%;
     margin-inline: auto;
-    flex-shrink: 0;
-    overflow: visible;
-}
-
-.dashboard-summary-pie-chart-shell::before {
-    content: "";
-    position: absolute;
-    inset: 20%;
-    border-radius: 50%;
-    border: 1px solid rgba(147, 197, 253, 0.55);
-    pointer-events: none;
-    z-index: 4;
+    flex-shrink: 1;
+    overflow: hidden;
+    container-type: size;
 }
 
 .dashboard-summary-pie-chart-shell.is-enter {
     animation: dashboard-pie-shell-in 0.78s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.dashboard-summary-pie-chart-shell.is-enter::before {
-    animation: dashboard-pie-ring-pulse 0.92s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .dashboard-summary-pie-chart-shell.is-enter::after {
@@ -1325,6 +1438,24 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     100% {
         opacity: 0;
         transform: rotate(250deg) scale(1.02);
+    }
+}
+
+@keyframes dashboard-pie-shell-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.78) rotate(-14deg);
+        filter: drop-shadow(0 0 0 rgba(59, 130, 246, 0));
+    }
+    70% {
+        opacity: 1;
+        transform: scale(1.04) rotate(2deg);
+        filter: drop-shadow(0 10px 28px rgba(59, 130, 246, 0.22));
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+        filter: drop-shadow(0 6px 18px rgba(59, 130, 246, 0.12));
     }
 }
 
@@ -1442,71 +1573,6 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     animation: dashboard-pie-center-in 0.68s cubic-bezier(0.34, 1.35, 0.64, 1) 0.28s both;
 }
 
-.dashboard-summary-pie-center-pct {
-    font-size: var(--summary-size-pie-pct);
-    font-weight: 700;
-    color: var(--summary-text-primary);
-    font-family: var(--summary-font);
-    line-height: 1.05;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-}
-
-.dashboard-summary-pie-center-code {
-    font-size: var(--summary-size-caption);
-    font-weight: 600;
-    color: var(--summary-text-secondary);
-    font-family: var(--summary-font);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    line-height: 1.2;
-}
-
-.dashboard-summary-pie-center-caption {
-    font-size: var(--summary-size-caption);
-    font-weight: 500;
-    color: var(--summary-text-muted);
-    font-family: var(--summary-font);
-    line-height: 1.25;
-    letter-spacing: 0.01em;
-}
-
-@keyframes dashboard-pie-shell-in {
-    0% {
-        opacity: 0;
-        transform: scale(0.78) rotate(-14deg);
-        filter: drop-shadow(0 0 0 rgba(59, 130, 246, 0));
-    }
-    70% {
-        opacity: 1;
-        transform: scale(1.04) rotate(2deg);
-        filter: drop-shadow(0 10px 28px rgba(59, 130, 246, 0.22));
-    }
-    100% {
-        opacity: 1;
-        transform: scale(1) rotate(0deg);
-        filter: drop-shadow(0 6px 18px rgba(59, 130, 246, 0.12));
-    }
-}
-
-@keyframes dashboard-pie-ring-pulse {
-    0% {
-        opacity: 0;
-        transform: scale(0.62);
-        border-color: rgba(96, 165, 250, 0.15);
-    }
-    45% {
-        opacity: 1;
-        transform: scale(1.08);
-        border-color: rgba(96, 165, 250, 0.85);
-    }
-    100% {
-        opacity: 0.65;
-        transform: scale(1);
-        border-color: rgba(147, 197, 253, 0.55);
-    }
-}
-
 @keyframes dashboard-pie-center-in {
     0% {
         opacity: 0;
@@ -1520,6 +1586,35 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
         opacity: 1;
         transform: scale(1) rotate(0deg);
     }
+}
+
+.dashboard-summary-pie-center-pct {
+    font-size: clamp(14px, 11cqmin, var(--summary-size-pie-pct, 28px));
+    font-weight: 700;
+    color: var(--summary-text-primary);
+    font-family: var(--summary-font);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.dashboard-summary-pie-center-code {
+    font-size: clamp(9px, 4.8cqmin, var(--summary-size-caption, 12px));
+    font-weight: 600;
+    color: var(--summary-text-secondary);
+    font-family: var(--summary-font);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.2;
+}
+
+.dashboard-summary-pie-center-caption {
+    font-size: clamp(9px, 4.2cqmin, var(--summary-size-caption, 12px));
+    font-weight: 500;
+    color: var(--summary-text-muted);
+    font-family: var(--summary-font);
+    line-height: 1.25;
+    letter-spacing: 0.01em;
 }
 
 .dashboard-summary-pie-wrap .recharts-pie-sector,
@@ -1700,9 +1795,9 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-currency-list {
-    --breakdown-cols: minmax(3.5rem, auto) minmax(0, 1fr) minmax(6.25rem, max-content);
-    grid-column: 2;
-    grid-row: 1;
+    --breakdown-cols: var(--breakdown-cols-3);
+    grid-column: 1;
+    grid-row: 2;
     flex: 1;
     min-width: 0;
     min-height: 0;
@@ -1715,11 +1810,15 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     align-self: stretch;
 }
 
+.dashboard-summary-currency-list.is-with-original {
+    --breakdown-cols: var(--breakdown-cols-4);
+}
+
 .dashboard-summary-currency-list-head {
     display: grid;
     grid-template-columns: var(--breakdown-cols);
-    column-gap: 10px;
-    padding: 0 8px 6px;
+    column-gap: var(--breakdown-col-gap);
+    padding: 0 8px 6px var(--summary-content-inset);
     margin: 0;
     flex-shrink: 0;
     position: sticky;
@@ -1746,9 +1845,10 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 .dashboard-summary-currency-list-body {
     flex: 1;
     min-height: 0;
+    max-height: 100%;
     overflow-x: auto;
     overflow-y: auto;
-    padding: 4px 2px 0 0;
+    padding: 2px 2px 0 var(--summary-content-inset);
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -1758,8 +1858,8 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     display: grid;
     grid-template-columns: var(--breakdown-cols);
     align-items: center;
-    column-gap: 10px;
-    padding: 6px 8px;
+    column-gap: var(--breakdown-col-gap);
+    padding: 4px 8px 4px 0;
     border-radius: var(--radius-panel, 8px);
     font-family: var(--summary-font);
     border-left: none;
@@ -1814,6 +1914,29 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     text-align: right;
 }
 
+.dashboard-summary-currency-original-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-align: right;
+}
+
+.dashboard-summary-currency-original {
+    font-size: var(--summary-size-body);
+    font-weight: 500;
+    color: var(--summary-text-secondary);
+    white-space: nowrap;
+    line-height: 1.25;
+    font-variant-numeric: tabular-nums;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .dashboard-summary-currency-amount {
     font-size: var(--summary-size-body);
     font-weight: 600;
@@ -1844,8 +1967,9 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     visibility: hidden;
 }
 
-.dashboard-summary-currency-list.is-multi-currency .dashboard-summary-currency-row:not(.is-active) .dashboard-summary-currency-amount-col {
-    min-height: 2.45em;
+.dashboard-summary-currency-list.is-multi-currency .dashboard-summary-currency-row:not(.is-active) .dashboard-summary-currency-amount-col,
+.dashboard-summary-currency-list.is-multi-currency .dashboard-summary-currency-row:not(.is-active) .dashboard-summary-currency-original-col {
+    min-height: auto;
 }
 
 .dashboard-summary-currency-rate {
@@ -1856,11 +1980,10 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     text-align: right;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-    justify-self: end;
-    min-width: max-content;
+    justify-self: stretch;
+    min-width: 0;
     overflow: visible;
     text-overflow: clip;
-    padding-left: 4px;
 }
 
 .dashboard-summary-rate-footnote {
@@ -2013,43 +2136,34 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
         gap: 12px;
     }
 
-    .dashboard-kpi-grid,
-    .dashboard-kpi-grid--with-earnings {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+    .dashboard-kpi-grid {
         gap: 10px;
     }
 
     .dashboard-panels-row {
         grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.82fr);
-        min-height: 320px;
+        min-height: 0;
         gap: 12px;
     }
 
     .dashboard-panel-chart-body {
-        min-height: 200px;
+        min-height: 0;
     }
 
     .dashboard-summary-layout {
-        grid-template-columns: minmax(118px, 42%) minmax(0, 1fr);
+        gap: clamp(6px, 0.5vw, 8px) 0;
+    }
+
+    .dashboard-panel-card--summary {
+        --summary-pie-size: clamp(200px, 24vh, 250px);
+        --summary-currency-max: clamp(120px, 21vh, 180px);
+    }
+
+    .dashboard-summary-top-row {
+        grid-template-columns: minmax(0, 1fr) minmax(130px, 46%);
         gap: 0 10px;
     }
 
-    .dashboard-summary-pie-chart-shell {
-        width: min(100%, 196px);
-        height: clamp(156px, 14vw, 188px);
-    }
-
-    .dashboard-summary-pie-center-pct {
-        font-size: clamp(20px, 1.5vw, 24px);
-    }
-
-    .dashboard-summary-hero-value {
-        font-size: clamp(20px, 1.55vw, 26px);
-    }
-
-    .dashboard-summary-currency-list {
-        --breakdown-cols: minmax(3.25rem, auto) minmax(0, 1fr) minmax(5.75rem, max-content);
-    }
 }
 
 /* Tablet ≤1024：面板纵向堆叠，环图与列表同排 */
@@ -2096,10 +2210,8 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
         gap: var(--user-gc-inline-pills-gap, 4px);
     }
 
-    .dashboard-kpi-grid,
-    .dashboard-kpi-grid--with-earnings {
+    .dashboard-kpi-grid {
         gap: 10px;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .dashboard-kpi-card {
@@ -2124,6 +2236,8 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
     .dashboard-panel-card--summary {
         min-height: 0;
+        --summary-pie-size: clamp(180px, 22vh, 220px);
+        --summary-currency-max: clamp(118px, 19vh, 165px);
     }
 
     .dashboard-panel-chart-body {
@@ -2131,18 +2245,22 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     }
 
     .dashboard-summary-layout {
-        grid-template-columns: minmax(132px, 40%) minmax(0, 1fr);
-        gap: 0 12px;
+        gap: clamp(6px, 0.5vw, 10px) 0;
         align-items: stretch;
     }
 
-    .dashboard-summary-pie-wrap {
-        min-height: 148px;
+    .dashboard-summary-top-row {
+        grid-template-columns: minmax(0, 1fr) minmax(120px, 44%);
+        gap: 0 12px;
     }
 
-    .dashboard-summary-pie-chart-shell {
-        width: min(100%, 180px);
-        height: clamp(148px, 38vw, 176px);
+    .dashboard-summary-top-row .dashboard-summary-pie-wrap {
+        max-height: var(--summary-pie-size);
+    }
+
+    .dashboard-summary-top-row .dashboard-summary-pie-chart-shell {
+        width: 100%;
+        height: 100%;
     }
 
     .dashboard-summary-pie-center-pct {
@@ -2187,41 +2305,30 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     }
 }
 
-/* 窄平板 / 小屏：收益区改为上下布局 */
+/* 窄平板 / 小屏：收益区上排略收紧 */
 @media (max-width: 900px) {
-    .dashboard-summary-layout {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto minmax(0, 1fr);
-        gap: 12px 0;
+    .dashboard-panel-card--summary {
+        --summary-pie-size: clamp(150px, 34vw, 180px);
+        --summary-currency-max: clamp(108px, 20vh, 150px);
     }
 
-    .dashboard-summary-left-col {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(140px, 42%);
-        grid-template-rows: auto;
-        align-items: center;
+    .dashboard-summary-top-row {
+        grid-template-columns: minmax(0, 1fr) minmax(130px, 44%);
         gap: 12px 16px;
     }
 
-    .dashboard-summary-hero--compact {
-        grid-column: 1;
-        padding-bottom: 0;
+    .dashboard-summary-top-row .dashboard-summary-pie-wrap {
+        height: var(--summary-pie-size);
+        min-height: var(--summary-pie-size);
+        max-height: var(--summary-pie-size);
     }
 
-    .dashboard-summary-pie-wrap {
-        grid-column: 2;
-        grid-row: 1;
-        min-height: 140px;
-    }
-
-    .dashboard-summary-pie-chart-shell {
-        width: min(100%, 168px);
-        height: clamp(140px, 36vw, 168px);
+    .dashboard-summary-top-row .dashboard-summary-pie-chart-shell {
+        width: 100%;
+        height: 100%;
     }
 
     .dashboard-summary-currency-list {
-        grid-column: 1 / -1;
-        grid-row: 2;
         max-height: none;
     }
 
@@ -2396,7 +2503,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     user-select: none;
     background: transparent;
     border: 1px solid transparent;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     color: var(--scd-foreground);
     font-family: var(--font-heading-page);
 }
@@ -2414,7 +2521,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .date-separator {
     color: var(--scd-neutral-400);
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: 500;
     user-select: none;
     margin: 0 2px;
@@ -2485,7 +2592,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 #month-date-picker .year-grid .date-option {
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     padding: 8px 6px;
     min-width: 0;
     text-align: center;
@@ -2515,7 +2622,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     cursor: pointer;
     border-radius: clamp(4px, 0.31vw, 6px);
     transition: all 0.2s;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     color: var(--scd-foreground);
     background: transparent;
     border: 1px solid transparent;
@@ -2542,7 +2649,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 .day-header {
     padding: clamp(2px, 0.21vw, 4px);
     text-align: center;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     color: var(--scd-muted-foreground);
     font-weight: 600;
     font-family: var(--font-heading-page);
@@ -2566,7 +2673,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     gap: clamp(4px, 0.5vw, 6px);
     width: 100%;
     white-space: nowrap;
@@ -2602,7 +2709,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     background: transparent;
     color: var(--scd-foreground);
     cursor: pointer;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: 600;
     text-align: left;
     transition: background-color 0.2s;
@@ -2626,7 +2733,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     border-radius: clamp(4px, 0.42vw, 8px);
     border: none;
     cursor: pointer;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     display: inline-flex;
     align-items: center;
     gap: clamp(4px, 0.6vw, 8px);
@@ -2657,7 +2764,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .form-label {
     display: block;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: bold;
     color: var(--scd-black);
     margin-bottom: clamp(4px, 0.5vw, 8px);
@@ -2665,7 +2772,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .date-info {
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: bold;
     color: var(--scd-muted-foreground);
     padding: clamp(4px, 0.42vw, 8px) clamp(6px, 0.63vw, 12px);
@@ -2715,7 +2822,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .calendar-popup.calendar-popup--toolbar .calendar-nav-btn i {
     color: var(--scd-foreground);
-    font-size: clamp(9px, 0.57vw, 11px);
+    font-size: var(--text-medium);
 }
 
 .calendar-popup.calendar-popup--toolbar .calendar-month-year {
@@ -2728,7 +2835,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     border: 1px solid var(--scd-input-border);
     border-radius: 4px;
     padding: clamp(4px, 0.3vw, 6px) clamp(6px, 0.4vw, 8px);
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: 600;
     color: var(--scd-black);
     background: var(--scd-card);
@@ -2756,7 +2863,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 .calendar-popup.calendar-popup--toolbar .calendar-weekday {
     text-align: center;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: 600;
     color: var(--scd-neutral-500);
     padding: clamp(2px, 0.21vw, 4px) 0;
@@ -2775,7 +2882,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     align-items: center;
     justify-content: center;
     border-radius: 6px;
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
@@ -2855,7 +2962,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-date-info {
-    font-size: clamp(9px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     font-weight: bold;
     color: var(--scd-muted-foreground);
     padding: clamp(4px, 0.4vw, 6px) clamp(6px, 0.63vw, 12px);
@@ -2887,4 +2994,230 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
         z-index: 10;
         /* box-shadow: 0 4px 6px -1px #00000014; */
     }
+}
+
+/* KPI 單行：覆蓋舊版 grid 2 欄媒體查詢（2026-06） */
+body.dashboard-page .dashboard-content > .dashboard-kpi-grid,
+body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: stretch;
+}
+
+body.dashboard-page .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card,
+body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+}
+
+/* Dashboard home: fit one viewport — no document scroll */
+html:has(body.dashboard-home-page) {
+    height: 100%;
+    overflow: hidden;
+}
+
+body.dashboard-home-page {
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+}
+
+body.dashboard-home-page #root {
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+body.dashboard-home-page .dashboard-container {
+    height: 100%;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    flex: 1 1 0;
+    padding-bottom: clamp(4px, 0.5vh, 8px);
+}
+
+body.dashboard-home-page .dashboard-content {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+    --dashboard-section-gap: clamp(6px, 0.85vh, 14px);
+}
+
+body.dashboard-home-page .dashboard-filter-panel {
+    flex-shrink: 0;
+}
+
+body.dashboard-home-page .dashboard-kpi-grid {
+    flex-shrink: 0;
+}
+
+body.dashboard-home-page .dashboard-panels-row {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+body.dashboard-home-page .dashboard-panel-card {
+    min-height: 0;
+    overflow: hidden;
+    padding: clamp(10px, 1vh, 16px);
+}
+
+body.dashboard-home-page .dashboard-panel-chart-body {
+    flex: 1 1 0;
+    min-height: 0;
+}
+
+body.dashboard-home-page .dashboard-panel-card--summary {
+    --summary-pie-size: clamp(195px, 22vh, 240px);
+    --summary-currency-max: clamp(120px, 20vh, 175px);
+}
+
+body.dashboard-home-page .dashboard-summary-top-row {
+    grid-template-rows: min(var(--summary-pie-size));
+}
+
+body.dashboard-home-page .dashboard-summary-top-row .dashboard-summary-pie-wrap {
+    height: var(--summary-pie-size);
+    min-height: var(--summary-pie-size);
+    max-height: var(--summary-pie-size);
+}
+
+body.dashboard-home-page .dashboard-summary-top-row .dashboard-summary-pie-chart-shell {
+    width: 100%;
+    height: 100%;
+}
+
+body.dashboard-home-page .dashboard-summary-pie-wrap {
+    min-height: 0;
+    max-height: 100%;
+}
+
+body.dashboard-home-page .dashboard-summary-pie-chart-shell {
+    width: 100%;
+    height: 100%;
+}
+
+body.dashboard-home-page .dashboard-summary-currency-list-body {
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Group-level summary tabs (Currency / Earnings / Profit): compact panels so bottoms are not clipped */
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs {
+    --dashboard-section-gap: clamp(4px, 0.55vh, 10px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card {
+    padding: clamp(8px, 0.8vh, 13px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-head {
+    margin-bottom: clamp(5px, 0.45vh, 8px);
+    gap: 6px 10px;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-title {
+    font-size: clamp(13px, 1vw, 16px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-legend-item {
+    font-size: clamp(11px, 0.78vw, 13px);
+    gap: 4px;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-period-pill {
+    padding: 4px 8px;
+    font-size: clamp(11px, 0.78vw, 12px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-view-tabs {
+    margin-bottom: 0;
+    padding: 2px;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-view-tab {
+    padding: 4px 10px;
+    font-size: clamp(10px, 0.72vw, 11px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card--summary {
+    overflow: hidden;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-layout {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    gap: clamp(4px, 0.4vh, 8px) 0;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-top-row {
+    min-height: 0;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-top-row .dashboard-summary-view-tabs {
+    padding: 2px;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-top-row .dashboard-summary-pie-wrap {
+    flex: none;
+    height: var(--summary-pie-size);
+    min-height: var(--summary-pie-size);
+    max-height: var(--summary-pie-size);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-top-row .dashboard-summary-pie-chart-shell {
+    width: 100%;
+    height: 100%;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-pie-chart-shell {
+    flex-shrink: 1;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card--summary {
+    padding: clamp(8px, 0.75vh, 12px) clamp(10px, 0.9vh, 14px);
+    gap: clamp(4px, 0.4vh, 8px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-currency-list-head {
+    padding: 0 6px 4px var(--summary-content-inset);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-currency-row {
+    padding: 3px 6px 3px 0;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-rate-footnote {
+    padding: 3px 6px;
+    min-height: 0;
+    line-height: 1.25;
+    font-size: clamp(9px, 0.65vw, 10px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card--chart .dashboard-panel-head {
+    margin-bottom: clamp(4px, 0.35vh, 6px);
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card--chart .dashboard-panel-legend {
+    gap: 4px 8px;
+}
+
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-chart-body {
+    flex: 1 1 0;
+    min-height: clamp(100px, 14vh, 180px);
 }

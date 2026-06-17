@@ -353,7 +353,9 @@ function normalizeSinglePeriodPricesFromApi(raw, kind) {
 
   let source = null;
   if (kind === "company") {
-    if (raw.company_period_prices && typeof raw.company_period_prices === "object") {
+    if (raw.company && typeof raw.company === "object" && !raw.company_period_prices) {
+      source = raw.company;
+    } else if (raw.company_period_prices && typeof raw.company_period_prices === "object") {
       source = raw.company_period_prices;
     } else if (raw.period_prices && typeof raw.period_prices === "object") {
       if (raw.period_prices.company && typeof raw.period_prices.company === "object") {
@@ -362,6 +364,8 @@ function normalizeSinglePeriodPricesFromApi(raw, kind) {
         source = raw.period_prices;
       }
     }
+  } else if (raw.group && typeof raw.group === "object" && !raw.group_period_prices) {
+    source = raw.group;
   } else if (raw.group_period_prices && typeof raw.group_period_prices === "object") {
     source = raw.group_period_prices;
   } else if (raw.period_prices?.group && typeof raw.period_prices.group === "object") {

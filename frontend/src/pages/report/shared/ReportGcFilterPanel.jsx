@@ -81,6 +81,16 @@ export default function ReportGcFilterPanel({
             <span className="user-gc-inline-label">{t("currency")}</span>
             <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
               <div className="user-gc-segment-group" role="group" aria-label={t("currency")}>
+                {toggleAllCurrencies ? (
+                  <button
+                    type="button"
+                    className={`user-gc-segment${showAllCurrencies ? " is-on" : ""}`}
+                    data-currency-code="ALL"
+                    onClick={toggleAllCurrencies}
+                  >
+                    {t("currencyAll")}
+                  </button>
+                ) : null}
                 {currencyList.map((row) => {
                   const code = row.code;
                   const on = !showAllCurrencies && selectedCurrencies.includes(code);
@@ -170,6 +180,16 @@ export default function ReportGcFilterPanel({
           <span className="user-gc-inline-label">{t("currency")}</span>
           <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
             <div className="user-gc-segment-group" role="group" aria-label={t("currency")}>
+              {toggleAllCurrencies ? (
+                <button
+                  type="button"
+                  className={`user-gc-segment${showAllCurrencies ? " is-on" : ""}`}
+                  data-currency-code="ALL"
+                  onClick={toggleAllCurrencies}
+                >
+                  {t("currencyAll")}
+                </button>
+              ) : null}
               {currencyList.map((row) => {
                 const code = row.code;
                 const on = !showAllCurrencies && selectedCurrencies.includes(code);

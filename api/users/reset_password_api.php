@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/email_validation.php';
+require_once __DIR__ . '/../../includes/auth_invalidation.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(['success' => false, 'message' => 'Method not allowed']);
@@ -75,6 +76,7 @@ try {
 
         $hashed = password_hash($new_password, PASSWORD_DEFAULT);
         $pdo->prepare("UPDATE user SET password = ? WHERE id = ?")->execute([$hashed, $user_id]);
+        invalidate_user_remember_token($pdo, (int) $user_id);
         $pdo->prepare("DELETE FROM password_reset_tac WHERE email = ? AND company_id = ?")->execute([$email, $company_numeric_id]);
         echo json_encode(['success' => true, 'message' => 'Password reset successful']);
         exit;

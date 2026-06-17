@@ -13,14 +13,24 @@ export {
   resolveCustomerReportScope as resolveFormulaMaintenanceScope,
 };
 
-/** Group entity scope: SALARY / BONUS only (aligned with Capture Maintenance). */
+/** Group entity or C168 company payroll: SALARY / BONUS / COMMISSION process list. */
 export function formulaMaintenanceUsesGroupProcesses(scope) {
-  return scope?.mode === "group";
+  if (!scope) return false;
+  if (scope.c168Channel) return true;
+  return scope.mode === "group";
 }
 
 /** Query params for formula maintenance list / update / delete APIs. */
 export function formulaMaintenanceScopeApiParams(scope) {
   if (!scope) return {};
+  if (scope.c168Channel) {
+    const companyId = scope.scopeCompanyId ?? scope.uiCompanyId ?? undefined;
+    return {
+      companyId,
+      viewGroup: scope.viewGroup || scope.groupId || undefined,
+      reportScope: "company",
+    };
+  }
   const base = customerReportScopeApiParams(scope);
   const out = {
     ...base,

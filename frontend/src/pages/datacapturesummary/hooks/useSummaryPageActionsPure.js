@@ -1,44 +1,64 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
 import { useNavigate } from "react-router-dom";
-
-import {
-
-  buildSummaryRestoreCapturePath,
-
-  buildSummarySubmittedCapturePath,
-
-  clearSummarySessionAfterSubmit,
-
-} from "../lib/summaryPageActions.js";
-
+import { loadActiveCaptureSession } from "../../datacapture/lib/dataCaptureStorage.js";
+import { saveGroupOnlyProcessPrefsFromProcessData } from "../../datacapture/lib/dataCaptureGroupOnlyProcessPersistence.js";
+import { isGroupLedgerCapture } from "../../../utils/company/c168CaptureChannel.js";
+import { clearSummaryCaptureRoundStorage } from "../lib/summaryStorage.js";
 import { saveSummaryRefreshStatePure } from "../lib/summaryRefreshStatePure.js";
 import { deleteSummaryTemplate } from "../lib/summaryApi.js";
-
-import { loadActiveCaptureSession } from "../../datacapture/lib/dataCaptureStorage.js";
-
 import { useSummaryContext } from "../context/SummaryContext.jsx";
-
 import { useSummarySubmitPure } from "./useSummarySubmitPure.js";
-
 import { pushSummaryNotification } from "../lib/summaryNotify.js";
-
 import { computeSummaryTotal } from "../table/summaryRowData.js";
 import { rowsHaveCompleteFormulaCurrency } from "../table/summaryRowAmount.js";
 import { syncSubOrderTemplates } from "../table/summarySubOrderResequence.js";
 import { saveSummaryTemplatePure } from "../formula/summarySaveTemplatePure.js";
-
 import {
-
   SUMMARY_SUBMIT_TOTAL_MAX,
-
   SUMMARY_SUBMIT_TOTAL_MIN,
-
-} from "../submit/summarySubmitConstants.js";
-
+} from "../submit/summarySubmitTotalPure.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 
+function buildSummaryRestoreCapturePath(companyId, options = {}) {
+  const groupOnly = options.groupOnly === true;
+  const params = new URLSearchParams({ restore: "1" });
+  if (groupOnly) {
+    params.set("group_only", "1");
+  } else if (companyId != null && String(companyId).trim() !== "") {
+    params.set("company_id", String(companyId));
+  }
+  return `/datacapture?${params.toString()}`;
+}
 
+function buildSummarySubmittedCapturePath(companyId, options = {}) {
+  const groupOnly = options.groupOnly === true;
+  const params = new URLSearchParams({ submitted: "1" });
+  if (groupOnly) {
+    params.set("group_only", "1");
+  } else if (companyId != null && String(companyId).trim() !== "") {
+    params.set("company_id", String(companyId));
+  }
+  return `/datacapture?${params.toString()}`;
+}
+
+function clearSummarySessionAfterSubmit(options = {}) {
+  window.isNavigatingAwayByBackOrSubmit = true;
+  if (options.groupOnly === true) {
+    const session = loadActiveCaptureSession();
+    if (session?.processData) {
+      saveGroupOnlyProcessPrefsFromProcessData(session.processData, session.processData.captureSelectedGroup);
+    }
+  }
+  try {
+    localStorage.removeItem("capturedTableRateValues");
+    localStorage.removeItem("capturedTableRateValuesByProductId");
+    localStorage.removeItem("capturedTableFormulaSourceForRefresh");
+    localStorage.removeItem("capturedCaptureId");
+  } catch {
+    /* ignore */
+  }
+  clearSummaryCaptureRoundStorage();
+}
 
 export function useSummaryPageActionsPure({
 
@@ -132,7 +152,7 @@ export function useSummaryPageActionsPure({
 
       const session = loadActiveCaptureSession();
 
-      const groupOnly = session?.processData?.groupOnlyCapture === true;
+      const groupOnly = isGroupLedgerCapture(captureScope, session?.processData);
 
       clearSummarySessionAfterSubmit({ groupOnly });
 
@@ -170,7 +190,7 @@ export function useSummaryPageActionsPure({
 
     const session = loadActiveCaptureSession();
 
-    const groupOnly = session?.processData?.groupOnlyCapture === true;
+    const groupOnly = isGroupLedgerCapture(captureScope, session?.processData);
 
     navigate(buildSummaryRestoreCapturePath(companyId, { groupOnly }), { replace: true });
 

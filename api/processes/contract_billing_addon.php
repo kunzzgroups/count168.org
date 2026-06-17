@@ -83,22 +83,17 @@ function billingCalendarMonthDueYmd(int $year, int $month, int $dueDay): string
 }
 
 /**
- * Frequency=monthly（按同一日对月）：一期服务区间为「上一应付日到本期应付前一日」，
- * 不使用「从应付日到自然月末」的算法。首期应付若等于合同 day_start，区间为 [day_start, day_start+1月-1日]。
+ * Frequency=monthly（先付 / prepaid）：应付日当天付「从应付日起连续 1 个月」的服务。
+ * 区间为 [dueYmd, dueYmd+1月-1日]（例如 6/17 应付 → 6/17–7/16）。
  *
  * @return array{0:string,1:string}
  */
 function billingMonthlyAnniversaryInclusiveRangeFromDue(string $dueYmd, string $contractStartYmd): array
 {
     try {
-        if ($dueYmd === $contractStartYmd) {
-            $s = new DateTimeImmutable($contractStartYmd);
-
-            return [$contractStartYmd, $s->modify('+1 month')->modify('-1 day')->format('Y-m-d')];
-        }
         $due = new DateTimeImmutable($dueYmd);
 
-        return [$due->modify('-1 month')->format('Y-m-d'), $due->modify('-1 day')->format('Y-m-d')];
+        return [$dueYmd, $due->modify('+1 month')->modify('-1 day')->format('Y-m-d')];
     } catch (Throwable $e) {
         return [$dueYmd, $dueYmd];
     }

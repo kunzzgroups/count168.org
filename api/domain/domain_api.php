@@ -34,7 +34,7 @@ $data = json_decode($json, true);
 $action = $data['action'] ?? '';
 
 // 检查用户是否已登录（对于需要权限的操作）
-if (in_array($action, ['list', 'create', 'update', 'delete', 'validate_domain_code', 'get_domain_fee_settings', 'save_domain_fee_settings', 'get_company_share_settings', 'save_company_share_settings'], true)) {
+if (in_array($action, ['list', 'create', 'update', 'delete', 'validate_domain_code', 'get_domain_fee_settings', 'save_domain_fee_settings', 'get_company_share_settings', 'save_company_share_settings', 'save_group_share_settings', 'save_group_tenant_settings'], true)) {
     if (!isset($_SESSION['user_id'])) {
         http_response_code(401);
         echo json_encode(['success' => false, 'message' => 'User not logged in', 'data' => null]);
@@ -4107,6 +4107,115 @@ try {
                     'profit_payment_created' => false,
                     'profit_amount' => null,
                     'domain_one_time_skipped' => false,
+                ]);
+            } catch (Exception $e) {
+                jsonResponse(false, 'Error: ' . $e->getMessage(), null);
+            }
+            break;
+
+        case 'save_group_share_settings':
+            if (!isset($_SESSION['user_id']) || !$hasC168Context || !$canUseC168DomainActions) {
+                jsonResponse(false, 'Forbidden', null, 403);
+                exit;
+            }
+            $groupShareCode = strtoupper(trim($data['group_code'] ?? ''));
+            if ($groupShareCode === '') {
+                jsonResponse(false, 'Invalid group ID', null);
+                exit;
+            }
+            if (!domainApiHasGroupsTable($pdo)) {
+                jsonResponse(false, 'Groups table not available', null);
+                exit;
+            }
+            $saveNormalized = normalizeFeeShareAllocationsInput($data['fee_share_allocations'] ?? null);
+            try {
+                ensureCompanyFeeShareColumn($pdo);
+                $stmt = $pdo->prepare('SELECT id FROM `groups` WHERE UPPER(TRIM(group_code)) = ? LIMIT 1');
+                $stmt->execute([$groupShareCode]);
+                $groupRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$groupRow) {
+                    jsonResponse(false, 'Group not found in database yet; save the domain first.', null);
+                    exit;
+                }
+                if (!feeShareAllocationsTargetsValid($pdo, $saveNormalized)) {
+                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff or agent under C168.', null);
+                    exit;
+                }
+                $feeJson = feeShareAllocationsToJson($saveNormalized);
+                $pdo->beginTransaction();
+                try {
+                    $up = $pdo->prepare('UPDATE `groups` SET fee_share_allocations = ? WHERE id = ?');
+                    $up->execute([$feeJson, (int) $groupRow['id']]);
+                    $pdo->commit();
+                } catch (Exception $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $e;
+                }
+                jsonResponse(true, 'Share settings saved', [
+                    'fee_share_allocations' => $saveNormalized,
+                ]);
+            } catch (Exception $e) {
+                jsonResponse(false, 'Error: ' . $e->getMessage(), null);
+            }
+            break;
+
+        case 'save_group_tenant_settings':
+            if (!isset($_SESSION['user_id']) || !$hasC168Context || !$canUseC168DomainActions) {
+                jsonResponse(false, 'Forbidden', null, 403);
+                exit;
+            }
+            $groupCode = strtoupper(trim($data['group_code'] ?? ''));
+            if ($groupCode === '') {
+                jsonResponse(false, 'Invalid group ID', null);
+                exit;
+            }
+            if (!domainApiHasGroupsTable($pdo)) {
+                jsonResponse(false, 'Groups table not available', null);
+                exit;
+            }
+            $saveNormalized = normalizeFeeShareAllocationsInput($data['fee_share_allocations'] ?? null);
+            $expDate = !empty($data['expiration_date']) ? (string) $data['expiration_date'] : null;
+            $applyCommission = filter_var($data['apply_commission_payments'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            try {
+                ensureCompanyFeeShareColumn($pdo);
+                $stmt = $pdo->prepare('SELECT id FROM `groups` WHERE UPPER(TRIM(group_code)) = ? LIMIT 1');
+                $stmt->execute([$groupCode]);
+                $groupRow = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$groupRow) {
+                    jsonResponse(false, 'Group not found in database yet; save the domain first.', null);
+                    exit;
+                }
+                if (!feeShareAllocationsTargetsValid($pdo, $saveNormalized)) {
+                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff or agent under C168.', null);
+                    exit;
+                }
+                $feeJson = feeShareAllocationsToJson($saveNormalized);
+                $pdo->beginTransaction();
+                try {
+                    $up = $pdo->prepare('UPDATE `groups` SET expiration_date = ?, fee_share_allocations = ? WHERE id = ?');
+                    $up->execute([$expDate, $feeJson, (int) $groupRow['id']]);
+                    $pdo->commit();
+                } catch (Exception $e) {
+                    if ($pdo->inTransaction()) {
+                        $pdo->rollBack();
+                    }
+                    throw $e;
+                }
+                if ($applyCommission) {
+                    domainApiApplyGroupDomainListFeePaymentsFromPayload($pdo, [[
+                        'group_code' => $groupCode,
+                        'expiration_date' => $expDate,
+                        'permissions' => [],
+                        'fee_share_allocations' => $saveNormalized,
+                        'apply_commission_payments_on_domain_save' => true,
+                    ]], $hasC168Context, $canUseC168DomainActions);
+                }
+                jsonResponse(true, 'Group settings saved', [
+                    'group_code' => $groupCode,
+                    'fee_share_allocations' => $saveNormalized,
+                    'expiration_date' => $expDate,
                 ]);
             } catch (Exception $e) {
                 jsonResponse(false, 'Error: ' . $e->getMessage(), null);

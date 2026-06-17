@@ -3,6 +3,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
+require_once __DIR__ . '/../includes/process_modified_by.php';
 require_once __DIR__ . '/../api_response.php';
 
 header('Content-Type: application/json');
@@ -44,8 +45,17 @@ function getProcessCurrent(PDO $pdo, int $id, int $companyId): ?array {
 }
 
 function updateProcessStatus(PDO $pdo, string $newStatus, int $id, int $companyId): void {
-    $stmt = $pdo->prepare("UPDATE process SET status = ? WHERE id = ? AND company_id = ?");
-    $stmt->execute([$newStatus, $id, $companyId]);
+    $modifier = resolveProcessModifierFromSession($pdo);
+    $stmt = $pdo->prepare(
+        'UPDATE process SET status = ?'
+        . processModifiedBySqlSuffix()
+        . ' WHERE id = ? AND company_id = ?'
+    );
+    $stmt->execute(array_merge(
+        [$newStatus],
+        processModifiedByBindParams($modifier),
+        [$id, $companyId]
+    ));
     if ($stmt->rowCount() == 0) throw new Exception('状态更新失败');
 }
 

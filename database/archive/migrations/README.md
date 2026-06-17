@@ -2,7 +2,7 @@
 
 These scripts upgraded **older** databases before structure was folded into `schema/easycount_schema.sql` (from Hostinger export) and `schema/banks_schema.sql`.
 
-**Do not run on a fresh import** of `easycount_schema.sql` or `dumps/count168_org_*` — tables/columns/indexes already match; re-running causes duplicate-column/index errors.
+**Do not run on a fresh import** of `easycount_schema.sql` or `dumps/count168_site_*` — tables/columns/indexes already match; re-running causes duplicate-column/index errors.
 
 ## When you might still open these files
 

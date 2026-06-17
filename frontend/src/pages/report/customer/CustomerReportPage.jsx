@@ -1,6 +1,7 @@
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import {
   getCachedOwnerCompanies,
   DASHBOARD_GROUP_FILTER_KEY,
@@ -209,7 +210,7 @@ export default function CustomerReportPage() {
     const hasFull = perms.length === 0;
     const canReport = hasFull || perms.includes("report");
     if (!canReport || !u.company_has_gambling) {
-      navigate("/dashboard", { replace: true });
+      navigate(spaPath("dashboard"), { replace: true });
       return;
     }
 
@@ -276,7 +277,7 @@ export default function CustomerReportPage() {
         setSelectedGroup(groupFilterOptOut ? null : bootGroup);
         if (nextCompanyId != null) void checkBankOnly(nextCompanyId);
       } catch {
-        if (!cancelled) navigate("/login", { replace: true });
+        if (!cancelled) navigate(spaPath("login"), { replace: true });
       }
     })();
     return () => {
@@ -312,7 +313,7 @@ export default function CustomerReportPage() {
       const comp = companies.find(c => Number(c.id) === Number(compId));
       const perms = await fetchCompanyPermissions(comp?.company_id || "");
       if (isBankOnlyCategoryCompany(perms)) {
-        window.location.assign(new URL("/process-list", window.location.origin).href);
+        window.location.assign(new URL(spaPath("process-list"), window.location.origin).href);
       }
     } catch (err) {
       console.error("Bank only check error:", err);

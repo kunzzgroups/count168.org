@@ -19,7 +19,7 @@ export function rowsToSavePayload(rows) {
 }
 
 export function mapOwnerApiRows(data) {
-  return (Array.isArray(data) ? data : []).map((o) => {
+  return (Array.isArray(data) ? data : []).map((o, index) => {
     const role = String(o.role || "").toUpperCase();
     const accountName = o.account_name || "";
     const name = o.name || "";
@@ -29,6 +29,7 @@ export function mapOwnerApiRows(data) {
     } else if (role === "GROUP" && accountName) {
       account_label = accountName;
     }
+    const ownership_id = o.ownership_id || null;
     return {
       account_id: o.account_id,
       account_label,
@@ -37,7 +38,8 @@ export function mapOwnerApiRows(data) {
       percentage: parseFloat(o.percentage),
       role: o.role || "",
       user_raw_id: o.user_raw_id || null,
-      ownership_id: o.ownership_id || null,
+      ownership_id,
+      clientRowId: ownership_id ? `own-${ownership_id}` : `api-${o.account_id}-${index}`,
       is_external_partner: parseInt(o.is_external_partner, 10) === 1,
       read_only: o.read_only !== null ? parseInt(o.read_only, 10) : 1,
     };
@@ -87,9 +89,23 @@ export function accountsForRowPicker(accounts, currentAccountId = "") {
   });
 }
 
-export function calcOwnershipTotal(rows) {
-  return rows.reduce((sum, r) => sum + (parseFloat(r.percentage) || 0), 0);
+export function calcAllocationTotal(rows, excludeIdx = -1) {
+  return (rows || []).reduce((sum, r, i) => {
+    if (i === excludeIdx || isExternalPartnerRow(r)) return sum;
+    return sum + (parseFloat(r.percentage) || 0);
+  }, 0);
 }
+
+export function calcOwnershipTotal(rows) {
+  return calcAllocationTotal(rows);
+}
+
+/** How much this row may hold without pushing the group total over 100%. */
+export function maxAllowedOwnershipPct(rows, idx) {
+  const other = calcAllocationTotal(rows, idx);
+  return Math.max(0, Math.round((100 - other) * 100) / 100);
+}
+
 export function fmtOwnershipPct(n) {
   return `${(parseFloat(n) || 0).toFixed(2)}%`;
 }
@@ -102,7 +118,24 @@ export const EMPTY_OWNERSHIP_ROW = {
   read_only: 1,
 };
 
-export function applyOwnershipRowFieldUpdate(row, field, val, accounts) {
+let emptyRowSeq = 0;
+
+export function createEmptyOwnershipRow() {
+  emptyRowSeq += 1;
+  return {
+    ...EMPTY_OWNERSHIP_ROW,
+    clientRowId: `new-${Date.now()}-${emptyRowSeq}`,
+  };
+}
+
+export function ownershipRowClientId(row, fallbackIdx = 0) {
+  if (row?.clientRowId) return row.clientRowId;
+  if (row?.ownership_id) return `own-${row.ownership_id}`;
+  if (row?.account_id) return `acct-${row.account_id}-${fallbackIdx}`;
+  return `row-${fallbackIdx}`;
+}
+
+export function applyOwnershipRowFieldUpdate(row, field, val, accounts, allRows, rowIdx) {
   const r = { ...row };
   if (field === "account_id") {
     r.account_id = val;
@@ -119,12 +152,21 @@ export function applyOwnershipRowFieldUpdate(row, field, val, accounts) {
       r.is_external_partner = false;
       r.ownership_id = null;
     }
-  } else if (field === "percent_input") {
-    let p = parseFloat(String(val).replace("%", ""));
-    if (isNaN(p)) p = 0;
-    r.percentage = Math.max(0, Math.min(100, p));
-  } else if (field === "slider") {
-    r.percentage = parseFloat(val);
+  } else if (field === "percent_input" || field === "slider") {
+    if (isExternalPartnerRow(r)) {
+      r.percentage = 0;
+    } else {
+      let p =
+        field === "percent_input"
+          ? parseFloat(String(val).replace("%", ""))
+          : parseFloat(val);
+      if (isNaN(p)) p = 0;
+      p = Math.max(0, Math.min(100, p));
+      if (Array.isArray(allRows) && rowIdx >= 0) {
+        p = Math.min(p, maxAllowedOwnershipPct(allRows, rowIdx));
+      }
+      r.percentage = Math.round(p * 100) / 100;
+    }
   } else if (field === "read_only") {
     r.read_only = val;
   }

@@ -5,6 +5,7 @@ import "../../../public/css/domain.css";
 import "../../../public/css/date-range-picker.css";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 import {
   ROWS_PER_PAGE,
   MAX_VISIBLE_CHIPS,
@@ -23,6 +24,7 @@ import DomainFormModal from "./components/DomainFormModal.jsx";
 import { getDomainText } from "../../translateFile/pages/domainTranslate.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
+import { fetchOwnerCompaniesAll, readPersistedDashboardGcFilter } from "../../utils/company/sharedCompanyFilter.js";
 
 export default function DomainPage() {
   const navigate = useNavigate();
@@ -95,8 +97,16 @@ export default function DomainPage() {
     let cancelled = false;
     (async () => {
       try {
-        if (!canAccessC168DomainPages(me)) {
-          navigate("/dashboard", { replace: true });
+        let allowed = canAccessC168DomainPages(me);
+        if (!allowed) {
+          const { companyId } = readPersistedDashboardGcFilter();
+          if (companyId != null) {
+            await fetchOwnerCompaniesAll();
+            allowed = canAccessC168DomainPages(me);
+          }
+        }
+        if (!allowed) {
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
 
@@ -345,7 +355,7 @@ export default function DomainPage() {
             <div>{t("ownerCodeWithColon")}</div>
             <div>{t("nameWithColon")}</div>
             <div>{t("emailWithColon")}</div>
-            <div>GroupID:</div>
+            <div>Group ID:</div>
             <div>{t("companiesWithColon")}</div>
             <div>{t("createdBy")}</div>
             <div>{t("action")}</div>

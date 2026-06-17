@@ -2,7 +2,7 @@
  * Cell/column/row drag selection — extracted from js/datacapture.js (Phase 5f).
  * Re-run: node frontend/scripts/extract-grid-mouse-selection.mjs
  */
-import { highlightHeadersForCell } from "./gridCellInteraction.js";
+import { blurActiveTableCell, highlightHeadersForCell } from "./gridCellInteraction.js";
 import { setTableActive } from "./dataCaptureGridMeta.js";
 import {
   clearAllSelections,
@@ -140,14 +140,32 @@ export function getColumnIndexFromHeader(header) {
     return index > 0 ? index - 1 : -1; // -1 because first column is empty
 }
 
+function resolveRowHeaderEl(e) {
+    if (e.currentTarget?.classList?.contains("row-header")) return e.currentTarget;
+    return e.target?.closest?.(".row-header") ?? e.target;
+}
+
+function resolveColumnHeaderEl(e) {
+    if (e.currentTarget?.tagName === "TH" && e.currentTarget.parentElement?.parentElement?.id === "tableHeader") {
+        return e.currentTarget;
+    }
+    return e.target?.closest?.("#tableHeader th") ?? e.target;
+}
+
 // Get row index from row header element
 export function getRowIndexFromHeader(rowHeader) {
+    const headerEl =
+        rowHeader?.nodeType === Node.ELEMENT_NODE
+            ? rowHeader.closest?.(".row-header") || rowHeader
+            : rowHeader?.parentElement?.closest?.(".row-header");
+    if (!headerEl) return -1;
+
     const tableBody = document.getElementById('tableBody');
     if (!tableBody) return -1;
     const rows = Array.from(tableBody.children);
     for (let i = 0; i < rows.length; i++) {
         const rh = rows[i].querySelector('.row-header');
-        if (rh === rowHeader) {
+        if (rh === headerEl) {
             return i;
         }
     }
@@ -157,16 +175,19 @@ export function getRowIndexFromHeader(rowHeader) {
 // Handle column header click (both left and right click)
 export function handleColumnHeaderClick(e, colIndex) {
     e.preventDefault();
+    blurActiveTableCell();
     setTableActive(true);
 
-    // Get actual column index from DOM position
-    const actualColIndex = getColumnIndexFromHeader(e.target);
+    const headerEl = resolveColumnHeaderEl(e);
+    const actualColIndex = getColumnIndexFromHeader(headerEl);
     const finalColIndex = actualColIndex >= 0 ? actualColIndex : colIndex;
 
     const isCtrlPressed = e.ctrlKey || e.metaKey;
 
     // If Ctrl is pressed, toggle this column selection
     if (isCtrlPressed) {
+        isSelectingColumns = false;
+        startColumnIndex = null;
         const headers = document.querySelectorAll('#dataTable th');
         const isSelected = headers[finalColIndex + 1] && headers[finalColIndex + 1].classList.contains('column-selected');
         toggleColumnSelection(finalColIndex, !isSelected);
@@ -181,19 +202,19 @@ export function handleColumnHeaderClick(e, colIndex) {
 // Handle row header click (both left and right click)
 export function handleRowHeaderClick(e, rowIndex) {
     e.preventDefault();
+    blurActiveTableCell();
     setTableActive(true);
 
-    // Get actual row index from DOM position
-    const actualRowIndex = getRowIndexFromHeader(e.target);
+    const rowHeaderEl = resolveRowHeaderEl(e);
+    const actualRowIndex = getRowIndexFromHeader(rowHeaderEl);
     const finalRowIndex = actualRowIndex >= 0 ? actualRowIndex : rowIndex;
 
     const isCtrlPressed = e.ctrlKey || e.metaKey;
 
     // If Ctrl is pressed, toggle this row selection
     if (isCtrlPressed) {
-        const tableBody = document.getElementById('tableBody');
-        const row = tableBody.children[finalRowIndex];
-        const rowHeaderEl = row ? row.querySelector('.row-header') : null;
+        isSelectingRows = false;
+        startRowIndex = null;
         const isSelected = rowHeaderEl && rowHeaderEl.classList.contains('row-selected');
         toggleRowSelection(finalRowIndex, !isSelected);
     } else {
@@ -367,7 +388,7 @@ export function toggleRowSelection(rowIndex, add) {
 }
 
 export function handleColumnHeaderMousedown(e) {
-  if (e.button === 0) handleColumnHeaderClick(e, -1);
+  if (e.button === 0) handleColumnHeaderClick(e, getColumnIndexFromHeader(resolveColumnHeaderEl(e)));
 }
 
 export function handleColumnHeaderMouseover(e) {
@@ -375,7 +396,7 @@ export function handleColumnHeaderMouseover(e) {
 }
 
 export function handleRowHeaderMousedown(e) {
-  if (e.button === 0) handleRowHeaderClick(e, -1);
+  if (e.button === 0) handleRowHeaderClick(e, getRowIndexFromHeader(resolveRowHeaderEl(e)));
 }
 
 export function handleRowHeaderMouseover(e) {

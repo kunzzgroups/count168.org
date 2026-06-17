@@ -240,6 +240,71 @@ if (!function_exists('bmp_inboxEffectiveCreatedYmd')) {
     }
 }
 
+/** Monthly 先付：该应付日是否已有 monthly / monthly_skipped（按 DATE(posted_date)，非整自然月）。 */
+if (!function_exists('bmp_hasMonthlyPostedOrSkippedForDueYmd')) {
+    function bmp_hasMonthlyPostedOrSkippedForDueYmd(PDO $pdo, int $companyId, int $processId, string $dueYmd): bool
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dueYmd)) {
+            return false;
+        }
+        try {
+            $stmt = $pdo->prepare(
+                "SELECT 1 FROM process_accounting_posted
+                 WHERE company_id = ? AND process_id = ? AND DATE(posted_date) = DATE(?)
+                   AND (period_type IN ('monthly','monthly_skipped') OR period_type IS NULL OR period_type = '')
+                 LIMIT 1"
+            );
+            $stmt->execute([$companyId, $processId, $dueYmd]);
+            return (bool) $stmt->fetch();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+}
+
+/**
+ * 由 billing_month 锚点（Y-n 或 Y-m-d）与 day_start 推算 Monthly 应付日；无法解析时返回 null。
+ */
+if (!function_exists('bmp_monthlyDueYmdFromBillingAnchor')) {
+    function bmp_monthlyDueYmdFromBillingAnchor(string $billingAnchor, string $dayStartYmd, string $frequency = 'monthly'): ?string
+    {
+        $anchor = trim($billingAnchor);
+        if ($anchor === '') {
+            return null;
+        }
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $anchor, $md) && checkdate((int) $md[2], (int) $md[3], (int) $md[1])) {
+            return $md[1] . '-' . $md[2] . '-' . $md[3];
+        }
+        if (!preg_match('/^(\d{4})-(\d{1,2})$/', $anchor, $m)) {
+            return null;
+        }
+        $billY = (int) $m[1];
+        $billMo = (int) $m[2];
+        if ($billY < 1970 || $billMo < 1 || $billMo > 12) {
+            return null;
+        }
+        if ($frequency === '1st_of_every_month') {
+            return sprintf('%04d-%02d-01', $billY, $billMo);
+        }
+        $startTs = strtotime($dayStartYmd);
+        if ($startTs === false) {
+            return null;
+        }
+        $last = (int) date('t', mktime(0, 0, 0, $billMo, 1, $billY));
+        $dueDay = min(max(1, (int) date('j', $startTs)), $last);
+        $dueYmd = sprintf('%04d-%02d-%02d', $billY, $billMo, $dueDay);
+        try {
+            $billYm = sprintf('%04d-%d', $billY, $billMo);
+            if ((new DateTimeImmutable($dayStartYmd))->format('Y-n') === $billYm) {
+                return $dayStartYmd;
+            }
+        } catch (Throwable $e) {
+            // keep $dueYmd
+        }
+        return $dueYmd;
+    }
+}
+
 if (!function_exists('bmp_resolveProcessAccountingPostedId')) {
     function bmp_resolveProcessAccountingPostedId(
         PDO $pdo,

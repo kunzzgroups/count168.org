@@ -1,4 +1,52 @@
-﻿body {
+﻿/* Single scrollbar on body (Ownership-page pattern; all viewport widths) */
+html:has(body.datacapture-summary-page) {
+    height: auto !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.datacapture-summary-page,
+body.ec-auth-shell.dashboard-page.datacapture-summary-page {
+    min-height: 100vh !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
+
+body.dashboard-page.datacapture-summary-page #root,
+body.dashboard-page.datacapture-summary-page .ec-page-shell,
+body.dashboard-page.datacapture-summary-page .ec-page-shell__content {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.datacapture-summary-page .ec-page-shell__content {
+    min-height: 0 !important;
+}
+
+body.dashboard-page.datacapture-summary-page .container {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.datacapture-summary-page #summaryTableContainer,
+body.dashboard-page.datacapture-summary-page .summary-table-container {
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    height: auto !important;
+}
+
+        body.datacapture-summary-page {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             margin: 0;
             padding: 0;
@@ -14,7 +62,6 @@
             background-blend-mode: screen, screen, multiply, screen, normal;
             color: #334155;
             overflow-x: hidden !important;
-            overflow-y: auto !important;
         }
 
         .container {
@@ -116,7 +163,7 @@
             border-radius: 8px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             margin-bottom: clamp(10px, 1.04vw, 20px);
-            overflow: hidden;
+            overflow: visible;
             border: 1px solid #ddd; /* 与datacapture.php中的excel-table-container边框一致 */
             border-radius: 4px; /* 与datacapture.php中的excel-table-container圆角一致 */
         }
@@ -159,16 +206,10 @@
             font-family: Arial, sans-serif;
         }
 
-        .table-wrapper {
+        .summary-table-x-scroll {
             overflow-x: auto;
-            overflow-y: auto;
-        }
-
-        /* Summary Table fixed viewport (approx 10 rows) with vertical scroll，允许横向滚动以完整显示 id_product */
-        #summaryTableContainer .table-wrapper {
-            /* height: clamp(230px, 16.67vw, 320px); */ /* ~10 rows incl. header - removed height restriction */
-            overflow-x: auto;
-            overflow-y: auto;
+            overflow-y: visible;
+            max-height: none;
         }
 
         /* Captured Data Table fixed viewport (approx 10 rows) with vertical scroll */
@@ -443,19 +484,19 @@
             color: #6c757d; /* 变灰，表示该行已被标记 */
         }
 
-        /* Confirmation Modal Styles */
+        /* Confirmation Modal Styles — viewport-fixed, centered, unaffected by page scroll */
         .summary-modal {
             display: none;
             position: fixed;
             z-index: 10000;
-            left: 0;
-            top: 0;
+            inset: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
             animation: fadeIn 0.2s ease-out;
             align-items: center;
             justify-content: center;
+            box-sizing: border-box;
         }
 
         /* Center Edit Formula modal within main content area (exclude sidebar) */
@@ -481,8 +522,19 @@
 
         /* Center Confirm Delete modal within right content area (exclude sidebar) */
         #confirmDeleteModal.summary-modal {
+            align-items: center;
+            justify-content: center;
+            padding-top: clamp(12px, 2vh, 24px);
+            padding-bottom: clamp(12px, 2vh, 24px);
             padding-left: clamp(150px, 13.02vw, 250px);
+            padding-right: 20px;
             box-sizing: border-box;
+            pointer-events: none;
+            overflow: visible;
+        }
+
+        #confirmDeleteModal .summary-confirm-modal-content {
+            pointer-events: auto;
         }
 
         /*

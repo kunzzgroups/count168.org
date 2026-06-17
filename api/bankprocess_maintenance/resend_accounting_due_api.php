@@ -297,6 +297,24 @@ try {
         );
         $delDayPap->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
         $removedPap = $delDayPap->rowCount();
+    } elseif ($scheduleFromClient && $newFrequency === 'monthly') {
+        // Monthly：仅清除该应付日锚点的 monthly，避免 Resend 6/12 误删同月 6/15 正常流程账单。
+        $delMonthlyPap = $pdo->prepare(
+            "DELETE FROM process_accounting_posted
+             WHERE company_id = ? AND process_id = ?
+               AND (period_type IN ('monthly','monthly_skipped') OR period_type IS NULL OR period_type = '')
+               AND DATE(posted_date) = ?"
+        );
+        $delMonthlyPap->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
+        $removedPap = $delMonthlyPap->rowCount();
+        $delAnchorConsolidated = $pdo->prepare(
+            "DELETE FROM process_accounting_posted
+             WHERE company_id = ? AND process_id = ?
+               AND period_type IN ('resend_consolidated_range','resend_consolidated_range_skipped')
+               AND DATE(posted_date) = ?"
+        );
+        $delAnchorConsolidated->execute([$company_id, $bankProcessId, $effectiveDayStartYmd]);
+        $removedPap += $delAnchorConsolidated->rowCount();
     } else {
         // 仅清除 day_start 所在月份的 posted 标记，避免一次 Resend 把整合同期都补回。
         // 兜底：

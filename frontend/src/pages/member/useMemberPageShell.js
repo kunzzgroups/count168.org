@@ -6,6 +6,7 @@ import { formatMemberRole, getMemberText } from "../../translateFile/pages/membe
 import { ensureMaintenanceDateRangePicker } from "../../utils/date/dateRangePicker.js";
 import { useExpirationReminder } from "../../hooks/useExpirationReminder.js";
 import { clearDashboardFilterSession, clearOwnerCompaniesCache } from "../../utils/company/sharedCompanyFilter.js";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 
 function readCookie(name) {
   const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
@@ -85,12 +86,12 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
         const meRes = await fetch(buildApiUrl("api/session/current_user_api.php"), { credentials: "include" });
         const meJson = await meRes.json();
         if (!meRes.ok || !meJson.success || !meJson.data) {
-          navigate("/login", { replace: true });
+          navigate(spaPath("login"), { replace: true });
           return;
         }
         const u = meJson.data;
         if (String(u.user_type || "").toLowerCase() !== "member") {
-          navigate("/dashboard", { replace: true });
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
         const loginId = Number(u.member_login_account_id || u.user_id) || 0;
@@ -105,7 +106,7 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
           initSession(u, u.company_id, mondayDmy, todayDmy);
         }
       } catch {
-        if (!cancelled) navigate("/login", { replace: true });
+        if (!cancelled) navigate(spaPath("login"), { replace: true });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -207,7 +208,7 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
       clearOwnerCompaniesCache();
       setLogoutLoading(false);
       setShowLogoutConfirm(false);
-      window.location.assign(new URL("/login", window.location.origin).href);
+      window.location.assign(new URL(spaPath("login"), window.location.origin).href);
     }
   }, [logoutLoading]);
 

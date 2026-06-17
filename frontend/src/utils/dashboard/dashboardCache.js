@@ -103,14 +103,139 @@ export function patchDashboardCache(key, patch) {
   setDashboardCache(key, { ...prev, ...patch });
 }
 
-/** Earnings rows are identical across display-currency scopes — reuse from a sibling cache entry. */
-export function findSharedDashboardEarnings(scopeKeys, expectedCount) {
+/** Stable signature for a currency code list (earnings rows must match exactly). */
+export function earningsCodesSignature(codes) {
+  return [...new Set(
+    (codes || []).map((c) => String(c || "").trim().toUpperCase()).filter(Boolean)
+  )].sort().join(",");
+}
+
+/** True when every expected code has a row with a numeric earnings value. */
+export function earningsRowsMatchCodes(rows, codes) {
+  const expected = earningsCodesSignature(codes).split(",").filter(Boolean);
+  if (!expected.length) return false;
+  if (!Array.isArray(rows) || rows.length !== expected.length) return false;
+  const rowCodes = rows
+    .map((row) => String(row?.code || "").trim().toUpperCase())
+    .filter(Boolean)
+    .sort();
+  if (rowCodes.join(",") !== expected.sort().join(",")) return false;
+  return rows.every((row) => row.earnings != null && Number.isFinite(Number(row.earnings)));
+}
+
+/** Suspicious when 2+ currencies share the same earnings (stale mirrored cache). */
+export function earningsRowsLookUniform(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return false;
+  const values = rows
+    .map((row) => Number(row?.earnings))
+    .filter((n) => Number.isFinite(n));
+  if (values.length < 2) return false;
+  const first = values[0];
+  return values.every((n) => Math.abs(n - first) < 0.01);
+}
+
+/**
+ * Non-primary row copied from primary KPI (common stale seed when only 2 currencies).
+ */
+export function earningsRowsDuplicatePrimary(rows, primaryCode) {
+  if (!Array.isArray(rows) || rows.length < 2 || primaryCode == null) return false;
+  const primary = String(primaryCode).trim().toUpperCase();
+  if (!primary) return false;
+  const primaryRow = rows.find(
+    (r) => String(r?.code || "").trim().toUpperCase() === primary
+  );
+  if (primaryRow?.earnings == null || !Number.isFinite(Number(primaryRow.earnings))) {
+    return false;
+  }
+  const primaryValue = Number(primaryRow.earnings);
+  return rows.some((row) => {
+    const code = String(row?.code || "").trim().toUpperCase();
+    if (!code || code === primary || row.earnings == null) return false;
+    return Math.abs(Number(row.earnings) - primaryValue) < 0.02;
+  });
+}
+
+/** Clear non-primary rows that mirror the primary KPI so UI can refetch real values. */
+export function sanitizeDuplicateNonPrimaryEarnings(rows, primaryCode, primaryEarnings = null) {
+  if (!Array.isArray(rows) || rows.length < 2 || primaryCode == null) return rows;
+  const primary = String(primaryCode).trim().toUpperCase();
+  if (!primary) return rows;
+  let primaryValue = null;
+  if (primaryEarnings != null && Number.isFinite(Number(primaryEarnings))) {
+    primaryValue = Number(primaryEarnings);
+  } else {
+    const primaryRow = rows.find(
+      (r) => String(r?.code || "").trim().toUpperCase() === primary
+    );
+    if (primaryRow?.earnings != null && Number.isFinite(Number(primaryRow.earnings))) {
+      primaryValue = Number(primaryRow.earnings);
+    }
+  }
+  if (primaryValue == null) return rows;
+  return rows.map((row) => {
+    const code = String(row?.code || "").trim().toUpperCase();
+    if (!code || code === primary || row.earnings == null) return row;
+    if (Math.abs(Number(row.earnings) - primaryValue) < 0.02) {
+      return { ...row, earnings: null };
+    }
+    return row;
+  });
+}
+
+/**
+ * Primary display currency row must match live KPI earnings when provided.
+ */
+export function earningsRowsPrimaryMatches(rows, primaryCode, primaryEarnings) {
+  if (primaryCode == null || String(primaryCode).trim() === "") return true;
+  if (primaryEarnings == null || !Number.isFinite(Number(primaryEarnings))) return true;
+  const primary = String(primaryCode).trim().toUpperCase();
+  const row = (rows || []).find(
+    (r) => String(r?.code || "").trim().toUpperCase() === primary
+  );
+  if (!row || row.earnings == null) return false;
+  return Math.abs(Number(row.earnings) - Number(primaryEarnings)) < 0.02;
+}
+
+export function earningsRowsAreUsable(rows, codes, primaryCode = null, primaryEarnings = null) {
+  if (!earningsRowsMatchCodes(rows, codes)) return false;
+  if (earningsRowsLookUniform(rows)) return false;
+  if (earningsRowsDuplicatePrimary(rows, primaryCode)) return false;
+  if (!earningsRowsPrimaryMatches(rows, primaryCode, primaryEarnings)) return false;
+  return true;
+}
+
+/** Drop cached earnings on sibling currency scopes (e.g. after currency pill list changes). */
+export function clearEarningsFromScopeKeys(scopeKeys) {
   const keys = Array.isArray(scopeKeys) ? scopeKeys : [scopeKeys];
+  for (const key of keys) {
+    if (!key || !store.has(key)) continue;
+    const entry = store.get(key);
+    if (!entry || entry.earnings == null) continue;
+    const { earnings: _removed, ...rest } = entry;
+    store.set(key, rest);
+  }
+}
+
+/**
+ * Earnings breakdown is shared across display-currency scopes — reuse from a sibling cache
+ * only when row codes match the active currency list and data passes sanity checks.
+ */
+export function findSharedDashboardEarnings(scopeKeys, codes, primaryCode = null, primaryEarnings = null) {
+  const keys = Array.isArray(scopeKeys) ? scopeKeys : [scopeKeys];
+  const codeList = typeof codes === "number"
+    ? null
+    : (Array.isArray(codes) ? codes : String(codes || "").split(","));
+  const expectedCount = typeof codes === "number" ? codes : (codeList?.length ?? 0);
+
   for (const key of keys) {
     if (!key) continue;
     const earnings = store.get(key)?.earnings;
     if (!Array.isArray(earnings) || !earnings.length) continue;
-    if (expectedCount > 0 && earnings.length !== expectedCount) continue;
+    if (codeList) {
+      if (!earningsRowsAreUsable(earnings, codeList, primaryCode, primaryEarnings)) continue;
+    } else if (expectedCount > 0 && earnings.length !== expectedCount) {
+      continue;
+    }
     return earnings;
   }
   return null;

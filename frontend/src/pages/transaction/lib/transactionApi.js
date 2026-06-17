@@ -286,6 +286,7 @@ export async function getHistory({
   viewGroup,
   groupId,
   groupAggregate,
+  subsidiaryAccountsOnly,
   accountId,
   dateFrom,
   dateTo,
@@ -294,7 +295,13 @@ export async function getHistory({
   signal,
 } = {}) {
   const params = new URLSearchParams();
-  appendTransactionScope(params, { companyId, viewGroup, groupId, groupAggregate });
+  appendTransactionScope(params, {
+    companyId,
+    viewGroup,
+    groupId,
+    groupAggregate,
+    subsidiaryAccountsOnly,
+  });
   if (accountId != null && accountId !== "") params.set("account_id", String(accountId));
   if (dateFrom) params.set("date_from", String(dateFrom));
   if (dateTo) params.set("date_to", String(dateTo));

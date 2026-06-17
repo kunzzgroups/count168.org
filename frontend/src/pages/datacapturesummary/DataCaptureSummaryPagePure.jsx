@@ -25,6 +25,8 @@ import { useSummaryCaptureBootstrap } from "./hooks/useSummaryCaptureBootstrap.j
 
 import { useSummaryTableModel } from "./hooks/useSummaryTableModel.js";
 
+import { useSummaryPageScroll, useSummaryRefreshPersist } from "./hooks/useSummaryRefreshPersist.js";
+
 import { useSummaryPageActionsPure } from "./hooks/useSummaryPageActionsPure.js";
 
 import { useSummaryEditFormulaPure } from "./hooks/useSummaryEditFormulaPure.js";
@@ -48,6 +50,7 @@ import { saveSummaryTemplatePure } from "./formula/summarySaveTemplatePure.js";
 import { recalculateRowAmounts } from "./table/summaryRowAmount.js";
 import { pushSummaryNotification } from "./lib/summaryNotify.js";
 
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 import {
 
   getDataCaptureSummaryText,
@@ -149,9 +152,27 @@ function DataCaptureSummaryPureInner() {
 
     serverState: capture.serverState,
 
+    serverStateLoading: capture.serverStateLoading,
+
+    serverStateQueryEnabled: capture.serverStateQueryEnabled,
+
     searchParams,
 
     t,
+
+  });
+
+
+
+  useSummaryRefreshPersist({
+
+    captureScope,
+
+    processId: capture.processId,
+
+    processCode: capture.processCode,
+
+    enabled: sessionReady && capture.hasCaptureData,
 
   });
 
@@ -315,6 +336,8 @@ function DataCaptureSummaryPureInner() {
 
   }, []);
 
+  useSummaryPageScroll(capture.hasCaptureData ? rows.length : 0);
+
 
 
   useEffect(() => {
@@ -373,7 +396,7 @@ function DataCaptureSummaryPureInner() {
 
       clearSummaryCaptureRoundStorage();
 
-      navigate("/datacapture", { replace: true });
+      navigate(spaPath("datacapture"), { replace: true });
 
     }
 
@@ -637,8 +660,6 @@ function DataCaptureSummaryPureInner() {
 
         saveDisabled={editFormula.saveDisabled}
         saving={editFormula.saving}
-
-        usedAccountIds={editFormula.usedAccountIds}
 
         onAccountSelect={editFormula.handleAccountSelect}
 

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { getAnnouncementText } from "../../translateFile/pages/announcementTranslate.js";
 import "../../../public/css/announcement.css";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 
 // Components
 import { AnnouncementToast, AnnouncementConfirmModal } from "./components/AnnouncementCommon.jsx";
@@ -93,12 +94,12 @@ export default function AnnouncementPage() {
     (async () => {
       try {
         if (!canAccessC168DomainPages(me)) {
-          navigate("/dashboard", { replace: true });
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
         await Promise.all([loadAnnouncements(), loadMaintenance()]);
       } catch {
-        if (!cancelled) navigate("/login", { replace: true });
+        if (!cancelled) navigate(spaPath("login"), { replace: true });
       }
     })();
     return () => {
@@ -179,9 +180,9 @@ export default function AnnouncementPage() {
     <>
       <div className="container announcement-page-container">
         <div className="page-header">
-          <div className="page-tabs">
-            <button type="button" className={`page-tab${activeTab === "announcement" ? " active" : ""}`} onClick={() => setActiveTab("announcement")}>{t("announcementTab")}</button>
-            <button type="button" className={`page-tab${activeTab === "maintenance" ? " active" : ""}`} onClick={() => setActiveTab("maintenance")}>{t("maintenanceTab")}</button>
+          <div className="page-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={activeTab === "announcement"} className={`page-tab${activeTab === "announcement" ? " active" : ""}`} onClick={() => setActiveTab("announcement")}>{t("announcementTab")}</button>
+            <button type="button" role="tab" aria-selected={activeTab === "maintenance"} className={`page-tab${activeTab === "maintenance" ? " active" : ""}`} onClick={() => setActiveTab("maintenance")}>{t("maintenanceTab")}</button>
           </div>
         </div>
         {activeTab === "announcement" && <AnnouncementPanel t={t} announcements={announcements} onEdit={handleAnnouncementEdit} onDelete={handleAnnouncementDelete} />}

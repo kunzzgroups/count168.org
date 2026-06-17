@@ -29,18 +29,21 @@ export default function ConfirmDeleteModal({
   confirmClassName = "btn btn-delete confirm-delete",
   onConfirm,
   onClose,
+  modalId = "confirmDeleteModal",
   zIndex = CONFIRM_DELETE_Z_INDEX,
   confirmDisabled = false,
 }) {
   if (!open) return null;
+  const titleId = `${modalId}Title`;
+  const messageId = `${modalId}Message`;
 
   return portalToDocumentBody(
     <div
-      id="confirmDeleteModal"
+      id={modalId}
       className="confirm-delete-modal-overlay"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="confirmDeleteModalTitle"
+      aria-labelledby={titleId}
       style={{ zIndex }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
@@ -48,10 +51,10 @@ export default function ConfirmDeleteModal({
     >
       <div className="confirm-delete-modal-content domain-confirm-modal-content">
         <div className="confirm-delete-modal-icon-container confirm-icon-container">{WARNING_ICON}</div>
-        <h2 id="confirmDeleteModalTitle" className="confirm-delete-modal-title confirm-title">
+        <h2 id={titleId} className="confirm-delete-modal-title confirm-title">
           {title}
         </h2>
-        <p id="confirmDeleteMessage" className="confirm-delete-modal-message confirm-message">
+        <p id={messageId} className="confirm-delete-modal-message confirm-message">
           {message}
         </p>
         <div className="confirm-delete-modal-actions confirm-actions">

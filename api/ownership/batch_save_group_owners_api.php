@@ -71,6 +71,82 @@ if (money_cmp($total_percentage, '100', 2) > 0) {
     exit();
 }
 
+$monthRaw = $inputData['month'] ?? null;
+$parsedMonth = ownership_history_parse_month_param($monthRaw);
+$saveHistoryOnly = $parsedMonth !== null && ownership_history_is_past_month($parsedMonth['month_key']);
+
+if ($saveHistoryOnly) {
+    try {
+        ownership_history_ensure_tables($pdo);
+        $effectiveMonth = $parsedMonth['effective_month'];
+
+        $sessionRole = strtolower($_SESSION['role'] ?? '');
+        if ($sessionRole === 'owner') {
+            $owner_id = (int)($_SESSION['real_owner_id'] ?? $_SESSION['owner_id'] ?? $_SESSION['user_id']);
+        } else {
+            $stmtOwn = $pdo->prepare("SELECT DISTINCT owner_id FROM company WHERE UPPER(TRIM(group_id)) = UPPER(TRIM(?)) LIMIT 1");
+            $stmtOwn->execute([$group_id]);
+            $owner_id = (int) $stmtOwn->fetchColumn();
+        }
+        if ($owner_id <= 0) {
+            $owner_id = ownership_history_resolve_group_owner_id($pdo, $group_id);
+        }
+
+        $existingGroups = [];
+        $existingReadOnly = [];
+        $stmtGroups = $pdo->prepare("
+            SELECT account_id, partner_group_id, COALESCE(read_only, 1) as read_only
+            FROM group_ownership_history
+            WHERE group_id = ? AND effective_month = ? AND owner_type = 'owner'
+        ");
+        $stmtGroups->execute([$group_id, $effectiveMonth]);
+        while ($row = $stmtGroups->fetch(PDO::FETCH_ASSOC)) {
+            $existingGroups[(int) $row['account_id']] = $row['partner_group_id'];
+            $existingReadOnly[(int) $row['account_id']] = (int) $row['read_only'];
+        }
+
+        $existingGroupReadOnly = [];
+        $stmtGrp = $pdo->prepare("
+            SELECT partner_group_id, COALESCE(read_only, 1) as read_only
+            FROM group_ownership_history
+            WHERE group_id = ? AND effective_month = ? AND owner_type = 'group'
+        ");
+        $stmtGrp->execute([$group_id, $effectiveMonth]);
+        while ($row = $stmtGrp->fetch(PDO::FETCH_ASSOC)) {
+            $key = strtoupper(trim((string) $row['partner_group_id']));
+            if ($key !== '') {
+                $existingGroupReadOnly[$key] = (int) $row['read_only'];
+            }
+        }
+
+        $historyRows = ownership_build_group_history_rows_from_payload(
+            $owners,
+            $existingGroups,
+            $existingReadOnly,
+            $existingGroupReadOnly
+        );
+        $savedBy = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+
+        $pdo->beginTransaction();
+        ownership_history_save_group_for_month($pdo, $group_id, $owner_id, $historyRows, $savedBy, $effectiveMonth);
+        $pdo->commit();
+
+        echo json_encode([
+            'status'  => 'success',
+            'message' => 'Historical group ownership saved successfully',
+        ]);
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Database error: ' . $e->getMessage(),
+        ]);
+    }
+    exit();
+}
+
 try {
     // Auto-create table if not exists
     $pdo->exec("

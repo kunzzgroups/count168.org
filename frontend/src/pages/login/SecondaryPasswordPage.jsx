@@ -4,6 +4,7 @@ import { SECONDARY_VERIFY_I18N } from "../../translateFile/auth/authTranslate.js
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import SecondaryVerifyBackButton from "./SecondaryVerifyBackButton.jsx";
 import { useAuthBackground } from "./useAuthBackground.js";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 
 const VARIANT_CONFIG = {
   owner: {
@@ -55,19 +56,19 @@ export default function SecondaryPasswordPage({ variant }) {
         });
         const json = await res.json();
         if (!res.ok || !json?.success || !json?.data) {
-          if (!cancelled) navigate("/login", { replace: true });
+          if (!cancelled) navigate(spaPath("login"), { replace: true });
           return;
         }
         const user = json.data;
         if (String(user.user_type || "").toLowerCase() !== config.expectedUserType) {
-          if (!cancelled) navigate("/login", { replace: true });
+          if (!cancelled) navigate(spaPath("login"), { replace: true });
           if (config.returnAfterWrongUserType) return;
         }
         if (config.shouldRedirectToDashboard(user)) {
-          if (!cancelled) navigate("/dashboard", { replace: true });
+          if (!cancelled) navigate(spaPath("dashboard"), { replace: true });
         }
       } catch {
-        if (!cancelled) navigate("/login", { replace: true });
+        if (!cancelled) navigate(spaPath("login"), { replace: true });
       }
     })();
     return () => {
@@ -100,7 +101,7 @@ export default function SecondaryPasswordPage({ variant }) {
     } catch {
       // still return to login
     }
-    window.location.assign(new URL("/login", window.location.origin).href);
+    window.location.assign(new URL(spaPath("login"), window.location.origin).href);
   };
 
   const onSubmit = async (e) => {
@@ -125,7 +126,7 @@ export default function SecondaryPasswordPage({ variant }) {
       });
       const json = await res.json();
       if (res.ok && json?.success) {
-        navigate("/dashboard", { replace: true });
+        navigate(spaPath("dashboard"), { replace: true });
         return;
       }
       setErrorMessage(json?.message || i18n.genericError);

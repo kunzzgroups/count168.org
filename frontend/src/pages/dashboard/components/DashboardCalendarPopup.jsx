@@ -1,8 +1,13 @@
 import { parseYmd } from "../lib/dashboardDateUtils.js";
 
-export function DashboardCalendarPopup({ i18n, periodPresets, dateFrom }) {
+export function DashboardCalendarPopup({ i18n, periodPresets, dateFrom, className = "" }) {
   return (
-    <div className="calendar-popup calendar-popup--transaction-range" id="calendar-popup" style={{ display: "none" }}>
+    <div
+      className={`calendar-popup calendar-popup--transaction-range ${className}`.trim()}
+      id="calendar-popup"
+      style={{ display: "none" }}
+      aria-hidden="true"
+    >
       <div className="transaction-calendar-presets" aria-label={i18n.periodShortcutsAria}>
         {periodPresets.map(([key, label]) => (
           <button

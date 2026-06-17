@@ -28,10 +28,9 @@ import MemberMoneyCell from "./components/MemberMoneyCell.jsx";
 import MemberGridAccountPills from "./components/MemberGridAccountPills.jsx";
 import {
   computeTableTotals,
-  WINLOSS_ACCOUNT_SEGMENT_MAX_BUTTONS,
+  splitWinLossAccountBands,
   WINLOSS_ACCOUNT_SEGMENT_MAX_BUTTONS_NARROW,
   WINLOSS_ACCOUNT_SEGMENT_NARROW_MQ,
-  WINLOSS_CURRENCY_SEGMENT_MAX_BUTTONS,
 } from "./memberPageHelpers.js";
 import { useMemberWinLoss } from "./useMemberWinLoss.js";
 import { useMemberPageShell } from "./useMemberPageShell.js";
@@ -54,8 +53,14 @@ export default function MemberPage() {
 
   const wlFiltersColRef = useRef(null);
   const wlMatrixColRef = useRef(null);
+  const accountButtonsRef = useRef(null);
+  const accountMeasureRef = useRef(null);
+  const currencyButtonsRef = useRef(null);
+  const currencyMeasureRef = useRef(null);
   const [wlFiltersSyncPx, setWlFiltersSyncPx] = useState(null);
   const [accountNarrowViewport, setAccountNarrowViewport] = useState(false);
+  const [accountLayout, setAccountLayout] = useState({ containerWidth: 0, segmentWidths: [] });
+  const [currencyLayout, setCurrencyLayout] = useState({ containerWidth: 0, segmentWidths: [] });
   const [notifications, setNotifications] = useState([]);
 
   const showNotification = useCallback((message, type = "info") => {
@@ -78,7 +83,6 @@ export default function MemberPage() {
     dateTo,
     setDateTo,
     linkedAccounts,
-    viewGridAccounts,
     wlGridSelectedIds,
     linkedAccountCurrenciesMap,
     linkedCurrenciesLoaded,
@@ -146,20 +150,6 @@ export default function MemberPage() {
     lang,
   });
 
-  const accountMaxPerBand = accountNarrowViewport
-    ? WINLOSS_ACCOUNT_SEGMENT_MAX_BUTTONS_NARROW
-    : WINLOSS_ACCOUNT_SEGMENT_MAX_BUTTONS;
-
-  /** Account 多段：每段最多 N 格，超出自动换行；窄屏减少每行格数以完整显示户名 */
-  const accountFilterBands = useMemo(() => {
-    const accounts = Array.isArray(linkedAccounts) ? linkedAccounts : [];
-    const bands = [];
-    for (let i = 0; i < accounts.length; i += accountMaxPerBand) {
-      bands.push(accounts.slice(i, i + accountMaxPerBand));
-    }
-    return bands;
-  }, [linkedAccounts, accountMaxPerBand]);
-
   useEffect(() => {
     const mq = window.matchMedia(WINLOSS_ACCOUNT_SEGMENT_NARROW_MQ);
     const update = () => setAccountNarrowViewport(mq.matches);
@@ -168,22 +158,97 @@ export default function MemberPage() {
     return () => mq.removeEventListener("change", update);
   }, []);
 
-  /** Currency 多段：每段最多 8 格（含 All），满一行自动换到下一排 segment 白底条 */
-  const currencyFilterBands = useMemo(() => {
+  const accountFilterBands = useMemo(
+    () =>
+      splitWinLossAccountBands(
+        linkedAccounts,
+        accountLayout.segmentWidths,
+        accountLayout.containerWidth,
+      ),
+    [linkedAccounts, accountLayout.containerWidth, accountLayout.segmentWidths],
+  );
+
+  useLayoutEffect(() => {
+    const container = accountButtonsRef.current;
+    const measure = accountMeasureRef.current;
+    if (!container || !measure) return undefined;
+
+    const update = () => {
+      const containerWidth = Math.max(container.clientWidth, 0);
+      const buttons = measure.querySelectorAll("button.user-gc-segment");
+      const segmentWidths = Array.from(buttons).map((btn) => btn.offsetWidth);
+      setAccountLayout((prev) => {
+        if (
+          prev.containerWidth === containerWidth
+          && prev.segmentWidths.length === segmentWidths.length
+          && prev.segmentWidths.every((w, i) => w === segmentWidths[i])
+        ) {
+          return prev;
+        }
+        return { containerWidth, segmentWidths };
+      });
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      ro.disconnect();
+    };
+  }, [linkedAccounts, viewAccountId, accountNarrowViewport, lang]);
+
+  const currencyCells = useMemo(() => {
     const codes = Array.isArray(availableCurrencies) ? availableCurrencies : [];
     const showAllBtn = codes.length === 0 || codes.length > 1;
-    const maxPerBand = WINLOSS_CURRENCY_SEGMENT_MAX_BUTTONS;
 
     const cells = [];
     if (showAllBtn) cells.push({ type: "all" });
     codes.forEach((c) => cells.push({ type: "code", code: c }));
-
-    const bands = [];
-    for (let i = 0; i < cells.length; i += maxPerBand) {
-      bands.push(cells.slice(i, i + maxPerBand));
-    }
-    return bands;
+    return cells;
   }, [availableCurrencies]);
+
+  const currencyFilterBands = useMemo(
+    () =>
+      splitWinLossAccountBands(
+        currencyCells,
+        currencyLayout.segmentWidths,
+        currencyLayout.containerWidth,
+      ),
+    [currencyCells, currencyLayout.containerWidth, currencyLayout.segmentWidths],
+  );
+
+  useLayoutEffect(() => {
+    const container = currencyButtonsRef.current;
+    const measure = currencyMeasureRef.current;
+    if (!container || !measure) return undefined;
+
+    const update = () => {
+      const containerWidth = Math.max(container.clientWidth, 0);
+      const buttons = measure.querySelectorAll("button.user-gc-segment");
+      const segmentWidths = Array.from(buttons).map((btn) => btn.offsetWidth);
+      setCurrencyLayout((prev) => {
+        if (
+          prev.containerWidth === containerWidth
+          && prev.segmentWidths.length === segmentWidths.length
+          && prev.segmentWidths.every((w, i) => w === segmentWidths[i])
+        ) {
+          return prev;
+        }
+        return { containerWidth, segmentWidths };
+      });
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      ro.disconnect();
+    };
+  }, [currencyCells, selectedCurrencies, isAllSelected, lang, accountNarrowViewport]);
 
   const handleWinLossCurrencyCodeDrop = useCallback(
     (e) => {
@@ -202,7 +267,7 @@ export default function MemberPage() {
     [availableCurrencies, persistCurrencyOrder],
   );
 
-  const periodPresets = useMemo(() => buildMaintenancePeriodPresets(t), [t]);
+  const periodPresets = useMemo(() => buildMaintenancePeriodPresets(maintenanceLocale), [maintenanceLocale]);
 
   const handleDateRangeChange = useCallback(
     (start, end) => {
@@ -416,17 +481,37 @@ export default function MemberPage() {
                   <div
                     className="user-gc-inline-pills member-winloss-account-pills"
                     id="member_account_buttons"
+                    ref={accountButtonsRef}
                     role="group"
                     aria-label={t("ariaAccount")}
                   >
+                    <div
+                      ref={accountMeasureRef}
+                      className="member-winloss-account-measure"
+                      aria-hidden="true"
+                    >
+                      {linkedAccounts.map((acc) => {
+                        const accountLabel = String(acc.account_id || acc.name || acc.id);
+                        const isOn = Number(acc.id) === Number(viewAccountId);
+                        return (
+                          <button
+                            key={`measure-${acc.id}`}
+                            type="button"
+                            tabIndex={-1}
+                            className={`user-gc-segment${isOn ? " is-on" : ""}`}
+                          >
+                            <span className="member-winloss-account-pill-label">{accountLabel}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                     {accountFilterBands.map((band, segIdx) => (
                       <div
                         key={`member-acc-band-${segIdx}`}
                         className="user-gc-segment-group member-winloss-account-segments"
                         style={{
-                          width: `${(band.length / accountMaxPerBand) * 100}%`,
+                          width: "fit-content",
                           maxWidth: "100%",
-                          gridTemplateColumns: `repeat(${band.length}, minmax(max-content, 1fr))`,
                         }}
                       >
                         {band.map((acc) => {
@@ -452,16 +537,39 @@ export default function MemberPage() {
                 <div
                   className="user-gc-inline-pills member-winloss-currency-pills"
                   id="member_currency_buttons"
+                  ref={currencyButtonsRef}
                   role="group"
                   aria-label={t("ariaCurrency")}
                 >
+                  <div
+                    ref={currencyMeasureRef}
+                    className="member-winloss-currency-measure"
+                    aria-hidden="true"
+                  >
+                    {currencyCells.map((cell) =>
+                      cell.type === "all" ? (
+                        <button key="member-ccy-measure-all" type="button" tabIndex={-1} className="user-gc-segment">
+                          {t("all")}
+                        </button>
+                      ) : (
+                        <button
+                          key={`member-ccy-measure-${cell.code}`}
+                          type="button"
+                          tabIndex={-1}
+                          className="user-gc-segment"
+                        >
+                          {cell.code}
+                        </button>
+                      ),
+                    )}
+                  </div>
                   {currencyFilterBands.map((band, segIdx) => (
                     <div
                       key={`member-ccy-band-${segIdx}`}
                       className="user-gc-segment-group member-winloss-currency-segments"
                       style={{
-                        width: `${(band.length / WINLOSS_CURRENCY_SEGMENT_MAX_BUTTONS) * 100}%`,
-                        gridTemplateColumns: `repeat(${band.length}, minmax(0, 1fr))`,
+                        width: "fit-content",
+                        maxWidth: "100%",
                       }}
                     >
                       {band.map((cell) =>
@@ -480,7 +588,7 @@ export default function MemberPage() {
                             type="button"
                             draggable
                             data-currency={cell.code}
-                            className={`user-gc-segment user-gc-segment--draggable-pill${isAllSelected || selectedCurrencies.includes(cell.code) ? " is-on" : ""}`}
+                            className={`user-gc-segment user-gc-segment--draggable-pill${!isAllSelected && selectedCurrencies.includes(cell.code) ? " is-on" : ""}`}
                             onDragStart={(e) => {
                               e.dataTransfer.setData("text/plain", cell.code);
                               e.dataTransfer.effectAllowed = "move";
@@ -502,10 +610,10 @@ export default function MemberPage() {
               {showMiniRail && (
                 <>
                   <div className="member-dash-col member-dash-col-matrix" ref={wlMatrixColRef} aria-hidden="false">
-                    {(viewGridAccounts.length > 0 || linkedAccounts.length > 0) && (
+                    {linkedAccounts.length > 0 && (
                       <div className="member-dash-rail-toolbar member-dash-matrix-toolbar">
                         <MemberGridAccountPills
-                          linkedAccounts={viewGridAccounts.length ? viewGridAccounts : linkedAccounts}
+                          linkedAccounts={linkedAccounts}
                           selectedIds={wlGridSelectedIds}
                           onApply={applyWlGridSelection}
                           onNotify={showNotification}

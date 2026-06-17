@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import {
   applyGroupOnlyCaptureRestoreFilter,
   captureSessionMatchesScope,
@@ -87,7 +88,11 @@ export function useDataCaptureSubmitReset({
   navigate,
   t,
   requireDescriptions = true,
-  groupOnlyCapture = false,
+  groupPayrollUi = false,
+  groupLedgerCapture = false,
+  groupPayrollCapture = false,
+  payrollDraftBucket = null,
+  payrollDraftServerSync = true,
   selectedGroup = null,
 }) {
   const { selectedDescriptions, clearSelectedDescriptions, gridRef, gridVersion, replaceGrid } =
@@ -120,10 +125,10 @@ export function useDataCaptureSubmitReset({
       captureType: activeCaptureType,
       tableData,
       requireDescriptions,
-      requireTableData: groupOnlyCapture,
+      requireTableData: groupPayrollUi,
     });
     setSubmitDisabled(!ready);
-  }, [form.selectedProcess, form.currencyId, form.descriptionDisplay, requireDescriptions, groupOnlyCapture, selectedDescriptions, gridRef]);
+  }, [form.selectedProcess, form.currencyId, form.descriptionDisplay, requireDescriptions, groupPayrollUi, selectedDescriptions, gridRef]);
 
   useEffect(() => {
     recomputeSubmitState();
@@ -151,7 +156,7 @@ export function useDataCaptureSubmitReset({
       captureType: activeCaptureType,
       tableData,
       requireDescriptions,
-      requireTableData: groupOnlyCapture,
+      requireTableData: groupPayrollUi,
     });
     if (!validation.ok) {
       pushDataCaptureNotification(translateDataCaptureMessage(localStorage.getItem("login_lang") === "zh" ? "zh" : "en", validation.message), "danger");
@@ -171,7 +176,7 @@ export function useDataCaptureSubmitReset({
     prefetchRouteModule("/datacapturesummary");
     try {
       const processData = buildProcessCapturePayload(form, activeCaptureType, form.currencies, selectedDescriptions);
-      if (groupOnlyCapture && isGroupOnlyProcessId(processData.process)) {
+      if (groupPayrollUi && isGroupOnlyProcessId(processData.process)) {
         const code =
           form.selectedProcess?.process_id ||
           processData.processCode ||
@@ -200,29 +205,33 @@ export function useDataCaptureSubmitReset({
         return;
       }
 
+      const draftBucket = payrollDraftBucket || selectedGroup;
       if (
-        groupOnlyCapture &&
-        selectedGroup &&
+        groupPayrollUi &&
+        draftBucket &&
         isGroupOnlyProcessId(form.selectedProcess?.id)
       ) {
         const draftPayload = {
           tableData: preConvertSnapshot,
           captureType: activeCaptureType,
         };
-        saveGroupOnlyTableDraft(selectedGroup, form.selectedProcess.id, form.currencyId, draftPayload, {
-          captureScope,
-        });
+        const draftOptions = { captureScope, serverSync: payrollDraftServerSync };
+        saveGroupOnlyTableDraft(draftBucket, form.selectedProcess.id, form.currencyId, draftPayload, draftOptions);
         await flushGroupOnlyTableDraftToServer(
-          selectedGroup,
+          draftBucket,
           form.selectedProcess.id,
           form.currencyId,
           draftPayload,
           captureScope,
+          draftOptions,
         );
       }
 
       saveCaptureSession(finalTableData, processData, activeCaptureType, {
-        groupOnly: groupOnlyCapture,
+        groupPayrollUi,
+        groupOnly: groupLedgerCapture,
+        groupPayrollCapture,
+        payrollPrefsKey: draftBucket,
         selectedGroup,
         scope: captureScope,
         scopeCompanyId:
@@ -240,10 +249,10 @@ export function useDataCaptureSubmitReset({
 
       markSummaryFreshNavigation();
       if (typeof navigate === "function") {
-        navigate("/datacapturesummary?success=1");
+        navigate(spaPath("datacapturesummary"));
         return;
       }
-      window.location.assign(buildSpaPath("datacapturesummary?success=1"));
+      window.location.assign(buildSpaPath("datacapturesummary"));
     } catch (error) {
       console.error("Error submitting data:", error);
       pushDataCaptureNotification(t("failedCaptureData"), "danger");
@@ -251,25 +260,26 @@ export function useDataCaptureSubmitReset({
       submitInFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [form, captureType, mutationsBlocked, navigate, t, requireDescriptions, groupOnlyCapture, selectedGroup, captureScope, selectedDescriptions, gridRef]);
+  }, [form, captureType, mutationsBlocked, navigate, t, requireDescriptions, groupPayrollUi, groupLedgerCapture, groupPayrollCapture, payrollDraftBucket, payrollDraftServerSync, selectedGroup, captureScope, selectedDescriptions, gridRef]);
 
   const reset = useCallback(() => {
+    const draftBucket = payrollDraftBucket || selectedGroup;
     const groupOnlyProcessId =
-      groupOnlyCapture && selectedGroup && isGroupOnlyProcessId(form.selectedProcess?.id)
+      groupPayrollUi && draftBucket && isGroupOnlyProcessId(form.selectedProcess?.id)
         ? form.selectedProcess.id
         : null;
 
-    if (groupOnlyCapture && selectedGroup) {
+    if (groupPayrollUi && draftBucket) {
       if (groupOnlyProcessId && form.currencyId) {
         const activeCaptureType = getBridgeCaptureType(captureType || "1.Text");
         const tableData = captureTableSnapshot(activeCaptureType, gridRef.current);
         if (tableSnapshotHasData(tableData)) {
           saveGroupOnlyTableDraft(
-            selectedGroup,
+            draftBucket,
             groupOnlyProcessId,
             form.currencyId,
             { tableData, captureType: activeCaptureType },
-            { captureScope, flush: true },
+            { captureScope, flush: true, serverSync: payrollDraftServerSync },
           );
         } else {
           cancelAllScheduledServerDraftSaves();
@@ -281,7 +291,7 @@ export function useDataCaptureSubmitReset({
       clearSelectedDescriptions();
     }
 
-    const { rows, cols } = resolveDataCaptureGridDimensions(groupOnlyCapture);
+    const { rows, cols } = resolveDataCaptureGridDimensions(groupPayrollUi);
     callDataCaptureRuntime("ensureGridReady", rows, cols);
     const current = gridRef.current;
     if (current) {
@@ -299,7 +309,9 @@ export function useDataCaptureSubmitReset({
     recomputeSubmitState();
   }, [
     recomputeSubmitState,
-    groupOnlyCapture,
+    groupPayrollUi,
+    payrollDraftBucket,
+    payrollDraftServerSync,
     selectedGroup,
     captureScope,
     captureType,
@@ -325,10 +337,11 @@ export function useDataCaptureSubmitReset({
 
     getDataCaptureState().isRestoring = true;
     const { tableData, processData, captureType: savedType } = session;
-    const restoringGroupOnly = processData.groupOnlyCapture === true;
+    const restoringGroupLedger =
+      processData.groupOnlyCapture === true && processData.groupPayrollCapture !== true;
 
     try {
-      if (restoringGroupOnly) {
+      if (restoringGroupLedger) {
         applyGroupOnlyCaptureRestoreFilter(processData);
       }
 
@@ -342,7 +355,7 @@ export function useDataCaptureSubmitReset({
       await callDataCaptureRuntime("syncRestoreForm", processData);
 
       const pid = processData.process != null ? String(processData.process) : "";
-      if (pid && captureScope && !restoringGroupOnly && !isGroupOnlyProcessId(pid)) {
+      if (pid && captureScope && !restoringGroupLedger && !isGroupOnlyProcessId(pid)) {
         const res = await fetchProcessDetail(pid, captureScope);
         if (res.success && res.data) {
           await callDataCaptureRuntime("syncRestoreForm", {

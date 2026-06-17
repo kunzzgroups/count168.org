@@ -8,7 +8,7 @@
  * Usage:
  *   php database/scripts/migrate_legacy_group_entity_to_group_scope.php --group=AP [--dry-run]
  *   php database/scripts/migrate_legacy_group_entity_to_group_scope.php --group=AP --legacy-company-id=312
- *   php database/scripts/migrate_legacy_group_entity_to_group_scope.php --group=AP --source-db=c168org_src
+ *   php database/scripts/migrate_legacy_group_entity_to_group_scope.php --group=AP --source-db=c168site_src
  */
 declare(strict_types=1);
 

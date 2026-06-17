@@ -4,6 +4,7 @@ require_once '../../includes/config.php';
 require_once '../../includes/group_company_access.php';
 require_once '../includes/money_decimal.php';
 require_once '../includes/ownership_history.php';
+require_once '../includes/ownership_schema.php';
 
 header('Content-Type: application/json');
 
@@ -20,8 +21,7 @@ $parsedMonth = ownership_history_parse_month_param($_GET['month'] ?? null);
 $useHistory = $parsedMonth !== null && ownership_history_is_past_month($parsedMonth['month_key']);
 
 try {
-    // Check if the table exists first (to prevent fatals if SQL wasn't run)
-    $tableExists = $pdo->query("SHOW TABLES LIKE 'company_ownership'")->rowCount() > 0;
+    $tableExists = ownership_table_exists($pdo, 'company_ownership');
     
     // Get companies available to this user
     require_once '../get_companies_helper.php';
@@ -75,7 +75,7 @@ try {
             $stmt->execute(array_merge($company_ids, [$parsedMonth['effective_month']]));
             $totals = $stmt->fetchAll(PDO::FETCH_KEY_PAIR);
         } elseif ($tableExists) {
-            $hasOwnerType = $pdo->query("SHOW COLUMNS FROM company_ownership LIKE 'owner_type'")->rowCount() > 0;
+            $hasOwnerType = ownership_column_exists($pdo, 'company_ownership', 'owner_type');
 
             if ($hasOwnerType) {
                 $stmt = $pdo->prepare("

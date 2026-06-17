@@ -3,7 +3,7 @@ import CompanyCard from "./components/CompanyCard.jsx";
 import { countOwnershipSubsidiariesInGroup } from "../shared/ownershipHelpers.js";
 
 export default function CompanyOwnershipTab({ shell, company }) {
-  const { t, loadingList, allCompanies, isHistoricalView } = shell;
+  const { t, loadingList, allCompanies, isHistoricalView, readOnlyMode } = shell;
   const {
     groupFilter,
     setGroupFilter,
@@ -22,6 +22,7 @@ export default function CompanyOwnershipTab({ shell, company }) {
     calcTotal,
     fmtPct,
     viewOnlyMode,
+    adminLocked,
     toggleCard,
     toggleCompanySelect,
     joinGroup,
@@ -61,7 +62,7 @@ export default function CompanyOwnershipTab({ shell, company }) {
           <button
             type="button"
             className={`own-select-mode-btn${selectionMode ? " active" : ""}`}
-            style={{ display: viewOnlyMode ? "none" : "" }}
+            style={{ display: adminLocked ? "none" : "" }}
             onClick={toggleSelectionMode}
           >
             {selectionMode ? (
@@ -120,7 +121,7 @@ export default function CompanyOwnershipTab({ shell, company }) {
               onConfirm={confirmCompany}
               onCancel={() => setExpandedCompanyId(null)}
               calcTotal={calcTotal}
-              readOnlyMode={viewOnlyMode}
+              readOnlyMode={readOnlyMode}
               isHistoricalView={isHistoricalView}
               fmtPct={fmtPct}
               t={t}

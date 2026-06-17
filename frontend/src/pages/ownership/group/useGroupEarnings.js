@@ -5,6 +5,7 @@ import { formatOwnershipSavedAt } from "../shared/ownershipMonthHelpers.js";
 import {
   applyOwnershipRowFieldUpdate,
   calcOwnershipTotal,
+  createEmptyOwnershipRow,
   EMPTY_OWNERSHIP_ROW,
   fmtOwnershipPct,
   validateOwnershipRowsForSave,
@@ -26,7 +27,8 @@ export function useGroupEarnings(shell) {
     lang,
   } = shell;
 
-  const viewOnlyMode = readOnlyMode || isHistoricalView;
+  const viewOnlyMode = readOnlyMode;
+  const adminLocked = readOnlyMode || isHistoricalView;
 
   const [geGroups, setGeGroups] = useState([]);
   const [geLoading, setGeLoading] = useState(false);
@@ -174,33 +176,33 @@ export function useGroupEarnings(shell) {
       const st = prev[gid];
       if (!st) return prev;
       const rows = [...st.rows];
-      rows[idx] = applyOwnershipRowFieldUpdate(rows[idx], field, val, st.accounts);
+      rows[idx] = applyOwnershipRowFieldUpdate(rows[idx], field, val, st.accounts, rows, idx);
       return { ...prev, [gid]: { ...st, rows } };
     });
   }, []);
 
   const geAddRow = useCallback(
     (gid) => {
-      if (viewOnlyMode) return showToast("Read-only: only owner can modify ownership", "error");
+      if (readOnlyMode) return showToast("Read-only: only owner can modify ownership", "error");
       setGeStates((prev) => {
         const st = prev[gid];
         if (!st) return prev;
         return {
           ...prev,
-          [gid]: { ...st, rows: [...st.rows, { ...EMPTY_OWNERSHIP_ROW }] },
+          [gid]: { ...st, rows: [...st.rows, createEmptyOwnershipRow()] },
         };
       });
     },
-    [viewOnlyMode, showToast],
+    [readOnlyMode, showToast],
   );
 
   const geRemoveRow = useCallback(
     async (gid, idx) => {
-      if (viewOnlyMode) return showToast("Read-only: only owner can modify ownership", "error");
+      if (readOnlyMode) return showToast("Read-only: only owner can modify ownership", "error");
       const st = geStates[gid];
       if (!st) return;
       const row = st.rows[idx];
-      if (row?.ownership_id) {
+      if (row?.ownership_id && !isHistoricalView) {
         try {
           const body = new FormData();
           body.append("ownership_id", String(row.ownership_id));
@@ -227,12 +229,12 @@ export function useGroupEarnings(shell) {
         return { ...prev, [gid]: { ...cur, rows } };
       });
     },
-    [geStates, viewOnlyMode, showToast],
+    [geStates, readOnlyMode, isHistoricalView, showToast],
   );
 
   const geConfirm = useCallback(
     async (groupId) => {
-      if (viewOnlyMode) return showToast("Read-only: only owner can modify ownership", "error");
+      if (readOnlyMode) return showToast("Read-only: only owner can modify ownership", "error");
       const st = geStates[groupId];
       if (!st) return;
       const { rows } = st;
@@ -248,21 +250,25 @@ export function useGroupEarnings(shell) {
       const total = calcOwnershipTotal(allocationRowsForSave(rows));
       setGeSavingGid(groupId);
       try {
+        const payload = {
+          group_id: groupId,
+          owners: rowsToSavePayload(rows),
+        };
+        if (isHistoricalView) payload.month = selectedMonth;
         const res = await fetch(buildApiUrl("api/ownership/batch_save_group_owners_api.php"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
-            group_id: groupId,
-            owners: rowsToSavePayload(rows),
-          }),
+          body: JSON.stringify(payload),
         });
         const json = await res.json();
         if (isApiSuccess(json)) {
           showToast(getApiMessage(json, "Group ownership saved successfully"), "success");
-          setGeGroups((g) =>
-            g.map((x) => (x.group_id === groupId ? { ...x, allocated_percentage: total } : x)),
-          );
+          if (!isHistoricalView) {
+            setGeGroups((g) =>
+              g.map((x) => (x.group_id === groupId ? { ...x, allocated_percentage: total } : x)),
+            );
+          }
           await loadGroupState(groupId, { force: true });
           setGeExpanded(null);
         } else showToast(getApiMessage(json, "Save failed"), "error");
@@ -272,12 +278,12 @@ export function useGroupEarnings(shell) {
         setGeSavingGid(null);
       }
     },
-    [geStates, viewOnlyMode, showToast, loadGroupState],
+    [geStates, readOnlyMode, isHistoricalView, selectedMonth, showToast, loadGroupState],
   );
 
   const geLinkPartner = useCallback(
     async (groupId, loginId, forceType = "") => {
-      if (viewOnlyMode) {
+      if (adminLocked) {
         showToast("Read-only: only owner can modify ownership", "error");
         return false;
       }
@@ -305,7 +311,7 @@ export function useGroupEarnings(shell) {
         return false;
       }
     },
-    [loadGroupState, viewOnlyMode, showToast],
+    [loadGroupState, adminLocked, showToast],
   );
 
   return {
@@ -319,6 +325,7 @@ export function useGroupEarnings(shell) {
     calcTotal: calcOwnershipTotal,
     fmtPct: fmtOwnershipPct,
     viewOnlyMode,
+    adminLocked,
     isHistoricalView,
     geToggle,
     geUpdateRow,

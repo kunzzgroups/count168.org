@@ -1,17 +1,13 @@
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { measureMaintenanceVirtualRow } from "../../shared/measureMaintenanceVirtualRow.js";
 import {
-  useMaintenanceCyclicScrollExtent,
-  useMaintenanceCyclicScrollObserver,
-} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
+  pickMaintenanceVirtualOverscan,
+  useMaintenanceTableScrollExtent,
+  useMaintenanceVirtualScrollReset,
+} from "../../shared/maintenanceVirtualScroll.js";
 import PaymentVirtualDataRow from "./PaymentVirtualDataRow.jsx";
 import { isPaymentMaintenanceRowSelectable } from "../paymentMaintenanceLogic.js";
-
-function pickOverscan(count) {
-  if (count > 2000) return 2;
-  if (count > 800) return 3;
-  return 4;
-}
 
 function PaymentVirtualTableHead({ selectAllRef, selectAll, toggleSelectAll, m, disableSelectAll }) {
   const labels = [
@@ -42,16 +38,18 @@ function PaymentVirtualTableHead({ selectAllRef, selectAll, toggleSelectAll, m, 
           role="columnheader"
           className="maintenance-virtual-th payment-virtual-th-checkbox maintenance-select-all-header"
         >
-          <input
-            type="checkbox"
-            id={disableSelectAll ? undefined : "select_all_payment"}
-            ref={disableSelectAll ? undefined : selectAllRef}
-            className="maintenance-row-checkbox"
-            checked={selectAll}
-            onChange={toggleSelectAll}
-            title={m.selectAll}
-            disabled={disableSelectAll}
-          />
+          <span className="maintenance-checkbox-cell-inner">
+            <input
+              type="checkbox"
+              id={disableSelectAll ? undefined : "select_all_payment"}
+              ref={disableSelectAll ? undefined : selectAllRef}
+              className="maintenance-row-checkbox"
+              checked={selectAll}
+              onChange={toggleSelectAll}
+              title={m.selectAll}
+              disabled={disableSelectAll}
+            />
+          </span>
         </div>
       </div>
     </div>
@@ -62,6 +60,8 @@ export default function PaymentVirtualRows({
   rows,
   rowHeight,
   rowKeyPrefix,
+  scrollResetKey = "",
+  listSyncing = false,
   selectedSet,
   onToggleRow,
   selectAllRef,
@@ -71,14 +71,7 @@ export default function PaymentVirtualRows({
   disableSelectAll,
 }) {
   const scrollRef = useRef(null);
-  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
-  const rowsRef = useRef(rows);
-
-  if (rowsRef.current !== rows) {
-    sizeCacheRef.current.clear();
-    rowsRef.current = rows;
-  }
 
   const getItemKey = useCallback(
     (index) => {
@@ -94,9 +87,7 @@ export default function PaymentVirtualRows({
     (el) => {
       if (!el) return rowHeight;
       const idx = Number(el.dataset?.index);
-      const inner = el.querySelector(".payment-virtual-data-row");
-      const target = inner ?? el;
-      const h = Math.max(rowHeight, Math.ceil(target.scrollHeight || target.getBoundingClientRect().height || rowHeight));
+      const h = measureMaintenanceVirtualRow(el, rowHeight, ".payment-virtual-data-row");
       if (Number.isFinite(idx)) {
         sizeCacheRef.current.set(idx, h);
       }
@@ -109,28 +100,27 @@ export default function PaymentVirtualRows({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => sizeCacheRef.current.get(index) ?? rowHeight,
-    overscan: pickOverscan(rows.length),
+    overscan: pickMaintenanceVirtualOverscan(rows.length),
     getItemKey,
     measureElement,
-    observeElementOffset,
   });
 
-  useLayoutEffect(() => {
-    contentOffsetRef.current = 0;
-    scrollRef.current?.scrollTo(0, 0);
-    sizeCacheRef.current.clear();
-    rowVirtualizer.measure();
-  }, [rows, rowVirtualizer]);
+  useMaintenanceVirtualScrollReset({
+    scrollRef,
+    scrollResetKey,
+    rowVirtualizer,
+    sizeCacheRef,
+  });
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceTableScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: rowHeight,
-    resetDeps: [rows],
-    contentOffsetRef,
+    scrollResetKey,
+    listSyncing,
   });
 
   return (

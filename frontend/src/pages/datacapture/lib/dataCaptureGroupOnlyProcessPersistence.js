@@ -2,6 +2,7 @@
  * Persists group-only Process (and related form fields) across Summary final submit
  * and page reloads. Scoped per dashboard GroupID (AP / IG).
  */
+import { isGroupPayrollCaptureSession } from "../../../utils/company/c168CaptureChannel.js";
 import {
   isGroupOnlyProcessId,
   selectedProcessFromGroupOnlySession,
@@ -9,9 +10,11 @@ import {
 
 export const GROUP_ONLY_PROCESS_PREFS_KEY = "dc_group_only_process_prefs";
 
-function normalizeGroupId(groupId) {
-  const g = groupId != null ? String(groupId).trim().toUpperCase() : "";
-  return g || null;
+function normalizePrefsKey(key) {
+  const raw = key != null ? String(key).trim() : "";
+  if (!raw) return null;
+  if (raw.toLowerCase().startsWith("company:")) return raw;
+  return raw.toUpperCase();
 }
 
 function readAllPrefs() {
@@ -34,8 +37,8 @@ function writeAllPrefs(map) {
 }
 
 /** @returns {object|null} */
-export function readGroupOnlyProcessPrefs(groupId) {
-  const g = normalizeGroupId(groupId);
+export function readGroupOnlyProcessPrefs(prefsKey) {
+  const g = normalizePrefsKey(prefsKey);
   if (!g) return null;
   const entry = readAllPrefs()[g];
   if (!entry?.process) return null;
@@ -43,8 +46,8 @@ export function readGroupOnlyProcessPrefs(groupId) {
   return entry;
 }
 
-export function clearGroupOnlyProcessPrefs(groupId) {
-  const g = normalizeGroupId(groupId);
+export function clearGroupOnlyProcessPrefs(prefsKey) {
+  const g = normalizePrefsKey(prefsKey);
   if (!g) return;
   const map = readAllPrefs();
   if (!map[g]) return;
@@ -56,8 +59,8 @@ export function clearGroupOnlyProcessPrefs(groupId) {
  * @param {string|null|undefined} groupId
  * @param {{ process?: string|number, processCode?: string, processName?: string, currency?: string|number, date?: string }} payload
  */
-export function saveGroupOnlyProcessPrefs(groupId, payload = {}) {
-  const g = normalizeGroupId(groupId);
+export function saveGroupOnlyProcessPrefs(prefsKey, payload = {}) {
+  const g = normalizePrefsKey(prefsKey);
   const pid = payload.process != null ? String(payload.process) : "";
   if (!g || !pid || !isGroupOnlyProcessId(pid)) return;
 
@@ -73,13 +76,16 @@ export function saveGroupOnlyProcessPrefs(groupId, payload = {}) {
   writeAllPrefs(map);
 }
 
-export function saveGroupOnlyProcessPrefsFromProcessData(processData, groupId) {
+export function saveGroupOnlyProcessPrefsFromProcessData(processData, prefsKey) {
   if (!processData) return;
   const gid =
-    normalizeGroupId(groupId) ||
-    normalizeGroupId(processData.captureSelectedGroup) ||
-    null;
-  const proc = processData.groupOnlyCapture
+    normalizePrefsKey(prefsKey) ||
+    normalizePrefsKey(processData.payrollPrefsKey) ||
+    normalizePrefsKey(processData.captureSelectedGroup) ||
+    (processData.groupPayrollCapture && processData.scopeCompanyId
+      ? `company:${Number(processData.scopeCompanyId)}`
+      : null);
+  const proc = isGroupPayrollCaptureSession(processData)
     ? selectedProcessFromGroupOnlySession(processData)
     : null;
   saveGroupOnlyProcessPrefs(gid, {

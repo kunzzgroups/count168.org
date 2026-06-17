@@ -1,11 +1,17 @@
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
-import {
-  SUMMARY_SUBMIT_TOTAL_MAX,
-  SUMMARY_SUBMIT_TOTAL_MIN,
-} from "./summarySubmitConstants.js";
 import { computeSummaryTotal, formatSummaryTotalDisplay } from "../table/summaryRowData.js";
 import { roundSummaryTotalForValidation } from "../table/summaryRowAmount.js";
-import { formatSummarySubmitTotalError } from "./summarySubmitValidation.js";
+
+/** Processed Amount total must be within this range before submit. */
+export const SUMMARY_SUBMIT_TOTAL_MIN = "-0.05";
+export const SUMMARY_SUBMIT_TOTAL_MAX = "0.05";
+
+/** Matches legacy `MAX_ROWS_PER_BATCH` in datacapturesummary.js. */
+export const SUMMARY_SUBMIT_MAX_ROWS_PER_BATCH = 20;
+
+export function formatSummarySubmitTotalError(totalDisplay) {
+  return `Cannot submit: The sum of Processed Amount must be between ${SUMMARY_SUBMIT_TOTAL_MIN} and ${SUMMARY_SUBMIT_TOTAL_MAX}. Current sum: ${totalDisplay}`;
+}
 
 export function validateSummarySubmitTotalPure(rows, globalRateInput = "") {
   const total = computeSummaryTotal(rows, globalRateInput);

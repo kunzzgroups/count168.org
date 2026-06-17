@@ -24,14 +24,14 @@ $parsedMonth = ownership_history_parse_month_param($monthRaw);
 $useHistory = $parsedMonth !== null && ownership_history_is_past_month($parsedMonth['month_key']);
 
 try {
-    $tableExists = $pdo->query("SHOW TABLES LIKE 'company_ownership'")->rowCount() > 0;
+    $tableExists = ownership_table_exists($pdo, 'company_ownership');
 
     if (!$tableExists) {
         echo json_encode(['status' => 'success', 'data' => [], 'meta' => ['is_historical' => false]]);
         exit();
     }
 
-    $hasOwnerType = $pdo->query("SHOW COLUMNS FROM company_ownership LIKE 'owner_type'")->rowCount() > 0;
+    $hasOwnerType = ownership_column_exists($pdo, 'company_ownership', 'owner_type');
 
     if ($useHistory) {
         ownership_history_ensure_tables($pdo);
@@ -120,10 +120,6 @@ try {
     }
 
     if ($hasOwnerType) {
-        try {
-            $pdo->exec("ALTER TABLE company_ownership ADD COLUMN read_only TINYINT(1) NOT NULL DEFAULT 1");
-        } catch (Exception $e) {
-        }
         ownership_ensure_sort_order_column($pdo, 'company_ownership');
 
         $stmt = $pdo->prepare("

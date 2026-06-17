@@ -19,6 +19,7 @@ try {
     require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/transaction_scope.php';
     require_once __DIR__ . '/../includes/money_decimal.php';
+    require_once __DIR__ . '/../includes/transaction_approval.php';
 } catch (Throwable $e) {
     http_response_code(500);
     echo json_encode([
@@ -30,38 +31,22 @@ require_once __DIR__ . '/transaction_scope.php';
     exit;
 }
 
-/**
- * 角色与权限工具
- * 说明：这里的 role 指 user 表中的 role（admin/manager/supervisor/.../owner）
- */
+/** @deprecated use tx_is_manager_or_above_role */
 function isManagerOrAboveRole(string $role): bool
 {
-    $role = strtolower(trim($role));
-    // manager 以上：manager / admin / owner
-    return in_array($role, ['manager', 'admin', 'owner'], true);
+    return tx_is_manager_or_above_role($role);
 }
 
-/**
- * 是否需要交易审批：
- * - manager 以下：只要是“今天及之前”的交易日期，就需要审批
- */
+/** @deprecated use tx_requires_transaction_approval */
 function requiresTransactionApproval(string $role, string $transactionDateDb): bool
 {
-    if (isManagerOrAboveRole($role)) {
-        return false;
-    }
-    $today = date('Y-m-d');
-    return $transactionDateDb < $today;
+    return tx_requires_transaction_approval($role, $transactionDateDb);
 }
 
-/**
- * 需要审批的交易类型：
- * CONTRA / PAYMENT / CLAIM / CLEAR / ADJUSTMENT / PROFIT(实际落库为 WIN/LOSE)
- */
+/** @deprecated use tx_requires_approval_for_type */
 function requiresApprovalForType(string $transactionType): bool
 {
-    $type = strtoupper(trim($transactionType));
-    return in_array($type, ['CONTRA', 'PAYMENT', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'PROFIT', 'WIN', 'LOSE'], true);
+    return tx_requires_approval_for_type($transactionType);
 }
 
 function tableHasColumn(PDO $pdo, string $table, string $column): bool
@@ -340,7 +325,14 @@ try {
     $is_pending_approval = false;
 
     if ($has_approval_status && requiresApprovalForType($transaction_type)) {
-        if (requiresTransactionApproval($userRole, $transaction_date_db)) {
+        $skipApproval = tx_submit_skips_transaction_approval(
+            $pdo,
+            $userRole,
+            $transaction_type,
+            $account_id,
+            $from_account_id
+        );
+        if (!$skipApproval && requiresTransactionApproval($userRole, $transaction_date_db)) {
             $approval_status = 'PENDING';
             $approved_by = null;
             $approved_by_owner = null;

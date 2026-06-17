@@ -31,7 +31,7 @@ try {
     echo $e->getMessage() . "\n";
 }
 
-foreach (['c168org_src', 'easycount'] as $dbName) {
+foreach (['c168site_src', 'easycount'] as $dbName) {
     echo "\n=== optional DB {$dbName} ===\n";
     try {
         $admin = new PDO(

@@ -1,4 +1,8 @@
 import {
+  computeDisplayConvertedAmount,
+  formatFrankfurterUnitRate,
+} from "../../../utils/dashboard/frankfurterRates.js";
+import {
   DASHBOARD_CURRENCY_COLORS,
   DASHBOARD_CURRENCY_FALLBACK_PALETTE,
 } from "./dashboardConstants.js";
@@ -147,6 +151,34 @@ export function computePieCenterMetrics(rows, selectedCode, { useConverted = fal
   const shareByCode = buildEarningsShareByCode(rows, selectedCode, { useConverted });
   const pct = (shareByCode[selected] ?? 0).toFixed(1);
   return { pct, code: selected || match?.code || "—" };
+}
+
+/** Pie center badge: unit rate of the active filter currency vs display base. */
+export function computePieCenterRateMetrics(selectedCode, baseCode, rates) {
+  const selected = String(selectedCode || "").toUpperCase();
+  const base = String(baseCode || "").toUpperCase();
+  const code = selected || base || "—";
+  const rateLabel = formatFrankfurterUnitRate(code, base, rates);
+  return { rate: rateLabel, code };
+}
+
+/**
+ * Primary amount in the display (filter) currency; optional native subtitle when converted.
+ */
+export function resolveEarningsRowDisplayAmounts(row, baseCode, rates, useConverted) {
+  const code = String(row?.code || "").toUpperCase();
+  const base = String(baseCode || "").toUpperCase();
+  const native = row?.earnings;
+  if (native == null) return { primary: null, native: null };
+  if (!useConverted || code === base) {
+    return { primary: native, native: null };
+  }
+  const converted =
+    row.earningsConverted != null
+      ? row.earningsConverted
+      : computeDisplayConvertedAmount(native, code, base, rates);
+  if (converted == null) return { primary: null, native };
+  return { primary: converted, native };
 }
 
 export function computeCurrencySharePct(row, shareByCode) {

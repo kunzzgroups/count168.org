@@ -25,15 +25,18 @@ body.domain-page .domain-react-page {
     box-sizing: border-box;
     overflow-x: hidden;
     overflow-y: visible;
+    display: flex;
+    flex-direction: column;
 }
 
 body.domain-page .domain-react-page .action-buttons {
-    /* 整块工具栏叠在下方 table 之上，避免兄弟层 late-paint 盖住 Add/Price 等按钮点击区 */
+    /* 保持工具栏可点，但不压盖下方首行数据 */
     position: relative;
-    z-index: 400;
+    z-index: 2;
+    flex-shrink: 0;
     background-color: transparent !important;
     padding: 0 !important;
-    margin-bottom: 0;
+    margin-bottom: clamp(10px, 1.04vw, 16px);
     display: flex;
     justify-content: space-between;
     align-items: start;
@@ -74,14 +77,16 @@ body.domain-page .domain-react-page .separator-line {
 
 body.domain-page .domain-react-page .table-container {
     position: relative;
-    z-index: 0;
-    isolation: isolate;
-    overflow-x: visible;
-    overflow-y: auto;
-    margin-top: 20px;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-top: 0;
     border: none;
     border-radius: 0;
-    max-height: calc(100vh - 200px);
+    max-height: none;
 }
 
 /*
@@ -90,8 +95,8 @@ body.domain-page .domain-react-page .table-container {
  */
 body.ec-auth-shell .domain-form-modal-backdrop {
     --dfm-selected-item-height: 34px;
-    --dfm-selected-item-gap: 5px;
-    --dfm-selected-action-height: 22px;
+    --dfm-selected-item-gap: 6px;
+    --dfm-selected-action-height: 20px;
     --dfm-row1-control-height: 34px;
     --dfm-selected-visible-rows: 9;
     --dfm-selected-list-inset-y: 16px;
@@ -104,17 +109,25 @@ body.ec-auth-shell .domain-form-modal-backdrop {
 
 body.ec-auth-shell .domain-form-modal-backdrop .domain-form-modal-panel {
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
     width: min(98vw, 1400px);
     max-width: 1400px;
+    margin: 1vh auto;
     background-color: var(--color-surface);
     font-family: var(--font-ui);
     min-height: min(86vh, 900px);
     max-height: 92vh;
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+    container-type: inline-size;
+    container-name: dfm-panel;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-header h2 {
     font-family: var(--font-heading-page) !important;
-    font-size: var(--text-h3) !important;
+    font-size: var(--text-page-title);
+    letter-spacing: 0;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .domain-form-modal-form {
@@ -122,12 +135,15 @@ body.ec-auth-shell .domain-form-modal-backdrop .domain-form-modal-form {
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
+    overflow: hidden;
     background-color: var(--color-surface);
 }
 
 /* 图二：头部左右留白更宽，标题位置下沉一点 */
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-header {
     padding: 18px 36px !important;
+    border-bottom: 1px solid var(--color-border-slate);
+    background-color: #f4f5f7;
 }
 
 /* 图二：内容与按钮栏之间留白；整段白底 */
@@ -136,16 +152,22 @@ body.ec-auth-shell .domain-form-modal-backdrop .domain-form-modal-body {
     flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
+    overflow: hidden;
     padding: 20px 36px !important;
     background-color: var(--color-surface);
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions {
     flex-shrink: 0;
-    gap: clamp(16px, 3vw, 32px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
     margin-top: 0 !important;
     padding: 18px 36px !important;
     background-color: var(--color-surface) !important;
+    border-top: 1px solid var(--color-border-slate) !important;
 }
 
 /* 设计图：DOMAIN / COMPANY 上下全宽堆叠，非左右分栏 */
@@ -156,6 +178,10 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-section-block {
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-section-block--company {
     margin-top: 10px !important;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-section-block .dfm-section-heading {
@@ -224,6 +250,10 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid .dfm-field input
 }
 
 /* COMPANY INFORMATION — row1: group id / company id / group；row2: selected groups / selected companies */
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-section-block:not(.dfm-section-block--company) {
+    flex-shrink: 0;
+}
+
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row1 {
     display: grid;
     width: 100%;
@@ -299,14 +329,14 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 {
     display: grid;
     width: 100%;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
         "headGroups headCompanies"
         "selectedGroups selectedCompanies";
     gap: 4px 12px;
-    flex: 0 0 auto;
-    margin-top: auto;
-    align-items: start;
+    flex: 1 1 auto;
+    margin-top: 0;
+    align-items: stretch;
     align-content: start;
     min-height: 0;
 }
@@ -344,13 +374,14 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-field
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selected-list {
     box-sizing: border-box;
     width: 100%;
-    height: var(--dfm-selected-list-cap-height);
-    min-height: var(--dfm-selected-list-cap-height);
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
     max-height: var(--dfm-selected-list-cap-height);
-    flex: 0 0 auto;
     margin-top: 0 !important;
     overflow-x: hidden;
     overflow-y: auto;
+    scroll-padding-bottom: 6px;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-field--selected-groups,
@@ -358,17 +389,19 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-field
     display: flex !important;
     flex-direction: column !important;
     min-height: 0;
+    height: 100%;
     align-self: stretch;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-field--selected-groups .dfm-selected-list,
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-field--selected-companies .dfm-selected-list {
-    flex: 0 0 auto;
-    height: var(--dfm-selected-list-cap-height);
-    min-height: var(--dfm-selected-list-cap-height);
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
     max-height: var(--dfm-selected-list-cap-height);
     padding: 8px 10px !important;
     overflow-y: auto !important;
+    scroll-padding-bottom: 6px;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selected-list--mc-mode {
@@ -376,12 +409,22 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selec
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selected-list > .company-item {
-    min-height: 34px !important;
-    height: 34px !important;
-    margin: 0 0 5px 0 !important;
-    padding: 0 8px !important;
-    column-gap: 8px !important;
+    display: grid !important;
+    align-items: center !important;
+    box-sizing: border-box !important;
+    width: 100% !important;
+    min-height: var(--dfm-selected-item-height) !important;
+    height: var(--dfm-selected-item-height) !important;
+    max-height: var(--dfm-selected-item-height) !important;
+    margin: 0 0 var(--dfm-selected-item-gap) 0 !important;
+    padding: 6px 10px !important;
+    column-gap: 10px !important;
+    row-gap: 6px !important;
+    grid-template-columns: auto minmax(72px, 1fr) auto auto !important;
+    border: 1px solid var(--color-border) !important;
     border-radius: 6px !important;
+    background-color: var(--color-surface) !important;
+    box-shadow: var(--shadow-row-surface) !important;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selected-list .company-item-left > span {
@@ -390,7 +433,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selec
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selected-list .company-item .exp-date-display {
-    font-size: var(--text-tiny) !important;
+    font-size: var(--text-small) !important;
     line-height: 1.2 !important;
 }
 
@@ -398,74 +441,270 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selec
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selected-list .company-item .company-remove-btn {
     height: var(--dfm-selected-action-height) !important;
     min-height: var(--dfm-selected-action-height) !important;
-    padding: 0 10px !important;
-    min-width: 42px !important;
+    padding: 0 12px !important;
+    min-width: 48px !important;
     border-radius: 4px !important;
-    font-size: var(--text-tiny) !important;
+    font-size: var(--text-small) !important;
     line-height: 1 !important;
 }
 
-@media (max-width: 760px) {
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid,
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row1,
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 {
-        grid-template-columns: minmax(0, 1fr);
-    }
+/* 小屏 / 平板：全屏 + 图二左右半栏（Domain | Company）— 由 --compact class 触发（≤1280px） */
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact {
+    --dfm-selected-visible-rows: 4;
+    --dfm-compact-selected-item-height: 30px;
+    --dfm-compact-selected-item-gap: 6px;
+    overflow: hidden !important;
+    background-color: var(--color-surface) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row1 {
-        grid-template-areas:
-            "groupId"
-            "companyId"
-            "groupPills";
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-panel {
+    width: 100vw !important;
+    max-width: none !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 {
-        grid-template-areas:
-            "headGroups"
-            "selectedGroups"
-            "headCompanies"
-            "selectedCompanies";
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-header {
+    flex-shrink: 0;
+    padding: 18px 16px !important;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row1 {
-        grid-template-columns: minmax(0, 1fr);
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-body.dfm-main-split {
+    display: grid !important;
+    flex-direction: unset !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "domain company";
+    gap: 10px 14px;
+    align-items: stretch;
+    align-content: stretch;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 14px !important;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row1 .dfm-field--group-input .dfm-input-with-btn,
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row1 .dfm-field--company-input .dfm-input-with-btn {
-        max-width: 100%;
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-main-split > .dfm-section-block:not(.dfm-section-block--company) {
+    grid-area: domain;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid,
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid.dfm-domain-grid--no-secondary {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas:
-            "owner"
-            "name"
-            "email"
-            "password"
-            "secondary";
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-main-split > .dfm-section-block--company {
+    grid-area: company;
+    margin-top: 0 !important;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid .dfm-field--owner-code {
-        grid-area: owner;
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-footer-actions {
+    flex-shrink: 0;
+    padding: 12px 16px !important;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid .dfm-field--name {
-        grid-area: name;
-    }
+/* 左栏：Domain 字段纵向 */
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid,
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid.dfm-domain-grid--no-secondary {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-areas:
+        "owner"
+        "name"
+        "email"
+        "password"
+        "secondary" !important;
+    gap: 8px;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid .dfm-field--email {
-        grid-area: email;
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid .dfm-field {
+    margin-bottom: 0 !important;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid .dfm-field--password {
-        grid-area: password;
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-panel .dfm-main-split .dfm-field {
+    margin-bottom: 10px !important;
+}
 
-    body.ec-auth-shell .domain-form-modal-backdrop .dfm-domain-grid .dfm-field--secondary-pwd {
-        grid-area: secondary;
-    }
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid .dfm-field input[type="text"],
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid .dfm-field input[type="password"] {
+    min-height: 36px !important;
+    padding: 8px 10px !important;
+    font-size: var(--text-small) !important;
+}
+
+/* 右栏：Group ID / Company ID 并排，下方 Group、列表纵向 */
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    grid-template-areas:
+        "groupId companyId"
+        "groupPills groupPills" !important;
+    gap: 6px 8px;
+    align-items: end;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 .dfm-field--group-input .dfm-input-with-btn,
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 .dfm-field--company-input .dfm-input-with-btn {
+    max-width: none !important;
+    width: 100%;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 .dfm-field--group-pills .group-pills {
+    height: auto !important;
+    min-height: var(--dfm-row1-control-height) !important;
+    flex-wrap: wrap !important;
+    align-content: flex-start !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-section {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 {
+    flex-shrink: 0;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr);
+    grid-template-areas:
+        "headGroups"
+        "selectedGroups"
+        "headCompanies"
+        "selectedCompanies" !important;
+    gap: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-row2-head {
+    min-height: auto;
+    margin: 0;
+    padding: 2px 0;
+    align-self: start;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-row2-head--companies {
+    margin-top: 0;
+    padding-top: 6px;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-selected-companies-label {
+    font-family: var(--font-ui) !important;
+    font-size: var(--text-small) !important;
+    font-weight: 700 !important;
+    color: var(--color-text-label) !important;
+    line-height: 1.3 !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-groups,
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-companies {
+    height: 100% !important;
+    min-height: 0 !important;
+    flex: 1 1 auto !important;
+    align-self: stretch;
+    margin-bottom: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field {
+    margin-bottom: 0 !important;
+}
+
+/* 两列表撑满剩余高度，内容多时在各自区域内滚动 */
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-selected-list {
+    min-height: 0 !important;
+    max-height: none !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-groups .dfm-selected-list,
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-companies .dfm-selected-list {
+    box-sizing: border-box;
+    width: 100%;
+    flex: 1 1 auto !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    padding: 8px 10px !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    border: 1px solid var(--color-border-strong) !important;
+    border-radius: 8px !important;
+    background-color: var(--color-surface-muted) !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list:has(.company-item) > .company-item:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* 空列表：占满分配高度，提示居中 */
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list:not(:has(.company-item)) {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode {
+    display: flex !important;
+    flex-direction: column !important;
+    max-height: none !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode .dfm-mc-panel-head {
+    flex-shrink: 0;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode .dfm-assign-mc-stack,
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode > :not(.dfm-mc-panel-head) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list .dfm-empty-hint {
+    display: block;
+    width: 100%;
+    font-size: var(--text-tiny) !important;
+    line-height: 1.35 !important;
+    text-align: center !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-section-heading {
+    font-size: var(--text-small) !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-panel label {
+    font-size: var(--text-small) !important;
+    margin-bottom: 4px !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list > .company-item {
+    grid-template-columns: auto minmax(48px, 1fr) auto auto !important;
+    padding: 4px 6px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    max-height: 30px !important;
+}
+
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list .company-item .company-reset-btn,
+.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list .company-item .company-remove-btn {
+    min-width: 36px !important;
+    padding: 0 6px !important;
+    font-size: 10px !important;
 }
 
 /* 图二：DOMAIN / COMPANY 栏目标题 */
@@ -473,9 +712,9 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-section-heading {
     margin: 0 !important;
     padding: 0 !important;
     font-family: var(--font-heading-page) !important;
-    font-size: var(--text-medium) !important;
+    font-size: var(--text-base);
     font-weight: 700 !important;
-    letter-spacing: 0.04em !important;
+    letter-spacing: 0;
     line-height: 1.35 !important;
     color: var(--color-body-strong) !important;
 }
@@ -486,9 +725,9 @@ body.ec-auth-shell .domain-form-modal-backdrop .domain-form-modal-panel label {
     font-family: var(--font-ui) !important;
     font-weight: 700 !important;
     color: var(--color-text-label) !important;
-    font-size: var(--text-small) !important;
+    font-size: var(--text-medium);
     line-height: 1.3 !important;
-    letter-spacing: 0 !important;
+    letter-spacing: 0;
     text-transform: none !important;
 }
 
@@ -514,7 +753,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-helper-text {
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-empty-hint {
     color: var(--color-text-placeholder) !important;
     font-family: var(--font-ui) !important;
-    font-size: var(--text-tiny) !important;
+    font-size: var(--text-small) !important;
     line-height: 1.45 !important;
     font-weight: 500 !important;
 }
@@ -534,25 +773,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-selected-list {
     font-size: var(--text-base) !important;
 }
 
-/* Selected Companies 行 — 对齐图一：左公司名｜中区日期｜右 Set / Remove */
-body.ec-auth-shell .domain-form-modal-backdrop .dfm-selected-list>.company-item {
-    display: grid !important;
-    align-items: center !important;
-    box-sizing: border-box !important;
-    width: 100% !important;
-    min-height: 44px !important;
-    margin: 0 0 8px 0 !important;
-    padding: 8px 14px !important;
-    column-gap: 14px !important;
-    row-gap: 6px !important;
-    grid-template-columns: auto minmax(72px, 1fr) auto auto !important;
-    border: 1px solid var(--color-border) !important;
-    border-radius: 8px !important;
-    background-color: var(--color-surface) !important;
-    box-shadow: var(--shadow-row-surface) !important;
-}
-
-body.ec-auth-shell .domain-form-modal-backdrop .dfm-selected-list>.company-item:last-child {
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selected-list > .company-item:last-child {
     margin-bottom: 0 !important;
 }
 
@@ -598,12 +819,12 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-selected-list .company-item 
     flex-shrink: 0 !important;
     margin: 0 !important;
     justify-self: end !important;
-    padding: 4px 14px !important;
-    min-width: 46px !important;
-    height: 28px !important;
-    min-height: 28px !important;
+    padding: 5px 16px !important;
+    min-width: 50px !important;
+    height: var(--dfm-selected-action-height) !important;
+    min-height: var(--dfm-selected-action-height) !important;
     font-family: var(--font-ui) !important;
-    font-size: var(--text-tiny) !important;
+    font-size: var(--text-small) !important;
     font-weight: 600 !important;
     line-height: 1 !important;
     color: var(--color-text-inverse) !important;
@@ -619,11 +840,12 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-selected-list .company-item 
     flex-shrink: 0 !important;
     margin: 0 !important;
     justify-self: end !important;
-    padding: 4px 12px !important;
-    min-height: 28px !important;
-    height: 28px !important;
+    padding: 5px 14px !important;
+    min-width: 50px !important;
+    min-height: var(--dfm-selected-action-height) !important;
+    height: var(--dfm-selected-action-height) !important;
     font-family: var(--font-ui) !important;
-    font-size: var(--text-tiny) !important;
+    font-size: var(--text-small) !important;
     font-weight: 600 !important;
     line-height: 1 !important;
     color: var(--color-text-inverse) !important;
@@ -915,9 +1137,9 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-assign-mc-list > .company-it
     align-items: center !important;
     box-sizing: border-box !important;
     width: 100% !important;
-    min-height: 42px !important;
+    min-height: var(--dfm-selected-item-height) !important;
     margin: 0 !important;
-    padding: 7px 10px !important;
+    padding: 8px 12px !important;
     column-gap: 8px !important;
     row-gap: 4px !important;
     border: 1px solid var(--color-border) !important;
@@ -972,11 +1194,11 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-selected-list .dfm-assign-mc
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-selected-list .dfm-assign-mc-list > .company-item.dfm-assign-mc-row .company-reset-btn {
     grid-column: 4 !important;
     justify-self: end !important;
-    padding: 2px 8px !important;
-    min-width: 40px !important;
-    height: 24px !important;
-    min-height: 24px !important;
-    font-size: var(--text-tiny, 11px) !important;
+    padding: 4px 10px !important;
+    min-width: 48px !important;
+    height: var(--dfm-selected-action-height) !important;
+    min-height: var(--dfm-selected-action-height) !important;
+    font-size: var(--text-small) !important;
 }
 
 /* 多选区勾选：统一 16px 槽位，避免原生 checkbox 与文字基线不齐 */
@@ -1113,18 +1335,33 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-wrap {
     display: block;
     width: 100%;
     min-width: 0;
+    height: 43px;
+    contain: layout style;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-wrap input[type="password"],
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-wrap input[type="text"] {
     width: 100% !important;
     max-width: 100% !important;
+    height: 43px !important;
+    min-height: 43px !important;
+    max-height: 43px !important;
+    padding-top: 9px !important;
+    padding-bottom: 9px !important;
     padding-right: 42px !important;
+    line-height: 1.4 !important;
+}
+
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-wrap input.dfm-password-masked {
+    -webkit-text-security: disc;
+    text-security: disc;
+    font-family: var(--font-ui) !important;
+    letter-spacing: 0 !important;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-toggle {
     position: absolute;
-    top: 50%;
+    top: 6px;
     right: 8px;
     display: inline-flex;
     align-items: center;
@@ -1138,8 +1375,32 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-toggle {
     background: transparent;
     color: var(--color-text-caption, #6b7280);
     cursor: pointer;
-    transform: translateY(-50%);
+    flex-shrink: 0;
+    touch-action: manipulation;
     transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-toggle-icon {
+    position: relative;
+    display: block;
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-toggle-icon svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+    width: 18px;
+    height: 18px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-toggle-icon svg.is-active {
+    opacity: 1;
 }
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-password-toggle:hover {
@@ -1205,44 +1466,57 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-adjoin-btn:active {
     filter: brightness(0.96);
 }
 
-/* 图二底部药丸按钮：压住全局 btn active 缩放 */
-body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-btn {
-    box-sizing: border-box !important;
+/* Add/Edit Domain footer — 与 Company Settings / Price 弹窗 btn-save / btn-cancel 一致 */
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-save,
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-cancel {
+    box-sizing: border-box;
+    width: 120px;
+    min-height: 35.5px;
+    padding: 8px 20px;
     margin: 0 !important;
-    min-height: 41px !important;
-    min-width: 130px !important;
-    padding: 12px 30px !important;
-    border: none !important;
-    border-radius: 9999px !important;
-    font-family: var(--font-ui) !important;
-    font-size: var(--text-medium) !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.04em;
-    cursor: pointer !important;
+    font-family: var(--font-heading-page);
+    font-size: var(--text-base);
+    font-weight: 700;
+    line-height: 1;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--color-text-inverse);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-save {
+    background: var(--btn-add-gradient);
+    box-shadow: var(--shadow-btn-add-page);
+}
+
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-save:hover:not(:disabled) {
+    background: var(--btn-add-gradient-hover);
+    box-shadow: 0 4px 8px rgba(1, 59, 153, 0.4);
+    transform: translateY(-1px);
+}
+
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-save:disabled,
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-save:disabled:hover {
+    background: linear-gradient(180deg, #dde3e9 0%, #9aa5b1 100%) !important;
+    color: #f8fafc !important;
+    box-shadow: none !important;
     transform: none !important;
-    transition: filter 0.15s ease, box-shadow 0.15s ease !important;
+    cursor: not-allowed;
+    opacity: 0.9;
 }
 
-body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-btn--primary {
-    color: var(--color-text-inverse) !important;
-    background: var(--btn-add-gradient) !important;
-    box-shadow: var(--shadow-btn-primary) !important;
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-cancel {
+    background: var(--gradient-domain-muted-action);
+    box-shadow: 0 2px 4px rgba(88, 88, 88, 0.3);
 }
 
-body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-btn--secondary {
-    color: var(--color-text-inverse) !important;
-    background: var(--gradient-btn-secondary-footer) !important;
-    box-shadow: var(--shadow-footer-muted) !important;
-}
-
-body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-btn:hover {
-    transform: none !important;
-    filter: brightness(1.05);
-}
-
-body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-btn:active {
-    transform: none !important;
-    filter: brightness(0.96);
+body.ec-auth-shell .domain-form-modal-backdrop .dfm-footer-actions .btn-cancel:hover {
+    background: var(--gradient-domain-muted-action-hover);
+    box-shadow: 0 4px 8px rgba(84, 84, 84, 0.4);
+    transform: translateY(-1px);
 }
 
 .btn:hover {
@@ -1334,7 +1608,7 @@ body.domain-page .domain-react-page .domain-fee-price-chips {
 
 body.domain-page .domain-react-page .domain-fee-price-chip {
     font-family: var(--font-heading-page);
-    font-size: clamp(11px, 0.78vw, 13px);
+    font-size: var(--text-small);
     font-weight: var(--font-weight-semibold);
     line-height: 1.2;
     white-space: nowrap;
@@ -1471,8 +1745,9 @@ body.domain-page .domain-fee-react-modal.domain-fee-react-modal--periods.modal-c
     border: none;
     background: transparent;
     color: var(--color-ink-muted);
-    font-size: var(--domain-text-24);
+    font-size: var(--text-page-title);    
     font-weight: 700;
+    letter-spacing: 0;
 }
 
 .domain-fee-react-modal .modal-header.domain-fee-modal-header .account-close {
@@ -1554,7 +1829,7 @@ body.domain-page .domain-fee-react-modal.domain-fee-react-modal--periods.modal-c
 .domain-fee-react-modal .domain-fee-edit-hint {
     margin: 0 0 12px 0;
     color: var(--color-text-caption);
-    font-size: var(--domain-text-13);
+    font-size: var(--text-tiny);
 }
 
 .domain-fee-react-modal .form-group {
@@ -1594,35 +1869,54 @@ body.domain-page .domain-fee-react-modal.domain-fee-react-modal--periods.modal-c
     border-top: 1px solid var(--color-border-slate) !important;
 }
 
+/* Price modal footer — 与 Company Settings 弹窗 btn-save / btn-cancel 一致 */
 .domain-fee-react-modal .btn-save,
 .domain-fee-react-modal .btn-cancel {
+    box-sizing: border-box;
     width: 120px;
     min-height: 35.5px;
     padding: 8px 20px;
     font-family: var(--font-heading-page);
-    font-size: var(--domain-text-legacy-15936);
+    font-size: var(--text-base);
+    font-weight: 600;
     line-height: 1;
+    border: none;
     border-radius: 6px;
-    border: none !important;
-    color: var(--color-text-inverse) !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25) !important;
+    cursor: pointer;
+    color: var(--color-text-inverse);
     justify-content: center !important;
 }
 
 .domain-fee-react-modal .btn-save {
-    background: var(--btn-add-gradient) !important;
+    background: var(--btn-add-gradient);
+    box-shadow: var(--shadow-btn-add-page);
 }
 
 .domain-fee-react-modal .btn-save:hover {
-    background: var(--btn-add-gradient-hover) !important;
+    background: var(--btn-add-gradient-hover);
+    box-shadow: 0 4px 8px rgba(1, 59, 153, 0.4);
+    transform: translateY(-1px);
+}
+
+.domain-fee-react-modal .btn-save:disabled,
+.domain-fee-react-modal .btn-save:disabled:hover {
+    background: linear-gradient(180deg, #dde3e9 0%, #9aa5b1 100%);
+    color: #f8fafc;
+    box-shadow: none;
+    transform: none;
+    cursor: not-allowed;
+    opacity: 0.9;
 }
 
 .domain-fee-react-modal .btn-cancel {
-    background: var(--gradient-domain-muted-action) !important;
+    background: var(--gradient-domain-muted-action);
+    box-shadow: 0 2px 4px rgba(88, 88, 88, 0.3);
 }
 
 .domain-fee-react-modal .btn-cancel:hover {
-    background: var(--gradient-domain-muted-action-hover) !important;
+    background: var(--gradient-domain-muted-action-hover);
+    box-shadow: 0 4px 8px rgba(84, 84, 84, 0.4);
+    transform: translateY(-1px);
 }
 
 /* Price modal — Company / Group split layout */
@@ -1675,7 +1969,7 @@ body.domain-page .domain-fee-react-modal.domain-fee-react-modal--split.modal-con
     border-radius: 10px;
     background: rgba(59, 130, 246, 0.08);
     border: 1px solid rgba(59, 130, 246, 0.18);
-    font-size: var(--text-base, 0.9375rem);
+    font-size: var(--text-base);
     line-height: 1.45;
 }
 
@@ -1717,7 +2011,7 @@ body.domain-page .domain-fee-react-modal.domain-fee-react-modal--split.modal-con
     gap: 8px;
     margin-bottom: 12px;
     font-weight: 600;
-    font-size: var(--text-base, 0.9375rem);
+    font-size: var(--text-base);
 }
 
 .domain-fee-col-icon {
@@ -1747,7 +2041,7 @@ body.domain-page .domain-fee-react-modal.domain-fee-react-modal--split.modal-con
 }
 
 .domain-fee-split-label {
-    font-size: var(--text-base, 0.9375rem);
+    font-size: var(--text-base);
     color: var(--color-text-secondary, #64748b);
 }
 
@@ -1812,6 +2106,29 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     width: min(600px, 92vw) !important;
     max-width: 600px !important;
     box-sizing: border-box !important;
+}
+
+.company-expiration-react-modal .modal-header.company-expiration-modal-header {
+    padding: clamp(10px, 1.04vw, 20px) clamp(22px, 1.67vw, 32px);
+    border-bottom: 1px solid var(--color-border-slate);
+    background: var(--color-surface-slate-50);
+    box-sizing: border-box;
+}
+
+.company-expiration-react-modal .modal-header.company-expiration-modal-header h2 {
+    margin: 0;
+    padding: 0;
+    width: auto;
+    border: none;
+    background: transparent;
+    color: var(--color-ink-muted);
+    font-size: clamp(14px, 1.25vw, 24px);
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+
+.company-expiration-react-modal .modal-header.company-expiration-modal-header .account-close {
+    margin-right: 6px !important;
 }
 
 .company-expiration-react-modal > .close {
@@ -2203,6 +2520,22 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     max-width: min(1120px, 96vw);
 }
 
+.modal-content.company-settings-modal-content--commission-only {
+    width: min(640px, 96vw);
+    max-width: min(640px, 96vw);
+}
+
+.company-settings-modal-content--commission-only .company-settings-split-right {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 0;
+    width: 100%;
+}
+
+.company-settings-modal-content--commission-only .company-settings-form-actions {
+    justify-content: flex-end;
+}
+
 /* 与 EDIT DOMAIN dfm-header 一致：整行背景含关闭按钮，勿用 .modal-content h2 单独铺底 */
 .company-settings-react-modal .company-settings-modal-header {
     box-sizing: border-box;
@@ -2219,9 +2552,10 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     width: auto;
     background: transparent;
     border: none;
-    font-size: var(--domain-fluid-14-125-24);
+    font-size: var(--text-page-title);
     font-weight: bold;
     color: var(--color-ink-muted);
+    letter-spacing: 0;
 }
 
 .company-settings-modal-body {
@@ -2236,9 +2570,9 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
 .company-settings-split {
     display: flex;
     flex-direction: row;
-    align-items: stretch;
+    align-items: flex-start;
     gap: 0;
-    min-height: min(48vh, 400px);
+    min-height: 0;
 }
 
 .company-settings-split-left {
@@ -2276,7 +2610,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     margin: 0 0 8px 0;
     padding-bottom: 6px;
     border-bottom: 2px solid var(--color-border-slate);
-    font-size: var(--domain-fluid-13-1-16);
+    font-size: var(--text-base);
     font-weight: 700;
     color: var(--color-ink);
     letter-spacing: -0.02em;
@@ -2308,7 +2642,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
 }
 
 .company-share-charge-on-save__state {
-    font-size: var(--domain-fluid-11-085-13);
+    font-size: var(--text-medium);
     font-weight: 700;
     color: var(--color-text-caption);
     min-width: 1.75em;
@@ -2388,6 +2722,25 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     width: min(1120px, 96vw);
     max-width: min(1120px, 96vw);
     box-sizing: border-box;
+}
+
+/* Auto Renew / user-page 会套用 userlist.css 的 .user-page .modal-content { height:100% }，须覆盖为按内容高度 */
+body.user-page .company-settings-react-modal.modal-content,
+body.auto-renew-page-body .company-settings-react-modal.modal-content {
+    width: min(1120px, 96vw) !important;
+    max-width: min(1120px, 96vw) !important;
+    height: auto !important;
+    max-height: calc(100vh - 48px);
+    display: block;
+    overflow: hidden;
+    margin: 0 !important;
+}
+
+body.user-page .company-settings-react-modal.modal-content .company-settings-modal-body,
+body.auto-renew-page-body .company-settings-react-modal.modal-content .company-settings-modal-body {
+    flex: none;
+    height: auto;
+    min-height: 0;
 }
 
 /* 关闭按钮：与图二 DevTools 量测一致（父级已 position: relative） */
@@ -2525,7 +2878,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     box-sizing: border-box;
     border: 1px solid var(--color-border-strong);
     border-radius: 6px;
-    font-size: var(--domain-text-13);
+    font-size: var(--text-small);
     font-family: var(--font-ui);
     line-height: 1.25;
     color: var(--color-text-label);
@@ -2714,8 +3067,8 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
 .company-settings-react-modal .cs-company-field-label {
     display: block;
     margin: 0 0 8px 0;
-    font-size: var(--domain-text-13);
-    font-weight: 600;
+    font-size: var(--text-medium);
+    font-weight: 700;
     color: var(--color-text-label);
     line-height: 1.25;
 }
@@ -2725,7 +3078,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     width: 100%;
     padding: 8px;
     text-align: center;
-    font-size: var(--domain-text-14);
+    font-size: var(--text-medium);
     font-weight: 600;
     line-height: 1.35;
     color: var(--color-ink-muted);
@@ -2788,7 +3141,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     min-height: 35.5px;
     padding: 8px 20px;
     font-family: var(--font-heading-page);
-    font-size: var(--domain-text-legacy-15936);
+    font-size: var(--text-base);
     font-weight: 600;
     line-height: 1;
     border: none;
@@ -2829,7 +3182,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
 }
 
 .company-settings-split-right .company-share-scroll {
-    flex: 1;
+    flex: 0 1 auto;
     min-height: 0;
     max-height: min(58vh, 520px);
 }
@@ -2923,7 +3276,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
 }
 
 .company-share-account-count-display {
-    font-size: var(--domain-fluid-10-072-12);
+    font-size: var(--text-tiny);
     font-weight: 500;
     color: var(--color-text-placeholder);
     line-height: 1.2;
@@ -2944,11 +3297,11 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
 }
 
 .company-share-role-alloc-label {
-    font-size: var(--domain-fluid-9-065-11);
+    font-size: var(--text-small);
     font-weight: 700;
     color: var(--color-page-fg);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0;
 }
 
 .company-share-role-header-middle .company-share-card-sum {
@@ -3001,7 +3354,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     color: var(--color-primary-strong);
     background: transparent;
     border-radius: 8px;
-    font-size: var(--domain-fluid-11-078-13);
+    font-size: var(--text-medium);
     font-weight: 600;
     cursor: pointer;
     transition: background-color 0.2s ease, transform 0.2s ease;
@@ -3055,9 +3408,9 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     align-items: center;
     padding: 4px 12px;
     border-radius: 999px;
-    font-size: var(--domain-fluid-11-083-14);
+    font-size: var(--text-small);
     font-weight: 700;
-    letter-spacing: 0.02em;
+    letter-spacing: 0;
 }
 
 .company-share-role-badge--sales {
@@ -3114,11 +3467,11 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     grid-template-columns: minmax(180px, 1.45fr) minmax(110px, 0.9fr) minmax(110px, 0.9fr) 2.25rem;
     gap: 8px;
     align-items: center;
-    font-size: var(--domain-fluid-10-073-12);
+    font-size: var(--text-tiny);
     font-weight: 600;
     color: var(--color-text-placeholder);
     text-transform: uppercase;
-    letter-spacing: 0.04em;
+    letter-spacing: 0;
     margin-bottom: 6px;
     padding: 0 2px;
 }
@@ -3177,7 +3530,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     height: 36px;
     box-sizing: border-box;
     padding: 8px 10px;
-    font-size: var(--domain-fluid-11-083-14);
+    font-size: var(--text-medium);
     border: 1px solid var(--account-select-card-border);
     border-radius: 8px;
     background: var(--color-surface);
@@ -3271,7 +3624,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     border-radius: 8px;
     background: var(--color-surface-slate-200);
     color: var(--color-page-fg);
-    font-size: var(--domain-fluid-11-083-14);
+    font-size: var(--text-medium);
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     text-align: right;
@@ -3311,7 +3664,7 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
     color: var(--color-domain-info-text);
     border: 2px dashed var(--color-border-dashed-info);
     border-radius: 12px;
-    font-size: var(--domain-fluid-13-095-15);
+    font-size: var(--text-base);
     font-weight: 700;
     text-align: center;
     cursor: pointer;
@@ -3644,6 +3997,11 @@ body.domain-page .domain-react-page .btn-delete.active {
 /* Add Account (Share % in Company Settings) — above Company Settings overlay (2147483001) */
 body.domain-page #account-addModal.account-modal {
     z-index: 2147483002 !important;
+}
+
+body.domain-page #account-addModal .account-modal-header h2,
+body.domain-page #account-editModal .account-modal-header h2 {
+    letter-spacing: 0;
 }
 
 /* Company picker from Add Account — above #account-addModal (2147483002) */
@@ -4181,7 +4539,7 @@ body.domain-page .domain-react-page .domain-action-cell {
     border: 1px solid var(--color-border-strong);
     background: var(--color-surface-gray-soft);
     color: var(--color-text-label);
-    font-size: var(--domain-text-13);
+    font-size: var(--text-small);
     font-weight: 600;
     font-family: inherit;
     line-height: 1.2;
@@ -4469,11 +4827,12 @@ body.domain-page .domain-react-page .table-header {
     background-image: none !important;
     border-radius: 8px;
     margin-top: 0 !important;
-    margin-bottom: 0px;
+    margin-bottom: 8px;
     font-weight: bold;
     color: var(--color-text-label) !important;
     font-size: var(--text-base);
     min-width: 0;
+    flex-shrink: 0;
     /* 允许内容收缩 */
 }
 
@@ -4485,11 +4844,14 @@ body.domain-page .domain-react-page .domain-cards {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    max-height: calc(100vh - 250px);
-    /* 添加这行 */
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: calc(100vh - var(--layout-page-top-inset) - clamp(148px, 12vw, 220px));
     overflow-y: auto;
-    /* 添加这行 */
     overflow-x: visible;
+    padding-top: 2px;
+    padding-bottom: 72px;
+    box-sizing: border-box;
     /* 允许 tooltip 显示 */
 }
 
@@ -4750,7 +5112,7 @@ body.domain-page .domain-confirm-modal-content .confirm-title {
     font-size: var(--domain-text-40) !important;
     font-weight: 700 !important;
     line-height: 1 !important;
-    letter-spacing: -0.02em !important;
+    letter-spacing: 2px !important;
     color: var(--color-body-strong) !important;
 }
 
@@ -4813,7 +5175,7 @@ body.domain-page .domain-confirm-modal-content .confirm-actions {
 .modal-header-wide h2 {
     font-size: var(--domain-text-20);
     font-weight: 700;
-    letter-spacing: 1.5px;
+    letter-spacing: 2px;
     color: var(--color-text-pure);
     margin: 0;
     background: transparent;

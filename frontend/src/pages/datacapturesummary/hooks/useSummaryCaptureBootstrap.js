@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchSummaryServerState } from "../lib/summaryApi.js";
-import { summaryQueryKeys } from "../lib/summaryQueryKeys.js";
 import {
   applyTransformationsToTableData,
   parseSummaryProcessMeta,
@@ -12,6 +11,26 @@ import {
   loadSummaryCaptureSession,
 } from "../lib/summaryStorage.js";
 import { clearSuppressedRowKeys } from "../lib/summarySuppressedRows.js";
+import { clearSummaryRefreshDraftStorage } from "../lib/summaryRefreshStatePure.js";
+
+const summaryQueryKeys = {
+  root: () => ["summary"],
+  session: () => [...summaryQueryKeys.root(), "session"],
+  formCatalog: (companyId) => [...summaryQueryKeys.root(), "formCatalog", companyId ?? "none"],
+  serverState: (companyId, processId, processCode) => [
+    ...summaryQueryKeys.root(),
+    "serverState",
+    companyId ?? "none",
+    processId ?? "none",
+    processCode ?? "",
+  ],
+  templates: (captureId, companyId) => [
+    ...summaryQueryKeys.root(),
+    "templates",
+    captureId ?? "none",
+    companyId ?? "none",
+  ],
+};
 
 /** Capture session read + optional server state prefetch for pure React Summary. */
 export function useSummaryCaptureBootstrap({ captureScope, companyId, searchParams, enabled }) {
@@ -22,13 +41,6 @@ export function useSummaryCaptureBootstrap({ captureScope, companyId, searchPara
     freshPinnedRef.current = true;
   }
   const isFreshCaptureRound = freshPinnedRef.current;
-
-  useEffect(() => {
-    if (isFreshCaptureRound) {
-      clearStaleCaptureIdForFreshRound();
-      clearSuppressedRowKeys();
-    }
-  }, [isFreshCaptureRound]);
 
   const captureSession = useMemo(() => {
     if (!enabled) return null;
@@ -55,6 +67,14 @@ export function useSummaryCaptureBootstrap({ captureScope, companyId, searchPara
     () => parseSummaryProcessMeta(captureSession?.processData ?? null),
     [captureSession]
   );
+
+  useEffect(() => {
+    if (isFreshCaptureRound) {
+      clearStaleCaptureIdForFreshRound();
+      clearSuppressedRowKeys();
+      clearSummaryRefreshDraftStorage(captureScope, { processId, processCode });
+    }
+  }, [isFreshCaptureRound, captureScope, processId, processCode]);
 
   const serverStateQueryEnabled =
     enabled &&

@@ -92,3 +92,45 @@
   width: 36px;
   height: 36px;
 }
+
+/* Data Capture Summary — same single-page scroll as Ownership (all viewport widths) */
+html:has(body.datacapture-summary-page) {
+  height: auto !important;
+  overflow: visible !important;
+}
+
+body.dashboard-page.datacapture-summary-page,
+body.ec-auth-shell.dashboard-page.datacapture-summary-page {
+  height: auto !important;
+  min-height: 100vh !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+body.datacapture-summary-page #root,
+body.datacapture-summary-page .ec-page-shell,
+body.datacapture-summary-page .ec-page-shell__content,
+body.datacapture-summary-page .container,
+body.datacapture-summary-page #summaryTableContainer,
+body.datacapture-summary-page .summary-table-container {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body.datacapture-summary-page .ec-page-shell {
+  flex: none !important;
+}
+
+body.datacapture-summary-page .ec-page-shell__content {
+  min-height: 0 !important;
+}
+
+body.datacapture-summary-page .summary-table-x-scroll {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  max-height: none !important;
+  height: auto !important;
+}

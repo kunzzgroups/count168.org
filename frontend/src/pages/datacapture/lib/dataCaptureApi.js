@@ -1,6 +1,21 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { dataCaptureScopeApiParams, dataCaptureScopeCacheKey } from "./dataCaptureScope.js";
 
+/** One option per currency code (subsidiary + group rows can share company_id). */
+export function dedupeCaptureCurrenciesByCode(rows) {
+  const byCode = new Map();
+  for (const row of rows || []) {
+    const code = String(row.code || "").trim().toUpperCase();
+    if (!code) continue;
+    const id = String(row.id);
+    const existing = byCode.get(code);
+    if (!existing || Number(id) < Number(existing.id)) {
+      byCode.set(code, { id, code });
+    }
+  }
+  return Array.from(byCode.values()).sort((a, b) => a.code.localeCompare(b.code));
+}
+
 export const dataCaptureQueryKeys = {
   root: () => ["dataCapture"],
   permissions: (companyCode) => [
@@ -71,7 +86,7 @@ export function buildDateOptions() {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     const dateString = `${year}-${month}-${day}`;
-    const weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    const weekdayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
     const weekday = weekdayNames[date.getDay()];
     opts.push({
       value: dateString,
@@ -148,12 +163,12 @@ export async function fetchGroupCaptureCurrencies(viewGroup) {
     );
     const json = await response.json();
     if (!response.ok || !json.success || !Array.isArray(json.data)) return [];
-    return json.data
-      .map((r) => ({
+    return dedupeCaptureCurrenciesByCode(
+      json.data.map((r) => ({
         id: String(r.id),
         code: String(r.code || "").trim().toUpperCase(),
-      }))
-      .sort((a, b) => a.code.localeCompare(b.code));
+      })),
+    );
   } catch {
     return [];
   }
@@ -247,7 +262,7 @@ export async function fetchProcessDetail(processId, scope) {
   return response.json();
 }
 
-/** Resolve numeric process.id for SALARY/BONUS under group entity company. */
+/** Resolve numeric process.id for SALARY/COMMISSION/BONUS under group entity company. */
 export async function fetchGroupProcessIdByCode(scope, processCode, currencyId = null) {
   const params = new URLSearchParams({
     action: "get_group_process_id",

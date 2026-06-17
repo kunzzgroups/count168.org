@@ -270,7 +270,8 @@ function rowToItem(array $row, $is_deleted = 0, string $ownerCode = '', string $
     if (stripos(trim($descriptionRaw), 'Commision FROM ') === 0
         || stripos(trim($descriptionRaw), 'Commision for ') === 0
         || $remarkTrim === '[DOMAIN_SHARE_COMMISSION]'
-        || stripos($remarkTrim, '[DOMAIN_SHARE_COMMISSION|') === 0) {
+        || stripos($remarkTrim, '[DOMAIN_SHARE_COMMISSION|') === 0
+        || stripos($remarkTrim, '[AUTO_RENEW|COMMISSION|') === 0) {
         $isDomainShareCommission = true;
     }
     if (stripos(trim($descriptionRaw), 'Pay Domain Fee') === 0
@@ -306,7 +307,18 @@ function rowToItem(array $row, $is_deleted = 0, string $ownerCode = '', string $
             $roleLabel = 'Profit';
         }
         $sourceCompany = '';
-        if (preg_match('/^\[DOMAIN_SHARE_COMMISSION\|([^|\]]+)/i', $remarkTrim, $mSrc)) {
+        if (stripos($remarkTrim, '[AUTO_RENEW|COMMISSION|') === 0) {
+            if (preg_match('/^\[AUTO_RENEW\|COMMISSION\|GROUP\|([^|\]]+)/i', $remarkTrim, $mAr)) {
+                $sourceCompany = strtoupper(trim((string) $mAr[1]));
+            } elseif (preg_match('/^\[AUTO_RENEW\|COMMISSION\|([^|\]]+)/i', $remarkTrim, $mAr)) {
+                $sourceCompany = strtoupper(trim((string) $mAr[1]));
+            }
+            if ($sourceCompany === '') {
+                if (preg_match('/Commision\s+for\s+([A-Za-z0-9_-]+)/i', trim((string) $descriptionRaw), $mFor)) {
+                    $sourceCompany = strtoupper(trim((string) $mFor[1]));
+                }
+            }
+        } elseif (preg_match('/^\[DOMAIN_SHARE_COMMISSION\|([^|\]]+)/i', $remarkTrim, $mSrc)) {
             $sourceCompany = strtoupper(trim((string)$mSrc[1]));
         }
         if ($sourceCompany === '') {

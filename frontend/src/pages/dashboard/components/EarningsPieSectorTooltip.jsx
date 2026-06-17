@@ -2,37 +2,48 @@ import { formatCurrency, formatI18nTemplate } from "../lib/dashboardFormat.js";
 
 export function EarningsPieSectorTooltip({
   slice,
+  displayAmount,
+  nativeAmount,
   sharePct,
-  displayConverted,
+  unitRateLabel,
   baseCode,
-  useConverted,
-  convertedApproxTemplate,
+  rateOneUnitTemplate,
+  nativeAmountTemplate,
   placeAbove = true,
 }) {
   if (!slice?.code) return null;
-  const displayAmount = slice.originalEarnings ?? slice.earnings ?? 0;
-  const convertedAmount =
-    displayConverted != null ? displayConverted : slice.earningsConverted;
-  const showConverted =
-    useConverted &&
-    convertedAmount != null &&
+  const showNative =
+    nativeAmount != null &&
     String(slice.code).toUpperCase() !== String(baseCode || "").toUpperCase();
+  const showShare = sharePct != null;
+  const showRate = !showShare && unitRateLabel && unitRateLabel !== "—";
 
   return (
     <div className={`dashboard-summary-pie-tooltip-stack${placeAbove ? "" : " is-below"}`}>
       <div className="dashboard-summary-pie-tooltip dashboard-summary-pie-tooltip--sector">
         <div className="dashboard-summary-pie-tooltip-label">{slice.code}</div>
-        <div className="dashboard-summary-pie-tooltip-value">{formatCurrency(displayAmount)}</div>
-        {showConverted && (
+        <div className="dashboard-summary-pie-tooltip-value">
+          {displayAmount != null ? formatCurrency(displayAmount) : "—"}
+        </div>
+        {showNative && (
           <div className="dashboard-summary-pie-tooltip-converted">
-            {formatI18nTemplate(convertedApproxTemplate, {
-              amount: formatCurrency(convertedAmount),
-              code: baseCode,
+            {formatI18nTemplate(nativeAmountTemplate, {
+              amount: formatCurrency(nativeAmount),
+              code: slice.code,
             })}
           </div>
         )}
-        {sharePct != null && (
+        {showShare && (
           <div className="dashboard-summary-pie-tooltip-pct">{sharePct.toFixed(1)}%</div>
+        )}
+        {showRate && (
+          <div className="dashboard-summary-pie-tooltip-pct">
+            {formatI18nTemplate(rateOneUnitTemplate, {
+              from: slice.code,
+              rate: unitRateLabel,
+              base: baseCode,
+            })}
+          </div>
         )}
       </div>
       <div className="dashboard-summary-pie-tooltip-arrow" aria-hidden="true" />

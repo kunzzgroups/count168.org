@@ -1,5 +1,6 @@
 ﻿body.user-page {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: var(--font-ui) !important;
+    font-size: var(--text-medium) !important;
     margin: 0;
     padding: 0;
     min-height: 100vh;
@@ -38,6 +39,12 @@ body.user-page:not(.user-page--show-all) {
     /* 添加这行 */
 }
 
+.user-page .container,
+.user-page .content {
+    font-family: inherit;
+    font-size: inherit;
+}
+
 @media (max-width: 1200px) {
     body.ec-auth-shell.user-page .container {
         padding-left: var(--layout-main-offset);
@@ -66,7 +73,7 @@ body.user-page:not(.user-page--show-all) {
 
 .user-page .user-table-wrapper .table-header {
     flex-shrink: 0;
-    margin-top: 8px;
+    margin-top: 12px;
 }
 
 /*
@@ -164,12 +171,13 @@ body.user-page .user-list-table.user-table-wrapper--bulk-delete-col .user-card.u
 .user-list-table .user-list-table-header,
 body.user-page .user-list-table .table-header.user-list-table-header {
     padding: var(--table-header-height) !important;
-    margin-top: 8px;
+    margin-top: 12px;
     background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%);
     border-radius: 8px 8px 0 0;
     font-weight: bold;
     color: white;
     font-size: var(--text-base);
+    font-family: inherit;
     min-width: 0;
 }
 
@@ -297,6 +305,13 @@ body.account-page .action-buttons-container {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
     flex-shrink: 0;
+}
+
+/* 与 Games Process List：panel 底无额外 margin，表头 margin-top 12px */
+body.user-page .action-buttons-container .user-gc-inline-panel .user-gc-inline-label,
+body.account-page .action-buttons-container .user-gc-inline-panel .user-gc-inline-label {
+    text-align: left;
+    justify-self: start;
 }
 
 /* 顶栏白卡第一行：与 Admin User List 同高（抵消其它表对 .action-buttons 的 margin 叠加） */

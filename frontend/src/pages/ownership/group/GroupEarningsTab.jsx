@@ -2,7 +2,7 @@ import React from "react";
 import GroupEarningCard from "./components/GroupEarningCard.jsx";
 
 export default function GroupEarningsTab({ shell, group }) {
-  const { t, isHistoricalView } = shell;
+  const { t, isHistoricalView, readOnlyMode } = shell;
   const {
     geGroups,
     geLoading,
@@ -48,7 +48,7 @@ export default function GroupEarningsTab({ shell, group }) {
               onCancel={() => setGeExpanded(null)}
               onLinkPartner={(login) => geLinkPartner(grp.group_id, login)}
               calcTotal={calcTotal}
-              readOnlyMode={viewOnlyMode}
+              readOnlyMode={readOnlyMode}
               isHistoricalView={isHistoricalView}
               fmtPct={fmtPct}
               t={t}

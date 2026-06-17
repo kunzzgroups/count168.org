@@ -5,14 +5,12 @@ import { notifyCompanySessionUpdated } from "../../utils/company/companySessionE
 import { syncCompanySessionApi } from "../../utils/company/companySessionSync.js";
 import {
   clearDashboardGroupFilterKeepCompany,
-  companiesForCompanyPicker,
   companiesGroupEntityList,
   companyRowIsGroupEntity,
   companiesInGroupList,
   dedupeOwnerCompaniesByCode,
   DASHBOARD_GROUP_FILTER_EVENT,
   DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
-  excludeGroupLabelsFromCompanyPicker,
   filterCompaniesWithDisplayId,
   isDashboardGroupOnlyMode,
   isSubsidiaryCompanyRow,
@@ -34,10 +32,11 @@ import {
   resolveCompanyPickWhenSwitchingGroup,
   resolveBootCompanyId,
   resolveInitialSelectedGroupFromSession,
-  independentCompaniesForPicker,
   sortedUniqueGroupIds,
   fetchOwnerCompaniesAll,
 } from "../../utils/company/sharedCompanyFilter.js";
+import { pathnameIs, spaPath } from "../../utils/routing/pageRoutes.js";
+import { replaceBrowserPathOnly } from "../../utils/routing/privateBrowserUrl.js";
 import {
   canClearCompanySelection,
   canUseGroupOnlyMode,
@@ -75,6 +74,13 @@ import {
   canInteractWithReadOnlyToggle,
   isUserModalPageReadOnlyLock,
   getUserEditFieldLocks,
+  isCompanyInUserListPicker,
+  readUserListGroupFilterOptOut,
+  resolveUserListFetchScopeKey,
+  resolveUserListInlinePickerCompanies,
+  resolveUserListMutationScopeCompanyId,
+  shouldLoadUserListData,
+  userListHasMutationScope,
 } from "./userListLogic.js";
 
 // Components
@@ -336,13 +342,8 @@ export default function UserListPage() {
   }, [currentUserRole]);
 
   const syncUrl = useCallback(() => {
-    const url = new URL(window.location.href);
-    if (companyId) url.searchParams.set("company_id", String(companyId));
-    else url.searchParams.delete("company_id");
-    if (search.trim()) url.searchParams.set("search", search.trim()); else url.searchParams.delete("search");
-    if (showAll) url.searchParams.set("showAll", "1"); else url.searchParams.delete("showAll");
-    window.history.replaceState(null, "", url.pathname + url.search);
-  }, [companyId, search, showAll]);
+    replaceBrowserPathOnly();
+  }, []);
 
   useEffect(() => { if (!bootLoading) syncUrl(); }, [bootLoading, syncUrl]);
 
@@ -380,6 +381,12 @@ export default function UserListPage() {
   }, []);
 
   useEffect(() => {
+    if (showAll) document.body.classList.add("user-page--show-all");
+    else document.body.classList.remove("user-page--show-all");
+    return () => document.body.classList.remove("user-page--show-all");
+  }, [showAll]);
+
+  useEffect(() => {
     if (!sessionReady || !me) return;
     if (bootInitializedRef.current) return;
     bootInitializedRef.current = true;
@@ -388,7 +395,7 @@ export default function UserListPage() {
       try {
         const perms = Array.isArray(me.permissions) ? me.permissions : [];
         if (perms.length > 0 && !perms.includes("admin")) {
-          navigate("/dashboard", { replace: true });
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
         const rows = (await fetchOwnerCompaniesAll()).map(normalizeCompanyRow);
@@ -582,9 +589,35 @@ export default function UserListPage() {
           bootGroup = null;
         }
 
+        const bootGroupIds = sortedUniqueGroupIds(rows);
+        if (
+          !groupOnlyBoot &&
+          effectiveNum != null &&
+          !isCompanyInUserListPicker(
+            {
+              companies: rows,
+              groupIds: bootGroupIds,
+              selectedGroup: bootGroup,
+              preferredCompanyId: effectiveNum,
+              groupFilterOptOut,
+            },
+            effectiveNum,
+          )
+        ) {
+          effectiveNum = null;
+          stripCompanyIdFromUrl();
+          persistDashboardSelectedCompany(null);
+        }
+
+        if (groupFilterOptOut && effectiveNum == null && !groupOnlyBoot) {
+          const pick = resolveCompanyWhenClosingGroup(rows, null, bootGroupIds);
+          if (pick?.id != null) effectiveNum = Number(pick.id);
+        }
+
         setCompanyId(groupOnlyBoot ? null : effectiveNum);
         setSelectedGroup(bootGroup);
         setSearch(String(url.searchParams.get("search") || ""));
+        setShowInactive(url.searchParams.get("showInactive") === "1");
         setShowAll(url.searchParams.get("showAll") === "1");
 
         const syncCompanyId =
@@ -604,7 +637,7 @@ export default function UserListPage() {
           })();
         }
       } catch {
-        if (!cancelled) navigate("/login", { replace: true });
+        if (!cancelled) navigate(spaPath("login"), { replace: true });
       } finally {
         if (!cancelled) setBootLoading(false);
       }
@@ -630,7 +663,6 @@ export default function UserListPage() {
     groupAllMode,
     handlePickAllGroups,
     handlePickAllInGroup,
-    isListScopeReady,
     setGroupsAllMode,
     setGroupAllMode,
   } = useGcFilterWithAllModes({
@@ -665,34 +697,18 @@ export default function UserListPage() {
   });
 
   /** When no Group is selected, the shared picker only lists “ungrouped” rows — often empty for AP/IG-only tenants. */
-  const inlineCompaniesForPicker = useMemo(() => {
-    const groupFilterOptOut =
-      typeof sessionStorage !== "undefined" &&
-      sessionStorage.getItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY) === "1";
-
-    const independentPicker = () => {
-      const list = independentCompaniesForPicker(companies, groupIds);
-      if (list.length) {
-        return dedupeOwnerCompaniesByCode(list, companyId);
-      }
-      return excludeGroupLabelsFromCompanyPicker(
-        dedupeOwnerCompaniesByCode(filterCompaniesWithDisplayId(companies), companyId),
+  const inlineCompaniesForPicker = useMemo(
+    () =>
+      resolveUserListInlinePickerCompanies({
+        companies,
         groupIds,
-      ).filter((c) => !normalizeCompanyGroupId(c));
-    };
-
-    if (!selectedGroup || groupFilterOptOut) {
-      return independentPicker();
-    }
-
-    if (companiesForPicker.length > 0) return companiesForPicker;
-
-    const effectiveGroup = String(selectedGroup).trim().toUpperCase();
-    return dedupeOwnerCompaniesByCode(
-      companiesForCompanyPicker(companies, effectiveGroup, groupIds),
-      companyId,
-    );
-  }, [companiesForPicker, selectedGroup, companyId, companies, groupIds]);
+        selectedGroup,
+        preferredCompanyId: companyId,
+        companiesForPickerFromHook: companiesForPicker,
+        groupFilterOptOut: readUserListGroupFilterOptOut(),
+      }),
+    [companiesForPicker, selectedGroup, companyId, companies, groupIds],
+  );
 
   const groupOnlyUserList = useMemo(() => {
     if (groupsAllMode || groupAllMode) return false;
@@ -736,6 +752,36 @@ export default function UserListPage() {
     const sessionId = me?.company_id != null ? Number(me.company_id) : Number.NaN;
     return Number.isFinite(sessionId) && sessionId > 0 ? sessionId : null;
   }, [companyId, groupOnlyUserList, anchorCompanyId, selectedGroup, companies, me]);
+
+  /** Add User: active group ledger or company pill in picker — no session-only fallback. */
+  const mutationScopeCompanyId = useMemo(
+    () =>
+      resolveUserListMutationScopeCompanyId({
+        companyId,
+        selectedGroup,
+        groupOnlyUserList,
+        anchorCompanyId,
+        groupsAllMode,
+        groupAllMode,
+        scopeCompanyId,
+        companies,
+        groupIds,
+        companiesForPicker,
+        groupFilterOptOut: readUserListGroupFilterOptOut(),
+      }),
+    [
+      companyId,
+      selectedGroup,
+      groupOnlyUserList,
+      anchorCompanyId,
+      groupsAllMode,
+      groupAllMode,
+      scopeCompanyId,
+      companies,
+      groupIds,
+      companiesForPicker,
+    ],
+  );
 
   /** Group-only list/add-user: group entity only (e.g. AP), not subsidiaries (e.g. C168). */
   const groupScopedModalCompanies = useMemo(() => {
@@ -1046,8 +1092,84 @@ export default function UserListPage() {
 
   onSwitchCompanyRef.current = onSwitchCompany;
 
+  const userListFetchScopeKey = useMemo(() => {
+    if (bootLoading) return "";
+    if (
+      !shouldLoadUserListData({
+        companyId,
+        selectedGroup,
+        groupOnlyMode: groupOnlyUserList,
+        groupsAllMode,
+        groupAllMode,
+      })
+    ) {
+      return "";
+    }
+    return resolveUserListFetchScopeKey({
+      companyId,
+      selectedGroup,
+      groupsAllMode,
+      groupAllMode,
+      groupOnlyMode: groupOnlyUserList,
+    });
+  }, [
+    bootLoading,
+    companyId,
+    groupAllMode,
+    groupOnlyUserList,
+    groupsAllMode,
+    selectedGroup,
+  ]);
+
   useEffect(() => {
-    if (!bootLoading && me && (isListScopeReady || groupOnlyUserList)) {
+    if (bootLoading || groupsAllMode || groupAllMode) return;
+    if (companyId == null) return;
+    if (groupOnlyUserList) return;
+    if (
+      isCompanyInUserListPicker(
+        {
+          companies,
+          groupIds,
+          selectedGroup,
+          preferredCompanyId: companyId,
+          companiesForPickerFromHook: companiesForPicker,
+          groupFilterOptOut: readUserListGroupFilterOptOut(),
+        },
+        companyId,
+      )
+    ) {
+      return;
+    }
+    skipCompanyFetchEffectRef.current = true;
+    listFetchAbortRef.current?.abort();
+    flushSync(() => {
+      setCompanyId(null);
+      setUsersRaw([]);
+    });
+    stripCompanyIdFromUrl();
+    persistDashboardSelectedCompany(null);
+  }, [
+    bootLoading,
+    companyId,
+    companies,
+    companiesForPicker,
+    groupIds,
+    groupsAllMode,
+    groupAllMode,
+    groupOnlyUserList,
+    selectedGroup,
+  ]);
+
+  useEffect(() => {
+    if (bootLoading) return;
+    if (userListFetchScopeKey) return;
+    listFetchAbortRef.current?.abort();
+    setUsersRaw([]);
+    bootFetchedUsersKeyRef.current = null;
+  }, [bootLoading, userListFetchScopeKey]);
+
+  useEffect(() => {
+    if (!bootLoading && me && userListFetchScopeKey) {
       if (skipCompanyFetchEffectRef.current) {
         skipCompanyFetchEffectRef.current = false;
         return;
@@ -1071,12 +1193,12 @@ export default function UserListPage() {
     companyId,
     groupOnlyUserList,
     aggregateUserList,
-    isListScopeReady,
     me,
     fetchUsers,
     selectedGroup,
     groupsAllMode,
     groupAllMode,
+    userListFetchScopeKey,
   ]);
 
   /** Company login without Admin-assigned group must auto-pick a subsidiary when a group pill is shown. */
@@ -1411,7 +1533,7 @@ export default function UserListPage() {
 
   useEffect(() => {
     if (bootLoading) return;
-    if (location.pathname !== "/userlist") return;
+    if (!pathnameIs("userlist", location.pathname)) return;
     syncGcFilterFromSession();
   }, [bootLoading, location.pathname, syncGcFilterFromSession]);
 
@@ -1711,10 +1833,10 @@ export default function UserListPage() {
       notify(t("readOnlyActionBlocked"), "danger");
       return;
     }
-    if (!scopeCompanyId) return;
-    const modalCacheKey = resolveModalAccessCacheKey(scopeCompanyId, groupOnlyUserList, selectedGroup);
+    if (!mutationScopeCompanyId) return;
+    const modalCacheKey = resolveModalAccessCacheKey(mutationScopeCompanyId, groupOnlyUserList, selectedGroup);
     if (!modalAccessCacheRef.current.has(modalCacheKey)) {
-      await fetchModalAccountsProcesses(scopeCompanyId);
+      await fetchModalAccountsProcesses(mutationScopeCompanyId);
     }
     const avail = getAvailableRolesForCreation(currentUserRole);
     if (avail.length === 0) { notify(t("noPermissionCreateAccounts"), "danger"); return; }
@@ -1726,7 +1848,10 @@ export default function UserListPage() {
     const allP = new Set(PERMISSION_KEYS.filter((k) => !permDisabledMap[k])); setPermSelected(allP);
     void loadCompaniesForModal();
     const cachedAccess = modalAccessCacheRef.current.get(modalCacheKey);
-    const currentAccess = Number(modalAccessCompanyIdRef.current) === Number(scopeCompanyId) ? { accounts: modalAccounts, processes: modalProcesses } : null;
+    const currentAccess =
+      Number(modalAccessCompanyIdRef.current) === Number(mutationScopeCompanyId)
+        ? { accounts: modalAccounts, processes: modalProcesses }
+        : null;
     const initialAccess = cachedAccess || currentAccess || { accounts: [], processes: [] };
     if (!cachedAccess && !currentAccess) { setModalAccounts([]); setModalProcesses([]); }
     setSelectedAccountIds(new Set(initialAccess.accounts.map((a) => Number(a.id)))); setSelectedProcessIds(new Set(initialAccess.processes.map((p) => Number(p.id))));
@@ -1766,7 +1891,7 @@ export default function UserListPage() {
       }
     }
     setModalOpen(true);
-    void fetchModalAccountsProcesses(scopeCompanyId, true).then(({ accounts: accList, processes: procList }) => {
+    void fetchModalAccountsProcesses(mutationScopeCompanyId, true).then(({ accounts: accList, processes: procList }) => {
       if (loadSeq !== modalLoadSeqRef.current) return;
       setSelectedAccountIds(new Set(accList.map((a) => Number(a.id)))); setSelectedProcessIds(new Set(procList.map((p) => Number(p.id))));
     });
@@ -1830,7 +1955,28 @@ export default function UserListPage() {
       const res = await fetch(buildApiUrl("api/users/toggle_status_api.php"), { method: "POST", body: fd, credentials: "include" });
       const json = await res.json(); const newStatus = json?.data?.newStatus || json?.newStatus;
       if (!json.success || !newStatus) { notifyApi(json.message, "toggleFailed", "danger"); return; }
-      setUsersRaw((prev) => prev.map((u) => (Number(u.id) === Number(row.id) ? { ...u, status: newStatus } : u))); notify(t("statusUpdated"), "success");
+      setUsersRaw((prev) => {
+        const next = prev.map((u) => (Number(u.id) === Number(row.id) ? { ...u, status: newStatus } : u));
+        const s = userListScopeRef.current;
+        const cacheKey = resolveUserListCacheKey(
+          s.companyId,
+          s.groupOnlyUserList,
+          s.selectedGroup,
+          s.aggregateUserList,
+          s.groupsAllMode,
+          s.groupAllMode,
+        );
+        if (cacheKey) userListCacheRef.current.set(cacheKey, next);
+        return next;
+      });
+      if (normRole(newStatus) === "active") {
+        setSelectedDeleteIds((prev) => {
+          const next = new Set(prev);
+          next.delete(row.id);
+          return next;
+        });
+      }
+      notify(t("statusUpdated"), "success");
     } catch { notify(t("toggleFailed"), "danger"); }
   };
 
@@ -2041,11 +2187,16 @@ export default function UserListPage() {
     <>
       <div className="container">
         <div className="content">
-          <div className="action-buttons-container" style={{ marginBottom: 20 }}>
+          <div className="action-buttons-container">
             <div className="action-buttons" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 {canCreateUser ? (
-                <button type="button" className="btn btn-add" onClick={openAdd} disabled={bootLoading || userMutationsBlocked}>
+                <button
+                  type="button"
+                  className="btn btn-add"
+                  onClick={openAdd}
+                  disabled={bootLoading || userMutationsBlocked || !userListHasMutationScope(mutationScopeCompanyId)}
+                >
                   <svg className="btn-add__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                   </svg>
@@ -2070,18 +2221,12 @@ export default function UserListPage() {
                 <div className="userlist-filter-chips" role="group">
                   <button
                     type="button"
-                    className={`user-filter-chip${showInactive && !showAll ? " is-selected" : ""}`}
-                    aria-pressed={showInactive && !showAll}
-                    onClick={() => {
-                      if (showInactive && !showAll) setShowInactive(false);
-                      else {
-                        setShowInactive(true);
-                        setShowAll(false);
-                      }
-                    }}
+                    className={`user-filter-chip${showInactive ? " is-selected" : ""}`}
+                    aria-pressed={showInactive}
+                    onClick={() => setShowInactive((prev) => !prev)}
                   >
                     <span className="user-filter-chip__dot" aria-hidden>
-                      {showInactive && !showAll ? (
+                      {showInactive ? (
                         <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M6 12l4 4 8-8" />
                         </svg>
@@ -2093,13 +2238,7 @@ export default function UserListPage() {
                     type="button"
                     className={`user-filter-chip${showAll ? " is-selected" : ""}`}
                     aria-pressed={showAll}
-                    onClick={() => {
-                      if (showAll) setShowAll(false);
-                      else {
-                        setShowAll(true);
-                        setShowInactive(false);
-                      }
-                    }}
+                    onClick={() => setShowAll((prev) => !prev)}
                   >
                     <span className="user-filter-chip__dot" aria-hidden>
                       {showAll ? (

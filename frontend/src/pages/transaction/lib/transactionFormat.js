@@ -76,6 +76,20 @@ export function formatHistoryMoney(v) {
   return v === "-" ? "-" : formatPaymentHistoryMoneyHalfUp(v);
 }
 
+/** Payment History Balance column: show 0.00 when cleared (legacy PHP showed 0.00, not "-"). */
+export function formatHistoryBalanceMoney(v) {
+  if (v === "-" || v === null || v === undefined) return "-";
+  const cleaned = String(v).replace(/,/g, "").trim();
+  if (cleaned === "" || cleaned === "-") return "0.00";
+  try {
+    const rounded = MoneyDecimal.formatFixedHalfUp(cleaned, 2);
+    if (MoneyDecimal.toDecimal(rounded).isZero()) return "0.00";
+    return MoneyDecimal.formatThousands(rounded, 2);
+  } catch {
+    return "0.00";
+  }
+}
+
 const RATE_MAX_DECIMALS = 8;
 const RATE_HISTORY_MAX_DECIMALS = 6;
 

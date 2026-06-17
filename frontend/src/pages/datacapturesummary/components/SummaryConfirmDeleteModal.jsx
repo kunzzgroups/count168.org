@@ -1,3 +1,5 @@
+import { portalToDocumentBody } from "../../../components/ProcessModalPortal.jsx";
+
 export default function SummaryConfirmDeleteModal({
   t,
   open,
@@ -7,7 +9,7 @@ export default function SummaryConfirmDeleteModal({
 }) {
   if (!open) return null;
 
-  return (
+  return portalToDocumentBody(
     <div id="confirmDeleteModal" className="summary-modal" style={{ display: "flex" }} role="dialog" aria-modal="true">
       <div className="summary-confirm-modal-content">
         <div className="summary-confirm-icon-container">

@@ -13,6 +13,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../api_response.php';
 
 /**
@@ -86,6 +87,32 @@ function currency_order_decode_to_company_map(?string $json, ?array &$legacyFlat
     return $map;
 }
 
+/**
+ * Resolve view_group for company access checks (GET query or group login).
+ */
+function currency_order_view_group(): ?string
+{
+    if (isset($_GET['view_group']) && trim((string) $_GET['view_group']) !== '') {
+        return gc_normalize_view_group((string) $_GET['view_group']);
+    }
+    if (isset($_GET['group_id']) && trim((string) $_GET['group_id']) !== '') {
+        return gc_normalize_view_group((string) $_GET['group_id']);
+    }
+    if (gc_is_group_login()) {
+        return gc_session_login_identifier();
+    }
+
+    return null;
+}
+
+function assert_currency_order_company_access(PDO $pdo, int $companyId): void
+{
+    if ($companyId <= 0) {
+        return;
+    }
+    gc_assert_api_company_access($pdo, $companyId, currency_order_view_group());
+}
+
 try {
     if (!isset($_SESSION['user_id'])) {
         api_error('未登录', 401);
@@ -101,6 +128,12 @@ try {
 
     if ($method === 'GET') {
         $companyId = isset($_GET['company_id']) ? (int) $_GET['company_id'] : (int) ($_SESSION['company_id'] ?? 0);
+        try {
+            assert_currency_order_company_access($pdo, $companyId);
+        } catch (RuntimeException $e) {
+            api_error('无权访问该公司', 403);
+            exit;
+        }
 
         $stmt = $pdo->prepare('SELECT currency_order FROM account_currency_display_order WHERE account_id = ?');
         $stmt->execute([$accountId]);
@@ -133,6 +166,12 @@ try {
         }
         if ($companyId <= 0) {
             api_error('缺少 company_id（且 session 中无公司）', 400);
+            exit;
+        }
+        try {
+            assert_currency_order_company_access($pdo, $companyId);
+        } catch (RuntimeException $e) {
+            api_error('无权访问该公司', 403);
             exit;
         }
 

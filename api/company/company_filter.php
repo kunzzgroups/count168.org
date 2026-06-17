@@ -42,7 +42,7 @@ foreach ($user_companies as $comp) {
 <!-- Group Buttons (above Company) -->
 <?php if (count($shared_groups) > 0 && !$hide_group_filter): ?>
 <div id="group-buttons-wrapper" class="<?php echo $filter_prefix; ?>-company-filter shared-group-wrapper">
-    <span class="<?php echo $filter_prefix; ?>-company-label">GroupID:</span>
+    <span class="<?php echo $filter_prefix; ?>-company-label">Group ID:</span>
     <div id="group-buttons-container" class="<?php echo $filter_prefix; ?>-company-buttons">
         <?php foreach ($shared_groups as $gid): ?>
             <button type="button" 

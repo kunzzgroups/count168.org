@@ -20,23 +20,6 @@ body {
     overflow-y: auto;
 }
 
-/* Keep maintenance pages scrollable under dashboard layout. */
-html,
-body.dashboard-page.maintenance-page {
-    height: auto !important;
-    min-height: 100vh !important;
-    max-height: none !important;
-    overflow-y: hidden !important;
-    overflow-x: hidden !important;
-}
-
-body.dashboard-page.maintenance-page .container {
-    height: auto !important;
-    min-height: 100vh !important;
-    max-height: none !important;
-    overflow: visible !important;
-}
-
 .container {
     max-width: none;
     margin: 0;
@@ -501,8 +484,6 @@ body.dashboard-page.maintenance-page .container {
     margin-top: 10px;
     max-width: 1600px;
     width: 100%;
-    max-height: none;
-    overflow: visible;
     margin-left: auto;
     margin-right: auto;
     box-sizing: border-box;
@@ -1304,4 +1285,8 @@ body.dashboard-page.maintenance-page .bankprocess-maintenance-page-root .mainten
 
 .bankprocess-maintenance-page-root .maintenance-list-container--syncing .maintenance-virtual-scroll {
     pointer-events: none;
+}
+
+body.maintenance-page .bankprocess-maintenance-filters-shell {
+    width: 100%;
 }

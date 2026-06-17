@@ -1,4 +1,4 @@
-﻿body.transaction-page {
+body.transaction-page {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     margin: 0;
     padding: 0;
@@ -269,7 +269,6 @@ body.transaction-page .transaction-add-section .tx-add-winlose-heading {
     border-top: 1px solid #e5e7eb;
     display: flex;
     flex-direction: column;
-    gap: clamp(0px, -0.48vw, 10px);
 }
 
 .transaction-page .transaction-bottom-filters .transaction-company-filter {
@@ -281,8 +280,7 @@ body.transaction-page .transaction-bottom-filters .user-gc-inline-panel {
     display: grid;
     grid-template-columns: auto 1fr;
     column-gap: var(--user-gc-inline-column-gap, 4px);
-    row-gap: var(--user-gc-inline-row-gap, 4px);
-    align-items: center;
+    align-items: start;
     border-top: none;
     padding: 0 0 4px;
     background: transparent;
@@ -320,9 +318,74 @@ body.transaction-page .transaction-bottom-filters .user-gc-inline-pills--segment
     overflow-x: auto;
     gap: var(--user-gc-inline-pills-gap, 4px);
     padding-top: 2px;
-    padding-bottom: 6px;
-    scrollbar-gutter: stable;
+    padding-bottom: 2px;
     -webkit-overflow-scrolling: touch;
+}
+
+body.transaction-page .transaction-bottom-filters #currency-buttons-wrapper .transaction-currency-pills {
+    margin-left: 0;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    align-self: stretch;
+    overflow-x: hidden;
+    overflow-y: visible;
+    gap: var(--user-gc-inline-pills-gap, 4px);
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding-top: 2px;
+    padding-bottom: 2px;
+    box-sizing: border-box;
+    position: relative;
+}
+
+body.transaction-page .transaction-bottom-filters .transaction-currency-measure {
+    position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+    z-index: -1;
+}
+
+body.transaction-page .transaction-bottom-filters .transaction-currency-measure .user-gc-segment,
+body.transaction-page .transaction-bottom-filters #currency-buttons-wrapper .transaction-currency-segments .user-gc-segment {
+    width: auto;
+    min-width: max-content;
+    padding: var(--user-gc-segment-padding, 4px clamp(10px, 1.2vw, 18px));
+    box-sizing: border-box;
+    font-size: var(--text-medium) !important;
+    line-height: 1.25;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+body.transaction-page .transaction-bottom-filters #currency-buttons-wrapper .transaction-currency-segments {
+    margin-inline-start: 0;
+    align-self: flex-start;
+    max-width: 100%;
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    width: auto;
+    align-items: stretch;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+body.transaction-page .transaction-bottom-filters #currency-buttons-wrapper .transaction-currency-segments .user-gc-segment.is-on {
+    overflow: hidden;
+}
+
+body.transaction-page .transaction-bottom-filters #currency-buttons-wrapper .transaction-currency-segments .user-gc-segment.is-on + .user-gc-segment.is-on {
+    border-left: 1px solid rgba(255, 255, 255, 0.28);
 }
 
 body.transaction-page .transaction-bottom-filters .user-gc-segment-group {
@@ -511,6 +574,11 @@ body.transaction-page .transaction-search-section .transaction-category-date-row
     flex-direction: column;
 }
 
+body.transaction-page .transaction-search-section .transaction-category-date-row .transaction-outlined-field-col--date {
+    flex: 0 1 var(--drp-popup-width);
+    min-width: var(--drp-popup-width);
+}
+
 body.transaction-page .transaction-search-section .transaction-category-date-row .report-outlined-shell {
     flex: 1 1 auto;
     display: flex;
@@ -526,24 +594,29 @@ body.transaction-page .transaction-search-section .transaction-category-date-row
 }
 
 body.transaction-page .transaction-search-section .transaction-category-date-row .transaction-outlined-field-col--category .report-outlined-inner {
-    justify-content: flex-start;
+    justify-content: center;
+    align-items: stretch;
 }
 
-body.transaction-page .transaction-search-section .transaction-category-date-row .category-dropdown {
+body.transaction-page .transaction-search-section .transaction-category-date-row .transaction-outlined-field-col--category .transaction-category-multiselect,
+body.transaction-page .transaction-search-section .transaction-category-date-row .transaction-outlined-field-col--category .category-dropdown {
     flex: 1 1 auto;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     min-height: 0;
+    width: 100%;
 }
 
 body.transaction-page .transaction-search-section .report-outlined-inner .category-dropdown-button {
+    flex: 1 1 auto;
     min-height: clamp(38px, 2.45vw, 40px);
-    max-height: clamp(38px, 2.45vw, 40px);
-    height: clamp(38px, 2.45vw, 40px);
+    height: 100%;
+    max-height: none;
     overflow: hidden;
     padding: 4px 10px;
     box-sizing: border-box;
-    align-items: stretch;
+    align-items: center;
 }
 
 body.transaction-page .transaction-search-section .report-outlined-inner .category-dropdown-button > .fas.fa-chevron-down {
@@ -553,15 +626,23 @@ body.transaction-page .transaction-search-section .report-outlined-inner .catego
 }
 
 body.transaction-page .transaction-search-section .report-outlined-inner .category-selected-tags {
+    display: flex;
     flex: 1 1 auto;
+    align-self: stretch;
     min-width: 0;
     min-height: 0;
+    height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-gutter: stable;
     -webkit-overflow-scrolling: touch;
     align-items: center;
     align-content: center;
+    justify-content: flex-start;
+}
+
+body.transaction-page .transaction-search-section .report-outlined-inner .category-placeholder {
+    text-align: left;
 }
 
 body.transaction-page .transaction-category-date-row .transaction-category-multiselect {
@@ -570,12 +651,12 @@ body.transaction-page .transaction-category-date-row .transaction-category-multi
 }
 
 .transaction-page .transaction-date-range-group {
-    min-width: clamp(316px, 22vw, 336px);
+    min-width: var(--drp-popup-width);
     flex: 0 0 auto;
 }
 
 body.transaction-page .transaction-date-range-group .date-range-picker {
-    min-width: clamp(316px, 22vw, 336px);
+    min-width: var(--drp-popup-width);
     min-height: clamp(32px, 2.45vw, 38px);
     gap: clamp(8px, 0.7vw, 12px);
     padding: 0 clamp(9px, 0.85vw, 14px) 0 0;
@@ -598,7 +679,10 @@ body.transaction-page .transaction-date-range-group .date-range-picker:focus-vis
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
 }
 
-body.transaction-page .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
+body.transaction-page .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -611,7 +695,7 @@ body.transaction-page .transaction-date-range-group .date-range-picker i.fa-cale
     background: #3b82f6;
     background-clip: padding-box;
     box-shadow: none;
-    font-size: var(--text-small);
+    font-size: var(--drp-trigger-icon, var(--text-medium));
     flex: 0 0 auto;
     position: relative;
     z-index: 1;
@@ -623,7 +707,7 @@ body.transaction-page .transaction-date-range-group #rate-tx-date-range-display 
     flex: 1 1 auto;
     min-width: 0;
     color: #1f2937;
-    font-size: var(--text-small);
+    font-size: var(--drp-trigger-text, var(--text-medium));
     font-weight: 700;
     letter-spacing: 0.01em;
     white-space: nowrap;
@@ -635,7 +719,7 @@ body.transaction-page .transaction-date-range-chevron,
 body.dashboard-page.report-page .transaction-date-range-chevron {
     margin: 0 !important;
     color: #64748b !important;
-    font-size: var(--text-tiny) !important;
+    font-size: var(--drp-trigger-chevron, var(--text-medium)) !important;
     transition:
         color 0.16s ease,
         transform 0.16s ease;
@@ -647,337 +731,7 @@ body.dashboard-page.report-page .transaction-date-range-group .date-range-picker
     transform: translateY(1px);
 }
 
-body.transaction-page .calendar-popup.calendar-popup--transaction-range.calendar-popup--no-presets,
-body.dashboard-page.report-page .calendar-popup.calendar-popup--transaction-range.calendar-popup--no-presets {
-    grid-template-columns: 1fr;
-    width: min(292px, calc(100vw - 24px));
-}
-
-body.transaction-page .calendar-popup--transaction-range.calendar-popup--no-presets .transaction-calendar-panel, body.dashboard-page.report-page .calendar-popup--transaction-range.calendar-popup--no-presets .transaction-calendar-panel{
-    padding: 12px 14px 14px;
-}
-
-body.transaction-page .calendar-popup--transaction-range.calendar-popup--no-presets .calendar-header, body.dashboard-page.report-page .calendar-popup--transaction-range.calendar-popup--no-presets .calendar-header{
-    max-width: none;
-    width: 100%;
-    margin-bottom: 10px;
-}
-
-body.transaction-page .calendar-popup--transaction-range.calendar-popup--no-presets .calendar-weekdays, body.dashboard-page.report-page .calendar-popup--transaction-range.calendar-popup--no-presets .calendar-weekdays,
-body.transaction-page .calendar-popup--transaction-range.calendar-popup--no-presets .calendar-days, body.dashboard-page.report-page .calendar-popup--transaction-range.calendar-popup--no-presets .calendar-days{
-    max-width: none;
-    width: 100%;
-}
-
-body.transaction-page .calendar-popup.calendar-popup--transaction-range,
-body.dashboard-page.report-page .calendar-popup.calendar-popup--transaction-range {
-    display: none;
-    grid-template-columns: clamp(76px, 5.6vw, 96px) 1fr;
-    gap: 0;
-    width: clamp(316px, 22vw, 336px);
-    max-width: calc(100vw - 24px);
-    max-height: none;
-    padding: 0;
-    overflow: hidden;
-    border: 1px solid rgba(203, 213, 225, 0.9);
-    border-radius: 12px;
-    background: #ffffff;
-    box-shadow: 0 16px 38px rgba(15, 23, 42, 0.16);
-}
-
-body.transaction-page .calendar-popup.calendar-popup--transaction-range[style*="display: block"],
-body.dashboard-page.report-page .calendar-popup.calendar-popup--transaction-range[style*="display: block"] {
-    display: grid !important;
-}
-
-body.transaction-page .transaction-calendar-presets,
-body.dashboard-page.report-page .transaction-calendar-presets {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 9px 6px;
-    border-right: 1px solid rgba(226, 232, 240, 0.95);
-    background: linear-gradient(180deg, #fbfdff 0%, #f8fbff 100%);
-}
-
-body.transaction-page .transaction-calendar-preset,
-body.dashboard-page.report-page .transaction-calendar-preset {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-    min-height: 25px;
-    padding: 5px 6px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: #334155;
-    font-family: var(--font-heading-page);
-    font-size: var(--text-tiny);
-    font-weight: 700;
-    text-align: left;
-    cursor: pointer;
-    transition:
-        background 0.16s ease,
-        color 0.16s ease,
-        box-shadow 0.16s ease;
-}
-
-body.transaction-page .transaction-calendar-preset:hover,
-body.transaction-page .transaction-calendar-preset:focus-visible,
-body.dashboard-page.report-page .transaction-calendar-preset:hover,
-body.dashboard-page.report-page .transaction-calendar-preset:focus-visible {
-    outline: none;
-    background: rgba(59, 130, 246, 0.1);
-    color: #1d4ed8;
-    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.15);
-}
-
-body.transaction-page .transaction-calendar-preset.is-active,
-body.dashboard-page.report-page .transaction-calendar-preset.is-active {
-    background: var(--btn-add-gradient);
-    color: #ffffff;
-    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
-}
-
-body.transaction-page .transaction-calendar-panel,
-body.dashboard-page.report-page .transaction-calendar-panel {
-    padding: 10px 10px 12px;
-    background: #ffffff;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-header, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-header{
-    display: grid;
-    grid-template-columns: 1fr 5fr 1fr;
-    align-items: center;
-    max-width: 250px;
-    margin-left: auto;
-    margin-right: auto;
-    margin-bottom: 8px;
-    padding: 0;
-    column-gap: 4px;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-year, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-year{
-    grid-column: 2;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    justify-self: center;
-    overflow: visible;
-    min-height: 36px;
-    border: 1px solid rgba(203, 213, 225, 0.86);
-    border-radius: 10px;
-    background: #f8fafc;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-year select, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-year select,
-body.transaction-page .calendar-popup--transaction-range .calendar-month-trigger, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-trigger,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-trigger, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-trigger{
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    color: #334155;
-    font-size: var(--text-small);
-    font-weight: 800;
-    text-align: center;
-    box-shadow: none;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-year select, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-year select{
-    min-height: 34px;
-    padding: 6px 8px;
-    cursor: pointer;
-    font-family: var(--font-heading-page);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-year select:hover, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-year select:hover,
-body.transaction-page .calendar-popup--transaction-range .calendar-month-year select:focus, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-year select:focus,
-body.transaction-page .calendar-popup--transaction-range .calendar-month-trigger:hover, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-trigger:hover,
-body.transaction-page .calendar-popup--transaction-range .calendar-month-trigger:focus, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-trigger:focus,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-trigger:hover, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-trigger:hover,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-trigger:focus, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-trigger:focus{
-    background: #eff6ff;
-    color: #1d4ed8;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-trigger, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-trigger{
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    min-width: 5.5rem;
-    min-height: 34px;
-    padding: 6px 10px;
-    cursor: pointer;
-    font-family: var(--font-heading-page);
-    border-right: 1px solid rgba(203, 213, 225, 0.74);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-year-trigger, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-trigger{
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    min-width: 4.5rem;
-    min-height: 34px;
-    padding: 6px 10px;
-    cursor: pointer;
-    font-family: var(--font-heading-page);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-trigger.is-active, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-trigger.is-active,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-trigger.is-active, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-trigger.is-active{
-    background: var(--btn-add-gradient);
-    color: #ffffff;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-trigger::after, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-trigger::after,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-trigger::after, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-trigger::after{
-    content: "";
-    display: inline-block;
-    flex-shrink: 0;
-    width: 5px;
-    height: 5px;
-    margin-left: 0;
-    border-right: 1.5px solid currentColor;
-    border-bottom: 1.5px solid currentColor;
-    transform: translateY(-1px) rotate(45deg);
-    opacity: 0.85;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-nav-btn, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-nav-btn{
-    color: #2563eb;
-    border-radius: 999px;
-    justify-self: center;
-    transition:
-        background 0.16s ease,
-        color 0.16s ease,
-        transform 0.16s ease;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-nav-btn:hover, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-nav-btn:hover{
-    background: #eff6ff;
-    color: #1d4ed8;
-    transform: translateY(-1px);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-weekdays, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-weekdays{
-    margin-bottom: 5px;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-weekday, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-weekday{
-    color: #8b95a5;
-    font-size: var(--text-tiny);
-    font-weight: 700;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-weekdays, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-weekdays,
-body.transaction-page .calendar-popup--transaction-range .calendar-days, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-days{
-    max-width: 250px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day{
-    min-height: 25px;
-    border-radius: 6px;
-    color: #111827;
-    font-size: var(--text-tiny);
-    font-weight: 700;
-    transition:
-        background 0.14s ease,
-        color 0.14s ease,
-        box-shadow 0.14s ease,
-        transform 0.14s ease;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-days.calendar-month-grid, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-days.calendar-month-grid,
-body.transaction-page .calendar-popup--transaction-range .calendar-days.calendar-year-grid, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-days.calendar-year-grid{
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    padding: 8px 0 2px;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-option, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-option,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-option, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-option{
-    min-height: 34px;
-    border: 1px solid transparent;
-    border-radius: 9px;
-    background: #f8fafc;
-    color: #334155;
-    font-family: var(--font-heading-page);
-    font-size: var(--text-tiny);
-    font-weight: 800;
-    cursor: pointer;
-    transition:
-        background 0.14s ease,
-        color 0.14s ease,
-        border-color 0.14s ease,
-        box-shadow 0.14s ease,
-        transform 0.14s ease;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-option:hover, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-option:hover,
-body.transaction-page .calendar-popup--transaction-range .calendar-month-option:focus-visible, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-option:focus-visible,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-option:hover, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-option:hover,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-option:focus-visible, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-option:focus-visible{
-    outline: none;
-    border-color: rgba(59, 130, 246, 0.28);
-    background: #eff6ff;
-    color: #1d4ed8;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-month-option.is-active, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-month-option.is-active,
-body.transaction-page .calendar-popup--transaction-range .calendar-year-option.is-active, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-year-option.is-active{
-    background: var(--btn-add-gradient);
-    color: #ffffff;
-    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
-    transform: translateY(-1px);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day:not(.disabled):not(.selected):not(.start-date):not(.end-date):hover, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day:not(.disabled):not(.selected):not(.start-date):not(.end-date):hover{
-    background: #f1f5ff;
-    color: #1d4ed8;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day.today:not(.start-date):not(.end-date):not(.selected), body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.today:not(.start-date):not(.end-date):not(.selected){
-    border-color: rgba(37, 99, 235, 0.55);
-    box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day.other-month, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.other-month{
-    color: #cbd5e1;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day.in-range, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.in-range,
-body.transaction-page .calendar-popup--transaction-range .calendar-day.preview-range, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.preview-range{
-    background: #eff6ff;
-    color: #2563eb;
-    border-radius: 0;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day.start-date, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.start-date,
-body.transaction-page .calendar-popup--transaction-range .calendar-day.end-date, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.end-date,
-body.transaction-page .calendar-popup--transaction-range .calendar-day.selected, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.selected{
-    background: var(--btn-add-gradient);
-    color: #ffffff;
-    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
-    transform: translateY(-1px);
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day.start-date, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.start-date{
-    border-radius: 6px 0 0 6px;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day.end-date, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.end-date{
-    border-radius: 0 6px 6px 0;
-}
-
-body.transaction-page .calendar-popup--transaction-range .calendar-day.start-date.end-date, body.dashboard-page.report-page .calendar-popup--transaction-range .calendar-day.start-date.end-date{
-    border-radius: 6px;
-}
+/* 日历弹层内部样式统一由 date-range-picker.css 维护，避免与 transaction.css 重复覆盖字体/间距 */
 
 .transaction-page .transaction-account-inputs {
     display: flex;
@@ -1190,7 +944,6 @@ body.transaction-page .transaction-search-section .transaction-checkboxes.userli
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-gutter: stable;
     -webkit-overflow-scrolling: touch;
     min-width: 0;
     width: 100%;
@@ -1416,6 +1169,41 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
 .transaction-page .transaction-company-select,
 .transaction-page .transaction-currency-select {
     flex: 1;
+}
+
+.transaction-page .transaction-main-content {
+    transition: opacity 0.2s ease;
+}
+
+.transaction-page .transaction-main--booting .transaction-main-content {
+    opacity: 0.72;
+    pointer-events: none;
+    user-select: none;
+}
+
+.transaction-page .transaction-tables-section {
+    transition: opacity 0.2s ease;
+}
+
+.transaction-page .transaction-boot-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    margin: 0 0 12px 0;
+    color: #6b7280;
+    font-size: clamp(9px, 0.73vw, 14px);
+}
+
+.transaction-page .transaction-boot-loading::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    margin-right: 10px;
+    border: 2px solid #e5e7eb;
+    border-top-color: #002C49;
+    border-radius: 50%;
+    animation: transaction-loading-spin 0.7s linear infinite;
 }
 
 .transaction-page .transaction-tables-section {
@@ -3690,10 +3478,17 @@ body.transaction-page .transaction-search-section .report-outlined-inner .transa
     width: 100%;
     max-width: 100%;
     min-height: clamp(38px, 2.45vw, 40px) !important;
-    padding: clamp(4px, 0.35vw, 6px) clamp(8px, 0.75vw, 12px) clamp(4px, 0.35vw, 6px) clamp(8px, 0.65vw, 10px);
-    border-radius: clamp(5px, 0.42vw, 7px);
+    padding: 0 clamp(8px, 0.75vw, 12px) 0 0 !important;
+    border-radius: 0 !important;
+    gap: clamp(8px, 0.7vw, 12px);
     background: #ffffff !important;
     box-shadow: none !important;
+    overflow: hidden;
+}
+
+body.transaction-page .transaction-search-section .report-outlined-inner:has(.transaction-date-range-group) {
+    overflow: hidden;
+    border-radius: inherit;
 }
 
 body.transaction-page .transaction-search-section .report-outlined-inner .transaction-date-range-group .date-range-picker:hover {
@@ -3707,22 +3502,13 @@ body.transaction-page .transaction-search-section .report-outlined-inner .transa
 
 /* Capture Date: label sits above date text (after calendar tile), not over the blue icon */
 body.transaction-page .transaction-search-section .transaction-category-date-row .report-outlined-label--txn-capture-date {
-    left: calc(
-        clamp(8px, 0.65vw, 10px) + clamp(28px, 2vw, 34px) + clamp(6px, 0.45vw, 8px)
-    );
+    left: clamp(46px, 3.35vw, 58px);
 }
 
+/* Outlined shell: icon pill clips to shell left corner (same as dashboard / maintenance) */
 body.transaction-page .transaction-search-section .transaction-outlined-field-col--date .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
-    align-self: center;
-    width: clamp(28px, 2vw, 34px);
-    height: clamp(28px, 2vw, 34px);
-    min-height: 0;
-    margin: 0;
-    flex: 0 0 auto;
-    position: relative;
-    z-index: 1;
-    border-radius: clamp(5px, 0.42vw, 7px);
-    box-shadow: none !important;
+    border-radius: clamp(6px, 0.52vw, 8px) 0 0 clamp(6px, 0.52vw, 8px);
+    z-index: 5;
 }
 
 /* Add form (right card): same date-range bar as Capture Date; period presets hidden when opening from this trigger. */
@@ -3736,10 +3522,17 @@ body.transaction-page .transaction-add-section .report-outlined-inner .transacti
     width: 100%;
     max-width: 100%;
     min-height: clamp(26px, 2.25vw, 34px) !important;
-    padding: 0 clamp(8px, 0.75vw, 12px) 0 0;
-    border-radius: clamp(4px, 0.42vw, 6px);
+    padding: 0 clamp(8px, 0.75vw, 12px) 0 0 !important;
+    border-radius: 0 !important;
+    gap: clamp(8px, 0.7vw, 12px);
     background: #f2f2f2ad !important;
     box-shadow: none !important;
+    overflow: hidden;
+}
+
+body.transaction-page .transaction-add-section .report-outlined-inner:has(.transaction-date-range-group) {
+    overflow: hidden;
+    border-radius: inherit;
 }
 
 body.transaction-page .transaction-add-section .report-outlined-inner .transaction-date-range-group .date-range-picker:hover,
@@ -3759,7 +3552,7 @@ body.transaction-page .transaction-add-section .report-outlined-label--tx-add-ic
 body.transaction-page .transaction-add-section .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
     position: relative;
     z-index: 5;
-    border-radius: clamp(4px, 0.42vw, 6px) 0 0 clamp(4px, 0.42vw, 6px);
+    border-radius: clamp(6px, 0.52vw, 8px) 0 0 clamp(6px, 0.52vw, 8px);
     box-shadow: none !important;
 }
 
@@ -3875,5 +3668,161 @@ body.dashboard-page.transaction-page:not(.member-winloss-page) .transaction-main
 body.dashboard-page.transaction-page:not(.member-winloss-page) .transaction-tables-section {
     overflow: visible !important;
     max-height: none !important;
+}
+
+body.transaction-payment-history-page,
+body.ec-payment-history-chromeless {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+body.ec-payment-history-chromeless {
+    --layout-main-offset: 0px;
+}
+
+body.ec-payment-history-chromeless #root {
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 100dvh !important;
+    height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: auto !important;
+}
+
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup #root {
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+}
+
+body.ec-payment-history-chromeless .ec-page-shell,
+body.ec-payment-history-chromeless .ec-page-shell__content {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: auto !important;
+}
+
+body.ec-payment-history-chromeless #root > .transaction-payment-history-page-root {
+    position: relative;
+    inset: auto;
+    z-index: 1;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible;
+}
+
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup #root > .transaction-payment-history-page-root {
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+}
+
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup .ec-page-shell,
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup .ec-page-shell__content {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+}
+
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup .transaction-payment-history-panel.transaction-history-modal.transaction-modal-content,
+body.transaction-payment-history-page--popup .transaction-payment-history-panel.transaction-history-modal.transaction-modal-content {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    max-width: none !important;
+    width: 100% !important;
+    overflow: hidden;
+}
+
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup .transaction-payment-history-panel .transaction-modal-body,
+body.transaction-payment-history-page--popup .transaction-payment-history-panel .transaction-modal-body {
+    overflow: hidden !important;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+}
+
+.transaction-payment-history-page-root {
+    width: 100%;
+    min-height: 100dvh;
+}
+
+.transaction-payment-history-main {
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 1320px;
+}
+
+/* Beat legacy modal card rules (body.transaction-page .transaction-modal-content.transaction-history-modal) */
+body.ec-payment-history-chromeless.transaction-page .transaction-modal-content.transaction-history-modal.transaction-payment-history-panel,
+body.ec-payment-history-chromeless .transaction-payment-history-panel.transaction-history-modal.transaction-modal-content,
+body.transaction-payment-history-page .transaction-payment-history-panel.transaction-history-modal.transaction-modal-content {
+    width: 100% !important;
+    max-width: 1320px !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    align-self: stretch !important;
+    display: flex;
+    flex-direction: column;
+    border-radius: 14px !important;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+body.ec-payment-history-chromeless .transaction-payment-history-panel .transaction-modal-header,
+body.transaction-payment-history-page .transaction-payment-history-panel .transaction-modal-header {
+    flex-shrink: 0;
+}
+
+body.ec-payment-history-chromeless .transaction-payment-history-panel .transaction-modal-body,
+body.transaction-payment-history-page .transaction-payment-history-panel .transaction-modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup .transaction-payment-history-panel.transaction-history-modal.transaction-modal-content,
+body.transaction-payment-history-page--popup .transaction-payment-history-panel.transaction-history-modal.transaction-modal-content {
+    max-width: none !important;
+}
+
+body.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table [class*="transaction-history-col-"],
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table [class*="transaction-history-col-"] {
+    min-width: 0 !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    font-size: var(--txn-history-text-table) !important;
+}
+
+body.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table thead th[class*="transaction-history-col-"],
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table thead th[class*="transaction-history-col-"] {
+    font-size: var(--txn-history-text-table-head-compact) !important;
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+}
+
+.transaction-payment-history-error {
+    margin: 0;
+    padding: 24px;
+    color: #b91c1c;
+    text-align: center;
+    font-size: var(--txn-history-text-error);
 }
 

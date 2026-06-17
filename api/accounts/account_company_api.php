@@ -9,6 +9,7 @@ session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/tenant_scope.php';
 require_once __DIR__ . '/../get_companies_helper.php';
 require_once __DIR__ . '/../deleted_log/deleted_log.php';
 
@@ -143,6 +144,7 @@ function dbAddCompanyAndSyncCurrencies($pdo, $account_id, $company_id) {
                 if (!$currencyId) {
                     $insertStmt->execute([$code, $company_id]);
                     $currencyId = $pdo->lastInsertId();
+                    tenant_sync_company_currency_to_parent_groups($pdo, (int) $company_id, $code);
                 }
                 $checkStmt->execute([$account_id, $currencyId]);
                 if (!$checkStmt->fetchColumn()) {

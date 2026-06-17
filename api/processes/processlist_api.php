@@ -5,6 +5,7 @@ require_once __DIR__ . '/../../includes/permissions.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/../includes/ensure_bank_process_day_end_monthly_cap_column.php';
+require_once __DIR__ . '/../includes/process_modified_by.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -363,7 +364,7 @@ function getProcesses() {
                     p.replace_word_to,
                     p.remark,
                     p.dts_modified,
-                    COALESCE(u_modified.login_id, o_modified.owner_code) as modified_by_login,
+                    " . processModifiedByLoginSql() . " as modified_by_login,
                     p.dts_created,
                     COALESCE(u_created.login_id, o_created.owner_code) as created_by_login,
                     p.status" .
@@ -392,14 +393,18 @@ function getProcesses() {
             $params[] = "%$searchTerm%";
         }
         
-        // 根据 showAll 和 showInactive 参数过滤状态
-        if ($showAll) {
-            // Show All：显示 active + inactive（不追加状态条件）
+        // 根据 showAll / showInactive 过滤状态：
+        // - 默认 / 仅分页：active
+        // - showInactive：inactive（分页）
+        // - showAll：全部 active（不分页由前端控制）
+        // - showAll + showInactive：全部 inactive
+        if ($showAll && $showInactive) {
+            $conditions[] = "p.status = 'inactive'";
+        } elseif ($showAll) {
+            $conditions[] = "p.status = 'active'";
         } elseif ($showInactive) {
-            // 勾选 showInactive 时，只显示 inactive 流程
             $conditions[] = "p.status = 'inactive'";
         } else {
-            // 未勾选时，只显示 active 流程（分页）
             $conditions[] = "p.status = 'active'";
         }
         
@@ -488,7 +493,7 @@ function getProcess() {
                     c.code as currency_code,
                     GROUP_CONCAT(pd.day_id ORDER BY pd.day_id SEPARATOR ',') as day_ids,
                     GROUP_CONCAT(day.day_name ORDER BY day.id SEPARATOR ',') as day_names,
-                    COALESCE(u_modified.login_id, o_modified.owner_code) as modified_by_login,
+                    " . processModifiedByLoginSql() . " as modified_by_login,
                     COALESCE(u_created.login_id, o_created.owner_code) as created_by_login
                 FROM process p
                 LEFT JOIN description d ON p.description_id = d.id
@@ -613,21 +618,11 @@ function updateProcess() {
             $targetProcessId = (int)$id;
             $linkedProcessIds = getLinkedProcessIdsForSync($pdo, (int)$currentCompanyId, $targetProcessId);
 
-            // 检查是否是 owner 登录
-            $isOwner = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner';
-            $modifiedByType = 'user';
-            $modifiedByOwnerId = null;
-            $currentUserId = null;
-            
-            if ($isOwner) {
-                // 如果是 owner，设置 owner 相关信息
-                $modifiedByType = 'owner';
-                $modifiedByOwnerId = $_SESSION['owner_id'] ?? null;
-            } else {
-                // 如果是普通用户，获取用户 ID
-                $currentUserId = getCurrentUserId($pdo);
-            }
-            
+            $modifier = resolveProcessModifierFromSession($pdo, true);
+            $currentUserId = $modifier['modified_by'];
+            $modifiedByType = $modifier['modified_by_type'];
+            $modifiedByOwnerId = $modifier['modified_by_owner_id'];
+
             // 更新process基本信息
             $updateSql = "UPDATE process SET 
                             process_id = ?,
@@ -705,15 +700,27 @@ function updateProcess() {
                     
                     // 更新process表的description_id字段
                     if ($descriptionId) {
-                        $updateDescSql = "UPDATE process SET description_id = ? WHERE id = ?";
+                        $updateDescSql = 'UPDATE process SET description_id = ?'
+                            . processModifiedBySqlSuffix()
+                            . ' WHERE id = ?';
                         $stmt = $pdo->prepare($updateDescSql);
-                        $stmt->execute([$descriptionId, $id]);
+                        $stmt->execute(array_merge(
+                            [$descriptionId],
+                            processModifiedByBindParams($modifier),
+                            [$id]
+                        ));
 
                         if (!empty($linkedProcessIds)) {
-                            $updateLinkedDescSql = "UPDATE process SET description_id = ? WHERE id = ? AND company_id = ?";
+                            $updateLinkedDescSql = 'UPDATE process SET description_id = ?'
+                                . processModifiedBySqlSuffix()
+                                . ' WHERE id = ? AND company_id = ?';
                             $updateLinkedDescStmt = $pdo->prepare($updateLinkedDescSql);
                             foreach ($linkedProcessIds as $linkedId) {
-                                $updateLinkedDescStmt->execute([$descriptionId, $linkedId, $currentCompanyId]);
+                                $updateLinkedDescStmt->execute(array_merge(
+                                    [$descriptionId],
+                                    processModifiedByBindParams($modifier),
+                                    [$linkedId, $currentCompanyId]
+                                ));
                             }
                         }
                     }
@@ -1169,10 +1176,10 @@ function updateBankProcess() {
         if (!in_array($status, ['active', 'inactive', 'waiting'], true)) {
             $status = 'active';
         }
-        $isOwner = isset($_SESSION['user_type']) && $_SESSION['user_type'] === 'owner';
-        $modifiedByType = $isOwner ? 'owner' : 'user';
-        $modifiedByOwnerId = $isOwner ? ($_SESSION['owner_id'] ?? null) : null;
-        $currentUserId = $isOwner ? null : getCurrentUserId($pdo);
+        $modifier = resolveProcessModifierFromSession($pdo, true);
+        $currentUserId = $modifier['modified_by'];
+        $modifiedByType = $modifier['modified_by_type'];
+        $modifiedByOwnerId = $modifier['modified_by_owner_id'];
         $hasSopColumn = bankProcessHasColumn($pdo, 'sop');
         $hasDayEndTailSwitchCol = bankProcessHasColumn($pdo, 'day_end_monthly_cap_enabled');
         $sql = "UPDATE bank_process SET 

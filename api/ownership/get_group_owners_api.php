@@ -30,7 +30,7 @@ $useHistory = $parsedMonth !== null && ownership_history_is_past_month($parsedMo
 try {
     if ($useHistory) {
         ownership_history_ensure_tables($pdo);
-        $tableExists = $pdo->query("SHOW TABLES LIKE 'group_ownership_history'")->rowCount() > 0;
+        $tableExists = ownership_table_exists($pdo, 'group_ownership_history');
         if (!$tableExists) {
             echo json_encode([
                 'status' => 'success',
@@ -106,7 +106,7 @@ try {
         exit();
     }
 
-    $tableExists = $pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() > 0;
+    $tableExists = ownership_table_exists($pdo, 'group_ownership');
     if (!$tableExists) {
         echo json_encode(['status' => 'success', 'data' => [], 'meta' => ['is_historical' => false]]);
         exit();

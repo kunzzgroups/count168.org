@@ -3,6 +3,20 @@
  * main.jsx 最后一行 import，在 Vite bundle 内排在 Tailwind 之后，无需 !important。
  * 与 public/css/style.css 保持同步，供 bundle 加载前的首屏绘制。
  */
+body.bg {
+  --login-input-cursor: text;
+}
+
+body.bg .sc-login-input-row,
+body.bg .login-container .input-group {
+  cursor: var(--login-input-cursor);
+}
+
+body.bg .sc-login-input-icon,
+body.bg .login-container .input-icon {
+  pointer-events: none;
+}
+
 body.bg .sc-login-input,
 body.bg .login-container .input-group input {
   box-sizing: border-box;
@@ -17,7 +31,11 @@ body.bg .login-container .input-group input {
   border-radius: var(--login-radius-pill);
   font-size: var(--text-base);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
-  color: var(--login-text);
+  color: var(--login-text, #333333);
+  /* Windows 深色模式 / 高对比度下，浅色输入框的插入符可能渲染成白色条块 */
+  color-scheme: light;
+  caret-color: var(--login-text, #333333);
+  cursor: var(--login-input-cursor);
 }
 
 body.bg .sc-login-input {

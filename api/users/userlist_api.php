@@ -10,6 +10,7 @@ header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/email_validation.php';
+require_once __DIR__ . '/../../includes/auth_invalidation.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../../includes/group_scope_resolve.php';
@@ -2384,9 +2385,11 @@ try {
             // 这些字段保留在 $input 中，稍后在事务中处理
             
             // Only update password if provided
+            $userPasswordWasUpdated = false;
             if (isset($input['password']) && trim($input['password']) !== '') {
                 $updateFields[] = "password = ?";
                 $updateValues[] = password_hash($input['password'], PASSWORD_DEFAULT);
+                $userPasswordWasUpdated = true;
             }
             
             // Only update secondary_password if provided (for c168 company users)
@@ -2413,6 +2416,10 @@ try {
                 
                 if (!$result) {
                     throw new Exception('Failed to update user');
+                }
+
+                if ($userPasswordWasUpdated) {
+                    invalidate_user_remember_token($pdo, (int) $input['id']);
                 }
                 
                 // 同步 read_only 到 company_ownership

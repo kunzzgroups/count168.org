@@ -1,5 +1,15 @@
 /** User list page — pure helpers (rules aligned with api/users/userlist_api.php + former legacy page) */
 
+import {
+  companiesForCompanyPicker,
+  DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
+  dedupeOwnerCompaniesByCode,
+  excludeGroupLabelsFromCompanyPicker,
+  filterCompaniesWithDisplayId,
+  independentCompaniesForPicker,
+  normalizeCompanyGroupId,
+} from "../../utils/company/sharedCompanyFilter.js";
+
 export const PAGE_SIZE = 20;
 
 export const ROLE_HIERARCHY = {
@@ -135,6 +145,7 @@ export function getAvailableRolesForCreation(currentUserRole) {
   /** level < 5 可建账号：supervisor(4) 可建下级 */
   if (currentLevel >= 5) return [];
   return ALL_ROLE_OPTIONS.filter((role) => {
+    if (role.value === "company") return false;
     const roleLevel = ROLE_HIERARCHY[role.value] ?? 999;
     return roleLevel > currentLevel;
   });
@@ -234,6 +245,21 @@ export function formatLastLogin(raw) {
   return `${y}-${m}-${day} ${h}:${min}`;
 }
 
+/**
+ * Status visibility after toggle — aligned with processlist / account list:
+ * - default: active (paginated)
+ * - showInactive: inactive (paginated)
+ * - showAll: all active (no pagination)
+ * - showAll + showInactive: all inactive
+ */
+export function userRowVisibleAfterStatusChange(newStatus, { showInactive, showAll }) {
+  const status = normRole(newStatus);
+  if (showAll && showInactive) return status === "inactive";
+  if (showAll) return status === "active";
+  if (showInactive) return status === "inactive";
+  return status === "active";
+}
+
 export function applyUserFilters(users, { search, showInactive, showAll, viewerRole }) {
   const vr = normRole(viewerRole);
   let rows = users.map((u) => ({ ...u }));
@@ -244,8 +270,11 @@ export function applyUserFilters(users, { search, showInactive, showAll, viewerR
   if (q) {
     rows = rows.filter((u) => `${u.login_id || ""} ${u.name || ""} ${u.email || ""}`.toLowerCase().includes(q));
   }
-  if (showAll) return rows;
-  if (showInactive) {
+  if (showAll && showInactive) {
+    rows = rows.filter((u) => normRole(u.status) === "inactive");
+  } else if (showAll) {
+    rows = rows.filter((u) => normRole(u.status) === "active");
+  } else if (showInactive) {
     rows = rows.filter((u) => normRole(u.status) === "inactive");
   } else {
     rows = rows.filter((u) => normRole(u.status) === "active");
@@ -360,4 +389,132 @@ export function getDeleteCheckboxState(row, caps) {
   if (normRole(row.status) === "active") return { show: false };
   if (!caps.canDelete) return { show: true, disabled: true, title: caps.isSelf ? "You cannot delete your own account" : "No permission to delete" };
   return { show: true, disabled: false, title: "" };
+}
+
+/** Company pills shown in User List inline filter (matches UserListPage useMemo). */
+export function resolveUserListInlinePickerCompanies({
+  companies = [],
+  groupIds = [],
+  selectedGroup = null,
+  preferredCompanyId = null,
+  companiesForPickerFromHook = null,
+  groupFilterOptOut = false,
+} = {}) {
+  const independentPicker = () => {
+    const list = independentCompaniesForPicker(companies, groupIds);
+    if (list.length) {
+      return dedupeOwnerCompaniesByCode(list, preferredCompanyId);
+    }
+    return excludeGroupLabelsFromCompanyPicker(
+      dedupeOwnerCompaniesByCode(filterCompaniesWithDisplayId(companies), preferredCompanyId),
+      groupIds,
+    ).filter((c) => !normalizeCompanyGroupId(c));
+  };
+
+  if (!selectedGroup || groupFilterOptOut) {
+    return independentPicker();
+  }
+
+  if (Array.isArray(companiesForPickerFromHook) && companiesForPickerFromHook.length > 0) {
+    return companiesForPickerFromHook;
+  }
+
+  const effectiveGroup = String(selectedGroup).trim().toUpperCase();
+  return dedupeOwnerCompaniesByCode(
+    companiesForCompanyPicker(companies, effectiveGroup, groupIds),
+    preferredCompanyId,
+  );
+}
+
+export function isCompanyInUserListPicker(options, companyId) {
+  const cid = Number(companyId);
+  if (!Number.isFinite(cid) || cid <= 0) return false;
+  return resolveUserListInlinePickerCompanies(options).some((c) => Number(c.id) === cid);
+}
+
+/** List fetch is allowed only with an active company pill, aggregate mode, or explicit group-only mode. */
+export function shouldLoadUserListData({
+  companyId = null,
+  selectedGroup = null,
+  groupOnlyMode = false,
+  groupsAllMode = false,
+  groupAllMode = false,
+} = {}) {
+  if (groupsAllMode || groupAllMode) return true;
+  if (companyId != null && Number(companyId) > 0) return true;
+  if (groupOnlyMode && selectedGroup) return true;
+  return false;
+}
+
+/** Whether Add / list mutations have a resolvable company or group ledger scope. */
+export function userListHasMutationScope(scopeCompanyId) {
+  return scopeCompanyId != null && Number(scopeCompanyId) > 0;
+}
+
+/**
+ * Stricter scope for Add User: requires an active group (group-only) or a company pill
+ * visible in the inline picker — never falls back to PHP session company alone.
+ */
+export function resolveUserListMutationScopeCompanyId({
+  companyId = null,
+  selectedGroup = null,
+  groupOnlyUserList = false,
+  anchorCompanyId = null,
+  groupsAllMode = false,
+  groupAllMode = false,
+  scopeCompanyId = null,
+  companies = [],
+  groupIds = [],
+  companiesForPicker = null,
+  groupFilterOptOut = false,
+} = {}) {
+  if (groupsAllMode || groupAllMode) {
+    const id = scopeCompanyId != null ? Number(scopeCompanyId) : Number.NaN;
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }
+  if (groupOnlyUserList && anchorCompanyId != null) {
+    const id = Number(anchorCompanyId);
+    return Number.isFinite(id) && id > 0 ? id : null;
+  }
+  const cid = companyId != null ? Number(companyId) : Number.NaN;
+  if (Number.isFinite(cid) && cid > 0) {
+    if (
+      isCompanyInUserListPicker(
+        {
+          companies,
+          groupIds,
+          selectedGroup,
+          preferredCompanyId: companyId,
+          companiesForPickerFromHook: companiesForPicker,
+          groupFilterOptOut,
+        },
+        cid,
+      )
+    ) {
+      return cid;
+    }
+  }
+  return null;
+}
+
+export function readUserListGroupFilterOptOut() {
+  return (
+    typeof sessionStorage !== "undefined" &&
+    sessionStorage.getItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY) === "1"
+  );
+}
+
+/** Active list scope key — must stay in sync with userListFetchScopeKey useMemo in UserListPage. */
+export function resolveUserListFetchScopeKey({
+  companyId: cid,
+  selectedGroup: sg,
+  groupsAllMode: gAll = false,
+  groupAllMode: cAll = false,
+  groupOnlyMode = false,
+} = {}) {
+  if (gAll) return cAll ? "groups-all:companies-all" : "groups-all";
+  if (cAll) return `group-all:${sg || ""}`;
+  if (cid != null && Number(cid) > 0) return `company:${cid}`;
+  if (sg && groupOnlyMode) return `group:${sg}`;
+  return "";
 }

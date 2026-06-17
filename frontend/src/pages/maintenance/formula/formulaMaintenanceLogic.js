@@ -1,4 +1,5 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { isC168CompanyCode } from "../../../utils/company/c168CaptureChannel.js";
 import { companiesNativeInGroupList } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   fetchFormulaCompanyPermissionsRaw,
@@ -76,14 +77,20 @@ export async function fetchCompanyPermissionsRaw(companyCode) {
 }
 
 export async function fetchCompanyPermissions(companyCode) {
+  const code = String(companyCode ?? "").trim().toUpperCase();
+  if (isC168CompanyCode(code)) {
+    return ["Games", "Gambling"];
+  }
   const permissions = await fetchCompanyPermissionsRaw(companyCode);
-  return permissions.filter((p) => p !== "Bank");
+  const filtered = permissions.filter((p) => p !== "Bank");
+  return filtered.length > 0 ? filtered : ["Games", "Gambling", "Loan", "Rate", "Money"];
 }
 
 export { isBankOnlyCategoryCompany } from "../shared/maintenanceCompanyApi.js";
 
 export async function fetchProcesses(companyId, scope = null) {
-  if (scope && formulaMaintenanceUsesGroupProcesses(scope)) {
+  const c168Channel = Boolean(scope?.c168Channel);
+  if (scope && formulaMaintenanceUsesGroupProcesses(scope) && !c168Channel) {
     const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
     return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList), {
       groupPayrollShort: true,
@@ -91,7 +98,13 @@ export async function fetchProcesses(companyId, scope = null) {
   }
   const effectiveId = scope?.scopeCompanyId ?? companyId;
   const rows = await fetchMaintenanceProcesses(effectiveId, { credentials: "include" });
-  return mapProcessesForMaintenanceSelect(rows, { groupPayrollShort: false });
+  let mapped = mapProcessesForMaintenanceSelect(rows, { groupPayrollShort: false });
+  if (c168Channel) {
+    mapped = mapped.filter((p) =>
+      FORMULA_PAYROLL_PROCESS_CODES.has(String(p.process_name ?? "").trim().toUpperCase()),
+    );
+  }
+  return mapped;
 }
 
 export async function bootstrapFormulaMaintenanceMeta({ companies, groupId = null }) {

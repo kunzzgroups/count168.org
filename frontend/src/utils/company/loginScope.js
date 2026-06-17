@@ -3,9 +3,11 @@
  */
 import {
   DASHBOARD_GROUP_FILTER_KEY,
+  findOwnerCompanyById,
   isDashboardGroupOnlyMode,
   normalizeNativeCompanyGroupId,
   readAccessibleGroupIds,
+  readDashboardSelectedCompanyId,
   resolveViewGroupForCompany,
 } from "./sharedCompanyFilter.js";
 import { peekCompanySessionFlags } from "./companySessionFlagsCache.js";
@@ -550,9 +552,13 @@ export function isActiveCompanyContextC168(me) {
   if (!me) return false;
   if (isDashboardGroupOnlyMode()) return false;
   if (me.is_current_company_c168) return true;
-  return String(me.company_code || "")
-    .trim()
-    .toUpperCase() === "C168";
+  if (String(me.company_code || "").trim().toUpperCase() === "C168") return true;
+  const persistedId = readDashboardSelectedCompanyId();
+  if (persistedId != null) {
+    const row = findOwnerCompanyById(persistedId);
+    if (String(row?.company_id || "").trim().toUpperCase() === "C168") return true;
+  }
+  return false;
 }
 
 /**

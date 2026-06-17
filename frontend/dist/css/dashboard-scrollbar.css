@@ -110,7 +110,6 @@ body *::-webkit-scrollbar-corner {
 }
 
 /* Member Win/Loss (/member) — matrix rail, total column, tables, modals */
-body.member-winloss-page .member-dash-matrix-scroll,
 body.member-winloss-page .member-dash-total-matrix-body,
 body.member-winloss-page .transaction-modal-body,
 body.member-winloss-page .transaction-table-wrapper,
@@ -123,4 +122,39 @@ body.member-winloss-page .avatar-options {
 body.member-winloss-page .member-dash-matrix-scroll::-webkit-scrollbar-track,
 body.member-winloss-page .member-dash-total-matrix-body::-webkit-scrollbar-track {
     margin: var(--dash-scrollbar-track-margin);
+}
+
+/* ==========================================================================
+   Touch momentum scroll (-webkit-overflow-scrolling: touch)
+   Finger swipe on tablet — keep scroll, hide thumb/track (no nested bar).
+   ========================================================================== */
+body.user-page .user-gc-inline-pills--segment-scroll,
+body.account-page .user-gc-inline-pills--segment-scroll,
+body.maintenance-page .user-gc-inline-pills--segment-scroll,
+body.process-page .user-gc-inline-pills--segment-scroll,
+body.report-page .user-gc-inline-pills--segment-scroll,
+body.datacapture-page .user-gc-inline-pills--segment-scroll,
+body.member-winloss-page .user-gc-inline-pills--segment-scroll,
+body.dashboard-page .user-gc-inline-pills--segment-scroll,
+body.transaction-page .user-gc-inline-pills--segment-scroll,
+body.transaction-page .transaction-search-section .transaction-checkboxes.userlist-filter-chips {
+    scrollbar-width: none !important;
+    scrollbar-gutter: auto !important;
+    -ms-overflow-style: none !important;
+}
+
+body.user-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.account-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.maintenance-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.process-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.report-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.datacapture-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.member-winloss-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.dashboard-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.transaction-page .user-gc-inline-pills--segment-scroll::-webkit-scrollbar,
+body.transaction-page .transaction-search-section .transaction-checkboxes.userlist-filter-chips::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
 }

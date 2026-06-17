@@ -66,6 +66,10 @@ export function useProgressiveScrollExtent({
   minRows = DEFAULT_PROGRESSIVE_MIN_ROWS,
   initialViewportMultiplier = DEFAULT_INITIAL_VIEWPORT_MULTIPLIER,
   enableCyclicRebound = false,
+  /** While true, spacer matches all loaded rows (streaming / background sync). */
+  forceFullExtent = false,
+  /** 流式加载：滚动范围随 actualTotalH 增长，滑块从长到短（不重置 scrollTop）。 */
+  expandWithLoadedContent = false,
   /** Shared with virtualizer observeElementOffset when cyclic rebound is enabled. */
   contentOffsetRef: externalContentOffsetRef,
 }) {
@@ -79,7 +83,9 @@ export function useProgressiveScrollExtent({
   const contentOffsetRef = externalContentOffsetRef ?? internalContentOffsetRef;
   const isReboundingRef = useRef(false);
   const reboundTimerRef = useRef(null);
+  const wasExpandingLoadedRef = useRef(false);
 
+  const tracksLoadedContent = forceFullExtent || expandWithLoadedContent;
   const enabled =
     rowCount >= minRows && actualTotalH > 0 && actualTotalH > rowHeightEstimate;
 
@@ -137,8 +143,31 @@ export function useProgressiveScrollExtent({
     } else {
       setExtentH(computeInitialExtent());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- resetDeps are caller-provided reset triggers
-  }, [computeInitialExtent, actualTotalH, rowCount, resetCyclicState, enableCyclicRebound, enabled, measureCycleSpacer, ...resetDeps]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only on filter/query change (resetDeps)
+  }, [resetCyclicState, enableCyclicRebound, enabled, measureCycleSpacer, ...resetDeps]);
+
+  /** 流式追加：extent 跟随已加载高度，滑块平滑变短 */
+  useLayoutEffect(() => {
+    if (!enabled || enableCyclicRebound || !expandWithLoadedContent) return;
+    wasExpandingLoadedRef.current = true;
+    setExtentH(actualTotalH);
+  }, [actualTotalH, enabled, enableCyclicRebound, expandWithLoadedContent]);
+
+  useLayoutEffect(() => {
+    if (expandWithLoadedContent || !wasExpandingLoadedRef.current) return;
+    wasExpandingLoadedRef.current = false;
+    setExtentH((prev) => Math.min(actualTotalH, Math.max(prev, actualTotalH)));
+  }, [expandWithLoadedContent, actualTotalH]);
+
+  /** Grow scroll range as loaded rows increase — do not wait for user scroll. */
+  useLayoutEffect(() => {
+    if (!enabled || enableCyclicRebound || tracksLoadedContent) return;
+    setExtentH((prev) => {
+      const initial = computeInitialExtent();
+      if (prev <= 0) return initial;
+      return Math.min(actualTotalH, Math.max(prev, initial));
+    });
+  }, [actualTotalH, enabled, enableCyclicRebound, tracksLoadedContent, computeInitialExtent]);
 
   useLayoutEffect(() => {
     if (!enabled || !enableCyclicRebound) return undefined;
@@ -372,6 +401,8 @@ export function useProgressiveScrollExtent({
   }, [scrollRef, enabled, enableCyclicRebound, computeInitialExtent, actualTotalH]);
 
   const displayTotalH = (() => {
+    if (forceFullExtent && actualTotalH > 0) return actualTotalH;
+    if (expandWithLoadedContent && actualTotalH > 0) return actualTotalH;
     if (!enabled) return actualTotalH;
     if (enableCyclicRebound) {
       if (isTerminalPhase()) return actualTotalH;

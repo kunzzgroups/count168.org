@@ -1,12 +1,13 @@
 <?php
 /**
- * EC2 / 本地覆盖数据库连接（复制为 config.local.php，已在 .gitignore）
+ * EC2 count168.org 专用数据库覆盖（复制为 config.local.php，已在 .gitignore）
  *
  *   cp includes/config.local.php.example includes/config.local.php
  *   nano includes/config.local.php
+ *
+ * 仅 org 服务器使用；git pull 不会覆盖 config.local.php，也不影响 live (Hostinger) 的 config.php。
  */
-
 $host = '127.0.0.1';
-$dbname = 'u857194726_c168_org';
-$dbuser = 'org_admin';
+$dbname = 'u857194726_c168org';
+$dbuser = 'admin';
 $dbpass = 'C168_org';

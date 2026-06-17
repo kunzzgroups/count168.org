@@ -258,12 +258,20 @@ try {
             $account_id = isset($_GET['account_id']) ? (int)$_GET['account_id'] : 0;
             $all = dbGetScopeCurrencies($pdo, $currencyCtx);
             $linked_ids = $account_id ? dbGetLinkedCurrencyIds($pdo, $account_id) : [];
-            $result = array_map(function($c) use ($linked_ids) {
-                return [
+            $result = array_map(static function ($c) use ($linked_ids) {
+                $row = [
                     'id' => (int) $c['id'],
                     'code' => $c['code'],
-                    'is_linked' => in_array($c['id'], $linked_ids)
+                    'is_linked' => in_array($c['id'], $linked_ids, true),
                 ];
+                if (array_key_exists('sync_source', $c)) {
+                    $row['sync_source'] = $c['sync_source'];
+                }
+                if (array_key_exists('deletable', $c)) {
+                    $row['deletable'] = (bool) $c['deletable'];
+                }
+
+                return $row;
             }, $all);
             jsonResponse(true, '', $result);
             exit;

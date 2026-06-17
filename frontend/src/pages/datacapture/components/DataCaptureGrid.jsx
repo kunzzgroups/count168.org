@@ -56,7 +56,6 @@ function DataCaptureGrid({ engineReady = false }) {
               ref={bindColumnHeader}
               onMouseDown={gridEvents.onColumnHeaderMouseDown}
               onMouseOver={gridEvents.onColumnHeaderMouseOver}
-              onClick={gridEvents.onColumnHeaderClick}
               onContextMenu={gridEvents.onColumnHeaderContextMenu}
             >
               {colIndex + 1}
@@ -72,7 +71,6 @@ function DataCaptureGrid({ engineReady = false }) {
               className="row-header"
               onMouseDown={gridEvents.onRowHeaderMouseDown}
               onMouseOver={gridEvents.onRowHeaderMouseOver}
-              onClick={gridEvents.onRowHeaderClick}
               onContextMenu={gridEvents.onRowHeaderContextMenu}
             >
               {grid.rowLabels[rowIndex]}

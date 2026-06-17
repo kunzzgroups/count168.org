@@ -479,6 +479,13 @@ export function orderCurrencyRows(orderedData, orderData, explicitCompanyId = nu
   }
 }
 
+/** Transaction page cold boot: MYR when available, otherwise first listed currency. */
+export function pickTransactionDefaultCurrency(codes) {
+  const list = (codes || []).map((c) => String(c || "").toUpperCase().trim()).filter(Boolean);
+  if (list.includes("MYR")) return "MYR";
+  return list[0] || "";
+}
+
 export function readTransactionCurrencyFilterState(companyId) {
   if (!companyId) return null;
   try {

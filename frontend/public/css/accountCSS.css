@@ -126,10 +126,11 @@ body.account-page .action-controls-row {
 
 body.account-page .action-buttons-container .user-gc-inline-panel {
     flex: 0 0 auto;
-    padding: 12px 18px 14px 18px;
+    padding: 12px 20px 14px;
     column-gap: var(--user-gc-inline-column-gap, 4px);
     row-gap: var(--user-gc-inline-row-gap, 4px);
 }
+
 
 body.account-page .account-table-wrapper {
     flex: 1 1 auto;
@@ -147,6 +148,7 @@ body.account-page .account-table-wrapper {
     margin-top: 12px;
     width: 100%;
     box-sizing: border-box;
+    font-family: inherit;
 }
 
 /*
@@ -1487,7 +1489,9 @@ body.ec-auth-shell.account-page .account-cards.account-cards--show-all > .accoun
 }
 
 body.account-page #confirmDeleteModal .confirm-cancel,
-body.account-page #confirmDeleteModal .confirm-delete {
+body.account-page #confirmDeleteModal .confirm-delete,
+body.account-page #forceDeleteCurrencyModal .confirm-cancel,
+body.account-page #forceDeleteCurrencyModal .confirm-delete {
     flex: 0 0 auto;
     min-width: clamp(90px, 7vw, 130px);
     display: flex;
@@ -1999,7 +2003,9 @@ body.account-page #confirmDeleteModal .confirm-delete {
 
 /* Form footer · tooltip: padding 16px 40px */
 #account-addModal .account-form-actions,
-#account-editModal .account-form-actions {
+#account-editModal .account-form-actions,
+#addModal .account-form-actions,
+#editModal .account-form-actions {
     margin-top: auto;
     padding: 16px 40px;
     border-radius: 0 0 0.875rem 0.875rem;
@@ -2024,7 +2030,11 @@ body.account-page #confirmDeleteModal .confirm-delete {
 #account-addModal .account-btn-save,
 #account-editModal .account-btn-save,
 #account-addModal .account-btn-cancel,
-#account-editModal .account-btn-cancel {
+#account-editModal .account-btn-cancel,
+#addModal .account-btn-save,
+#editModal .account-btn-save,
+#addModal .account-btn-cancel,
+#editModal .account-btn-cancel {
     min-width: var(--userlist-btn-add-width);
     width: auto;
     min-height: auto;
@@ -2048,19 +2058,27 @@ body.account-page #confirmDeleteModal .confirm-delete {
 #account-addModal .account-btn-save::after,
 #account-editModal .account-btn-save::after,
 #account-addModal .account-btn-cancel::after,
-#account-editModal .account-btn-cancel::after {
+#account-editModal .account-btn-cancel::after,
+#addModal .account-btn-save::after,
+#editModal .account-btn-save::after,
+#addModal .account-btn-cancel::after,
+#editModal .account-btn-cancel::after {
     display: none;
     content: none;
 }
 
 #account-addModal .account-btn-save,
-#account-editModal .account-btn-save {
+#account-editModal .account-btn-save,
+#addModal .account-btn-save,
+#editModal .account-btn-save {
     background: var(--btn-add-gradient);
     box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
 }
 
 #account-addModal .account-btn-save:hover,
-#account-editModal .account-btn-save:hover {
+#account-editModal .account-btn-save:hover,
+#addModal .account-btn-save:hover,
+#editModal .account-btn-save:hover {
     background: var(--btn-add-gradient-hover);
     color: #ffffff;
     box-shadow: 0 4px 8px rgba(0, 123, 255, 0.4);
@@ -2069,38 +2087,55 @@ body.account-page #confirmDeleteModal .confirm-delete {
 
 #account-addModal .account-btn-save:active,
 #account-editModal .account-btn-save:active,
+#addModal .account-btn-save:active,
+#editModal .account-btn-save:active,
 #account-addModal .account-btn-cancel:active,
-#account-editModal .account-btn-cancel:active {
+#account-editModal .account-btn-cancel:active,
+#addModal .account-btn-cancel:active,
+#editModal .account-btn-cancel:active {
     transform: translateY(0);
 }
 
 #account-addModal .account-btn-cancel,
-#account-editModal .account-btn-cancel {
+#account-editModal .account-btn-cancel,
+#addModal .account-btn-cancel,
+#editModal .account-btn-cancel {
     background: var(--gradient-domain-muted-action);
     box-shadow: 0 2px 4px rgba(88, 88, 88, 0.3);
 }
 
 #account-addModal .account-btn-cancel:hover,
-#account-editModal .account-btn-cancel:hover {
+#account-editModal .account-btn-cancel:hover,
+#addModal .account-btn-cancel:hover,
+#editModal .account-btn-cancel:hover {
     background: var(--gradient-domain-muted-action-hover);
     color: #ffffff;
     box-shadow: 0 4px 8px rgba(84, 84, 84, 0.4);
     transform: translateY(-1px);
 }
 
+/* Add/Edit/Link Account title — shared modal title row */
+#account-addModal .account-form-modal-header h2,
+#account-editModal .account-form-modal-header h2,
+#linkAccountModal .account-form-modal-header h2,
 #account-addModal .account-modal-header h2,
-#account-editModal .account-modal-header h2 {
-    font-size: var(--text-h2);
-    font-weight: var(--font-weight-page-title, 700);
-    padding: clamp(10px, 0.78vw, 14px) 0;
-    color: #1f2937;
-    letter-spacing: -0.02em;
+#account-editModal .account-modal-header h2,
+#linkAccountModal .account-modal-header h2 {
+    margin: 0;
+    padding: clamp(12px, 0.78vw, 15px) clamp(18px, 1.2vw, 23px);
+    font-size: var(--process-form-modal-title-size, var(--text-page-title));
+    font-family: var(--font-heading-page);
+    font-weight: var(--font-weight-page-title);
+    letter-spacing: var(--letter-spacing-page-title);
+    color: var(--color-body-strong, #1f2937);
+    line-height: 1.2;
     flex: 1 1 auto;
     min-width: 0;
 }
 
 #account-addModal .account-close,
-#account-editModal .account-close {
+#account-editModal .account-close,
+#linkAccountModal .account-close {
     position: static;
     right: auto;
     top: auto;
@@ -2147,9 +2182,10 @@ body.account-page #confirmDeleteModal .confirm-delete {
 }
 
 #account-addModal .account-modal-header,
-#account-editModal .account-modal-header {
+#account-editModal .account-modal-header,
+#linkAccountModal .account-modal-header {
     margin: -10px -20px 0;
-    padding: 3px 3rem 3px 20px;
+    padding: 3px 20px;
     background: #f8fafc;
     border-bottom: 1px solid #e2e8f0;
     border-radius: 0.9rem 0.9rem 0 0;
@@ -2157,6 +2193,18 @@ body.account-page #confirmDeleteModal .confirm-delete {
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
+    box-sizing: border-box;
+}
+
+#linkAccountModal .account-modal-header {
+    margin: 0;
+    border-radius: 0.9rem 0.9rem 0 0;
+}
+
+#linkAccountModal .account-modal-content {
+    padding: 0;
+    border-radius: 0.9rem;
+    overflow: hidden;
 }
 
 .account-modal-header h2 {
@@ -2748,7 +2796,7 @@ body.account-page .account-pagination-info {
     border-radius: 4px;
     background-color: white;
     cursor: pointer;
-    font-size: clamp(9px, 0.73vw, 14px);
+    font-size: var(--drp-trigger-text, var(--text-medium));
     color: #374151;
     transition: all 0.2s ease;
     min-height: 32px;
@@ -2764,7 +2812,7 @@ body.account-page .account-pagination-info {
 
 .report-date-range-picker i {
     color: #007AFF;
-    font-size: clamp(9px, 0.73vw, 13px);
+    font-size: var(--drp-trigger-icon, var(--text-medium));
 }
 
 .report-date-range-input {
@@ -2977,7 +3025,7 @@ body:not(.maintenance-page) .quick-select-dropdown-toggle .dropdown-item:hover {
     }
 
     body.account-page .action-buttons-container .user-gc-inline-panel {
-        padding: 8px 16px 12px 16px;
+        padding: 8px 20px 12px;
         column-gap: var(--user-gc-inline-column-gap, 4px);
         row-gap: var(--user-gc-inline-row-gap, 4px);
     }
@@ -3015,27 +3063,42 @@ body:not(.maintenance-page) .quick-select-dropdown-toggle .dropdown-item:hover {
     }
 
     #account-addModal .account-modal-header,
-    #account-editModal .account-modal-header {
+    #account-editModal .account-modal-header,
+    #linkAccountModal .account-modal-header {
         margin: -8px -18px 0;
-        padding: 6px 1.1rem 6px 18px;
+        padding: 3px 18px;
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        box-sizing: border-box;
     }
 
+    #linkAccountModal .account-modal-header {
+        margin: 0;
+    }
+
+    #account-addModal .account-form-modal-header h2,
+    #account-editModal .account-form-modal-header h2,
+    #linkAccountModal .account-form-modal-header h2,
     #account-addModal .account-modal-header h2,
-    #account-editModal .account-modal-header h2 {
-        font-size: clamp(1.35rem, 2.6vh, 1.6rem) !important;
-        padding: 8px 0 !important;
+    #account-editModal .account-modal-header h2,
+    #linkAccountModal .account-modal-header h2 {
+        margin: 0;
+        padding: clamp(8px, 1.8vh, 12px) clamp(12px, 2vw, 18px) !important;
+        font-size: clamp(1.35rem, 2.6vh, 1.85rem) !important;
+        font-family: var(--font-heading-page);
+        font-weight: var(--font-weight-page-title);
+        letter-spacing: var(--letter-spacing-page-title);
+        color: var(--color-body-strong, #1f2937);
         line-height: 1.2;
-        letter-spacing: -0.02em;
         flex: 1 1 auto;
         min-width: 0;
     }
 
     #account-addModal .account-close,
-    #account-editModal .account-close {
+    #account-editModal .account-close,
+    #linkAccountModal .account-close {
         position: static;
         width: 22px;
         height: 22px;
@@ -3263,6 +3326,8 @@ body > #userModal.modal {
 body > #confirmModal.modal,
 body > #confirmDeleteModal.account-modal,
 body > #forceDeleteCurrencyModal.account-modal,
+body > #confirmDeleteModal.confirm-delete-modal-overlay,
+body > #forceDeleteCurrencyModal.confirm-delete-modal-overlay,
 body > #accountAlertModal.account-modal {
     z-index: 20100;
 }

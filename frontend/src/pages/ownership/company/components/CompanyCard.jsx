@@ -1,6 +1,7 @@
 import React from "react";
 import AccountEditorRow from "../../shared/components/AccountEditorRow.jsx";
 import PartnerLinkSection from "./PartnerLinkSection.jsx";
+import { ownershipRowClientId, maxAllowedOwnershipPct } from "../../shared/ownershipRowHelpers.js";
 
 export default function CompanyCard({
   comp,
@@ -124,7 +125,7 @@ export default function CompanyCard({
           </div>
         </div>
         <div className="own-card-header-right">
-          {!readOnlyMode && allGroupIds.length > 0 && !gid ? (
+          {!readOnlyMode && !isHistoricalView && allGroupIds.length > 0 && !gid ? (
             <div className="own-group-btn-wrap">
               <button
                 type="button"
@@ -154,7 +155,7 @@ export default function CompanyCard({
               </div>
             </div>
           ) : null}
-          {!readOnlyMode && allGroupIds.length > 0 && gid ? (
+          {!readOnlyMode && !isHistoricalView && allGroupIds.length > 0 && gid ? (
             <button type="button" className="own-group-ungroup-btn" onClick={(e) => { e.stopPropagation(); onUngroup(id, comp.name); }}>
               {t("ungroup")}
             </button>
@@ -195,15 +196,17 @@ export default function CompanyCard({
               <div id={`rows-container-${id}`}>
                 {st.rows.map((row, idx) => (
                   <AccountEditorRow
-                    key={`${id}-${idx}-${String(row.account_id)}-${row.ownership_id ?? "n"}`}
+                    key={ownershipRowClientId(row, idx)}
                     companyId={id}
                     idx={idx}
                     row={row}
                     accounts={st.accounts}
+                    maxPercentage={maxAllowedOwnershipPct(st.rows, idx)}
                     dragContextRef={dragRef}
                     onUpdate={(i, f, v) => onUpdateRow(id, i, f, v)}
                     onRemove={(i) => onRemoveRow(id, i)}
                     readOnlyMode={readOnlyMode}
+                    structureLocked={readOnlyMode}
                     onDragStart={() => {
                       dragRef.current = { companyId: id, idx };
                     }}
@@ -227,7 +230,7 @@ export default function CompanyCard({
               </button>
               <PartnerLinkSection
                 inputId={`partner-login-${id}`}
-                disabled={readOnlyMode}
+                disabled={readOnlyMode || isHistoricalView}
                 onLink={async (login) => onLinkPartner(id, login)}
                 t={t}
               />

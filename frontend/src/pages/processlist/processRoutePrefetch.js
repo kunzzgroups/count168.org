@@ -1,10 +1,12 @@
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { mergeCurrencyCodesWithSavedOrder } from "../../utils/company/currencyDisplayOrder.js";
-import { normalizeRows as normalizeGamesProcessRows, processListCacheHasRows } from "./processListHelpers.js";
+import { normalizeRows as normalizeGamesProcessRows, processListCacheHasEntry, processListCacheHasRows } from "./processListHelpers.js";
 import { normalizeRows as normalizeBankProcessRows } from "../bankprocesslist/lib/bankProcessHelpers.js";
 
 const processListRouteWarmCache = new Map();
 const processListRouteWarmInflight = new Map();
+const bankProcessListRouteWarmCache = new Map();
+const bankProcessListRouteWarmInflight = new Map();
 
 function processListRouteCacheKey(companyId, { search = "", showInactive = false, showAll = false } = {}) {
   return `${Number(companyId)}|${String(search || "").trim()}|${showInactive ? 1 : 0}|${showAll ? 1 : 0}`;
@@ -18,7 +20,7 @@ export function warmProcessListRouteCache(companyId, opts = {}) {
   if (processListRouteWarmCache.has(key) || processListRouteWarmInflight.has(key)) return;
   const promise = fetchGamesProcessListSlice(cid, opts)
     .then((slice) => {
-      if (processListCacheHasRows(slice)) processListRouteWarmCache.set(key, slice);
+      if (processListCacheHasEntry(slice)) processListRouteWarmCache.set(key, slice);
       return slice;
     })
     .finally(() => {
@@ -43,13 +45,13 @@ export async function resolveProcessListRouteCache(companyId, opts = {}) {
     return { rows: null, currencyCodes: null };
   }
   const cached = consumeProcessListRouteCache(cid, opts);
-  if (processListCacheHasRows(cached)) return cached;
+  if (processListCacheHasEntry(cached)) return cached;
   const key = processListRouteCacheKey(cid, opts);
   const inflight = processListRouteWarmInflight.get(key);
   if (inflight) {
     try {
       const slice = await inflight;
-      if (processListCacheHasRows(slice)) return slice;
+      if (processListCacheHasEntry(slice)) return slice;
     } catch {
       /* fall through to fetch */
     }
@@ -115,6 +117,61 @@ export async function fetchGamesProcessListSlice(
     if (err?.name === "AbortError") throw err;
     return { rows: null, currencyCodes: null };
   }
+}
+
+function bankProcessListRouteCacheKey(companyId, { search = "" } = {}) {
+  return `${Number(companyId)}|${String(search || "").trim()}`;
+}
+
+function bankProcessListCacheHasEntry(cached) {
+  return cached != null && Array.isArray(cached.rows);
+}
+
+/** Sidebar hover / idle warm — consumed on BankProcessListPage boot. */
+export function warmBankProcessListRouteCache(companyId, opts = {}) {
+  const cid = Number(companyId);
+  if (!Number.isFinite(cid) || cid <= 0) return;
+  const key = bankProcessListRouteCacheKey(cid, opts);
+  if (bankProcessListRouteWarmCache.has(key) || bankProcessListRouteWarmInflight.has(key)) return;
+  const promise = prefetchBankProcessListPayload(cid, opts)
+    .then((slice) => {
+      if (bankProcessListCacheHasEntry(slice)) bankProcessListRouteWarmCache.set(key, slice);
+      return slice;
+    })
+    .finally(() => {
+      if (bankProcessListRouteWarmInflight.get(key) === promise) {
+        bankProcessListRouteWarmInflight.delete(key);
+      }
+    });
+  bankProcessListRouteWarmInflight.set(key, promise);
+}
+
+export function consumeBankProcessListRouteCache(companyId, opts = {}) {
+  const key = bankProcessListRouteCacheKey(Number(companyId), opts);
+  const cached = bankProcessListRouteWarmCache.get(key) || null;
+  if (cached) bankProcessListRouteWarmCache.delete(key);
+  return cached;
+}
+
+/** Use sidebar warm cache, in-flight warm, or fetch once. */
+export async function resolveBankProcessListRouteCache(companyId, opts = {}) {
+  const cid = Number(companyId);
+  if (!Number.isFinite(cid) || cid <= 0) {
+    return { rows: null, currencyCodes: null };
+  }
+  const cached = consumeBankProcessListRouteCache(cid, opts);
+  if (bankProcessListCacheHasEntry(cached)) return cached;
+  const key = bankProcessListRouteCacheKey(cid, opts);
+  const inflight = bankProcessListRouteWarmInflight.get(key);
+  if (inflight) {
+    try {
+      const slice = await inflight;
+      if (bankProcessListCacheHasEntry(slice)) return slice;
+    } catch {
+      /* fall through to fetch */
+    }
+  }
+  return prefetchBankProcessListPayload(cid, opts);
 }
 
 /** Warm Bank Process List data before route swap (Games → Bank). */

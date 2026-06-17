@@ -1,5 +1,12 @@
 import { tableSnapshotHasData } from "./dataCaptureTableSnapshot.js";
 
+/** Replace / remove / remark fields: first letter uppercase, rest lowercase. */
+export function toDataCaptureWordFieldCase(value) {
+  const s = String(value ?? "");
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
 export const CAPTURE_TYPE_OPTIONS = ["1.Text", "2.Format", "CITIBET", "4.RETURN"];
 
 /** Align with `normalizeCaptureTypeValue` in `js/datacapture.js`. */

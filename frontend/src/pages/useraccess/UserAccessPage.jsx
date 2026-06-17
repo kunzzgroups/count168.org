@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 
 const PERMISSION_OPTIONS = [
   "home",
@@ -254,7 +255,7 @@ export default function UserAccessPage() {
   return (
     <div style={{ marginLeft: 260, padding: 16 }}>
       <div style={{ marginBottom: 12, display: "flex", gap: 8 }}>
-        <button onClick={() => navigate("/userlist")}>Back</button>
+        <button onClick={() => navigate(spaPath("userlist"))}>Back</button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "380px 1fr", gap: 16 }}>
@@ -355,7 +356,7 @@ export default function UserAccessPage() {
           </div>
           <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
             <button disabled={submitting} onClick={handleRequestUpdate}>{submitting ? "Updating..." : "Update"}</button>
-            <button onClick={() => navigate("/userlist")}>Cancel</button>
+            <button onClick={() => navigate(spaPath("userlist"))}>Cancel</button>
           </div>
           {notice && <div style={{ marginTop: 8 }}>{notice}</div>}
         </div>

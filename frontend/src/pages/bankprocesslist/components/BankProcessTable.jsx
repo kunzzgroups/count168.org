@@ -103,8 +103,8 @@ export default function BankProcessTable({
 
   const bankColClass = (key) => `bank-col bank-col-${key}`;
 
-  /** <1700px：Bank / Card Owner 最多两行（Bank 有 type 时用 bank-cell-display 两行，无 type 时靠 --wrap） */
-  const bankNameWrapKeys = new Set(["bank", "owner"]);
+  /** <1700px：Bank 最多两行；Card Owner 单行省略 + title 悬停 */
+  const bankNameWrapKeys = new Set(["bank"]);
   /** <1600px：金额/日期/短码强制单行 */
   const bankSingleLineKeys = new Set([
     "no",
@@ -266,7 +266,12 @@ export default function BankProcessTable({
                   <div className={cellClass("supplier")}>{r.card_lower || "-"}</div>
                   <div className={cellClass("ccy")}>{r.country || "-"}</div>
                   <div className={cellClass("bank")}>{renderBankCell(r.bank, r.type)}</div>
-                  <div className={cellClass("owner")}>{r.supplier || "-"}</div>
+                  <div
+                    className={cellClass("owner")}
+                    title={String(r.supplier || "").trim() || undefined}
+                  >
+                    <span className="bank-owner-text">{r.supplier || "-"}</span>
+                  </div>
                   <div className={cellClass("contract", "bank-contract-cell")}>
                     {renderBankContract(r.contract, r.day_start || r.date, r.day_end, lang)}
                   </div>
@@ -300,9 +305,8 @@ export default function BankProcessTable({
                             aria-label={t("remark")}
                             title={t("remark")}
                             onClick={() => openRemarkModal(r)}
-                            style={{ marginLeft: 6 }}
                           >
-                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style={{ width: 14, height: 14 }}>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                               <path
                                 d="M6 4h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4h8M8 11h6"
                                 fill="none"
@@ -329,9 +333,8 @@ export default function BankProcessTable({
                                 isBankResendScheduleLockedToday(r, r.day_start || r.date)
                               }
                               onClick={() => openResendModal(r)}
-                              style={{ marginLeft: 6 }}
                             >
-                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style={{ width: 16, height: 16 }}>
+                              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                                 <path
                                   d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
                                   fill="none"
@@ -387,9 +390,8 @@ export default function BankProcessTable({
                           aria-label={t("remark")}
                           title={t("remark")}
                           onClick={() => openRemarkModal(r)}
-                          style={{ marginLeft: 6 }}
                         >
-                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style={{ width: 14, height: 14 }}>
+                          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                             <path
                               d="M6 4h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H10l-4 4v-4H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm2 4h8M8 11h6"
                               fill="none"
@@ -407,9 +409,8 @@ export default function BankProcessTable({
                             aria-label={t("resendToAccountingDue")}
                             title={t("resend")}
                             onClick={() => openResendModal(r)}
-                            style={{ marginLeft: 6 }}
                           >
-                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" style={{ width: 16, height: 16 }}>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                               <path
                                 d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
                                 fill="none"

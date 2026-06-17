@@ -1,9 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { readTransactionCurrencyFilterState } from "../lib/transactionPaymentLogic.js";
-import {
-  buildDashboardCurrencyScopeKey,
-  resolveCrossPageCurrencyPreference,
-} from "../../../utils/company/sharedCompanyFilter.js";
+import { pickTransactionDefaultCurrency } from "../lib/transactionPaymentLogic.js";
 import {
   transactionScopeCacheCompanyKey,
   transactionScopeCacheKey,
@@ -16,10 +12,9 @@ function sameCurrencySelection(a, b) {
   return left.every((code, idx) => code === right[idx]);
 }
 
-/** Session memory uses { showAll, currencies }; normalize legacy { showAllCurrencies, selectedCurrencies }. */
+/** In-session company switch only — refresh always falls back to MYR default (not localStorage). */
 function resolveSavedCurrencyPrefs(companyCacheKey, memoryStore) {
   const mem = companyCacheKey != null ? memoryStore[companyCacheKey] : null;
-  const fromStorage = readTransactionCurrencyFilterState(companyCacheKey);
 
   const memCurrencies = Array.isArray(mem?.currencies)
     ? mem.currencies
@@ -27,14 +22,18 @@ function resolveSavedCurrencyPrefs(companyCacheKey, memoryStore) {
       ? mem.selectedCurrencies
       : [];
 
+  if (mem?.showAll || mem?.showAllCurrencies) {
+    return { showAll: true, currencies: [] };
+  }
+
   if (memCurrencies.length > 0) {
     return {
-      showAll: !!(mem?.showAll ?? mem?.showAllCurrencies),
+      showAll: false,
       currencies: memCurrencies.map((c) => String(c || "").trim()).filter(Boolean),
     };
   }
 
-  return fromStorage;
+  return null;
 }
 
 export function useTransactionInitialization({
@@ -97,26 +96,9 @@ export function useTransactionInitialization({
     const rows = currencyScopeBundle.rows;
     const codes = rows.map((x) => String(x.code || x.currency || "").toUpperCase().trim()).filter(Boolean);
 
-    let preferredDefault = resolveCrossPageCurrencyPreference({
-      scopeKey: buildDashboardCurrencyScopeKey({
-        companyId: transactionScope?.scopeCompanyId > 0 ? transactionScope.scopeCompanyId : cid,
-        selectedGroup: transactionScope?.selectedGroup ?? filterSnapshot?.selectedGroup,
-      }),
-      availableCodes: codes,
-    });
-    if (!preferredDefault) {
-      try {
-        preferredDefault =
-          String(localStorage.getItem(`transaction_default_currency_${cid || 0}`))
-            .trim()
-            .toUpperCase() || null;
-      } catch {
-        preferredDefault = null;
-      }
-    }
-
+    const defaultCode = pickTransactionDefaultCurrency(codes);
     const pickDefault =
-      (preferredDefault ? rows.find((c) => String(c.code || "").toUpperCase() === preferredDefault) : null) ||
+      (defaultCode ? rows.find((c) => String(c.code || "").toUpperCase() === defaultCode) : null) ||
       rows[0];
 
     const ensureCurrencySelection = () => {
@@ -130,9 +112,9 @@ export function useTransactionInitialization({
         }
         return;
       }
+      const code = pickTransactionDefaultCurrency(codes);
       const pick =
-        (preferredDefault ? rows.find((c) => String(c.code || "").toUpperCase() === preferredDefault) : null) ||
-        rows[0];
+        (code ? rows.find((c) => String(c.code || "").toUpperCase() === code) : null) || rows[0];
       if (pick?.code) {
         activeSearch.setSelectedCurrencies([pick.code]);
       }
@@ -155,17 +137,17 @@ export function useTransactionInitialization({
     let nextSel = [];
 
     if (saved?.showAll) {
-      nextShowAll = false;
-      nextSel = rows.map((c) => String(c.code || "").toUpperCase().trim()).filter(Boolean);
+      nextShowAll = true;
+      nextSel = [];
     } else if (saved?.currencies?.length) {
       const valid = saved.currencies.filter((code) => rows.some((c) => String(c.code) === String(code)));
       if (valid.length > 0) nextSel = valid;
     }
 
     if (!nextShowAll && nextSel.length === 0 && rows.length > 0) {
+      const code = pickTransactionDefaultCurrency(codes);
       const pick =
-        (preferredDefault ? rows.find((c) => String(c.code || "").toUpperCase() === preferredDefault) : null) ||
-        rows[0];
+        (code ? rows.find((c) => String(c.code || "").toUpperCase() === code) : null) || rows[0];
       if (pick?.code) nextSel = [pick.code];
     }
 

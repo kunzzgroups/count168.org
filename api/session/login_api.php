@@ -22,6 +22,8 @@ if (isset($_SESSION['last_activity']) && (time() - (int) $_SESSION['last_activit
 
 // 设置错误处理，确保返回 JSON
 header('Content-Type: application/json');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 // 开启输出缓冲，防止意外输出（必须在 header 之后）
 ob_start();
@@ -32,6 +34,7 @@ try {
     require_once __DIR__ . '/../../includes/login_scope.php';
     require_once __DIR__ . '/../../includes/group_company_access.php';
     require_once __DIR__ . '/../../includes/company_expiration.php';
+    require_once __DIR__ . '/../../includes/auth_invalidation.php';
 } catch (Throwable $e) {
     ob_clean();
     echo json_encode(['status' => 'error', 'message' => 'Database connection failed']);
@@ -55,6 +58,9 @@ function isCompanyExpiredOrUnset($expirationDate, $companyCode = null, $groupId 
 
 try {
     if ($_POST) {
+        session_unset();
+        session_user_payload_cache_clear();
+
         $password = trim($_POST['password']);
         $company_id = strtoupper(trim($_POST['company_id'])); // 转换为大写，不区分大小写
         $login_role = isset($_POST['login_role']) ? trim($_POST['login_role']) : 'admin'; // 获取登录角色
@@ -128,12 +134,15 @@ try {
             $_SESSION['company_id'] = $account['company_numeric_id'];
             $_SESSION['last_activity'] = time();
 
+            $passwordForFingerprint = (string) ($account['password'] ?? '');
             // 明文密码登录成功时升级为哈希（与 owner 一致）
             if ($account_record_to_update && (int) $account['id'] === (int) $account_record_to_update['id']) {
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 $update_stmt = $pdo->prepare('UPDATE account SET password = ? WHERE id = ?');
                 $update_stmt->execute([$hashed_password, $account['id']]);
+                $passwordForFingerprint = $hashed_password;
             }
+            auth_store_password_fingerprint($passwordForFingerprint);
 
             // 更新最后登录时间
             $stmt = $pdo->prepare("UPDATE account SET last_login = NOW() WHERE id = ?");
@@ -179,7 +188,7 @@ try {
         FROM user u
         INNER JOIN user_company_map ucm ON u.id = ucm.user_id
         INNER JOIN company c ON ucm.company_id = c.id
-        WHERE u.login_id = ? AND (UPPER(c.company_id) = ? OR UPPER(c.group_id) = ?) AND u.status = 'active'
+        WHERE UPPER(u.login_id) = UPPER(?) AND (UPPER(c.company_id) = ? OR UPPER(c.group_id) = ?) AND u.status = 'active'
     ");
     $stmt->execute([$login_id, $company_id, $company_id]);
     $matched_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -224,7 +233,12 @@ try {
             
             // 设置cookie，30天过期
             setcookie('remember_token', $remember_token, time() + (30 * 24 * 60 * 60), "/", "", false, true);
+        } else {
+            invalidate_user_remember_token($pdo, (int) $user['id']);
+            clear_remember_token_cookie();
         }
+
+        auth_store_password_fingerprint((string) ($user['password'] ?? ''));
 
         // 更新最后登录时间
         $stmt = $pdo->prepare("UPDATE user SET last_login = NOW() WHERE id = ?");
@@ -315,11 +329,13 @@ try {
         }
         
         if ($owner) {
+            $passwordForFingerprint = (string) ($owner['password'] ?? '');
             // 如果使用明文密码验证成功，自动升级为哈希密码
             if ($owner_record_to_update && $owner['id'] == $owner_record_to_update['id']) {
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 $update_stmt = $pdo->prepare("UPDATE owner SET password = ? WHERE id = ?");
                 $update_stmt->execute([$hashed_password, $owner['id']]);
+                $passwordForFingerprint = $hashed_password;
             }
 
             $_SESSION['user_id'] = $owner['id'];
@@ -341,6 +357,8 @@ try {
             if ($remember_me) {
                 // Owner 的 remember me 可以存在 session 或另外处理
             }
+
+            auth_store_password_fingerprint($passwordForFingerprint);
 
             persist_login_filter_scope($pdo, $company_id);
             $loginFilter = resolve_login_identifier_scope($pdo, $company_id);

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { isPaymentMaintenanceRowSelectable } from "../paymentMaintenanceLogic.js";
 import PaymentVirtualRows from "./PaymentVirtualRows.jsx";
+import { MAINTENANCE_REPORT_ROW_HEIGHT } from "../../shared/maintenanceReportRowMetrics.js";
 
-const ROW_HEIGHT = 52;
+const ROW_HEIGHT = MAINTENANCE_REPORT_ROW_HEIGHT;
 
 
 
@@ -87,6 +88,8 @@ export default function PaymentMaintenanceTable({
           rows={data}
           rowHeight={ROW_HEIGHT}
           rowKeyPrefix={rowKeyPrefix}
+          scrollResetKey={rowKeyPrefix}
+          listSyncing={listSyncing}
           selectedSet={selectedSet}
           onToggleRow={toggleSelect}
           selectAllRef={selectAllRef}

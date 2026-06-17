@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import { flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { canAccessTransactionFormulaMaintenance } from "../../../utils/auth/sidebarPermissions.js";
@@ -7,6 +8,7 @@ import { ensureMaintenanceDateRangePicker } from "../../../utils/date/dateRangeP
 import { useMaintenanceGroupCompanyFilter } from "../shared/useMaintenanceGroupCompanyFilter.js";
 import { runMaintenanceCompanySwitch } from "../shared/maintenanceCompanySwitch.js";
 import { useMaintenanceBankOnlyGuard } from "../shared/useMaintenanceBankOnlyGuard.js";
+import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import {
   companiesInGroupList,
   getCachedOwnerCompanies,
@@ -30,8 +32,8 @@ import "../../../../public/css/transaction.css";
 import "../../../../public/css/date-range-picker.css";
 import "../../../../public/css/customer_report.css";
 import "../../../../public/css/report-outlined-fields.css";
-import "../../../../public/css/maintenance_unified_filters.css";
 import "../../../../public/css/transaction_maintenance.css";
+import "../../../../public/css/maintenance_unified_filters.css";
 import { useGroupAnchorSessionSync } from "../../../utils/company/useGroupAnchorSessionSync.js";
 import {
   fetchCompanyPermissions,
@@ -145,6 +147,7 @@ export default function TransactionMaintenancePage() {
   /** Boot finished with scope/permission — trigger one explicit search before auto-effect. */
   const pendingBootSearchRef = useRef(null);
   const searchDebounceRef = useRef(null);
+  const firstProgressPaintRef = useRef(true);
 
   const [transactionData, setTransactionData] = useState([]);
   const [maintenanceDataComplete, setMaintenanceDataComplete] = useState(false);
@@ -315,6 +318,7 @@ export default function TransactionMaintenancePage() {
       maintenanceAbortRef.current = ac;
       const seq = ++maintenanceSeqRef.current;
       const quietRefresh = initialSearchDoneRef.current;
+      firstProgressPaintRef.current = true;
       if (filtersChanged || overrides.scope) {
         if (!quietRefresh) {
           setTransactionData([]);
@@ -343,8 +347,19 @@ export default function TransactionMaintenancePage() {
           onProgress: (progressRows) => {
             if (seq !== maintenanceSeqRef.current) return;
             if (searchScopeKey !== scopeKeyRef.current) return;
-            setTransactionData(progressRows);
-            setMaintenanceDataComplete(false);
+            const applyProgress = () => {
+              setTransactionData(progressRows);
+              setMaintenanceDataComplete(false);
+              if (!quietRefresh) {
+                setListLoading(false);
+              }
+            };
+            if (firstProgressPaintRef.current) {
+              firstProgressPaintRef.current = false;
+              flushSync(applyProgress);
+            } else {
+              startTransition(applyProgress);
+            }
           },
         });
         if (seq !== maintenanceSeqRef.current) return;
@@ -408,6 +423,7 @@ export default function TransactionMaintenancePage() {
     const seq = ++maintenanceSeqRef.current;
     const searchScopeKey = transactionMaintenanceScopeCacheKey(pending.scope);
     scopeKeyRef.current = searchScopeKey;
+    firstProgressPaintRef.current = true;
     setListLoading(true);
     setSearchError(null);
     try {
@@ -418,6 +434,20 @@ export default function TransactionMaintenancePage() {
         category,
         scope: pending.scope,
         signal: ac.signal,
+        onProgress: (progressRows) => {
+          if (seq !== maintenanceSeqRef.current) return;
+          const applyProgress = () => {
+            setTransactionData(progressRows);
+            setMaintenanceDataComplete(false);
+            setListLoading(false);
+          };
+          if (firstProgressPaintRef.current) {
+            firstProgressPaintRef.current = false;
+            flushSync(applyProgress);
+          } else {
+            startTransition(applyProgress);
+          }
+        },
       });
       if (seq !== maintenanceSeqRef.current) return false;
       setTransactionData(rows);
@@ -486,7 +516,7 @@ export default function TransactionMaintenancePage() {
     searchDebounceRef.current = window.setTimeout(() => {
       searchDebounceRef.current = null;
       void performMaintenanceSearch();
-    }, 280);
+    }, 180);
     return () => {
       if (searchDebounceRef.current) {
         window.clearTimeout(searchDebounceRef.current);
@@ -578,13 +608,13 @@ export default function TransactionMaintenancePage() {
 
         // Member check
         if (String(u.user_type || "").toLowerCase() === "member") {
-          window.location.assign(new URL("/member", window.location.origin).href);
+          window.location.assign(new URL(spaPath("member"), window.location.origin).href);
           return;
         }
 
         // Permissions check
         if (!canAccessTransactionFormulaMaintenance(u)) {
-          navigate("/dashboard", { replace: true });
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
 
@@ -699,11 +729,11 @@ export default function TransactionMaintenancePage() {
           const hasGames = companyPerms.includes("Games") || companyPerms.includes("Gambling");
           const bankOnly = companyPerms.includes("Bank") && !hasGames;
           if (bankOnly) {
-            navigate("/dashboard", { replace: true });
+            navigate(spaPath("dashboard"), { replace: true });
             return;
           }
           if (!hasGames) {
-            navigate("/dashboard", { replace: true });
+            navigate(spaPath("dashboard"), { replace: true });
             return;
           }
 
@@ -760,7 +790,7 @@ export default function TransactionMaintenancePage() {
 
       } catch (err) {
         console.error("Boot error:", err);
-        if (!cancelled && runId === bootRunIdRef.current) navigate("/login", { replace: true });
+        if (!cancelled && runId === bootRunIdRef.current) navigate(spaPath("login"), { replace: true });
       } finally {
         if (!cancelled && runId === bootRunIdRef.current) {
           const pending = pendingBootSearchRef.current;
@@ -1028,7 +1058,7 @@ export default function TransactionMaintenancePage() {
       setListSyncing(false);
       const msg = String(err?.message || "");
       if (msg.toLowerCase().includes("unauthorized permission category")) {
-        navigate("/dashboard", { replace: true });
+        navigate(spaPath("dashboard"), { replace: true });
         return;
       }
       notify(err.message || t("switchFailed"), "error");
@@ -1111,6 +1141,8 @@ export default function TransactionMaintenancePage() {
             showTopLoading={showTopLoadingBar}
             topLoadingLabel={listStatusMessage || t("loading")}
             listSyncing={listSyncing}
+            dataIncomplete={!maintenanceDataComplete && listRowCount > 0}
+            scrollResetKey={searchQueryKey}
             m={m}
           />
         </div>

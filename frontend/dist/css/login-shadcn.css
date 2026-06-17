@@ -1,4 +1,5 @@
 ﻿body.bg {
+  color-scheme: light;
   /* Latin + CJK in one stack so toggling zh/en does not swap entire font metrics */
   font-family:
     "Segoe UI",
@@ -301,6 +302,7 @@ button.sc-login-lang-seg.active {
   display: flex;
   align-items: center;
   min-width: 0;
+  cursor: var(--login-input-cursor, text);
 }
 
 .sc-login-input-icon {
@@ -311,6 +313,7 @@ button.sc-login-lang-seg.active {
   color: var(--login-bg-end);
   font-size: 15px;
   z-index: 2;
+  pointer-events: none;
 }
 
 /* 输入框 chrome 见 style.css + src/styles/login-auth-fields.css */

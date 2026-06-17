@@ -51,6 +51,24 @@ function getRoles(PDO $pdo) {
 }
 
 /**
+ * Account modal roles: ensure DEBTOR appears after MEMBER when missing from role table.
+ */
+function ensureAccountModalRoles(array $roles): array
+{
+    $normalized = array_map(static fn($r) => strtoupper(trim((string) $r)), $roles);
+    if (in_array('DEBTOR', $normalized, true)) {
+        return $roles;
+    }
+    $memberIdx = array_search('MEMBER', $normalized, true);
+    if ($memberIdx !== false) {
+        array_splice($roles, $memberIdx + 1, 0, 'DEBTOR');
+        return $roles;
+    }
+    $roles[] = 'DEBTOR';
+    return $roles;
+}
+
+/**
  * Resolve numeric company id for currency list (optional).
  */
 function editdataResolveCurrencyCompanyId(PDO $pdo): int
@@ -86,7 +104,7 @@ try {
         throw new Exception('用户未登录');
     }
 
-    $roles = getRoles($pdo);
+    $roles = ensureAccountModalRoles(getRoles($pdo));
     $currencies = [];
     try {
         $company_id = editdataResolveCurrencyCompanyId($pdo);

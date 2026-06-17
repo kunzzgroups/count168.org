@@ -1,6 +1,7 @@
 import React from "react";
 import AccountEditorRow from "../../shared/components/AccountEditorRow.jsx";
 import GePartnerSection from "./GePartnerSection.jsx";
+import { ownershipRowClientId, maxAllowedOwnershipPct } from "../../shared/ownershipRowHelpers.js";
 
 export default function GroupEarningCard({
   grp,
@@ -114,15 +115,17 @@ export default function GroupEarningCard({
               <div id={`ge-rows-container-${gid}`}>
                 {st.rows.map((row, idx) => (
                   <AccountEditorRow
-                    key={`ge-${gid}-${idx}-${String(row.account_id)}-${row.ownership_id ?? "n"}`}
+                    key={ownershipRowClientId(row, idx)}
                     companyId={`ge-${gid}`}
                     idx={idx}
                     row={row}
                     accounts={st.accounts}
+                    maxPercentage={maxAllowedOwnershipPct(st.rows, idx)}
                     enableDrag={false}
                     onUpdate={(i, f, v) => onUpdateRow(gid, i, f, v)}
                     onRemove={(i) => onRemoveRow(gid, i)}
                     readOnlyMode={readOnlyMode}
+                    structureLocked={readOnlyMode}
                     t={t}
                   />
                 ))}
@@ -130,7 +133,7 @@ export default function GroupEarningCard({
               <button type="button" className="own-btn-add-account" data-action="add-row" disabled={readOnlyMode}>
                 {t("addAccount")}
               </button>
-              <GePartnerSection groupId={gid} disabled={readOnlyMode} onLink={(login) => onLinkPartner(login)} t={t} />
+              <GePartnerSection groupId={gid} disabled={readOnlyMode || isHistoricalView} onLink={(login) => onLinkPartner(login)} t={t} />
               <div className="own-card-footer">
                 <div className="own-footer-left">
                   <div className={`own-warning-badge${warn.err ? " own-warning-error" : ""}`} style={{ display: warn.show ? "flex" : "none" }}>

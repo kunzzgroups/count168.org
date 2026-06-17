@@ -2,8 +2,8 @@
 export const DEFAULT_GRID_ROWS = 26;
 export const DEFAULT_GRID_COLS = 20;
 
-/** Group-only mode (Group selected, no Company): starts at 11×11 (A–K, cols 1–11); rows may grow (L…Z, AA…). */
-export const GROUP_ONLY_GRID_ROWS = 11;
+/** Group payroll UI: same A–Z row span as company capture; cols start at 11 (may grow). */
+export const GROUP_ONLY_GRID_ROWS = DEFAULT_GRID_ROWS;
 export const GROUP_ONLY_GRID_COLS = 11;
 
 /** ZZ row index + 1 in legacy. */

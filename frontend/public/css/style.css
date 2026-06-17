@@ -15,6 +15,8 @@
 }
 
 body.bg {
+    color-scheme: light;
+    --login-input-cursor: text;
     font-family: var(--font-ui, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif);
     background: url('/images/count_bg.png') center/cover no-repeat;
     min-height: 100vh;
@@ -263,6 +265,12 @@ body.bg::before {
     color: var(--login-bg-end);
     font-size: 15px;
     z-index: 2;
+    pointer-events: none;
+}
+
+body.bg .sc-login-input-row,
+body.bg .login-container .input-group {
+    cursor: var(--login-input-cursor);
 }
 
 /* LoginPage (.sc-login-input) + 二级密码 / reset (.login-container .input-group input) */
@@ -280,7 +288,11 @@ body.bg .login-container .input-group input {
     border-radius: var(--login-radius-pill);
     font-size: var(--text-base);
     transition: border-color 0.3s ease, box-shadow 0.3s ease;
-    color: var(--login-text);
+    color: var(--login-text, #333333);
+    /* Windows 深色模式 / 高对比度下，浅色输入框的插入符可能渲染成白色条块 */
+    color-scheme: light;
+    caret-color: var(--login-text, #333333);
+    cursor: var(--login-input-cursor);
 }
 
 body.bg .sc-login-input {

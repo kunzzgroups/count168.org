@@ -6,6 +6,7 @@
  */
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../../includes/permissions.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
@@ -35,23 +36,21 @@ function bankProcessHasColumn(PDO $pdo, string $column): bool {
 }
 
 // ---------- 权限与用户 ----------
-function validateCompanyAccessProcess(PDO $pdo, int $companyId): void {
-    $current_user_id = $_SESSION['user_id'];
-    $current_user_role = $_SESSION['role'] ?? '';
-    if ($current_user_role === 'owner') {
-        $owner_id = $_SESSION['owner_id'] ?? $current_user_id;
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM company WHERE id = ? AND owner_id = ?");
-        $stmt->execute([$companyId, $owner_id]);
-        if ((int)$stmt->fetchColumn() === 0) {
-            throw new Exception('无权限访问该公司');
-        }
-    } else {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM user_company_map WHERE user_id = ? AND company_id = ?");
-        $stmt->execute([$current_user_id, $companyId]);
-        if ((int)$stmt->fetchColumn() === 0) {
-            throw new Exception('无权限访问该公司');
-        }
+function validateCompanyAccessProcess(PDO $pdo, int $companyId): void
+{
+    $viewGroup = null;
+    if (isset($_GET['group_id']) && trim((string) $_GET['group_id']) !== '') {
+        $viewGroup = gc_normalize_view_group((string) $_GET['group_id']);
+    } elseif (isset($_POST['group_id']) && trim((string) $_POST['group_id']) !== '') {
+        $viewGroup = gc_normalize_view_group((string) $_POST['group_id']);
+    } elseif (isset($_GET['view_group']) && trim((string) $_GET['view_group']) !== '') {
+        $viewGroup = gc_normalize_view_group((string) $_GET['view_group']);
+    } elseif (isset($_POST['view_group']) && trim((string) $_POST['view_group']) !== '') {
+        $viewGroup = gc_normalize_view_group((string) $_POST['view_group']);
+    } elseif (gc_is_group_login()) {
+        $viewGroup = gc_session_login_identifier();
     }
+    gc_assert_api_company_access($pdo, $companyId, $viewGroup);
 }
 
 function getCurrentUserId(PDO $pdo): int {
@@ -86,9 +85,20 @@ function getCurrentUserId(PDO $pdo): int {
 
 // ---------- 数据层：表单与列表 ----------
 function getCurrenciesByCompany(PDO $pdo, int $companyId): array {
-    $stmt = $pdo->prepare("SELECT id, code FROM currency WHERE company_id = ? ORDER BY code");
-    $stmt->execute([$companyId]);
-    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    if (!function_exists('tenant_fetch_currencies')) {
+        require_once __DIR__ . '/../../includes/tenant_scope.php';
+    }
+    $rows = tenant_fetch_currencies($pdo, [
+        'mode' => 'company',
+        'company_id' => $companyId,
+    ]);
+
+    return array_map(static function (array $row): array {
+        return [
+            'id' => (int) ($row['id'] ?? 0),
+            'code' => (string) ($row['code'] ?? ''),
+        ];
+    }, $rows);
 }
 
 function getProcessesForForm(PDO $pdo, int $companyId): array {

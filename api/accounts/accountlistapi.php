@@ -123,17 +123,30 @@ function validateCompanyAccess(PDO $pdo, int $company_id): void {
     }
     $current_user_id = $_SESSION['user_id'];
     $current_user_role = $_SESSION['role'] ?? '';
+    $view_group = normalizeGroupId($_GET['group_id'] ?? $_GET['view_group'] ?? null);
     if ($current_user_role === 'owner') {
         $owner_id = $_SESSION['owner_id'] ?? $current_user_id;
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM company WHERE id = ? AND owner_id = ?");
         $stmt->execute([$company_id, $owner_id]);
         if ($stmt->fetchColumn() == 0) {
+            if (
+                $view_group !== null
+                && gc_session_can_access_subsidiary_under_view_group($pdo, $company_id, $view_group)
+            ) {
+                return;
+            }
             throw new Exception('无权限访问该公司');
         }
     } else {
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM user_company_map WHERE user_id = ? AND company_id = ?");
         $stmt->execute([$current_user_id, $company_id]);
         if ($stmt->fetchColumn() == 0) {
+            if (
+                $view_group !== null
+                && gc_session_can_access_subsidiary_under_view_group($pdo, $company_id, $view_group)
+            ) {
+                return;
+            }
             throw new Exception('无权限访问该公司');
         }
     }
@@ -174,6 +187,26 @@ function accountListTableExists(PDO $pdo, string $table): bool
         return $pdo->query('SHOW TABLES LIKE ' . $pdo->quote($table))->rowCount() > 0;
     } catch (PDOException $e) {
         return false;
+    }
+}
+
+/**
+ * 与 processlist 一致的状态筛选：
+ * - 默认 / 仅分页：active
+ * - showInactive：inactive（分页）
+ * - showAll：全部 active（不分页由前端控制）
+ * - showAll + showInactive：全部 inactive
+ */
+function appendAccountStatusSqlFilter(string &$sql, bool $showInactive, bool $showAll): void
+{
+    if ($showAll && $showInactive) {
+        $sql .= " AND a.status = 'inactive'";
+    } elseif ($showAll) {
+        $sql .= " AND a.status = 'active'";
+    } elseif ($showInactive) {
+        $sql .= " AND a.status = 'inactive'";
+    } else {
+        $sql .= " AND a.status = 'active'";
     }
 }
 
@@ -251,13 +284,7 @@ function fetchAccountsForGroupScope(
         $params[] = $searchParam;
     }
 
-    if (!$showAll) {
-        if ($showInactive) {
-            $sql .= " AND a.status = 'inactive'";
-        } else {
-            $sql .= " AND a.status = 'active'";
-        }
-    }
+    appendAccountStatusSqlFilter($sql, $showInactive, $showAll);
 
     $sql .= ' ORDER BY a.account_id ASC, a.id ASC';
     $stmt = $pdo->prepare($sql);
@@ -392,13 +419,7 @@ function fetchAccountsForCompany(PDO $pdo, int $company_id, string $searchTerm, 
         $params[] = $searchParam;
     }
 
-    if ($showAll) {
-        // Show All: include both active and inactive (no status constraint)
-    } elseif ($showInactive) {
-        $sql .= " AND a.status = 'inactive'";
-    } else {
-        $sql .= " AND a.status = 'active'";
-    }
+    appendAccountStatusSqlFilter($sql, $showInactive, $showAll);
 
     $sql .= " ORDER BY a.account_id ASC, a.id ASC";
     $stmt = $pdo->prepare($sql);

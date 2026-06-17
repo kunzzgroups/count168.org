@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { accountModalOverlayZIndex, portalToDocumentBody } from "../../../components/ProcessModalPortal.jsx";
+import ConfirmDeleteModal from "../../../components/ConfirmDeleteModal.jsx";
 import { toUpper } from "../accountLogic.js";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
@@ -15,36 +16,18 @@ export function AccountConfirmModal({
   confirmLabel,
   modalId = "confirmDeleteModal",
 }) {
-  if (!open) return null;
-  return portalToDocumentBody(
-    <div
-      id={modalId}
-      className="account-modal"
-      role="dialog"
-      aria-modal="true"
-      style={{ zIndex: confirmModalZIndex }}
-      onClick={onClose}
-    >
-      <div className="account-confirm-modal-content" onClick={(e) => e.stopPropagation()}>
-        <div className="account-confirm-icon-container">
-          <svg className="account-confirm-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
-        </div>
-        <h2 className="account-confirm-title">{title || t("confirmDelete")}</h2>
-        <p id="confirmDeleteMessage" className="account-confirm-message">
-          {message || t("actionCannotUndone")}
-        </p>
-        <div className="account-confirm-actions">
-          <button type="button" className="btn btn-cancel confirm-cancel" onClick={onClose}>
-            {t("cancel")}
-          </button>
-          <button type="button" className="btn btn-delete confirm-delete" onClick={onConfirm}>
-            {confirmLabel || t("delete")}
-          </button>
-        </div>
-      </div>
-    </div>
+  return (
+    <ConfirmDeleteModal
+      open={open}
+      modalId={modalId}
+      zIndex={confirmModalZIndex}
+      title={title || t("confirmDelete")}
+      message={message || t("actionCannotUndone")}
+      cancelLabel={t("cancel")}
+      confirmLabel={confirmLabel || t("delete")}
+      onConfirm={onConfirm}
+      onClose={onClose}
+    />
   );
 }
 
@@ -103,7 +86,6 @@ export function LinkAccountModal({
   t,
 }) {
   const { submitting, runGuarded } = useSubmitGuard(open);
-  if (!open) return null;
 
   const rows = useMemo(() => {
     const q = String(searchTerm || "").trim().toLowerCase();
@@ -116,10 +98,12 @@ export function LinkAccountModal({
       });
   }, [accounts, currentAccountId, searchTerm]);
 
+  if (!open) return null;
+
   return portalToDocumentBody(
     <div id="linkAccountModal" className="account-modal" style={{ display: "block", zIndex: accountModalOverlayZIndex }}>
       <div className="account-modal-content">
-        <div className="account-modal-header">
+        <div className="account-modal-header account-form-modal-header">
           <h2>{t("linkAccountTitle")}</h2>
           <span className="account-close" onClick={onClose} role="button" tabIndex={0} aria-label={t("close")} />
         </div>

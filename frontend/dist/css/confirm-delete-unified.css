@@ -80,6 +80,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -164,6 +165,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -187,6 +189,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -242,6 +245,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -268,6 +272,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -295,6 +300,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -321,6 +327,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -347,6 +354,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -374,6 +382,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .confirm-delete-modal-content,
   .domain-confirm-modal-content,
   .process-confirm-modal-content,
@@ -400,6 +409,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .domain-confirm-modal-content,
   .process-confirm-modal-content
 ) :is(
@@ -411,6 +421,7 @@
 :is(
   #confirmModal,
   #confirmDeleteModal,
+  #forceDeleteCurrencyModal,
   .domain-confirm-modal-content,
   .process-confirm-modal-content
 ) :is(
@@ -428,6 +439,6 @@
 }
 
 /* Process delete sweep animation — keep but don't affect layout */
-:is(#confirmDeleteModal, #confirmModal) .process-btn-delete::after {
+:is(#confirmDeleteModal, #forceDeleteCurrencyModal, #confirmModal) .process-btn-delete::after {
   pointer-events: none;
 }

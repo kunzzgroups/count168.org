@@ -319,6 +319,38 @@ function gc_assert_company_id_allowed_for_login_scope(PDO $pdo, int $numericComp
 }
 
 /**
+ * Dashboard group tab + subsidiary company pill (e.g. IG + 95): user may drill down via view_group
+ * without a direct user_company_map row on the subsidiary.
+ */
+function gc_session_can_access_subsidiary_under_view_group(PDO $pdo, int $companyId, ?string $viewGroup): bool
+{
+    if ($companyId <= 0) {
+        return false;
+    }
+
+    $g = gc_normalize_group_code($viewGroup ?? '');
+    if ($g === '') {
+        return false;
+    }
+
+    if (gc_is_group_login()) {
+        return gc_session_can_access_company_id($pdo, $companyId, $g);
+    }
+
+    if (!gc_session_can_access_group_ledger($pdo, $g)) {
+        return false;
+    }
+
+    foreach (gc_company_numeric_ids_for_group_code($pdo, $g) as $cid) {
+        if ((int) $cid === $companyId) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
  * Filter company rows for list/switch APIs (same rules as get_owner_companies_api).
  *
  * @param array<int, array<string, mixed>> $companies

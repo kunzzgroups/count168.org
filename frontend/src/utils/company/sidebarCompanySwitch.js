@@ -3,6 +3,7 @@ import { peekCompanySessionFlags } from "./companySessionFlagsCache.js";
 import { normalizeCompanyCode } from "./loginScope.js";
 import { notifyDashboardGroupFilterChanged } from "./sharedCompanyFilter.js";
 import { resolveCompanyCategoryFlagsFromRow } from "./companyCategoryFlags.js";
+import { pathnameToPageKey, spaPath } from "../routing/pageRoutes.js";
 
 export { resolveCompanyCategoryFlagsFromRow } from "./companyCategoryFlags.js";
 
@@ -74,8 +75,8 @@ export function applySidebarForCompanySwitch(viewGroup, companyRow, apiData) {
 
 /** Bank-only companies may use payment-maintenance and bankprocess-maintenance. */
 export function isBankOnlyAllowedMaintenancePath(path) {
-  const p = String(path || "");
-  return p === "/bankprocess-maintenance" || p === "/payment-maintenance";
+  const pageKey = pathnameToPageKey(path);
+  return pageKey === "bankprocess-maintenance" || pageKey === "payment-maintenance";
 }
 
 /**
@@ -86,21 +87,33 @@ export function isBankOnlyAllowedMaintenancePath(path) {
 export function resolveMaintenanceRedirectForSession(sessionData, currentPath) {
   const flags = categoryFlagsFromSession(sessionData, sessionData?.company_id);
   if (!flags) return null;
-  const path = String(currentPath || "");
+  const pageKey = pathnameToPageKey(currentPath);
 
   if (isBankOnlyCategoryFlags(flags)) {
-    if (isBankOnlyAllowedMaintenancePath(path)) return null;
-    if (path === "/dashboard") return null;
-    return "/dashboard";
+    if (isBankOnlyAllowedMaintenancePath(currentPath)) return null;
+    if (
+      pageKey === "transaction-maintenance" ||
+      pageKey === "capture-maintenance" ||
+      pageKey === "formula-maintenance"
+    ) {
+      return spaPath("payment-maintenance");
+    }
+    if (pageKey === "dashboard") return null;
+    return spaPath("dashboard");
   }
 
   if (isGamesOnlyCategoryFlags(flags)) {
-    if (path === "/bankprocess-maintenance") return "/capture-maintenance";
+    if (pageKey === "bankprocess-maintenance") return spaPath("capture-maintenance");
+    // Payment Maintenance 与 Process 共用公司 pills，切换 Games 公司时不跳转。
     return null;
   }
 
   if (!flags.hasGambling && !flags.hasBank) {
-    return "/dashboard";
+    const code = String(sessionData?.company_code ?? "").trim().toUpperCase();
+    if (code === "C168" && (pageKey === "capture-maintenance" || pageKey === "formula-maintenance")) {
+      return null;
+    }
+    return spaPath("dashboard");
   }
 
   return null;

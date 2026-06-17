@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
+import { MAINTENANCE_REPORT_ROW_HEIGHT } from "../../shared/maintenanceReportRowMetrics.js";
 import CaptureVirtualRows from "./CaptureVirtualRows.jsx";
 
-const ROW_HEIGHT = 52;
+const ROW_HEIGHT = MAINTENANCE_REPORT_ROW_HEIGHT;
 
 function isRowDeleted(row) {
   return row.is_deleted === 1 || row.is_deleted === "1" || row.is_deleted === true;
@@ -87,6 +88,8 @@ export default function CaptureMaintenanceTable({
           rows={data}
           rowHeight={ROW_HEIGHT}
           rowKeyPrefix={rowKeyPrefix}
+          scrollResetKey={rowKeyPrefix}
+          listSyncing={listSyncing}
           selectedSet={selectedSet}
           onToggleRow={toggleSelect}
           alreadyDeletedTitle={m.alreadyDeleted}

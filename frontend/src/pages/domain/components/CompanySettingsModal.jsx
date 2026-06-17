@@ -59,6 +59,9 @@ const WEEKDAYS_ZH = ["日", "一", "二", "三", "四", "五", "六"];
  *   excludeOwnerId — edit domain: exclude current owner from global code check
  *   siblingGroupCodes — other group IDs in the form (for local rename validation)
  *   siblingCompanyCodes — other company IDs in the form (for local rename validation)
+ *   persistImmediately = false — group: POST save_group_tenant_settings on Save
+ *   commissionOnly — Auto Renew Comm: Share % only, no billing on Save
+ *   sharePricePeriod — renewal period for share amount preview (commissionOnly)
  *   onSave(updatedCompany) — callback with updated company data
  *   onClose()
  */
@@ -72,6 +75,9 @@ export default function CompanySettingsModal({
   excludeOwnerId = null,
   siblingGroupCodes = [],
   siblingCompanyCodes = [],
+  persistImmediately = false,
+  commissionOnly = false,
+  sharePricePeriod = "",
   onSave,
   onClose,
 }) {
@@ -331,6 +337,38 @@ export default function CompanySettingsModal({
   }
 
   async function handleSave() {
+    const cleanFsa = pruneEmptyShareRows(fsa);
+    const apiEntityCode = originalEntityCode;
+
+    if (commissionOnly) {
+      try {
+        const action = isGroup ? "save_group_share_settings" : "save_company_share_settings";
+        const payload = isGroup
+          ? { action, group_code: apiEntityCode, fee_share_allocations: cleanFsa }
+          : { action, company_id: apiEntityCode, fee_share_allocations: cleanFsa };
+        const res = await fetch(buildApiUrl("api/domain/domain_api.php"), {
+          cache: "no-cache",
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+        if (!json.success) {
+          showDomainAlert(json.message || t("shareSaveFailed"), "danger");
+          return;
+        }
+        showDomainAlert(t("commissionSettingsSaved"));
+        onSave({
+          ...company,
+          fee_share_allocations: cleanFsa,
+        });
+      } catch {
+        showDomainAlert(t("shareSaveFailed"), "danger");
+      }
+      return;
+    }
+
     // Validate permissions (company only — groups do not use Process List / Data Capture categories)
     if (!isGroup && SINGLE_CATEGORY_MODE) {
       if (permissions.length === 0) { showDomainAlert(t("pleaseSelectOneCategory"), "danger"); return; }
@@ -339,7 +377,6 @@ export default function CompanySettingsModal({
 
     const newEntityCode = await validateEntityCodeForSave();
     if (!newEntityCode) return;
-    const apiEntityCode = originalEntityCode;
     const renameFields = buildRenameFields(newEntityCode);
 
     let expDate = company.expiration_date || null;
@@ -347,8 +384,6 @@ export default function CompanySettingsModal({
       const base = startDate || new Date().toISOString().split("T")[0];
       expDate = calculateExpirationDate(period, base);
     }
-
-    const cleanFsa = pruneEmptyShareRows(fsa);
 
     if (isGroup) {
       const updated = {
@@ -365,6 +400,43 @@ export default function CompanySettingsModal({
         fee_share_allocations: cleanFsa,
         apply_commission_payments_on_domain_save: chargeOnSave,
       };
+
+      if (persistImmediately) {
+        try {
+          const res = await fetch(buildApiUrl("api/domain/domain_api.php"), {
+            cache: "no-cache",
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "save_group_tenant_settings",
+              group_code: apiEntityCode,
+              expiration_date: expDate || null,
+              fee_share_allocations: cleanFsa,
+              apply_commission_payments: chargeOnSave,
+            }),
+          });
+          const json = await res.json();
+          if (!json.success) {
+            const msg = json.message || "";
+            if (msg.includes("not found") || msg.includes("save the domain first")) {
+              showDomainAlert(t("groupUpdatedShareAfterSave"));
+            } else {
+              showDomainAlert(msg || t("shareSaveFailed"), "danger");
+              return;
+            }
+          } else {
+            const hint = chargeOnSave ? t("feePostsHint") : "";
+            showDomainAlert(t("groupUpdatedSuccess") + hint);
+          }
+          onSave(updated);
+          notifySessionRefreshRequested();
+        } catch {
+          showDomainAlert(t("shareSaveFailed"), "danger");
+        }
+        return;
+      }
+
       showDomainAlert(t("groupUpdatedShareAfterSave"));
       onSave(updated);
       notifySessionRefreshRequested();
@@ -442,9 +514,10 @@ export default function CompanySettingsModal({
   }
 
   // ─── Share % helpers（周期变更时按 Price 中对应金额重算，含 C168 行） ─────
+  const shareAmountPeriod = commissionOnly ? (sharePricePeriod || period) : period;
   const effectiveFeePrice = resolveDomainFeePriceForPeriod(
     domainPeriodPrices,
-    period,
+    shareAmountPeriod,
     isGroup ? "group" : "company"
   );
   const totals = computeShareTotals(fsa, effectiveFeePrice);
@@ -507,21 +580,24 @@ export default function CompanySettingsModal({
     <DomainModalPortal>
       <div
         style={{
-          display: "block",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "flex-start",
           position: "fixed",
           inset: 0,
           zIndex: companySettingsOverlayZ,
           overflowY: "auto",
+          padding: "clamp(16px, 3vh, 32px) 12px",
           backgroundColor: "rgba(0, 0, 0, 0.5)",
           backdropFilter: "blur(4px)",
           WebkitBackdropFilter: "blur(4px)",
         }}
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
-        <div className="company-settings-react-modal modal-content company-settings-modal-content--split relative mx-auto mt-[2%] overflow-hidden rounded-2xl border-0 bg-white shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)]">
+        <div className={`company-settings-react-modal modal-content relative mx-auto shrink-0 overflow-hidden rounded-2xl border-0 bg-white shadow-[0_20px_25px_-5px_rgba(0,0,0,0.1),0_10px_10px_-5px_rgba(0,0,0,0.04)]${commissionOnly ? " company-settings-modal-content--commission-only" : " company-settings-modal-content--split"}`}>
         <div className="modal-header company-settings-modal-header">
           <h2 className="m-0 bg-transparent p-0">
-            {isGroup ? t("groupSettings") : t("companySettings")}
+            {commissionOnly ? t("commissionSettings") : (isGroup ? t("groupSettings") : t("companySettings"))}
           </h2>
           <button
             type="button"
@@ -532,6 +608,8 @@ export default function CompanySettingsModal({
         </div>
         <div className="company-settings-modal-body">
           <div className="company-settings-split">
+            {!commissionOnly ? (
+            <>
             {/* ── Left: General ── */}
             <div id="companySettingsPanelGeneral" className="company-settings-split-left">
               <h3 className="company-settings-column-title">
@@ -630,11 +708,14 @@ export default function CompanySettingsModal({
             </div>
 
             <div className="company-settings-split-divider" role="separator" aria-orientation="vertical" aria-hidden="true" />
+            </>
+            ) : null}
 
             {/* ── Right: Share % ── */}
             <div className="company-settings-split-right">
               <div className="company-settings-share-header">
                 <h3 className="company-settings-column-title company-settings-share-title">{t("share")}</h3>
+                {!commissionOnly ? (
                 <div className="company-share-charge-on-save">
                   <span className={`company-share-charge-on-save__state${chargeOnSave ? " company-share-charge-on-save__state--on" : ""}`} aria-hidden="true">
                     {chargeOnSave ? t("on") : t("off")}
@@ -655,6 +736,7 @@ export default function CompanySettingsModal({
                     </span>
                   </label>
                 </div>
+                ) : null}
               </div>
 
               {/* Grand total bar */}
@@ -810,8 +892,12 @@ export default function CompanySettingsModal({
             <button type="button" className="btn btn-save" disabled={submitting} onClick={() => runGuarded(handleSave)}>
               {submitting ? t("saving") : t("save")}
             </button>
+            {!commissionOnly ? (
+            <>
             <button type="button" className="btn btn-reset-company" onClick={handleReset}>{t("reset")}</button>
             <button type="button" className="btn btn-cancel" onClick={onClose}>{t("cancel")}</button>
+            </>
+            ) : null}
           </div>
         </div>
       </div>

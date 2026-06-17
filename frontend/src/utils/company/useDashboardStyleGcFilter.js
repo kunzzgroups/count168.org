@@ -81,6 +81,7 @@ export function useDashboardStyleGcFilter({
     companyId,
     sessionCompanyId,
     enabled: enableGroupAnchorSession,
+    broadcastFilterChanged: broadcastFilterToLayout,
   });
 
   const groupIds = useMemo(

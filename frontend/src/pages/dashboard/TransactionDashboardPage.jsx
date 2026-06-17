@@ -68,10 +68,13 @@ export default function TransactionDashboardPage() {
             kpiCompareLabel={page.kpiCompareLabel}
             kpiFooter={page.kpiFooter}
             loading={page.loading}
-            dashboardData={page.dashboardData}
           />
 
-          <div className="dashboard-panels-row">
+          <div
+            className={`dashboard-panels-row${
+              page.showProfitChartTab ? " dashboard-panels-row--with-summary-tabs" : ""
+            }`}
+          >
             <DashboardTrendChart
               i18n={i18n}
               chartRows={page.chartRows}
@@ -80,6 +83,8 @@ export default function TransactionDashboardPage() {
               onToggleSeries={page.toggleChartSeries}
               chartDateRangeText={page.chartDateRangeText}
               chartXAxisLayout={page.chartXAxisLayout}
+              chartDataStable={page.chartDataStable}
+              chartScopeKey={page.dashboardScopeKey}
             />
             <DashboardEarningsSummary
               i18n={i18n}
@@ -88,6 +93,7 @@ export default function TransactionDashboardPage() {
               earningsCurrencyRows={page.earningsCurrencyRows}
               useConvertedEarnings={page.useConvertedEarnings}
               earningsBreakdownShowsRate={page.earningsBreakdownShowsRate}
+              summaryPanelLabel={page.summaryPanelLabel}
               summaryEarningsValue={page.summaryEarningsValue}
               summaryConversionNote={page.summaryConversionNote}
               summaryEarningsLoading={page.summaryEarningsLoading}
@@ -99,6 +105,11 @@ export default function TransactionDashboardPage() {
               exchangeRateScopeKey={page.exchangeRateScopeKey}
               rateFootnoteText={page.rateFootnoteText}
               convertedEarningsTotal={page.convertedEarningsTotal}
+              showProfitChartTab={page.showProfitChartTab}
+              earningsPanelView={page.earningsPanelView}
+              onEarningsPanelViewChange={page.setEarningsPanelView}
+              companyBreakdownRows={page.companyBreakdownRows}
+              companyNetProfitTotal={page.companyNetProfitTotal}
             />
           </div>
         </div>

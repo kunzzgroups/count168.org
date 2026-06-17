@@ -1,5 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { lazyWithRetry } from "./utils/routing/lazyWithRetry.js";
+import {
+  PAGE_PATHS,
+  PAGE_ROUTE_UUIDS,
+  PATH_ALIASES_TO_PAGE_KEY,
+  spaPath,
+} from "./utils/routing/pageRoutes.js";
 import LoginPage from "./pages/login/LoginPage.jsx";
 import AuthenticatedLayout from "./components/AuthenticatedLayout.jsx";
 import SecondaryPasswordPage from "./pages/login/SecondaryPasswordPage.jsx";
@@ -19,6 +25,7 @@ const BankProcessListPage = lazyWithRetry(() => import("./pages/bankprocesslist/
 const DataCapturePage = lazyWithRetry(() => import("./pages/datacapture/DataCapturePage.jsx"));
 const DataCaptureSummaryPage = lazyWithRetry(() => import("./pages/datacapturesummary/DataCaptureSummaryPage.jsx"));
 const TransactionPaymentPage = lazyWithRetry(() => import("./pages/transaction/TransactionPaymentPage.jsx"));
+const TransactionPaymentHistoryPage = lazyWithRetry(() => import("./pages/transaction/TransactionPaymentHistoryPage.jsx"));
 const CustomerReportPage = lazyWithRetry(() => import("./pages/report/customer/CustomerReportPage.jsx"));
 const DomainReportPage = lazyWithRetry(() => import("./pages/report/domain/DomainReportPage.jsx"));
 const CaptureMaintenancePage = lazyWithRetry(() => import("./pages/maintenance/capture/CaptureMaintenancePage.jsx"));
@@ -29,83 +36,147 @@ const PaymentMaintenancePage = lazyWithRetry(() => import("./pages/maintenance/p
 const UserAccessPage = lazyWithRetry(() => import("./pages/useraccess/UserAccessPage.jsx"));
 const DeletedLogPage = lazyWithRetry(() => import("./pages/deletedlog/DeletedLogPage.jsx"));
 
+function OwnerSecondaryPasswordPage() {
+  return <SecondaryPasswordPage variant="owner" />;
+}
+
+function UserSecondaryPasswordPage() {
+  return <SecondaryPasswordPage variant="user" />;
+}
+
+const PAGE_COMPONENTS = {
+  login: LoginPage,
+  member: MemberPage,
+  "reset-password": ResetPasswordPage,
+  "owner-secondary-password": OwnerSecondaryPasswordPage,
+  "user-secondary-password": UserSecondaryPasswordPage,
+  dashboard: TransactionDashboardPage,
+  domain: DomainPage,
+  announcement: AnnouncementPage,
+  "account-list": AccountListPage,
+  "add-account": AccountListPage,
+  "process-list": ProcessListPage,
+  "games-process-list": ProcessListPage,
+  "bank-process-list": BankProcessListPage,
+  userlist: UserListPage,
+  ownership: OwnershipPage,
+  datacapture: DataCapturePage,
+  datacapturesummary: DataCaptureSummaryPage,
+  transaction: TransactionPaymentPage,
+  "transaction-payment-history": TransactionPaymentHistoryPage,
+  "customer-report": CustomerReportPage,
+  "domain-report": DomainReportPage,
+  "capture-maintenance": CaptureMaintenancePage,
+  "transaction-maintenance": TransactionMaintenancePage,
+  "formula-maintenance": FormulaMaintenancePage,
+  "bankprocess-maintenance": BankprocessMaintenancePage,
+  "payment-maintenance": PaymentMaintenancePage,
+  useraccess: UserAccessPage,
+  "deleted-log": DeletedLogPage,
+  "auto-renew": AutoRenewPage,
+};
+
+const PUBLIC_PAGE_KEYS = new Set([
+  "login",
+  "member",
+  "reset-password",
+  "owner-secondary-password",
+  "user-secondary-password",
+]);
+
+const LEGACY_PHP_REDIRECTS = {
+  "/datacapture.php": "datacapture",
+  "/datacapturesummary.php": "datacapturesummary",
+  "/transaction.php": "transaction",
+  "/customer_report.php": "customer-report",
+  "/domain_report.php": "domain-report",
+  "/capture_maintenance.php": "capture-maintenance",
+  "/transaction_maintenance.php": "transaction-maintenance",
+  "/formula_maintenance.php": "formula-maintenance",
+  "/bankprocess_maintenance.php": "bankprocess-maintenance",
+  "/payment_maintenance.php": "payment-maintenance",
+  "/index.php": "login",
+  "/dashboard.php": "dashboard",
+  "/member.php": "member",
+  "/reset-password.php": "reset-password",
+  "/domain.php": "domain",
+  "/announcement.php": "announcement",
+  "/account-list.php": "account-list",
+  "/add-account.php": "add-account",
+  "/processlist.php": "process-list",
+  "/games_process_list.php": "games-process-list",
+  "/bank_process_list.php": "bank-process-list",
+  "/userlist.php": "userlist",
+  "/ownership.php": "ownership",
+  "/owner_secondary_password.php": "owner-secondary-password",
+  "/api/users/user_secondary_password.php": "user-secondary-password",
+  "/useraccess.php": "useraccess",
+  "/auto_renew.php": "auto-renew",
+  "/auto-renew.php": "auto-renew",
+};
+
+function canonicalRoutePath(pageKey) {
+  return `${PAGE_PATHS[pageKey]}/${PAGE_ROUTE_UUIDS[pageKey]}`;
+}
+
+function pageElement(pageKey) {
+  const Component = PAGE_COMPONENTS[pageKey];
+  return Component ? <Component /> : null;
+}
+
 export default function App() {
+  const pathEntries = Object.entries(PAGE_PATHS);
+
   return (
     <Routes>
-      {/* SPA routes */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/member" element={<MemberPage />} />
-      <Route path="/reset-password" element={<ResetPasswordPage />} />
-      <Route path="/owner-secondary-password" element={<SecondaryPasswordPage variant="owner" />} />
-      <Route path="/user-secondary-password" element={<SecondaryPasswordPage variant="user" />} />
+      {pathEntries
+        .filter(([pageKey]) => PUBLIC_PAGE_KEYS.has(pageKey))
+        .map(([pageKey]) => (
+          <Route key={pageKey} path={canonicalRoutePath(pageKey)} element={pageElement(pageKey)} />
+        ))}
+
       <Route element={<AuthenticatedLayout />}>
-        <Route path="/dashboard" element={<TransactionDashboardPage />} />
-        <Route path="/domain" element={<DomainPage />} />
-        <Route path="/announcement" element={<AnnouncementPage />} />
-        <Route path="/account-list" element={<AccountListPage />} />
-        <Route path="/add-account" element={<AccountListPage />} />
-        <Route path="/process-list" element={<ProcessListPage />} />
-        <Route path="/games-process-list" element={<ProcessListPage />} />
-        <Route path="/bank-process-list" element={<BankProcessListPage />} />
-        <Route path="/userlist" element={<UserListPage />} />
-        <Route path="/ownership" element={<OwnershipPage />} />
-        <Route path="/datacapture" element={<DataCapturePage />} />
-        <Route path="/datacapturesummary" element={<DataCaptureSummaryPage />} />
-        <Route path="/transaction" element={<TransactionPaymentPage />} />
-        <Route path="/customer-report" element={<CustomerReportPage />} />
-        <Route path="/domain-report" element={<DomainReportPage />} />
-        <Route path="/capture-maintenance" element={<CaptureMaintenancePage />} />
-        <Route path="/transaction-maintenance" element={<TransactionMaintenancePage />} />
-        <Route path="/formula-maintenance" element={<FormulaMaintenancePage />} />
-        <Route path="/bankprocess-maintenance" element={<BankprocessMaintenancePage />} />
-        <Route path="/payment-maintenance" element={<PaymentMaintenancePage />} />
-        <Route path="/useraccess" element={<UserAccessPage />} />
-        <Route path="/deleted-log" element={<DeletedLogPage />} />
-        <Route path="/auto-renew" element={<AutoRenewPage />} />
+        {pathEntries
+          .filter(([pageKey]) => !PUBLIC_PAGE_KEYS.has(pageKey))
+          .map(([pageKey]) => (
+            <Route key={pageKey} path={canonicalRoutePath(pageKey)} element={pageElement(pageKey)} />
+          ))}
       </Route>
 
-      {/* Clean URLs for non-migrated pages (still rendered by PHP) */}
-      <Route path="/datacapture.php" element={<Navigate to="/datacapture" replace />} />
-      <Route path="/datacapturesummary.php" element={<Navigate to="/datacapturesummary" replace />} />
-      <Route path="/transaction.php" element={<Navigate to="/transaction" replace />} />
-      <Route path="/transcation" element={<Navigate to="/transaction" replace />} />
-      <Route path="/customer_report.php" element={<Navigate to="/customer-report" replace />} />
-      <Route path="/customer_report" element={<Navigate to="/customer-report" replace />} />
-      <Route path="/domain_report.php" element={<Navigate to="/domain-report" replace />} />
-      <Route path="/domain_report" element={<Navigate to="/domain-report" replace />} />
-      <Route path="/capture_maintenance.php" element={<Navigate to="/capture-maintenance" replace />} />
-      <Route path="/capture_maintenance" element={<Navigate to="/capture-maintenance" replace />} />
-      <Route path="/transaction_maintenance.php" element={<Navigate to="/transaction-maintenance" replace />} />
-      <Route path="/transaction_maintenance" element={<Navigate to="/transaction-maintenance" replace />} />
-      <Route path="/formula_maintenance.php" element={<Navigate to="/formula-maintenance" replace />} />
-      <Route path="/formula_maintenance" element={<Navigate to="/formula-maintenance" replace />} />
-      <Route path="/bankprocess_maintenance.php" element={<Navigate to="/bankprocess-maintenance" replace />} />
-      <Route path="/bankprocess_maintenance" element={<Navigate to="/bankprocess-maintenance" replace />} />
-      <Route path="/payment_maintenance.php" element={<Navigate to="/payment-maintenance" replace />} />
-      <Route path="/payment_maintenance" element={<Navigate to="/payment-maintenance" replace />} />
+      {pathEntries.map(([pageKey, path]) => (
+        <Route
+          key={`bare-${pageKey}`}
+          path={path}
+          element={<Navigate to={spaPath(pageKey)} replace />}
+        />
+      ))}
 
-      {/* Legacy .php aliases */}
-      <Route path="/index.php" element={<Navigate to="/login" replace />} />
-      <Route path="/dashboard.php" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/member.php" element={<Navigate to="/member" replace />} />
-      <Route path="/reset-password.php" element={<Navigate to="/reset-password" replace />} />
-      <Route path="/domain.php" element={<Navigate to="/domain" replace />} />
-      <Route path="/announcement.php" element={<Navigate to="/announcement" replace />} />
-      <Route path="/account-list.php" element={<Navigate to="/account-list" replace />} />
-      <Route path="/add-account.php" element={<Navigate to="/add-account" replace />} />
-      <Route path="/processlist.php" element={<Navigate to="/process-list" replace />} />
-      <Route path="/games_process_list.php" element={<Navigate to="/games-process-list" replace />} />
-      <Route path="/bank_process_list.php" element={<Navigate to="/bank-process-list" replace />} />
-      <Route path="/userlist.php" element={<Navigate to="/userlist" replace />} />
-      <Route path="/ownership.php" element={<Navigate to="/ownership" replace />} />
-      <Route path="/owner_secondary_password.php" element={<Navigate to="/owner-secondary-password" replace />} />
-      <Route path="/api/users/user_secondary_password.php" element={<Navigate to="/user-secondary-password" replace />} />
-      <Route path="/useraccess.php" element={<Navigate to="/useraccess" replace />} />
-      <Route path="/auto_renew.php" element={<Navigate to="/auto-renew" replace />} />
-      <Route path="/auto_renew" element={<Navigate to="/auto-renew" replace />} />
+      {Object.entries(PAGE_ROUTE_UUIDS).map(([pageKey, uuid]) => (
+        <Route
+          key={`legacy-p-${pageKey}`}
+          path={`/p/${uuid}`}
+          element={<Navigate to={spaPath(pageKey)} replace />}
+        />
+      ))}
 
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {Object.entries(PATH_ALIASES_TO_PAGE_KEY).map(([aliasPath, pageKey]) => (
+        <Route
+          key={`alias-${aliasPath}`}
+          path={aliasPath}
+          element={<Navigate to={spaPath(pageKey)} replace />}
+        />
+      ))}
+
+      {Object.entries(LEGACY_PHP_REDIRECTS).map(([legacyPath, pageKey]) => (
+        <Route
+          key={`legacy-php-${legacyPath}`}
+          path={legacyPath}
+          element={<Navigate to={spaPath(pageKey)} replace />}
+        />
+      ))}
+
+      <Route path="/" element={<Navigate to={spaPath("login")} replace />} />
+      <Route path="*" element={<Navigate to={spaPath("login")} replace />} />
     </Routes>
   );
 }

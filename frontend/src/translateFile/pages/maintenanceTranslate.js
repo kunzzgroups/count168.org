@@ -3,7 +3,7 @@ import { createGetText, toLocale } from "../shared/i18nHelpers.js";
 export const MAINTENANCE_I18N = {
   en: {
     category: "Category:",
-    groupId: "GroupID:",
+    groupId: "Group ID:",
     company: "Company:",
     currency: "Currency:",
     currencyAll: "All",

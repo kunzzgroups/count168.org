@@ -207,3 +207,11 @@ export function gridSelectAllCells(e) {
 export function gridMoveCaretToClickPosition(cell, clickEvent) {
   callDataCaptureRuntime("moveCaretToClickPosition", cell, clickEvent);
 }
+
+export function gridGetContextMenuColumn() {
+  return callDataCaptureRuntime("getContextMenuColumn") ?? null;
+}
+
+export function gridGetContextMenuRow() {
+  return callDataCaptureRuntime("getContextMenuRow") ?? null;
+}

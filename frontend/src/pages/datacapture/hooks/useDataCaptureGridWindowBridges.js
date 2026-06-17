@@ -46,6 +46,7 @@ import {
   clearPasteHistory,
   hasPasteHistory,
   pushPasteHistory,
+  undoLastPaste,
 } from "../grid/dataCaptureGridPasteHistory.js";
 import { registerDataCaptureRuntime, unregisterDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
 
@@ -78,6 +79,7 @@ export function useDataCaptureGridWindowBridges() {
       pushPasteHistory,
       clearPasteHistory,
       hasPasteHistory,
+      undoLastPaste,
       handleCellMousedown: handleCellMouseDown,
       handleCellMouseover: handleCellMouseOver,
       handleMouseUp,

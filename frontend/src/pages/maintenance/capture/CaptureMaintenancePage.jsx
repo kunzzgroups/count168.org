@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { spaPath } from "../../../utils/routing/pageRoutes.js";
 /* 与 DataCapture 相同：打进 Vite 产物，避免 dynamic import 在生产包中被拆成空 chunk、样式从未加载 */
 import "../../../../public/css/accountCSS.css";
 import "../../../../public/css/userlist.css";
@@ -7,8 +8,8 @@ import "../../../../public/css/transaction.css";
 import "../../../../public/css/date-range-picker.css";
 import "../../../../public/css/customer_report.css";
 import "../../../../public/css/report-outlined-fields.css";
-import "../../../../public/css/maintenance_unified_filters.css";
 import "../../../../public/css/capture_maintenance.css";
+import "../../../../public/css/maintenance_unified_filters.css";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { removeOtherMaintenanceStylesheets, waitForStylesheet } from "../../../utils/maintenance/maintenanceStylesheets.js";
 import { ensureMaintenanceDateRangePicker } from "../../../utils/date/dateRangePicker.js";
@@ -24,7 +25,6 @@ import {
 } from "../shared/maintenanceGroupBoot.js";
 import { canUseGroupOnlyMode } from "../../../utils/company/loginScope.js";
 import {
-  companiesNativeInGroupList,
   isDashboardGroupOnlyMode,
   persistDashboardFilterState,
   persistDashboardGroupOnlyMode,
@@ -41,7 +41,6 @@ import {
 import { useGroupAnchorSessionSync } from "../../../utils/company/useGroupAnchorSessionSync.js";
 import { fetchOwnerCompaniesAll } from "../../../utils/company/sharedCompanyFilter.js";
 import {
-  bootstrapCaptureMaintenanceMeta,
   fetchCompanyPermissions,
   fetchProcesses,
   searchCaptureData,
@@ -94,14 +93,12 @@ export default function CaptureMaintenancePage() {
   // -- Boot State ---
   const [bootLoading, setBootLoading] = useState(true);
   const [companies, setCompanies] = useState([]);
-  const [permissions, setPermissions] = useState([]);
 
   // -- Filter State --
   const [companyId, setCompanyId] = useState(readInitialMaintenanceCompanyId);
   const [companyCode, setCompanyCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState("");
-  const [activePermission, setActivePermission] = useState("");
   
   const today = useMemo(() => new Date(), []);
   const todayDmy = useMemo(() => {
@@ -249,7 +246,7 @@ export default function CaptureMaintenancePage() {
 
         // Sidebar visibility check
         if (!canMaintenance) {
-          navigate("/dashboard", { replace: true });
+          navigate(spaPath("dashboard"), { replace: true });
           return;
         }
 
@@ -313,10 +310,6 @@ export default function CaptureMaintenancePage() {
             groupsAllMode: false,
             groupAllMode: false,
           });
-          const meta = await bootstrapCaptureMaintenanceMeta({
-            companies: rows,
-            groupId: bootGroup ?? sessionGroup,
-          });
           if (cancelled) return;
           let procList = [];
           try {
@@ -326,8 +319,6 @@ export default function CaptureMaintenancePage() {
             notify(procErr.message || t("failedLoadProcesses"), "error");
           }
           setProcesses(procList);
-          setPermissions(meta.permissions);
-          setActivePermission(meta.activePermission);
           if (bootGroup ?? sessionGroup) {
             sessionStorage.setItem("dashboard_group_filter", bootGroup ?? sessionGroup);
           }
@@ -345,7 +336,6 @@ export default function CaptureMaintenancePage() {
             companyId: initialCompanyId,
           });
 
-          // Fetch initial metadata here to ensure the first query starts with the correct activePermission
           const [procList, companyPerms] = await Promise.all([
             fetchProcesses(initialCompanyId, bootScope),
             fetchCompanyPermissions(code),
@@ -364,21 +354,16 @@ export default function CaptureMaintenancePage() {
             const hasGames = companyPerms.includes("Games") || companyPerms.includes("Gambling");
             const bankOnly = companyPerms.includes("Bank") && !hasGames;
             if (bankOnly) {
-              navigate("/dashboard", { replace: true });
+              navigate(spaPath("dashboard"), { replace: true });
               return;
             }
             if (!hasGames) {
-              navigate("/dashboard", { replace: true });
+              navigate(spaPath("dashboard"), { replace: true });
               return;
             }
           }
 
           setProcesses(procList);
-          setPermissions(companyPerms);
-
-          const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
-          const initialActive = savedPerm && companyPerms.includes(savedPerm) ? savedPerm : (companyPerms.length > 0 ? companyPerms[0] : "");
-          setActivePermission(initialActive);
 
           if (bootGroup) sessionStorage.setItem("dashboard_group_filter", bootGroup);
         }
@@ -404,25 +389,9 @@ export default function CaptureMaintenancePage() {
     let cancelled = false;
     (async () => {
       try {
-        const anchor =
-          companyId == null && selectedGroup
-            ? companiesNativeInGroupList(companies, selectedGroup)[0]
-            : null;
-        const permCode = companyCode || anchor?.company_id || "";
-        const [procList, permList] = await Promise.all([
-          fetchProcesses(companyId, captureScope),
-          permCode ? fetchCompanyPermissions(permCode) : Promise.resolve([]),
-        ]);
+        const procList = await fetchProcesses(companyId, captureScope);
         if (cancelled) return;
         setProcesses(procList);
-        if (permList.length > 0) setPermissions(permList);
-
-        const saved = permCode ? localStorage.getItem(`selectedPermission_${permCode}`) : null;
-        if (saved && permList.includes(saved)) {
-          setActivePermission(saved);
-        } else if (permList.length > 0) {
-          setActivePermission(permList[0]);
-        }
 
         if (captureMaintenanceUsesGroupProcesses(captureScope)) {
           setSelectedProcess((prev) =>
@@ -437,7 +406,7 @@ export default function CaptureMaintenancePage() {
     return () => {
       cancelled = true;
     };
-  }, [bootLoading, captureScope, companyId, companyCode, selectedGroup, companies, notify, t]);
+  }, [bootLoading, captureScope, companyId, notify, t]);
 
   // -- Search Logic --
   const performSearch = useCallback(
@@ -471,7 +440,6 @@ export default function CaptureMaintenancePage() {
             dateFrom,
             dateTo,
             process: selectedProcess,
-            category: activePermission,
             scope: effectiveScope,
           },
           { signal: ac.signal },
@@ -503,7 +471,7 @@ export default function CaptureMaintenancePage() {
         }
       }
     },
-    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, dateFrom, dateTo, selectedProcess, activePermission, notify, t],
+    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, dateFrom, dateTo, selectedProcess, notify, t],
   );
 
   // Auto-search when filters change（defer 0ms；切换公司已手动 performSearch 时跳过一轮避免重复）
@@ -525,7 +493,6 @@ export default function CaptureMaintenancePage() {
     selectedProcess,
     dateFrom,
     dateTo,
-    activePermission,
     performSearch,
   ]);
 
@@ -617,7 +584,7 @@ export default function CaptureMaintenancePage() {
     } catch (err) {
       const msg = String(err?.message || "");
       if (msg.toLowerCase().includes("unauthorized permission category")) {
-        navigate("/dashboard", { replace: true });
+        navigate(spaPath("dashboard"), { replace: true });
         return;
       }
       notify(err.message || t("switchFailed"), "error");
@@ -626,12 +593,6 @@ export default function CaptureMaintenancePage() {
 
   switchCompanyRef.current = handleSwitchCompany;
   onClearCompanyRef.current = handleClearCompany;
-
-  const handlePermissionSwitch = (p) => {
-    if (p === activePermission) return;
-    setActivePermission(p);
-    localStorage.setItem(`selectedPermission_${companyCode}`, p);
-  };
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => 
@@ -699,27 +660,6 @@ export default function CaptureMaintenancePage() {
 
   return (
     <div className="container">
-      {permissions.length > 1 ? (
-      <div className="maintenance-header">
-          <div id="maintenance-permission-filter" className="maintenance-permission-filter-header">
-            <span className="maintenance-company-label">{m.category}</span>
-            <div id="maintenance-permission-buttons" className="maintenance-company-buttons">
-              {permissions.map(p => (
-                <button 
-                  key={p} 
-                  type="button" 
-                  className={`maintenance-company-btn ${p === activePermission ? 'active' : ''}`}
-                  onClick={() => handlePermissionSwitch(p)}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-      </div>
-      ) : null}
-
-      {/* Scope table CSS: other maintenance pages share .maintenance-* and win in bundle order */}
       <div className="capture-maintenance-page-root">
         <CaptureMaintenanceFilters
           processes={processes}

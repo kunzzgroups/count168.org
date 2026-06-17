@@ -1,19 +1,16 @@
-import { useCallback, useLayoutEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  useMaintenanceCyclicScrollExtent,
-  useMaintenanceCyclicScrollObserver,
-} from "../../shared/useMaintenanceCyclicVirtualScroll.js";
+  pickMaintenanceVirtualOverscan,
+  useMaintenanceTableScrollExtent,
+  useMaintenanceVirtualScrollReset,
+} from "../../shared/maintenanceVirtualScroll.js";
 import { formatAmount } from "../transactionMaintenanceLogic.js";
 import MaintenanceCreatedAtDisplay from "../../shared/MaintenanceCreatedAtDisplay.jsx";
+import { MAINTENANCE_REPORT_ROW_HEIGHT } from "../../shared/maintenanceReportRowMetrics.js";
+import { measureMaintenanceVirtualRow } from "../../shared/measureMaintenanceVirtualRow.js";
 
-const ROW_HEIGHT = 52;
-
-function pickOverscan(count) {
-  if (count > 2000) return 2;
-  if (count > 800) return 3;
-  return 4;
-}
+const ROW_HEIGHT = MAINTENANCE_REPORT_ROW_HEIGHT;
 
 const HEADER_LABELS = (m) => [
   m.tblNo,
@@ -35,8 +32,12 @@ function VirtualTableHeader({ m }) {
   return (
     <div className="maintenance-virtual-thead" role="rowgroup">
       <div className="maintenance-virtual-head-row transaction-virtual-head-row" role="row">
-        {HEADER_LABELS(m).map((label) => (
-          <div key={label} role="columnheader" className="maintenance-virtual-th">
+        {HEADER_LABELS(m).map((label, i) => (
+          <div
+            key={label}
+            role="columnheader"
+            className={`maintenance-virtual-th transaction-virtual-th--left${i === 0 ? " transaction-virtual-th--no" : ""}`}
+          >
             {label}
           </div>
         ))}
@@ -113,6 +114,8 @@ function VirtualDataRow({ row, index }) {
  * @param {boolean} props.showEmptyState
  * @param {string} props.statusMessage
  * @param {boolean} props.listSyncing
+ * @param {boolean} props.dataIncomplete
+ * @param {string} props.scrollResetKey
  * @param {object} props.m
  */
 export default function TransactionMaintenanceTable({
@@ -123,18 +126,13 @@ export default function TransactionMaintenanceTable({
   showTopLoading = false,
   topLoadingLabel = "",
   listSyncing = false,
+  dataIncomplete = false,
+  scrollResetKey = "",
   m,
 }) {
   const scrollRef = useRef(null);
-  const { contentOffsetRef, observeElementOffset } = useMaintenanceCyclicScrollObserver();
   const sizeCacheRef = useRef(new Map());
-  const rowsRef = useRef([]);
   const rows = Array.isArray(data) ? data : [];
-
-  if (rowsRef.current !== rows) {
-    sizeCacheRef.current.clear();
-    rowsRef.current = rows;
-  }
 
   const getItemKey = useCallback(
     (index) => {
@@ -148,12 +146,7 @@ export default function TransactionMaintenanceTable({
   const measureElement = useCallback((el) => {
     if (!el) return ROW_HEIGHT;
     const idx = Number(el.dataset?.index);
-    const inner = el.querySelector(".transaction-virtual-data-row");
-    const target = inner ?? el;
-    const h = Math.max(
-      ROW_HEIGHT,
-      Math.ceil(target.scrollHeight || target.getBoundingClientRect().height || ROW_HEIGHT),
-    );
+    const h = measureMaintenanceVirtualRow(el, ROW_HEIGHT, ".transaction-virtual-data-row");
     if (Number.isFinite(idx)) {
       sizeCacheRef.current.set(idx, h);
     }
@@ -164,28 +157,28 @@ export default function TransactionMaintenanceTable({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => sizeCacheRef.current.get(index) ?? ROW_HEIGHT,
-    overscan: pickOverscan(rows.length),
+    overscan: pickMaintenanceVirtualOverscan(rows.length),
     getItemKey,
     measureElement,
-    observeElementOffset,
   });
 
-  useLayoutEffect(() => {
-    contentOffsetRef.current = 0;
-    scrollRef.current?.scrollTo(0, 0);
-    sizeCacheRef.current.clear();
-    rowVirtualizer.measure();
-  }, [rows, rowVirtualizer]);
+  useMaintenanceVirtualScrollReset({
+    scrollRef,
+    scrollResetKey,
+    rowVirtualizer,
+    sizeCacheRef,
+  });
 
   const vItems = rowVirtualizer.getVirtualItems();
   const totalH = rowVirtualizer.getTotalSize();
-  const { displayTotalH, cyclicRowOffset } = useMaintenanceCyclicScrollExtent({
+  const { displayTotalH, cyclicRowOffset } = useMaintenanceTableScrollExtent({
     scrollRef,
     actualTotalH: totalH,
     rowCount: rows.length,
     rowHeightEstimate: ROW_HEIGHT,
-    resetDeps: [rows],
-    contentOffsetRef,
+    scrollResetKey,
+    listSyncing,
+    dataIncomplete,
   });
 
   if (rows.length === 0 && (showSkeleton || statusMessage)) {
@@ -194,8 +187,8 @@ export default function TransactionMaintenanceTable({
       <div className="maintenance-list-container maintenance-virtual-table transaction-virtual-table">
         <div className="maintenance-virtual-table-inner transaction-virtual-table-inner" role="table" aria-label={m.pageTitleTransaction}>
           <TopLoadingBar label={label} />
-          <VirtualTableHeader m={m} />
-          <div className="maintenance-virtual-scroll maintenance-virtual-scroll--body" tabIndex={0}>
+          <div className="maintenance-virtual-scroll" tabIndex={0}>
+            <VirtualTableHeader m={m} />
             <div className="maintenance-virtual-empty-loading" aria-hidden />
           </div>
         </div>
@@ -224,8 +217,8 @@ export default function TransactionMaintenanceTable({
     >
       <div className="maintenance-virtual-table-inner transaction-virtual-table-inner" role="table" aria-label={m.pageTitleTransaction}>
         {showBlueBar ? <TopLoadingBar label={topLabel} /> : null}
-        <VirtualTableHeader m={m} />
-        <div ref={scrollRef} className="maintenance-virtual-scroll maintenance-virtual-scroll--body" tabIndex={0}>
+        <div ref={scrollRef} className="maintenance-virtual-scroll" tabIndex={0}>
+          <VirtualTableHeader m={m} />
           {rows.length > 0 ? (
             <div className="maintenance-virtual-spacer" style={{ height: displayTotalH, position: "relative", width: "100%" }}>
               {vItems.map((virtualRow) => {

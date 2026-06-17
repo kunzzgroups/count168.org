@@ -953,7 +953,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     box-sizing: border-box;
 }
 
-.transaction-maintenance-page-root .maintenance-list-container {
+.transaction-maintenance-page-root .maintenance-list-container:not(.maintenance-virtual-table) {
     margin-bottom: clamp(20px, 1.67vw, 32px);
     margin-top: 10px;
     overflow-x: auto;
@@ -1180,6 +1180,10 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 
 .transaction-maintenance-page-root .maintenance-virtual-table-inner,
 .transaction-maintenance-page-root .transaction-virtual-table-inner {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     min-width: 100%;
     width: 100%;
     box-sizing: border-box;
@@ -1188,15 +1192,16 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     overflow: hidden;
 }
 
-.maintenance-virtual-table--refreshing .maintenance-virtual-scroll--body {
+.maintenance-virtual-table--refreshing .maintenance-virtual-scroll {
     opacity: 0.92;
     transition: opacity 0.15s ease;
 }
 
 .transaction-maintenance-page-root .maintenance-virtual-thead {
-    position: relative;
-    top: auto;
+    position: sticky;
+    top: 0;
     z-index: 3;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.12);
 }
 
 .maintenance-virtual-stale-hint {
@@ -1247,17 +1252,22 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     color: #ffffff;
     font-weight: bold;
     font-size: var(--text-base);
-    padding: clamp(5px, 0.55vw, 9px) clamp(10px, 1vw, 18px);
-    text-align: center;
-    min-height: clamp(30px, 2.1vw, 38px);
+    padding: 0;
+    text-align: left;
+    min-height: 0;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     box-sizing: border-box;
     white-space: nowrap;
     line-height: 1.25;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.transaction-maintenance-page-root .transaction-virtual-th--left {
+    justify-content: flex-start;
+    text-align: left;
 }
 
 .transaction-maintenance-page-root .maintenance-virtual-th:last-child {
@@ -1270,8 +1280,14 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     border-top-left-radius: 8px;
 }
 
-.transaction-maintenance-page-root .maintenance-virtual-scroll--body {
+.transaction-maintenance-page-root .maintenance-virtual-scroll {
+    border-radius: 8px;
     background: #fff;
+}
+
+.transaction-maintenance-page-root .maintenance-list-container--syncing .maintenance-virtual-scroll {
+    opacity: 0.92;
+    transition: opacity 0.15s ease;
 }
 
 .transaction-maintenance-page-root .maintenance-virtual-row-wrap {
@@ -1305,7 +1321,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     font-weight: bold;
     color: #374151;
     line-height: var(--transaction-list-cell-line-height);
-    padding: var(--transaction-list-cell-padding-y) var(--transaction-list-cell-padding-x);
+    padding: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1314,7 +1330,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     box-sizing: border-box;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     align-self: stretch;
 }
 
@@ -1360,8 +1376,8 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 .transaction-maintenance-page-root .maintenance-virtual-data-row .maintenance-cell-currency {
-    text-align: center;
-    justify-content: center;
+    text-align: left;
+    justify-content: flex-start;
 }
 
 /* Laptop: tighter padding, smaller header text */
@@ -1393,7 +1409,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
         --transaction-list-cell-min-height: clamp(32px, 2.2vw, 42px);
     }
 
-    .transaction-maintenance-page-root .maintenance-virtual-scroll--body {
+    .transaction-maintenance-page-root .maintenance-virtual-scroll {
         max-height: min(68vh, 820px);
     }
 

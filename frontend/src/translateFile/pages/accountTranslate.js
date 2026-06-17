@@ -36,7 +36,7 @@ export const ACCOUNT_I18N = {
     showAll: "Show All",
     currencySetting: "Currency Setting",
     deleteWithCount: "Delete ({count})",
-    groupId: "GroupID:",
+    groupId: "Group ID:",
     groupFilterAll: "ALL",
     company: "Company:",
     companyRequiredMark: "Company *",
@@ -178,6 +178,8 @@ export const ACCOUNT_I18N = {
     apiReadOnlyCannotAdd: "Read-only account cannot add accounts",
     apiReadOnlyCannotDelete: "Read-only account cannot delete accounts",
     apiCurrencyInUse: "Currency is in use and cannot be deleted",
+    apiCurrencySyncedFromSubsidiary:
+      "This currency was synced from subsidiary companies and cannot be deleted while subsidiaries still use it.",
     apiCurrencyBlockedByHistory:
       "Cannot delete currency — historical records still reference it ({detail}). Remove related Data Capture / Transaction records first.",
     forceDeleteCurrency: "Force delete",
@@ -364,6 +366,7 @@ export const ACCOUNT_I18N = {
     apiReadOnlyCannotAdd: "只读账号无法添加账户",
     apiReadOnlyCannotDelete: "只读账号无法删除账户",
     apiCurrencyInUse: "货币正在使用中，无法删除",
+    apiCurrencySyncedFromSubsidiary: "该货币由旗下子公司同步，子公司仍在使用时无法删除。",
     apiCurrencyBlockedByHistory:
       "无法删除货币，仍有历史业务数据引用（{detail}）。请先在 Data Capture / Transaction 中清理相关记录。",
     forceDeleteCurrency: "强制删除",
@@ -477,6 +480,8 @@ const ACCOUNT_API_MESSAGE_KEYS = {
   [normAccountApiMessage("创建失败")]: "createFailed",
   [normAccountApiMessage("Failed to delete currency")]: "failedDeleteCurrency",
   [normAccountApiMessage("删除货币失败")]: "failedDeleteCurrency",
+  [normAccountApiMessage("Cannot delete currency synced from subsidiary companies")]:
+    "apiCurrencySyncedFromSubsidiary",
   [normAccountApiMessage("Failed to switch company")]: "failedToSwitchCompany",
   [normAccountApiMessage("切换公司失败")]: "failedToSwitchCompany",
   [normAccountApiMessage("Network error")]: "networkError",

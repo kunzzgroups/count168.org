@@ -1,4 +1,4 @@
-import { summaryNotificationCssType } from "../lib/summaryNotificationNormalize.js";
+import { summaryNotificationCssType } from "../lib/summaryNotify.js";
 
 export default function SummaryNotification({ notification, shown, onClose }) {
   const { open, title, message, type } = notification;

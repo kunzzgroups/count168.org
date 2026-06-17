@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { getOwnershipText } from "../../../translateFile/pages/ownershipTranslate.js";
+import { prefetchOwnershipCompanies, peekOwnershipCompaniesCache } from "../ownershipRoutePrefetch.js";
 import { getApiMessage, isApiSuccess } from "./ownershipHelpers.js";
 import {
   getOwnershipCurrentMonthKey,
@@ -57,20 +57,15 @@ export function useOwnershipPageShell() {
 
   const fetchCompanies = useCallback(
     async (monthKey = getOwnershipCurrentMonthKey()) => {
-      setLoadingList(true);
+      const cached = peekOwnershipCompaniesCache(monthKey);
+      if (!cached) setLoadingList(true);
       try {
-        const monthQs = isOwnershipHistoricalMonth(monthKey)
-          ? `&month=${encodeURIComponent(monthKey)}`
-          : "";
-        const res = await fetch(buildApiUrl(`api/ownership/get_companies_api.php?all=1${monthQs}`), {
-          credentials: "include",
-        });
-        const json = await res.json();
+        const json = await prefetchOwnershipCompanies(monthKey);
         if (isApiSuccess(json)) setAllCompanies(json.data || []);
         else showToast(getApiMessage(json, "Failed to load companies"), "error");
         setReadOnlyMode(false);
       } catch {
-        showToast("Server error", "error");
+        if (!cached) showToast("Server error", "error");
       } finally {
         setLoadingList(false);
       }

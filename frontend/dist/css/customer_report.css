@@ -1,4 +1,4 @@
-﻿/* customer_report.css - 从 customer_report.php 提取 */
+/* customer_report.css - 从 customer_report.php 提取 */
 /* Override container styles for scrolling */
 body {
     overflow-y: auto !important;
@@ -83,6 +83,12 @@ body.dashboard-page.report-page .customer-report-quick-and-showall {
     min-width: clamp(150px, 12.5vw, 240px);
 }
 
+body.dashboard-page.report-page .customer-report-filters .customer-report-filter-group.report-date-range-picker-container,
+body.dashboard-page.report-page .domain-report-filters .customer-report-filter-group.report-date-range-picker-container,
+body.maintenance-page .customer-report-filters .customer-report-filter-group.report-date-range-picker-container {
+    min-width: var(--drp-popup-width, clamp(316px, 22vw, 336px));
+}
+
 .customer-report-filter-group label {
     font-size: clamp(11px, 0.85vw, 13px);
     font-weight: 600;
@@ -91,7 +97,8 @@ body.dashboard-page.report-page .customer-report-quick-and-showall {
 }
 
 /* Date range — same bar + label offset as Transaction search */
-body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group {
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group,
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group {
     min-width: 0 !important;
     width: 100%;
 }
@@ -101,35 +108,47 @@ body.dashboard-page.report-page .customer-report-filters .report-outlined-inner 
     min-height: clamp(32px, 2.25vw, 36px);
 }
 
-body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker {
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker,
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker {
     min-width: 0 !important;
     width: 100%;
     max-width: 100%;
     min-height: clamp(32px, 2.25vw, 36px) !important;
-    padding: clamp(4px, 0.3vw, 6px) clamp(8px, 0.75vw, 12px) clamp(4px, 0.3vw, 6px) 0;
-    border-radius: clamp(5px, 0.42vw, 7px);
+    padding: 0 clamp(8px, 0.75vw, 12px) 0 0 !important;
+    border-radius: 0 !important;
+    gap: clamp(8px, 0.7vw, 12px);
+    background: #ffffff !important;
+    box-shadow: none !important;
+    overflow: hidden;
+}
+
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner:has(.transaction-date-range-group),
+body.maintenance-page .customer-report-filters .report-outlined-inner:has(.transaction-date-range-group) {
+    overflow: hidden;
+    border-radius: inherit;
+}
+
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker:hover,
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker:hover {
     background: #ffffff !important;
     box-shadow: none !important;
 }
 
-body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker:hover {
-    background: #ffffff !important;
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker:focus-visible,
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker:focus-visible {
     box-shadow: none !important;
 }
 
-body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker:focus-visible {
-    box-shadow: none !important;
-}
-
-body.dashboard-page.report-page .customer-report-filters .report-outlined-label--txn-capture-date {
+body.dashboard-page.report-page .customer-report-filters .report-outlined-label--txn-capture-date,
+body.maintenance-page .customer-report-filters .report-outlined-label--txn-capture-date {
     left: clamp(46px, 3.35vw, 58px);
 }
 
-body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
-    position: relative;
+/* Calendar icon pill — shared with dashboard via transaction.css; outlined shell clips left corner */
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
+    border-radius: clamp(6px, 0.52vw, 8px) 0 0 clamp(6px, 0.52vw, 8px);
     z-index: 5;
-    border-radius: clamp(5px, 0.42vw, 7px) 0 0 clamp(5px, 0.42vw, 7px);
-    box-shadow: none !important;
 }
 
 /* Match Transaction Capture Date: `date-range-picker.css` `.calendar-month-year select` */
@@ -271,7 +290,7 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
     display: grid;
     grid-template-columns: 1.35fr 1.45fr 0.72fr 0.82fr 0.72fr 1.05fr 1.05fr;
     gap: 15px;
-    padding: clamp(0px, 0.78vw, 15px) 20px 12px;
+    padding: var(--report-list-header-padding-block-start) var(--report-list-header-padding-inline) var(--report-list-header-padding-block-end);
     background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%);
     border-radius: 8px 8px 0 0;
     margin-top: 20px;
@@ -332,8 +351,10 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
 .customer-report-card {
     display: grid;
     grid-template-columns: 1.35fr 1.45fr 0.72fr 0.82fr 0.72fr 1.05fr 1.05fr;
-    gap: 15px;
-    padding: 1px 22px;
+    gap: var(--report-list-grid-gap);
+    padding: var(--report-list-row-padding-block) var(--report-list-row-padding-inline);
+    min-height: var(--report-list-cell-min-height);
+    box-sizing: content-box;
     background: #f0e5fb;
     border-bottom: 1px solid rgba(148, 163, 184, 0.35);
     align-items: center;
@@ -368,8 +389,8 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
 .customer-report-total {
     display: grid;
     grid-template-columns: 1.35fr 1.45fr 0.72fr 0.82fr 0.72fr 1.05fr 1.05fr;
-    gap: 15px;
-    padding: 1px 22px;
+    gap: var(--report-list-grid-gap);
+    padding: var(--report-list-row-padding-block) var(--report-list-row-padding-inline);
     background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
     border-top: 2px solid #0F61FF;
     border-radius: 0 0 8px 8px;

@@ -15,4 +15,4 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            bash /var/www/count168.org/deploy/deploy.sh
+            bash /var/www/count168/deploy/deploy.sh

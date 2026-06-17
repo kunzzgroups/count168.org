@@ -5,7 +5,7 @@ import {
   parseYmd,
   shouldAggregateChartByMonth,
 } from "./dashboardDateUtils.js";
-import { resolveEffectiveOwnershipPct } from "./dashboardKpi.js";
+import { resolvePanelEarningsPct, viewerHasEarningsConfig } from "./dashboardKpi.js";
 
 /** 按天模式：1 个自然月每天；2 个月隔 2 天；≤14 天每天；更长区间按宽度跳日 */
 export function resolveDailyChartXAxisTicks(dayCount, monthSpan) {
@@ -31,17 +31,20 @@ export function makeDashboardChartXTick(compact) {
   };
 }
 
-export function DashboardChartBaseline({ offset, width, height }) {
-  if (!height || !width || offset?.bottom == null) return null;
-  const axisY = height - offset.bottom;
+export function DashboardChartBaseline({ offset, width, yAxisMap }) {
+  if (!width || !yAxisMap) return null;
+  const yAxis = yAxisMap[0] ?? yAxisMap[Object.keys(yAxisMap)[0]];
+  const zeroY = yAxis?.scale?.(0);
+  if (zeroY == null || Number.isNaN(zeroY)) return null;
   return (
     <line
       x1={offset?.left ?? 0}
-      y1={axisY}
+      y1={zeroY}
       x2={width - (offset?.right ?? 0)}
-      y2={axisY}
+      y2={zeroY}
       stroke="#94a3b8"
       strokeWidth={1}
+      className="dashboard-chart-zero-line"
     />
   );
 }
@@ -63,10 +66,19 @@ function buildChartMetricRow(date, label, dailyData, earningsMultiplier) {
   };
 }
 
-export function buildChartRows(data, startYmd, endYmd, locale = "en-US", selectedGroup = null) {
+export function buildChartRows(
+  data,
+  startYmd,
+  endYmd,
+  locale = "en-US",
+  selectedGroup = null,
+  options = {}
+) {
   if (!data?.daily_data) return [];
   const dailyData = data.daily_data;
-  const earningsMultiplier = resolveEffectiveOwnershipPct(data, selectedGroup);
+  const earningsMultiplier = viewerHasEarningsConfig(data)
+    ? resolvePanelEarningsPct(data, selectedGroup, options)
+    : 1;
   const rangeStart = parseYmd(startYmd);
   const rangeEnd = parseYmd(endYmd);
 

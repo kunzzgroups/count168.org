@@ -45,3 +45,18 @@ export const KPI_CARD_ICONS = {
   net: "fas fa-chart-line",
   earnings: "fas fa-hand-holding-dollar",
 };
+
+/** YYYY-MM from dashboard date_to (matches backend ownership month resolution). */
+export function dashboardOwnershipMonthFromDateEnd(dateTo) {
+  const m = String(dateTo || "").trim().match(/^(\d{4})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}` : null;
+}
+
+/** True when date range end falls in a completed past month (use ownership history). */
+export function isDashboardHistoricalOwnershipMonth(dateTo) {
+  const key = dashboardOwnershipMonthFromDateEnd(dateTo);
+  if (!key) return false;
+  const now = new Date();
+  const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  return key < current;
+}

@@ -2,6 +2,22 @@ const FRANKFURTER_API = "https://api.frankfurter.dev/v2/rates";
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const SESSION_CACHE_PREFIX = "frankfurter_rates_v1:";
 
+/** Crypto / custom codes — never sent to Frankfurter (would fail the whole batch). */
+const FRANKFURTER_EXCLUDED_CODES = new Set([
+  "USDT",
+  "USDC",
+  "BUSD",
+  "DAI",
+  "TUSD",
+  "FDUSD",
+  "USDD",
+  "BTC",
+  "ETH",
+  "BNB",
+  "XRP",
+  "SOL",
+]);
+
 /** @type {Map<string, { expires: number, rates: Record<string, number>, date: string | null, unsupported?: string[] }>} */
 const rateCache = new Map();
 /** @type {Map<string, Promise<{ rates: Record<string, number>, date: string | null, unsupported: string[] }>>} */
@@ -45,6 +61,94 @@ function cacheKey(base, quotes, date) {
   return `${base}|${sorted}|${date || "latest"}`;
 }
 
+export function isFrankfurterExcludedCode(code) {
+  return FRANKFURTER_EXCLUDED_CODES.has(String(code || "").trim().toUpperCase());
+}
+
+/** Split quotes into Frankfurter API candidates vs locally excluded codes (e.g. USDT). */
+function partitionFrankfurterQuotes(baseCode, quoteCodes) {
+  const quotes = normalizeFrankfurterQuotes(baseCode, quoteCodes);
+  const apiQuotes = [];
+  const excluded = [];
+  for (const quote of quotes) {
+    if (isFrankfurterExcludedCode(quote)) excluded.push(quote);
+    else apiQuotes.push(quote);
+  }
+  return { quotes, apiQuotes, excluded };
+}
+
+function mergeFrankfurterUnsupported(preExcluded, apiUnsupported, baseCode, quoteCodes, rates) {
+  const missing = frankfurterMissingQuotes(baseCode, quoteCodes, rates);
+  return [...new Set([...preExcluded, ...(apiUnsupported || []), ...missing])];
+}
+
+function missingFrankfurterApiQuotes(baseCode, apiQuotes, rates) {
+  return (apiQuotes || []).filter((quote) => {
+    const rate = rates?.[quote];
+    return !rate || rate <= 0;
+  });
+}
+
+function mergeFrankfurterRatePayload(baseCode, target, patch) {
+  const rates = { [baseCode]: 1, ...target?.rates, ...patch?.rates };
+  return {
+    rates,
+    date: patch?.date || target?.date || null,
+    unsupported: patch?.unsupported || target?.unsupported || [],
+  };
+}
+
+function isFrankfurterCacheComplete(baseCode, apiQuotes, cached) {
+  if (!cached || cached.expires <= Date.now()) return false;
+  if (!frankfurterRatesPartiallyUsable(baseCode, apiQuotes, cached.rates)) return false;
+  return missingFrankfurterApiQuotes(baseCode, apiQuotes, cached.rates).length === 0;
+}
+
+/** True when every Frankfurter-eligible quote in `quoteCodes` has a rate in `payload`. */
+export function isFrankfurterRatesPayloadComplete(base, quoteCodes, payload) {
+  const baseCode = String(base || "").trim().toUpperCase();
+  const { apiQuotes } = partitionFrankfurterQuotes(baseCode, quoteCodes);
+  if (!apiQuotes.length) return true;
+  const rates = payload?.rates;
+  if (!rates?.[baseCode]) return false;
+  return missingFrankfurterApiQuotes(baseCode, apiQuotes, rates).length === 0;
+}
+
+/** Fetch each missing quote individually (historical date first, then latest). */
+async function backfillMissingFrankfurterQuotes(baseCode, apiQuotes, dateYmd, seed) {
+  let merged = mergeFrankfurterRatePayload(baseCode, { rates: { [baseCode]: 1 } }, seed);
+  const missing = missingFrankfurterApiQuotes(baseCode, apiQuotes, merged.rates);
+  if (!missing.length) {
+    return {
+      ...merged,
+      unsupported: missingFrankfurterApiQuotes(baseCode, apiQuotes, merged.rates),
+    };
+  }
+
+  const unsupported = new Set(missing);
+  for (const quote of missing) {
+    const dateCandidates = dateYmd ? [dateYmd, null] : [null];
+    for (const dateTry of dateCandidates) {
+      try {
+        const one = await fetchFrankfurterRatesOnce(baseCode, [quote], dateTry);
+        if (one.rates[quote] && one.rates[quote] > 0) {
+          merged = mergeFrankfurterRatePayload(baseCode, merged, one);
+          unsupported.delete(quote);
+          break;
+        }
+      } catch {
+        /* try next date or leave unsupported */
+      }
+    }
+  }
+
+  return {
+    rates: merged.rates,
+    date: merged.date,
+    unsupported: [...unsupported],
+  };
+}
+
 /**
  * Fetch Frankfurter rates with base→quote multipliers (1 base = rate quote).
  * @param {string} base - e.g. MYR
@@ -53,7 +157,10 @@ function cacheKey(base, quotes, date) {
  */
 export async function fetchFrankfurterRates(base, quoteCodes, dateYmd = null) {
   const baseCode = String(base || "").trim().toUpperCase();
-  const quotes = normalizeFrankfurterQuotes(baseCode, quoteCodes);
+  const { quotes, apiQuotes, excluded: preExcluded } = partitionFrankfurterQuotes(
+    baseCode,
+    quoteCodes
+  );
 
   if (!baseCode) {
     return { rates: {}, date: null, unsupported: quotes };
@@ -65,12 +172,12 @@ export async function fetchFrankfurterRates(base, quoteCodes, dateYmd = null) {
 
   const key = cacheKey(baseCode, quotes, dateYmd);
   const cached = rateCache.get(key);
-  if (cached && cached.expires > Date.now()) {
+  if (isFrankfurterCacheComplete(baseCode, apiQuotes, cached)) {
     return { rates: cached.rates, date: cached.date, unsupported: cached.unsupported || [] };
   }
 
   const sessionCached = readSessionRateCache(key);
-  if (sessionCached) {
+  if (isFrankfurterCacheComplete(baseCode, apiQuotes, sessionCached)) {
     rateCache.set(key, sessionCached);
     return {
       rates: sessionCached.rates,
@@ -79,14 +186,52 @@ export async function fetchFrankfurterRates(base, quoteCodes, dateYmd = null) {
     };
   }
 
+  const seedFromCache =
+    cached && cached.expires > Date.now()
+      ? cached
+      : sessionCached && sessionCached.expires > Date.now()
+        ? sessionCached
+        : null;
+
   if (frankfurterInflight.has(key)) {
     return frankfurterInflight.get(key);
   }
 
   const promise = (async () => {
-    let lastResult = { rates: { [baseCode]: 1 }, date: dateYmd, unsupported: quotes };
+    let lastResult = {
+      rates: { [baseCode]: 1 },
+      date: dateYmd,
+      unsupported: mergeFrankfurterUnsupported(
+        preExcluded,
+        [],
+        baseCode,
+        quoteCodes,
+        { [baseCode]: 1 }
+      ),
+    };
+
+    if (!apiQuotes.length) {
+      return lastResult;
+    }
+
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      lastResult = await fetchFrankfurterRatesOnce(baseCode, quotes, dateYmd);
+      const fetched = await fetchFrankfurterRatesResilient(
+        baseCode,
+        apiQuotes,
+        dateYmd,
+        seedFromCache
+      );
+      lastResult = {
+        rates: fetched.rates,
+        date: fetched.date,
+        unsupported: mergeFrankfurterUnsupported(
+          preExcluded,
+          fetched.unsupported,
+          baseCode,
+          quoteCodes,
+          fetched.rates
+        ),
+      };
       if (frankfurterRatesPartiallyUsable(baseCode, quoteCodes, lastResult.rates)) {
         storeFrankfurterRatesCache(baseCode, quotes, dateYmd, lastResult);
         return lastResult;
@@ -162,7 +307,29 @@ function storeFrankfurterRatesCache(baseCode, quotes, dateYmd, payload) {
   writeSessionRateCache(key, entry);
 }
 
+function parseFrankfurterRateRows(baseCode, quotes, rows, dateYmd) {
+  const rates = { [baseCode]: 1 };
+  const supported = new Set();
+  for (const row of rows || []) {
+    const quote = String(row.quote || "").toUpperCase();
+    const rate = parseFloat(row.rate);
+    if (quote && Number.isFinite(rate) && rate > 0) {
+      rates[quote] = rate;
+      supported.add(quote);
+    }
+  }
+  return {
+    rates,
+    date: rows?.[0]?.date || dateYmd || null,
+    unsupported: quotes.filter((q) => !supported.has(q)),
+  };
+}
+
 async function fetchFrankfurterRatesOnce(baseCode, quotes, dateYmd) {
+  if (!quotes.length) {
+    return { rates: { [baseCode]: 1 }, date: dateYmd, unsupported: [] };
+  }
+
   const params = new URLSearchParams({ base: baseCode, quotes: quotes.join(",") });
   if (dateYmd) params.set("date", dateYmd);
 
@@ -176,21 +343,42 @@ async function fetchFrankfurterRatesOnce(baseCode, quotes, dateYmd) {
     throw new Error("Frankfurter invalid response");
   }
 
-  const rates = { [baseCode]: 1 };
-  const supported = new Set();
-  for (const row of rows) {
-    const quote = String(row.quote || "").toUpperCase();
-    const rate = parseFloat(row.rate);
-    if (quote && Number.isFinite(rate) && rate > 0) {
-      rates[quote] = rate;
-      supported.add(quote);
+  return parseFrankfurterRateRows(baseCode, quotes, rows, dateYmd);
+}
+
+/**
+ * Batch fetch first, then backfill any missing quotes individually
+ * (partial batch responses must not be treated as complete).
+ */
+async function fetchFrankfurterRatesResilient(baseCode, apiQuotes, dateYmd, seedFromCache = null) {
+  let merged = seedFromCache
+    ? mergeFrankfurterRatePayload(baseCode, { rates: { [baseCode]: 1 } }, seedFromCache)
+    : { rates: { [baseCode]: 1 }, date: dateYmd, unsupported: [...apiQuotes] };
+
+  if (missingFrankfurterApiQuotes(baseCode, apiQuotes, merged.rates).length === 0) {
+    return {
+      rates: merged.rates,
+      date: merged.date,
+      unsupported: [],
+    };
+  }
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const batch = await fetchFrankfurterRatesOnce(baseCode, apiQuotes, dateYmd);
+      merged = mergeFrankfurterRatePayload(baseCode, merged, batch);
+      if (missingFrankfurterApiQuotes(baseCode, apiQuotes, merged.rates).length === 0) {
+        return { rates: merged.rates, date: merged.date, unsupported: [] };
+      }
+      break;
+    } catch {
+      if (attempt === 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 200));
+      }
     }
   }
 
-  const unsupported = quotes.filter((q) => !supported.has(q));
-  const date = rows[0]?.date || dateYmd || null;
-
-  return { rates, date, unsupported };
+  return backfillMissingFrankfurterQuotes(baseCode, apiQuotes, dateYmd, merged);
 }
 
 /** Re-base Frankfurter multipliers (1 sourceBase = rate[quote] quote). */
@@ -276,7 +464,7 @@ export function peekFrankfurterRatesCacheOrDerived(base, quoteCodes, dateYmd = n
       ...quotes,
     ]);
     if (!derived || !Object.keys(derived.rates).length) continue;
-    if (!frankfurterRatesCoverQuotes(baseCode, quoteCodes, derived.rates)) continue;
+    if (!frankfurterRatesPartiallyUsable(baseCode, quoteCodes, derived.rates)) continue;
     const payload = {
       rates: derived.rates,
       date: cached.date,

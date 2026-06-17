@@ -770,6 +770,7 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     min-width: 0;
+    text-decoration: none;
 }
 
 .informationmenu-section-title:has(.section-arrow) {
@@ -2244,15 +2245,18 @@ body.ec-auth-shell #root > :is(
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
     min-width: 16px;
     height: 16px;
-    padding: 0 5px;
+    padding: 0 4px;
     border-radius: 999px;
-    background: #f59e0b;
+    background: #ef4444;
     color: #fff;
     font-size: 10px;
     font-weight: 700;
-    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    text-align: center;
     pointer-events: none;
     box-shadow: none;
 }
@@ -2269,21 +2273,24 @@ body.ec-auth-shell #root > :is(
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
     min-width: 16px;
     height: 16px;
-    padding: 0 5px;
+    padding: 0 4px;
     border-radius: 999px;
-    background: #f59e0b;
+    background: #ef4444;
     color: #fff;
     font-size: 10px;
     font-weight: 700;
-    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
+    text-align: center;
     pointer-events: none;
 }
 
 .informationmenu-section-title.current-page .sidebar-pending-badge,
 .informationmenu-section-title:hover .sidebar-pending-badge {
-    background: #f59e0b;
+    background: #ef4444;
 }
 
 /* Collapsed sidebar: badge on menu icon top-right */
@@ -2302,5 +2309,15 @@ body.ec-auth-shell #root > :is(
         position: absolute;
         top: 6px;
         right: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-sizing: border-box;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 4px;
+        line-height: 16px;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
     }
 }

@@ -1,15 +1,52 @@
+import {
+  getSiteBasePath,
+  pathnameToPageKey,
+  resolveCanonicalSpaPath,
+  spaPath,
+} from "../routing/pageRoutes.js";
+
 export function buildApiUrl(pathAndQuery) {
-  const pathname = window.location.pathname || "/";
-  const basePath = pathname.replace(/[^/]*$/, "") || "/";
-  const base = window.location.origin + basePath;
+  const base = window.location.origin + getSiteBasePath();
   return new URL(pathAndQuery, base).href;
 }
 
-/** In-app route path (respects subdirectory deploy). */
+/**
+ * In-app route path (respects subdirectory deploy).
+ * Accepts page key ("dashboard"), legacy path ("/dashboard"), or "dashboard?x=1".
+ */
 export function buildSpaPath(pathAndQuery) {
-  const pathname = window.location.pathname || "/";
-  const basePath = pathname.replace(/[^/]*$/, "") || "/";
-  const url = new URL(String(pathAndQuery || "").replace(/^\//, ""), window.location.origin + basePath);
+  const raw = String(pathAndQuery || "").trim();
+  if (!raw) return spaPath("login");
+
+  const qIndex = raw.indexOf("?");
+  const hIndex = raw.indexOf("#");
+  let pathPart = raw;
+  let search = "";
+  let hash = "";
+  if (qIndex >= 0 && (hIndex < 0 || qIndex < hIndex)) {
+    pathPart = raw.slice(0, qIndex);
+    search = raw.slice(qIndex);
+    if (hIndex >= 0) {
+      search = raw.slice(qIndex, hIndex);
+      hash = raw.slice(hIndex);
+    }
+  } else if (hIndex >= 0) {
+    pathPart = raw.slice(0, hIndex);
+    hash = raw.slice(hIndex);
+  }
+
+  const normalized = pathPart.startsWith("/") ? pathPart : `/${pathPart}`;
+  const pageKey = pathnameToPageKey(normalized);
+  const canonical = pageKey
+    ? spaPath(pageKey, { search, hash })
+    : resolveCanonicalSpaPath(normalized, { search, hash }) || normalized;
+
+  // Readable SPA paths are site-root absolute (/dashboard, /login, etc.).
+  if (canonical.startsWith("/")) {
+    return canonical;
+  }
+
+  const url = new URL(canonical.replace(/^\//, ""), window.location.origin + getSiteBasePath());
   return `${url.pathname}${url.search}${url.hash}`;
 }
 

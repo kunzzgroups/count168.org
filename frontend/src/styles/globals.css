@@ -72,6 +72,7 @@ body.ec-auth-shell.maintenance-page
 body.ec-auth-shell .transaction-container > .transaction-header-bar:first-child,
 body.ec-auth-shell .bank-process-header-left,
 body.ec-auth-shell.announcement-page .announcement-page-container > .page-header:first-child,
+body.ec-auth-shell.auto-renew-page-body .container > .content > .auto-renew-page-header:first-child,
 body.ec-auth-shell.ownership-page .own-container > .own-group-filter-bar:first-child,
 body.ec-auth-shell.domain-page .domain-react-page > .action-buttons:first-child,
 body.ec-auth-shell.member-winloss-page

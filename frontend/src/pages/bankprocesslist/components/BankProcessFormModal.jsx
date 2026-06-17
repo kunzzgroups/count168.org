@@ -9,8 +9,6 @@ import {
 import {
   parseProfitSharingToRows,
   serializeProfitSharingRows,
-  parseBankContractRentalMonthsForDayEnd,
-  contractBillingEndYmdForBankForm,
   bankProcessFrequencyNormalized,
   BANK_PROCESS_CONTRACT_OPTIONS,
   formatBankProcessContractLabel,
@@ -70,14 +68,8 @@ export default function BankProcessFormModal({
     setForm((prev) => ({ ...prev, profit_sharing: serializeProfitSharingRows(next, accounts) }));
   };
 
+  // 允许 1st_of_every_month / monthly 手动填写 Day end，仅保持不得早于 Day start。
   let dayEndMin = dayStart || undefined;
-  if (!isOnce && !isWeek && !isDay && frequency !== "monthly" && dayStart && contract) {
-    const term = parseBankContractRentalMonthsForDayEnd(contract);
-    const calculated = term ? contractBillingEndYmdForBankForm(dayStart, term, frequency) : null;
-    if (calculated) {
-      dayEndMin = calculated;
-    }
-  }
 
   return (
     <ProcessModalPortal>
@@ -468,7 +460,7 @@ export default function BankProcessFormModal({
                       <button type="button" id="bank_remark_btn" className="btn btn-save bank-note-open-btn" onClick={() => onOpenBankFormNoteModal("remark")}>{t("remark")}</button>
                     </div>
                     {(form.sop || form.remark) ? (
-                      <p style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>{[form.sop && t("sopFilled"), form.remark && t("remarkFilled")].filter(Boolean).join(" · ")}</p>
+                      <p className="bank-remark-filled-hint">{[form.sop && t("sopFilled"), form.remark && t("remarkFilled")].filter(Boolean).join(" · ")}</p>
                     ) : null}
                   </div>
                 </div>

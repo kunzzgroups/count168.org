@@ -1,11 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { LOGIN_I18N } from "../../translateFile/auth/authTranslate.js";
+import { buildSpaPath } from "../../utils/core/apiUrl.js";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 import {
   clearDashboardFilterSession,
   seedDashboardFilterFromLogin,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { useAuthBackground } from "./useAuthBackground.js";
+
+const LOGIN_ASSET_RETRY_KEY = "ec_login_asset_retry";
+
+function tryLoginPageReloadOnce() {
+  if (sessionStorage.getItem(LOGIN_ASSET_RETRY_KEY)) {
+    sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
+    return false;
+  }
+  sessionStorage.setItem(LOGIN_ASSET_RETRY_KEY, "1");
+  const url = new URL(window.location.href);
+  url.searchParams.set("_", String(Date.now()));
+  window.location.replace(url.toString());
+  return true;
+}
 
 function escapeHtml(text) {
   const div = document.createElement("div");
@@ -73,7 +89,7 @@ export default function LoginPage() {
         next.delete("role");
       }
       const qs = next.toString();
-      navigate(qs ? `/login?${qs}` : "/login", { replace: true });
+      navigate(qs ? spaPath("login", { search: `?${qs}` }) : spaPath("login"), { replace: true });
     },
     [navigate, searchParams],
   );
@@ -136,6 +152,10 @@ export default function LoginPage() {
   }, [lang]);
 
   useEffect(() => {
+    sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
+  }, []);
+
+  useEffect(() => {
     if (sessionStorage.getItem("ec_skip_session_bootstrap") === "1") {
       sessionStorage.removeItem("ec_skip_session_bootstrap");
       return undefined;
@@ -156,18 +176,18 @@ export default function LoginPage() {
         const user = json.data;
         const userType = String(user.user_type || "").toLowerCase();
         if (userType === "member") {
-          navigate("/member", { replace: true });
+          navigate(spaPath("member"), { replace: true });
           return;
         }
         if (user.needs_owner_secondary) {
-          navigate("/owner-secondary-password", { replace: true });
+          navigate(spaPath("owner-secondary-password"), { replace: true });
           return;
         }
         if (user.needs_user_secondary) {
-          navigate("/user-secondary-password", { replace: true });
+          navigate(spaPath("user-secondary-password"), { replace: true });
           return;
         }
-        navigate("/dashboard", { replace: true });
+        navigate(spaPath("dashboard"), { replace: true });
       } catch (err) {
         if (err?.name === "AbortError") return;
         // stay on login page when not authenticated
@@ -270,7 +290,12 @@ export default function LoginPage() {
         if (rememberMe) fd.append("remember_me", "1");
       }
 
-      const res = await fetch("/api/session/login_api.php", { method: "POST", body: fd, credentials: "include" });
+      const res = await fetch("/api/session/login_api.php", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+        cache: "no-store",
+      });
       const raw = await res.text();
       let data = {};
       try {
@@ -279,10 +304,12 @@ export default function LoginPage() {
         const msg = res.ok
           ? i18n.loginInvalidResponse
           : i18n.loginServerError.replace("{status}", String(res.status));
+        if (tryLoginPageReloadOnce()) return;
         showNotice(msg);
         return;
       }
       if (data.status === "success" && data.redirect) {
+        sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
         clearDashboardFilterSession();
         const loginScope = String(data.login_scope || "").trim().toLowerCase();
         const loginIdentifier = String(data.login_identifier || companyId).trim().toUpperCase();
@@ -301,7 +328,7 @@ export default function LoginPage() {
 
         // Smooth routing: do not follow legacy "dashboard.php -> member" chain.
         if (loginRole === "member" || userType === "member") {
-          navigate("/member", { replace: true });
+          navigate(spaPath("member"), { replace: true });
           return;
         }
 
@@ -319,7 +346,7 @@ export default function LoginPage() {
         })();
 
         if (internalPath) {
-          navigate(internalPath, { replace: true });
+          navigate(buildSpaPath(internalPath), { replace: true });
           return;
         }
 
@@ -332,6 +359,7 @@ export default function LoginPage() {
       }
       showNotice(data.message || i18n.loginFailed);
     } catch {
+      if (tryLoginPageReloadOnce()) return;
       showNotice(i18n.loginError);
     } finally {
       setSubmitting(false);

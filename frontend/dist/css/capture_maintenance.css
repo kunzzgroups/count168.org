@@ -608,8 +608,9 @@ body.dashboard-page.maintenance-page {
     padding-right: clamp(6px, 0.75vw, 12px);
 }
 
-.maintenance-list-container .maintenance-table th:nth-child(9),
-.maintenance-list-container .maintenance-table td:nth-child(9) {
+/* 勾选列（第 9 列）：仅列宽，水平 padding 由下方 checkbox 专用规则统一 */
+.maintenance-list-container .maintenance-table th:nth-child(9):not(.maintenance-select-all-header),
+.maintenance-list-container .maintenance-table td:nth-child(9):not(.maintenance-cell-checkbox) {
     padding-left: clamp(4px, 0.5vw, 10px);
     padding-right: clamp(6px, 0.65vw, 12px);
 }
@@ -1112,8 +1113,8 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     padding-right: clamp(6px, 0.75vw, 12px);
 }
 
-.capture-maintenance-page-root .maintenance-list-container .maintenance-table th:nth-child(9),
-.capture-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(9) {
+.capture-maintenance-page-root .maintenance-list-container .maintenance-table th:nth-child(9):not(.maintenance-select-all-header),
+.capture-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(9):not(.maintenance-cell-checkbox) {
     padding-left: clamp(4px, 0.5vw, 10px);
     padding-right: clamp(6px, 0.65vw, 12px);
 }
@@ -1176,6 +1177,10 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     vertical-align: middle;
 }
 
+.capture-maintenance-page-root .maintenance-virtual-th.maintenance-select-all-header {
+    display: flex;
+}
+
 .capture-maintenance-page-root #select_all_capture {
     cursor: pointer;
 }
@@ -1213,10 +1218,13 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     line-height: 1;
 }
 
-/* 勾选列：thead th 与 tbody td 的 padding 来源不同（th 无 maintenance-table-cell），纵向看勾选框易左右错位；对称 padding + 全宽 flex 内层与表头/行共用 */
+/* 勾选列：thead th 与 tbody td 对称 padding，flex 内层居中，与虚拟表一致 */
 .capture-maintenance-page-root .maintenance-list-container .maintenance-table>thead>tr>th.maintenance-select-all-header,
 .capture-maintenance-page-root .maintenance-list-container .maintenance-table>tbody>tr>td.maintenance-cell-checkbox {
-    padding: clamp(4px, 0.5vw, 8px) clamp(8px, 0.85vw, 14px) !important;
+    padding-top: clamp(4px, 0.5vw, 8px) !important;
+    padding-bottom: clamp(4px, 0.5vw, 8px) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
     text-align: center;
     vertical-align: middle;
 }
@@ -1333,7 +1341,11 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 
 .capture-maintenance-page-root .capture-virtual-th-checkbox {
     border-top-right-radius: 8px;
-    padding: clamp(4px, 0.5vw, 8px) clamp(8px, 0.85vw, 14px) !important;
+    justify-content: center;
+    padding-top: clamp(4px, 0.5vw, 8px) !important;
+    padding-bottom: clamp(4px, 0.5vw, 8px) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 
 .capture-maintenance-page-root .maintenance-virtual-scroll {
@@ -1407,7 +1419,11 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 .capture-maintenance-page-root .capture-virtual-cell-checkbox {
-    padding: clamp(4px, 0.5vw, 8px) clamp(8px, 0.85vw, 14px) !important;
+    justify-content: center;
+    padding-top: clamp(4px, 0.5vw, 8px) !important;
+    padding-bottom: clamp(4px, 0.5vw, 8px) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 
 .capture-maintenance-page-root .capture-virtual-cell--no {
@@ -1434,11 +1450,6 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 .capture-maintenance-page-root .maintenance-list-container .maintenance-virtual-data-row .maintenance-virtual-cell:nth-child(8) {
     padding-left: clamp(10px, 1.05vw, 18px);
     padding-right: clamp(6px, 0.75vw, 12px);
-}
-
-.capture-maintenance-page-root .maintenance-list-container .maintenance-virtual-data-row .maintenance-virtual-cell:nth-child(9) {
-    padding-left: clamp(4px, 0.5vw, 10px);
-    padding-right: clamp(6px, 0.65vw, 12px);
 }
 
 .capture-maintenance-page-root .maintenance-row-deleted .maintenance-virtual-cell {

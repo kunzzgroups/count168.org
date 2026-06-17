@@ -48,6 +48,10 @@
     body.ec-auth-shell.process-page #addModal .add-actions .btn-cancel,
     body.ec-auth-shell.process-page #editModal .add-actions .btn-save,
     body.ec-auth-shell.process-page #editModal .add-actions .btn-cancel,
+    body.ec-auth-shell.process-page #addModal .account-btn-save,
+    body.ec-auth-shell.process-page #addModal .account-btn-cancel,
+    body.ec-auth-shell.process-page #editModal .account-btn-save,
+    body.ec-auth-shell.process-page #editModal .account-btn-cancel,
     body.ec-auth-shell.account-page .btn-currency-setting,
     body.ec-auth-shell.user-page #userModal .btn-save,
     body.ec-auth-shell.user-page #userModal .btn-cancel,
@@ -495,11 +499,11 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
         flex-direction: column;
     }
 
-    /*.modal-body,
+    /* .modal-body,
     .transaction-modal-body,
     .form-container {
         padding-bottom: 90px !important;
-    }
+    } */
 }
 
 /* 3. Interactive Polish (Micro-animations) */
@@ -630,11 +634,11 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
    Global Layout Unlock (Destroy nested scrolls, use Native Window Scroll)
    ========================================================================== */
     /* 1. Unlock the main bounding containers so they stretch infinitely downwards */
-    html:not(:has(body.datacapture-page)),
+    html:not(:has(body.datacapture-page)):not(:has(body.datacapture-summary-page)),
     body.user-page,
     body.transaction-page,
-    body.dashboard-page:not(.datacapture-page),
-    body.ec-auth-shell:not(.datacapture-page) {
+    body.dashboard-page:not(.datacapture-page):not(.datacapture-summary-page),
+    body.ec-auth-shell:not(.datacapture-page):not(.datacapture-summary-page) {
         height: auto !important;
         min-height: 100vh !important;
         max-height: none !important;
@@ -646,7 +650,8 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
     body.ec-auth-shell:not(.datacapture-page) .content,
     body.ec-auth-shell:not(.datacapture-page) .transaction-container,
     body.ec-auth-shell:not(.datacapture-page) .datacapture-container,
-    body.ec-auth-shell:not(.datacapture-page) .dashboard-container {
+    body.ec-auth-shell:not(.datacapture-page) .dashboard-container,
+    body.ec-auth-shell:not(.datacapture-page) .own-container {
         height: auto !important;
         min-height: 100vh !important;
         max-height: none !important;
@@ -676,6 +681,41 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
         overflow: hidden !important;
     }
 
+    /* Bank Process（非 Show All）：覆盖下方 Global Unlock，桌面一屏无整页滚动 */
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) {
+        height: 100vh !important;
+        min-height: 100vh !important;
+        max-height: 100vh !important;
+        overflow-x: hidden !important;
+        overflow-y: hidden !important;
+    }
+
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .container,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) #root > .container {
+        height: 100vh !important;
+        min-height: 0 !important;
+        max-height: 100vh !important;
+        overflow: hidden !important;
+        padding-bottom: 0 !important;
+    }
+
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .content {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .process-table-wrapper.bank-process-table-region {
+        overflow: hidden !important;
+        max-height: none !important;
+    }
+
     /* 2. Remove all internal scrolling constraints on table wrappers (No vertical nested scrollbars) */
     body.ec-auth-shell .table-container,
     body.ec-auth-shell .account-cards,
@@ -688,12 +728,43 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
     body.ec-auth-shell .dashboard-content,
     body.ec-auth-shell .transaction-main-content,
     body.ec-auth-shell .transaction-table-wrapper,
-    body.ec-auth-shell .datacapture-table-wrapper {
+    body.ec-auth-shell .datacapture-table-wrapper,
+    body.ec-auth-shell .summary-table-x-scroll,
+    body.ec-auth-shell.datacapture-summary-page .summary-table-container,
+    body.ec-auth-shell .own-container,
+    body.ec-auth-shell #companyCardsContainer,
+    body.ec-auth-shell #groupEarningsContainer {
         height: auto !important;
         min-height: 0 !important;
         max-height: none !important;
         overflow: visible !important;
         /* This forces the data to completely render out, triggering the global browser scrollbar */
+    }
+
+    /* Bank Process（非 Show All）：覆盖上方 Unlock 对列表容器的 overflow:visible */
+    html:has(body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all)) {
+        height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table,
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .process-table-wrapper.bank-process-table-region {
+        overflow: hidden !important;
+    }
+
+    body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .pagination-container {
+        position: fixed !important;
+        right: max(40px, env(safe-area-inset-right, 0px)) !important;
+        bottom: max(20px, env(safe-area-inset-bottom, 0px)) !important;
+        left: auto !important;
+        top: auto !important;
+        margin: 0 !important;
+        z-index: 120 !important;
+        width: fit-content !important;
+        flex-shrink: 0 !important;
     }
 
     body.user-page:not(.user-page--show-all) .user-cards {
@@ -766,6 +837,66 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
         flex-direction: column !important;
     }
 
+    /* Games Process List Show All：小屏下覆盖 global unlock，整页可滚 */
+    body.process-page.process-page--show-all:not(.process-page--bank) {
+        overflow-y: auto !important;
+        height: auto !important;
+        min-height: 100vh !important;
+        max-height: none !important;
+    }
+
+    body.process-page.process-page--show-all:not(.process-page--bank) .container {
+        height: auto !important;
+        min-height: 100vh !important;
+        max-height: none !important;
+        overflow: visible !important;
+        display: block !important;
+        padding-bottom: 20px !important;
+    }
+
+    body.process-page.process-page--show-all:not(.process-page--bank) .content {
+        height: auto !important;
+        min-height: calc(100vh - var(--layout-page-top-inset)) !important;
+        max-height: none !important;
+        overflow: visible !important;
+        display: flex !important;
+        flex-direction: column !important;
+        flex: none !important;
+        padding-bottom: 0 !important;
+    }
+
+    body.process-page.process-page--show-all:not(.process-page--bank) .process-table-wrapper {
+        flex: 0 1 auto !important;
+        min-height: 0 !important;
+        padding-bottom: 0 !important;
+        overflow: visible !important;
+    }
+
+    body.process-page.process-page--show-all:not(.process-page--bank) .process-cards:not(.bank-virtual-scroll) {
+        display: block !important;
+        flex: none !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        scrollbar-gutter: auto;
+    }
+
+    body.process-page.process-page--show-all:not(.process-page--bank) .process-card.games-process-row {
+        flex: none !important;
+        flex-shrink: 0 !important;
+        min-height: 26px !important;
+        align-items: center !important;
+    }
+
+    body.process-page.process-page--show-all:not(.process-page--bank) .pagination-container {
+        position: relative !important;
+        right: auto !important;
+        bottom: auto !important;
+        margin-top: 8px !important;
+        margin-left: auto !important;
+        z-index: 1 !important;
+        width: fit-content !important;
+    }
+
     body.process-page:not(.process-page--bank):not(.process-page--show-all) .games-process-table-header,
     body.process-page:not(.process-page--bank):not(.process-page--show-all) .process-table-wrapper > .table-header {
         flex-shrink: 0 !important;
@@ -818,7 +949,188 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
         min-height: 0 !important;
     }
 
-}
+    /* Dashboard home: one viewport — override global unlock scroll */
+    html:has(body.dashboard-home-page) {
+        height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    body.dashboard-home-page {
+        height: 100vh !important;
+        height: 100dvh !important;
+        max-height: 100dvh !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.dashboard-home-page #root {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    body.dashboard-home-page .dashboard-container {
+        height: 100% !important;
+        min-height: 0 !important;
+        max-height: 100dvh !important;
+        overflow: hidden !important;
+        flex: 1 1 0 !important;
+        padding-bottom: clamp(4px, 0.5vh, 8px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-content {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        height: auto !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        --dashboard-section-gap: clamp(6px, 0.85vh, 14px);
+        gap: var(--dashboard-section-gap) !important;
+    }
+
+    body.dashboard-home-page .dashboard-filter-panel {
+        flex-shrink: 0 !important;
+    }
+
+    body.dashboard-home-page .dashboard-kpi-grid {
+        flex-shrink: 0 !important;
+        gap: clamp(8px, 1vh, 14px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-kpi-card {
+        padding: clamp(10px, 1.1vh, 18px) clamp(12px, 1.2vh, 20px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+        overflow: hidden !important;
+    }
+
+    body.dashboard-home-page .dashboard-panel-card {
+        min-height: 0 !important;
+        overflow: hidden !important;
+        padding: clamp(10px, 1vh, 16px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panel-chart-body {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+    }
+
+    body.dashboard-home-page .dashboard-panel-card--summary {
+        --summary-pie-size: clamp(195px, 22vh, 240px) !important;
+        --summary-currency-max: clamp(120px, 20vh, 175px) !important;
+        padding: clamp(10px, 1vh, 16px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-summary-pie-wrap {
+        flex: none !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+    }
+
+    body.dashboard-home-page .dashboard-summary-pie-chart-shell {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+    }
+
+    body.dashboard-home-page .dashboard-summary-currency-list-body {
+        overflow-y: auto !important;
+        min-height: 0 !important;
+        max-height: 100% !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs {
+        --dashboard-section-gap: clamp(4px, 0.55vh, 10px);
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card {
+        padding: clamp(8px, 0.8vh, 13px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-head {
+        margin-bottom: clamp(5px, 0.45vh, 8px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-layout {
+        flex: 1 1 0 !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-top-row {
+        min-height: 0 !important;
+        overflow: hidden !important;
+        flex-shrink: 0 !important;
+    }
+
+    body.dashboard-home-page .dashboard-summary-top-row .dashboard-summary-pie-wrap {
+        height: var(--summary-pie-size) !important;
+        min-height: var(--summary-pie-size) !important;
+        max-height: var(--summary-pie-size) !important;
+    }
+
+    body.dashboard-home-page .dashboard-summary-top-row .dashboard-summary-pie-chart-shell {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-top-row .dashboard-summary-pie-wrap {
+        flex: none !important;
+        height: var(--summary-pie-size) !important;
+        min-height: var(--summary-pie-size) !important;
+        max-height: var(--summary-pie-size) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-top-row .dashboard-summary-pie-chart-shell {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-pie-chart-shell {
+        flex-shrink: 1 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-currency-row {
+        padding: 3px 6px 3px 0 !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-rate-footnote {
+        padding: 3px 6px !important;
+        min-height: 0 !important;
+        font-size: clamp(9px, 0.65vw, 10px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card--chart .dashboard-panel-head {
+        margin-bottom: clamp(4px, 0.35vh, 6px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-chart-body {
+        flex: 1 1 0 !important;
+        min-height: clamp(100px, 14vh, 180px) !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-view-tabs {
+        margin-bottom: 0 !important;
+        padding: 2px !important;
+    }
+
+    body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-summary-view-tab {
+        padding: 4px 10px !important;
+        font-size: clamp(10px, 0.72vw, 11px) !important;
+    }
 
 /* ==========================================================================
    Chips with Overflow Component Styles
@@ -865,4 +1177,38 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
 .chip-more:hover {
     background-color: #bae6fd;
     color: #0369a1;
+}
+
+/* Data Capture Summary — body scroll only (all viewport widths) */
+html:has(body.datacapture-summary-page) {
+    height: auto !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.datacapture-summary-page,
+body.ec-auth-shell.dashboard-page.datacapture-summary-page {
+    height: auto !important;
+    min-height: 100vh !important;
+    max-height: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+}
+
+body.dashboard-page.datacapture-summary-page #root,
+body.dashboard-page.datacapture-summary-page .ec-page-shell,
+body.dashboard-page.datacapture-summary-page .ec-page-shell__content,
+body.dashboard-page.datacapture-summary-page .container,
+body.dashboard-page.datacapture-summary-page #summaryTableContainer,
+body.dashboard-page.datacapture-summary-page .summary-table-container {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
+
+body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    max-height: none !important;
+    height: auto !important;
 }

@@ -70,6 +70,17 @@ export function getOrderedRoles(roles) {
   return [...out, ...Array.from(map.values()).sort((a, b) => a.localeCompare(b))];
 }
 
+/** Add/Edit Account modal：DB 未建 role 时仍展示的核心角色 */
+const ACCOUNT_MODAL_FALLBACK_ROLES = ["DEBTOR"];
+
+export function getAccountModalOrderedRoles(roles) {
+  const merged = [...(roles || [])];
+  ACCOUNT_MODAL_FALLBACK_ROLES.forEach((role) => {
+    if (!merged.some((r) => toUpper(r) === role)) merged.push(role);
+  });
+  return getOrderedRoles(merged);
+}
+
 export function normalizeCompanyRow(row) {
   if (!row || typeof row !== "object") return row;
   return {
@@ -156,10 +167,14 @@ export async function fetchMergedAccounts({
   return { success: true, accounts: mergeAccountRows(results) };
 }
 
-/** Add Account：列表中有 MYR 时默认勾选 */
+/** Add Account：列表中有 MYR 时默认勾选，否则默认第一个 currency */
 export function pickDefaultAddCurrencyIds(currencies) {
-  const myr = (currencies || []).find((c) => toUpper(c.code) === "MYR");
-  return myr ? [Number(myr.id)] : [];
+  const list = Array.isArray(currencies) ? currencies : [];
+  if (!list.length) return [];
+  const myr = list.find((c) => toUpper(c.code) === "MYR");
+  if (myr) return [Number(myr.id)];
+  const first = list[0];
+  return first?.id != null ? [Number(first.id)] : [];
 }
 
 /** Company pills shown in Account List inline filter (matches AccountListPage useMemo). */
@@ -215,6 +230,17 @@ export function shouldLoadAccountListData({
   if (companyId != null && Number(companyId) > 0) return true;
   if (groupOnlyMode && selectedGroup) return true;
   return false;
+}
+
+/** Whether Add / list mutations have a resolvable company or group ledger scope. */
+export function accountListHasMutationScope(
+  scopeCompanyId,
+  { groupOnly = false, selectedGroup = null, canUseGroupLedger = false } = {},
+) {
+  const cid = scopeCompanyId != null ? Number(scopeCompanyId) : Number.NaN;
+  if (Number.isFinite(cid) && cid > 0) return true;
+  const gid = String(selectedGroup || "").trim().toUpperCase();
+  return Boolean(groupOnly && gid && canUseGroupLedger);
 }
 
 export function readAccountListGroupFilterOptOut() {

@@ -10,6 +10,11 @@ import {
   gridSetContextMenuColumn,
   gridSetContextMenuRow,
 } from "./dataCaptureBridge.js";
+import { getDataCaptureState } from "./dataCaptureRuntime.js";
+
+function isGroupOnlyColumnContextMenuDisabled() {
+  return getDataCaptureState().isGroupOnlyGrid === true;
+}
 
 let activeContextMenuAnchor = null;
 let contextMenuColumn = null;
@@ -196,6 +201,7 @@ export function showContextMenu(e, cell) {
 export function showColumnContextMenu(e, headerEl) {
   e.preventDefault();
   e.stopPropagation();
+  if (isGroupOnlyColumnContextMenuDisabled()) return;
 
   const target = headerEl || e.target?.closest?.("#tableHeader th");
   if (!target || target.cellIndex <= 0) return;

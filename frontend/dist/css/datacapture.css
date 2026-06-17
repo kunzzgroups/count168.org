@@ -26,19 +26,36 @@ body.datacapture-page {
     --dc-layout-gap: clamp(12px, 1.15vw, 18px);
     --dc-top-col-left: minmax(0, 1.8fr);
     --dc-top-col-right: minmax(0, 1fr);
-    /* Group-only table: cap scroll area to remaining viewport (no empty filler below few rows) */
-    --dc-go-table-scroll-max: calc(
-        100dvh
-        - var(--layout-page-top-gap, 10px)
-        - 12px
-        - clamp(36px, 4.2vh, 52px)
-        - clamp(200px, 30vh, 300px)
-        - var(--dc-layout-gap)
-        - clamp(40px, 4.5vh, 52px)
-        - var(--dc-layout-gap)
-        - clamp(40px, 5vh, 56px)
-        - var(--dc-layout-gap)
-    );
+    --dc-input-focus-border: #3b82f6;
+    --dc-input-focus-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+/* Unified focus ring — overrides global-13inch ec-auth-shell input:focus */
+body.ec-auth-shell.datacapture-page .process-form input:not(.dc-remove-word-chip-input__field):focus,
+body.ec-auth-shell.datacapture-page .process-form input:not(.dc-remove-word-chip-input__field):focus-visible,
+body.ec-auth-shell.datacapture-page .process-form select:focus,
+body.ec-auth-shell.datacapture-page .process-form select:focus-visible,
+body.ec-auth-shell.datacapture-page .process-form textarea:focus,
+body.ec-auth-shell.datacapture-page .process-form textarea:focus-visible,
+body.ec-auth-shell.datacapture-page .dc-remove-word-chip-input:focus-within,
+body.ec-auth-shell.datacapture-page .process-form .dc-description-input-wrap:hover,
+body.ec-auth-shell.datacapture-page .process-form .dc-description-input-wrap:focus-within,
+body.ec-auth-shell.datacapture-page .custom-select-button:focus,
+body.ec-auth-shell.datacapture-page .custom-select-button:focus-visible,
+body.ec-auth-shell.datacapture-page .custom-select-button.open {
+    outline: none !important;
+    border-color: var(--dc-input-focus-border) !important;
+    box-shadow: var(--dc-input-focus-shadow) !important;
+}
+
+body.ec-auth-shell.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field:focus,
+body.ec-auth-shell.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field:focus-visible,
+body.ec-auth-shell.datacapture-page .process-form .dc-description-input-wrap input:focus,
+body.ec-auth-shell.datacapture-page .process-form .dc-description-input-wrap input:focus-visible {
+    outline: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
 }
 
 body.datacapture-page {
@@ -136,8 +153,10 @@ body.datacapture-page .container {
         min-height: min(42vh, 360px);
     }
 
-    body.datacapture-page .excel-table-container--group-only .excel-table-scroll-body {
-        max-height: none;
+    body.datacapture-page .excel-table-container--group-only {
+        align-self: stretch;
+        height: 100%;
+        max-height: 100%;
     }
 
     body.datacapture-page .form-container {
@@ -198,7 +217,7 @@ body.datacapture-page .top-section .submitted-column > .submitted-container {
 }
 
 body.datacapture-page .top-section .form-column > .form-container {
-    overflow: visible;
+    overflow: hidden;
 }
 
 body.datacapture-page .top-section .submitted-column > .submitted-container {
@@ -207,9 +226,11 @@ body.datacapture-page .top-section .submitted-column > .submitted-container {
 
 body.datacapture-page .form-container .process-form {
     overflow-x: hidden;
-    overflow-y: visible;
-    flex: 0 0 auto;
-    min-height: auto;
+    overflow-y: auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    min-width: 0;
 }
 
 body.datacapture-page .submitted-list {
@@ -234,6 +255,62 @@ body.datacapture-page .submitted-list {
     body.datacapture-page .submitted-list {
         max-height: min(42dvh, 400px);
     }
+
+    body.datacapture-page .process-form .dc-form-row--3col {
+        grid-template-columns: 1fr;
+    }
+
+    body.datacapture-page .process-form .dc-form-row--2col {
+        grid-template-columns: 1fr;
+    }
+
+    body.datacapture-page .process-form .dc-form-company-layout {
+        grid-template-columns: 1fr;
+    }
+
+    body.datacapture-page .process-form .dc-form-company-layout__date,
+    body.datacapture-page .process-form .dc-form-company-layout__process,
+    body.datacapture-page .process-form .dc-form-company-layout__currency,
+    body.datacapture-page .process-form .dc-form-company-layout__description,
+    body.datacapture-page .process-form .dc-form-company-layout__replace-old,
+    body.datacapture-page .process-form .dc-form-company-layout__replace-new,
+    body.datacapture-page .process-form .dc-form-company-layout__remove,
+    body.datacapture-page .process-form .dc-form-company-layout__remark {
+        grid-column: 1;
+        grid-row: auto;
+        margin-top: 0;
+    }
+
+    body.datacapture-page .process-form .dc-form-company-layout__description,
+    body.datacapture-page .process-form .dc-form-company-layout__replace-old,
+    body.datacapture-page .process-form .dc-form-company-layout__replace-new,
+    body.datacapture-page .process-form .dc-form-company-layout__remove,
+    body.datacapture-page .process-form .dc-form-company-layout__remark {
+        margin-top: clamp(8px, 0.7vw, 12px);
+    }
+
+    body.datacapture-page .process-form .dc-form-company-layout > .form-group > label.dc-form-company-layout__label-spacer {
+        display: none;
+    }
+
+    body.datacapture-page .process-form .dc-form-company-layout__replace-new-field {
+        display: flex;
+        align-items: center;
+        gap: clamp(4px, 0.42vw, 6px);
+    }
+
+    body.datacapture-page .process-form .dc-form-company-layout__replace-new-field .replace-arrow {
+        position: static;
+        transform: none;
+        margin-right: 0;
+    }
+
+    body.datacapture-page .process-form .dc-form-company-layout__replace-new-field input {
+        display: block;
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
+    }
 }
 
 body.datacapture-page .form-container .user-gc-inline-panel.dc-data-capture-gc-panel {
@@ -244,35 +321,46 @@ body.datacapture-page .form-container .user-gc-inline-panel.dc-data-capture-gc-p
     row-gap: var(--user-gc-inline-row-gap, 4px);
 }
 
-body.datacapture-page .process-form .dc-form-two-col {
+body.datacapture-page .process-form .dc-form-two-col,
+body.datacapture-page .process-form .dc-form-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: clamp(10px, 1.2vw, 18px);
     align-items: start;
     margin-bottom: clamp(6px, 0.55vw, 10px);
 }
 
-body.datacapture-page .process-form .dc-form-two-col .form-group {
+body.datacapture-page .process-form .dc-form-row--2col {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+body.datacapture-page .process-form .dc-form-row--3col {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
+body.datacapture-page .process-form .dc-form-two-col .form-group,
+body.datacapture-page .process-form .dc-form-row .form-group {
     margin-bottom: 0;
 }
 
-/* Date | Process & Description | Currency: label above field (2×2 grid, mockup parity) */
-body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked {
+/* Row 1–3: label above field */
+body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked {
     align-items: start;
     column-gap: clamp(12px, 1.35vw, 20px);
     row-gap: 0;
-    /* Space between Date/Process row and Description/Currency row (labels align to mockup) */
     margin-bottom: clamp(10px, 0.85vw, 14px);
 }
 
-body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group {
+body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group {
     flex-direction: column;
     align-items: stretch;
     align-self: stretch;
     gap: clamp(4px, 0.38vw, 6px);
 }
 
-body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > label {
+body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > label,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group > label {
     width: auto;
     max-width: 100%;
     align-self: flex-start;
@@ -288,23 +376,30 @@ body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .f
 
 body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > select,
 body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > .custom-select-wrapper,
-body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > .input-with-icon {
+body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > .input-with-icon,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group > select,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group > .custom-select-wrapper,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group > .input-with-icon,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group > .replace-word-fields {
     width: 100%;
     min-width: 0;
     flex: 0 0 auto;
 }
 
 body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > input,
-body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > select {
+body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group > select,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group > input,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group > select {
     width: 100%;
 }
 
-body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group .input-with-icon input {
+body.datacapture-page .process-form .dc-form-two-col.dc-form-two-col--stacked .form-group .input-with-icon input,
+body.datacapture-page .process-form .dc-form-row.dc-form-row--stacked .form-group .input-with-icon input {
     width: 100%;
 }
 
-/* Group-only (no Company): Currency | Remark same row as Date | Process */
-body.datacapture-page .process-form.dc-form--group-only .dc-form-two-col--stacked > .form-group > input#capture_remark {
+/* Group-only: Currency | Remark on same row */
+body.datacapture-page .process-form.dc-form--group-only .dc-form-row--stacked > .form-group > input#capture_remark {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
@@ -316,88 +411,88 @@ body.datacapture-page .process-form.dc-form--group-only .dc-form-two-col--stacke
     font-weight: 600;
 }
 
-/* Bottom block: Replace Word outside the 2-col grid so Remove | Remark get equal tracks (spanning rows skew column sizing) */
-body.datacapture-page .process-form .dc-form-bottom-block {
-    display: flex;
-    flex-direction: column;
-    gap: clamp(10px, 0.85vw, 14px);
-    margin-bottom: clamp(4px, 0.45vw, 8px);
-}
-
-body.datacapture-page .process-form .dc-form-remove-remark-grid {
+/* Company form: 12-col grid — thirds = 4 cols; row 3 splits at Old word center (col 7) */
+body.datacapture-page .process-form .dc-form-company-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(12, minmax(0, 1fr));
     column-gap: clamp(12px, 1.35vw, 20px);
     row-gap: clamp(4px, 0.38vw, 6px);
-    grid-template-areas:
-        "lbl_rm lbl_mk"
-        "inp_rm inp_mk"
-        "hlp_rm slot_mk";
-    align-items: stretch;
-}
-
-body.datacapture-page .process-form .dc-remove-remark__label {
-    width: auto;
-    max-width: 100%;
-    justify-self: start;
-    text-align: left;
-    margin-bottom: 0;
-    font-size: clamp(11px, 0.82vw, 14px);
-    font-weight: 700;
-    color: #475569;
-    letter-spacing: 0.01em;
-    line-height: 1.25;
-}
-
-body.datacapture-page .process-form .dc-remove-remark__label--rm {
-    grid-area: lbl_rm;
-}
-
-body.datacapture-page .process-form .dc-remove-remark__label--mk {
-    grid-area: lbl_mk;
-}
-
-body.datacapture-page .process-form .dc-remove-remark__input {
+    align-items: start;
     width: 100%;
     min-width: 0;
+    max-width: 100%;
     box-sizing: border-box;
-    min-height: 36px;
-    padding: clamp(6px, 0.35vw, 9px) clamp(8px, 0.63vw, 12px);
-    border: 1px solid var(--dc-border, #e2e8f0);
-    border-radius: 6px;
-    font-size: clamp(10px, 0.74vw, 14px);
-    font-weight: 600;
+    margin-bottom: clamp(10px, 0.85vw, 14px);
 }
 
-body.datacapture-page .process-form .dc-remove-remark__input--rm {
-    grid-area: inp_rm;
+body.datacapture-page .process-form .dc-form-company-layout__date {
+    grid-column: 1 / span 4;
+    grid-row: 1;
 }
 
-body.datacapture-page .process-form .dc-remove-remark__input--mk {
-    grid-area: inp_mk;
+body.datacapture-page .process-form .dc-form-company-layout__process {
+    grid-column: 5 / span 4;
+    grid-row: 1;
 }
 
-body.datacapture-page .process-form .dc-remove-remark__help {
-    grid-area: hlp_rm;
-    margin-top: 0;
-    line-height: 1.25;
+body.datacapture-page .process-form .dc-form-company-layout__currency {
+    grid-column: 9 / span 4;
+    grid-row: 1;
 }
 
-body.datacapture-page .process-form .dc-remove-remark__slot {
-    grid-area: slot_mk;
-    min-height: 0;
-    pointer-events: none;
+body.datacapture-page .process-form .dc-form-company-layout__description {
+    grid-column: 1 / span 4;
+    grid-row: 2;
+    margin-top: clamp(6px, 0.55vw, 10px);
 }
 
-body.datacapture-page .process-form .dc-form-bottom-block .replace-word-group.dc-replace-word-field {
+body.datacapture-page .process-form .dc-form-company-layout__replace-old {
+    grid-column: 5 / span 4;
+    grid-row: 2;
+    margin-top: clamp(6px, 0.55vw, 10px);
+}
+
+body.datacapture-page .process-form .dc-form-company-layout__replace-new {
+    grid-column: 9 / span 4;
+    grid-row: 2;
+    margin-top: clamp(6px, 0.55vw, 10px);
+}
+
+body.datacapture-page .process-form .dc-form-company-layout__remove {
+    grid-column: 1 / 7;
+    grid-row: 3;
+    margin-top: clamp(6px, 0.55vw, 10px);
+}
+
+body.datacapture-page .process-form .dc-form-company-layout__remark {
+    grid-column: 7 / -1;
+    grid-row: 3;
+    margin-top: clamp(6px, 0.55vw, 10px);
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group {
+    margin-bottom: 0;
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    align-self: start;
     gap: clamp(4px, 0.38vw, 6px);
-    margin-bottom: 0;
+    min-width: 0;
 }
 
-body.datacapture-page .process-form .dc-form-bottom-block .replace-word-group.dc-replace-word-field > label {
+body.datacapture-page .process-form .dc-form-company-layout > .form-group:has(> .field-help) {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    grid-template-columns: none;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group:has(> .field-help) > .field-help {
+    grid-column: auto;
+    width: 100%;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > label {
     width: auto;
     max-width: 100%;
     align-self: flex-start;
@@ -411,12 +506,198 @@ body.datacapture-page .process-form .dc-form-bottom-block .replace-word-group.dc
     line-height: 1.25;
 }
 
-body.datacapture-page .process-form .dc-form-bottom-block .replace-word-fields {
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > label.dc-form-company-layout__label-spacer {
+    visibility: hidden;
+    user-select: none;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > select,
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > .custom-select-wrapper,
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > .input-with-icon,
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > .dc-form-company-layout__replace-new-field {
+    width: 100%;
+    min-width: 0;
+    flex: 0 0 auto;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > input,
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    flex: 0 0 auto;
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    padding: clamp(6px, 0.35vw, 9px) clamp(8px, 0.63vw, 12px);
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    font-size: clamp(10px, 0.74vw, 14px);
+    font-weight: 600;
+    line-height: 1.25;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group .input-with-icon {
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group .input-with-icon input {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout > .form-group > .custom-select-wrapper .custom-select-button {
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    box-sizing: border-box;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout__replace-new-field {
+    position: relative;
+    display: block;
+    min-width: 0;
+    width: 100%;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout__replace-new-field .replace-arrow {
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: clamp(4px, 0.42vw, 6px);
+    margin-left: 0;
+    flex-shrink: 0;
+    color: #666;
+    font-weight: bold;
+    font-size: clamp(12px, 0.83vw, 16px);
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout__replace-new-field input {
+    display: block;
+    flex: none;
+    min-width: 0;
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    padding: clamp(6px, 0.35vw, 9px) clamp(8px, 0.63vw, 12px);
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    font-size: clamp(10px, 0.74vw, 14px);
+    font-weight: 600;
+    line-height: 1.25;
+    box-sizing: border-box;
+}
+
+body.datacapture-page .process-form .dc-form-company-layout__remove-help {
+    margin-top: 0;
+    line-height: 1.25;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: clamp(12px, 1.35vw, 20px);
+    row-gap: clamp(4px, 0.38vw, 6px);
+    grid-template-areas:
+        "lbl_rm lbl_mk"
+        "inp_rm inp_mk"
+        "hlp_rm slot_mk";
+    align-items: stretch;
+    margin-bottom: clamp(10px, 0.85vw, 14px);
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__help {
+    grid-area: hlp_rm;
+    margin-top: 0;
+    line-height: 1.25;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__slot {
+    grid-area: slot_mk;
+    min-height: 0;
+    pointer-events: none;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__label {
+    width: auto;
+    max-width: 100%;
+    justify-self: start;
+    text-align: left;
+    margin-bottom: 0;
+    font-size: clamp(11px, 0.82vw, 14px);
+    font-weight: 700;
+    color: #475569;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__label--rm {
+    grid-area: lbl_rm;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__label--mk {
+    grid-area: lbl_mk;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    min-height: 36px;
+    padding: clamp(6px, 0.35vw, 9px) clamp(8px, 0.63vw, 12px);
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    font-size: clamp(10px, 0.74vw, 14px);
+    font-weight: 600;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__input--rm {
+    grid-area: inp_rm;
+}
+
+body.datacapture-page .process-form .dc-form-remove-remark-grid .dc-remove-remark__input--mk {
+    grid-area: inp_mk;
+}
+
+body.datacapture-page .process-form .dc-form-row--stacked .replace-word-group.dc-replace-word-field {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: clamp(4px, 0.38vw, 6px);
+    margin-bottom: 0;
+}
+
+body.datacapture-page .process-form .dc-form-row--stacked .replace-word-group.dc-replace-word-field > label {
+    width: auto;
+    max-width: 100%;
+    align-self: flex-start;
+    text-align: left;
+    padding-right: 0;
+    margin-bottom: 0;
+    font-size: clamp(11px, 0.82vw, 14px);
+    font-weight: 700;
+    color: #475569;
+    letter-spacing: 0.01em;
+    line-height: 1.25;
+}
+
+body.datacapture-page .process-form .dc-form-row--stacked .replace-word-fields {
     width: 100%;
     min-width: 0;
 }
 
-body.datacapture-page .process-form .dc-form-bottom-block .replace-word-fields input {
+body.datacapture-page .process-form .dc-form-row--stacked .replace-word-fields input {
     width: auto;
     flex: 1;
     min-width: 0;
@@ -441,8 +722,9 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
     flex: 1 1 auto;
     min-height: 0;
     margin: 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    align-content: stretch;
     gap: var(--dc-layout-gap);
     overflow: hidden;
 }
@@ -575,15 +857,125 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
     border-radius: 4px;
     font-size: clamp(10px, 0.74vw, 14px);
     box-sizing: border-box;
-    text-transform: uppercase;
+    text-transform: none;
 }
 
-/* Uppercase conversion for remove word, replace words, and remark */
-#capture_remove_word,
+/* Replace / remove / remark: sentence case (not all-caps) */
 #capture_replace_word_from,
 #capture_replace_word_to,
 #capture_remark {
-    text-transform: uppercase;
+    text-transform: none;
+}
+
+body.datacapture-page .dc-remove-word-chip-input {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: flex-start;
+    gap: 6px;
+    width: 100%;
+    min-height: 36px;
+    padding: 5px 10px;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    background: #ffffff;
+    box-sizing: border-box;
+    cursor: text;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.datacapture-page .dc-remove-word-chip-input:focus-within {
+    border-color: var(--dc-input-focus-border, #3b82f6);
+    box-shadow: var(--dc-input-focus-shadow, 0 0 0 2px rgba(59, 130, 246, 0.12));
+}
+
+body.datacapture-page .dc-remove-word-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    max-width: 100%;
+    height: 24px;
+    padding: 0 4px 0 8px;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 4px;
+    background: #f8fafc;
+    color: #334155;
+    font-size: clamp(10px, 0.74vw, 14px);
+    font-weight: 600;
+    line-height: 1;
+}
+
+body.datacapture-page .dc-remove-word-chip__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+body.datacapture-page .dc-remove-word-chip__remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+body.datacapture-page .dc-remove-word-chip__remove:hover {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+body.datacapture-page .process-form .form-group .dc-remove-word-chip-input__field,
+body.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field,
+body.ec-auth-shell.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field {
+    flex: 0 1 auto;
+    display: inline-block;
+    width: auto;
+    min-width: 4ch;
+    max-width: 100%;
+    height: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    margin: 0;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    -webkit-appearance: none;
+    appearance: none;
+    color: #334155;
+    font-size: clamp(10px, 0.74vw, 14px);
+    font-weight: 600;
+    line-height: 24px;
+    text-transform: none;
+}
+
+body.datacapture-page .process-form .form-group .dc-remove-word-chip-input__field:focus,
+body.datacapture-page .process-form .form-group .dc-remove-word-chip-input__field:focus-visible,
+body.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field:focus,
+body.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field:focus-visible,
+body.ec-auth-shell.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field:focus,
+body.ec-auth-shell.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field:focus-visible {
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
+
+body.datacapture-page .process-form .form-group .dc-remove-word-chip-input__field::placeholder,
+body.datacapture-page .dc-remove-word-chip-input .dc-remove-word-chip-input__field::placeholder {
+    color: #94a3b8;
+    font-weight: 500;
 }
 
 .replace-arrow {
@@ -624,6 +1016,18 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
     text-overflow: ellipsis;
     white-space: nowrap;
     position: relative;
+    box-sizing: border-box;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.datacapture-page .custom-select-button:focus,
+body.datacapture-page .custom-select-button:focus-visible,
+body.datacapture-page .custom-select-button.open {
+    outline: none;
+    border-color: var(--dc-input-focus-border, #3b82f6);
+    box-shadow: var(--dc-input-focus-shadow, 0 0 0 2px rgba(59, 130, 246, 0.12));
 }
 
 .custom-select-button::after {
@@ -693,6 +1097,34 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
     overflow-y: auto;
 }
 
+/* Process portal dropdown — rendered on document.body, not clipped by form scroll */
+body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal,
+.custom-select-dropdown.dc-process-select-portal {
+    display: flex !important;
+    flex-direction: column;
+    box-sizing: border-box;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+    background: #ffffff;
+    overflow: hidden;
+    max-height: min(280px, calc(100vh - 32px));
+    z-index: 9000;
+}
+
+body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .custom-select-search,
+.custom-select-dropdown.dc-process-select-portal .custom-select-search {
+    flex-shrink: 0;
+}
+
+body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .custom-select-options,
+.custom-select-dropdown.dc-process-select-portal .custom-select-options {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    overflow-y: auto;
+}
+
 .custom-select-option {
     padding: 8px 12px;
     cursor: pointer;
@@ -720,7 +1152,7 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
     font-size: 14px;
 }
 
-.process-form .form-group input,
+.process-form .form-group input:not(.dc-remove-word-chip-input__field),
 .process-form .form-group select {
     flex: 1;
     min-width: 0;
@@ -877,41 +1309,82 @@ body.datacapture-page .bottom-section .form-actions {
     width: 100%;
 }
 
+body.datacapture-page .bottom-section:has(.excel-table-container--group-only) .form-actions {
+    flex: 0 0 auto;
+    margin-top: 0;
+}
+
 .input-with-icon {
     position: relative;
     flex: 1;
     min-width: 0;
 }
 
-.add-icon {
-    position: absolute;
-    right: 8px;
-    top: 50%;
-    transform: translateY(-50%);
-    background: var(--dc-accent, #2563eb);
-    color: white;
-    border: none;
-    width: clamp(18px, 1.25vw, 24px);
-    height: clamp(18px, 1.25vw, 24px);
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: clamp(12px, 0.83vw, 16px);
-    font-weight: bold;
+body.datacapture-page .process-form .dc-description-input-wrap {
     display: flex;
+    align-items: stretch;
+    height: 36px;
+    min-height: 36px;
+    max-height: 36px;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+body.datacapture-page .process-form .dc-description-input-wrap:hover,
+body.datacapture-page .process-form .dc-description-input-wrap:focus-within {
+    border-color: var(--dc-input-focus-border, #3b82f6);
+    box-shadow: var(--dc-input-focus-shadow, 0 0 0 2px rgba(59, 130, 246, 0.12));
+}
+
+body.datacapture-page .process-form .dc-description-input-wrap input {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    padding: clamp(6px, 0.35vw, 9px) clamp(8px, 0.63vw, 12px);
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    outline: none;
+    background: #ffffff;
+    cursor: pointer;
+}
+
+body.datacapture-page .process-form .dc-description-add-tile {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex: 0 0 clamp(34px, 2.45vw, 40px);
+    width: clamp(34px, 2.45vw, 40px);
+    align-self: stretch;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: #3b82f6;
+    color: #ffffff;
+    font-size: clamp(14px, 0.95vw, 18px);
+    font-weight: 700;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
 }
 
-.add-icon:hover {
-    background: var(--dc-accent-hover, #1d4ed8);
+body.datacapture-page .process-form .dc-description-add-tile:hover {
+    background: #2563eb;
 }
 
-.add-icon:disabled,
-.add-icon:disabled:hover {
-    background: #cbd5e1;
-    color: #f1f5f9;
-    cursor: not-allowed;
-    opacity: 0.75;
+body.datacapture-page .process-form .dc-description-add-tile:focus,
+body.datacapture-page .process-form .dc-description-add-tile:focus-visible {
+    outline: none;
+    background: #2563eb;
 }
 
 /* Modal Styles */
@@ -1014,33 +1487,44 @@ body.datacapture-page .bottom-section .form-actions {
     box-sizing: border-box;
 }
 
-.modal-content.description-selection-modal .modal-header {
+.modal-content.description-selection-modal .modal-header,
+.modal-content.description-selection-modal .description-selection-modal-header.modal-header {
     position: relative;
     flex-shrink: 0;
     margin: 0;
-    padding: var(--desc-modal-pad-block, 3px) var(--desc-modal-pad-inline, 20px) 0;
+    padding: 3px 20px;
+    padding-right: 3rem;
     background: #f8fafc;
-    border-bottom: none;
+    border-bottom: 1px solid #e2e8f0;
     border-radius: 12px 12px 0 0;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
 }
 
 .modal-content.description-selection-modal .modal-header h2 {
     margin: 0;
-    padding: 0;
+    padding: clamp(12px, 0.78vw, 15px) clamp(18px, 1.2vw, 23px);
     background: transparent;
+    border: none;
     border-bottom: none;
-    font-size: var(--text-page-title);
+    font-size: var(--process-form-modal-title-size, var(--text-page-title));
     font-family: var(--font-heading-page);
     font-weight: var(--font-weight-page-title);
     letter-spacing: var(--letter-spacing-page-title);
     color: #1f2937;
     line-height: 1.2;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .modal-content.description-selection-modal .close {
-    right: 1.25rem;
-    top: 1.25rem;
+    position: static;
+    right: auto;
+    top: auto;
+    flex-shrink: 0;
     transform: none;
 }
 
@@ -1241,6 +1725,8 @@ body.datacapture-page .bottom-section .form-actions {
     border-radius: 4px;
     padding: var(--desc-modal-list-pad, 0.5rem);
     background-color: #f8fafc;
+    font-size: var(--desc-modal-list-text, var(--text-small));
+    font-family: var(--font-ui);
 }
 
 .selected-descriptions-list,
@@ -1259,6 +1745,8 @@ body.datacapture-page .bottom-section .form-actions {
     border-radius: 4px;
     padding: var(--desc-modal-list-pad, 0.5rem);
     background-color: #f8fafc;
+    font-size: var(--desc-modal-list-text, var(--text-small));
+    font-family: var(--font-ui);
 }
 
 .modal-content.description-selection-modal .description-item,
@@ -1292,7 +1780,7 @@ body.datacapture-page .bottom-section .form-actions {
 .description-item label,
 .modal-content.description-selection-modal .description-item label {
     margin: 0;
-    font-size: var(--desc-modal-list-text, var(--text-tiny));
+    font-size: var(--desc-modal-list-text, var(--text-small));
     font-family: var(--font-ui);
     font-weight: var(--font-weight-normal);
     cursor: pointer;
@@ -1339,11 +1827,14 @@ body.datacapture-page .bottom-section .form-actions {
     margin-bottom: 0;
 }
 
+.modal-content.description-selection-modal .selected-description-modal-item span,
 .selected-description-modal-item span {
     flex: 1;
-    font-size: clamp(10px, 0.73vw, 14px);
-    color: #1976d2;
-    font-weight: 500;
+    font-size: var(--desc-modal-list-text, var(--text-small));
+    font-family: var(--font-ui);
+    color: var(--desc-modal-selected-fg, #1976d2);
+    font-weight: var(--font-weight-semibold, 600);
+    line-height: 1.35;
 }
 
 .remove-description-modal {
@@ -1381,15 +1872,18 @@ body.datacapture-page .bottom-section .form-actions {
     margin: 0;
     border: 1px solid var(--dc-border, #e2e8f0);
     border-radius: 10px;
-    overflow: auto;
+    overflow: hidden;
     background: white;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
     max-width: 100%;
     width: 100%;
     flex: 1 1 auto;
-    min-height: 140px;
     min-height: 0;
-    height: auto;
+    height: 100%;
+    align-self: stretch;
+    justify-self: stretch;
+    display: flex;
+    flex-direction: column;
     scrollbar-gutter: stable;
     position: relative;
 }
@@ -1398,6 +1892,46 @@ body.datacapture-page .excel-table-container {
     flex: 1 1 auto;
     min-height: 0;
     max-height: 100%;
+}
+
+body.datacapture-page .excel-table-container .excel-table-header {
+    flex-shrink: 0;
+}
+
+body.datacapture-page .excel-table-scroll-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+}
+
+body.datacapture-page .excel-table-scroll-body .excel-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background-color: #f6f8fa;
+}
+
+body.datacapture-page .excel-table-scroll-body .excel-table td.row-header {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background-color: #f6f8fa;
+}
+
+body.datacapture-page .excel-table-scroll-body .excel-table thead th:first-child {
+    left: 0;
+    z-index: 3;
+}
+
+body.datacapture-page .excel-table-scroll-body .excel-table tbody tr {
+    box-sizing: border-box;
+}
+
+body.datacapture-page .excel-table-scroll-body .excel-table tbody td {
+    box-sizing: border-box;
+    vertical-align: middle;
 }
 
 .text-input-format {
@@ -1586,24 +2120,9 @@ body.datacapture-page .excel-table-container {
     text-transform: uppercase;
 }
 
-/* 1.Text / 2.Format：手动输入同样全大写；带内联样式的 Format 单元格不强制 text-transform */
-.excel-table-container.capture-type-text .excel-table td[contenteditable="true"]:not([style]),
-.excel-table-container.capture-type-format .excel-table td[contenteditable="true"]:not([style]) {
-    text-transform: uppercase;
-}
-
 /* 2.Format模式：确保粘贴的单元格内容样式不被覆盖 */
 .excel-table td[contenteditable="true"][style] {
     color: inherit !important;
-}
-
-.excel-table-container.capture-type-format .excel-table td[contenteditable="true"][style] {
-    text-transform: none !important;
-}
-
-.excel-table-container.capture-type-text .excel-table td[contenteditable="true"]:focus,
-.excel-table-container.capture-type-format .excel-table td[contenteditable="true"]:focus:not([style]) {
-    text-transform: uppercase;
 }
 
 .excel-table td[contenteditable="true"] span[style],
@@ -1654,57 +2173,210 @@ body.datacapture-page .excel-table-container {
     flex: 0 0 auto;
 }
 
-/* Group-only: shrink-wrap to row count; scroll only when rows exceed viewport */
-body.datacapture-page .bottom-section:has(.excel-table-container--group-only) {
-    flex: 0 1 auto;
-    min-height: 0;
-    overflow: visible;
+.excel-table-header.dc-table-header-bar--group-only {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 12px 16px;
 }
 
+.excel-table-header.dc-table-header-bar--group-only .dc-table-header-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.excel-table-header .dc-table-header-title {
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.excel-table-header .dc-table-header-reset-btn,
+.excel-table-header .dc-table-header-delete-btn {
+    font-size: clamp(11px, 0.85vw, 14px);
+    font-weight: 600;
+    padding: 4px 12px;
+    white-space: nowrap;
+}
+
+/* Group-only: same flex fill as company; extra class only for layout tweaks */
 body.datacapture-page .excel-table-container--group-only {
-    flex: 0 1 auto;
-    height: auto;
-    max-height: none;
-    display: flex;
-    flex-direction: column;
-    overflow: visible;
+    align-self: stretch;
+    justify-self: stretch;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
 }
 
-body.datacapture-page .excel-table-container--group-only .excel-table-header {
+.dc-table-size {
+    position: relative;
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+.dc-table-size-trigger-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.dc-table-size-label {
+    font-size: clamp(12px, 0.9vw, 15px);
+    font-weight: 600;
+    color: #475569;
+    white-space: nowrap;
+}
+
+.dc-table-size-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 4px 10px;
+    min-width: 48px;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    background: #fff;
+    color: #0f172a;
+    font-size: clamp(12px, 0.9vw, 15px);
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.4;
+}
+
+.dc-table-size-trigger:hover:not(:disabled) {
+    border-color: var(--dc-accent, #2563eb);
+    background: var(--dc-accent-soft, #eff6ff);
+}
+
+.dc-table-size-trigger:disabled,
+.dc-table-size-reset-icon:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.dc-table-size-trigger-caret {
+    font-size: 10px;
+    color: #64748b;
+    line-height: 1;
+}
+
+.dc-table-size-reset-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    background: #fff;
+    color: #64748b;
+    cursor: pointer;
     flex-shrink: 0;
 }
 
-body.datacapture-page .excel-table-container--group-only .excel-table-scroll-body {
-    flex: 0 1 auto;
-    height: auto;
-    max-height: var(--dc-go-table-scroll-max);
-    overflow-x: auto;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+.dc-table-size-reset-icon:hover:not(:disabled) {
+    border-color: var(--dc-accent, #2563eb);
+    color: var(--dc-accent, #2563eb);
+    background: var(--dc-accent-soft, #eff6ff);
 }
 
-body.datacapture-page .excel-table-container--group-only .excel-table thead th {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-    background-color: #f6f8fa;
+.dc-table-size-popover {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 200;
+    min-width: 240px;
+    padding: 12px;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
 }
 
-body.datacapture-page .excel-table-container--group-only .excel-table td.row-header {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background-color: #f6f8fa;
+.dc-table-size-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
 }
 
-body.datacapture-page .excel-table-container--group-only .excel-table thead th:first-child {
-    left: 0;
-    z-index: 3;
+.dc-table-size-popover-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #64748b;
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
 }
 
-.excel-table-header.dc-table-header-bar--group-only {
-    flex-wrap: nowrap;
-    justify-content: flex-start;
+.dc-table-size-popover-close:hover {
+    background: #f1f5f9;
+    color: #334155;
+}
+
+.dc-table-size-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.dc-table-size-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dc-table-size-field-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.dc-table-size-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 6px 8px;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+.dc-table-size-field input:focus {
+    outline: none;
+    border-color: var(--dc-accent, #2563eb);
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.dc-table-size-summary {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.dc-table-size-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.dc-table-size-clear-btn,
+.dc-table-size-apply-btn {
+    font-size: 13px;
+    padding: 5px 14px;
 }
 
 .excel-table-header .dc-table-header-controls {

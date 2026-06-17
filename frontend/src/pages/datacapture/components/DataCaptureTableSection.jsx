@@ -1,5 +1,9 @@
+import { useRef } from "react";
 import DataCaptureGrid from "./DataCaptureGrid.jsx";
+import GroupOnlyTableSizeControl from "./GroupOnlyTableSizeControl.jsx";
 import { CAPTURE_TYPE_OPTIONS } from "../lib/dataCaptureFormRules.js";
+import { callDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
+import { useDataCaptureGridViewportFit } from "../hooks/useDataCaptureGridViewportFit.js";
 
 function captureTypeLabel(opt, t) {
   if (opt === "1.Text") return t("captureTypeText");
@@ -26,6 +30,9 @@ export default function DataCaptureTableSection({
   onReset,
   engineReady = false,
 }) {
+  const tableAreaRef = useRef(null);
+  useDataCaptureGridViewportFit(groupOnlyTable, engineReady, tableAreaRef);
+
   const formatPasteMode = captureType === "2.Format" && !formatGridReady;
   const containerClass = [
     "excel-table-container",
@@ -68,13 +75,24 @@ export default function DataCaptureTableSection({
           <div className="dc-table-header-main">
             <span className="dc-table-header-title">{t("dataCaptureTable")}</span>
             {hideCaptureTypeSelector ? (
-              <button
-                type="button"
-                className="btn btn-cancel dc-table-header-reset-btn"
-                onClick={() => onReset?.()}
-              >
-                {t("reset")}
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="btn btn-cancel dc-table-header-reset-btn"
+                  onClick={() => onReset?.()}
+                >
+                  {t("reset")}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-cancel dc-table-header-delete-btn"
+                  disabled={!engineReady}
+                  title={t("selectRowToDeleteData")}
+                  onClick={() => callDataCaptureRuntime("deleteSelectedRowData")}
+                >
+                  {t("deleteRowData")}
+                </button>
+              </>
             ) : null}
           </div>
           {!hideCaptureTypeSelector ? (
@@ -97,8 +115,13 @@ export default function DataCaptureTableSection({
               </button>
             </div>
           ) : null}
+          {hideCaptureTypeSelector ? (
+            <GroupOnlyTableSizeControl t={t} engineReady={engineReady} />
+          ) : null}
         </div>
-        {groupOnlyTable ? <div className="excel-table-scroll-body">{gridBody}</div> : gridBody}
+        <div className="excel-table-scroll-body" ref={tableAreaRef}>
+          {gridBody}
+        </div>
       </div>
 
       <div className="form-actions">

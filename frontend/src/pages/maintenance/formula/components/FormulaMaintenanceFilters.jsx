@@ -46,20 +46,34 @@ export default function FormulaMaintenanceFilters({
                 noResultsText={m.noResultsFound}
                 ariaLabelledBy="formula-maint-process-legend"
               />
-              <button
-                type="button"
-                id="clear_filters_btn"
-                title={m.clearFiltersTitle}
-                className="formula-clear-icon-btn"
-                onClick={onClearFilters}
-                style={{ opacity: showClear ? 1 : 0, pointerEvents: showClear ? "auto" : "none" }}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="15" y1="9" x2="9" y2="15" />
-                  <line x1="9" y1="9" x2="15" y2="15" />
-                </svg>
-              </button>
+              {showClear ? (
+                <button
+                  type="button"
+                  id="clear_filters_btn"
+                  title={m.clearFiltersTitle}
+                  aria-label={m.clearFiltersTitle}
+                  className="formula-clear-icon-btn"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onClearFilters();
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="15" y1="9" x2="9" y2="15" />
+                    <line x1="9" y1="9" x2="15" y2="15" />
+                  </svg>
+                </button>
+              ) : null}
             </div>
           </div>
         </div>

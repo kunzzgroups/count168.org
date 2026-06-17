@@ -34,7 +34,8 @@ export function useSummaryBoot() {
 
     const session = loadSummaryCaptureSession();
     const processData = session?.processData ?? null;
-    const groupOnly = processData?.groupOnlyCapture === true;
+    const groupOnly =
+      processData?.groupOnlyCapture === true && processData?.groupPayrollCapture !== true;
 
     const resolveGroupScope = (meta, processMetaForNormalize = meta) => {
       const fromMeta = resolveDataCaptureScopeFromSessionMeta(meta);
@@ -70,7 +71,7 @@ export function useSummaryBoot() {
     }
 
     const pointerMeta = readCaptureSessionMeta();
-    if (pointerMeta?.groupOnlyCapture) {
+    if (pointerMeta?.groupOnlyCapture && !pointerMeta?.groupPayrollCapture) {
       const scoped = resolveGroupScope(
         {
           groupOnlyCapture: true,

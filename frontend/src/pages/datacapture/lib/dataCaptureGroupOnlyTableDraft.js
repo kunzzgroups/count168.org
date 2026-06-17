@@ -1,6 +1,6 @@
 /**
- * Group-only table drafts — shared via server (group_id + process_key + currency_id).
- * localStorage is used as a local cache / offline fallback only.
+ * Group payroll table drafts — shared via server for group buckets (AP/IG).
+ * Company payroll buckets (e.g. company:5 for C168) stay local-only to avoid AP data mixing.
  */
 import { resolveDataCaptureGridDimensions } from "../grid/dataCaptureGridMeta.js";
 import { isGroupOnlyProcessId, selectedProcessFromGroupOnlySession } from "./dataCaptureGroupOnlyProcesses.js";
@@ -12,6 +12,10 @@ import {
   fetchGroupCaptureDraft,
   saveGroupCaptureDraft,
 } from "./dataCaptureGroupDraftApi.js";
+import {
+  isGroupPayrollCaptureSession,
+  payrollDraftBucketIsCompany,
+} from "../../../utils/company/c168CaptureChannel.js";
 
 export const GROUP_ONLY_TABLE_DRAFTS_KEY = "dc_group_only_table_drafts";
 
@@ -25,9 +29,11 @@ export function cancelAllScheduledServerDraftSaves() {
   serverSaveTimers.clear();
 }
 
-function normalizeGroupId(groupId) {
-  const g = groupId != null ? String(groupId).trim().toUpperCase() : "";
-  return g || null;
+function normalizeDraftBucket(bucketId) {
+  const raw = bucketId != null ? String(bucketId).trim() : "";
+  if (!raw) return null;
+  if (payrollDraftBucketIsCompany(raw)) return raw;
+  return raw.toUpperCase();
 }
 
 function normalizeProcessKey(processKey) {
@@ -41,8 +47,8 @@ export function normalizeGroupOnlyDraftCurrencyId(currencyId) {
   return id;
 }
 
-function draftTimerKey(groupId, processKey, currencyId) {
-  return `${groupId}:${processKey}:${currencyId}`;
+function draftTimerKey(bucketId, processKey, currencyId) {
+  return `${bucketId}:${processKey}:${currencyId}`;
 }
 
 function readAllDrafts() {
@@ -64,8 +70,14 @@ function writeAllDrafts(map) {
   }
 }
 
-function writeLocalDraft(groupId, processKey, currencyId, payload) {
-  const g = normalizeGroupId(groupId);
+function draftAllowsServerSync(bucket, options = {}) {
+  if (options.serverSync === false) return false;
+  if (payrollDraftBucketIsCompany(bucket)) return false;
+  return true;
+}
+
+function writeLocalDraft(bucketId, processKey, currencyId, payload) {
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c || !payload?.tableData || !tableSnapshotHasData(payload.tableData)) return;
@@ -83,8 +95,8 @@ function writeLocalDraft(groupId, processKey, currencyId, payload) {
   writeAllDrafts(map);
 }
 
-function clearLocalDraft(groupId, processKey, currencyId) {
-  const g = normalizeGroupId(groupId);
+function clearLocalDraft(bucketId, processKey, currencyId) {
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return;
@@ -96,8 +108,8 @@ function clearLocalDraft(groupId, processKey, currencyId) {
   writeAllDrafts(map);
 }
 
-function cancelScheduledServerSave(groupId, processKey, currencyId) {
-  const g = normalizeGroupId(groupId);
+function cancelScheduledServerSave(bucketId, processKey, currencyId) {
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return;
@@ -109,11 +121,12 @@ function cancelScheduledServerSave(groupId, processKey, currencyId) {
   }
 }
 
-function scheduleServerDraftSave(groupId, processKey, currencyId, payload, captureScope) {
-  const g = normalizeGroupId(groupId);
+function scheduleServerDraftSave(bucketId, processKey, currencyId, payload, captureScope, options = {}) {
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return;
+  if (!draftAllowsServerSync(g, options)) return;
 
   const key = draftTimerKey(g, p, c);
   cancelScheduledServerSave(g, p, c);
@@ -128,26 +141,29 @@ function scheduleServerDraftSave(groupId, processKey, currencyId, payload, captu
 
 /** Immediate server persist (e.g. process/currency switch). */
 export async function flushGroupOnlyTableDraftToServer(
-  groupId,
+  bucketId,
   processKey,
   currencyId,
   payload,
   captureScope = null,
+  options = {},
 ) {
-  const g = normalizeGroupId(groupId);
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return false;
   cancelScheduledServerSave(g, p, c);
   if (!payload?.tableData || !tableSnapshotHasData(payload.tableData)) {
+    if (!draftAllowsServerSync(g, options)) return true;
     return clearGroupCaptureDraft(captureScope, g, p, c);
   }
+  if (!draftAllowsServerSync(g, options)) return true;
   return saveGroupCaptureDraft(captureScope, g, p, c, payload);
 }
 
 function scopeFromGroupId(groupId) {
-  const g = normalizeGroupId(groupId);
-  if (!g) return null;
+  const g = normalizeDraftBucket(groupId);
+  if (!g || payrollDraftBucketIsCompany(g)) return null;
   return {
     mode: "group",
     groupId: g,
@@ -158,8 +174,8 @@ function scopeFromGroupId(groupId) {
 }
 
 /** @returns {{ tableData: object, captureType: string, savedAt?: number }|null} */
-export function readGroupOnlyTableDraft(groupId, processKey, currencyId) {
-  const g = normalizeGroupId(groupId);
+export function readGroupOnlyTableDraft(bucketId, processKey, currencyId) {
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return null;
@@ -173,15 +189,20 @@ export function readGroupOnlyTableDraft(groupId, processKey, currencyId) {
 }
 
 export async function fetchGroupOnlyTableDraft(
-  groupId,
+  bucketId,
   processKey,
   currencyId,
   captureScope = null,
+  options = {},
 ) {
-  const g = normalizeGroupId(groupId);
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return null;
+
+  if (!draftAllowsServerSync(g, options)) {
+    return readGroupOnlyTableDraft(g, p, c);
+  }
 
   const scope = captureScope || scopeFromGroupId(g);
   const serverDraft = scope ? await fetchGroupCaptureDraft(scope, g, p, c) : null;
@@ -194,8 +215,8 @@ export async function fetchGroupOnlyTableDraft(
   return null;
 }
 
-export function clearGroupOnlyTableDraft(groupId, processKey, currencyId, options = {}) {
-  const g = normalizeGroupId(groupId);
+export async function clearGroupOnlyTableDraft(bucketId, processKey, currencyId, options = {}) {
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return;
@@ -203,27 +224,29 @@ export function clearGroupOnlyTableDraft(groupId, processKey, currencyId, option
   cancelScheduledServerSave(g, p, c);
   clearLocalDraft(g, p, c);
 
+  if (!draftAllowsServerSync(g, options)) return;
+
   const scope = options.captureScope || scopeFromGroupId(g);
   if (scope) {
-    void clearGroupCaptureDraft(scope, g, p, c);
+    await clearGroupCaptureDraft(scope, g, p, c);
   }
 }
 
 /**
- * @param {string|null|undefined} groupId
+ * @param {string|null|undefined} bucketId group code or company:{id}
  * @param {string} processKey salary | commission | bonus
  * @param {string|number} currencyId
  * @param {{ tableData?: object, captureType?: string, savedAt?: number }} payload
- * @param {{ captureScope?: object, flush?: boolean }} [options]
+ * @param {{ captureScope?: object, flush?: boolean, serverSync?: boolean }} [options]
  */
-export function saveGroupOnlyTableDraft(
-  groupId,
+export async function saveGroupOnlyTableDraft(
+  bucketId,
   processKey,
   currencyId,
   payload = {},
   options = {},
 ) {
-  const g = normalizeGroupId(groupId);
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c || !payload.tableData || !tableSnapshotHasData(payload.tableData)) return;
@@ -238,28 +261,37 @@ export function saveGroupOnlyTableDraft(
 
   writeLocalDraft(g, p, c, entry);
 
+  if (!draftAllowsServerSync(g, options)) return;
+
   const scope = options.captureScope || scopeFromGroupId(g);
   if (!scope) return;
 
   if (options.flush) {
-    void flushGroupOnlyTableDraftToServer(g, p, c, entry, scope);
-    return;
+    return flushGroupOnlyTableDraftToServer(g, p, c, entry, scope, options);
   }
-  scheduleServerDraftSave(g, p, c, entry, scope);
+  scheduleServerDraftSave(g, p, c, entry, scope, options);
 }
 
 /** Persist draft from active capture session before Summary clears storage. */
 export function saveGroupOnlyTableDraftFromCaptureSession(session, options = {}) {
-  if (!session?.processData?.groupOnlyCapture) return;
-  const groupId = normalizeGroupId(session.processData.captureSelectedGroup);
+  if (!isGroupPayrollCaptureSession(session?.processData)) return;
+  const pd = session.processData;
+  const bucket =
+    pd.payrollPrefsKey ||
+    (pd.groupPayrollCapture && pd.scopeCompanyId
+      ? `company:${Number(pd.scopeCompanyId)}`
+      : null) ||
+    (pd.captureSelectedGroup ? String(pd.captureSelectedGroup).trim().toUpperCase() : null);
+  const groupId = normalizeDraftBucket(bucket);
   if (!groupId) return;
 
-  const proc = selectedProcessFromGroupOnlySession(session.processData);
+  const proc = selectedProcessFromGroupOnlySession(pd);
   const processKey = proc?.id ? normalizeProcessKey(proc.id) : null;
-  const currencyId = normalizeGroupOnlyDraftCurrencyId(session.processData.currency);
+  const currencyId = normalizeGroupOnlyDraftCurrencyId(pd.currency);
   if (!processKey || !currencyId) return;
 
   const captureScope = options.captureScope || scopeFromGroupId(groupId);
+  const serverSync = !payrollDraftBucketIsCompany(groupId);
   saveGroupOnlyTableDraft(
     groupId,
     processKey,
@@ -268,7 +300,7 @@ export function saveGroupOnlyTableDraftFromCaptureSession(session, options = {})
       tableData: session.tableData,
       captureType: session.captureType,
     },
-    { captureScope, flush: true },
+    { captureScope, flush: true, serverSync },
   );
 }
 
@@ -299,7 +331,7 @@ export function groupOnlyTableDraftKey(processKey, currencyId) {
 }
 
 /** Flush table snapshot for a draft key before switching process/currency. */
-export function flushGroupOnlyTableDraftForKey(groupId, draftKey, options = {}) {
+export function flushGroupOnlyTableDraftForKey(bucketId, draftKey, options = {}) {
   if (!draftKey) return;
   const [processKey, currencyId] = draftKey.split(":");
   if (!processKey || !currencyId) return;
@@ -307,24 +339,24 @@ export function flushGroupOnlyTableDraftForKey(groupId, draftKey, options = {}) 
   const tableData = options.tableData;
   if (!tableData || !tableSnapshotHasData(tableData)) return;
   saveGroupOnlyTableDraft(
-    groupId,
+    bucketId,
     processKey,
     currencyId,
     { tableData, captureType: activeCaptureType },
-    { captureScope: options.captureScope, flush: true },
+    { captureScope: options.captureScope, flush: true, serverSync: options.serverSync },
   );
 }
 
-/** Restore grid from shared group+process+currency draft, or clear grid when no draft. */
+/** Restore grid from payroll draft, or clear grid when no draft. */
 export async function restoreGroupOnlyTableDraft(
-  groupId,
+  bucketId,
   processKey,
   currencyId,
   options = {},
 ) {
   if (!shouldApplyGroupOnlyTableDraft()) return;
 
-  const g = normalizeGroupId(groupId);
+  const g = normalizeDraftBucket(bucketId);
   const p = normalizeProcessKey(processKey);
   const c = normalizeGroupOnlyDraftCurrencyId(currencyId);
   if (!g || !p || !c) return;
@@ -336,8 +368,8 @@ export async function restoreGroupOnlyTableDraft(
   try {
     callDataCaptureRuntime("clearCaptureTable");
 
-    const scope = options.captureScope || scopeFromGroupId(g);
-    const draft = await fetchGroupOnlyTableDraft(g, p, c, scope);
+    const scope = payrollDraftBucketIsCompany(g) ? options.captureScope : options.captureScope || scopeFromGroupId(g);
+    const draft = await fetchGroupOnlyTableDraft(g, p, c, scope, options);
     if (seq !== restoreSeq) return;
 
     if (!draft?.tableData) {

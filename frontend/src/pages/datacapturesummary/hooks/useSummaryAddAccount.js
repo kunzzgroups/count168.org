@@ -9,7 +9,7 @@ import {
 } from "../../../utils/company/tenantLedgerParams.js";
 import {
   DEFAULT_FORM,
-  getOrderedRoles,
+  getAccountModalOrderedRoles,
   normalizeAlertAmount,
   pickDefaultAddCurrencyIds,
   toUpper,
@@ -31,14 +31,10 @@ function isVirtualGroupLinkCompanyRow(c) {
   return ls != null && String(ls).trim() !== "";
 }
 
+import { isGroupLedgerCapture } from "../../../utils/company/c168CaptureChannel.js";
+
 function resolveSummaryAddAccountContext(captureScope, processData, companyId) {
-  const groupOnlyCapture =
-    processData?.groupOnlyCapture === true || processData?.captureScopeMode === "group";
-  const isGroupLedger =
-    (captureScope?.mode === "group" &&
-      (captureScope?.resolveCompanyViaGroupId ||
-        Number(captureScope?.scopeCompanyId ?? 0) <= 0)) ||
-    groupOnlyCapture;
+  const isGroupLedger = isGroupLedgerCapture(captureScope, processData);
 
   const groupId = String(captureScope?.groupId || processData?.captureSelectedGroup || "")
     .trim()
@@ -140,7 +136,7 @@ export function useSummaryAddAccount({
   );
 
   const modalPickerCompanies = ledgerCtx.groupOnlyAccountMode ? groupPickerCompanies : companyButtons;
-  const orderedRoles = useMemo(() => getOrderedRoles(roles), [roles]);
+  const orderedRoles = useMemo(() => getAccountModalOrderedRoles(roles), [roles]);
 
   useEffect(() => {
     if (ledgerCtx.groupOnlyAccountMode || !ledgerCtx.companyId) return undefined;

@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { toUpperDisplay, syncEditFormSourcePercent, createFormulaEditFormFromRow } from "../formulaMaintenanceLogic.js";
 import { assetUrl } from "../../../../utils/core/apiUrl.js";
-import FormulaVirtualRows from "./FormulaVirtualRows.jsx";
+import FormulaVirtualRows, { FormulaVirtualTableHead } from "./FormulaVirtualRows.jsx";
+import { MAINTENANCE_FORMULA_EDIT_ROW_HEIGHT, MAINTENANCE_REPORT_ROW_HEIGHT } from "../../shared/maintenanceReportRowMetrics.js";
 
-const ROW_HEIGHT = 56;
-const EDIT_ROW_HEIGHT = 80;
+const ROW_HEIGHT = MAINTENANCE_REPORT_ROW_HEIGHT;
+const EDIT_ROW_HEIGHT = MAINTENANCE_FORMULA_EDIT_ROW_HEIGHT;
 
 export default function FormulaMaintenanceTable({
   data,
@@ -21,10 +22,12 @@ export default function FormulaMaintenanceTable({
   onListScrolling,
   scrollRestoreRowId = null,
   onScrollRestoreComplete,
+  scrollResetKey = "",
   accounts,
   m,
   inputMethodOptions,
   awaitingProcessSelection = false,
+  bootPending = false,
 }) {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
@@ -61,32 +64,33 @@ export default function FormulaMaintenanceTable({
     }
   };
 
-  if (loading && data.length === 0) {
+  const showSkeleton = data.length === 0 && (bootPending || loading || listSyncing);
+  const showEmptyState = data.length === 0 && !showSkeleton;
+
+  if (showSkeleton) {
+    const statusLabel = m.loading;
     return (
-      <div className="maintenance-list-container" style={{ display: "block" }}>
-        <table className="maintenance-table">
-          <thead>
-            <tr>
-              <th>{m.tblNo}</th><th>{m.tblProcess}</th><th>{m.tblAccount}</th><th>{m.tblCurrency}</th><th>{m.tblSource}</th><th>{m.tblProduct}</th><th>{m.tblInputMethod}</th><th>{m.tblFormula}</th><th>{m.tblDescription}</th>
-              <th className="maintenance-select-all-header">
-                <div className="maintenance-formula-actions-inner">
-                  <span className="maintenance-action-edit-placeholder" aria-hidden="true" />
-                  <input type="checkbox" className="maintenance-row-checkbox" disabled />
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="maintenance-table-cell" colSpan="10" style={{ textAlign: "center", padding: "20px" }}>{m.loading}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="maintenance-list-container maintenance-virtual-table formula-virtual-table">
+        <div className="maintenance-virtual-table-inner formula-virtual-table-inner" role="table">
+          <div className="maintenance-virtual-stale-hint" role="status" aria-live="polite">
+            {statusLabel}
+          </div>
+          <FormulaVirtualTableHead
+            selectAllRef={selectAllRef}
+            selectAllChecked={false}
+            onToggleSelectAll={() => {}}
+            m={m}
+            disableSelectAll
+          />
+          <div className="maintenance-virtual-scroll maintenance-virtual-scroll--body" tabIndex={0}>
+            <div className="maintenance-virtual-empty-loading" aria-hidden />
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (!loading && !listSyncing && data.length === 0) {
+  if (showEmptyState) {
     return (
       <div className="empty-state-container" style={{ display: "block" }}>
         <div className="empty-state">
@@ -277,21 +281,13 @@ export default function FormulaMaintenanceTable({
     />
   );
 
-  const hydrateHint =
-    listHydrating && totalRowCount > data.length ? (
-      <div className="formula-list-hydrate-hint" role="status" aria-live="polite">
-        {m.loading} ({data.length} / {totalRowCount})
-      </div>
-    ) : null;
-
   if (useVirtualList) {
     return (
       <div
         className={`maintenance-list-container maintenance-virtual-table formula-virtual-table${
-          listHydrating ? " formula-list-container--hydrating" : ""
-        }${listSyncing ? " formula-list-container--syncing" : ""}`}
+          listSyncing ? " formula-list-container--syncing" : ""
+        }`}
       >
-        {hydrateHint}
         <div className="maintenance-virtual-table-inner formula-virtual-table-inner" role="table">
           <FormulaVirtualRows
             rows={data}
@@ -311,6 +307,8 @@ export default function FormulaMaintenanceTable({
             onScrollingChange={onListScrolling}
             scrollRestoreRowId={scrollRestoreRowId}
             onScrollRestoreComplete={onScrollRestoreComplete}
+            scrollResetKey={scrollResetKey}
+            listSyncing={listSyncing}
             listHydrating={listHydrating}
             selectAllRef={selectAllRef}
             selectAllChecked={selectAllChecked}
@@ -322,11 +320,7 @@ export default function FormulaMaintenanceTable({
   }
 
   return (
-    <div
-      className={`maintenance-list-container${listHydrating ? " formula-list-container--hydrating" : ""}`}
-      style={{ display: "block" }}
-    >
-      {hydrateHint}
+    <div className="maintenance-list-container" style={{ display: "block" }}>
       <table className="maintenance-table">
         <thead>
           <tr>

@@ -1,6 +1,7 @@
 import { recalculateRowAmounts } from "../table/summaryRowAmount.js";
-import { summaryRefreshStorageKeys, RATE_BY_PRODUCT_KEY } from "./summaryRefreshStorageKeys.js";
+import { summaryRefreshStorageKeys, RATE_BY_PRODUCT_KEY } from "./summaryStorage.js";
 import { SUMMARY_RATE_VALUES_KEY } from "./summaryStorage.js";
+import { buildSummaryRowStableKey } from "./summaryRefreshStatePure.js";
 
 function readJsonObject(key) {
   if (!key) return null;
@@ -36,7 +37,13 @@ export function restoreRateValuesOnRows(rows, captureScope = null) {
     let rateChecked = row.rateChecked;
     let rateValue = row.rateValue || "";
 
-    const fromKey = byKey?.[row.key];
+    let fromKey = byKey?.[row.key];
+    if (!fromKey) {
+      const stableKey = buildSummaryRowStableKey(row);
+      if (stableKey && byKey?.[stableKey]) {
+        fromKey = byKey[stableKey];
+      }
+    }
     if (fromKey && typeof fromKey === "object") {
       rateChecked = !!fromKey.checked;
       rateValue = fromKey.value != null ? String(fromKey.value) : rateValue;

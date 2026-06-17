@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import GcInlineFilterPanel from "../../../components/GcInlineFilterPanel.jsx";
+import { splitWinLossAccountBands } from "../../member/memberPageHelpers.js";
 import { buildTransactionCompanyStripRows } from "../lib/transactionCompanyStrip.js";
 
 export default function TransactionSearchSection({
@@ -16,17 +17,25 @@ export default function TransactionSearchSection({
   fs,
   onGroupButtonClick,
   onCompanyButtonClick,
+  onWarmCompany,
   onPickAllGroups,
   onPickAllInGroup,
   allowCompanyDeselect = false,
   currencyRowsOrdered,
+  showAllCurrencies,
   selectedCurrencies,
   onCurrencyDragStart,
   onCurrencyDropOn,
   toggleCurrencyBtn,
+  toggleAllCurrenciesBtn,
   m,
   t,
 }) {
+  const selectedCurrencySet = useMemo(
+    () => new Set((selectedCurrencies || []).map((x) => String(x || "").toUpperCase().trim())),
+    [selectedCurrencies],
+  );
+
   const displayFilterChips = useMemo(() => [
     { id: "show_name", key: "showName", label: m.showName },
     { id: "show_capture_only", key: "showCaptureOnly", label: m.showCaptureOnly },
@@ -51,6 +60,60 @@ export default function TransactionSearchSection({
     fs?.snapCompaniesAll,
     fs?.snapGroupIds,
   ]);
+
+  const currencyButtonsRef = useRef(null);
+  const currencyMeasureRef = useRef(null);
+  const [currencyLayout, setCurrencyLayout] = useState({ containerWidth: 0, segmentWidths: [] });
+
+  const currencyCells = useMemo(() => {
+    const cells = [{ type: "all" }];
+    (currencyRowsOrdered || []).forEach((c) => {
+      const code = String(c.code || "").toUpperCase().trim();
+      if (code) cells.push({ type: "code", code });
+    });
+    return cells;
+  }, [currencyRowsOrdered]);
+
+  const currencyFilterBands = useMemo(
+    () =>
+      splitWinLossAccountBands(
+        currencyCells,
+        currencyLayout.segmentWidths,
+        currencyLayout.containerWidth,
+      ),
+    [currencyCells, currencyLayout.containerWidth, currencyLayout.segmentWidths],
+  );
+
+  useLayoutEffect(() => {
+    const container = currencyButtonsRef.current;
+    const measure = currencyMeasureRef.current;
+    if (!container || !measure) return undefined;
+
+    const update = () => {
+      const containerWidth = Math.max(container.clientWidth, 0);
+      const buttons = measure.querySelectorAll("button.user-gc-segment");
+      const segmentWidths = Array.from(buttons).map((btn) => btn.offsetWidth);
+      setCurrencyLayout((prev) => {
+        if (
+          prev.containerWidth === containerWidth
+          && prev.segmentWidths.length === segmentWidths.length
+          && prev.segmentWidths.every((w, i) => w === segmentWidths[i])
+        ) {
+          return prev;
+        }
+        return { containerWidth, segmentWidths };
+      });
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      ro.disconnect();
+    };
+  }, [currencyCells, showAllCurrencies, selectedCurrencies, m.all]);
 
   return (
     <div className="transaction-search-section">
@@ -198,11 +261,11 @@ export default function TransactionSearchSection({
         })}
       </div>
 
-      {(fs.snapGroupIds.length > 0 || fs.snapCompanies.length > 0) && (
+      {fs && (fs.snapGroupIds?.length > 0 || fs.snapCompanies?.length > 0) && (
         <div className="transaction-bottom-filters">
           <GcInlineFilterPanel
             t={(key) => m[key] ?? key}
-            groupIds={fs.snapGroupIds}
+            groupIds={fs.snapGroupIds ?? []}
             groupsAllMode={Boolean(fs.groupsAllMode)}
             selectedGroup={fs.selectedGroup}
             onPickAllGroups={onPickAllGroups}
@@ -212,32 +275,79 @@ export default function TransactionSearchSection({
             pickerCompanyId={fs.companyId}
             onPickAllInGroup={onPickAllInGroup}
             onPickCompany={onCompanyButtonClick}
+            onWarmCompany={onWarmCompany}
             allowCompanyDeselect={allowCompanyDeselect}
           >
             {currencyRowsOrdered.length > 0 && (
               <div id="currency-buttons-wrapper" className="user-gc-inline-row">
                 <span className="user-gc-inline-label">{m.currencyLabel}</span>
-                <div className="user-gc-inline-pills user-gc-inline-pills--segment-scroll">
-                  <div id="currency-buttons-container" className="user-gc-segment-group" role="group" aria-label="Currency">
-                    {currencyRowsOrdered.map((c) => {
-                      const code = c.code;
-                      return (
-                        <button
-                          key={code}
-                          type="button"
-                          className={`user-gc-segment${selectedCurrencies.includes(code) ? " is-on" : ""}`}
-                          data-currency-code={code}
-                          draggable
-                          onDragStart={() => onCurrencyDragStart(code)}
-                          onDragOver={(e) => e.preventDefault()}
-                          onDrop={() => onCurrencyDropOn(code)}
-                          onClick={() => toggleCurrencyBtn(code)}
-                        >
-                          {code}
+                <div
+                  className="user-gc-inline-pills transaction-currency-pills"
+                  ref={currencyButtonsRef}
+                  role="group"
+                  aria-label="Currency"
+                >
+                  <div
+                    ref={currencyMeasureRef}
+                    className="transaction-currency-measure"
+                    aria-hidden="true"
+                  >
+                    {currencyCells.map((cell) =>
+                      cell.type === "all" ? (
+                        <button key="tx-ccy-measure-all" type="button" tabIndex={-1} className="user-gc-segment">
+                          {m.all}
                         </button>
-                      );
-                    })}
+                      ) : (
+                        <button
+                          key={`tx-ccy-measure-${cell.code}`}
+                          type="button"
+                          tabIndex={-1}
+                          className="user-gc-segment"
+                        >
+                          {cell.code}
+                        </button>
+                      ),
+                    )}
                   </div>
+                  {currencyFilterBands.map((band, segIdx) => (
+                    <div
+                      key={`tx-ccy-band-${segIdx}`}
+                      id={segIdx === 0 ? "currency-buttons-container" : undefined}
+                      className="user-gc-segment-group transaction-currency-segments"
+                      style={{
+                        width: "fit-content",
+                        maxWidth: "100%",
+                      }}
+                    >
+                      {band.map((cell) =>
+                        cell.type === "all" ? (
+                          <button
+                            key="tx-ccy-all"
+                            type="button"
+                            className={`user-gc-segment${showAllCurrencies ? " is-on" : ""}`}
+                            data-currency-code="ALL"
+                            onClick={toggleAllCurrenciesBtn}
+                          >
+                            {m.all}
+                          </button>
+                        ) : (
+                          <button
+                            key={cell.code}
+                            type="button"
+                            className={`user-gc-segment user-gc-segment--draggable-pill${showAllCurrencies || selectedCurrencySet.has(cell.code) ? " is-on" : ""}`}
+                            data-currency-code={cell.code}
+                            draggable
+                            onDragStart={() => onCurrencyDragStart(cell.code)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => onCurrencyDropOn(cell.code)}
+                            onClick={() => toggleCurrencyBtn(cell.code)}
+                          >
+                            {cell.code}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

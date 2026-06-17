@@ -1,11 +1,12 @@
 import { useLayoutEffect, useMemo, useEffect, useCallback, useRef } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useSearchParams } from "react-router-dom";
+import TransactionPaymentHistoryPage from "./TransactionPaymentHistoryPage.jsx";
+import { isPaymentHistoryView } from "./lib/transactionPaymentHistoryUrl.js";
 import TransactionAddSection from "./components/TransactionAddSection.jsx";
 import TransactionHeader from "./components/TransactionHeader.jsx";
-import TransactionHistoryModal from "./components/TransactionHistoryModal.jsx";
 import TransactionSearchSection from "./components/TransactionSearchSection.jsx";
 import TransactionTablesSection from "./components/TransactionTablesSection.jsx";
-import { formatDmy, formatHistoryMoney } from "./lib/transactionFormat.js";
+import { formatDmy } from "./lib/transactionFormat.js";
 import { useTransactionData } from "./hooks/useTransactionData.js";
 import { useTransactionUI } from "./hooks/useTransactionUI.js";
 import { useTransactionSearch } from "./hooks/useTransactionSearch.js";
@@ -14,14 +15,15 @@ import { useTransactionSync } from "./hooks/useTransactionSync.js";
 import { useTransactionDateRange } from "./hooks/useTransactionDateRange.js";
 import { useTransactionInitialization } from "./hooks/useTransactionInitialization.js";
 import { installTransactionExcelCopy } from "./lib/transactionExcelCopy.js";
-import { TRANSACTION_SHOW_DESCRIPTION_COLUMN } from "./lib/transactionPaymentPageUtils.js";
 import { getRoleClass } from "./lib/transactionPaymentLogic.js";
 import "../../../public/css/report-outlined-fields.css";
 import "../../../public/css/transaction.css";
 import "../../../public/css/userlist.css";
 import { useLoginLang } from "../../utils/i18n/useLoginLang.js";
 import { getTransactionText, TRANSACTION_I18N } from "../../translateFile/pages/transactionTranslate.js";
-import { transactionScopeApiParams } from "./lib/transactionScope.js";
+import { transactionScopeApiParams, transactionScopeCacheKey } from "./lib/transactionScope.js";
+import { clearInlineScrollLock } from "../../utils/layout/clearInlineScrollLock.js";
+import { spaPath } from "../../utils/routing/pageRoutes.js";
 
 /** Cleared on mount so SPA navigation cannot leave stale route classes on `body` before paint (e.g. Process uses `useEffect`; this page uses `useLayoutEffect`, which runs first). */
 const ROUTE_BODY_CLASSES_TO_CLEAR = [
@@ -41,6 +43,14 @@ const ROUTE_BODY_CLASSES_TO_CLEAR = [
 ];
 
 export default function TransactionPaymentPage() {
+  const [searchParams] = useSearchParams();
+  if (isPaymentHistoryView(searchParams)) {
+    return <TransactionPaymentHistoryPage />;
+  }
+  return <TransactionPaymentPageMain />;
+}
+
+function TransactionPaymentPageMain() {
   const location = useLocation();
   const todayDmy = useMemo(() => formatDmy(new Date()), []);
   
@@ -136,16 +146,17 @@ export default function TransactionPaymentPage() {
     selectedCurrencies: search.selectedCurrencies,
     lastSearchCommitMsRef: search.lastSearchCommitMsRef,
     runSearch: search.runSearch,
-    setHistory: ui.setHistory,
     loading,
     forbidden,
     canApproveContra,
     refreshContraInboxBadge: ui.refreshContraInboxBadge,
+    initialSearchDoneRef: search.initialSearchDoneRef,
   });
 
   const applyTransactionBodyClasses = useCallback(() => {
     document.body.classList.remove(...ROUTE_BODY_CLASSES_TO_CLEAR, "bg");
     document.body.classList.add("dashboard-page", "transaction-page");
+    clearInlineScrollLock();
   }, []);
 
   useLayoutEffect(() => {
@@ -227,10 +238,16 @@ export default function TransactionPaymentPage() {
   );
 
   if (forbidden) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={spaPath("dashboard")} replace />;
   }
 
   const booting = loading || !filterSnapshot;
+  const scopeCacheKey = transactionScopeCacheKey(transactionScope);
+  const scopeDataPending = Boolean(
+    filterSnapshot && scopeCacheKey && data.currencyScopeBundle?.scopeKey !== scopeCacheKey,
+  );
+  const tablesLoading = search.searchLoading || scopeDataPending;
+  const tablesVisible = search.tablesVisible || Boolean(filterSnapshot);
 
   return (
     <div className="container-fluid transaction-container">
@@ -248,9 +265,12 @@ export default function TransactionPaymentPage() {
         t={t}
       />
 
-      <main className="transaction-main">
-        {!booting ? (
-          <>
+      <main className={`transaction-main${booting ? " transaction-main--booting" : ""}`}>
+        {booting && !search.rawSearchData ? (
+          <div className="transaction-boot-loading" aria-live="polite" aria-busy="true">
+            {m.loadingData}
+          </div>
+        ) : null}
         {txWlTolBannerActive ? (
           <div
             className="transaction-tx-wl-tol-banner"
@@ -278,14 +298,17 @@ export default function TransactionPaymentPage() {
             removeCategoryTag={search.removeCategoryTag}
             searchState={search.searchState}
             setSearchState={search.setSearchState}
+            showAllCurrencies={search.showAllCurrencies}
             selectedCurrencies={search.selectedCurrencies}
             setSelectedCurrencies={search.setSelectedCurrencies}
+            toggleAllCurrenciesBtn={search.toggleAllCurrenciesBtn}
             currencyOptions={data.currencyOptions}
             searchLoading={search.searchLoading}
             onSearch={onSearch}
             fs={filterSnapshot}
             onGroupButtonClick={data.onGroupButtonClick}
             onCompanyButtonClick={data.onCompanyButtonClick}
+            onWarmCompany={data.onWarmCompany}
             onPickAllGroups={data.onPickAllGroups}
             onPickAllInGroup={data.onPickAllInGroup}
             allowCompanyDeselect={data.allowCompanyDeselect}
@@ -354,8 +377,8 @@ export default function TransactionPaymentPage() {
         </div>
 
         <TransactionTablesSection
-          tablesVisible={search.tablesVisible}
-          searchLoading={search.searchLoading}
+          tablesVisible={tablesVisible}
+          searchLoading={tablesLoading}
           tp={search.tablePresentation}
           searchState={search.searchState}
           getRoleClass={getRoleClass}
@@ -370,8 +393,6 @@ export default function TransactionPaymentPage() {
           m={m}
           t={t}
         />
-          </>
-        ) : null}
       </main>
 
       {/* Same date logic as legacy page, with Transaction-specific range picker layout. */}
@@ -418,15 +439,6 @@ export default function TransactionPaymentPage() {
           <div className="calendar-days" id="calendar-days" />
         </div>
       </div>
-
-      <TransactionHistoryModal
-        history={ui.history}
-        setHistory={ui.setHistory}
-        histMoney={formatHistoryMoney}
-        showDescriptionColumn={TRANSACTION_SHOW_DESCRIPTION_COLUMN}
-        m={m}
-        t={t}
-      />
 
       <div id="notificationContainer" className="transaction-notification-container" aria-live="polite">
         {ui.toast.map((t) => {

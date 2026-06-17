@@ -26,7 +26,7 @@ SET FOREIGN_KEY_CHECKS = 0;
 SET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';
 
 CREATE DATABASE IF NOT EXISTS `easycount` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE `u857194726_c168org`;
+USE `u857194726_c168site`;
 -- Generated from u857194726_count168_no_definer.sql
 -- Target: u857194726_Games
 -- Excluded: transactions*, transaction_*, bank_process*, process*, submitted_processes*
@@ -751,7 +751,9 @@ CREATE TABLE `tenant_module_policy` (
 
 CREATE TABLE `company_auto_renew_request` (
   `id` int UNSIGNED NOT NULL AUTO_INCREMENT,
-  `company_id` int UNSIGNED NOT NULL COMMENT 'FK company.id',
+  `entity_type` enum('company','group') NOT NULL DEFAULT 'company' COMMENT 'Tenant type',
+  `company_id` int UNSIGNED DEFAULT NULL COMMENT 'FK company.id when entity_type=company',
+  `group_id` bigint UNSIGNED DEFAULT NULL COMMENT 'FK groups.id when entity_type=group',
   `expiration_snapshot` date NOT NULL,
   `status` enum('pending','approved','rejected') NOT NULL DEFAULT 'pending',
   `period` varchar(20) DEFAULT NULL,
@@ -767,7 +769,9 @@ CREATE TABLE `company_auto_renew_request` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_auto_renew_company_exp` (`company_id`,`expiration_snapshot`),
-  KEY `idx_auto_renew_status` (`status`)
+  UNIQUE KEY `uq_auto_renew_group_exp` (`group_id`,`expiration_snapshot`),
+  KEY `idx_auto_renew_status` (`status`),
+  KEY `idx_auto_renew_group` (`group_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `company_ownership_history` (
@@ -2535,7 +2539,8 @@ ALTER TABLE `account_group_map`
   ADD CONSTRAINT `fk_agm_group` FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE `company_auto_renew_request`
-  ADD CONSTRAINT `fk_car_company` FOREIGN KEY (`company_id`) REFERENCES `company` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+  ADD CONSTRAINT `fk_car_company` FOREIGN KEY (`company_id`) REFERENCES `company` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_car_group` FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 ALTER TABLE `process`
   ADD CONSTRAINT `fk_process_company` FOREIGN KEY (`company_id`) REFERENCES `company` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,

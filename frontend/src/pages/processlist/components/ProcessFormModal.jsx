@@ -1,7 +1,8 @@
-import React, { useMemo, useState, useRef, useEffect } from "react";
+import React, { useMemo, useState } from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
 import { toProcessFormUpperInput } from "../processListHelpers.js";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
+import ProcessFormPortalSelect from "./ProcessFormPortalSelect.jsx";
 
 const DAY_NAME_MAP = {
   "MON": "dayMonday",
@@ -62,8 +63,6 @@ export default function ProcessFormModal({
   const [copyOpen, setCopyOpen] = useState(false);
   const [copySearch, setCopySearch] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
-  const copyWrapRef = useRef(null);
-  const currencyWrapRef = useRef(null);
 
   const copyOptions = useMemo(() => sortedCopyFromOptions(form.existingProcesses), [form.existingProcesses]);
   const filteredCopy = useMemo(() => {
@@ -76,15 +75,6 @@ export default function ProcessFormModal({
   }, [copyOptions, copySearch]);
 
   const multiUseRows = useMemo(() => uniqueProcessesForMultiUse(form.existingProcesses), [form.existingProcesses]);
-
-  useEffect(() => {
-    const onDoc = (e) => {
-      if (!copyWrapRef.current?.contains(e.target)) setCopyOpen(false);
-      if (!currencyWrapRef.current?.contains(e.target)) setCurrencyOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
 
   const descSummary =
     form.selected_descriptions?.length > 0
@@ -105,28 +95,29 @@ export default function ProcessFormModal({
             &times;
           </span>
         </div>
-        <div className="modal-body">
-          <form className="process-form add-grid" onSubmit={guardSubmit(onSubmit)}>
+        <form className="process-form-modal-shell" onSubmit={guardSubmit(onSubmit)}>
+          <div className="modal-body">
+            <div className="process-form add-grid">
             <div className="add-col">
               <div className="process-form-section">
-                <h3 className="process-form-section-title">{t("processFormSectionBasic")}</h3>
+                <h3 className="account-section-header">{t("processFormSectionBasic")}</h3>
               {!editMode && (
                 <div className="form-row">
                   <div className="form-group">
                     <label>{t("copyFrom")}</label>
-                    <div className="custom-select-wrapper" ref={copyWrapRef}>
-                      <button
-                        type="button"
-                        className="custom-select-button"
-                        disabled={ro}
-                        onClick={() => !ro && setCopyOpen((o) => !o)}
-                      >
-                        {selectedCopyRow
+                    <ProcessFormPortalSelect
+                      open={copyOpen}
+                      onOpenChange={setCopyOpen}
+                      disabled={ro}
+                      hasSearch
+                      displayLabel={
+                        selectedCopyRow
                           ? `${selectedCopyRow.process_name || t("unknown")} - ${selectedCopyRow.description_name || t("noDescription")}`
-                          : placeholderBtn}
-                      </button>
-                      {copyOpen && (
-                        <div className="custom-select-dropdown" style={{ display: "block" }}>
+                          : placeholderBtn
+                      }
+                    >
+                      {({ optionsMaxHeight }) => (
+                        <>
                           <div className="custom-select-search">
                             <input
                               type="text"
@@ -137,7 +128,10 @@ export default function ProcessFormModal({
                               onChange={(e) => setCopySearch(e.target.value)}
                             />
                           </div>
-                          <div className="custom-select-options">
+                          <div
+                            className="custom-select-options"
+                            style={{ flex: "1 1 auto", minHeight: 0, maxHeight: optionsMaxHeight }}
+                          >
                             <div
                               className="custom-select-option"
                               role="button"
@@ -173,9 +167,9 @@ export default function ProcessFormModal({
                               </div>
                             ))}
                           </div>
-                        </div>
+                        </>
                       )}
-                    </div>
+                    </ProcessFormPortalSelect>
                   </div>
                 </div>
               )}
@@ -354,61 +348,59 @@ export default function ProcessFormModal({
               <div className="form-row">
                 <div className="form-group">
                   <label>{t("currencyColumn")}</label>
-                  <div className="custom-select-wrapper" ref={currencyWrapRef}>
-                    <button
-                      type="button"
-                      className={`custom-select-button${currencyOpen ? " open" : ""}`}
-                      disabled={ro}
-                      onClick={() => !ro && setCurrencyOpen((o) => !o)}
-                    >
-                      {selectedCurrency ? selectedCurrency.code : t("selectCurrency")}
-                    </button>
-                    {currencyOpen && (
-                      <div className="custom-select-dropdown" style={{ display: "block" }}>
-                        <div className="custom-select-options">
+                  <ProcessFormPortalSelect
+                    open={currencyOpen}
+                    onOpenChange={setCurrencyOpen}
+                    disabled={ro}
+                    displayLabel={selectedCurrency ? selectedCurrency.code : t("selectCurrency")}
+                  >
+                    {({ optionsMaxHeight }) => (
+                      <div
+                        className="custom-select-options"
+                        style={{ flex: "1 1 auto", minHeight: 0, maxHeight: optionsMaxHeight }}
+                      >
+                        <div
+                          className={`custom-select-option${!form.currency_id ? " selected" : ""}`}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => {
+                            setForm((prev) => ({ ...prev, currency_id: "" }));
+                            setCurrencyOpen(false);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              setForm((prev) => ({ ...prev, currency_id: "" }));
+                              setCurrencyOpen(false);
+                            }
+                          }}
+                        >
+                          {t("selectCurrency")}
+                        </div>
+                        {currencies.map((c) => (
                           <div
-                            className={`custom-select-option${!form.currency_id ? " selected" : ""}`}
+                            key={c.id}
+                            className={`custom-select-option${
+                              String(c.id) === String(form.currency_id) ? " selected" : ""
+                            }`}
                             role="button"
                             tabIndex={0}
                             onClick={() => {
-                              setForm((prev) => ({ ...prev, currency_id: "" }));
+                              setForm((prev) => ({ ...prev, currency_id: String(c.id) }));
                               setCurrencyOpen(false);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
-                                setForm((prev) => ({ ...prev, currency_id: "" }));
+                                setForm((prev) => ({ ...prev, currency_id: String(c.id) }));
                                 setCurrencyOpen(false);
                               }
                             }}
                           >
-                            {t("selectCurrency")}
+                            {c.code}
                           </div>
-                          {currencies.map((c) => (
-                            <div
-                              key={c.id}
-                              className={`custom-select-option${
-                                String(c.id) === String(form.currency_id) ? " selected" : ""
-                              }`}
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => {
-                                setForm((prev) => ({ ...prev, currency_id: String(c.id) }));
-                                setCurrencyOpen(false);
-                              }}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter" || e.key === " ") {
-                                  setForm((prev) => ({ ...prev, currency_id: String(c.id) }));
-                                  setCurrencyOpen(false);
-                                }
-                              }}
-                            >
-                              {c.code}
-                            </div>
-                          ))}
-                        </div>
+                        ))}
                       </div>
                     )}
-                  </div>
+                  </ProcessFormPortalSelect>
                 </div>
               </div>
 
@@ -416,28 +408,13 @@ export default function ProcessFormModal({
 
               {editMode && (
                 <div className="process-form-section process-form-section--record">
-                  <h3 className="process-form-section-title">{t("processFormSectionRecord")}</h3>
+                  <h3 className="account-section-header">{t("processFormSectionRecord")}</h3>
                   <div className="form-row">
                     <div className="form-group">
-                      <label style={{ fontWeight: 600, color: "#666" }}>{t("dtsModified")}</label>
-                      <div
-                        id="edit_dts_modified"
-                        style={{
-                          backgroundColor: "#f5f5f5",
-                          marginTop: 5,
-                          padding: "8px 12px",
-                          border: "1px solid #ddd",
-                          borderRadius: 4,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          width: "100%",
-                          minHeight: 38,
-                          boxSizing: "border-box",
-                        }}
-                      >
+                      <label>{t("dtsModified")}</label>
+                      <div id="edit_dts_modified" className="process-form-dts-readonly">
                         <span id="edit_dts_modified_date">{form.dts_modified_display || ""}</span>
-                        <span id="edit_dts_modified_user" style={{ fontWeight: 600 }}>
+                        <span id="edit_dts_modified_user" className="process-form-dts-readonly-user">
                           {form.dts_modified_user_display || ""}
                         </span>
                       </div>
@@ -446,25 +423,10 @@ export default function ProcessFormModal({
 
                   <div className="form-row">
                     <div className="form-group">
-                      <label style={{ fontWeight: 600, color: "#666" }}>{t("dtsCreated")}</label>
-                      <div
-                        id="edit_dts_created"
-                        style={{
-                          backgroundColor: "#f5f5f5",
-                          marginTop: 5,
-                          padding: "8px 12px",
-                          border: "1px solid #ddd",
-                          borderRadius: 4,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          width: "100%",
-                          minHeight: 38,
-                          boxSizing: "border-box",
-                        }}
-                      >
+                      <label>{t("dtsCreated")}</label>
+                      <div id="edit_dts_created" className="process-form-dts-readonly">
                         <span id="edit_dts_created_date">{form.dts_created || ""}</span>
-                        <span id="edit_dts_created_user" style={{ fontWeight: 600 }}>
+                        <span id="edit_dts_created_user" className="process-form-dts-readonly-user">
                           {form.created_by || ""}
                         </span>
                       </div>
@@ -476,7 +438,7 @@ export default function ProcessFormModal({
 
             <div className="add-col">
               <div className="process-form-section">
-                <h3 className="process-form-section-title">{t("processFormSectionTextReplace")}</h3>
+                <h3 className="account-section-header">{t("processFormSectionTextReplace")}</h3>
               <div className="form-row">
                 <div className="form-group">
                   <label>{t("removeWords")}</label>
@@ -519,7 +481,7 @@ export default function ProcessFormModal({
               </div>
 
               <div className="process-form-section">
-                <h3 className="process-form-section-title">{t("processFormSectionScheduleNotes")}</h3>
+                <h3 className="account-section-header">{t("processFormSectionScheduleNotes")}</h3>
               <div className="form-row">
                 <div className="form-group">
                   <div className="day-use-pill-row">
@@ -594,17 +556,17 @@ export default function ProcessFormModal({
               </div>
               </div>
             </div>
-
-            <div className="form-actions add-actions modal-footer process-form-modal-footer">
-              <button type="submit" className="btn btn-save" disabled={ro || submitting}>
-                {submitting ? t("saving") : editMode ? t("updateProcess") : t("addProcess")}
-              </button>
-              <button type="button" className="btn btn-cancel" onClick={onClose}>
-                {t("cancel")}
-              </button>
             </div>
-          </form>
-        </div>
+          </div>
+          <div className="form-actions add-actions modal-footer process-form-modal-footer account-form-actions">
+            <button type="submit" className="account-btn account-btn-save" disabled={ro || submitting}>
+              {submitting ? t("saving") : editMode ? t("updateProcess") : t("addProcess")}
+            </button>
+            <button type="button" className="account-btn account-btn-cancel" onClick={onClose}>
+              {t("cancel")}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
     </ProcessModalPortal>

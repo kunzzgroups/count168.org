@@ -86,7 +86,7 @@ export default function ProcessSelect({
   };
 
   const getDisplayText = (value) => {
-    if (!useIdValue && (value === null || value === undefined)) {
+    if (value === null || value === undefined) {
       return unsetPlaceholder || placeholder;
     }
     if (!value || value === placeholder) return placeholder;

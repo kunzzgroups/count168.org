@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../reports/report_scope_common.php';
 require_once __DIR__ . '/../../includes/tenant_scope.php';
+require_once __DIR__ . '/../includes/process_modified_by.php';
 
 function dcNormalizeGroupId(?string $groupId): string
 {
@@ -1070,8 +1071,17 @@ function dcFixGroupPayrollProcessDescription(PDO $pdo, int $processId): void
     if ($newDescId === null || $newDescId <= 0) {
         return;
     }
-    $upd = $pdo->prepare('UPDATE process SET description_id = ? WHERE id = ?');
-    $upd->execute([$newDescId, $processId]);
+    $modifier = resolveProcessModifierFromSession($pdo);
+    $upd = $pdo->prepare(
+        'UPDATE process SET description_id = ?'
+        . processModifiedBySqlSuffix()
+        . ' WHERE id = ?'
+    );
+    $upd->execute(array_merge(
+        [$newDescId],
+        processModifiedByBindParams($modifier),
+        [$processId]
+    ));
 }
 
 /**
