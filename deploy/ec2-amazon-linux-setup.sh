@@ -5,7 +5,7 @@
 #   sudo bash deploy/ec2-amazon-linux-setup.sh
 set -euo pipefail
 
-APP_ROOT="${APP_ROOT:-/var/www/count168}"
+APP_ROOT="${APP_ROOT:-/var/www/count168.org}"
 REPO_URL="${REPO_URL:-https://github.com/kunzzgroups/count168test.git}"
 BRANCH="${BRANCH:-main}"
 
@@ -36,7 +36,7 @@ fi
 
 echo "==> 5/7 Nginx 站点（替换默认 Welcome 页）"
 rm -f /etc/nginx/conf.d/default.conf
-cp "${APP_ROOT}/deploy/nginx/count168.site.amazon-linux.conf" /etc/nginx/conf.d/count168.site.conf
+cp "${APP_ROOT}/deploy/nginx/count168.org.amazon-linux.conf" /etc/nginx/conf.d/count168.org.conf
 nginx -t
 systemctl reload nginx
 
