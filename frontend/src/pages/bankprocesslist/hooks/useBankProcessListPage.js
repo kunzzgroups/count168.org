@@ -1030,21 +1030,15 @@ export function useBankProcessListPage() {
     });
   }, [modalOpen, form.cost, form.price, form.profit_sharing]);
 
-  // Contract / Day start / Frequency 变化时自动填 Day end。
-  // 仅保留非常规频率旧逻辑；1st_of_every_month / monthly 改为允许手动填写 Day end。
+  // Contract / Day start / Frequency 变化时自动填 Day end（1st_of_every_month / monthly 仍可事后手动改）。
   useEffect(() => {
     if (!modalOpen) {
       contractSyncKeysRef.current = { day_start: "", contract: "", frequency: "" };
       return;
     }
     const frequencyNorm = bankProcessFrequencyNormalized(form.day_start_frequency);
-    if (
-      frequencyNorm === "once" ||
-      frequencyNorm === "week" ||
-      frequencyNorm === "day" ||
-      frequencyNorm === "monthly" ||
-      frequencyNorm === "1st_of_every_month"
-    ) return;
+    if (frequencyNorm === "once" || frequencyNorm === "week" || frequencyNorm === "day") return;
+    if (editMode && form.day_end_monthly_cap_enabled && frequencyNorm === "1st_of_every_month") return;
 
     const start = String(form.day_start || "").trim();
     const contract = String(form.contract || "").trim();
@@ -1070,7 +1064,7 @@ export function useBankProcessListPage() {
     }
 
     setForm((prevForm) => (prevForm.day_end === calculated ? prevForm : { ...prevForm, day_end: calculated }));
-  }, [modalOpen, form.day_start, form.contract, form.day_start_frequency]);
+  }, [modalOpen, editMode, form.day_start, form.contract, form.day_start_frequency, form.day_end_monthly_cap_enabled]);
 
   useEffect(() => {
     return () => {
@@ -1280,11 +1274,15 @@ export function useBankProcessListPage() {
 
   const loadAccountingInbox = useCallback(async (opts = {}) => {
     const silent = !!opts.silent;
+    const restoreDismissed = !!opts.restoreDismissed;
     if (!companyId) return;
     if (!silent) setAccountingLoading(true);
     try {
       const url = new URL(buildApiUrl("api/processes/process_accounting_inbox_api.php"));
       url.searchParams.set("company_id", String(companyId));
+      if (restoreDismissed) {
+        url.searchParams.set("restore_dismissed", "1");
+      }
       const res = await fetch(url.toString(), { credentials: "include", cache: "no-cache" });
       const json = await res.json();
       const list = Array.isArray(json?.data) ? json.data : [];

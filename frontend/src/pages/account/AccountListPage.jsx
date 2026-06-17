@@ -270,6 +270,7 @@ export default function AccountListPage() {
   const onSwitchCompanyRef = useRef(null);
   const gcScopeRef = useRef({});
   const listFiltersRef = useRef({ showInactive: false, showAll: false, searchTerm: "" });
+  const listPaginationScopeRef = useRef("");
   const accountsLenRef = useRef(0);
   listFiltersRef.current = { showInactive, showAll, searchTerm };
   accountsLenRef.current = accounts.length;
@@ -364,6 +365,38 @@ export default function AccountListPage() {
     [searchTerm, showInactive, showAll, resolveGroupOnlyFetch],
   );
 
+  const resolveListPaginationScopeKey = useCallback(
+    (gcScope) => {
+      if (!gcScope) return "";
+      return resolveAccountsListFetchScopeKey({
+        companyId: gcScope.companyId,
+        selectedGroup: gcScope.selectedGroup,
+        groupsAllMode: gcScope.groupsAllMode,
+        groupAllMode: gcScope.groupAllMode,
+        isListScopeReady: gcScope.isListScopeReady ?? true,
+        groupOnlyMode: resolveGroupOnlyFetch(gcScope),
+      });
+    },
+    [resolveGroupOnlyFetch],
+  );
+
+  const resetAccountListPagination = useCallback(() => {
+    setCurrentPage(1);
+    setSelectedDeleteIds(new Set());
+  }, []);
+
+  const resetPaginationForGcScope = useCallback(
+    (gcScope, { force = false } = {}) => {
+      const scopeKey = resolveListPaginationScopeKey(gcScope);
+      if (!scopeKey) return false;
+      if (!force && scopeKey === listPaginationScopeRef.current) return false;
+      listPaginationScopeRef.current = scopeKey;
+      resetAccountListPagination();
+      return true;
+    },
+    [resolveListPaginationScopeKey, resetAccountListPagination],
+  );
+
   const applyAccountListResult = useCallback(
     (cacheKey, nextAccounts, { silent = false, gcScope = null } = {}) => {
       accountListCacheRef.current.set(cacheKey, nextAccounts);
@@ -374,12 +407,16 @@ export default function AccountListPage() {
         return nextAccounts;
       });
       if (!silent) {
-        setSelectedDeleteIds(new Set());
-        setCurrentPage(1);
+        if (gcScope) {
+          listPaginationScopeRef.current = resolveListPaginationScopeKey(gcScope);
+        }
+        resetAccountListPagination();
+      } else if (gcScope) {
+        resetPaginationForGcScope(gcScope);
       }
       if (gcScope) markAccountsFetchKeyApplied(gcScope);
     },
-    [markAccountsFetchKeyApplied],
+    [markAccountsFetchKeyApplied, resetAccountListPagination, resetPaginationForGcScope, resolveListPaginationScopeKey],
   );
 
   const matchesLiveListFilters = useCallback((requested) => {
@@ -550,6 +587,7 @@ export default function AccountListPage() {
 
   const applySwitchListPreview = useCallback(
     (gcScope, { groupOnly = null } = {}) => {
+      resetPaginationForGcScope(gcScope, { force: true });
       const { companyId: cid, selectedGroup: sg } = gcScope || {};
       const useGroupOnly = groupOnly ?? resolveGroupOnlyFetch(gcScope);
       const scopeKey = resolveAccountScopeKey({
@@ -574,7 +612,7 @@ export default function AccountListPage() {
       }
       return applyAccountListCache(gcScope, { groupOnly: useGroupOnly });
     },
-    [applyAccountListCache, resolveGroupOnlyFetch, searchTerm, showInactive, showAll],
+    [applyAccountListCache, resolveGroupOnlyFetch, resetPaginationForGcScope, searchTerm, showInactive, showAll],
   );
 
   const invalidateAccountListCacheForScope = useCallback(
@@ -939,6 +977,15 @@ export default function AccountListPage() {
       skipCompanyFetchEffectRef.current = true;
       flushSync(() => {
         setCompanyId(id);
+        resetPaginationForGcScope({
+          companyId: id,
+          selectedGroup: scope?.selectedGroup ?? selectedGroup,
+          groupsAllMode: false,
+          groupAllMode: false,
+          mergeCompanyIds: scope?.mergeCompanyIds ?? [],
+          groupIds: scope?.groupIds ?? [],
+          isListScopeReady: true,
+        }, { force: true });
         applyCacheOrClearAccounts({
           companyId: id,
           selectedGroup: scope?.selectedGroup ?? selectedGroup,
@@ -1105,6 +1152,7 @@ export default function AccountListPage() {
         setGroupAllMode(false);
         setSelectedGroup(g);
         setCompanyId(null);
+        resetPaginationForGcScope(gcScope, { force: true });
         applySwitchListPreview(gcScope, { groupOnly: true });
       });
 
@@ -1118,6 +1166,7 @@ export default function AccountListPage() {
       groupIds,
       invalidateAccountListCacheForScope,
       mergeCompanyIds,
+      resetPaginationForGcScope,
       selectedGroup,
       setGroupAllMode,
       setGroupsAllMode,
@@ -1298,6 +1347,18 @@ export default function AccountListPage() {
         setGroupAllMode(false);
         setSelectedGroup(g);
         setCompanyId(nextCompanyId);
+        resetPaginationForGcScope(
+          {
+            companyId: nextCompanyId,
+            selectedGroup: g,
+            groupsAllMode: false,
+            groupAllMode: false,
+            mergeCompanyIds,
+            groupIds,
+            isListScopeReady: true,
+          },
+          { force: true },
+        );
         applyCacheOrClearAccounts({
           companyId: nextCompanyId,
           selectedGroup: g,
@@ -1329,6 +1390,7 @@ export default function AccountListPage() {
       deselectGroupKeepCompany,
       groupIds,
       mergeCompanyIds,
+      resetPaginationForGcScope,
       sessionMe,
       selectedGroup,
       setGroupAllMode,
@@ -1391,6 +1453,7 @@ export default function AccountListPage() {
         if (nextGroup) setSelectedGroup(nextGroup);
         setCompanyId(nextCompanyId);
         gcScopeRef.current = fetchScope;
+        resetPaginationForGcScope(fetchScope, { force: true });
         bootFetchedAccountsKeyRef.current = null;
         if (!applySwitchListPreview(fetchScope)) {
           setAccounts([]);
@@ -1419,6 +1482,7 @@ export default function AccountListPage() {
       companyId,
       groupIds,
       mergeCompanyIds,
+      resetPaginationForGcScope,
       selectedGroup,
       setGroupAllMode,
       setGroupsAllMode,
@@ -1609,6 +1673,23 @@ export default function AccountListPage() {
     [bootLoading, isListScopeReady, groupsAllMode, groupAllMode, companyId, selectedGroup],
   );
 
+  useLayoutEffect(() => {
+    if (bootLoading) return;
+    const filterKey = `${String(searchTerm || "").trim()}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
+    const combined = `${accountsListFetchScopeKey}|${filterKey}`;
+    if (!accountsListFetchScopeKey) return;
+    if (combined === listPaginationScopeRef.current) return;
+    listPaginationScopeRef.current = combined;
+    resetAccountListPagination();
+  }, [
+    bootLoading,
+    accountsListFetchScopeKey,
+    searchTerm,
+    showInactive,
+    showAll,
+    resetAccountListPagination,
+  ]);
+
   useEffect(() => {
     if (bootLoading || groupsAllMode || groupAllMode) return;
     if (companyId == null) return;
@@ -1770,11 +1851,14 @@ export default function AccountListPage() {
   const accountMutationsBlocked = usePartnershipAuditReadOnlyLocked(sessionMe);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredForMode.length / PAGE_SIZE)), [filteredForMode]);
+  const effectivePage = useMemo(
+    () => Math.min(Math.max(1, currentPage), totalPages),
+    [currentPage, totalPages],
+  );
   const pageRows = useMemo(() => {
     if (showAll) return filteredForMode;
-    const p = Math.min(currentPage, totalPages);
-    return filteredForMode.slice((p - 1) * PAGE_SIZE, p * PAGE_SIZE);
-  }, [filteredForMode, showAll, currentPage, totalPages]);
+    return filteredForMode.slice((effectivePage - 1) * PAGE_SIZE, effectivePage * PAGE_SIZE);
+  }, [filteredForMode, showAll, effectivePage]);
 
   /** React scope (instant on pill click) — do not wait for sessionStorage group-only flag. */
   const isGroupOnlyScope = useMemo(
@@ -2760,7 +2844,7 @@ export default function AccountListPage() {
                 const isInactive = String(a.status || "").toLowerCase() === "inactive";
                 return (
                   <div className="account-card account-list-row" key={a.id}>
-                    <div className="account-card-item">{showAll ? idx + 1 : (currentPage - 1) * PAGE_SIZE + idx + 1}</div>
+                    <div className="account-card-item">{showAll ? idx + 1 : (effectivePage - 1) * PAGE_SIZE + idx + 1}</div>
                     <div className="account-card-item">{toUpper(a.account_id)}</div>
                     <div className="account-card-item">{toUpper(a.name)}</div>
                     <div className="account-card-item"><span className={`account-role-badge account-role-${String(a.role || "").toLowerCase().replace(/\s+/g, "-")}`}>{toUpper(a.role) === "UPLINE" ? t("supplier") : toUpper(a.role)}</span></div>
@@ -2785,9 +2869,9 @@ export default function AccountListPage() {
           </div>
           {!showAll && (
             <div className="account-pagination-container">
-              <button className="account-pagination-btn" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>◀</button>
-              <span className="account-pagination-info">{t("paginationOf", { page: currentPage, total: totalPages })}</span>
-              <button className="account-pagination-btn" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>▶</button>
+              <button className="account-pagination-btn" disabled={effectivePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>◀</button>
+              <span className="account-pagination-info">{t("paginationOf", { page: effectivePage, total: totalPages })}</span>
+              <button className="account-pagination-btn" disabled={effectivePage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>▶</button>
             </div>
           )}
         </div>

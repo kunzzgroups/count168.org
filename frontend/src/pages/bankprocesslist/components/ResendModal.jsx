@@ -7,6 +7,7 @@ export default function ResendModal({
   resendTarget,
   resendDayStart,
   resendDayEnd,
+  setResendDayEnd,
   resendFrequency,
   setResendFrequency,
   resendInlineError,
@@ -22,6 +23,7 @@ export default function ResendModal({
   const isMonthly = fq === "monthly";
   const isWeek = fq === "week";
   const isDay = fq === "day";
+  const isFirstOfMonth = fq === "1st_of_every_month";
   const dayEndDisabled = isOnce || isMonthly || isWeek || isDay;
   return (
     <ProcessModalPortal>
@@ -62,9 +64,10 @@ export default function ResendModal({
               label={t("dayEnd")}
               value={resendDayEnd}
               disabled={dayEndDisabled}
-              minYmd={dayEndDisabled ? undefined : (resendDayStart || undefined)}
+              minYmd={isFirstOfMonth ? (resendDayStart || undefined) : (dayEndDisabled ? undefined : (resendDayStart || undefined))}
               placeholder={t("pickDate")}
               clearLabel={t("clearDate")}
+              onValueChange={(iso) => setResendDayEnd(iso || "")}
               className={dayEndDisabled ? "bank-resend-day-end-field--muted" : ""}
             />
             <div className="bank-resend-field bank-resend-field--full">
