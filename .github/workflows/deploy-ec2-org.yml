@@ -21,7 +21,7 @@ jobs:
             APP_ROOT=/var/www/count168.org
             if [[ ! -d "${APP_ROOT}/.git" ]]; then
               echo "ERROR: ${APP_ROOT}/.git missing — run on EC2:"
-              echo "  sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git ${APP_ROOT}"
+              echo "  sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168.org.git ${APP_ROOT}"
               echo "  sudo chown -R ec2-user:nginx ${APP_ROOT}"
               exit 1
             fi
