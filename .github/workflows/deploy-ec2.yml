@@ -44,29 +44,21 @@ jobs:
           script: |
             set -euo pipefail
             APP_ROOT=/var/www/count168.org
-            REPO_URL="https://github.com/kunzzgroups/count168.org.git"
-            bootstrap_org_repo() {
-              echo "==> bootstrapping ${APP_ROOT} (first-time git clone)"
-              CONFIG_BAK=""
-              if [[ -f "${APP_ROOT}/includes/config.local.php" ]]; then
-                CONFIG_BAK="$(mktemp)"
-                cp "${APP_ROOT}/includes/config.local.php" "$CONFIG_BAK"
-              fi
-              sudo mkdir -p "$(dirname "$APP_ROOT")"
-              if [[ -d "$APP_ROOT" ]] && [[ -n "$(ls -A "$APP_ROOT" 2>/dev/null || true)" ]]; then
-                sudo mv "$APP_ROOT" "${APP_ROOT}.bak.$(date +%s)"
-              fi
-              sudo git clone --branch main --depth 1 "$REPO_URL" "$APP_ROOT"
-              if ! sudo chown -R "$(whoami):nginx" "$APP_ROOT"; then
-                sudo chown -R "$(whoami):$(id -gn)" "$APP_ROOT"
-              fi
-              if [[ -n "$CONFIG_BAK" && -f "$CONFIG_BAK" ]]; then
-                cp "$CONFIG_BAK" "${APP_ROOT}/includes/config.local.php"
-                rm -f "$CONFIG_BAK"
-              fi
+            run_bootstrap() {
+              for bootstrap in \
+                "${APP_ROOT}/deploy/bootstrap-org-repo.sh" \
+                "/var/www/count168/deploy/bootstrap-org-repo.sh"; do
+                if [[ -f "$bootstrap" ]]; then
+                  APP_ROOT="$APP_ROOT" bash "$bootstrap"
+                  return 0
+                fi
+              done
+              echo "==> fetching bootstrap-org-repo.sh from GitHub main"
+              curl -fsSL "https://raw.githubusercontent.com/kunzzgroups/count168.org/main/deploy/bootstrap-org-repo.sh" \
+                | APP_ROOT="$APP_ROOT" bash
             }
             if [[ ! -d "${APP_ROOT}/.git" ]]; then
-              bootstrap_org_repo
+              run_bootstrap
             fi
             ORG_DEPLOY=""
             for candidate in \

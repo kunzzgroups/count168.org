@@ -9,29 +9,8 @@ echo "==> deploy-org start: user=$(whoami) host=$(hostname) root=${APP_ROOT}"
 df -h "$APP_ROOT" / 2>/dev/null | tail -n +2 || true
 
 if [[ ! -d "$APP_ROOT/.git" ]]; then
-  echo "==> ${APP_ROOT}/.git missing — bootstrapping clone"
-  REPO_URL="${REPO_URL:-https://github.com/kunzzgroups/count168.org.git}"
-  CONFIG_BAK=""
-  if [[ -f "${APP_ROOT}/includes/config.local.php" ]]; then
-    CONFIG_BAK="$(mktemp)"
-    cp "${APP_ROOT}/includes/config.local.php" "$CONFIG_BAK"
-  fi
-  if ! command -v sudo >/dev/null 2>&1; then
-    echo "ERROR: ${APP_ROOT}/.git missing and sudo unavailable for bootstrap clone"
-    exit 1
-  fi
-  sudo mkdir -p "$(dirname "$APP_ROOT")"
-  if [[ -d "$APP_ROOT" ]] && [[ -n "$(ls -A "$APP_ROOT" 2>/dev/null || true)" ]]; then
-    sudo mv "$APP_ROOT" "${APP_ROOT}.bak.$(date +%s)"
-  fi
-  sudo git clone --branch "$BRANCH" --depth 1 "$REPO_URL" "$APP_ROOT"
-  if ! sudo chown -R "$(whoami):nginx" "$APP_ROOT"; then
-    sudo chown -R "$(whoami):$(id -gn)" "$APP_ROOT"
-  fi
-  if [[ -n "$CONFIG_BAK" && -f "$CONFIG_BAK" ]]; then
-    cp "$CONFIG_BAK" "${APP_ROOT}/includes/config.local.php"
-    rm -f "$CONFIG_BAK"
-  fi
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  bash "${SCRIPT_DIR}/bootstrap-org-repo.sh"
 fi
 
 cd "$APP_ROOT"
