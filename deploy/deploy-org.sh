@@ -26,6 +26,21 @@ fix_repo_permissions() {
   fi
 }
 
+fix_web_permissions() {
+  echo "==> fixing web permissions for nginx (dirs 755, files 644, SELinux)"
+  if ! command -v sudo >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! sudo chown -R ec2-user:nginx "$APP_ROOT" 2>/dev/null; then
+    sudo chown -R "$(whoami):nginx" "$APP_ROOT" || true
+  fi
+  sudo find "$APP_ROOT" -type d -exec chmod 755 {} \;
+  sudo find "$APP_ROOT" -type f -exec chmod 644 {} \;
+  if command -v chcon >/dev/null 2>&1; then
+    sudo chcon -R -t httpd_sys_content_t "$APP_ROOT" 2>/dev/null || true
+  fi
+}
+
 if [[ ! -w "$APP_ROOT/.git/objects" ]] || [[ ! -w "$APP_ROOT/.git/FETCH_HEAD" ]]; then
   fix_repo_permissions
 fi
@@ -38,9 +53,7 @@ if ! git fetch origin "$BRANCH"; then
 fi
 git reset --hard "origin/${BRANCH}"
 
-if command -v chcon >/dev/null 2>&1; then
-  chcon -R -t httpd_sys_content_t "$APP_ROOT" 2>/dev/null || true
-fi
+fix_web_permissions
 
 NGINX_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux.conf"
 NGINX_HTTP_REDIRECT_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux-http-redirect.conf"
@@ -95,6 +108,11 @@ FRONTEND_INDEX="${APP_ROOT}/frontend/dist/index.html"
 if [[ ! -f "$FRONTEND_INDEX" ]]; then
   echo "ERROR: $FRONTEND_INDEX missing — nginx /login routes will return 404"
   echo "Run: cd $APP_ROOT && git fetch origin main && git reset --hard origin/main"
+  exit 1
+fi
+if ! sudo -u nginx test -r "$FRONTEND_INDEX" 2>/dev/null; then
+  echo "ERROR: nginx cannot read $FRONTEND_INDEX (fix directory execute bits on parent paths)"
+  namei -l "$FRONTEND_INDEX" 2>/dev/null || true
   exit 1
 fi
 grep -o 'index-[A-Za-z0-9_-]*\.js' "$FRONTEND_INDEX" | head -1 || true

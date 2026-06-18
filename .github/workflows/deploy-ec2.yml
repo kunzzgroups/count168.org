@@ -53,6 +53,7 @@ jobs:
           debug: true
           script: |
             set -euo pipefail
+            echo "==> SSH OK: user=$(whoami) host=$(hostname)"
             APP_ROOT=/var/www/count168.org
             run_bootstrap() {
               for bootstrap in \
@@ -80,7 +81,11 @@ jobs:
               fi
             done
             if [[ -n "$ORG_DEPLOY" ]]; then
-              bash "$ORG_DEPLOY"
+              bash "$ORG_DEPLOY" || {
+                echo "ERROR: deploy-org.sh failed (exit $?)"
+                echo "On EC2 run: cd $APP_ROOT && bash deploy/deploy-org.sh"
+                exit 1
+              }
             else
               echo "==> fallback: git pull ${APP_ROOT} (deploy-org.sh not found)"
               cd "$APP_ROOT"
