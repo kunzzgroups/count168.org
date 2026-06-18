@@ -5,48 +5,35 @@ on:
     branches: [main]
   workflow_dispatch:
 
+env:
+  EC2_HOST: "56.68.48.190"
+  EC2_USER: "ec2-user"
+
 jobs:
   deploy-org:
     name: count168.org
     runs-on: ubuntu-latest
     steps:
-      - name: Verify EC2 secrets
+      - name: Verify EC2 SSH key secret
         run: |
-          missing=0
-          if [ -z "${{ secrets.EC2_HOST }}" ]; then
-            echo "::error::EC2_HOST secret is missing on count168.org repo"
-            missing=1
-          fi
-          if [ -z "${{ secrets.EC2_USER }}" ]; then
-            echo "::error::EC2_USER secret is missing on count168.org repo"
-            missing=1
-          fi
           if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
             echo "::error::EC2_SSH_KEY secret is missing on count168.org repo"
-            missing=1
-          fi
-          if [ "$missing" -ne 0 ]; then
-            echo ""
-            echo "Add the same secrets used by kunzzgroups/count168test:"
-            echo "  Settings -> Secrets and variables -> Actions -> New repository secret"
-            echo "  EC2_HOST, EC2_USER, EC2_SSH_KEY"
+            echo "Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "Name: EC2_SSH_KEY"
+            echo "Value: full Server_Key.pem (BEGIN ... END lines)"
             exit 1
           fi
           key="${{ secrets.EC2_SSH_KEY }}"
           if ! printf '%s' "$key" | grep -q 'BEGIN.*PRIVATE KEY'; then
-            echo "::error::EC2_SSH_KEY does not look like a PEM private key (missing BEGIN ... PRIVATE KEY)"
-            echo "Paste the full .pem file from AWS, including the first and last line."
+            echo "::error::EC2_SSH_KEY does not look like a PEM private key"
             exit 1
           fi
-          host="${{ secrets.EC2_HOST }}"
-          if printf '%s' "$host" | grep -qiE '[a-z]'; then
-            echo "::warning::EC2_HOST looks like a hostname ($host). Use the EC2 public IPv4, not count168.org."
-          fi
+          echo "EC2 target: ${{ env.EC2_USER }}@${{ env.EC2_HOST }}"
       - name: SSH deploy to /var/www/count168.org
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
+          host: ${{ env.EC2_HOST }}
+          username: ${{ env.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           command_timeout: 10m
