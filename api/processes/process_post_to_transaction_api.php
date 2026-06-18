@@ -1399,6 +1399,30 @@ try {
             $profit = $amountsDaily['profit'];
         }
 
+        // Resend 单期（Y-m-d 锚点）：金额区间与 Inbox 一致——1st 为锚点～月末，Monthly 为锚点～+1月-1日。
+        if ($origPeriodType === 'resend_monthly_reopen' && $periodType === 'monthly') {
+            $bmResendPost = trim((string) ($pair['billing_month'] ?? ''));
+            if ($bmResendPost !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $bmResendPost)) {
+                $resolvedMonthlyBm = $bmResendPost;
+                if ($frequency === 'monthly') {
+                    [$p0, $p1] = billingMonthlyAnniversaryInclusiveRangeFromDue($bmResendPost, $bmResendPost);
+                    $pr = prorateMonthlyAnniversaryPeriodLinear($p0, $p1, $p0, $cost, $price, $profit);
+                    $cost = $pr['cost'];
+                    $price = $pr['price'];
+                    $profit = $pr['profit'];
+                    if ($pr['ratio'] !== null) {
+                        $monthlyProrationPsRatio = $pr['ratio'];
+                    }
+                } elseif ($frequency === '1st_of_every_month') {
+                    $lastProrationRatio = ratioRemainingDaysInMonthFromStartYmd($bmResendPost);
+                    $pr = prorateToMonthEndFromStart($bmResendPost, $cost, $price, $profit);
+                    $cost = $pr['cost'];
+                    $price = $pr['price'];
+                    $profit = $pr['profit'];
+                }
+            }
+        }
+
         // monthly：与 Inbox 一致；1st_of_every_month 新建在创建日晚于当月1号时从创建日摊到月末；Resend 仍从 dueYmd（1号）起算比例。
         if ($periodType === 'monthly' && $resolvedMonthlyBm !== '' && preg_match('/^(\d{4})-(\d{1,2})$/', $resolvedMonthlyBm, $m)) {
             $billY = (int) $m[1];

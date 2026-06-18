@@ -179,8 +179,24 @@ try {
     $newDayEnd = null;
     $newFrequency = '1st_of_every_month';
     if ($scheduleFromClient) {
-        $newDayStart = bank_resend_normalizeOptionalYmd($payload['day_start'] ?? null);
-        $newDayEnd = bank_resend_normalizeOptionalYmd($payload['day_end'] ?? null);
+        $rawDayStart = $payload['day_start'] ?? null;
+        if ($rawDayStart === null || trim((string) $rawDayStart) === '') {
+            $newDayStart = null;
+        } else {
+            $newDayStart = bank_resend_parse_ymd_from_any_raw_or_dmy($rawDayStart);
+            if ($newDayStart === null) {
+                throw new Exception('日期格式无效（需 YYYY-MM-DD 或 DD/MM/YYYY）');
+            }
+        }
+        $rawDayEnd = $payload['day_end'] ?? null;
+        if ($rawDayEnd === null || trim((string) $rawDayEnd) === '') {
+            $newDayEnd = null;
+        } else {
+            $newDayEnd = bank_resend_parse_ymd_from_any_raw_or_dmy($rawDayEnd);
+            if ($newDayEnd === null) {
+                throw new Exception('日期格式无效（需 YYYY-MM-DD 或 DD/MM/YYYY）');
+            }
+        }
         $newFrequency = trim((string) ($payload['day_start_frequency'] ?? '1st_of_every_month'));
         if (!in_array($newFrequency, ['1st_of_every_month', 'monthly', 'week', 'day', 'once'], true)) {
             $newFrequency = '1st_of_every_month';
@@ -220,6 +236,8 @@ try {
     bmp_ensureMaintenanceResendPendingTable($pdo);
     bmp_ensureBankProcessAccountingResendRelaxColumn($pdo);
     bmp_ensureBankProcessAccountingResendScheduleColumns($pdo);
+    bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
+    bmp_ensureAccountingDueDismissedTable($pdo);
     bmp_ensureAccountingResendDailyGuardTable($pdo);
     // 若 Maintenance 已删除对应账单，guard 可能已无交易凭证，需先清理否则会误拦。
     bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $company_id, $bankProcessId);
@@ -393,11 +411,11 @@ try {
         );
         $flg->execute([$bankProcessId, $company_id]);
     }
-    // Monthly / 1st_of_every_month 单期 Resend：累积锚点，保留原正常流程账单与各次 Resend 独立行。
+    // Monthly / 1st_of_every_month 单期 Resend：覆盖为唯一锚点；自然月账单逻辑不受影响。
     if ($scheduleFromClient
         && ($newFrequency === 'monthly' || $newFrequency === '1st_of_every_month')
         && !($newFrequency === 'monthly' && $newDayStart !== null && $newDayEnd !== null)) {
-        bmp_appendResendOpenAnchor($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd);
+        bmp_setResendOpenAnchor($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd);
     }
     $pdo->commit();
     jsonResponse(true, 'Done: This process can appear in Accounting Due again.', [

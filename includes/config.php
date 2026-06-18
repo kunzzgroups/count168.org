@@ -1,6 +1,6 @@
 <?php
 
-// Live (Hostinger count168.site) 默认。EC2 org 用 includes/config.local.php，勿改本文件。
+// 默认连接参数（可被 config.local.php 覆盖，服务器上请用 config.local.php 放真实密码）
 
 $host = '127.0.0.1';
 $dbname = 'u857194726_c168site';

@@ -78,6 +78,83 @@ function postedDateForMonthlyBillingMonth(?string $billingMonthYn, string $fallb
 }
 
 /**
+ * 与 process_accounting_inbox_api::inboxItemHiddenByAccountingDueDismiss 一致：
+ * 正常流程 Delete 写入的 anchor_date 须与 Inbox 判定键相同，否则删不掉、Refresh 也无法对上。
+ */
+function dismissAnchorYmdForAccountingDueRow(
+    PDO $pdo,
+    int $companyId,
+    int $processId,
+    string $origPeriodType,
+    string $resolvedPeriodType,
+    string $billingMonth,
+    string $fallbackYmd
+): ?string {
+    $bm = trim($billingMonth);
+    if ($origPeriodType === 'resend_monthly_reopen' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $bm)) {
+        return $bm;
+    }
+    if ($resolvedPeriodType === 'weekly' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $bm)) {
+        return $bm;
+    }
+    if ($resolvedPeriodType === 'daily' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $bm)) {
+        return $bm;
+    }
+    if ($origPeriodType === 'partial_first_month' || $resolvedPeriodType === 'partial_first_month') {
+        $stmt = $pdo->prepare('SELECT day_start FROM bank_process WHERE id = ? AND company_id = ? LIMIT 1');
+        $stmt->execute([$processId, $companyId]);
+        $raw = $stmt->fetchColumn();
+        $ymd = bmp_bankProcessDateFieldToYmd(is_string($raw) ? $raw : null);
+
+        return $ymd ?? bmp_normalizeSqlDateYmd($fallbackYmd);
+    }
+    if ($origPeriodType === 'manual_inactive' || $resolvedPeriodType === 'manual_inactive') {
+        $stmt = $pdo->prepare('SELECT day_start FROM bank_process WHERE id = ? AND company_id = ? LIMIT 1');
+        $stmt->execute([$processId, $companyId]);
+        $raw = $stmt->fetchColumn();
+        $ymd = bmp_bankProcessDateFieldToYmd(is_string($raw) ? $raw : null);
+
+        return $ymd ?? bmp_normalizeSqlDateYmd($fallbackYmd);
+    }
+    if ($origPeriodType === 'once_one_off' || $resolvedPeriodType === 'once_one_off') {
+        $stmt = $pdo->prepare('SELECT day_start FROM bank_process WHERE id = ? AND company_id = ? LIMIT 1');
+        $stmt->execute([$processId, $companyId]);
+        $raw = $stmt->fetchColumn();
+        $ymd = bmp_bankProcessDateFieldToYmd(is_string($raw) ? $raw : null);
+
+        return $ymd ?? bmp_normalizeSqlDateYmd($fallbackYmd);
+    }
+    if (($resolvedPeriodType === 'monthly' || $resolvedPeriodType === 'day_end_tail') && $bm !== '') {
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bm)) {
+            return $bm;
+        }
+        if (preg_match('/^(\d{4})-(\d{1,2})$/', $bm)) {
+            $hasFreq = tableHasColumn($pdo, 'bank_process', 'day_start_frequency');
+            $sql = 'SELECT day_start' . ($hasFreq ? ', day_start_frequency' : '') . ' FROM bank_process WHERE id = ? AND company_id = ? LIMIT 1';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$processId, $companyId]);
+            $bpRow = $stmt->fetch(PDO::FETCH_ASSOC);
+            $dayStartYmd = bmp_bankProcessDateFieldToYmd($bpRow['day_start'] ?? null);
+            $freq = '1st_of_every_month';
+            if ($hasFreq) {
+                $fqRaw = strtolower(trim((string) ($bpRow['day_start_frequency'] ?? '')));
+                $freq = ($fqRaw === 'monthly') ? 'monthly' : '1st_of_every_month';
+            }
+            if ($dayStartYmd !== null) {
+                $due = bmp_monthlyDueYmdFromBillingAnchor($bm, $dayStartYmd, $freq);
+                if ($due !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
+                    return $due;
+                }
+            }
+
+            return postedDateForMonthlyBillingMonth($bm, $fallbackYmd);
+        }
+    }
+
+    return bmp_normalizeSqlDateYmd($fallbackYmd);
+}
+
+/**
  * 兜底识别：当前 process 若处于 Resend 合并区间（relax=1 且 schedule 同时有 day_start/day_end），
  * 即使前端传了 monthly，也应按 resend_consolidated_range 处理，避免 Delete 成功提示但 Accounting Due 残留。
  */
@@ -290,7 +367,25 @@ try {
                 }
             }
         }
-        $anchorYmd = bmp_normalizeSqlDateYmd($postDate);
+        $billingMonthRaw = trim((string) ($p['billing_month'] ?? ''));
+        if ($periodType === 'resend_consolidated_range') {
+            $anchorYmd = bmp_normalizeSqlDateYmd($postDate);
+        } else {
+            $anchorYmd = dismissAnchorYmdForAccountingDueRow(
+                $pdo,
+                $companyId,
+                $processId,
+                $origPeriodType,
+                $periodType,
+                $billingMonthRaw,
+                $postDate
+            );
+            if ($anchorYmd !== null
+                && in_array($periodType, ['monthly', 'day_end_tail'], true)
+                && $billingMonthRaw !== '') {
+                $postDate = $anchorYmd;
+            }
+        }
         $permanentResendDismiss = isPermanentAccountingDueDismiss($origPeriodType, $periodType);
 
         if (!$permanentResendDismiss) {

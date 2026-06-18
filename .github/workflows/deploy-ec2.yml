@@ -5,14 +5,53 @@ on:
     branches: [main]
 
 jobs:
-  deploy:
+  deploy-site:
+    name: count168.site
     runs-on: ubuntu-latest
     steps:
-      - name: SSH deploy (git pull on EC2)
+      - name: SSH deploy to /var/www/count168
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          command_timeout: 10m
+          debug: true
           script: |
-            bash /var/www/count168.org/deploy/deploy.sh
+            set -euo pipefail
+            if [[ ! -x /var/www/count168/deploy/deploy.sh ]]; then
+              echo "ERROR: /var/www/count168/deploy/deploy.sh missing"
+              exit 1
+            fi
+            bash /var/www/count168/deploy/deploy.sh
+
+  deploy-org:
+    name: count168.org
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy to /var/www/count168.org
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          command_timeout: 10m
+          debug: true
+          script: |
+            set -euo pipefail
+            if [[ ! -d /var/www/count168.org/.git ]]; then
+              echo "ERROR: /var/www/count168.org not cloned — run on EC2:"
+              echo "  sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git /var/www/count168.org"
+              echo "  sudo chown -R ec2-user:nginx /var/www/count168.org"
+              exit 1
+            fi
+            if [[ -x /var/www/count168.org/deploy/deploy-org.sh ]]; then
+              bash /var/www/count168.org/deploy/deploy-org.sh
+            elif [[ -x /var/www/count168/deploy/deploy-org.sh ]]; then
+              bash /var/www/count168/deploy/deploy-org.sh
+            else
+              echo "ERROR: deploy-org.sh missing"
+              exit 1
+            fi

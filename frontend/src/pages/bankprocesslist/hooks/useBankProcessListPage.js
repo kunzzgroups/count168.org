@@ -1963,8 +1963,8 @@ export function useBankProcessListPage() {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
         body: JSON.stringify({
           bank_process_id: Number(resendTarget.id),
-          day_start: resendDayStart || null,
-          day_end: omitDayEnd ? null : (dayEndTrim || null),
+          day_start: normalizeBankResendDayStartYmd(resendDayStart) || null,
+          day_end: omitDayEnd ? null : (normalizeBankResendDayStartYmd(dayEndTrim) || null),
           day_start_frequency: normalizedResendFrequency,
         }),
       });

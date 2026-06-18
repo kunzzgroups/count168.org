@@ -16,7 +16,63 @@
 
 ## 二、DNS
 
-域名 `count168.site` A 记录 → EC2 **公网 IPv4**（不是私有 172.31.x.x）。
+| 域名 | 记录 | 指向 |
+|------|------|------|
+| `count168.site` / `www.count168.site` | A | EC2 **公网 IPv4**（不是私有 172.31.x.x） |
+| `count168.org` / `www.count168.org` | A | 同上（与 `.site` 同机） |
+
+## 二点五、同机 `.org` + `.site`（Nginx）
+
+两个域名**代码目录分开**，Nginx 各一份配置：
+
+| 域名 | 代码目录 | Nginx 模板 | 安装路径 |
+|------|----------|------------|----------|
+| count168.org | `/var/www/count168.org` | `deploy/nginx/count168.org.amazon-linux.conf` | `/etc/nginx/conf.d/count168.org.conf` |
+| count168.site | `/var/www/count168` | `deploy/nginx/count168.site.amazon-linux.conf` | `/etc/nginx/conf.d/count168.site.conf` |
+
+`.org` **保留 `default_server`**（整台 EC2 默认 80 站点）；`.site` **不要** `default_server`。
+
+**`.org` 首次 clone**（若目录还没有）：
+
+```bash
+sudo dnf install -y git
+sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git /var/www/count168.org
+sudo chown -R ec2-user:nginx /var/www/count168.org
+```
+
+**安装 Nginx 站点**（`.site` 与 `.org` 代码都就绪后）：
+
+```bash
+sudo cp /var/www/count168.org/deploy/nginx/count168.org.amazon-linux.conf /etc/nginx/conf.d/count168.org.conf
+sudo cp /var/www/count168/deploy/nginx/count168.site.amazon-linux.conf /etc/nginx/conf.d/count168.site.conf
+sudo rm -f /etc/nginx/conf.d/default.conf
+sudo sed -i 's/ default_server//g' /etc/nginx/conf.d/count168.site.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**`.org` 首次 clone 后**，与 `.site` 一样随 **push main 自动部署**。仅更新 org 时可手动跑：
+
+```bash
+bash /var/www/count168.org/deploy/deploy-org.sh
+```
+
+HTTPS（**先确保 `nginx -t` 通过**，再分别申请）：
+
+```bash
+sudo certbot --nginx -d count168.org -d www.count168.org
+sudo certbot --nginx -d count168.site -d www.count168.site
+```
+
+certbot 会生成 `count168.org-le-ssl.conf` / `count168.site-le-ssl.conf`。**日常 git deploy 不会覆盖这些文件**（见 `deploy.sh`）。
+
+更新 `.org` 路由（仅 location 变更、且未用 certbot 时）：
+
+```bash
+sudo cp /var/www/count168.org/deploy/nginx/count168.org.amazon-linux.conf /etc/nginx/conf.d/count168.org.conf
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+若已上 certbot，请手动合并 location 块，或先备份再 cp，失败则 `nginx -t` 会报错。
 
 ## 三、一键装环境 + Nginx（推荐）
 
@@ -134,19 +190,21 @@ curl -sS -X POST https://count168.site/api/session/login_api.php \
 
 应返回 JSON（如 `Database connection failed` 或 `Username or password is incorrect`），而不是空白的 HTTP 500。
 
-## 日常更新（推荐：只 push，EC2 自动部署）
-
-**本地一次配置 GitHub Secrets 后**，日常只需：
+## 日常更新（push 自动部署 site + org）
 
 ```bash
-# 若改了 frontend 源码，先 build 并一起 commit dist/
-cd frontend && npm run build && cd ..
-git add -A
-git commit -m "你的说明"
-git push origin main
+cd frontend && npm run build && cd ..   # 若改了前端
+git add -A && git commit -m "说明" && git push origin main
 ```
 
-push 后 GitHub Actions 会自动 SSH 到 EC2 执行 `deploy/deploy.sh`（`git pull` + reload nginx），**不必再手动 SSH**。
+push 到 **`main`** 后，GitHub Actions **Deploy to EC2** 会**并行**跑两个 job：
+
+| Job | EC2 目录 | 域名 |
+|-----|----------|------|
+| `count168.site` | `/var/www/count168` | count168.site |
+| `count168.org` | `/var/www/count168.org` | count168.org |
+
+**EC2 上两个目录都要先 clone 好**（见「二点五」）。仅想单独重部署 org：Actions → **Deploy org to EC2** → Run workflow。
 
 ### 一次性配置（GitHub → Settings → Secrets and variables → Actions）
 
@@ -156,7 +214,12 @@ push 后 GitHub Actions 会自动 SSH 到 EC2 执行 `deploy/deploy.sh`（`git p
 | `EC2_USER` | `ec2-user` |
 | `EC2_SSH_KEY` | 登录 EC2 用的 **私钥** 全文（`.pem` 文件内容） |
 
-EC2 上需已 `git clone` 到 `/var/www/count168`，且能 `git pull`（公开仓库即可；私有仓库要在 EC2 配 deploy key 或 PAT）。
+EC2 上需已 clone：
+
+- `/var/www/count168`（count168.site）
+- `/var/www/count168.org`（count168.org）
+
+且两个目录都能 `git pull`（公开仓库即可；私有仓库要在 EC2 配 deploy key 或 PAT）。
 
 手动部署（备用）：
 
@@ -186,6 +249,36 @@ bash /var/www/count168/deploy/deploy.sh
 grep index- /var/www/count168/frontend/dist/index.html
 ```
 
-最后一行应显示 `index-CujfxkOl.js`（或更新的 hash），**不是** `index-Bn_oqep5.js`。
+最后一行应显示当前 main 上的 hash（如 `index-Kdu-tZ13.js`），**不是**过期的 `index-pRYh52Hh.js`。
 
 也可在 GitHub → Actions → 最新失败的 **Deploy to EC2** → **Re-run all jobs**（需先把上面 chown 跑一遍，或等 `deploy.sh` 已含自动修复并 push 后再 rerun）。
+
+## 部署失败：Actions 一直红、但网站还能打开
+
+说明 **SSH 连上了但脚本失败**，或 **GitHub 根本 SSH 不进 EC2**。先确认线上是否落后：
+
+```bash
+curl -sS https://count168.site/frontend/dist/index.html | grep -o 'index-[A-Za-z0-9_-]*\.js' | head -1
+```
+
+与本地 `frontend/dist/index.html` 里的 hash 对比；不一致则 EC2 未拉到最新 main。
+
+**在 EC2 上手动跑一遍**（Instance Connect）：
+
+```bash
+sudo chown -R ec2-user:nginx /var/www/count168
+df -h /var/www/count168
+bash /var/www/count168/deploy/deploy.sh
+```
+
+- 若报 `git fetch` / `.git/objects`：仍是权限问题，确认 chown 成功。
+- 若报 `duplicate default server`：EC2 **同机还跑着 count168.org**（或其它站点）时，**整台机器 80 端口只能有一个 `default_server`**，应留给 `.org`，`.site` 不能用。执行：
+  ```bash
+  sudo grep -rn default_server /etc/nginx/
+  # 只改 .site，保留 .org 上的 default_server
+  sudo sed -i 's/ default_server//g' /etc/nginx/conf.d/count168.site.conf
+  sudo nginx -t && sudo systemctl reload nginx
+  ```
+  **不要**用仓库配置覆盖 `/etc/nginx/conf.d/count168.org.conf`。若需更新 `.site` 的 nginx 路由，手动合并到现有 certbot 配置，或只改 `count168.site.conf` 里非 `listen` 的 location 块。
+  若误删了 `count168.site-le-ssl.conf`，用 `sudo certbot --nginx -d count168.site -d www.count168.site` 恢复 HTTPS。
+- 若本地手动成功，但 Actions 仍失败：检查 GitHub Secrets 里 `EC2_HOST`（公网 IP）、`EC2_USER`（`ec2-user`）、`EC2_SSH_KEY`（完整 `.pem` 私钥，含 `BEGIN/END` 行）。Secret 被截断或改错后，从 1072 起会连续失败且网站仍显示旧版本。

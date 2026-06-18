@@ -1,12 +1,10 @@
 <?php
 /**
- * EC2 count168.org 专用（复制为 config.local.php，已在 .gitignore）
+ * EC2 / 本地覆盖数据库（复制为 config.local.php，已在 .gitignore）
  *
  *   cp includes/config.local.php.example includes/config.local.php
- *
- * git pull 不会覆盖此文件；includes/config.php 保持 live 默认，勿在 EC2 上直接改。
  */
 $host = '127.0.0.1';
-$dbname = 'u857194726_c168org';
+$dbname = 'u857194726_c168site';
 $dbuser = 'admin';
-$dbpass = 'C168_org';
+$dbpass = 'C168_site';

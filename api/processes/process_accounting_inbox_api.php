@@ -506,10 +506,27 @@ function inboxAppendMonthlyNeedToday(
             $billY = (int) $m[1];
             $billMo = (int) $m[2];
         }
+        $isResendReopenLine = (
+            !empty($r['accounting_resend_relax_created_floor'])
+            && !empty($r['accounting_resend_single_period_from_schedule'])
+            && $monthlyBillingMonth !== ''
+            && preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $monthlyBillingMonth)
+        );
         if ($billY !== null && $billMo !== null) {
             $createdYm = $createdDt->format('Y-n');
             $billYm = sprintf('%04d-%d', $billY, $billMo);
-            if ($frequency === 'monthly' && $startTs !== false && $startDate !== '') {
+            if ($isResendReopenLine && $frequency === '1st_of_every_month' && $dueAnchorYmd !== null) {
+                $pr = prorateToMonthEndFromStart($dueAnchorYmd, $cost, $price, $profit);
+                $cost = $pr['cost'];
+                $price = $pr['price'];
+                $profit = $pr['profit'];
+            } elseif ($isResendReopenLine && $frequency === 'monthly' && $dueAnchorYmd !== null) {
+                [$p0, $p1] = billingMonthlyAnniversaryInclusiveRangeFromDue($dueAnchorYmd, $dueAnchorYmd);
+                $pr = prorateMonthlyAnniversaryPeriodLinear($p0, $p1, $p0, $cost, $price, $profit);
+                $cost = $pr['cost'];
+                $price = $pr['price'];
+                $profit = $pr['profit'];
+            } elseif ($frequency === 'monthly' && $startTs !== false && $startDate !== '') {
                 $startDay = (int) date('j', $startTs);
                 $dueYmd = $dueAnchorYmd ?? billingCalendarMonthDueYmd($billY, $billMo, $startDay);
                 if ($dueAnchorYmd === null && (new DateTimeImmutable($startDate))->format('Y-n') === $billYm) {
@@ -730,16 +747,19 @@ function inboxComputeBillingPeriodRangeForItem(array $item, array $process, bool
     if (!empty($item['is_resend_monthly_reopen'])) {
         $bmResend = trim((string) ($item['monthly_billing_month'] ?? ''));
         if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bmResend)) {
-            $storedStart = inboxBankProcessDateFieldToYmd(
-                $process['bank_process_stored_day_start'] ?? $item['bank_process_stored_day_start'] ?? $item['day_start'] ?? null
-            );
-            if ($freq === 'monthly' && $storedStart !== null) {
-                [, $p1] = billingMonthlyAnniversaryInclusiveRangeFromDue($bmResend, $storedStart);
+            $resendFreq = (string) ($item['frequency'] ?? $freq);
+            if ($resendFreq === 'monthly') {
+                [, $p1] = billingMonthlyAnniversaryInclusiveRangeFromDue($bmResend, $bmResend);
 
                 return [$bmResend, $p1];
             }
+            try {
+                $monthEnd = (new DateTimeImmutable($bmResend))->modify('last day of this month')->format('Y-m-d');
 
-            return [$bmResend, $bmResend];
+                return [$bmResend, $monthEnd];
+            } catch (Throwable $e) {
+                return [$bmResend, $bmResend];
+            }
         }
     }
 
@@ -1103,7 +1123,7 @@ function inboxCollectMonthlyPrepaidBillingAnchors(
 }
 
 /**
- * Resend relax 单期：为每个 open anchor 追加独立 resend_monthly_reopen 行（使用库里真实 day_start 计算金额）。
+ * Resend relax 单期：为当前唯一 open anchor 追加 resend_monthly_reopen 行（金额按 Resend 锚点日计算；Start 列仍显示库里真实 day_start）。
  *
  * @param '1st_of_every_month'|'monthly' $frequency
  */
@@ -1142,6 +1162,7 @@ function inboxAppendResendOpenAnchorRows(
     }
     $rResend = $r;
     $rResend['accounting_resend_single_period_from_schedule'] = 1;
+    $rResend['day_start_frequency'] = $frequency;
     if ($storedRaw !== null && trim((string) $storedRaw) !== '') {
         $rResend['day_start'] = $storedRaw;
     }
@@ -1149,7 +1170,6 @@ function inboxAppendResendOpenAnchorRows(
     if ($storedDayEnd !== null && trim((string) $storedDayEnd) !== '') {
         $rResend['day_end'] = $storedDayEnd;
     }
-    $createdYmd = inboxEffectiveCreatedYmdForProcess($rResend, $today, $startDate);
     foreach ($anchors as $anchorYmd) {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $anchorYmd)) {
             continue;
@@ -1157,14 +1177,19 @@ function inboxAppendResendOpenAnchorRows(
         if (bmp_hasMonthlyPostedOrSkippedForDueYmd($pdo, $companyId, $processId, $anchorYmd)) {
             continue;
         }
+        $anchorTs = strtotime($anchorYmd);
+        if ($anchorTs === false) {
+            continue;
+        }
+        $createdYmd = inboxEffectiveCreatedYmdForProcess($rResend, $today, $anchorYmd);
         inboxAppendMonthlyNeedToday(
             $needToday,
             $rResend,
             $anchorYmd,
             $frequency,
             $createdYmd,
-            $startTs,
-            $startDate,
+            $anchorTs,
+            $anchorYmd,
             $baseCost,
             $basePrice,
             $baseProfit,
@@ -1574,7 +1599,7 @@ function hasLegacyPostedInCalendarMonth(PDO $pdo, int $companyId, int $processId
     }
 }
 
-/** 标记 needToday 中哪些已入账 */
+/** 该行是否被 Accounting Due 软删除隐藏（正常流程）或 Resend 永久删除。 */
 function inboxItemHiddenByAccountingDueDismiss(PDO $pdo, int $companyId, array $item): bool
 {
     $processId = (int) ($item['id'] ?? 0);
@@ -1675,6 +1700,7 @@ function inboxItemHiddenByAccountingDueDismiss(PDO $pdo, int $companyId, array $
     return false;
 }
 
+/** 标记 needToday 中哪些已入账 */
 function markAlreadyPostedOnNeedToday(PDO $pdo, array &$needToday, int $companyId, string $today, bool $hasPeriodType): void
 {
     try {
@@ -1931,12 +1957,13 @@ try {
         exit;
     }
 
+    $today = date('Y-m-d');
+    //$today = '2026-06-12';
+
+    bmp_promoteExpiredNaturalMonthlySoftDismissals($pdo, $company_id, $today);
     if (isset($_GET['restore_dismissed']) && (string) $_GET['restore_dismissed'] === '1') {
         bmp_restoreNormalAccountingDueDismissals($pdo, $company_id);
     }
-
-    $today = date('Y-m-d');
-    //$today = '2026-06-12';
 
     $hasFrequency = hasBankProcessFrequencyColumn($pdo);
     $hasIssueFlagColumn = tableHasColumn($pdo, 'bank_process', 'issue_flag');
@@ -1975,15 +2002,37 @@ try {
             if ($today < $startDate && empty($r['accounting_resend_relax_created_floor'])) {
                 continue;
             }
-            $createdYmd = inboxEffectiveCreatedYmdForProcess($r, $today, $startDate);
-            if ($today < maxYmd($startDate, $createdYmd) && empty($r['accounting_resend_relax_created_floor'])) {
-                continue;
-            }
             $resendSinglePeriod = !empty($r['accounting_resend_single_period_from_schedule']);
             if (!empty($r['accounting_resend_consolidated_range'])) {
                 continue;
             }
-            if (!isWithinRecurringBillingWindow($today, $dayStart, $r['contract'] ?? null, $r['day_end'] ?? null, '1st_of_every_month', !empty($r['accounting_resend_relax_created_floor']), $resendSinglePeriod)) {
+            // Resend 单期指向其它锚点时：首月按比例仍按库里真实 day_start 判断，避免 merge 后误排 5/7 幽灵行。
+            $partialDayStartRaw = $r['day_start'] ?? null;
+            $partialStartDate = $startDate;
+            if (!empty($r['accounting_resend_relax_created_floor']) && $resendSinglePeriod) {
+                $storedPartialRaw = $r['bank_process_stored_day_start'] ?? null;
+                $storedPartialYmd = $storedPartialRaw !== null
+                    ? inboxBankProcessDateFieldToYmd((string) $storedPartialRaw)
+                    : null;
+                $mergedPartialYmd = inboxBankProcessDateFieldToYmd($r['day_start'] ?? null);
+                if ($storedPartialYmd !== null && $mergedPartialYmd !== null && $storedPartialYmd !== $mergedPartialYmd) {
+                    continue;
+                }
+                if ($storedPartialRaw !== null && trim((string) $storedPartialRaw) !== '') {
+                    $partialDayStartRaw = $storedPartialRaw;
+                    $partialStartDate = $storedPartialYmd ?? $startDate;
+                    $partialStartTs = strtotime($partialStartDate);
+                    if ($partialStartTs === false) {
+                        continue;
+                    }
+                    $startTs = $partialStartTs;
+                }
+            }
+            $createdYmd = inboxEffectiveCreatedYmdForProcess($r, $today, $partialStartDate);
+            if ($today < maxYmd($partialStartDate, $createdYmd) && empty($r['accounting_resend_relax_created_floor'])) {
+                continue;
+            }
+            if (!isWithinRecurringBillingWindow($today, $partialDayStartRaw, $r['contract'] ?? null, $r['day_end'] ?? null, '1st_of_every_month', !empty($r['accounting_resend_relax_created_floor']), $resendSinglePeriod)) {
                 continue;
             }
             // If day_start is the 1st, there's no "partial first month" period at all.
@@ -2003,7 +2052,7 @@ try {
             $cost = money_normalize($r['cost'] ?? '0');
             $price = money_normalize($r['price'] ?? '0');
             $profit = money_normalize($r['profit'] ?? '0');
-            $partialStart = $startDate;
+            $partialStart = $partialStartDate;
             if ($partialStart > $firstMonthEnd) {
                 continue;
             }
@@ -2016,7 +2065,7 @@ try {
                 'name' => ($r['name'] ?? '') ?: ($r['bank'] ?? ''),
                 'bank' => $r['bank'] ?? '',
                 'country' => $r['country'] ?? '',
-                'day_start' => $dayStart,
+                'day_start' => $partialDayStartRaw,
                 'contract' => $r['contract'] ?? '',
                 'cost' => $pc,
                 'price' => $pp,
