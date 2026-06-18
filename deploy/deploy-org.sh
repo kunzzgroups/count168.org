@@ -92,6 +92,9 @@ fi
 
 echo "==> Deploy OK at $(date -Iseconds)"
 FRONTEND_INDEX="${APP_ROOT}/frontend/dist/index.html"
-if [[ -f "$FRONTEND_INDEX" ]]; then
-  grep -o 'index-[A-Za-z0-9_-]*\.js' "$FRONTEND_INDEX" | head -1 || true
+if [[ ! -f "$FRONTEND_INDEX" ]]; then
+  echo "ERROR: $FRONTEND_INDEX missing — nginx /login routes will return 404"
+  echo "Run: cd $APP_ROOT && git fetch origin main && git reset --hard origin/main"
+  exit 1
 fi
+grep -o 'index-[A-Za-z0-9_-]*\.js' "$FRONTEND_INDEX" | head -1 || true
