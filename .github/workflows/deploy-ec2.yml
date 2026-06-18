@@ -32,6 +32,16 @@ jobs:
             echo "  EC2_HOST, EC2_USER, EC2_SSH_KEY"
             exit 1
           fi
+          key="${{ secrets.EC2_SSH_KEY }}"
+          if ! printf '%s' "$key" | grep -q 'BEGIN.*PRIVATE KEY'; then
+            echo "::error::EC2_SSH_KEY does not look like a PEM private key (missing BEGIN ... PRIVATE KEY)"
+            echo "Paste the full .pem file from AWS, including the first and last line."
+            exit 1
+          fi
+          host="${{ secrets.EC2_HOST }}"
+          if printf '%s' "$host" | grep -qiE '[a-z]'; then
+            echo "::warning::EC2_HOST looks like a hostname ($host). Use the EC2 public IPv4, not count168.org."
+          fi
       - name: SSH deploy to /var/www/count168.org
         uses: appleboy/ssh-action@v1.2.0
         with:

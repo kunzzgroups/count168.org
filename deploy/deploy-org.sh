@@ -43,27 +43,43 @@ if command -v chcon >/dev/null 2>&1; then
 fi
 
 NGINX_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux.conf"
+NGINX_HTTP_REDIRECT_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux-http-redirect.conf"
+NGINX_SSL_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux-ssl.conf"
 NGINX_DST="/etc/nginx/conf.d/count168.org.conf"
-NGINX_SSL="/etc/nginx/conf.d/count168.org-le-ssl.conf"
+NGINX_SSL_DST="/etc/nginx/conf.d/count168.org-le-ssl.conf"
 LE_CERT="/etc/letsencrypt/live/count168.org/fullchain.pem"
-if [[ -f "$LE_CERT" ]] || [[ -f "$NGINX_SSL" ]]; then
-  echo "==> skip nginx config sync (certbot HTTPS active for count168.org)"
-elif [[ -f "$NGINX_SRC" ]]; then
-  echo "==> sync nginx org config"
-  NGINX_BAK="$(mktemp)"
-  sudo cp "$NGINX_DST" "$NGINX_BAK" 2>/dev/null || true
-  sudo rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
-  sudo cp "$NGINX_SRC" "$NGINX_DST"
+
+install_nginx_file() {
+  local src="$1"
+  local dst="$2"
+  local label="$3"
+  if [[ ! -f "$src" ]]; then
+    echo "==> skip nginx sync ($label): $src missing"
+    return 0
+  fi
+  echo "==> sync nginx $label"
+  local bak
+  bak="$(mktemp)"
+  sudo cp "$dst" "$bak" 2>/dev/null || true
+  sudo cp "$src" "$dst"
   if ! sudo nginx -t; then
-    echo "ERROR: nginx -t failed after config sync — restoring previous config"
-    if [[ -f "$NGINX_BAK" ]]; then
-      sudo cp "$NGINX_BAK" "$NGINX_DST"
+    echo "ERROR: nginx -t failed after syncing $label — restoring previous config"
+    if [[ -f "$bak" ]]; then
+      sudo cp "$bak" "$dst"
       sudo nginx -t || true
     fi
-    rm -f "$NGINX_BAK"
+    rm -f "$bak"
     exit 1
   fi
-  rm -f "$NGINX_BAK"
+  rm -f "$bak"
+}
+
+if [[ -f "$LE_CERT" ]] || [[ -f "$NGINX_SSL_DST" ]]; then
+  install_nginx_file "$NGINX_SSL_SRC" "$NGINX_SSL_DST" "org HTTPS"
+  install_nginx_file "$NGINX_HTTP_REDIRECT_SRC" "$NGINX_DST" "org HTTP redirect"
+else
+  sudo rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
+  install_nginx_file "$NGINX_SRC" "$NGINX_DST" "org HTTP"
 fi
 
 if systemctl is-active --quiet nginx 2>/dev/null; then
