@@ -74,12 +74,16 @@ install_nginx_file() {
   rm -f "$bak"
 }
 
-if [[ -f "$LE_CERT" ]] || [[ -f "$NGINX_SSL_DST" ]]; then
+if [[ -f "$LE_CERT" ]]; then
   install_nginx_file "$NGINX_SSL_SRC" "$NGINX_SSL_DST" "org HTTPS"
   install_nginx_file "$NGINX_HTTP_REDIRECT_SRC" "$NGINX_DST" "org HTTP redirect"
 else
+  if [[ -f "$NGINX_SSL_DST" ]]; then
+    echo "==> disable stale org HTTPS config (LetsEncrypt cert missing at $LE_CERT)"
+    sudo mv "$NGINX_SSL_DST" "${NGINX_SSL_DST}.disabled.$(date +%s)" || true
+  fi
   sudo rm -f /etc/nginx/conf.d/default.conf 2>/dev/null || true
-  install_nginx_file "$NGINX_SRC" "$NGINX_DST" "org HTTP"
+  install_nginx_file "$NGINX_SRC" "$NGINX_DST" "org HTTP (Cloudflare/origin :80)"
 fi
 
 if systemctl is-active --quiet nginx 2>/dev/null; then
