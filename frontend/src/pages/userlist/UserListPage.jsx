@@ -36,6 +36,7 @@ import {
   fetchOwnerCompaniesAll,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { pathnameIs, spaPath } from "../../utils/routing/pageRoutes.js";
+import { resolveDefaultLandingPath } from "../../utils/auth/sidebarPermissions.js";
 import { replaceBrowserPathOnly } from "../../utils/routing/privateBrowserUrl.js";
 import {
   canClearCompanySelection,
@@ -55,6 +56,7 @@ import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
 import "../../../public/css/admin-responsive.css";
+import "../../../public/css/select-unified.css";
 import {
   ALL_ROLE_OPTIONS,
   PAGE_SIZE,
@@ -395,7 +397,8 @@ export default function UserListPage() {
       try {
         const perms = Array.isArray(me.permissions) ? me.permissions : [];
         if (perms.length > 0 && !perms.includes("admin")) {
-          navigate(spaPath("dashboard"), { replace: true });
+          const landing = resolveDefaultLandingPath(me);
+          navigate(landing || spaPath("login"), { replace: true });
           return;
         }
         const rows = (await fetchOwnerCompaniesAll()).map(normalizeCompanyRow);

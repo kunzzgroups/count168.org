@@ -1173,6 +1173,15 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     font-family: var(--font-heading-page);
 }
 
+.dashboard-panel-card--chart .dashboard-panel-head {
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+}
+
+.dashboard-panel-card--chart .dashboard-panel-period-pill {
+    flex-shrink: 0;
+    align-self: center;
+}
+
 .dashboard-panel-chart-body {
     flex: 1;
     min-height: 0;
@@ -3258,6 +3267,12 @@ body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-pan
 
 body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card--chart .dashboard-panel-legend {
     gap: 4px 8px;
+}
+
+/* Group-only (summary tabs): keep chart date pill same as group+company drill-down */
+body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-card--chart .dashboard-panel-period-pill {
+    padding: 6px 12px;
+    font-size: clamp(12px, 0.85vw, 14px);
 }
 
 body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-chart-body {

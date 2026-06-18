@@ -677,6 +677,10 @@ export default function PaymentMaintenancePage() {
     localStorage.setItem(`selectedPermission_${companyCode}`, p);
   };
 
+  const handleCurrencySelectAll = useCallback(() => {
+    setSelectedCurrency(null);
+  }, []);
+
   const toggleSelect = useCallback((id) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }, []);
@@ -772,6 +776,7 @@ export default function PaymentMaintenancePage() {
         currencies={currencies}
         selectedCurrency={selectedCurrency}
         setSelectedCurrency={setSelectedCurrency}
+        onCurrencySelectAll={handleCurrencySelectAll}
         onDelete={handleDeleteClick}
         confirmDelete={confirmDelete}
         setConfirmDelete={setConfirmDelete}

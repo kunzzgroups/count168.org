@@ -11,6 +11,7 @@
 @import "../../public/css/dashboard-scrollbar.css";
 @import "../../public/css/portal-tooltip.css";
 @import "../../public/css/sidebar.css";
+@import "../../public/css/select-unified.css";
 
 /* --- Session boot loading (login → dashboard, once per session) --- */
 @keyframes ec-shell-spin {

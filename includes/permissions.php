@@ -302,4 +302,69 @@ if (!function_exists('checkCompanyCategoryPermission')) {
         }
     }
 }
+
+if (!function_exists('user_sidebar_permissions_list')) {
+    /**
+     * Sidebar permission keys from user.permissions JSON.
+     * Empty/null = unrestricted (owner / legacy full access).
+     *
+     * @return array<int, string>|null null = unrestricted
+     */
+    function user_sidebar_permissions_list(PDO $pdo, ?int $userId = null): ?array
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+
+        $role = strtolower((string) ($_SESSION['role'] ?? ''));
+        if ($role === 'owner') {
+            return null;
+        }
+
+        $userType = strtolower((string) ($_SESSION['user_type'] ?? ''));
+        if ($userType === 'member') {
+            return [];
+        }
+
+        $uid = $userId ?? (int) ($_SESSION['user_id'] ?? 0);
+        if ($uid <= 0) {
+            return [];
+        }
+
+        $stmt = $pdo->prepare('SELECT permissions FROM user WHERE id = ? LIMIT 1');
+        $stmt->execute([$uid]);
+        $raw = $stmt->fetchColumn();
+        if ($raw === false || $raw === null || trim((string) $raw) === '') {
+            return null;
+        }
+
+        $decoded = json_decode((string) $raw, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+        if (count($decoded) === 0) {
+            return null;
+        }
+
+        return array_values(array_filter(array_map('strval', $decoded)));
+    }
+}
+
+if (!function_exists('user_has_sidebar_permission')) {
+    function user_has_sidebar_permission(PDO $pdo, string $key, ?int $userId = null): bool
+    {
+        $perms = user_sidebar_permissions_list($pdo, $userId);
+        if ($perms === null) {
+            return true;
+        }
+        return in_array($key, $perms, true);
+    }
+}
+
+if (!function_exists('user_can_access_dashboard')) {
+    function user_can_access_dashboard(PDO $pdo, ?int $userId = null): bool
+    {
+        return user_has_sidebar_permission($pdo, 'home', $userId);
+    }
+}
 ?>

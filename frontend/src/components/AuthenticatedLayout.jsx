@@ -19,9 +19,11 @@ import {
 import { useExpirationReminder } from "../hooks/useExpirationReminder.js";
 import { applyLoginLang } from "../utils/i18n/useLoginLang.js";
 import {
+  canAccessDashboard,
   canAccessFullMaintenance,
   canAccessLimitedMaintenance,
   canAccessPermission,
+  resolveDefaultLandingPath,
   showMaintenanceInSidebar,
 } from "../utils/auth/sidebarPermissions.js";
 import {
@@ -73,6 +75,7 @@ import { pathnameIs, pathnameToPageKey, spaPath } from "../utils/routing/pageRou
 import { stripPrivateQueryFromBrowserUrl } from "../utils/routing/privateBrowserUrl.js";
 import { resetDashboardSessionCaches } from "../utils/dashboard/dashboardCache.js";
 import "../../public/css/modal-close-unified.css";
+import "../../public/css/select-unified.css";
 
 function formatSidebarExpirationHint(hint, i18n) {
   if (!hint || hint === "-") return "-";
@@ -1033,6 +1036,11 @@ export default function AuthenticatedLayout() {
 
   if (loading) return <AppBootLoading label={lang === "zh" ? "正在加载…" : "Loading…"} />;
   if (!me) return <Navigate to={spaPath("login")} replace />;
+
+  if (pageKey === "dashboard" && !canAccessDashboard(me)) {
+    const fallback = resolveDefaultLandingPath(me);
+    if (fallback) return <Navigate to={fallback} replace />;
+  }
 
   return (
     <AuthSessionProvider value={sessionContextValue}>

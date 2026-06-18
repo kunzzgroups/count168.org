@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import SimpleSelect from "../../components/SimpleSelect.jsx";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/deleted-log.css";
@@ -211,33 +212,25 @@ export default function DeletedLogPage() {
             {appliedEntry !== "" ? <input type="hidden" name="entry" value={appliedEntry} /> : null}
             <div>
               <label htmlFor="f-user">User</label>
-              <select
+              <SimpleSelect
                 id="f-user"
                 value={draftUser}
-                onChange={(e) => setDraftUser(e.target.value)}
-              >
-                <option value="">All</option>
-                {usersDistinct.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
+                onChange={setDraftUser}
+                options={usersDistinct.map((u) => ({ value: u, label: u }))}
+                placeholder="All"
+                includeEmptyOption
+              />
             </div>
             <div>
               <label htmlFor="f-module">Module</label>
-              <select
+              <SimpleSelect
                 id="f-module"
                 value={draftModule}
-                onChange={(e) => setDraftModule(e.target.value)}
-              >
-                <option value="">All</option>
-                {moduleOptions.map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                onChange={setDraftModule}
+                options={moduleOptions.map(([key, label]) => ({ value: key, label }))}
+                placeholder="All"
+                includeEmptyOption
+              />
             </div>
             <div>
               <label htmlFor="f-q">Search</label>

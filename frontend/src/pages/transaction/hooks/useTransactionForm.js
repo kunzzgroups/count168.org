@@ -267,38 +267,6 @@ export function useTransactionForm({
       return;
     }
 
-    const toId = txToAccount?.id ? String(txToAccount.id) : "";
-    const fromId = txFromAccount?.id ? String(txFromAccount.id) : "";
-
-    if (!toId) {
-      pushToast(m.pleaseSelectToAccount, "error");
-      return;
-    }
-
-    const needsFromTo = ["CONTRA", "PAYMENT", "CLAIM", "PROFIT", "CLEAR"].includes(txType);
-    const isAdjustment = txType === "ADJUSTMENT";
-
-    if (txType === "PROFIT") {
-      if (!fromId) {
-        pushToast(m.profitPleaseSelectFromAccount, "error");
-        return;
-      }
-      if (toId && fromId && toId === fromId) {
-        pushToast(m.profitSameAccountError, "error");
-        return;
-      }
-    }
-
-    if (needsFromTo && (!fromId || fromId === toId)) {
-      pushToast(m.paymentContraEtcNeedFromAccount, "error");
-      return;
-    }
-
-    if (!txDate) {
-      pushToast(m.pleaseSelectTransactionDate, "error");
-      return;
-    }
-
     if (txType === "RATE") {
       const toId = rateToAccount?.id ? String(rateToAccount.id) : "";
       const fromId = rateFromAccount?.id ? String(rateFromAccount.id) : "";
@@ -405,6 +373,38 @@ export function useTransactionForm({
       } finally {
         setSubmitting(false);
       }
+      return;
+    }
+
+    const toId = txToAccount?.id ? String(txToAccount.id) : "";
+    const fromId = txFromAccount?.id ? String(txFromAccount.id) : "";
+
+    if (!toId) {
+      pushToast(m.pleaseSelectToAccount, "error");
+      return;
+    }
+
+    const needsFromTo = ["CONTRA", "PAYMENT", "CLAIM", "PROFIT", "CLEAR"].includes(txType);
+    const isAdjustment = txType === "ADJUSTMENT";
+
+    if (txType === "PROFIT") {
+      if (!fromId) {
+        pushToast(m.profitPleaseSelectFromAccount, "error");
+        return;
+      }
+      if (toId && fromId && toId === fromId) {
+        pushToast(m.profitSameAccountError, "error");
+        return;
+      }
+    }
+
+    if (needsFromTo && (!fromId || fromId === toId)) {
+      pushToast(m.paymentContraEtcNeedFromAccount, "error");
+      return;
+    }
+
+    if (!txDate) {
+      pushToast(m.pleaseSelectTransactionDate, "error");
       return;
     }
 

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import SimpleSelect from "../../../../components/SimpleSelect.jsx";
 import {
   buildMaintenancePeriodPresets,
   formatDmyFromYmd,
@@ -30,6 +31,7 @@ export default function PaymentMaintenanceFilters({
   currencies,
   selectedCurrency,
   setSelectedCurrency,
+  onCurrencySelectAll,
   onDelete,
   confirmDelete,
   setConfirmDelete,
@@ -37,6 +39,17 @@ export default function PaymentMaintenanceFilters({
   m,
 }) {
   const periodPresets = useMemo(() => buildMaintenancePeriodPresets(m), [m]);
+  const transactionTypeOptions = useMemo(
+    () => [
+      { value: "CONTRA", label: "CONTRA" },
+      { value: "PAYMENT", label: "PAYMENT" },
+      { value: "RECEIVE", label: "RECEIVE" },
+      { value: "CLAIM", label: "CLAIM" },
+      { value: "ADJUSTMENT", label: "ADJUSTMENT" },
+      { value: "RATE", label: "RATE" },
+    ],
+    [],
+  );
 
   return (
     <div className="customer-report-filter-container">
@@ -47,21 +60,15 @@ export default function PaymentMaintenanceFilters({
               {m.transactionType}
             </span>
             <div className="report-outlined-inner">
-              <select
+              <SimpleSelect
                 id="filter_transaction_type"
                 className="maintenance-select"
                 value={transactionType}
-                onChange={(e) => setTransactionType(e.target.value)}
-                aria-labelledby="payment-maint-type-legend"
-              >
-                <option value="">{m.allTypes}</option>
-                <option value="CONTRA">CONTRA</option>
-                <option value="PAYMENT">PAYMENT</option>
-                <option value="RECEIVE">RECEIVE</option>
-                <option value="CLAIM">CLAIM</option>
-                <option value="ADJUSTMENT">ADJUSTMENT</option>
-                <option value="RATE">RATE</option>
-              </select>
+                onChange={setTransactionType}
+                options={transactionTypeOptions}
+                placeholder={m.allTypes}
+                ariaLabelledBy="payment-maint-type-legend"
+              />
             </div>
           </div>
         </div>
@@ -118,11 +125,13 @@ export default function PaymentMaintenanceFilters({
             currencyList={currencies}
             showAllCurrencies={!selectedCurrency}
             selectedCurrencies={selectedCurrency ? [selectedCurrency] : []}
+            toggleAllCurrencies={onCurrencySelectAll}
             toggleCurrency={(code) => setSelectedCurrency(code)}
             t={(key) => {
               if (key === "groupId") return m.groupId;
               if (key === "company") return m.company;
               if (key === "currency") return m.currency;
+              if (key === "currencyAll") return m.currencyAll;
               if (key === "groupFilterAll") return m.all || "All";
               return m[key] || key;
             }}

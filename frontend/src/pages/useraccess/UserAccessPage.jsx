@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import SimpleSelect from "../../components/SimpleSelect.jsx";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { spaPath } from "../../utils/routing/pageRoutes.js";
@@ -272,12 +273,15 @@ export default function UserAccessPage() {
           </div>
 
           {sourceType === "template" ? (
-            <select value={templateUserId} onChange={(e) => setTemplateUserId(e.target.value)} style={{ width: "100%" }}>
-              <option value="">-- Select user --</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>{u.name} ({u.login_id})</option>
-              ))}
-            </select>
+            <SimpleSelect
+              value={templateUserId}
+              onChange={setTemplateUserId}
+              options={users.map((u) => ({
+                value: String(u.id),
+                label: `${u.name} (${u.login_id})`,
+              }))}
+              placeholder="-- Select user --"
+            />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 6 }}>
               {PERMISSION_OPTIONS.map((p) => (

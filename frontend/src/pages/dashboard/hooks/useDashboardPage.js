@@ -50,7 +50,7 @@ import {
 } from "../lib/dashboardChart.jsx";
 import {
   chartMonthSpan,
-  formatDisplayDate,
+  formatChartDateRangeText,
   parseYmd,
   previousMonthEquivalentRange,
   shouldAggregateChartByMonth,
@@ -6068,14 +6068,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     i18n.locale,
   ]);
 
-  const chartDateRangeText = useMemo(() => {
-    if (dashboardData?.date_range) {
-      return `${formatDisplayDate(dashboardData.date_range.from)} ${i18n.to} ${formatDisplayDate(
-        dashboardData.date_range.to
-      )}`;
-    }
-    return `${formatDisplayDate(dateFrom)} ${i18n.to} ${formatDisplayDate(dateTo)}`;
-  }, [dashboardData, dateFrom, dateTo, i18n.to]);
+  const chartDateRangeText = useMemo(
+    () => formatChartDateRangeText(dateFrom, dateTo, i18n.to),
+    [dateFrom, dateTo, i18n.to]
+  );
 
   const chartSeries = useMemo(() => {
     const series = [

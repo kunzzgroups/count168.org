@@ -3184,6 +3184,10 @@ try {
         throw new Exception('用户未登录');
     }
 
+    if (!user_can_access_dashboard($pdo)) {
+        throw new Exception('无权访问 Dashboard');
+    }
+
     // 获取搜索参数
     $date_from = $_GET['date_from'] ?? null;
     $date_to = $_GET['date_to'] ?? null;

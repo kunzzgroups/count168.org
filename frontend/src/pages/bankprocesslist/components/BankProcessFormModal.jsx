@@ -112,20 +112,15 @@ export default function BankProcessFormModal({
                         {editMode ? (
                           <input id="bank_bank" readOnly className="bank-input" value={form.bank} />
                         ) : (
-                          <select
+                          <BankSimpleSelect
                             id="bank_bank"
-                            name="bank"
-                            className="bank-select"
                             value={form.bank}
-                            required
+                            onChange={(v) => setForm((prev) => ({ ...prev, bank: v }))}
+                            options={banksList.map((b) => ({ value: b, label: b }))}
+                            placeholder={t("selectBank")}
                             disabled={!form.country}
-                            onChange={(ev) => setForm((prev) => ({ ...prev, bank: ev.target.value }))}
-                          >
-                            <option value="">{t("selectBank")}</option>
-                            {banksList.map((b) => (
-                              <option key={b} value={b}>{b}</option>
-                            ))}
-                          </select>
+                            includeEmptyOption
+                          />
                         )}
                         {!editMode ? (
                           <button type="button" className="bank-add-btn" title={t("addNewBank")} onClick={onOpenBankModal}>+</button>

@@ -1,4 +1,16 @@
+import { useMemo } from "react";
+import SimpleSelect from "../../../components/SimpleSelect.jsx";
 import AccountSelect from "./AccountSelect.jsx";
+
+const TX_TYPE_OPTIONS = [
+  "CONTRA",
+  "PAYMENT",
+  "CLAIM",
+  "PROFIT",
+  "RATE",
+  "ADJUSTMENT",
+  "CLEAR",
+];
 
 export default function TransactionAddSection({
   txType,
@@ -57,6 +69,11 @@ export default function TransactionAddSection({
   const standardHidden = txType === "RATE";
   const dateDisplayStandard = txDate?.trim() || todayDmy;
   const dateDisplayRate = rateDate?.trim() || todayDmy;
+  const txTypeOptions = useMemo(() => TX_TYPE_OPTIONS.map((v) => ({ value: v, label: v })), []);
+  const currencySelectOptions = useMemo(
+    () => (currencyOptions || []).map((c) => ({ value: c, label: c })),
+    [currencyOptions],
+  );
 
   return (
     <div className={`transaction-add-section${mutationsBlocked ? " transaction-add-section--read-only" : ""}`}>
@@ -64,21 +81,16 @@ export default function TransactionAddSection({
         <label className="transaction-label" htmlFor="transaction_type">
           {m.type}
         </label>
-        <select
+        <SimpleSelect
           id="transaction_type"
           className="transaction-select"
           value={txType}
           disabled={mutationsBlocked}
-          onChange={(e) => setTxType(e.target.value)}
-        >
-          <option value="CONTRA">CONTRA</option>
-          <option value="PAYMENT">PAYMENT</option>
-          <option value="CLAIM">CLAIM</option>
-          <option value="PROFIT">PROFIT</option>
-          <option value="RATE">RATE</option>
-          <option value="ADJUSTMENT">ADJUSTMENT</option>
-          <option value="CLEAR">CLEAR</option>
-        </select>
+          onChange={setTxType}
+          options={txTypeOptions}
+          placeholder={m.type}
+          includeEmptyOption={false}
+        />
       </div>
 
       <div id="standard-transaction-fields" style={{ display: standardHidden ? "none" : "block" }}>
@@ -159,20 +171,15 @@ export default function TransactionAddSection({
           <label className="transaction-label" htmlFor="transaction_currency">
             {m.currency}
           </label>
-          <select
+          <SimpleSelect
             id="transaction_currency"
             className="transaction-select"
             value={txCurrency}
             disabled={mutationsBlocked}
-            onChange={(e) => setTxCurrency(e.target.value)}
-          >
-            <option value="">{m.selectCurrency}</option>
-            {currencyOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
+            onChange={setTxCurrency}
+            options={currencySelectOptions}
+            placeholder={m.selectCurrency}
+          />
         </div>
 
         <div className="transaction-form-group">
@@ -268,21 +275,15 @@ export default function TransactionAddSection({
         <div className="transaction-form-group transaction-inline-row">
           <label className="transaction-label">{m.currency}</label>
           <div className="rate-row rate-row-five-cols">
-            <select
+            <SimpleSelect
               id="rate_currency_from"
               className="transaction-select"
               value={rateCurrencyFrom}
               disabled={mutationsBlocked}
-              onChange={(e) => setRateCurrencyFrom(e.target.value)}
-              aria-label={m.fromAccount}
-            >
-              <option value="">{m.currency}</option>
-              {currencyOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={setRateCurrencyFrom}
+              options={currencySelectOptions}
+              placeholder={m.currency}
+            />
             <input
               type="number"
               step="0.01"
@@ -305,21 +306,15 @@ export default function TransactionAddSection({
               onChange={(e) => setRateExchangeRateRaw(e.target.value)}
               aria-label={m.rate}
             />
-            <select
+            <SimpleSelect
               id="rate_currency_to"
               className="transaction-select"
               value={rateCurrencyTo}
               disabled={mutationsBlocked}
-              onChange={(e) => setRateCurrencyTo(e.target.value)}
-              aria-label={m.toAccount}
-            >
-              <option value="">{m.currency}</option>
-              {currencyOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              onChange={setRateCurrencyTo}
+              options={currencySelectOptions}
+              placeholder={m.currency}
+            />
             <input
               type="number"
               step="0.01"

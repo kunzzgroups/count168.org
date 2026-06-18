@@ -4767,7 +4767,7 @@ body.process-page > .process-modal {
     font-family: var(--font-ui) !important;
     border: 1px solid #dbe3ee !important;
     border-radius: 0.52rem !important;
-    min-height: 4rem !important;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem)) !important;
     box-sizing: border-box;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
@@ -4880,7 +4880,7 @@ body.process-page > .process-modal {
     padding: 0.7rem 0.9rem;
     font-size: var(--text-small);
     font-family: var(--font-ui);
-    min-height: 4rem;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
     box-sizing: border-box;
 }
@@ -4963,12 +4963,9 @@ body.process-page > .process-modal {
     align-self: start !important;
 }
 
-.process-page #addModal .process-form.add-grid .add-col:first-child {
-    padding-top: 0.8rem !important;
-}
-
+.process-page #addModal .process-form.add-grid .add-col:first-child,
 .process-page #addModal .process-form.add-grid .add-col:last-child {
-    padding-top: 0.55rem !important;
+    padding-top: calc(var(--space-gap, 0.75rem) * 0.65) !important;
 }
 
 .process-page #addModal .process-form .form-group > label {
@@ -5270,7 +5267,7 @@ body.process-page > .process-modal {
     display: flex;
     flex-direction: row;
     flex-wrap: nowrap;
-    align-items: stretch;
+    align-items: center;
     gap: calc(var(--space-gap, 0.75rem) * 0.65);
     width: 100%;
     min-width: 0;
@@ -5289,9 +5286,9 @@ body.process-page > .process-modal {
 .process-form-modal .btn-multi-process-toggle,
 #addModal .modal-content.process-form-modal .btn-multi-process-toggle {
     flex-shrink: 0;
-    align-self: stretch;
+    align-self: center;
     min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
-    height: auto;
+    height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
     min-width: clamp(7.25rem, 9vw, 9.75rem);
     padding: 0 calc(var(--space-gap, 0.75rem) * 0.85);
     font-family: var(--font-heading-page);
@@ -5460,7 +5457,7 @@ body.process-page > .process-modal {
     flex: 1 1 0;
     min-width: 0;
     padding: var(--user-gc-segment-padding, 4px clamp(10px, 1.2vw, 18px));
-    font-size: var(--text-medium) !important;
+    font-size: var(--process-form-modal-control-size, var(--text-small)) !important;
     font-weight: var(--font-weight-semibold) !important;
 }
 
@@ -7298,7 +7295,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     font-family: var(--font-ui) !important;
     line-height: 1.35;
     padding: 0.7rem 0.95rem !important;
-    min-height: 4rem;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
     border: 1px solid #dbe3ee !important;
     border-radius: 0.52rem !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
@@ -7418,12 +7415,9 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     align-self: start !important;
 }
 
-#addModal .process-form.add-grid .add-col:first-child {
-    padding-top: 0.8rem !important;
-}
-
+#addModal .process-form.add-grid .add-col:first-child,
 #addModal .process-form.add-grid .add-col:last-child {
-    padding-top: 0.55rem !important;
+    padding-top: calc(var(--space-gap, 0.75rem) * 0.65) !important;
 }
 
 #addModal .process-form .form-group > label {
@@ -7451,7 +7445,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     font-family: var(--font-ui) !important;
     line-height: 1.35 !important;
     padding: 0.7rem 0.9rem !important;
-    min-height: 4rem !important;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem)) !important;
     border: 1px solid #dbe3ee !important;
     border-radius: 0.52rem !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
@@ -7569,12 +7563,9 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     align-self: start !important;
 }
 
-#editModal .process-form.add-grid .add-col:first-child {
-    padding-top: 0.8rem !important;
-}
-
+#editModal .process-form.add-grid .add-col:first-child,
 #editModal .process-form.add-grid .add-col:last-child {
-    padding-top: 0.55rem !important;
+    padding-top: calc(var(--space-gap, 0.75rem) * 0.65) !important;
 }
 
 #editModal .process-form .form-group {
@@ -7598,7 +7589,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     font-family: var(--font-ui) !important;
     line-height: 1.35 !important;
     padding: 0.7rem 0.9rem !important;
-    min-height: 4rem !important;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem)) !important;
     border: 1px solid #dbe3ee !important;
     border-radius: 0.52rem !important;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
@@ -7741,13 +7732,10 @@ body.process-page.process-page--bank.process-page--bank-show-all .process-table-
 }
 
 .process-page #editModal .process-form.add-grid .add-col:first-child,
-#editModal .process-form.add-grid .add-col:first-child {
-    padding-top: 0.8rem !important;
-}
-
 .process-page #editModal .process-form.add-grid .add-col:last-child,
+#editModal .process-form.add-grid .add-col:first-child,
 #editModal .process-form.add-grid .add-col:last-child {
-    padding-top: 0.55rem !important;
+    padding-top: calc(var(--space-gap, 0.75rem) * 0.65) !important;
 }
 
 .process-page #editModal .day-use-header,
@@ -7931,7 +7919,7 @@ body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
     font-weight: 700;
     font-family: var(--font-heading-page);
     color: #111827;
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 calc(var(--space-gap, 0.75rem) * 0.65) 0;
     padding-bottom: 0.25rem;
     border-bottom: 0.125rem solid #e2e8f0;
     border-left: none;
@@ -8008,7 +7996,7 @@ body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
 .process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child),
 #addModal .modal-content.process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child),
 #editModal .modal-content.process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child) {
-    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.5);
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.85);
     padding-bottom: 0;
     border-bottom: none;
 }
@@ -8113,6 +8101,8 @@ body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
     font-size: var(--process-form-modal-hint-size, var(--text-small)) !important;
     font-family: var(--font-ui) !important;
     color: var(--color-text-muted, #64748b);
+    display: block;
+    margin-top: calc(var(--space-gap, 0.75rem) * 0.3);
 }
 
 .process-form-modal .selected-descriptions,
@@ -8403,5 +8393,63 @@ body.process-page > #editModal.modal > .modal-content.process-form-modal,
     padding: 16px 40px !important;
     gap: 12px !important;
     border-top: 1px solid #e5e7eb !important;
+}
+
+/* Add/Edit Process modal — unified row spacing (override legacy stacked margins) */
+#addModal .modal-content.process-form-modal .process-form .form-group,
+#editModal .modal-content.process-form-modal .process-form .form-group {
+    margin-bottom: 0 !important;
+}
+
+#addModal .modal-content.process-form-modal .process-form .form-row,
+#editModal .modal-content.process-form-modal .process-form .form-row {
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.75) !important;
+    gap: calc(var(--space-gap, 0.75rem) * 0.65) !important;
+}
+
+#addModal .modal-content.process-form-modal .process-form.add-grid .add-col:first-child,
+#addModal .modal-content.process-form-modal .process-form.add-grid .add-col:last-child,
+#editModal .modal-content.process-form-modal .process-form.add-grid .add-col:first-child,
+#editModal .modal-content.process-form-modal .process-form.add-grid .add-col:last-child {
+    padding-top: calc(var(--space-gap, 0.75rem) * 0.65) !important;
+}
+
+#addModal .modal-content.process-form-modal .input-with-checkbox > input[type="text"],
+#editModal .modal-content.process-form-modal .input-with-checkbox > input[type="text"] {
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem)) !important;
+    height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+}
+
+#addModal .modal-content.process-form-modal .day-use-pill-row,
+#editModal .modal-content.process-form-modal .day-use-pill-row {
+    gap: calc(var(--space-gap, 0.75rem) * 0.45);
+}
+
+#addModal .modal-content.process-form-modal .day-use-pill-row .user-gc-inline-label.day-use-pill-heading,
+#editModal .modal-content.process-form-modal .day-use-pill-row .user-gc-inline-label.day-use-pill-heading {
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.25);
+    font-size: var(--process-form-modal-label-size, var(--text-medium)) !important;
+    font-weight: var(--font-weight-semibold) !important;
+    font-family: var(--font-heading-page) !important;
+    color: var(--color-body-strong, #0f172a);
+}
+
+#editModal .modal-content.process-form-modal .field-help,
+#editModal .modal-content.process-form-modal .form-row small {
+    display: block;
+    margin-top: calc(var(--space-gap, 0.75rem) * 0.3);
+}
+
+/* First row in each column: Copy From ↔ Remove Word — match label spacing & control top edge */
+#addModal .modal-content.process-form-modal .add-col > .process-form-section:first-child > .form-row:first-of-type .form-group > label,
+#editModal .modal-content.process-form-modal .add-col > .process-form-section:first-child > .form-row:first-of-type .form-group > label {
+    display: block !important;
+    line-height: 1.3 !important;
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.45) !important;
+}
+
+#addModal .modal-content.process-form-modal .add-col > .process-form-section:first-child > .account-section-header,
+#editModal .modal-content.process-form-modal .add-col > .process-form-section:first-child > .account-section-header {
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.65) !important;
 }
 

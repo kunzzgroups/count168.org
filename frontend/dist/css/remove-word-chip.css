@@ -138,7 +138,7 @@ body.ec-auth-shell.process-page .process-form-modal .dc-remove-word-chip-input .
     display: flex;
     flex-direction: column;
     align-items: stretch;
-    gap: clamp(4px, 0.38vw, 6px);
+    gap: 0;
     min-width: 0;
 }
 
@@ -147,14 +147,14 @@ body.ec-auth-shell.process-page .process-form-modal .dc-remove-word-chip-input .
 #editModal .modal-content.process-form-modal .process-form .form-group.process-form-remove-word-group > label {
     width: auto !important;
     max-width: 100% !important;
-    margin-bottom: 0 !important;
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.45) !important;
 }
 
 .process-form-modal .process-form .form-group.process-form-remove-word-group .field-help,
 #addModal .modal-content.process-form-modal .process-form .form-group.process-form-remove-word-group .field-help,
 #editModal .modal-content.process-form-modal .process-form .form-group.process-form-remove-word-group .field-help {
     display: block;
-    margin-top: 0;
+    margin-top: calc(var(--space-gap, 0.75rem) * 0.3);
     font-style: italic;
     color: #666;
     line-height: 1.25;
@@ -166,8 +166,8 @@ body.ec-auth-shell.process-page .process-form-modal .dc-remove-word-chip-input .
     flex: 1;
     min-width: 0;
     max-width: 100%;
-    min-height: 36px;
-    padding: 5px 10px;
+    min-height: var(--process-form-modal-control-min-h, clamp(2.75rem, 2.25vw, 3.25rem));
+    padding: calc(var(--space-gap, 0.75rem) * 0.45) calc(var(--space-gap, 0.75rem) * 0.65);
     border: 1px solid var(--dc-border, #e2e8f0) !important;
     border-radius: 6px !important;
     background: #ffffff !important;

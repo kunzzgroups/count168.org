@@ -57,6 +57,11 @@ export function formatDisplayDate(ymd) {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
+/** Trend chart header: DD/MM/YYYY to DD/MM/YYYY (always from filter range, not API payload). */
+export function formatChartDateRangeText(fromYmd, toYmd, toWord = "to") {
+  return `${formatDisplayDate(fromYmd)} ${toWord} ${formatDisplayDate(toYmd)}`;
+}
+
 export function formatChartTooltipLabel(dateKey, locale = "en-US") {
   if (!dateKey) return "";
   if (/^\d{4}-\d{2}$/.test(dateKey)) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { accountCompanyPickerZIndex, accountModalOverlayZIndex } from "../../../components/ProcessModalPortal.jsx";
+import SimpleSelect from "../../../components/SimpleSelect.jsx";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 
 /** Inline so first paint is 3-column even if extracted CSS applies one frame late */
@@ -191,6 +192,23 @@ export default function UserModal({
   const [bulkSelectionSettling, setBulkSelectionSettling] = useState(false);
   const bulkSelectionTimerRef = useRef(null);
   const { submitting, guardSubmit } = useSubmitGuard(open);
+
+  const roleOptions = useMemo(() => {
+    if (editingRow?.is_owner_shadow) {
+      return [{ value: "owner", label: "Owner" }];
+    }
+    const list = isEditMode
+      ? getAvailableRolesForEdit(currentUserRole, editingRow?.role)
+      : getAvailableRolesForCreation(currentUserRole);
+    const opts = [...list];
+    if (isEditMode && form.role && !list.find((x) => x.value === form.role)) {
+      opts.push({
+        value: form.role,
+        label: ALL_ROLE_OPTIONS.find((x) => x.value === form.role)?.label || String(form.role).toUpperCase(),
+      });
+    }
+    return opts;
+  }, [isEditMode, currentUserRole, editingRow, form.role]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -418,17 +436,15 @@ export default function UserModal({
               <h3 className="user-modal-col-title">{t("userInformation")}</h3>
               <form id="userForm" onSubmit={guardSubmit(onSave)}>
               <div className="user-info-grid">
-                <div className="user-info-field-row">
-                  <div className="form-group user-info-field">
-                    <label htmlFor="login_id">{t("loginId")} *</label>
-                    <input
-                      id="login_id"
-                      required
-                      disabled={loginDisabled || pageReadOnlyLock}
-                      value={form.login_id}
-                      onChange={(e) => setForm((f) => ({ ...f, login_id: e.target.value.toUpperCase() }))}
-                    />
-                  </div>
+                <div className="form-group user-info-field">
+                  <label htmlFor="login_id">{t("loginId")} *</label>
+                  <input
+                    id="login_id"
+                    required
+                    disabled={loginDisabled || pageReadOnlyLock}
+                    value={form.login_id}
+                    onChange={(e) => setForm((f) => ({ ...f, login_id: e.target.value.toUpperCase() }))}
+                  />
                 </div>
                 {showSecondaryPassword ? (
                   <div className="form-group user-info-field password-row-container password-row-container--split">
@@ -463,25 +479,18 @@ export default function UserModal({
                   </div>
                   <div className="form-group user-info-field">
                     <label htmlFor="role">{t("roleRequired")}</label>
-                    <select id="role" required disabled={roleSelectDisabled || fieldLocks.role || pageReadOnlyLock} value={form.role} onChange={(e) => {
-                      const v = e.target.value;
-                      setForm((f) => ({ ...f, role: v }));
-                      applyPermTemplate(v, true);
-                    }}>
-                      <option value="">{t("selectRole")}</option>
-                      {editingRow?.is_owner_shadow ? (
-                        <option value="owner">Owner</option>
-                      ) : (
-                        <>
-                          {(isEditMode ? getAvailableRolesForEdit(currentUserRole, editingRow?.role) : getAvailableRolesForCreation(currentUserRole)).map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                          {isEditMode && form.role && !getAvailableRolesForEdit(currentUserRole, editingRow?.role).find((x) => x.value === form.role) ? (
-                            <option value={form.role}>{ALL_ROLE_OPTIONS.find((x) => x.value === form.role)?.label || String(form.role).toUpperCase()}</option>
-                          ) : null}
-                        </>
-                      )}
-                    </select>
+                    <SimpleSelect
+                      id="role"
+                      value={form.role}
+                      onChange={(v) => {
+                        setForm((f) => ({ ...f, role: v }));
+                        applyPermTemplate(v, true);
+                      }}
+                      options={roleOptions}
+                      placeholder={t("selectRole")}
+                      disabled={roleSelectDisabled || fieldLocks.role || pageReadOnlyLock}
+                      required
+                    />
                   </div>
                 </div>
                 <div className="form-group user-info-field">

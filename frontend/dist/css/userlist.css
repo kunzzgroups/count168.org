@@ -1361,13 +1361,13 @@ label.user-modal-col-title.acc-proc-label {
 
 /* User modal — 基本信息：Login 独占一行，Name|Role 两列 */
 #userModal .user-info-field-row {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     width: 100%;
     min-width: 0;
     margin: 0 0 12px 0;
-    align-items: flex-start;
+    align-items: end;
 }
 
 #userModal .user-info-field-row > .form-group.user-info-field,
@@ -1378,6 +1378,10 @@ label.user-modal-col-title.acc-proc-label {
 }
 
 @media (max-width: 440px) {
+    #userModal .user-info-field-row {
+        grid-template-columns: 1fr;
+    }
+
     #userModal .user-info-field-row > .form-group.user-info-field,
     #userModal .user-info-field-row > .form-group.password-row-container {
         flex-basis: 100%;
@@ -2182,13 +2186,9 @@ label.user-modal-col-title.acc-proc-label {
     font-size: 14px;
 }
 
-/* Add/Edit User — Login ID 字段标题 */
+/* Add/Edit User — Login ID 标签与其它字段一致 */
 #userModal label[for="login_id"] {
-    font-size: var(--text-medium);
-}
-
-#userModal select#role {
-    font-size: var(--text-tiny);
+    font-size: 14px;
 }
 
 .user-page .form-group input,
@@ -3957,4 +3957,55 @@ body.datacapture-summary-page .btn-delete:disabled:hover {
     transform: none !important;
     cursor: not-allowed;
     opacity: 0.9;
+}
+
+/* User modal — Name / Role 同行：控件等高、底边对齐 */
+#userModal .user-info-field-row > .form-group.user-info-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    margin-bottom: 0;
+}
+
+#userModal .user-info-field-row > .form-group.user-info-field label {
+    margin-bottom: 0;
+    line-height: 1.25;
+}
+
+/* Login ID / Password / Name / Role — 输入框与下拉统一高度 */
+#userModal .user-info-grid > .form-group.user-info-field input#login_id,
+#userModal .user-info-grid > .form-group.user-info-field input#password,
+#userModal .password-row-container .password-field-wrapper input,
+#userModal .user-info-field-row input#name,
+#userModal .user-info-field-row .custom-select-button#role {
+    min-height: 32px !important;
+    height: 32px !important;
+    padding: 0 12px !important;
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 6px !important;
+    box-sizing: border-box !important;
+    background-color: #fff !important;
+    color: #0f172a !important;
+}
+
+#userModal .user-info-field-row .custom-select-button#role {
+    padding-right: 30px !important;
+}
+
+#userModal .user-info-field-row input#name:focus,
+#userModal .user-info-field-row input#name:focus-visible,
+#userModal .user-info-grid > .form-group.user-info-field input#login_id:focus,
+#userModal .user-info-grid > .form-group.user-info-field input#login_id:focus-visible,
+#userModal .user-info-grid > .form-group.user-info-field input#password:focus,
+#userModal .user-info-grid > .form-group.user-info-field input#password:focus-visible,
+#userModal .password-row-container .password-field-wrapper input:focus,
+#userModal .password-row-container .password-field-wrapper input:focus-visible,
+#userModal .user-info-field-row .custom-select-button#role:focus-visible,
+#userModal .user-info-field-row .custom-select-button#role.open {
+    outline: none !important;
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12) !important;
 }

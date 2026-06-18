@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { accountModalOverlayZIndex, accountCompanyPickerZIndex } from "./ProcessModalPortal.jsx";
+import SimpleSelect from "./SimpleSelect.jsx";
 import { useSubmitGuard } from "../hooks/useSubmitGuard.js";
 
 function upper(v) {
@@ -108,11 +109,35 @@ export default function AccountModal({
     return companyRows.filter((c) => String(c.company_id || "").toUpperCase().includes(q));
   }, [companyRows, companySearchQuery]);
 
+  const translate = (key, params) => (typeof t === "function" ? t(key, params) : key);
+
+  const roleOptions = useMemo(
+    () =>
+      (orderedRoles || []).map((r) => ({
+        value: r,
+        label: upper(r) === "UPLINE" ? translate("supplier") : r,
+      })),
+    [orderedRoles, t],
+  );
+
+  const alertTypeOptions = useMemo(
+    () => [
+      { value: "weekly", label: translate("weekly") },
+      { value: "monthly", label: translate("monthly") },
+      ...Array.from({ length: 31 }, (_, i) => ({
+        value: String(i + 1),
+        label: translate("days", { n: i + 1 }),
+      })),
+    ],
+    [t],
+  );
+
   if (!open) return null;
 
-  const text = (key, params) => (typeof t === "function" ? t(key, params) : key);
+  const text = translate;
   const modalId = isEditMode ? "account-editModal" : "account-addModal";
   const paymentAlertOn = form.payment_alert === "1";
+
   const currencyPlaceholder = text("newCurrencyPlaceholder");
   /** HTML size ≈ placeholder width (ch); CJK glyphs render wider → slight bump */
   const hasCjk = /[\u4e00-\u9fff\u3000-\u303f\u3040-\u30ff]/.test(currencyPlaceholder);
@@ -268,16 +293,12 @@ export default function AccountModal({
                   <div className="account-form-row">
                     <div className="account-form-group">
                       <label>{text("alertType")}</label>
-                      <select value={form.alert_type} onChange={(e) => setForm((f) => ({ ...f, alert_type: e.target.value }))}>
-                        <option value="">{text("selectType")}</option>
-                        <option value="weekly">{text("weekly")}</option>
-                        <option value="monthly">{text("monthly")}</option>
-                        {Array.from({ length: 31 }, (_, i) => (
-                          <option key={i + 1} value={String(i + 1)}>
-                            {text("days", { n: i + 1 })}
-                          </option>
-                        ))}
-                      </select>
+                      <SimpleSelect
+                        value={form.alert_type}
+                        onChange={(v) => setForm((f) => ({ ...f, alert_type: v }))}
+                        options={alertTypeOptions}
+                        placeholder={text("selectType")}
+                      />
                     </div>
                     <div className="account-form-group">
                       <label>{text("startDate")}</label>
@@ -313,14 +334,13 @@ export default function AccountModal({
 
               <div className="account-form-group">
                 <label>{text("roleRequired")}</label>
-                <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))} required>
-                  <option value="">{text("selectRole")}</option>
-                  {(orderedRoles || []).map((r) => (
-                    <option key={r} value={r}>
-                      {upper(r) === "UPLINE" ? text("supplier") : r}
-                    </option>
-                  ))}
-                </select>
+                <SimpleSelect
+                  value={form.role}
+                  onChange={(v) => setForm((f) => ({ ...f, role: v }))}
+                  options={roleOptions}
+                  placeholder={text("selectRole")}
+                  required
+                />
               </div>
               {paymentAlertOn ? (
                 <div className="account-form-group">
