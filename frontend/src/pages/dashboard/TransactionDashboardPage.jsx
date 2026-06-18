@@ -100,10 +100,8 @@ export default function TransactionDashboardPage() {
               earningsPanelStable={page.earningsPanelStable}
               earningsByCurrencyLoading={page.earningsByCurrencyLoading}
               exchangeRates={page.exchangeRates}
-              exchangeRatesError={page.exchangeRatesError}
               exchangeRatesLoading={page.exchangeRatesLoading}
               exchangeRateScopeKey={page.exchangeRateScopeKey}
-              rateFootnoteText={page.rateFootnoteText}
               convertedEarningsTotal={page.convertedEarningsTotal}
               showProfitChartTab={page.showProfitChartTab}
               earningsPanelView={page.earningsPanelView}

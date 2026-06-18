@@ -38,10 +38,8 @@ export function DashboardEarningsSummary({
   earningsPanelStable = true,
   earningsByCurrencyLoading,
   exchangeRates,
-  exchangeRatesError,
   exchangeRatesLoading,
   exchangeRateScopeKey = "",
-  rateFootnoteText,
   showProfitChartTab = false,
   earningsPanelView = "currency",
   onEarningsPanelViewChange,
@@ -601,15 +599,6 @@ export function DashboardEarningsSummary({
           </div>
         </div>
       </div>
-      {!isCompanyBreakdownView && showMultiCurrencyBreakdown && rateFootnoteText && (
-        <p
-          className={`dashboard-summary-rate-footnote${
-            exchangeRatesError || exchangeRates.unsupported?.length ? " is-warn" : ""
-          }${exchangeRatesLoading ? " is-muted" : ""}`}
-        >
-          {rateFootnoteText}
-        </p>
-      )}
     </div>
   );
 }

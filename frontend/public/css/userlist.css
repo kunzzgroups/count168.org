@@ -3979,8 +3979,8 @@ body.datacapture-summary-page .btn-delete:disabled:hover {
 #userModal .password-row-container .password-field-wrapper input,
 #userModal .user-info-field-row input#name,
 #userModal .user-info-field-row .custom-select-button#role {
-    min-height: 32px !important;
-    height: 32px !important;
+    min-height: 3.55rem !important;
+    height: 3.55rem !important;
     padding: 0 12px !important;
     font-size: 14px !important;
     line-height: 1.25 !important;

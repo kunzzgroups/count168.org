@@ -368,3 +368,25 @@ body.transaction-page .transaction-add-section .report-outlined-anchor .custom-s
 body.transaction-page .transaction-add-section .report-outlined-anchor:has(.custom-select-button.open) .custom-select-wrapper {
     z-index: 45;
 }
+
+/* Maintenance ProcessSelect — dropdown panel matches outlined trigger typography */
+body.maintenance-page .customer-report-filters .custom-select-dropdown .custom-select-search {
+    padding: clamp(4px, 0.35vw, 6px) !important;
+}
+
+body.maintenance-page .customer-report-filters .custom-select-dropdown .custom-select-search input {
+    font-size: clamp(9px, 0.63vw, 12px) !important;
+    font-weight: 600 !important;
+    font-family: var(--font-heading-page) !important;
+    min-height: clamp(24px, 1.75vw, 28px) !important;
+    padding: clamp(3px, 0.25vw, 5px) clamp(6px, 0.4vw, 8px) !important;
+    line-height: 1.35 !important;
+}
+
+body.maintenance-page .customer-report-filters .custom-select-dropdown .custom-select-option,
+body.maintenance-page .customer-report-filters .custom-select-dropdown .custom-select-no-results {
+    font-size: clamp(9px, 0.63vw, 12px) !important;
+    font-weight: 600 !important;
+    font-family: var(--font-heading-page) !important;
+    line-height: 1.35 !important;
+}

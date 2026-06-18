@@ -22,12 +22,15 @@ export default function SimpleSelect({
   wrapperClassName = "",
   portalDropdownClassName = "",
   ariaLabelledBy,
+  ariaLabel,
   dropdownCap = 260,
   minWidth = 180,
+  forcePortal = false,
 }) {
   const [open, setOpen] = useState(false);
   const [usePortal, setUsePortal] = useState(false);
   const [menuStyle, setMenuStyle] = useState(null);
+  const [menuPlacement, setMenuPlacement] = useState("below");
   const [optionsMaxHeight, setOptionsMaxHeight] = useState(240);
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
@@ -41,11 +44,12 @@ export default function SimpleSelect({
   const positionMenu = useCallback(() => {
     const btn = buttonRef.current;
     if (!btn) return;
-    const { menuStyle: nextMenuStyle, optionsMaxHeight: nextOptionsMaxHeight } = layoutPortalCustomSelect(
+    const { menuStyle: nextMenuStyle, optionsMaxHeight: nextOptionsMaxHeight, openBelow } = layoutPortalCustomSelect(
       btn,
       wrapRef.current,
       { minWidth, dropdownCap },
     );
+    setMenuPlacement(openBelow ? "below" : "above");
     setOptionsMaxHeight(nextOptionsMaxHeight);
     setMenuStyle(nextMenuStyle);
   }, [minWidth, dropdownCap]);
@@ -87,9 +91,11 @@ export default function SimpleSelect({
   const openDropdown = () => {
     if (disabled) return;
     const inModal = !!wrapRef.current?.closest(MODAL_SELECTOR);
-    setUsePortal(inModal);
+    const shouldPortal = forcePortal || inModal;
+    setUsePortal(shouldPortal);
+    if (!shouldPortal) setMenuPlacement("below");
     setOpen(true);
-    if (inModal) positionMenu();
+    if (shouldPortal) positionMenu();
   };
 
   const pick = (nextValue) => {
@@ -97,10 +103,13 @@ export default function SimpleSelect({
     close();
   };
 
+  const placementClass =
+    menuPlacement === "above" ? " custom-select-dropdown-above" : " custom-select-dropdown-below";
+
   const dropdownNode = (
     <div
       ref={dropdownRef}
-      className={`custom-select-dropdown show${usePortal ? " custom-select-dropdown-portal" : ""}${portalDropdownClassName ? ` ${portalDropdownClassName}` : ""}`}
+      className={`custom-select-dropdown show${placementClass}${usePortal ? " custom-select-dropdown-portal" : ""}${portalDropdownClassName ? ` ${portalDropdownClassName}` : ""}`}
       style={usePortal && menuStyle ? menuStyle : undefined}
       role="listbox"
       id={id ? `${id}_dropdown` : undefined}
@@ -158,12 +167,13 @@ export default function SimpleSelect({
         ref={buttonRef}
         id={id}
         type="button"
-        className={`custom-select-button${open ? " open" : ""}${showPlaceholderTone ? " simple-select-button--placeholder" : ""}${className ? ` ${className}` : ""}`}
+        className={`custom-select-button${open ? " open" : ""}${open ? (menuPlacement === "above" ? " open-above" : " open-below") : ""}${showPlaceholderTone ? " simple-select-button--placeholder" : ""}${className ? ` ${className}` : ""}`}
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="listbox"
         aria-required={required || undefined}
         aria-labelledby={ariaLabelledBy || undefined}
+        aria-label={!ariaLabelledBy && ariaLabel ? ariaLabel : undefined}
         onClick={() => (open ? close() : openDropdown())}
       >
         {displayLabel}

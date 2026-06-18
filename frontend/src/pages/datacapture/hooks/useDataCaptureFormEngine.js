@@ -314,8 +314,11 @@ export function useDataCaptureFormEngine(
   }, [companyId, applyCompanyOnlyFields, captureDate, reloadProcessesForDate]);
 
   const onDateChange = useCallback(
-    (e) => {
-      const v = e.target.value;
+    (eOrValue) => {
+      const v =
+        typeof eOrValue === "object" && eOrValue?.target != null
+          ? eOrValue.target.value
+          : String(eOrValue ?? "");
       setCaptureDate(v);
       // Defer fetch past the native <select> close + layout (avoids insertBefore issues on touch / async flush).
       const run = () => void reloadProcessesForDate(v, { preserveSelection: false });
@@ -547,8 +550,7 @@ export function useDataCaptureFormEngine(
 
   const reloadProcesses = useCallback(async () => {
     const restoring = getDataCaptureState().isRestoring === true;
-    const d =
-      captureDate || document.getElementById("capture_date")?.value || getLocalDateString();
+    const d = captureDate || getLocalDateString();
     await reloadProcessesForDate(d, { preserveSelection: restoring });
   }, [captureDate, reloadProcessesForDate]);
 

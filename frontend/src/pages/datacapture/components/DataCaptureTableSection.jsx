@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import DataCaptureGrid from "./DataCaptureGrid.jsx";
 import GroupOnlyTableSizeControl from "./GroupOnlyTableSizeControl.jsx";
+import SimpleSelect from "../../../components/SimpleSelect.jsx";
 import { CAPTURE_TYPE_OPTIONS } from "../lib/dataCaptureFormRules.js";
 import { callDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
 import { useDataCaptureGridViewportFit } from "../hooks/useDataCaptureGridViewportFit.js";
@@ -32,6 +33,11 @@ export default function DataCaptureTableSection({
 }) {
   const tableAreaRef = useRef(null);
   useDataCaptureGridViewportFit(groupOnlyTable, engineReady, tableAreaRef);
+
+  const captureTypeOptions = useMemo(
+    () => CAPTURE_TYPE_OPTIONS.map((opt) => ({ value: opt, label: captureTypeLabel(opt, t) })),
+    [t],
+  );
 
   const formatPasteMode = captureType === "2.Format" && !formatGridReady;
   const containerClass = [
@@ -97,19 +103,17 @@ export default function DataCaptureTableSection({
           </div>
           {!hideCaptureTypeSelector ? (
             <div className="dc-table-header-controls">
-              <select
+              <SimpleSelect
                 id="dataCaptureTypeSelector"
                 className="data-capture-type-selector"
                 value={captureType}
-                onChange={onCaptureTypeChange}
-                aria-label={t("captureFormatAria")}
-              >
-                {CAPTURE_TYPE_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {captureTypeLabel(opt, t)}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => onCaptureTypeChange(v)}
+                options={captureTypeOptions}
+                includeEmptyOption={false}
+                forcePortal
+                portalDropdownClassName="dc-process-select-portal"
+                ariaLabel={t("captureFormatAria")}
+              />
               <button type="button" className="btn btn-cancel" onClick={() => onReset?.()}>
                 {t("reset")}
               </button>

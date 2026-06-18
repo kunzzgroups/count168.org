@@ -204,11 +204,19 @@ const key = (e.key || '').toLowerCase();
         // 检查是否在 currency 或 date 字段中（锁定表格）
         const currencySelect = document.getElementById('capture_currency');
         const dateSelect = document.getElementById('capture_date');
-        const isCurrencyFocused = activeElement === currencySelect;
-        const isDateFocused = activeElement === dateSelect;
+        const currencyDropdown = document.getElementById('capture_currency_dropdown');
+        const dateDropdown = document.getElementById('capture_date_dropdown');
+        const isCurrencyDropdownOpen = currencyDropdown?.classList.contains('show');
+        const isDateDropdownOpen = dateDropdown?.classList.contains('show');
+        const isCurrencyFocused =
+            activeElement === currencySelect ||
+            (currencyDropdown && currencyDropdown.contains(activeElement));
+        const isDateFocused =
+            activeElement === dateSelect ||
+            (dateDropdown && dateDropdown.contains(activeElement));
 
-        // 如果焦点在 currency 或 date 字段上，不处理箭头键
-        if (isCurrencyFocused || isDateFocused) {
+        // 如果焦点在 currency 或 date 字段上，或对应下拉已打开，不处理箭头键
+        if (isCurrencyFocused || isDateFocused || isCurrencyDropdownOpen || isDateDropdownOpen) {
             return;
         }
 

@@ -6299,46 +6299,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     [companyId, displayCurrencyCode, currencies, dateTo]
   );
 
-  const rateFootnoteText = useMemo(() => {
-    if (currencies.length <= 1) return "";
-    if (exchangeRatesLoading || exchangeRates.scopeKey !== exchangeRateScopeKey) {
-      return i18n.rateLoading;
-    }
-    if (exchangeRatesError) return i18n.rateUnavailable;
-    const foreignCodes = currencies
-      .map((c) => String(c).toUpperCase())
-      .filter((c) => c !== String(displayCurrencyCode).toUpperCase());
-    if (!foreignCodes.length) return "";
-    const convertibleForeignCodes = foreignCodes.filter(
-      (code) => !frankfurterMissingQuotes(displayCurrencyCode, [code], exchangeRates.rates).includes(code)
-    );
-    if (!convertibleForeignCodes.length) return i18n.rateUnavailable;
-    const dateLabel = exchangeRates.date || "—";
-    let text = formatI18nTemplate(i18n.rateFootnote, {
-      codes: convertibleForeignCodes.join(", "),
-      date: dateLabel,
-    });
-    const missingQuotes = frankfurterMissingQuotes(
-      displayCurrencyCode,
-      currencies,
-      exchangeRates.rates
-    );
-    if (missingQuotes.length) {
-      text += ` · ${i18n.rateUnavailable}`;
-    }
-    return text;
-  }, [
-    currencies,
-    displayCurrencyCode,
-    exchangeRateScopeKey,
-    exchangeRatesLoading,
-    exchangeRatesError,
-    exchangeRates.date,
-    exchangeRates.rates,
-    exchangeRates.scopeKey,
-    i18n,
-  ]);
-
   const scopeDataPending =
     Boolean(dashboardScopeKey) && displayScopeKey !== dashboardScopeKey;
   const chartDataStable = useMemo(
@@ -7200,7 +7160,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     exchangeRates,
     exchangeRatesError,
     exchangeRatesLoading,
-    rateFootnoteText,
     exchangeRateScopeKey,
     convertedEarningsTotal,
     showProfitChartTab,

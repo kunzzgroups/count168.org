@@ -8,7 +8,7 @@ import { filterBankPickAccounts, formatBankAccountDisplay } from "../lib/bankPro
 const PORTAL_MIN_WIDTH = 180;
 const ACCOUNT_PICK_MIN_WIDTH = 220;
 const PORTAL_EDGE_PAD = 16;
-const PORTAL_GAP = 2;
+const PORTAL_GAP = 1;
 const ACCOUNT_SEARCH_RESERVE = 52;
 const PORTAL_DROPDOWN_CAP_ACCOUNT = 280;
 

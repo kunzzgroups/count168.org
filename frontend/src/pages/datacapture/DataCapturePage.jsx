@@ -64,6 +64,7 @@ import {
 import { toDataCaptureWordFieldCase } from "./lib/dataCaptureFormRules.js";
 import { resolveDataCaptureGridDimensions } from "./grid/dataCaptureGridMeta.js";
 import DataCaptureProcessSelect from "./components/DataCaptureProcessSelect.jsx";
+import SimpleSelect from "../../components/SimpleSelect.jsx";
 import DataCaptureContextMenus from "./components/DataCaptureContextMenus.jsx";
 import DataCaptureDeleteDialog from "./components/DataCaptureDeleteDialog.jsx";
 import DataCaptureTableSection from "./components/DataCaptureTableSection.jsx";
@@ -330,6 +331,21 @@ function DataCapturePageContent() {
   });
 
   const groupOnlyProcessOptions = useMemo(() => getGroupOnlyProcessOptions(t), [t]);
+
+  const currencySelectOptions = useMemo(
+    () => form.currencies.map((c) => ({ value: String(c.id), label: c.code })),
+    [form.currencies],
+  );
+
+  const groupOnlyProcessSelectOptions = useMemo(
+    () => groupOnlyProcessOptions.map((o) => ({ value: o.id, label: o.displayText })),
+    [groupOnlyProcessOptions],
+  );
+
+  const dcFormSelectPortalProps = {
+    forcePortal: true,
+    portalDropdownClassName: "dc-process-select-portal",
+  };
 
   const { submittedItems } = useDataCaptureSubmittedList(captureScope, form.captureDate);
 
@@ -1023,13 +1039,16 @@ function DataCapturePageContent() {
                 <div className="dc-form-company-layout">
                   <div className="form-group dc-form-company-layout__date">
                     <label htmlFor="capture_date">{t("date")}</label>
-                    <select id="capture_date" name="capture_date" required value={form.captureDate} onChange={(e) => void form.onDateChange(e)}>
-                      {form.dateOptions.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                    <input type="hidden" name="capture_date" value={form.captureDate} />
+                    <SimpleSelect
+                      id="capture_date"
+                      value={form.captureDate}
+                      onChange={(v) => void form.onDateChange(v)}
+                      options={form.dateOptions}
+                      required
+                      includeEmptyOption={false}
+                      {...dcFormSelectPortalProps}
+                    />
                   </div>
 
                   <div className="form-group dc-form-company-layout__process">
@@ -1056,22 +1075,18 @@ function DataCapturePageContent() {
 
                   <div className="form-group dc-form-company-layout__currency">
                     <label htmlFor="capture_currency">{t("currency")}</label>
-                    <select
+                    <input type="hidden" name="currency" value={form.currencyId} />
+                    <SimpleSelect
                       id="capture_currency"
-                      name="currency"
                       value={form.currencyId}
-                      onChange={(e) => {
-                        form.setCurrencyId(e.target.value);
+                      onChange={(v) => {
+                        form.setCurrencyId(v);
                         setTimeout(() => callDataCaptureRuntime("recomputeSubmitState"), 0);
                       }}
-                    >
-                      <option value="">{t("selectCurrency")}</option>
-                      {form.currencies.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.code}
-                        </option>
-                      ))}
-                    </select>
+                      options={currencySelectOptions}
+                      placeholder={t("selectCurrency")}
+                      {...dcFormSelectPortalProps}
+                    />
                   </div>
 
                   <div className="form-group dc-form-company-layout__description">
@@ -1177,56 +1192,51 @@ function DataCapturePageContent() {
                   <div className="dc-form-row dc-form-row--2col dc-form-row--stacked">
                     <div className="form-group">
                       <label htmlFor="capture_date">{t("date")}</label>
-                      <select id="capture_date" name="capture_date" required value={form.captureDate} onChange={(e) => void form.onDateChange(e)}>
-                        {form.dateOptions.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
+                      <input type="hidden" name="capture_date" value={form.captureDate} />
+                      <SimpleSelect
+                        id="capture_date"
+                        value={form.captureDate}
+                        onChange={(v) => void form.onDateChange(v)}
+                        options={form.dateOptions}
+                        required
+                        includeEmptyOption={false}
+                        {...dcFormSelectPortalProps}
+                      />
                     </div>
 
                     <div className="form-group">
                       <label htmlFor="capture_process">{t("process")}</label>
-                      <select
+                      <input type="hidden" name="process" value={form.selectedProcess?.id || ""} />
+                      <SimpleSelect
                         id="capture_process"
-                        name="process"
                         value={form.selectedProcess?.id || ""}
-                        onChange={(e) => {
-                          const opt = groupOnlyProcessOptions.find((o) => o.id === e.target.value);
+                        onChange={(v) => {
+                          const opt = groupOnlyProcessOptions.find((o) => o.id === v);
                           if (opt) form.selectGroupOnlyProcess(opt);
                           else form.clearProcessSelection();
                         }}
-                      >
-                        <option value="">{t("selectProcess")}</option>
-                        {groupOnlyProcessOptions.map((o) => (
-                          <option key={o.id} value={o.id}>
-                            {o.displayText}
-                          </option>
-                        ))}
-                      </select>
+                        options={groupOnlyProcessSelectOptions}
+                        placeholder={t("selectProcess")}
+                        {...dcFormSelectPortalProps}
+                      />
                     </div>
                   </div>
 
                   <div className="dc-form-row dc-form-row--2col dc-form-row--stacked">
                     <div className="form-group">
                       <label htmlFor="capture_currency">{t("currency")}</label>
-                      <select
+                      <input type="hidden" name="currency" value={form.currencyId} />
+                      <SimpleSelect
                         id="capture_currency"
-                        name="currency"
                         value={form.currencyId}
-                        onChange={(e) => {
-                          form.setCurrencyId(e.target.value);
+                        onChange={(v) => {
+                          form.setCurrencyId(v);
                           setTimeout(() => callDataCaptureRuntime("recomputeSubmitState"), 0);
                         }}
-                      >
-                        <option value="">{t("selectCurrency")}</option>
-                        {form.currencies.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.code}
-                          </option>
-                        ))}
-                      </select>
+                        options={currencySelectOptions}
+                        placeholder={t("selectCurrency")}
+                        {...dcFormSelectPortalProps}
+                      />
                     </div>
 
                     <div className="form-group">

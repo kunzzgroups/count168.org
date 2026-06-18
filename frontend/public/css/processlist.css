@@ -2859,6 +2859,7 @@ body.process-page .custom-select-dropdown.custom-select-dropdown-portal .custom-
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    font-weight: 700;
 }
 
 body.process-page .custom-select-dropdown.custom-select-dropdown-portal .custom-select-no-results,

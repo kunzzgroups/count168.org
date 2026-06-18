@@ -23,7 +23,7 @@ body.datacapture-page {
     --dc-accent-soft: #eff6ff;
     --dc-border: #e2e8f0;
     --dc-text-muted: #64748b;
-    --dc-layout-gap: clamp(12px, 1.15vw, 18px);
+    --dc-layout-gap: 10px;
     --dc-top-col-left: minmax(0, 1.8fr);
     --dc-top-col-right: minmax(0, 1fr);
     --dc-input-focus-border: #3b82f6;
@@ -959,7 +959,7 @@ body.datacapture-page .custom-select-button.open {
     display: none;
     max-height: 300px;
     overflow: hidden;
-    margin-top: 2px;
+    margin-top: 1px;
 }
 
 .custom-select-dropdown.show {
@@ -1016,6 +1016,16 @@ body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .cus
     min-height: 0;
     max-height: none !important;
     overflow-y: auto;
+}
+
+body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .custom-select-option,
+.custom-select-dropdown.dc-process-select-portal .custom-select-option {
+    font-size: var(--text-small) !important;
+    font-family: var(--font-ui) !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 700;
 }
 
 .custom-select-option {
@@ -2215,6 +2225,16 @@ body.datacapture-page .excel-table-container--group-only {
     cursor: pointer;
 }
 
+.dc-table-header-controls .custom-select-wrapper {
+    min-width: 0;
+}
+
+.dc-table-header-controls .custom-select-button.data-capture-type-selector {
+    width: auto;
+    min-width: 10rem;
+    text-align: left;
+}
+
 .data-capture-type-selector:focus {
     border-color: #0969da;
     box-shadow: 0 0 0 2px rgba(9, 105, 218, 0.3);
@@ -2558,5 +2578,29 @@ body.datacapture-page .excel-table-container--group-only {
         margin-bottom: 4px;
     }
 
+}
+
+/* Restore Data Capture form field sizing after global select-unified.css */
+body.ec-auth-shell.datacapture-page .process-form select:not([multiple]):not([size]),
+body.ec-auth-shell.datacapture-page .process-form .custom-select-button {
+    min-height: 36px !important;
+    height: 36px !important;
+    max-height: 36px !important;
+    padding: clamp(6px, 0.35vw, 9px) clamp(28px, 2vw, 36px) clamp(6px, 0.35vw, 9px) clamp(8px, 0.63vw, 12px) !important;
+    font-size: var(--text-small);
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    border: 1px solid var(--dc-border, #e2e8f0) !important;
+    border-radius: 6px !important;
+}
+
+body.ec-auth-shell.datacapture-page .process-form .custom-select-option {
+    font-size: var(--text-small) !important;
+    font-weight: 700;
+    line-height: 1.35 !important;
+}
+
+body.ec-auth-shell.datacapture-page .process-form .custom-select-search input {
+    font-size: var(--text-small) !important;
 }
 
