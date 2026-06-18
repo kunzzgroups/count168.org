@@ -3,12 +3,35 @@ name: Deploy org to EC2
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy-org:
     name: count168.org
     runs-on: ubuntu-latest
     steps:
+      - name: Verify EC2 secrets
+        run: |
+          missing=0
+          if [ -z "${{ secrets.EC2_HOST }}" ]; then
+            echo "::error::EC2_HOST secret is missing on count168.org repo"
+            missing=1
+          fi
+          if [ -z "${{ secrets.EC2_USER }}" ]; then
+            echo "::error::EC2_USER secret is missing on count168.org repo"
+            missing=1
+          fi
+          if [ -z "${{ secrets.EC2_SSH_KEY }}" ]; then
+            echo "::error::EC2_SSH_KEY secret is missing on count168.org repo"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo ""
+            echo "Add the same secrets used by kunzzgroups/count168test:"
+            echo "  Settings -> Secrets and variables -> Actions -> New repository secret"
+            echo "  EC2_HOST, EC2_USER, EC2_SSH_KEY"
+            exit 1
+          fi
       - name: SSH deploy to /var/www/count168.org
         uses: appleboy/ssh-action@v1.2.0
         with:
