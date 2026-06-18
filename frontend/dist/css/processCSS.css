@@ -4826,9 +4826,9 @@ body.process-page > .process-modal {
 .process-page .process-form.add-grid .add-col > .process-form-section:not(:last-child),
 #addModal .process-form.add-grid .add-col > .process-form-section:not(:last-child),
 #editModal .process-form.add-grid .add-col > .process-form-section:not(:last-child) {
-    margin-bottom: 1rem;
-    padding-bottom: 0.85rem;
-    border-bottom: 1px solid #e8eef5;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0;
+    border-bottom: none;
 }
 
 .process-page .process-form.add-grid .process-form-section-title,
@@ -4872,7 +4872,7 @@ body.process-page > .process-modal {
     letter-spacing: 0.015em;
 }
 
-.process-page .process-form .form-group input,
+.process-page .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 .process-page .process-form .form-group select,
 .process-page .process-form .form-group textarea {
     border-color: #dbe3ee;
@@ -4885,7 +4885,7 @@ body.process-page > .process-modal {
     box-sizing: border-box;
 }
 
-.process-page .process-form .form-group input:focus,
+.process-page .process-form .form-group input:not(.dc-remove-word-chip-input__field):focus,
 .process-page .process-form .form-group select:focus,
 .process-page .process-form .form-group textarea:focus {
     border-color: #0D60FF;
@@ -5722,7 +5722,7 @@ body.process-page > .process-modal {
     min-width: 0 !important;
     max-width: 100% !important;
     font-family: var(--font-ui) !important;
-    font-size: var(--text-small) !important;
+    font-size: var(--text-medium) !important;
     font-weight: 400 !important;
     line-height: var(--process-form-modal-multi-item-line-height, 1.35) !important;
     cursor: pointer;
@@ -7291,7 +7291,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     line-height: 1.3;
 }
 
-.process-page #addModal .process-form .form-group input,
+.process-page #addModal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 .process-page #addModal .process-form .form-group select,
 .process-page #addModal .process-form .form-group textarea {
     font-size: var(--text-small) !important;
@@ -7444,7 +7444,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     display: block !important;
 }
 
-#addModal .process-form .form-group input,
+#addModal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 #addModal .process-form .form-group select,
 #addModal .process-form .form-group textarea {
     font-size: var(--text-small) !important;
@@ -7591,7 +7591,7 @@ body.ec-auth-shell #confirmBankResendModal .bank-resend-modal-actions .process-b
     margin-bottom: 0.45rem !important;
 }
 
-#editModal .process-form .form-group input,
+#editModal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 #editModal .process-form .form-group select,
 #editModal .process-form .form-group textarea {
     font-size: var(--text-small) !important;
@@ -7839,10 +7839,10 @@ body.process-page.process-page--bank.process-page--bank-show-all .process-table-
 }
 
 /* Edit Process 表单控件与 Account add 一致 */
-.process-page #editModal .process-form .form-group input,
+.process-page #editModal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 .process-page #editModal .process-form .form-group select,
 .process-page #editModal .process-form .form-group textarea,
-#editModal .process-form .form-group input,
+#editModal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 #editModal .process-form .form-group select,
 #editModal .process-form .form-group textarea {
     font-size: var(--text-small) !important;
@@ -8008,9 +8008,9 @@ body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
 .process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child),
 #addModal .modal-content.process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child),
 #editModal .modal-content.process-form-modal .process-form.add-grid .add-col > .process-form-section:not(:last-child) {
-    margin-bottom: calc(var(--space-gap, 0.75rem) * 1.1);
-    padding-bottom: calc(var(--space-gap, 0.75rem) * 0.95);
-    border-bottom: 1px solid var(--color-border, #e8eef5);
+    margin-bottom: calc(var(--space-gap, 0.75rem) * 0.5);
+    padding-bottom: 0;
+    border-bottom: none;
 }
 
 .process-form-modal .process-form-section-title,
@@ -8061,13 +8061,13 @@ body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
     text-transform: uppercase;
 }
 
-.process-form-modal .process-form .form-group input,
+.process-form-modal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 .process-form-modal .process-form .form-group select,
 .process-form-modal .process-form .form-group textarea,
-#addModal .modal-content.process-form-modal .process-form .form-group input,
+#addModal .modal-content.process-form-modal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 #addModal .modal-content.process-form-modal .process-form .form-group select,
 #addModal .modal-content.process-form-modal .process-form .form-group textarea,
-#editModal .modal-content.process-form-modal .process-form .form-group input,
+#editModal .modal-content.process-form-modal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 #editModal .modal-content.process-form-modal .process-form .form-group select,
 #editModal .modal-content.process-form-modal .process-form .form-group textarea {
     font-size: var(--process-form-modal-control-size, var(--text-small)) !important;
@@ -8081,10 +8081,10 @@ body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
     color: var(--color-body-strong, #1f2937);
 }
 
-.process-form-modal .process-form .form-group input:focus,
+.process-form-modal .process-form .form-group input:not(.dc-remove-word-chip-input__field):focus,
 .process-form-modal .process-form .form-group select:focus,
 .process-form-modal .process-form .form-group textarea:focus,
-#addModal .modal-content.process-form-modal .process-form .form-group input:focus,
+#addModal .modal-content.process-form-modal .process-form .form-group input:not(.dc-remove-word-chip-input__field):focus,
 #addModal .modal-content.process-form-modal .process-form .form-group textarea:focus {
     border-color: var(--color-primary, #0d60ff) !important;
     outline: none;
@@ -8135,20 +8135,6 @@ body.process-page > #editModal.modal.show > .modal-content.process-form-modal,
     font-size: var(--process-form-modal-control-size, var(--text-small));
     font-family: var(--font-ui);
     font-weight: var(--font-weight-semibold);
-}
-
-.process-form-modal .add-icon,
-#addModal .modal-content.process-form-modal .add-icon {
-    width: clamp(2rem, 2.2vw, 2.35rem);
-    height: clamp(2rem, 2.2vw, 2.35rem);
-    font-size: var(--text-h3);
-    background: var(--btn-add-gradient);
-    box-shadow: var(--shadow-btn-add-page);
-}
-
-.process-form-modal .add-icon:hover:not(:disabled),
-#addModal .modal-content.process-form-modal .add-icon:hover:not(:disabled) {
-    background: var(--btn-add-gradient-hover);
 }
 
 .process-form-modal .process-form-modal-footer.add-actions,
@@ -8312,8 +8298,8 @@ body.process-page > #editModal.modal > .modal-content.process-form-modal,
     }
 
     #editModal .process-form.add-grid .add-col > .process-form-section:not(:last-child) {
-        margin-bottom: 0.45rem !important;
-        padding-bottom: 0.4rem !important;
+        margin-bottom: 0.35rem !important;
+        padding-bottom: 0 !important;
     }
 
     #editModal .process-form-section-title {
@@ -8371,7 +8357,7 @@ body.process-page > #editModal.modal > .modal-content.process-form-modal,
     color: var(--color-body-strong, #0f172a) !important;
 }
 
-#editModal .modal-content.process-form-modal .process-form .form-group input,
+#editModal .modal-content.process-form-modal .process-form .form-group input:not(.dc-remove-word-chip-input__field),
 #editModal .modal-content.process-form-modal .process-form .form-group select,
 #editModal .modal-content.process-form-modal .process-form .form-group textarea,
 #editModal .modal-content.process-form-modal .custom-select-button,

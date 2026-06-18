@@ -482,13 +482,19 @@ if (!function_exists('bmp_mergeResendScheduleIntoBankProcessRowForAccounting')) 
                 $row['accounting_resend_single_period_from_schedule'],
                 $row['accounting_resend_consolidated_range'],
                 $row['bank_process_stored_day_start'],
-                $row['bank_process_stored_day_end']
+                $row['bank_process_stored_day_end'],
+                $row['bank_process_stored_day_start_frequency']
             );
             return $row;
         }
         // 入账 API 在清除 Resend 覆盖前可比对「编辑里持久化的 day_start / day_end」与弹窗锚点。
         $row['bank_process_stored_day_start'] = $row['day_start'] ?? null;
         $row['bank_process_stored_day_end'] = $row['day_end'] ?? null;
+        $storedFq = isset($row['day_start_frequency']) ? strtolower(trim((string) $row['day_start_frequency'])) : '';
+        if (!in_array($storedFq, ['1st_of_every_month', 'monthly', 'week', 'day', 'once'], true)) {
+            $storedFq = '1st_of_every_month';
+        }
+        $row['bank_process_stored_day_start_frequency'] = $storedFq;
         $ds = $row['accounting_resend_schedule_day_start'] ?? null;
         $hadScheduleStart = $ds !== null && trim((string) $ds) !== '';
         if ($hadScheduleStart) {

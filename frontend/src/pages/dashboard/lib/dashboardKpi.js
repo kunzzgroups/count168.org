@@ -113,7 +113,7 @@ export function resolvePanelEarningsPct(dashboardData, selectedGroup, options = 
   });
 }
 
-/** Copy ownership fields from primary-currency KPI into per-currency earnings payloads. */
+/** Copy ownership config (not dollar totals) from primary-currency KPI into per-currency payloads. */
 export function mergeDashboardOwnershipFields(payload, ownershipSource) {
   if (!payload || !ownershipSource) return payload;
   return {
@@ -124,9 +124,6 @@ export function mergeDashboardOwnershipFields(payload, ownershipSource) {
     group_account_percentage: ownershipSource.group_account_percentage,
     has_group_ownership: ownershipSource.has_group_ownership,
     _link_multiplier: ownershipSource._link_multiplier,
-    subsidiary_earnings_total: ownershipSource.subsidiary_earnings_total,
-    group_ledger_net_profit: ownershipSource.group_ledger_net_profit,
-    _group_aggregate_earnings: ownershipSource._group_aggregate_earnings,
   };
 }
 

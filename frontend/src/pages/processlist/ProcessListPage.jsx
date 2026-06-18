@@ -23,7 +23,9 @@ import { isPartnershipAuditReadOnlyLocked } from "../../utils/audit/partnershipA
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { isBankCategoryCompany, resolveBankOnlyCategoryHint } from "../bankprocesslist/lib/bankProcessHelpers.js";
 import "../../../public/css/processCSS.css";
+import "../../../public/css/description-input.css";
 import "../../../public/css/processlist.css";
+import "../../../public/css/remove-word-chip.css";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
 import {
@@ -47,6 +49,7 @@ import {
   warmProcessListRouteCache,
 } from "./processRoutePrefetch.js";
 import ProcessTable from "./components/ProcessTable.jsx";
+import { parseRemoveWordChips, serializeRemoveWordChips } from "../../lib/removeWordChips.js";
 import ProcessFormModal from "./components/ProcessFormModal.jsx";
 import DescriptionPickerModal from "./components/DescriptionPickerModal.jsx";
 import ProcessDeleteConfirmModal from "./components/ProcessDeleteConfirmModal.jsx";
@@ -141,6 +144,7 @@ export default function ProcessListPage() {
   const fetchGenRef = useRef(0);
   const activeCompanyIdRef = useRef(null);
   const companySessionAbortRef = useRef(null);
+  const listPaginationCompanyRef = useRef(null);
 
   const [existingProcesses, setExistingProcesses] = useState([]);
 
@@ -467,6 +471,23 @@ export default function ProcessListPage() {
     replaceBrowserPathOnly();
   }, []);
 
+  const resetProcessListPagination = useCallback(() => {
+    setCurrentPage(1);
+    setSelectedIds(new Set());
+  }, []);
+
+  const resetPaginationForCompany = useCallback(
+    (cid, { force = false } = {}) => {
+      const key = String(Number(cid));
+      if (!key || key === "NaN") return false;
+      if (!force && key === listPaginationCompanyRef.current) return false;
+      listPaginationCompanyRef.current = key;
+      resetProcessListPagination();
+      return true;
+    },
+    [resetProcessListPagination],
+  );
+
   const applyProcessListCache = useCallback(
     (cid) => {
       const id = Number(cid);
@@ -581,9 +602,11 @@ export default function ProcessListPage() {
           return nextRows;
         });
         if (!silent) {
-          setSelectedIds(new Set());
-          setCurrentPage(1);
+          listPaginationCompanyRef.current = String(cid);
+          resetProcessListPagination();
           syncUrl({ companyId: cid });
+        } else {
+          resetPaginationForCompany(cid);
         }
       } catch (err) {
         if (ac.signal.aborted || err?.name === "AbortError" || fetchGen !== fetchGenRef.current) return;
@@ -600,6 +623,8 @@ export default function ProcessListPage() {
       showInactive,
       showAll,
       notify,
+      resetPaginationForCompany,
+      resetProcessListPagination,
       syncUrl,
       t,
     ],
@@ -824,12 +849,15 @@ export default function ProcessListPage() {
   );
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(sortedDisplayRows.length / PAGE_SIZE)), [sortedDisplayRows]);
+  const effectivePage = useMemo(
+    () => Math.min(Math.max(1, currentPage), totalPages),
+    [currentPage, totalPages],
+  );
   const pageRows = useMemo(() => {
     if (showAll) return sortedDisplayRows;
-    const page = Math.min(currentPage, totalPages);
-    const start = (page - 1) * PAGE_SIZE;
+    const start = (effectivePage - 1) * PAGE_SIZE;
     return sortedDisplayRows.slice(start, start + PAGE_SIZE);
-  }, [sortedDisplayRows, currentPage, totalPages, showAll]);
+  }, [sortedDisplayRows, effectivePage, showAll]);
 
   const handleProcessTableSort = useCallback((column) => {
     setSortDirection((direction) => (sortColumn === column && direction === "asc" ? "desc" : "asc"));
@@ -988,12 +1016,12 @@ export default function ProcessListPage() {
       skipCompanyFetchEffectRef.current = true;
       suppressCrossPageSyncRef.current = true;
 
-      const hadCache = applyProcessListCache(nextId);
+      applyProcessListCache(nextId);
       flushSync(() => {
         setGroupFilterKind("follow");
         if (nextGroup) setSelectedGroup(nextGroup);
         setCompanyId(nextId);
-        if (hadCache) setSelectedIds(new Set());
+        resetPaginationForCompany(nextId, { force: true });
       });
 
       syncUrl({ companyId: nextId });
@@ -1006,7 +1034,7 @@ export default function ProcessListPage() {
 
       void onSwitchCompanyRef.current?.(c, { layoutSilent: true });
     },
-    [applyProcessListCache, companyId, syncUrl],
+    [applyProcessListCache, companyId, resetPaginationForCompany, syncUrl],
   );
 
   const handlePickGroup = useCallback(
@@ -1028,7 +1056,9 @@ export default function ProcessListPage() {
           setCompanyId(nextCompanyId);
           if (!nextCompanyId) {
             setRows([]);
-            setSelectedIds(new Set());
+            resetProcessListPagination();
+          } else {
+            resetPaginationForCompany(nextCompanyId, { force: true });
           }
         });
         if (nextCompanyId != null) {
@@ -1053,10 +1083,10 @@ export default function ProcessListPage() {
       if (nextCompanyId != null) {
         skipCompanyFetchEffectRef.current = true;
         suppressCrossPageSyncRef.current = true;
-        const hadCache = applyProcessListCache(nextCompanyId);
+        applyProcessListCache(nextCompanyId);
         flushSync(() => {
           setCompanyId(nextCompanyId);
-          if (hadCache) setSelectedIds(new Set());
+          resetPaginationForCompany(nextCompanyId, { force: true });
         });
         persistDashboardFilterState(g, nextCompanyId, { allowGroupOnly: false });
         notifyDashboardGroupFilterChanged(g, nextCompanyId, {
@@ -1080,6 +1110,8 @@ export default function ProcessListPage() {
       companyId,
       groupFilterKind,
       groupIds,
+      resetPaginationForCompany,
+      resetProcessListPagination,
       selectedGroupKey,
       sessionMe,
       syncUrl,
@@ -1160,7 +1192,7 @@ export default function ProcessListPage() {
           .split(",")
           .map((v) => v.trim())
           .filter(Boolean),
-        remove_word: p.remove_word || "",
+        remove_word: serializeRemoveWordChips(parseRemoveWordChips(p.remove_word || "")),
         replace_word_from: p.replace_word_from || "",
         replace_word_to: p.replace_word_to || "",
         remark: parseRemarkForForm(p.remarks),
@@ -1516,7 +1548,7 @@ export default function ProcessListPage() {
           showSelectColumn={showInactive || showAll}
           suppressEmpty={awaitingRows || loading}
           pageRows={pageRows}
-          currentPage={currentPage}
+          currentPage={effectivePage}
           PAGE_SIZE={PAGE_SIZE}
           sortColumn={sortColumn}
           sortDirection={sortDirection}
@@ -1532,16 +1564,16 @@ export default function ProcessListPage() {
 
         {!showAll && (
           <div className="pagination-container" id="paginationContainer">
-            <button type="button" className="pagination-btn" disabled={currentPage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
+            <button type="button" className="pagination-btn" disabled={effectivePage <= 1} onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}>
               ◀
             </button>
             <span className="pagination-info">
-              {t("pageOf", { current: currentPage, total: totalPages })}
+              {t("pageOf", { current: effectivePage, total: totalPages })}
             </span>
             <button
               type="button"
               className="pagination-btn"
-              disabled={currentPage >= totalPages}
+              disabled={effectivePage >= totalPages}
               onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             >
               ▶
@@ -1555,6 +1587,7 @@ export default function ProcessListPage() {
           editMode={editMode}
           form={form}
           setForm={setForm}
+          scopeCompanyId={companyId}
           currencies={currencies}
           days={days}
           readOnly={processMutationsBlocked}

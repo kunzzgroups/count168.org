@@ -213,7 +213,7 @@ export default function ResetPasswordPage() {
 
   return (
     <>
-      <div className="login-container">
+      <div className="login-container reset-password-page">
         <div className="login-header">
           <h2>{i18n.pageTitle}</h2>
         </div>
@@ -279,7 +279,7 @@ export default function ResetPasswordPage() {
                   placeholder={i18n.confirmPasswordPlaceholder}
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  style={{ borderColor: passwordMatched ? "#e1e5e9" : "#dc3545" }}
+                  className={!passwordMatched && confirmPassword ? "input--mismatch" : undefined}
                   required
                 />
               </div>

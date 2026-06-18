@@ -41,6 +41,34 @@ export function summaryRefreshStorageKeys(captureScope) {
   };
 }
 
+function readJsonStorageObject(key) {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** Read scoped rate maps from localStorage (falls back to legacy global keys). */
+export function loadSummaryRateMapsFromStorage(captureScope) {
+  const keys = summaryRefreshStorageKeys(captureScope);
+  const byKey =
+    readJsonStorageObject(keys.rateValues) ?? readJsonStorageObject(SUMMARY_RATE_VALUES_KEY);
+  const byProduct =
+    readJsonStorageObject(keys.rateByProduct) ?? readJsonStorageObject(RATE_BY_PRODUCT_KEY);
+  return {
+    byKey: byKey && typeof byKey === "object" ? { ...byKey } : {},
+    byProduct: byProduct && typeof byProduct === "object" ? { ...byProduct } : {},
+  };
+}
+
 export function markSummaryFreshNavigation() {
   try {
     sessionStorage.setItem(SUMMARY_FRESH_NAV_KEY, "1");

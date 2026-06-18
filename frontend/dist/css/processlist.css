@@ -1,11 +1,9 @@
 ﻿/* Input formatting - 统一管理输入框格式 */
 #add_process_id,
 #new_description_name,
-#add_remove_words,
 #add_replace_word_from,
 #add_replace_word_to,
 #add_remarks,
-#edit_remove_words,
 #edit_replace_word_from,
 #edit_replace_word_to,
 #edit_remarks {

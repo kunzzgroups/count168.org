@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
+import RemoveWordChipInput from "../../../components/RemoveWordChipInput.jsx";
 import { toProcessFormUpperInput } from "../processListHelpers.js";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 import ProcessFormPortalSelect from "./ProcessFormPortalSelect.jsx";
@@ -50,6 +51,7 @@ export default function ProcessFormModal({
   editMode,
   form,
   setForm,
+  scopeCompanyId = null,
   currencies,
   days,
   readOnly = false,
@@ -306,19 +308,29 @@ export default function ProcessFormModal({
                     {editMode ? t("description") : t("descriptionRequired")}
                   </label>
                   <div
-                    className={`input-with-icon${ro ? "" : " input-with-icon--opens-picker"}`}
+                    className={`description-input-wrap dc-description-input-wrap${ro ? "" : " description-input-wrap--interactive"}`}
+                    role={ro ? undefined : "button"}
+                    tabIndex={ro ? undefined : 0}
+                    title={t("chooseDescription")}
                     onClick={() => !ro && onOpenDescriptionPicker()}
+                    onKeyDown={(e) => {
+                      if (!ro && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        onOpenDescriptionPicker();
+                      }
+                    }}
                   >
                     <input
                       id={editMode ? "edit_description" : "add_description"}
                       readOnly
                       required={!editMode}
+                      tabIndex={-1}
                       value={descSummary}
                       placeholder={t("clickToSelectDescriptions")}
                     />
                     <button
                       type="button"
-                      className="add-icon"
+                      className="description-add-tile dc-description-add-tile"
                       aria-label={t("chooseDescription")}
                       disabled={ro}
                       onClick={(e) => {
@@ -440,14 +452,18 @@ export default function ProcessFormModal({
               <div className="process-form-section">
                 <h3 className="account-section-header">{t("processFormSectionTextReplace")}</h3>
               <div className="form-row">
-                <div className="form-group">
-                  <label>{t("removeWords")}</label>
-                  <input
+                <div className="form-group process-form-remove-word-group">
+                  <label htmlFor={editMode ? "edit_remove_words" : "add_remove_words"}>{t("removeWords")}</label>
+                  <RemoveWordChipInput
+                    id={editMode ? "edit_remove_words" : "add_remove_words"}
+                    name="remove_word"
                     value={form.remove_word}
-                    disabled={ro}
-                    onChange={(e) => setForm((prev) => ({ ...prev, remove_word: toProcessFormUpperInput(e.target.value) }))}
+                    onChange={(next) => setForm((prev) => ({ ...prev, remove_word: next }))}
+                    processId={editMode && form.id ? form.id : null}
+                    scopeCompanyId={scopeCompanyId}
                     placeholder={t("enterWordsToRemove")}
-                    style={{ textTransform: "uppercase" }}
+                    removeChipAriaLabel={t("removeWordChipRemove")}
+                    disabled={ro}
                   />
                   <small className="field-help">{t("removeWordsHelp")}</small>
                 </div>

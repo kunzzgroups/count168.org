@@ -736,13 +736,48 @@ function dailyCollectUnpostedDaysInRange(
 }
 
 /**
+ * Accounting Due 行计算服务区间时用的 frequency。
+ * Resend relax 期间：Resend 行用弹窗 frequency；正常流程行用 item / 库里 stored frequency，避免 merge 后的 process frequency 污染展示。
+ */
+function inboxEffectiveFrequencyForBillingPeriodItem(array $item, array $process, bool $hasFrequency): string
+{
+    if (!$hasFrequency) {
+        return '1st_of_every_month';
+    }
+    if (!empty($item['is_resend_monthly_reopen'])) {
+        $fq = strtolower(trim((string) ($item['frequency'] ?? '')));
+        if (in_array($fq, ['1st_of_every_month', 'monthly'], true)) {
+            return $fq;
+        }
+
+        return (string) ($process['day_start_frequency'] ?? '1st_of_every_month');
+    }
+    $itemFq = strtolower(trim((string) ($item['frequency'] ?? '')));
+    if (in_array($itemFq, ['1st_of_every_month', 'monthly', 'week', 'day', 'once'], true)) {
+        return $itemFq;
+    }
+    if (!empty($process['accounting_resend_relax_created_floor'])) {
+        $storedFq = strtolower(trim((string) (
+            $process['bank_process_stored_day_start_frequency']
+            ?? $item['bank_process_stored_day_start_frequency']
+            ?? ''
+        )));
+        if (in_array($storedFq, ['1st_of_every_month', 'monthly', 'week', 'day', 'once'], true)) {
+            return $storedFq;
+        }
+    }
+
+    return (string) ($process['day_start_frequency'] ?? '1st_of_every_month');
+}
+
+/**
  * Accounting Due 行：计算本笔账单服务区间（含首尾日，Y-m-d）。
  *
  * @return array{0:?string,1:?string}
  */
 function inboxComputeBillingPeriodRangeForItem(array $item, array $process, bool $hasDayEndMonthlyCapCol, bool $hasFrequency): array
 {
-    $freq = $hasFrequency ? (string) ($process['day_start_frequency'] ?? '1st_of_every_month') : '1st_of_every_month';
+    $freq = inboxEffectiveFrequencyForBillingPeriodItem($item, $process, $hasFrequency);
 
     if (!empty($item['is_resend_monthly_reopen'])) {
         $bmResend = trim((string) ($item['monthly_billing_month'] ?? ''));
@@ -1295,6 +1330,83 @@ function inboxCollectFirstOfMonthBillingAnchors(
     return inboxUniqueSortedBillingMonths($anchors);
 }
 
+/** Resend relax 期间：库里真实 frequency（与弹窗 frequency 解耦）。 */
+function inboxStoredNormalFlowFrequency(array $r): string
+{
+    $fq = strtolower(trim((string) ($r['bank_process_stored_day_start_frequency'] ?? '')));
+    if (in_array($fq, ['1st_of_every_month', 'monthly', 'week', 'day', 'once'], true)) {
+        return $fq;
+    }
+    return '1st_of_every_month';
+}
+
+/**
+ * Resend 单期：按库里真实 frequency 补回正常流程账单（与 Resend 弹窗 frequency 无关，两条并存）。
+ */
+function inboxAppendStoredNormalFlowIfNeeded(
+    array &$needToday,
+    PDO $pdo,
+    int $companyId,
+    array $r,
+    string $today,
+    string $baseCost,
+    string $basePrice,
+    string $baseProfit,
+    bool $hasDayEndMonthlyCapCol
+): void {
+    if (empty($r['accounting_resend_relax_created_floor']) || empty($r['accounting_resend_single_period_from_schedule'])) {
+        return;
+    }
+    $storedFq = inboxStoredNormalFlowFrequency($r);
+    if ($storedFq === '1st_of_every_month') {
+        inboxAppendStoredFirstOfMonthNormalFlowIfNeeded(
+            $needToday,
+            $pdo,
+            $companyId,
+            $r,
+            $today,
+            $baseCost,
+            $basePrice,
+            $baseProfit,
+            $hasDayEndMonthlyCapCol
+        );
+    } elseif ($storedFq === 'monthly') {
+        inboxAppendStoredMonthlyNormalFlowIfNeeded(
+            $needToday,
+            $pdo,
+            $companyId,
+            $r,
+            $today,
+            $baseCost,
+            $basePrice,
+            $baseProfit,
+            $hasDayEndMonthlyCapCol
+        );
+    } elseif ($storedFq === 'week') {
+        inboxAppendStoredWeeklyNormalFlowIfNeeded(
+            $needToday,
+            $pdo,
+            $companyId,
+            $r,
+            $today,
+            $baseCost,
+            $basePrice,
+            $baseProfit
+        );
+    } elseif ($storedFq === 'day') {
+        inboxAppendStoredDailyNormalFlowIfNeeded(
+            $needToday,
+            $pdo,
+            $companyId,
+            $r,
+            $today,
+            $baseCost,
+            $basePrice,
+            $baseProfit
+        );
+    }
+}
+
 /** Resend 单期与库里真实 day_start 不同时，额外排正常流程账单（不覆盖原流程）。 */
 function inboxAppendStoredMonthlyNormalFlowIfNeeded(
     array &$needToday,
@@ -1320,6 +1432,7 @@ function inboxAppendStoredMonthlyNormalFlowIfNeeded(
     }
     $rNormal = $r;
     $rNormal['day_start'] = $storedRaw;
+    $rNormal['day_start_frequency'] = 'monthly';
     $storedDayEnd = $r['bank_process_stored_day_end'] ?? null;
     if ($storedDayEnd !== null && trim((string) $storedDayEnd) !== '') {
         $rNormal['day_end'] = $storedDayEnd;
@@ -1391,6 +1504,7 @@ function inboxAppendStoredFirstOfMonthNormalFlowIfNeeded(
 
     $rNormal = $r;
     $rNormal['day_start'] = $storedRaw;
+    $rNormal['day_start_frequency'] = '1st_of_every_month';
     $storedDayEnd = $r['bank_process_stored_day_end'] ?? null;
     if ($storedDayEnd !== null && trim((string) $storedDayEnd) !== '') {
         $rNormal['day_end'] = $storedDayEnd;
@@ -1433,6 +1547,150 @@ function inboxAppendStoredFirstOfMonthNormalFlowIfNeeded(
             $baseProfit,
             $hasDayEndMonthlyCapCol
         );
+    }
+}
+
+/** Resend 单期：按库里真实 week frequency 补回正常周账单。 */
+function inboxAppendStoredWeeklyNormalFlowIfNeeded(
+    array &$needToday,
+    PDO $pdo,
+    int $companyId,
+    array $r,
+    string $today,
+    string $baseCost,
+    string $basePrice,
+    string $baseProfit
+): void {
+    if (empty($r['accounting_resend_relax_created_floor']) || empty($r['accounting_resend_single_period_from_schedule'])) {
+        return;
+    }
+    $storedRaw = $r['bank_process_stored_day_start'] ?? null;
+    if ($storedRaw === null || trim((string) $storedRaw) === '') {
+        return;
+    }
+    $storedYmd = inboxBankProcessDateFieldToYmd((string) $storedRaw);
+    if ($storedYmd === null) {
+        return;
+    }
+    $rNormal = $r;
+    $rNormal['day_start'] = $storedRaw;
+    $rNormal['day_start_frequency'] = 'week';
+    $storedDayEnd = $r['bank_process_stored_day_end'] ?? null;
+    if ($storedDayEnd !== null && trim((string) $storedDayEnd) !== '') {
+        $rNormal['day_end'] = $storedDayEnd;
+    }
+    unset($rNormal['accounting_resend_single_period_from_schedule'], $rNormal['accounting_resend_consolidated_range']);
+    $rNormal['accounting_resend_relax_created_floor'] = 0;
+
+    $startDate = $storedYmd;
+    $startTs = strtotime($startDate);
+    if ($startTs === false) {
+        return;
+    }
+    $createdYmd = inboxEffectiveCreatedYmdForProcess($rNormal, $today, $startDate);
+    $processIdWeek = (int) ($rNormal['id'] ?? 0);
+    if ($processIdWeek <= 0) {
+        return;
+    }
+    $queuedWeeklyStarts = [];
+    try {
+        $periodStartYmd = $startDate;
+        while ($periodStartYmd !== '') {
+            $due = $periodStartYmd;
+            $periodEnd = weekPeriodEndInclusiveYmd($due);
+            if ($periodEnd === null) {
+                break;
+            }
+            if ($due > $today) {
+                break;
+            }
+            if ($due < $createdYmd) {
+                $createdYear = (int) date('Y', strtotime($createdYmd));
+                $createdMonth = (int) date('n', strtotime($createdYmd));
+                if (!weekPeriodOverlapsCalendarMonth($due, $periodEnd, $createdYear, $createdMonth)) {
+                    $next = weekPeriodNextStartYmd($due);
+                    if ($next === null) {
+                        break;
+                    }
+                    $periodStartYmd = $next;
+                    continue;
+                }
+            }
+            if (weekPeriodIsReadyForAccounting($due, $today, false)
+                && !hasWeeklyPostedForPeriodStart($pdo, $companyId, $processIdWeek, $due)) {
+                $queuedWeeklyStarts[] = $due;
+            }
+            $next = weekPeriodNextStartYmd($due);
+            if ($next === null) {
+                break;
+            }
+            $periodStartYmd = $next;
+        }
+    } catch (Throwable $e) {
+        return;
+    }
+    foreach (inboxUniqueSortedWeeklyStarts($queuedWeeklyStarts) as $ws) {
+        inboxAppendWeeklyNeedToday($needToday, $rNormal, $ws, $baseCost, $basePrice, $baseProfit);
+    }
+}
+
+/** Resend 单期：按库里真实 day frequency 补回正常日账单。 */
+function inboxAppendStoredDailyNormalFlowIfNeeded(
+    array &$needToday,
+    PDO $pdo,
+    int $companyId,
+    array $r,
+    string $today,
+    string $baseCost,
+    string $basePrice,
+    string $baseProfit
+): void {
+    if (empty($r['accounting_resend_relax_created_floor']) || empty($r['accounting_resend_single_period_from_schedule'])) {
+        return;
+    }
+    $storedRaw = $r['bank_process_stored_day_start'] ?? null;
+    if ($storedRaw === null || trim((string) $storedRaw) === '') {
+        return;
+    }
+    $storedYmd = inboxBankProcessDateFieldToYmd((string) $storedRaw);
+    if ($storedYmd === null) {
+        return;
+    }
+    $rNormal = $r;
+    $rNormal['day_start'] = $storedRaw;
+    $rNormal['day_start_frequency'] = 'day';
+    $storedDayEnd = $r['bank_process_stored_day_end'] ?? null;
+    if ($storedDayEnd !== null && trim((string) $storedDayEnd) !== '') {
+        $rNormal['day_end'] = $storedDayEnd;
+    }
+    unset($rNormal['accounting_resend_single_period_from_schedule'], $rNormal['accounting_resend_consolidated_range']);
+    $rNormal['accounting_resend_relax_created_floor'] = 0;
+
+    $startDate = $storedYmd;
+    $processIdDay = (int) ($rNormal['id'] ?? 0);
+    if ($processIdDay <= 0) {
+        return;
+    }
+    $monthFirstYmd = $today;
+    try {
+        $monthFirstYmd = (new DateTimeImmutable($today))->modify('first day of this month')->format('Y-m-d');
+    } catch (Throwable $e) {
+        // keep $today
+    }
+    $effectiveStart = max($startDate, $monthFirstYmd);
+    $effectiveEnd = $today;
+    if ($effectiveStart > $effectiveEnd) {
+        return;
+    }
+    $unpostedDays = dailyCollectUnpostedDaysInRange(
+        $pdo,
+        $companyId,
+        $processIdDay,
+        $effectiveStart,
+        $effectiveEnd
+    );
+    foreach ($unpostedDays as $dayYmd) {
+        inboxAppendDailyNeedToday($needToday, $rNormal, $dayYmd, $baseCost, $basePrice, $baseProfit);
     }
 }
 
@@ -2106,6 +2364,22 @@ try {
                     'is_resend_consolidated_range' => true,
                 ];
             }
+            if (!empty($r['accounting_resend_single_period_from_schedule'])) {
+                $baseCost = money_normalize($r['cost'] ?? '0');
+                $basePrice = money_normalize($r['price'] ?? '0');
+                $baseProfit = money_normalize($r['profit'] ?? '0');
+                inboxAppendStoredNormalFlowIfNeeded(
+                    $needToday,
+                    $pdo,
+                    $company_id,
+                    $r,
+                    $today,
+                    $baseCost,
+                    $basePrice,
+                    $baseProfit,
+                    $hasDayEndMonthlyCapCol
+                );
+            }
             continue;
         }
         // Resend 单期开账（弹窗同时填 day_start + day_end）：统一走 consolidated 一条，避免与 monthly/day_end_tail 重复入列。
@@ -2261,6 +2535,19 @@ try {
                     inboxAppendWeeklyNeedToday($needToday, $r, $ws, $baseCost, $basePrice, $baseProfit);
                 }
             }
+            if ($resendRelax && $resendSinglePeriod) {
+                inboxAppendStoredNormalFlowIfNeeded(
+                    $needToday,
+                    $pdo,
+                    $company_id,
+                    $r,
+                    $today,
+                    $baseCost,
+                    $basePrice,
+                    $baseProfit,
+                    $hasDayEndMonthlyCapCol
+                );
+            }
             continue;
         }
 
@@ -2276,6 +2563,19 @@ try {
             if ($resendSinglePeriod && $startDate !== '') {
                 if (!hasDailyPostedOrSkippedForDay($pdo, $company_id, $processIdDay, $startDate)) {
                     inboxAppendDailyNeedToday($needToday, $r, $startDate, $baseCost, $basePrice, $baseProfit);
+                }
+                if ($resendRelax) {
+                    inboxAppendStoredNormalFlowIfNeeded(
+                        $needToday,
+                        $pdo,
+                        $company_id,
+                        $r,
+                        $today,
+                        $baseCost,
+                        $basePrice,
+                        $baseProfit,
+                        $hasDayEndMonthlyCapCol
+                    );
                 }
                 continue;
             }
@@ -2302,6 +2602,19 @@ try {
             }
             foreach ($unpostedDays as $dayYmd) {
                 inboxAppendDailyNeedToday($needToday, $r, $dayYmd, $baseCost, $basePrice, $baseProfit);
+            }
+            if ($resendRelax && $resendSinglePeriod) {
+                inboxAppendStoredNormalFlowIfNeeded(
+                    $needToday,
+                    $pdo,
+                    $company_id,
+                    $r,
+                    $today,
+                    $baseCost,
+                    $basePrice,
+                    $baseProfit,
+                    $hasDayEndMonthlyCapCol
+                );
             }
             continue;
         }
@@ -2358,7 +2671,7 @@ try {
                     }
                 }
             }
-            inboxAppendStoredFirstOfMonthNormalFlowIfNeeded(
+            inboxAppendStoredNormalFlowIfNeeded(
                 $needToday,
                 $pdo,
                 $company_id,
@@ -2423,7 +2736,7 @@ try {
                     }
                 }
             }
-            inboxAppendStoredMonthlyNormalFlowIfNeeded(
+            inboxAppendStoredNormalFlowIfNeeded(
                 $needToday,
                 $pdo,
                 $company_id,

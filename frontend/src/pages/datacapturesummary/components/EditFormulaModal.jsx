@@ -48,6 +48,15 @@ export default function EditFormulaModal({
   const [accountOpen, setAccountOpen] = useState(false);
   const [accountSearch, setAccountSearch] = useState("");
   const accountWrapperRef = useRef(null);
+  const accountSearchInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+    const raf = requestAnimationFrame(() => {
+      accountSearchInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [accountOpen]);
 
   useEffect(() => {
     if (!accountOpen) return undefined;
@@ -148,6 +157,7 @@ export default function EditFormulaModal({
                         >
                           <div className="custom-select-search">
                             <input
+                              ref={accountSearchInputRef}
                               type="text"
                               placeholder={t("searchAccount")}
                               autoComplete="off"

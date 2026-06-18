@@ -319,6 +319,16 @@ export function companyLoginRequiresSubsidiaryWithGroup(me) {
 }
 
 /**
+ * Company login that may use Group All → AP+IG group-ledger aggregate (same path as group login).
+ * Owner/admin, or Admin-assigned group ledger (e.g. partnership user with AP/IG).
+ */
+export function companyLoginCanUseGroupsAllLedger(me) {
+  if (!me || !isCompanyLogin(me) || isGroupLogin(me)) return false;
+  if (!canUseGroupOnlyMode(me)) return false;
+  return companyLoginHasGroupLedgerPrivilege(me) || userHasAssignedGroupLedger(me);
+}
+
+/**
  * Runtime UI state: viewing group ledger (no subsidiary company selected).
  * @param {object|null|undefined} me
  * @param {{ companyId?: number|null, selectedGroup?: string|null, groupOnly?: boolean }} ctx

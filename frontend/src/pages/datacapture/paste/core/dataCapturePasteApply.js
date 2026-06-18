@@ -1,5 +1,6 @@
 import {
   GROUP_ONLY_GRID_COLS,
+  MAX_GRID_COLS,
   MAX_GRID_ROWS,
 } from "../../grid/dataCaptureGridMeta.js";
 import { applyMatrixPatch, findLastFilledGridRowIndex, gridRowHasEditableData, resizeGrid } from "../../grid/gridModel.js";
@@ -23,7 +24,7 @@ function pasteGridCaps() {
   if (getDataCaptureState().isGroupOnlyGrid === true) {
     return { maxRows: MAX_GRID_ROWS, maxCols: GROUP_ONLY_GRID_COLS };
   }
-  return { maxRows: MAX_GRID_ROWS, maxCols: MAX_GRID_ROWS };
+  return { maxRows: MAX_GRID_ROWS, maxCols: MAX_GRID_COLS };
 }
 
 /** Shared grid helpers for paste modules (no legacy script required). */
@@ -31,21 +32,20 @@ export function ensurePasteGrid(rows, cols) {
   const { maxRows, maxCols } = pasteGridCaps();
   const targetRows = Math.max(1, Math.min(Number(rows) || 1, maxRows));
   const targetCols = Math.max(1, Math.min(Number(cols) || 1, maxCols));
-  let grid = getPasteGridModel();
+  const grid = getPasteGridModel();
 
   if (!grid || grid.rows < 1 || grid.cols < 1) {
     ensurePasteTableInitialized(targetRows, targetCols);
-    return;
+    return getPasteGridModel();
   }
 
-  if (targetRows <= grid.rows && targetCols <= grid.cols) return;
-
-  if (findLastFilledGridRow() < 0) {
-    ensurePasteTableInitialized(targetRows, targetCols);
-    return;
+  if (targetRows <= grid.rows && targetCols <= grid.cols) {
+    return grid;
   }
 
-  replacePasteGridModel(resizeGrid(grid, targetRows, targetCols));
+  const resized = resizeGrid(grid, targetRows, targetCols);
+  replacePasteGridModel(resized);
+  return resized;
 }
 
 function getGridSize() {
@@ -149,12 +149,14 @@ export function ensureGridFits(startRow, startCol, matrixRows, matrixCols) {
   const { rows: currentRows, cols: currentCols } = getGridSize();
   const requiredRows = startRow + matrixRows;
   const requiredCols = startCol + matrixCols;
-  if (requiredRows <= currentRows && requiredCols <= currentCols) return;
+  if (requiredRows <= currentRows && requiredCols <= currentCols) {
+    return getPasteGridModel();
+  }
 
   const { maxRows, maxCols } = pasteGridCaps();
   const targetRows = Math.max(currentRows, Math.min(requiredRows, maxRows));
   const targetCols = Math.max(currentCols, Math.min(requiredCols, maxCols));
-  ensurePasteGrid(targetRows, targetCols);
+  return ensurePasteGrid(targetRows, targetCols);
 }
 
 function padMatrixRows(dataMatrix) {
@@ -252,9 +254,7 @@ function applyDataMatrixToGridModel(dataMatrix, anchorCell, options = {}) {
   const startRow = startRowOverride != null ? startRowOverride : anchorRow;
   const startCol = startColOverride != null ? startColOverride : anchorCol;
 
-  ensureGridFits(startRow, startCol, dataMatrix.length, maxCols);
-
-  let grid = getPasteGridModel();
+  const grid = ensureGridFits(startRow, startCol, dataMatrix.length, maxCols) || getPasteGridModel();
   if (!grid) return { successCount: 0, changes: [] };
 
   const matrixForPatch = dataMatrix.map((rowData, rowIndex) =>
@@ -273,8 +273,8 @@ function applyDataMatrixToGridModel(dataMatrix, anchorCell, options = {}) {
     });
   });
 
-  grid = applyMatrixPatch(grid, startRow, startCol, matrixForPatch);
-  replacePasteGridModel(grid);
+  const updatedGrid = applyMatrixPatch(grid, startRow, startCol, matrixForPatch);
+  replacePasteGridModel(updatedGrid);
   recordPasteHistory(changes);
   recomputeSubmitStateAfterPaste();
 

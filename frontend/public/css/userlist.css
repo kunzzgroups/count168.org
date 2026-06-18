@@ -1,4 +1,4 @@
-﻿body.user-page {
+body.user-page {
     font-family: var(--font-ui) !important;
     font-size: var(--text-medium) !important;
     margin: 0;
@@ -2185,6 +2185,10 @@ label.user-modal-col-title.acc-proc-label {
 /* Add/Edit User — Login ID 字段标题 */
 #userModal label[for="login_id"] {
     font-size: var(--text-medium);
+}
+
+#userModal select#role {
+    font-size: var(--text-tiny);
 }
 
 .user-page .form-group input,

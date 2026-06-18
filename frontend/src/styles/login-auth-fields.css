@@ -63,6 +63,30 @@ body.bg .login-container .input-group input::placeholder {
   font-weight: 400;
 }
 
+body.bg .login-container .tac-container .input-group input {
+  border-radius: var(--login-radius-pill) 0 0 var(--login-radius-pill);
+  border-right-width: 0;
+  box-shadow: none;
+}
+
+body.bg .login-container .tac-container .input-group input:focus {
+  border-right-width: 0;
+  animation: pulse 0.3s ease-out;
+}
+
+body.bg .login-container .tac-container:focus-within .tac-btn {
+  border-color: var(--login-bg-start);
+}
+
+body.bg .login-container .input-group input.input--mismatch {
+  border-color: #dc3545;
+}
+
+body.bg .login-container .input-group input.input--mismatch:focus {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.15);
+}
+
 /* Remember me / Forgot password — bundle 内最后加载，避免被 Tailwind base 覆盖 */
 body.bg .sc-login-remember-text {
   white-space: nowrap;

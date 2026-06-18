@@ -20,7 +20,7 @@ jobs:
           debug: true
           script: |
             set -euo pipefail
-            if [[ ! -x /var/www/count168/deploy/deploy.sh ]]; then
+            if [[ ! -f /var/www/count168/deploy/deploy.sh ]]; then
               echo "ERROR: /var/www/count168/deploy/deploy.sh missing"
               exit 1
             fi
@@ -28,6 +28,7 @@ jobs:
 
   deploy-org:
     name: count168.org
+    needs: deploy-site
     runs-on: ubuntu-latest
     steps:
       - name: SSH deploy to /var/www/count168.org
@@ -41,17 +42,34 @@ jobs:
           debug: true
           script: |
             set -euo pipefail
-            if [[ ! -d /var/www/count168.org/.git ]]; then
-              echo "ERROR: /var/www/count168.org not cloned — run on EC2:"
-              echo "  sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git /var/www/count168.org"
-              echo "  sudo chown -R ec2-user:nginx /var/www/count168.org"
+            APP_ROOT=/var/www/count168.org
+            if [[ ! -d "${APP_ROOT}/.git" ]]; then
+              echo "ERROR: ${APP_ROOT}/.git missing — run on EC2:"
+              echo "  sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git ${APP_ROOT}"
+              echo "  sudo chown -R ec2-user:nginx ${APP_ROOT}"
               exit 1
             fi
-            if [[ -x /var/www/count168.org/deploy/deploy-org.sh ]]; then
-              bash /var/www/count168.org/deploy/deploy-org.sh
-            elif [[ -x /var/www/count168/deploy/deploy-org.sh ]]; then
-              bash /var/www/count168/deploy/deploy-org.sh
+            ORG_DEPLOY=""
+            for candidate in \
+              "${APP_ROOT}/deploy/deploy-org.sh" \
+              "/var/www/count168/deploy/deploy-org.sh"; do
+              if [[ -f "$candidate" ]]; then
+                ORG_DEPLOY="$candidate"
+                break
+              fi
+            done
+            if [[ -n "$ORG_DEPLOY" ]]; then
+              bash "$ORG_DEPLOY"
             else
-              echo "ERROR: deploy-org.sh missing"
-              exit 1
+              echo "==> fallback: git pull ${APP_ROOT} (deploy-org.sh not found)"
+              cd "$APP_ROOT"
+              git fetch origin main
+              git reset --hard origin/main
+              if command -v chcon >/dev/null 2>&1; then
+                chcon -R -t httpd_sys_content_t "$APP_ROOT" 2>/dev/null || true
+              fi
+              if systemctl is-active --quiet nginx 2>/dev/null; then
+                sudo systemctl reload nginx || true
+              fi
+              echo "==> org deploy OK (fallback)"
             fi

@@ -1238,7 +1238,7 @@ CREATE TABLE `transactions_deleted` (
   `company_id` int(11) NOT NULL,
   `scope_type` enum('company','group') NOT NULL DEFAULT 'company' COMMENT 'Tenant scope: company or group ledger',
   `scope_id` bigint UNSIGNED DEFAULT NULL COMMENT 'Numeric scope: company.id or groups.id',
-  `transaction_type` enum('WIN','LOSE','PAYMENT','RECEIVE','CONTRA','RATE','ADJUSTMENT') NOT NULL,
+  `transaction_type` enum('WIN','LOSE','PAYMENT','RECEIVE','CONTRA','CLAIM','RATE','CLEAR','ADJUSTMENT') NOT NULL,
   `account_id` int(11) NOT NULL COMMENT 'To Account - 接收方账户',
   `from_account_id` int(11) DEFAULT NULL COMMENT 'From Account - 发送方账户',
   `amount` decimal(25,8) NOT NULL,

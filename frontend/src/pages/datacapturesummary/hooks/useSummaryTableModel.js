@@ -68,6 +68,8 @@ export function useSummaryTableModel({
   const populateStartedRef = useRef(false);
   const populateChainRef = useRef(Promise.resolve());
   const repopulateAttemptRef = useRef(0);
+  /** After first populate on this mount, in-page Refresh may restore draft (rate/formula). */
+  const initialPopulateCompletedRef = useRef(false);
 
   const processMeta = { processId, processCode };
 
@@ -88,7 +90,9 @@ export function useSummaryTableModel({
       setDataPopulating(true);
 
       try {
-        if (freshFromCapture) {
+        const isFirstFreshPopulate = freshFromCapture && !initialPopulateCompletedRef.current;
+
+        if (isFirstFreshPopulate) {
           clearSummaryRefreshDraftStorage(captureScope, processMeta);
         }
 
@@ -105,7 +109,7 @@ export function useSummaryTableModel({
 
         const accounts = await consumePrefetchedAccounts(captureScope);
 
-        if (!freshFromCapture) {
+        if (!isFirstFreshPopulate) {
           const snapshot = loadSummarySessionSnapshotWithFallback(
             captureScope,
             processMeta,
@@ -119,6 +123,7 @@ export function useSummaryTableModel({
             saveSummaryRefreshStatePure(restoredRows, processMeta, captureScope);
             setTableChromeVisible(true);
             document.body.classList.add("page-ready");
+            initialPopulateCompletedRef.current = true;
             return true;
           }
         }
@@ -132,7 +137,7 @@ export function useSummaryTableModel({
           captureScope,
           captureId,
           serverState,
-          freshFromCapture,
+          freshFromCapture: isFirstFreshPopulate,
           loadTemplates: () =>
             consumePrefetchedTemplates({
               captureScope,
@@ -157,6 +162,8 @@ export function useSummaryTableModel({
         if (freshFromCapture && searchParams?.get("success") === "1") {
           stripSummarySuccessParamFromUrl();
         }
+
+        initialPopulateCompletedRef.current = true;
 
         return summaryRowsLookPopulated(populatedRows);
       } catch (error) {

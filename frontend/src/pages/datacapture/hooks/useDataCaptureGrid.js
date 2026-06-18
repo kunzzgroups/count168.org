@@ -18,7 +18,13 @@ import {
   restoreCaptureTableFromData,
 } from "../grid/dataCaptureGridClearRestore.js";
 import { toggleBridgeFormatDisplay } from "../lib/dataCaptureBridge.js";
-import { callDataCaptureRuntime, getDataCaptureState, registerDataCaptureRuntime, unregisterDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
+import { shouldRestoreFromUrl } from "../lib/dataCaptureStorage.js";
+import {
+  callDataCaptureRuntime,
+  getDataCaptureState,
+  registerDataCaptureRuntime,
+  unregisterDataCaptureRuntime,
+} from "../lib/dataCaptureRuntime.js";
 import { useDataCaptureGridWindowBridges } from "./useDataCaptureGridWindowBridges.js";
 
 /** Minimum rows/cols to consider the grid already built. */
@@ -157,6 +163,7 @@ export function useDataCaptureGrid(engineReady, groupOnly = false) {
 
   useEffect(() => {
     if (!engineReady) return;
+    if (shouldRestoreFromUrl() || getDataCaptureState().isRestoring) return;
     const { rows, cols } = resolveDataCaptureGridDimensions(groupOnly);
     handlersRef.current.initializeGrid(rows, cols);
   }, [engineReady, groupOnly]);

@@ -1287,6 +1287,37 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     font-family: var(--summary-font);
 }
 
+/* Few currencies / company rows: content stacks from pie downward — no dead space before table */
+.dashboard-panels-row > .dashboard-panel-card--summary-compact {
+    align-self: stretch;
+    height: auto;
+    min-height: clamp(220px, 28vh, 300px);
+}
+
+.dashboard-panel-card--summary-compact {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.dashboard-summary-layout.is-compact-breakdown {
+    grid-template-rows: auto auto;
+    flex: 1 1 auto;
+    min-height: 0;
+    align-content: start;
+}
+
+.dashboard-summary-currency-list.is-compact-breakdown {
+    flex: 0 0 auto;
+    max-height: none;
+    align-self: start;
+}
+
+.dashboard-summary-currency-list.is-compact-breakdown .dashboard-summary-currency-list-body {
+    flex: 0 0 auto;
+    max-height: none;
+    overflow: visible;
+}
+
 .dashboard-summary-hero {
     display: flex;
     align-items: center;
@@ -3078,10 +3109,22 @@ body.dashboard-home-page .dashboard-panel-chart-body {
 body.dashboard-home-page .dashboard-panel-card--summary {
     --summary-pie-size: clamp(195px, 22vh, 240px);
     --summary-currency-max: clamp(120px, 20vh, 175px);
+    overflow: visible;
+    align-self: stretch;
+    min-height: clamp(220px, 28vh, 300px);
+}
+
+body.dashboard-home-page .dashboard-panels-row > .dashboard-panel-card--summary-compact {
+    align-self: stretch;
+}
+
+body.dashboard-home-page .dashboard-summary-layout.is-compact-breakdown {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 body.dashboard-home-page .dashboard-summary-top-row {
-    grid-template-rows: min(var(--summary-pie-size));
+    grid-template-rows: var(--summary-pie-size);
 }
 
 body.dashboard-home-page .dashboard-summary-top-row .dashboard-summary-pie-wrap {

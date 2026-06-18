@@ -10,6 +10,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/maintenance_accounting_resend_lib.php';
+require_once __DIR__ . '/../includes/payment_delete_shared.php';
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -23,40 +24,6 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
         'message' => $message,
         'data' => $data
     ], JSON_UNESCAPED_UNICODE);
-}
-
-/**
- * 确保 transactions_deleted 日志表存在
- */
-function ensureTransactionsDeletedTable(PDO $pdo) {
-    $sql = "
-        CREATE TABLE IF NOT EXISTS transactions_deleted (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            transaction_id INT NOT NULL,
-            company_id INT NOT NULL,
-            transaction_type ENUM('WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'RATE', 'CLAIM', 'CLEAR', 'ADJUSTMENT') NOT NULL,
-            account_id INT NOT NULL,
-            from_account_id INT NULL,
-            amount DECIMAL(15, 2) NOT NULL,
-            transaction_date DATE NOT NULL,
-            description VARCHAR(500) NULL,
-            sms VARCHAR(500) NULL,
-            created_by INT NULL,
-            created_by_owner INT NULL,
-            created_at TIMESTAMP NULL,
-            deleted_by_user_id INT NULL,
-            deleted_by_owner_id INT NULL,
-            deleted_at TIMESTAMP NULL,
-            source_bank_process_id INT NULL,
-            source_bank_process_period_type VARCHAR(64) NULL,
-            currency_id INT NULL,
-            INDEX idx_company_date (company_id, transaction_date),
-            INDEX idx_transaction_id (transaction_id),
-            INDEX idx_deleted_at (deleted_at),
-            INDEX idx_source_bank_process_id (source_bank_process_id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    ";
-    $pdo->exec($sql);
 }
 
 /**
@@ -296,7 +263,7 @@ try {
         $deletedByUserId = $userId;
     }
 
-    ensureTransactionsDeletedTable($pdo);
+    payment_delete_ensure_transactions_deleted_table($pdo);
     ensureTransactionsDeletedExtraColumns($pdo);
     // Ensure resend-pending table exists BEFORE starting a DB transaction
     // (DDL inside transaction can cause implicit commit).

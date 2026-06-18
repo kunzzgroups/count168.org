@@ -47,14 +47,60 @@ function payment_delete_transaction_scope_filter(PDO $pdo, array $listScope, str
     return ['sql' => "{$alias}.company_id = ?", 'bind' => $permId];
 }
 
+/** @var list<string> */
+const PAYMENT_DELETE_TRANSACTION_TYPES = [
+    'WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM', 'RATE', 'CLEAR', 'ADJUSTMENT',
+];
+
+function payment_delete_sync_transactions_deleted_transaction_type_enum(PDO $pdo): void
+{
+    try {
+        $tableCheck = $pdo->query("SHOW TABLES LIKE 'transactions_deleted'");
+        if (!$tableCheck || $tableCheck->rowCount() === 0) {
+            return;
+        }
+
+        $col = $pdo->query("SHOW COLUMNS FROM transactions_deleted LIKE 'transaction_type'")->fetch(PDO::FETCH_ASSOC);
+        if (!$col) {
+            return;
+        }
+
+        $columnType = (string) ($col['Type'] ?? '');
+        if (stripos($columnType, 'enum(') !== 0) {
+            return;
+        }
+
+        $missing = [];
+        foreach (PAYMENT_DELETE_TRANSACTION_TYPES as $type) {
+            if (stripos($columnType, "'" . $type . "'") === false) {
+                $missing[] = $type;
+            }
+        }
+        if ($missing === []) {
+            return;
+        }
+
+        $newEnum = rtrim($columnType, ')');
+        foreach ($missing as $type) {
+            $newEnum .= ",'" . $type . "'";
+        }
+        $newEnum .= ')';
+        $nullable = strtoupper((string) ($col['Null'] ?? '')) === 'NO' ? ' NOT NULL' : ' NULL';
+        $pdo->exec("ALTER TABLE transactions_deleted MODIFY COLUMN transaction_type {$newEnum}{$nullable}");
+    } catch (PDOException $e) {
+        // Concurrent ALTER or permission issues should not block deletes on already-synced DBs.
+    }
+}
+
 function payment_delete_ensure_transactions_deleted_table(PDO $pdo): void
 {
+    $enumList = "'" . implode("','", PAYMENT_DELETE_TRANSACTION_TYPES) . "'";
     $sql = "
         CREATE TABLE IF NOT EXISTS transactions_deleted (
             id INT AUTO_INCREMENT PRIMARY KEY,
             transaction_id INT NOT NULL,
             company_id INT NOT NULL,
-            transaction_type ENUM('WIN', 'LOSE', 'PAYMENT', 'RECEIVE', 'CONTRA', 'RATE', 'CLAIM', 'CLEAR', 'ADJUSTMENT') NOT NULL,
+            transaction_type ENUM({$enumList}) NOT NULL,
             account_id INT NOT NULL,
             from_account_id INT NULL,
             amount DECIMAL(25, 8) NOT NULL,
@@ -100,6 +146,8 @@ function payment_delete_ensure_transactions_deleted_table(PDO $pdo): void
         }
     } catch (PDOException $e) {
     }
+
+    payment_delete_sync_transactions_deleted_transaction_type_enum($pdo);
 }
 
 function payment_delete_backup_transactions(

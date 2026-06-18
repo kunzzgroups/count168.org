@@ -21,6 +21,8 @@ export const CAPTURE_PROCESS_STORAGE_KEY = "capturedProcessData";
 export const CAPTURE_TYPE_STORAGE_KEY = "capturedDataCaptureType";
 /** Points at the scoped storage suffix for Summary / cross-page reads. */
 export const CAPTURE_SCOPE_POINTER_KEY = "dc_capture_active_scope_key";
+/** Summary → Capture back: survives AuthenticatedLayout URL param stripping. */
+export const CAPTURE_RESTORE_BOOT_KEY = "dc_capture_restore_boot";
 
 export { normalizeStoredCaptureType, isCitibetCaptureType };
 
@@ -267,11 +269,117 @@ export function captureSessionMatchesScope(session, scope) {
   return true;
 }
 
+/** Lenient match for Summary → Capture back navigation (company id must align). */
+export function captureSessionRestorable(session, scope) {
+  if (!session?.tableData || !session?.processData) return false;
+  if (scope && captureSessionMatchesScope(session, scope)) return true;
+  if (!scope) return true;
+
+  const pd = session.processData;
+  const savedCid =
+    pd.scopeCompanyId != null ? Number(pd.scopeCompanyId) : Number(pd.companyId);
+  if (
+    scope.mode === "company" &&
+    Number.isFinite(savedCid) &&
+    savedCid > 0 &&
+    Number(scope.scopeCompanyId) === savedCid
+  ) {
+    return true;
+  }
+
+  if (scope.mode === "group" && isGroupLedgerCapture(scope, pd)) {
+    const expectedGroup = scope.groupId ? String(scope.groupId).trim().toUpperCase() : "";
+    const savedGroup = pd.captureSelectedGroup
+      ? String(pd.captureSelectedGroup).trim().toUpperCase()
+      : "";
+    if (!expectedGroup || !savedGroup || expectedGroup === savedGroup) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Load capture session for ?restore=1 — tries scoped, active, and legacy keys with fallbacks.
+ */
+export function loadRestoreCaptureSession(captureScope, companies = []) {
+  if (!shouldRestoreFromUrl()) return null;
+
+  const seen = new Set();
+  const candidates = [];
+
+  const pushCandidate = (session) => {
+    if (!session?.tableData || !session?.processData) return;
+    const key = `${session.processData.process}:${session.tableData.rowCount}:${session.tableData.rows?.length ?? 0}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(session);
+  };
+
+  if (captureScope) {
+    pushCandidate(loadCaptureSession(captureScope));
+  }
+  pushCandidate(loadActiveCaptureSession(companies));
+  pushCandidate(loadCaptureSession(null));
+
+  const meta = readCaptureSessionMeta(captureScope);
+  if (meta) {
+    const fromMeta = resolveDataCaptureScopeFromSessionMeta(meta, companies);
+    if (fromMeta) {
+      pushCandidate(loadCaptureSession(fromMeta));
+    }
+  }
+
+  for (const session of candidates) {
+    if (captureSessionRestorable(session, captureScope)) return session;
+  }
+
+  return candidates[0] ?? null;
+}
+
+/** Persist restore intent before navigating to /datacapture (URL params are stripped by layout). */
+export function markCaptureRestorePending({ companyId = null, groupId = null, groupOnly = false } = {}) {
+  try {
+    sessionStorage.setItem(
+      CAPTURE_RESTORE_BOOT_KEY,
+      JSON.stringify({
+        restore: true,
+        companyId:
+          companyId != null && Number(companyId) > 0 ? Number(companyId) : null,
+        groupId: groupId ? String(groupId).trim().toUpperCase() : null,
+        groupOnly: groupOnly === true,
+      }),
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readCaptureRestoreBoot() {
+  try {
+    const raw = sessionStorage.getItem(CAPTURE_RESTORE_BOOT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.restore === true ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCaptureRestoreBoot() {
+  try {
+    sessionStorage.removeItem(CAPTURE_RESTORE_BOOT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function shouldRestoreFromUrl() {
+  if (readCaptureRestoreBoot()) return true;
   return new URLSearchParams(window.location.search).get("restore") === "1";
 }
 
 export function stripRestoreParamFromUrl() {
+  clearCaptureRestoreBoot();
   replaceBrowserPathOnly();
 }
 

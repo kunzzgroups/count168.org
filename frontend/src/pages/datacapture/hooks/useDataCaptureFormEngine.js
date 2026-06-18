@@ -19,7 +19,7 @@ import {
   restoreGroupOnlyTableDraft,
   saveGroupOnlyTableDraft,
 } from "../lib/dataCaptureGroupOnlyTableDraft.js";
-import { loadActiveCaptureSession } from "../lib/dataCaptureStorage.js";
+import { loadActiveCaptureSession, shouldRestoreFromUrl } from "../lib/dataCaptureStorage.js";
 import { isGroupPayrollCaptureSession } from "../../../utils/company/c168CaptureChannel.js";
 import { captureTableSnapshot } from "../lib/dataCaptureTableSnapshot.js";
 import { toDataCaptureWordFieldCase } from "../lib/dataCaptureFormRules.js";
@@ -47,8 +47,7 @@ const PROCESS_OPTIONS_RENDER_CAP = 80;
 
 function readRestoredProcessData() {
   try {
-    const url = new URLSearchParams(window.location.search);
-    if (url.get("restore") !== "1") return null;
+    if (!shouldRestoreFromUrl()) return null;
     const session = loadActiveCaptureSession();
     if (session?.processData) return session.processData;
     const raw = localStorage.getItem("capturedProcessData");
@@ -218,8 +217,7 @@ export function useDataCaptureFormEngine(
     applyCompanyOnlyFieldsRef.current || companyPayrollUiRef.current;
 
   useLayoutEffect(() => {
-    const url = new URLSearchParams(window.location.search);
-    if (url.get("restore") === "1") {
+    if (shouldRestoreFromUrl()) {
       getDataCaptureState().isRestoring = true;
       if (Array.isArray(restoredProcessData?.descriptions)) {
         setSelectedDescriptions(restoredProcessData.descriptions);
@@ -308,9 +306,11 @@ export function useDataCaptureFormEngine(
   useEffect(() => {
     if (!companyId || !applyCompanyOnlyFields) return;
     if (getDataCaptureState().isRestoring) return;
-    const url = new URLSearchParams(window.location.search);
-    if (url.get("restore") === "1") return;
-    void reloadProcessesForDate(captureDate, { preserveSelection: false });
+    if (shouldRestoreFromUrl()) return;
+    if (getDataCaptureState().restoreCompleted) return;
+    const session = loadActiveCaptureSession();
+    const preserveSelection = Boolean(session?.processData?.process);
+    void reloadProcessesForDate(captureDate, { preserveSelection });
   }, [companyId, applyCompanyOnlyFields, captureDate, reloadProcessesForDate]);
 
   const onDateChange = useCallback(

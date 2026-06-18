@@ -190,6 +190,7 @@ function SummaryTableRowInner({ row, onRowChange, onNewFormula, onEditFormula, o
       </td>
       <td
         className="editable-cell"
+        data-summary-field="rateValue"
         style={{ textAlign: "center", cursor: "text" }}
         contentEditable
         suppressContentEditableWarning

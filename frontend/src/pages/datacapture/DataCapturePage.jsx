@@ -37,9 +37,11 @@ import GcInlineFilterPanel from "../../components/GcInlineFilterPanel.jsx";
 import "../../../public/css/userlist.css";
 import "../../../public/css/global-13inch.css";
 import "../../../public/css/datacapture.css";
+import "../../../public/css/remove-word-chip.css";
+import "../../../public/css/description-input.css";
 
 import { formatSubmittedProcessDateTime } from "./lib/dataCaptureApi.js";
-import { readCaptureSessionMeta, shouldRestoreFromUrl, loadCaptureSession, captureSessionMatchesScope } from "./lib/dataCaptureStorage.js";
+import { readCaptureSessionMeta, shouldRestoreFromUrl, loadCaptureSession, captureSessionMatchesScope, loadActiveCaptureSession, readCaptureRestoreBoot } from "./lib/dataCaptureStorage.js";
 import { callDataCaptureRuntime, getDataCaptureState } from "./lib/dataCaptureRuntime.js";
 import {
   dataCaptureScopeCacheKey,
@@ -136,7 +138,10 @@ function DataCapturePageContent() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { me, sessionReady } = useAuthSession();
-  const companyIdFromUrl = searchParams.get("company_id");
+  const restoreBootOnMount = useMemo(() => readCaptureRestoreBoot(), []);
+  const companyIdFromUrl =
+    searchParams.get("company_id") ||
+    (restoreBootOnMount?.companyId != null ? String(restoreBootOnMount.companyId) : null);
   const [lang, setLang] = useState(() => (localStorage.getItem("login_lang") === "zh" ? "zh" : "en"));
   const t = useCallback((key, params) => getDataCaptureText(lang, key, params), [lang]);
 
@@ -174,6 +179,9 @@ function DataCapturePageContent() {
   useLayoutEffect(() => {
     window.__DATA_CAPTURE_SPA_BOOTSTRAP__ = true;
     window.isNavigatingAwayByBackOrSubmit = false;
+    if (readCaptureRestoreBoot()) {
+      getDataCaptureState().isRestoring = true;
+    }
     return () => {
       try {
         delete window.__DATA_CAPTURE_SPA_BOOTSTRAP__;
@@ -349,6 +357,7 @@ function DataCapturePageContent() {
   const mutationsBlocked = usePartnershipAuditReadOnlyLocked(me);
   const submitReset = useDataCaptureSubmitReset({
     captureScope,
+    companies: companiesDeduped,
     form,
     captureType,
     mutationsBlocked,
@@ -479,10 +488,16 @@ function DataCapturePageContent() {
         const raw = filterCompaniesForLoginScope(await fetchOwnerCompaniesAll(), u);
 
         const url = new URL(window.location.href);
-        const queryCompany = url.searchParams.get("company_id");
-        const restoreFromUrl = url.searchParams.get("restore") === "1";
+        const restoreBoot = readCaptureRestoreBoot();
+        const queryCompany =
+          url.searchParams.get("company_id") ||
+          (restoreBoot?.companyId != null ? String(restoreBoot.companyId) : null);
+        const restoreFromUrl =
+          url.searchParams.get("restore") === "1" || restoreBoot?.restore === true;
         const submittedFromUrl = url.searchParams.get("submitted") === "1";
-        const queryGroupOnly = url.searchParams.get("group_only") === "1";
+        const queryGroupOnly =
+          url.searchParams.get("group_only") === "1" || restoreBoot?.groupOnly === true;
+        const queryGroup = url.searchParams.get("group_id") || restoreBoot?.groupId || null;
         const sessionMeta = restoreFromUrl ? readCaptureSessionMeta() : null;
         const allowGroupOnly = canUseGroupOnlyMode(u);
         const persistedGc = readPersistedDashboardGcFilter();
@@ -563,7 +578,20 @@ function DataCapturePageContent() {
           return;
         }
 
-        const initialGroup = resolveInitialSelectedGroupFromSession(raw, rowForPick);
+        const initialGroup = (() => {
+          if (restoreFromUrl) {
+            const savedGroup =
+              queryGroup ||
+              sessionMeta?.captureSelectedGroup ||
+              loadActiveCaptureSession(raw)?.processData?.captureSelectedGroup;
+            if (savedGroup) {
+              const normalized = String(savedGroup).trim().toUpperCase();
+              persistDashboardGroupFilter(normalized);
+              return normalized;
+            }
+          }
+          return resolveInitialSelectedGroupFromSession(raw, rowForPick);
+        })();
 
         setCompanies(raw);
         setCompanyId(effectiveCompany);
@@ -789,7 +817,7 @@ function DataCapturePageContent() {
 
   useEffect(() => {
     if (getDataCaptureState().isRestoring) return;
-    if (new URLSearchParams(window.location.search).get("restore") === "1") return;
+    if (shouldRestoreFromUrl()) return;
     const id = form.selectedProcess?.id;
     if (!id) return;
     if (!isCompanySelected && !c168Channel && !isGroupOnlyProcessId(id)) {
@@ -913,9 +941,9 @@ function DataCapturePageContent() {
   }, [bootLoading, me, captureScope, effectiveCompanyId, companyCode, groupPayrollUi]);
 
   useEffect(() => {
-    if (!scriptsReady || !dataCaptureScopeIsReady(captureScope)) return;
+    if (bootLoading || !scriptsReady || !dataCaptureScopeIsReady(captureScope)) return;
     submitReset.restoreFromStorage();
-  }, [scriptsReady, captureScope, submitReset.restoreFromStorage]);
+  }, [bootLoading, scriptsReady, captureScope, submitReset.restoreFromStorage]);
 
   useEffect(() => {
     if (!scriptsReady) return;
@@ -1049,7 +1077,7 @@ function DataCapturePageContent() {
                   <div className="form-group dc-form-company-layout__description">
                     <label htmlFor="capture_description">{t("description")}</label>
                     <div
-                      className="input-with-icon dc-description-input-wrap"
+                      className="description-input-wrap dc-description-input-wrap description-input-wrap--interactive"
                       role="button"
                       tabIndex={0}
                       title={t("selectDescriptions")}
@@ -1073,7 +1101,7 @@ function DataCapturePageContent() {
                       />
                       <button
                         type="button"
-                        className="dc-description-add-tile"
+                        className="description-add-tile dc-description-add-tile"
                         title={t("selectDescriptions")}
                         aria-label={t("selectDescriptions")}
                         onClick={(e) => {

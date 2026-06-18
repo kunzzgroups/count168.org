@@ -14,7 +14,7 @@ import {
   setBridgeTableActive,
   updateBridgeCell,
 } from "../lib/dataCaptureBridge.js";
-import { MAX_GRID_ROWS } from "./dataCaptureGridMeta.js";
+import { MAX_GRID_COLS, MAX_GRID_ROWS } from "./dataCaptureGridMeta.js";
 
 /** Pending cell focus after grid row/column append (applied on next grid render). */
 let pendingGridCellFocus = null;
@@ -464,8 +464,9 @@ export function handleCellKeydown(e) {
       if (nextCell?.contentEditable === "true") {
         setActiveCell(nextCell);
       } else if (!e.shiftKey) {
-        const currentCols = document.querySelectorAll("#tableHeader th").length - 1;
-        if (currentCols < 30) {
+        const grid = getPasteGridModel();
+        const modelCols = grid?.cols ?? document.querySelectorAll("#tableHeader th").length - 1;
+        if (currentColIdx >= modelCols - 1 && modelCols < MAX_GRID_COLS) {
           const newColIndex = addNewColumn();
           if (newColIndex !== null) {
             const newCell = row.children[newColIndex + 1];
