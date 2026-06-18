@@ -276,7 +276,7 @@
   /*
    * Accounting Due inbox (Bank Process List) — grid + spacing aligned with Contra Inbox
    */
-  --accounting-due-grid-cols: 60px 56px minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1.08fr) minmax(0, 0.56fr) minmax(0, 0.8fr) 60px;
+  --accounting-due-grid-cols: 60px 56px minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 0.72fr) minmax(0, 1.08fr) minmax(0, 0.56fr) minmax(0, 0.8fr) 60px;
   --accounting-due-grid-gap: 0;
   --accounting-due-cell-pad-y: clamp(0.58rem, 0.5vw, 0.75rem);
   --accounting-due-cell-pad-x: clamp(0.5rem, 0.42vw, 0.65rem);

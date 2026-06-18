@@ -108,6 +108,7 @@ export default function BankProcessListPage() {
     resendInlineError,
     setResendInlineError,
     resendConfirmDisabled,
+    resendConfirmBlockReason,
     resendLockChecking,
     isBankResendScheduleLockedToday,
     sortColumn,
@@ -834,6 +835,7 @@ export default function BankProcessListPage() {
           resendFrequency={resendFrequency} setResendFrequency={setResendFrequency}
           resendInlineError={resendInlineError} setResendInlineError={setResendInlineError}
           resendConfirmDisabled={resendConfirmDisabled}
+          resendConfirmBlockReason={resendConfirmBlockReason}
           resendLockChecking={resendLockChecking}
           onResend={resendAccountingDue} onClose={() => setResendModalOpen(false)}
           t={t}

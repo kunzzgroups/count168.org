@@ -102,9 +102,22 @@ if (!function_exists('bmp_ensureBankProcessAccountingResendOpenAnchorsColumn')) 
     }
 }
 
-if (!function_exists('bmp_decodeResendOpenAnchorsJson')) {
-    /** @return string[] */
-    function bmp_decodeResendOpenAnchorsJson(?string $raw): array
+if (!function_exists('bmp_normalizeResendOpenAnchorFrequency')) {
+    function bmp_normalizeResendOpenAnchorFrequency(?string $raw): string
+    {
+        $fq = strtolower(trim((string) $raw));
+        if (in_array($fq, ['1st_of_every_month', 'monthly', 'week', 'day', 'once'], true)) {
+            return $fq;
+        }
+        return '1st_of_every_month';
+    }
+}
+
+if (!function_exists('bmp_decodeResendOpenAnchorEntriesJson')) {
+    /**
+     * @return array<int, array{anchor: string, frequency: string}>
+     */
+    function bmp_decodeResendOpenAnchorEntriesJson(?string $raw): array
     {
         if ($raw === null || trim($raw) === '') {
             return [];
@@ -113,19 +126,75 @@ if (!function_exists('bmp_decodeResendOpenAnchorsJson')) {
         if (!is_array($decoded)) {
             return [];
         }
-        $anchors = [];
-        foreach ($decoded as $a) {
-            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $a)) {
-                $anchors[] = (string) $a;
+        $entries = [];
+        foreach ($decoded as $item) {
+            if (is_string($item) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $item)) {
+                $entries[] = ['anchor' => $item, 'frequency' => '1st_of_every_month'];
+                continue;
             }
+            if (!is_array($item)) {
+                continue;
+            }
+            $anchor = isset($item['anchor']) ? trim((string) $item['anchor']) : '';
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchor)) {
+                continue;
+            }
+            $entries[] = [
+                'anchor' => $anchor,
+                'frequency' => bmp_normalizeResendOpenAnchorFrequency($item['frequency'] ?? null),
+            ];
         }
-        return array_values(array_unique($anchors));
+        $seen = [];
+        $uniq = [];
+        foreach ($entries as $entry) {
+            if (isset($seen[$entry['anchor']])) {
+                continue;
+            }
+            $seen[$entry['anchor']] = true;
+            $uniq[] = $entry;
+        }
+        return $uniq;
     }
 }
 
-if (!function_exists('bmp_loadResendOpenAnchorsFromDb')) {
+if (!function_exists('bmp_decodeResendOpenAnchorsJson')) {
     /** @return string[] */
-    function bmp_loadResendOpenAnchorsFromDb(PDO $pdo, int $processId, int $companyId): array
+    function bmp_decodeResendOpenAnchorsJson(?string $raw): array
+    {
+        $entries = bmp_decodeResendOpenAnchorEntriesJson($raw);
+        return array_map(static function (array $e): string {
+            return $e['anchor'];
+        }, $entries);
+    }
+}
+
+if (!function_exists('bmp_encodeResendOpenAnchorEntriesJson')) {
+    /** @param array<int, array{anchor: string, frequency: string}> $entries */
+    function bmp_encodeResendOpenAnchorEntriesJson(array $entries): ?string
+    {
+        if (empty($entries)) {
+            return null;
+        }
+        $payload = [];
+        foreach ($entries as $entry) {
+            if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) ($entry['anchor'] ?? ''))) {
+                continue;
+            }
+            $payload[] = [
+                'anchor' => (string) $entry['anchor'],
+                'frequency' => bmp_normalizeResendOpenAnchorFrequency($entry['frequency'] ?? null),
+            ];
+        }
+        if (empty($payload)) {
+            return null;
+        }
+        return json_encode($payload, JSON_UNESCAPED_UNICODE);
+    }
+}
+
+if (!function_exists('bmp_loadResendOpenAnchorEntriesFromDb')) {
+    /** @return array<int, array{anchor: string, frequency: string}> */
+    function bmp_loadResendOpenAnchorEntriesFromDb(PDO $pdo, int $processId, int $companyId): array
     {
         if (!bmp_resend_tableHasColumn($pdo, 'bank_process', 'accounting_resend_open_anchors')) {
             return [];
@@ -135,42 +204,83 @@ if (!function_exists('bmp_loadResendOpenAnchorsFromDb')) {
         );
         $stmt->execute([$processId, $companyId]);
         $raw = $stmt->fetchColumn();
-        return bmp_decodeResendOpenAnchorsJson(is_string($raw) ? $raw : null);
+        return bmp_decodeResendOpenAnchorEntriesJson(is_string($raw) ? $raw : null);
+    }
+}
+
+if (!function_exists('bmp_loadResendOpenAnchorsFromDb')) {
+    /** @return string[] */
+    function bmp_loadResendOpenAnchorsFromDb(PDO $pdo, int $processId, int $companyId): array
+    {
+        $entries = bmp_loadResendOpenAnchorEntriesFromDb($pdo, $processId, $companyId);
+        return array_map(static function (array $e): string {
+            return $e['anchor'];
+        }, $entries);
+    }
+}
+
+if (!function_exists('bmp_resendOpenAnchorAlreadyExists')) {
+    function bmp_resendOpenAnchorAlreadyExists(PDO $pdo, int $processId, int $companyId, string $anchorYmd): bool
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorYmd)) {
+            return false;
+        }
+        foreach (bmp_loadResendOpenAnchorEntriesFromDb($pdo, $processId, $companyId) as $entry) {
+            if ($entry['anchor'] === $anchorYmd) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+if (!function_exists('bmp_getResendOpenAnchorEntriesFromRow')) {
+    /**
+     * Inbox / 入账用：读取全部未处理 Resend open 锚点（可多条并存）。
+     *
+     * @param array<string,mixed> $row
+     * @return array<int, array{anchor: string, frequency: string}>
+     */
+    function bmp_getResendOpenAnchorEntriesFromRow(array $row): array
+    {
+        if (empty($row['accounting_resend_relax_created_floor'])) {
+            return [];
+        }
+        $entries = bmp_decodeResendOpenAnchorEntriesJson(
+            isset($row['accounting_resend_open_anchors']) ? (string) $row['accounting_resend_open_anchors'] : null
+        );
+        if (!empty($entries)) {
+            return $entries;
+        }
+        // 兼容旧数据：仅有 schedule / merge 单锚点时尚未写入 JSON。
+        $scheduleYmd = bmp_bankProcessDateFieldToYmd($row['accounting_resend_schedule_day_start'] ?? null);
+        if ($scheduleYmd !== null && $scheduleYmd !== '') {
+            $fq = bmp_normalizeResendOpenAnchorFrequency($row['accounting_resend_schedule_frequency'] ?? $row['day_start_frequency'] ?? null);
+            return [['anchor' => $scheduleYmd, 'frequency' => $fq]];
+        }
+        if (!empty($row['accounting_resend_single_period_from_schedule'])) {
+            $ds = $row['day_start'] ?? null;
+            $ymd = bmp_bankProcessDateFieldToYmd($ds);
+            if ($ymd !== null && $ymd !== '') {
+                $fq = bmp_normalizeResendOpenAnchorFrequency($row['day_start_frequency'] ?? null);
+                return [['anchor' => $ymd, 'frequency' => $fq]];
+            }
+        }
+        return [];
     }
 }
 
 if (!function_exists('bmp_getResendOpenAnchorsFromRow')) {
     /**
-     * Inbox / 入账用：读取当前唯一的 Resend open 锚点（同时最多一条 Resend 账单）。
-     *
      * @param array<string,mixed> $row
      * @return string[]
      */
     function bmp_getResendOpenAnchorsFromRow(array $row): array
     {
-        if (empty($row['accounting_resend_relax_created_floor'])) {
-            return [];
-        }
-        // 以 schedule_day_start 为准（每次 Resend 会更新）；兼容库里仍有多锚点 JSON 的旧数据。
-        $scheduleYmd = bmp_bankProcessDateFieldToYmd($row['accounting_resend_schedule_day_start'] ?? null);
-        if ($scheduleYmd !== null && $scheduleYmd !== '') {
-            return [$scheduleYmd];
-        }
-        $anchors = bmp_decodeResendOpenAnchorsJson(
-            isset($row['accounting_resend_open_anchors']) ? (string) $row['accounting_resend_open_anchors'] : null
-        );
-        if (!empty($anchors)) {
-            return [end($anchors)];
-        }
-        // 兼容旧数据：仅有合并后 day_start 时当作单锚点。
-        if (!empty($row['accounting_resend_single_period_from_schedule'])) {
-            $ds = $row['day_start'] ?? null;
-            $ymd = bmp_bankProcessDateFieldToYmd($ds);
-            if ($ymd !== null && $ymd !== '') {
-                return [$ymd];
-            }
-        }
-        return [];
+        $entries = bmp_getResendOpenAnchorEntriesFromRow($row);
+        return array_map(static function (array $e): string {
+            return $e['anchor'];
+        }, $entries);
     }
 }
 
@@ -197,37 +307,46 @@ if (!function_exists('bmp_clearResendAnchorAccountingDueSideEffects')) {
 
 if (!function_exists('bmp_setResendOpenAnchor')) {
     /**
-     * Resend 单槽位：新锚点覆盖旧锚点，同一 process 在 Accounting Due 中仅保留一条 Resend 账单。
-     * 调用方须在 beginTransaction() 之前执行 bmp_ensureBankProcessAccountingResendOpenAnchorsColumn
-     * 与 bmp_ensureAccountingDueDismissedTable（DDL 在事务内会隐式提交）。
+     * @deprecated 使用 bmp_appendResendOpenAnchor（多 Resend 锚点并存）
      */
-    function bmp_setResendOpenAnchor(PDO $pdo, int $processId, int $companyId, string $anchorYmd): void
+    function bmp_setResendOpenAnchor(PDO $pdo, int $processId, int $companyId, string $anchorYmd, string $frequency = '1st_of_every_month'): void
     {
+        bmp_appendResendOpenAnchor($pdo, $processId, $companyId, $anchorYmd, $frequency);
+    }
+}
+
+if (!function_exists('bmp_appendResendOpenAnchor')) {
+    /**
+     * Resend 多槽位：追加 open 锚点（同锚点不重复）；同一 process 可有多条 Resend 账单并存。
+     */
+    function bmp_appendResendOpenAnchor(
+        PDO $pdo,
+        int $processId,
+        int $companyId,
+        string $anchorYmd,
+        string $frequency = '1st_of_every_month'
+    ): void {
         if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorYmd)) {
             return;
         }
         if (!bmp_resend_tableHasColumn($pdo, 'bank_process', 'accounting_resend_open_anchors')) {
             return;
         }
-        $previous = bmp_loadResendOpenAnchorsFromDb($pdo, $processId, $companyId);
-        foreach ($previous as $old) {
-            if ($old !== $anchorYmd) {
-                bmp_clearResendAnchorAccountingDueSideEffects($pdo, $processId, $companyId, $old);
+        $entries = bmp_loadResendOpenAnchorEntriesFromDb($pdo, $processId, $companyId);
+        foreach ($entries as $entry) {
+            if ($entry['anchor'] === $anchorYmd) {
+                return;
             }
         }
-        $json = json_encode([$anchorYmd], JSON_UNESCAPED_UNICODE);
+        $entries[] = [
+            'anchor' => $anchorYmd,
+            'frequency' => bmp_normalizeResendOpenAnchorFrequency($frequency),
+        ];
+        $json = bmp_encodeResendOpenAnchorEntriesJson($entries);
         $upd = $pdo->prepare(
             'UPDATE bank_process SET accounting_resend_open_anchors = ?, dts_modified = NOW() WHERE id = ? AND company_id = ?'
         );
         $upd->execute([$json, $processId, $companyId]);
-    }
-}
-
-if (!function_exists('bmp_appendResendOpenAnchor')) {
-    /** @deprecated 使用 bmp_setResendOpenAnchor（Resend 仅保留单锚点） */
-    function bmp_appendResendOpenAnchor(PDO $pdo, int $processId, int $companyId, string $anchorYmd): void
-    {
-        bmp_setResendOpenAnchor($pdo, $processId, $companyId, $anchorYmd);
     }
 }
 
@@ -241,11 +360,11 @@ if (!function_exists('bmp_removeResendOpenAnchor')) {
         if (!bmp_resend_tableHasColumn($pdo, 'bank_process', 'accounting_resend_open_anchors')) {
             return;
         }
-        $anchors = bmp_loadResendOpenAnchorsFromDb($pdo, $processId, $companyId);
-        $anchors = array_values(array_filter($anchors, static function (string $a) use ($anchorYmd): bool {
-            return $a !== $anchorYmd;
+        $entries = bmp_loadResendOpenAnchorEntriesFromDb($pdo, $processId, $companyId);
+        $entries = array_values(array_filter($entries, static function (array $e) use ($anchorYmd): bool {
+            return $e['anchor'] !== $anchorYmd;
         }));
-        $json = empty($anchors) ? null : json_encode($anchors, JSON_UNESCAPED_UNICODE);
+        $json = bmp_encodeResendOpenAnchorEntriesJson($entries);
         $upd = $pdo->prepare(
             'UPDATE bank_process SET accounting_resend_open_anchors = ?, dts_modified = NOW() WHERE id = ? AND company_id = ?'
         );

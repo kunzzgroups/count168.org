@@ -13,6 +13,7 @@ export default function ResendModal({
   resendInlineError,
   setResendInlineError,
   resendConfirmDisabled = false,
+  resendConfirmBlockReason = "",
   resendLockChecking = false,
   onResend,
   onClose,
@@ -25,6 +26,13 @@ export default function ResendModal({
   const isDay = fq === "day";
   const isFirstOfMonth = fq === "1st_of_every_month";
   const dayEndDisabled = isOnce || isMonthly || isWeek || isDay;
+  const resendConfirmTitle = resendLockChecking
+    ? t("resendLockChecking")
+    : resendConfirmBlockReason === "duplicate"
+      ? t("resendDuplicateOpenAnchor")
+      : resendConfirmDisabled
+        ? t("resendLockedPostedToday")
+        : "";
   return (
     <ProcessModalPortal>
     <div id="confirmBankResendModal" className="process-modal process-modal--bank-resend" style={processModalBackdropStyle}>
@@ -111,7 +119,7 @@ export default function ResendModal({
             className="process-btn process-btn-resend confirm-bank-resend-confirm"
             id="confirmBankResendBtn"
             disabled={resendConfirmDisabled || resendLockChecking}
-            title={resendConfirmDisabled ? t("resendLockedPostedToday") : (resendLockChecking ? t("resendLockChecking") : "")}
+            title={resendConfirmTitle}
             onClick={onResend}
           >
             {resendLockChecking ? t("resendLockChecking") : t("resendAction")}

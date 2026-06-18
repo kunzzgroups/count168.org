@@ -360,6 +360,7 @@ export function isBankResendDayStartBackendErrorMessage(text) {
     s.includes("Resend 所填 Day start") ||
     s.includes("same calendar date as the current contract Day start") ||
     s.includes("already has a transaction posted") ||
+    s.includes("already has an open Resend bill") ||
     s.includes("Duplicate resends are not allowed")
   );
 }
@@ -396,9 +397,32 @@ export function isBankResendScheduleLockedToday(row, dayStartRaw) {
   return !!row.resend_today_day_start_locked;
 }
 
+export function isResendDayStartDuplicateInAccountingDue(rows, processId, dayStartRaw) {
+  const ymd = normalizeBankResendDayStartYmd(dayStartRaw);
+  if (!ymd || !processId) return false;
+  const pid = Number(processId);
+  if (!Number.isFinite(pid) || pid <= 0) return false;
+  return (Array.isArray(rows) ? rows : []).some((r) => {
+    if (Number(r?.id) !== pid || r?.already_posted_today) return false;
+    const billStart = normalizeBankResendDayStartYmd(r?.billing_period_start);
+    if (billStart === ymd) return true;
+    if (r?.is_resend_monthly_reopen) {
+      const bm = normalizeBankResendDayStartYmd(r?.monthly_billing_month);
+      if (bm === ymd) return true;
+    }
+    const weeklyStart = normalizeBankResendDayStartYmd(r?.weekly_billing_start || r?.monthly_billing_month);
+    if (r?.is_weekly && weeklyStart === ymd) return true;
+    const dayYmd = normalizeBankResendDayStartYmd(r?.daily_billing_start || r?.monthly_billing_month);
+    if (r?.is_daily && !r?.is_daily_consolidated && dayYmd === ymd) return true;
+    return false;
+  });
+}
+
 export async function checkBankResendLockFromBackend(processId, dayStartRaw) {
   const dayStartYmd = normalizeBankResendDayStartYmd(dayStartRaw);
-  if (!processId || !dayStartYmd) return false;
+  if (!processId || !dayStartYmd) {
+    return { locked: false, duplicateOpenAnchor: false };
+  }
   const res = await fetch(buildApiUrl("api/bankprocess_maintenance/resend_accounting_due_api.php"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -413,7 +437,11 @@ export async function checkBankResendLockFromBackend(processId, dayStartRaw) {
   if (!res.ok || !json?.success) {
     throw new Error(json?.message || "Check failed");
   }
-  return !!(json.data && json.data.locked);
+  const data = json.data || {};
+  return {
+    locked: !!data.locked,
+    duplicateOpenAnchor: !!data.duplicate_open_anchor,
+  };
 }
 
 export function notifyTransactionDataChanged(sourceTag) {
@@ -790,4 +818,19 @@ export function formatAccountingDueBillingPeriod(row) {
   const end = String(row?.billing_period_end || "").trim();
   const display = formatAccountingDueDisplayDate(start || end);
   return display || "-";
+}
+
+const ACCOUNTING_DUE_FREQUENCY_LABEL_KEYS = {
+  monthly: "monthly",
+  week: "weekFrequency",
+  day: "dayFrequency",
+  once: "onceFrequency",
+  "1st_of_every_month": "firstOfEveryMonth",
+};
+
+/** Accounting Due：本行账单计费频率（Resend 行用弹窗频率，正常行用 process 原始频率）。 */
+export function formatAccountingDueFrequency(row, t) {
+  const fq = bankProcessFrequencyNormalized(row?.display_frequency || row?.frequency || "");
+  const key = ACCOUNTING_DUE_FREQUENCY_LABEL_KEYS[fq] || "firstOfEveryMonth";
+  return typeof t === "function" ? t(key) : key;
 }

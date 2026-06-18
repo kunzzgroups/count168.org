@@ -75,6 +75,7 @@ import {
   accountingDueRowKey,
   checkBankResendLockFromBackend,
   isBankResendScheduleLockedToday,
+  isResendDayStartDuplicateInAccountingDue,
   normalizeBankResendDayStartYmd,
 } from "../lib/bankProcessHelpers.js";
 import {
@@ -224,6 +225,7 @@ export function useBankProcessListPage() {
   const [resendFrequency, setResendFrequency] = useState("1st_of_every_month");
   const [resendInlineError, setResendInlineError] = useState("");
   const [resendConfirmDisabled, setResendConfirmDisabled] = useState(false);
+  const [resendConfirmBlockReason, setResendConfirmBlockReason] = useState("");
   const [resendLockChecking, setResendLockChecking] = useState(false);
   const resendLockCheckSeqRef = useRef(0);
 
@@ -1086,33 +1088,41 @@ export function useBankProcessListPage() {
     const dayStartYmd = normalizeBankResendDayStartYmd(resendDayStart);
     if (!resendModalOpen || !id || !dayStartYmd) {
       setResendConfirmDisabled(false);
+      setResendConfirmBlockReason("");
       setResendLockChecking(false);
       return;
     }
+    const duplicateClient = isResendDayStartDuplicateInAccountingDue(accountingRows, id, resendDayStart);
     const quickLocked = isBankResendScheduleLockedToday(resendTarget, resendDayStart);
     const seq = ++resendLockCheckSeqRef.current;
     setResendLockChecking(true);
     setResendConfirmDisabled(true);
+    setResendConfirmBlockReason(duplicateClient ? "duplicate" : quickLocked ? "locked" : "");
     try {
-      const backendLocked = await checkBankResendLockFromBackend(id, resendDayStart);
+      const backend = await checkBankResendLockFromBackend(id, resendDayStart);
       if (seq !== resendLockCheckSeqRef.current) return;
-      setResendConfirmDisabled(backendLocked);
+      const duplicate = duplicateClient || backend.duplicateOpenAnchor;
+      const locked = backend.locked;
+      setResendConfirmDisabled(locked || duplicate);
+      setResendConfirmBlockReason(duplicate ? "duplicate" : locked ? "locked" : "");
     } catch {
       if (seq !== resendLockCheckSeqRef.current) return;
-      setResendConfirmDisabled(quickLocked);
+      setResendConfirmDisabled(quickLocked || duplicateClient);
+      setResendConfirmBlockReason(duplicateClient ? "duplicate" : quickLocked ? "locked" : "");
     } finally {
       if (seq === resendLockCheckSeqRef.current) setResendLockChecking(false);
     }
-  }, [resendModalOpen, resendTarget, resendDayStart]);
+  }, [resendModalOpen, resendTarget, resendDayStart, accountingRows]);
 
   useEffect(() => {
     if (!resendModalOpen) {
       setResendConfirmDisabled(false);
+      setResendConfirmBlockReason("");
       setResendLockChecking(false);
       return;
     }
     void refreshResendConfirmLock();
-  }, [resendModalOpen, resendDayStart, resendDayEnd, resendTarget?.id, refreshResendConfirmLock]);
+  }, [resendModalOpen, resendDayStart, resendDayEnd, resendTarget?.id, accountingRows, refreshResendConfirmLock]);
 
   const syncUrl = useCallback(() => {
     replaceBrowserPathOnly();
@@ -2441,6 +2451,7 @@ export function useBankProcessListPage() {
     resendInlineError,
     setResendInlineError,
     resendConfirmDisabled,
+    resendConfirmBlockReason,
     resendLockChecking,
     isBankResendScheduleLockedToday,
     sortColumn,

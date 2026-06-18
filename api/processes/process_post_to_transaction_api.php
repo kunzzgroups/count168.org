@@ -1989,6 +1989,21 @@ try {
                 if (empty(bmp_loadResendOpenAnchorsFromDb($pdo, (int) $p['id'], $companyId))) {
                     $p['accounting_resend_relax_created_floor'] = 0;
                 }
+            } elseif (in_array($periodType, ['weekly', 'daily', 'once_one_off'], true)) {
+                $resendAnchorYmd = null;
+                $bmPost = trim((string) ($pair['billing_month'] ?? ''));
+                if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $bmPost)) {
+                    $resendAnchorYmd = $bmPost;
+                } elseif ($dayStartYmd !== null && preg_match('/^\d{4}-\d{2}-\d{2}$/', $dayStartYmd)) {
+                    $resendAnchorYmd = $dayStartYmd;
+                }
+                if ($resendAnchorYmd !== null
+                    && bmp_resendOpenAnchorAlreadyExists($pdo, (int) $p['id'], $companyId, $resendAnchorYmd)) {
+                    bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, (int) $p['id'], $companyId, $resendAnchorYmd);
+                    if (empty(bmp_loadResendOpenAnchorsFromDb($pdo, (int) $p['id'], $companyId))) {
+                        $p['accounting_resend_relax_created_floor'] = 0;
+                    }
+                }
             }
         }
 

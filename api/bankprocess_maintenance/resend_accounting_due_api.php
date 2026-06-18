@@ -165,8 +165,11 @@ try {
         bmp_ensureAccountingResendDailyGuardTable($pdo);
         bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $company_id, $bankProcessId);
         $locked = bank_resend_isLockedToday($pdo, $company_id, $bankProcessId, $dayStartYmd);
+        bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
+        $duplicateOpen = bmp_resendOpenAnchorAlreadyExists($pdo, $bankProcessId, $company_id, $dayStartYmd);
         jsonResponse(true, '', [
             'locked' => $locked,
+            'duplicate_open_anchor' => $duplicateOpen,
             'day_start' => $dayStartYmd,
         ]);
         return;
@@ -250,6 +253,10 @@ try {
     }
     if (bank_resend_isLockedToday($pdo, $company_id, $bankProcessId, $effectiveDayStartYmd)) {
         throw new Exception('This process already has a transaction posted for this Day start today. Delete it from Bank Process Maintenance before resending.');
+    }
+    bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
+    if (bmp_resendOpenAnchorAlreadyExists($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd)) {
+        throw new Exception('This process already has an open Resend bill for this Day start in Accounting Due. Transaction or delete it before resending the same date.');
     }
 
     $pdo->beginTransaction();
@@ -411,11 +418,11 @@ try {
         );
         $flg->execute([$bankProcessId, $company_id]);
     }
-    // Monthly / 1st_of_every_month 单期 Resend：覆盖为唯一锚点；自然月账单逻辑不受影响。
+    // 单期 Resend（非 monthly 合并区间）：追加 open 锚点，多笔并存、同锚点拒绝重复。
     if ($scheduleFromClient
-        && ($newFrequency === 'monthly' || $newFrequency === '1st_of_every_month')
+        && $effectiveDayStartYmd !== null
         && !($newFrequency === 'monthly' && $newDayStart !== null && $newDayEnd !== null)) {
-        bmp_setResendOpenAnchor($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd);
+        bmp_appendResendOpenAnchor($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd, $newFrequency);
     }
     $pdo->commit();
     jsonResponse(true, 'Done: This process can appear in Accounting Due again.', [

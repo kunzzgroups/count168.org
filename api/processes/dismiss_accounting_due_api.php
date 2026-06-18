@@ -483,6 +483,8 @@ try {
         }
         if ($origPeriodType === 'resend_monthly_reopen' && $anchorYmd !== null) {
             bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $anchorYmd);
+        } elseif ($anchorYmd !== null && bmp_resendOpenAnchorAlreadyExists($pdo, $processId, $companyId, $anchorYmd)) {
+            bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $anchorYmd);
         }
     }
 

@@ -1367,7 +1367,7 @@
 
 .accounting-due-inbox-grid-cell {
     min-width: 0;
-    font-size: var(--accounting-due-text-cell);
+    font-size: var(--text-small);
     font-weight: var(--font-weight-semibold);
     color: var(--color-body-strong);
     line-height: 1.35;
@@ -1390,6 +1390,8 @@
 .accounting-due-inbox-grid-cell--no,
 .accounting-due-inbox-grid-cell--date,
 .accounting-due-inbox-grid-cell--period,
+.accounting-due-inbox-grid-cell--frequency,
+.accounting-due-inbox-grid-cell--owner,
 .accounting-due-inbox-grid-cell--bank,
 .accounting-due-inbox-grid-cell--contract {
     justify-content: center;
@@ -1402,18 +1404,9 @@
     padding-right: 0 !important;
 }
 
-.accounting-due-inbox-grid-cell--head.accounting-due-inbox-grid-cell--owner {
-    justify-content: center;
-    text-align: center;
-}
-
-.accounting-due-inbox-grid-cell--owner {
-    justify-content: flex-start;
-    text-align: left;
-}
-
 .accounting-due-inbox-grid-cell--date,
-.accounting-due-inbox-grid-cell--period {
+.accounting-due-inbox-grid-cell--period,
+.accounting-due-inbox-grid-cell--frequency {
     white-space: nowrap;
 }
 

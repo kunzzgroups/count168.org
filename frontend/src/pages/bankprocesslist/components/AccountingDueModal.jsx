@@ -3,6 +3,7 @@ import ProcessModalPortal, { processModalBackdropStyle } from "../../../componen
 import {
   formatBankProcessContractLabel,
   formatAccountingDueBillingPeriod,
+  formatAccountingDueFrequency,
   formatAccountingDueProcessDayStart,
   accountingDueRowKey,
 } from "../lib/bankProcessHelpers.js";
@@ -105,6 +106,9 @@ export default function AccountingDueModal({
             <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--head accounting-due-inbox-grid-cell--period" role="columnheader">
               {t("billingDate")}
             </div>
+            <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--head accounting-due-inbox-grid-cell--frequency" role="columnheader">
+              {t("frequency")}
+            </div>
             <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--head accounting-due-inbox-grid-cell--owner" role="columnheader">
               {t("cardOwner")}
             </div>
@@ -177,6 +181,9 @@ export default function AccountingDueModal({
                 </div>
                 <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--period" role="cell" title={formatAccountingDueBillingPeriod(r)}>
                   {formatAccountingDueBillingPeriod(r)}
+                </div>
+                <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--frequency" role="cell" title={formatAccountingDueFrequency(r, t)}>
+                  {formatAccountingDueFrequency(r, t)}
                 </div>
                 <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--owner" role="cell" title={r.card_owner || r.name || r.supplier || "-"}>
                   {r.card_owner || r.name || r.supplier || "-"}
