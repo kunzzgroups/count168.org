@@ -4,6 +4,7 @@
  */
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/password_hashing.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 
@@ -266,7 +267,7 @@ try {
             'account_id' => $account_id,
             'name' => $name,
             'role' => $role,
-            'password' => $password,
+            'password' => secure_hash_password($password),
             'payment_alert' => $payment_alert,
             'alert_day' => $alert_day,
             'alert_specific_date' => $alert_specific_date,

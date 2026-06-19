@@ -14,6 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/password_hashing.php';
 require_once __DIR__ . '/../../includes/email_validation.php';
 require_once __DIR__ . '/../../includes/auth_invalidation.php';
 
@@ -74,7 +75,7 @@ try {
             exit;
         }
 
-        $hashed = password_hash($new_password, PASSWORD_DEFAULT);
+        $hashed = secure_hash_password($new_password);
         $pdo->prepare("UPDATE user SET password = ? WHERE id = ?")->execute([$hashed, $user_id]);
         invalidate_user_remember_token($pdo, (int) $user_id);
         $pdo->prepare("DELETE FROM password_reset_tac WHERE email = ? AND company_id = ?")->execute([$email, $company_numeric_id]);
@@ -108,7 +109,7 @@ try {
         exit;
     }
 
-    $hashed = password_hash($new_password, PASSWORD_DEFAULT);
+    $hashed = secure_hash_password($new_password);
     $pdo->prepare("UPDATE owner SET password = ? WHERE id = ?")->execute([$hashed, $owner_id]);
     $pdo->prepare("DELETE FROM password_reset_tac_owner WHERE email = ? AND owner_id = ?")->execute([$email_lower, $owner_id]);
     echo json_encode(['success' => true, 'message' => 'Password reset successful']);

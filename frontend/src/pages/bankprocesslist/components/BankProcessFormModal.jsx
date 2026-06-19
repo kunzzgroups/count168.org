@@ -263,7 +263,7 @@ export default function BankProcessFormModal({
                               id="bank_day_end_monthly_cap_label_text"
                               className={`bank-day-end-cap-label${capOn ? " is-on" : ""}`}
                             >
-                              {capOn ? "ON" : "OFF"}
+                              {capOn ? t("toggleOn") : t("toggleOff")}
                             </span>
                             <label className="bank-day-end-cap-switch" htmlFor="bank_day_end_monthly_cap_switch">
                               <input

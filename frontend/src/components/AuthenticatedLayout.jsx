@@ -535,7 +535,29 @@ export default function AuthenticatedLayout() {
       }
       if (!options.force && !dashboardFilterEventMatchesPersisted(detail)) return;
 
-      const resolved = buildDashboardFilterEventDetailFromPersisted();
+      let resolved = buildDashboardFilterEventDetailFromPersisted();
+      const detailCompanyId =
+        detail?.companyId != null && detail.companyId !== ""
+          ? Number(detail.companyId)
+          : null;
+      if (Number.isFinite(detailCompanyId) && detailCompanyId > 0) {
+        resolved = {
+          ...resolved,
+          companyId: detailCompanyId,
+          groupAllMode: false,
+          companyCode:
+            detail.companyCode != null && String(detail.companyCode).trim() !== ""
+              ? String(detail.companyCode).trim().toUpperCase()
+              : resolved.companyCode,
+          ...(detail.hasGambling != null
+            ? { hasGambling: Boolean(detail.hasGambling) }
+            : {}),
+          ...(detail.hasBank != null ? { hasBank: Boolean(detail.hasBank) } : {}),
+          ...(detail.expirationDate !== undefined
+            ? { expirationDate: detail.expirationDate }
+            : {}),
+        };
+      }
       const sig = dashboardSidebarFilterSignature(resolved);
       if (sig === lastSidebarFilterSigRef.current) return;
       lastSidebarFilterSigRef.current = sig;

@@ -260,11 +260,16 @@ export function userRowVisibleAfterStatusChange(newStatus, { showInactive, showA
   return status === "active";
 }
 
-export function applyUserFilters(users, { search, showInactive, showAll, viewerRole }) {
+export function applyUserFilters(users, { search, showInactive, showAll, viewerRole, viewerUserId = null }) {
   const vr = normRole(viewerRole);
   let rows = users.map((u) => ({ ...u }));
   if (vr !== "owner") {
-    rows = rows.filter((u) => normRole(u.role) !== "partnership");
+    const viewerIdNum = Number(viewerUserId);
+    rows = rows.filter((u) => {
+      if (normRole(u.role) !== "partnership") return true;
+      if (!Number.isFinite(viewerIdNum) || viewerIdNum <= 0) return false;
+      return Number(u.id) === viewerIdNum;
+    });
   }
   const q = search.trim().toLowerCase();
   if (q) {

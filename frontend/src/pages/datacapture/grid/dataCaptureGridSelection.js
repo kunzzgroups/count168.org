@@ -2,12 +2,12 @@
  * Grid multi-selection state and clipboard actions.
  */
 import {
-  clearBridgeCells,
   getBridgeCellValue,
   gridHandleCellPaste,
   gridRecomputeSubmitState,
   notifyPasteUser,
 } from "../lib/dataCaptureBridge.js";
+import { callDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
 import { hideContextMenu } from "../lib/dataCaptureContextMenu.js";
 
 export const selectedCells = new Set();
@@ -54,13 +54,34 @@ function recomputeSubmitState() {
 }
 
 function cellPosition(cell) {
-  if (!cell?.parentNode?.parentNode) return null;
-  const row = cell.parentNode;
-  const table = row.parentNode;
-  const rowIndex = Array.from(table.children).indexOf(row);
+  if (!cell?.dataset) return null;
+  const rowIndex = Number.parseInt(cell.dataset.row, 10);
   const colIndex = Number.parseInt(cell.dataset.col, 10);
-  if (rowIndex < 0 || !Number.isFinite(colIndex)) return null;
+  if (!Number.isFinite(rowIndex) || !Number.isFinite(colIndex)) return null;
   return { rowIndex, colIndex };
+}
+
+export function getSelectedCellPositions() {
+  return getSelectedCells()
+    .filter((cell) => cell && cell.contentEditable === "true" && cell.closest("#dataTable"))
+    .map((cell) => cellPosition(cell))
+    .filter(Boolean);
+}
+
+export function getSelectedCellBounds() {
+  const positions = getSelectedCellPositions();
+  if (!positions.length) return null;
+
+  const rows = positions.map((p) => p.rowIndex);
+  const cols = positions.map((p) => p.colIndex);
+  return {
+    minRow: Math.min(...rows),
+    maxRow: Math.max(...rows),
+    minCol: Math.min(...cols),
+    maxCol: Math.max(...cols),
+    rowIndices: [...new Set(rows)].sort((a, b) => a - b),
+    colIndices: [...new Set(cols)].sort((a, b) => a - b),
+  };
 }
 
 export function copySelectedCells() {
@@ -122,17 +143,7 @@ export function pasteToSelectedCells() {
 }
 
 export function clearSelectedCells() {
-  const positions = getSelectedCells()
-    .filter((cell) => cell && cell.contentEditable === "true" && cell.closest("#dataTable"))
-    .map((cell) => cellPosition(cell))
-    .filter(Boolean);
-
-  if (positions.length) {
-    clearBridgeCells(positions);
-  }
-
-  hideContextMenu();
-  recomputeSubmitState();
+  callDataCaptureRuntime("clearSelectedCellsInGrid");
 }
 
 export function selectAllCells(e) {

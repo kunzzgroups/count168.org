@@ -381,7 +381,7 @@ const C168_DOMAIN_PAGE_ROLES = new Set([
 ]);
 
 /** Mirrors c168AutoRenewAllowedRoles */
-const C168_AUTO_RENEW_ROLES = new Set(["owner", "admin"]);
+const C168_AUTO_RENEW_ROLES = new Set(["owner", "admin", "partnership"]);
 
 export function userRoleAllowsC168Domain(role) {
   const r = String(role || "").trim().toLowerCase();
@@ -422,6 +422,14 @@ export function resolveVisibleGroupIds(groupIds, me, companies = []) {
   }
 
   return ids;
+}
+
+/** Group ledger API calls (dashboard group-only / currency warm) — skip pills the user cannot access. */
+export function filterGroupIdsForLedgerAccess(me, groupIds, companies = []) {
+  if (!me || !Array.isArray(groupIds)) return [];
+  return groupIds
+    .map((g) => String(g || "").trim().toUpperCase())
+    .filter((g) => g && canAccessGroupLedgerForGroup(me, g, companies));
 }
 
 export function loginScopeBodyClass(me) {

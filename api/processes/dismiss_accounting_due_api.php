@@ -387,6 +387,18 @@ try {
             }
         }
         $permanentResendDismiss = isPermanentAccountingDueDismiss($origPeriodType, $periodType);
+        if (!$permanentResendDismiss) {
+            bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
+            foreach (array_unique(array_filter([
+                ($billingMonthRaw !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $billingMonthRaw)) ? $billingMonthRaw : null,
+                $anchorYmd,
+            ])) as $tryAnchor) {
+                if (bmp_resendOpenAnchorAlreadyExists($pdo, $processId, $companyId, $tryAnchor)) {
+                    $permanentResendDismiss = true;
+                    break;
+                }
+            }
+        }
 
         if (!$permanentResendDismiss) {
             $softDismissPt = accountingDueDismissPeriodTypeForSoftDismiss($origPeriodType, $periodType);
@@ -394,6 +406,15 @@ try {
                 upsertAccountingDueDismissed($pdo, $companyId, $processId, $softDismissPt, $anchorYmd);
                 $inserted++;
                 bmp_clearAccountingResendDailyGuardForDayStart($pdo, $companyId, $processId, $anchorYmd);
+                foreach (array_unique(array_filter([
+                    ($billingMonthRaw !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $billingMonthRaw)) ? $billingMonthRaw : null,
+                    $anchorYmd,
+                ])) as $tryAnchor) {
+                    if (bmp_resendOpenAnchorAlreadyExists($pdo, $processId, $companyId, $tryAnchor)) {
+                        bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $tryAnchor);
+                        break;
+                    }
+                }
                 $processIdsForPrune[$processId] = true;
             }
             continue;
@@ -483,8 +504,16 @@ try {
         }
         if ($origPeriodType === 'resend_monthly_reopen' && $anchorYmd !== null) {
             bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $anchorYmd);
-        } elseif ($anchorYmd !== null && bmp_resendOpenAnchorAlreadyExists($pdo, $processId, $companyId, $anchorYmd)) {
-            bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $anchorYmd);
+        } else {
+            foreach (array_unique(array_filter([
+                ($billingMonthRaw !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $billingMonthRaw)) ? $billingMonthRaw : null,
+                $anchorYmd,
+            ])) as $tryAnchor) {
+                if (bmp_resendOpenAnchorAlreadyExists($pdo, $processId, $companyId, $tryAnchor)) {
+                    bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $tryAnchor);
+                    break;
+                }
+            }
         }
     }
 

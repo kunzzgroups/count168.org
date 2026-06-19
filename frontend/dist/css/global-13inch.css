@@ -1045,7 +1045,13 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
     body.dashboard-home-page .dashboard-summary-currency-list-body {
         overflow-y: auto !important;
         min-height: 0 !important;
-        max-height: 100% !important;
+        max-height: none !important;
+        flex: 0 1 auto !important;
+    }
+
+    body.dashboard-home-page .dashboard-summary-currency-list.is-compact-breakdown .dashboard-summary-currency-list-body {
+        max-height: none !important;
+        overflow-y: visible !important;
     }
 
     body.dashboard-home-page .dashboard-panels-row--with-summary-tabs {

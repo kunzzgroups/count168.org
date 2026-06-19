@@ -9,6 +9,7 @@ header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/password_hashing.php';
 require_once __DIR__ . '/../../includes/email_validation.php';
 require_once __DIR__ . '/../../includes/auth_invalidation.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
@@ -1995,10 +1996,7 @@ try {
             }
             
             // Hash password
-            $hashedPassword = password_hash($input['password'], PASSWORD_DEFAULT);
-            if ($hashedPassword === false) {
-                sendResponse(false, 'Failed to hash password');
-            }
+            $hashedPassword = secure_hash_password($input['password']);
             
             // Hash secondary_password if provided (for c168 company users)
             $hashedSecondaryPassword = null;
@@ -2007,10 +2005,7 @@ try {
                 if (!preg_match('/^\d{6}$/', $input['secondary_password'])) {
                     sendResponse(false, 'Secondary password must be exactly 6 digits');
                 }
-                $hashedSecondaryPassword = password_hash($input['secondary_password'], PASSWORD_DEFAULT);
-                if ($hashedSecondaryPassword === false) {
-                    sendResponse(false, 'Failed to hash secondary password');
-                }
+                $hashedSecondaryPassword = secure_hash_password($input['secondary_password']);
             }
             
             // 处理权限数据
@@ -2222,7 +2217,7 @@ try {
                 // Only update password if provided
                 if (isset($input['password']) && trim($input['password']) !== '') {
                     $updateFields[] = "password = ?";
-                    $updateValues[] = password_hash($input['password'], PASSWORD_DEFAULT);
+                    $updateValues[] = secure_hash_password($input['password']);
                 }
                 
                 // Only update secondary_password if provided (for c168 company)
@@ -2232,7 +2227,7 @@ try {
                         sendResponse(false, 'Secondary password must be exactly 6 digits');
                     }
                     $updateFields[] = "secondary_password = ?";
-                    $updateValues[] = password_hash($input['secondary_password'], PASSWORD_DEFAULT);
+                    $updateValues[] = secure_hash_password($input['secondary_password']);
                 }
                 
                 if (empty($updateFields)) {
@@ -2388,7 +2383,7 @@ try {
             $userPasswordWasUpdated = false;
             if (isset($input['password']) && trim($input['password']) !== '') {
                 $updateFields[] = "password = ?";
-                $updateValues[] = password_hash($input['password'], PASSWORD_DEFAULT);
+                $updateValues[] = secure_hash_password($input['password']);
                 $userPasswordWasUpdated = true;
             }
             
@@ -2399,7 +2394,7 @@ try {
                     sendResponse(false, 'Secondary password must be exactly 6 digits');
                 }
                 $updateFields[] = "secondary_password = ?";
-                $updateValues[] = password_hash($input['secondary_password'], PASSWORD_DEFAULT);
+                $updateValues[] = secure_hash_password($input['secondary_password']);
             }
             
             // 添加 WHERE 条件的参数

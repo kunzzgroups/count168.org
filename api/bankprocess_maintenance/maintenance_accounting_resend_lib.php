@@ -298,7 +298,6 @@ if (!function_exists('bmp_clearResendAnchorAccountingDueSideEffects')) {
         $del = $pdo->prepare(
             "DELETE FROM process_accounting_due_dismissed
              WHERE company_id = ? AND process_id = ?
-               AND period_type IN ('resend_monthly_reopen', 'resend_consolidated_range')
                AND DATE(anchor_date) = ?"
         );
         $del->execute([$companyId, $processId, $anchorYmd]);

@@ -1884,6 +1884,7 @@ body.datacapture-page .excel-table-scroll-body .excel-table tbody td {
     text-align: center;
     min-width: clamp(30px, 3.49vw, 67px);
     position: relative;
+    white-space: nowrap;
 }
 
 .excel-table th {

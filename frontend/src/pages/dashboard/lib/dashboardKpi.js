@@ -33,14 +33,21 @@ export function netProfitFromDashboardPayload(dashboardData) {
   return rawProfit + displayExpenses;
 }
 
-/** True when the logged-in viewer has earnings config (Account or Group Ownership). */
-export function viewerHasEarningsConfig(dashboardData) {
+/**
+ * True when the logged-in viewer has earnings config (Account or Group Ownership).
+ * Subsidiary drill-down (e.g. AP + C168): group-level earnings do not apply — only direct
+ * company ownership or link multiplier counts (matches IG + 95 net-profit panel).
+ */
+export function viewerHasEarningsConfig(dashboardData, options = {}) {
   if (!dashboardData) return false;
   const directPct = parseFloat(dashboardData.ownership_percentage) || 0;
   if (directPct > 0) return true;
-  if (dashboardData.has_group_ownership) return true;
   const linkMul = parseFloat(dashboardData._link_multiplier || 0) || 0;
-  return linkMul > 0 && linkMul !== 1;
+  if (linkMul > 0 && linkMul !== 1) return true;
+  if (options.subsidiaryGroupDrillDown) return false;
+  if (options.groupsAllCompaniesAggregate) return false;
+  if (dashboardData.has_group_ownership) return true;
+  return false;
 }
 
 /** Group earning = (subsidiary earnings + group ledger net profit) × viewer group %. */
@@ -162,7 +169,9 @@ export function computeKpiMetrics(dashboardData, selectedGroup, options = {}) {
   const displayProfitNum = rawProfit;
   const displayExpensesNum = rawExpenses > 0 ? -rawExpenses : rawExpenses;
   const netProfitDisplay = displayProfitNum + displayExpensesNum;
-  const showEarnings = viewerHasEarningsConfig(dashboardData);
+  const showEarnings = options.groupsAllCompaniesAggregate
+    ? false
+    : viewerHasEarningsConfig(dashboardData, options);
   const groupAggregate = isGroupAggregateEarningsPayload(dashboardData, options);
   const panelMultiplier = resolvePanelEarningsPct(dashboardData, selectedGroup, options);
   const kpiMultiplier = resolveEffectiveOwnershipPct(dashboardData, selectedGroup, options);

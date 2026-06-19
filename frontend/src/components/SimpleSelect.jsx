@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { layoutPortalCustomSelect } from "./customSelectPortalLayout.js";
 
 const MODAL_SELECTOR =
-  ".modal, [role='dialog'], .account-modal, #userModal, #account-addModal, #account-editModal, .domain-form-modal-backdrop";
+  ".modal, .process-modal, #confirmBankResendModal, [role='dialog'], .account-modal, #userModal, #account-addModal, #account-editModal, .domain-form-modal-backdrop";
 
 /**
  * Lightweight custom dropdown — same look as Bank Process「Type」select.

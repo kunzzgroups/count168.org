@@ -24,16 +24,18 @@ export function buildEarningsPieSlices(rows, { useConverted = false } = {}) {
           : null
         : row.earnings;
       if (earnings == null) return null;
+      const value = Math.abs(earnings);
+      if (value < 0.0001) return null;
       return {
         code: row.code,
         earnings,
         originalEarnings,
         earningsConverted: row.earningsConverted,
-        value: Math.abs(earnings),
-        fill: getCurrencyColor(row.code),
+        value,
+        fill: getCurrencyColor(row.code, index),
       };
     })
-    .filter((row) => row && row.value > 0)
+    .filter(Boolean)
     .sort((a, b) => b.value - a.value);
 }
 

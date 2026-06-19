@@ -7,6 +7,7 @@
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/password_hashing.php';
 require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../../includes/tenant_scope.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
@@ -291,7 +292,7 @@ try {
     $updateValues = [$name, $role, $payment_alert, $alert_day, $alert_specific_date, $alert_amount, $remark, $status];
     if (!empty($password)) {
         $updateFields[] = 'password = ?';
-        $updateValues[] = $password;
+        $updateValues[] = secure_hash_password($password);
     }
     $updateValues[] = $id;
     $sql = "UPDATE account SET " . implode(', ', $updateFields) . " WHERE id = ?";

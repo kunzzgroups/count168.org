@@ -60,7 +60,8 @@ export function DataCaptureProvider({ children }) {
       gridRef.current = next;
       return next;
     });
-  }, []);
+    bumpGridVersion();
+  }, [bumpGridVersion]);
 
   const value = useMemo(
     () => ({

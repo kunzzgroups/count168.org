@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { accountModalOverlayZIndex, accountCompanyPickerZIndex } from "./ProcessModalPortal.jsx";
 import SimpleSelect from "./SimpleSelect.jsx";
 import { useSubmitGuard } from "../hooks/useSubmitGuard.js";
+import { formatAccountRoleDisplay } from "../translateFile/pages/accountTranslate.js";
 
 function upper(v) {
   return String(v || "").toUpperCase();
@@ -115,7 +116,7 @@ export default function AccountModal({
     () =>
       (orderedRoles || []).map((r) => ({
         value: r,
-        label: upper(r) === "UPLINE" ? translate("supplier") : r,
+        label: formatAccountRoleDisplay(translate, r),
       })),
     [orderedRoles, t],
   );

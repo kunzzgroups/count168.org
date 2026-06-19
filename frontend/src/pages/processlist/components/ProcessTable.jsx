@@ -1,5 +1,9 @@
 import React from "react";
 import { assetUrl } from "../../../utils/core/apiUrl.js";
+import {
+  formatProcessDayUseDisplay,
+  formatProcessStatusDisplay,
+} from "../../../translateFile/pages/processListTranslate.js";
 
 function upperCell(val) {
   if (val == null || val === "") return "";
@@ -14,13 +18,6 @@ function processStatusBadgeClass(statusKey) {
   if (statusKey === "active") return "status-active";
   if (statusKey === "waiting") return "status-waiting";
   return "status-inactive";
-}
-
-function processStatusLabel(statusKey) {
-  if (statusKey === "active") return "ACTIVE";
-  if (statusKey === "inactive") return "INACTIVE";
-  if (statusKey === "waiting") return "WAITING";
-  return statusKey ? statusKey.toUpperCase() : "INACTIVE";
 }
 
 function ProcessSortIcon({ column, sortColumn, sortDirection }) {
@@ -137,11 +134,11 @@ export default function ProcessTable({
                   role="button"
                   style={mutationsBlocked ? { cursor: "not-allowed" } : undefined}
                 >
-                  {processStatusLabel(statusKey)}
+                  {formatProcessStatusDisplay(t, statusKey)}
                 </span>
               </div>
               <div className="card-item">{upperCell(row.currency)}</div>
-              <div className="card-item">{upperCell(row.day_use)}</div>
+              <div className="card-item">{formatProcessDayUseDisplay(t, row.day_use)}</div>
               <div className="card-item card-item--action">
                 <button
                   type="button"

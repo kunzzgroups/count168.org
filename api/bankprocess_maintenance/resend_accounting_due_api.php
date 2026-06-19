@@ -114,6 +114,31 @@ function bank_resend_isLockedToday(PDO $pdo, int $companyId, int $bankProcessId,
     return bmp_accountingResendIsLockedToday($pdo, $companyId, $bankProcessId, $dayStartYmd);
 }
 
+/** Due 已 Delete/Skip 但 open anchor 仍占位时，Resend 前自动清掉陈旧锚点。 */
+function bank_resend_reconcileStaleOpenAnchor(PDO $pdo, int $companyId, int $processId, string $anchorYmd): void
+{
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $anchorYmd)) {
+        return;
+    }
+    bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
+    if (!bmp_resendOpenAnchorAlreadyExists($pdo, $processId, $companyId, $anchorYmd)) {
+        return;
+    }
+    bmp_ensureAccountingDueDismissedTable($pdo);
+    $handled = bmp_hasMonthlyPostedOrSkippedForDueYmd($pdo, $companyId, $processId, $anchorYmd);
+    if (!$handled) {
+        foreach (['resend_monthly_reopen', 'monthly', 'weekly', 'daily'] as $pt) {
+            if (bmp_isAccountingDueSoftDismissed($pdo, $companyId, $processId, $pt, $anchorYmd)) {
+                $handled = true;
+                break;
+            }
+        }
+    }
+    if ($handled) {
+        bmp_maybeClearResendRelaxAfterAnchorHandled($pdo, $processId, $companyId, $anchorYmd);
+    }
+}
+
 /** @return string|null */
 function bank_resend_normalizeOptionalYmd($value): ?string
 {
@@ -166,6 +191,7 @@ try {
         bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $company_id, $bankProcessId);
         $locked = bank_resend_isLockedToday($pdo, $company_id, $bankProcessId, $dayStartYmd);
         bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
+        bank_resend_reconcileStaleOpenAnchor($pdo, $company_id, $bankProcessId, $dayStartYmd);
         $duplicateOpen = bmp_resendOpenAnchorAlreadyExists($pdo, $bankProcessId, $company_id, $dayStartYmd);
         jsonResponse(true, '', [
             'locked' => $locked,
@@ -255,6 +281,7 @@ try {
         throw new Exception('This process already has a transaction posted for this Day start today. Delete it from Bank Process Maintenance before resending.');
     }
     bmp_ensureBankProcessAccountingResendOpenAnchorsColumn($pdo);
+    bank_resend_reconcileStaleOpenAnchor($pdo, $company_id, $bankProcessId, $effectiveDayStartYmd);
     if (bmp_resendOpenAnchorAlreadyExists($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd)) {
         throw new Exception('This process already has an open Resend bill for this Day start in Accounting Due. Transaction or delete it before resending the same date.');
     }
@@ -424,6 +451,7 @@ try {
         && !($newFrequency === 'monthly' && $newDayStart !== null && $newDayEnd !== null)) {
         bmp_appendResendOpenAnchor($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd, $newFrequency);
     }
+    bmp_clearResendAnchorAccountingDueSideEffects($pdo, $bankProcessId, $company_id, $effectiveDayStartYmd);
     $pdo->commit();
     jsonResponse(true, 'Done: This process can appear in Accounting Due again.', [
         'bank_process_id' => $bankProcessId,

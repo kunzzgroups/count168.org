@@ -592,7 +592,7 @@ function dashboardGroupSalaryBonusCaptureBundle(
     ?string $filterCurrencyCode
 ): array {
     if ($accounts === []) {
-        return ['capture_bf' => dashboardMoneyZero(), 'daily' => []];
+        return ['capture_bf' => dashboardMoneyZero(), 'daily' => [], 'capture_period' => dashboardMoneyZero()];
     }
 
     require_once __DIR__ . '/../datacapture/data_capture_scope_common.php';
@@ -617,6 +617,27 @@ function dashboardGroupSalaryBonusCaptureBundle(
     $stmt->execute(array_merge($ledger['params'], [$dateFrom], $acctParams, $currencyParams));
     $captureBf = (string) ($stmt->fetchColumn() ?? '0');
 
+    $kpiOnly = !empty($GLOBALS['DASHBOARD_KPI_ONLY']);
+    if ($kpiOnly) {
+        $sql = "SELECT COALESCE(SUM({$dcdQ}), 0)
+                FROM data_capture_details dcd
+                JOIN data_captures dc ON dcd.capture_id = dc.id
+                INNER JOIN process p ON dc.process_id = p.id
+                WHERE {$ledger['sql']}
+                  AND dcd.currency_id IS NOT NULL
+                  AND dc.capture_date BETWEEN ? AND ?
+                  {$processFilter}
+                  {$acctFilter}
+                  {$currencyFilter}";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(array_merge($ledger['params'], [$dateFrom, $dateTo], $acctParams, $currencyParams));
+        return [
+            'capture_bf' => $captureBf,
+            'daily' => [],
+            'capture_period' => (string) ($stmt->fetchColumn() ?? '0'),
+        ];
+    }
+
     $sql = "SELECT DATE(dc.capture_date) AS d, COALESCE(SUM({$dcdQ}), 0) AS wl
             FROM data_capture_details dcd
             JOIN data_captures dc ON dcd.capture_id = dc.id
@@ -635,7 +656,7 @@ function dashboardGroupSalaryBonusCaptureBundle(
         $daily[(string) ($row['d'] ?? '')] = (string) ($row['wl'] ?? '0');
     }
 
-    return ['capture_bf' => $captureBf, 'daily' => $daily];
+    return ['capture_bf' => $captureBf, 'daily' => $daily, 'capture_period' => dashboardSumDailyAmounts($daily)];
 }
 
 /**
@@ -681,6 +702,7 @@ function dashboardBuildGroupProfitBucket(
               AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_LIST_FEE|%'
               AND UPPER(TRIM(COALESCE(t.description, ''))) NOT LIKE 'DOMAIN LIST FEE FROM %'";
 
+    $kpiOnly = !empty($GLOBALS['DASHBOARD_KPI_ONLY']);
     $captureBundle = dashboardGroupSalaryBonusCaptureBundle(
         $pdo,
         $groupScopeId,
@@ -690,8 +712,11 @@ function dashboardBuildGroupProfitBucket(
         $filterCurrencyCode
     );
     $totalBf = dashboardMoneyAdd($totalBf, $captureBundle['capture_bf']);
-    foreach ($captureBundle['daily'] as $date => $amount) {
-        dashboardAddDailyAmount($dailyData, $date, $amount);
+    $capturePeriod = (string) ($captureBundle['capture_period'] ?? '0');
+    if (!$kpiOnly) {
+        foreach ($captureBundle['daily'] as $date => $amount) {
+            dashboardAddDailyAmount($dailyData, $date, $amount);
+        }
     }
 
     $bfTxnTypes = "('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM', 'RATE', 'WIN', 'LOSE', 'ADJUSTMENT')";
@@ -754,6 +779,75 @@ function dashboardBuildGroupProfitBucket(
                 $totalBf = dashboardMoneyAdd($totalBf, $stmt->fetchColumn());
             }
         } catch (Throwable $e) {
+        }
+
+        if ($kpiOnly) {
+            $sql = "SELECT COALESCE(SUM(CASE
+                        WHEN transaction_type IN ('RECEIVE', 'CLAIM', 'RATE') THEN -t.amount
+                        WHEN transaction_type = 'CONTRA' THEN -t.amount
+                        WHEN transaction_type = 'CLEAR' THEN -t.amount
+                        WHEN transaction_type = 'PAYMENT' THEN -t.amount
+                        WHEN t.transaction_type = 'WIN' AND (t.description LIKE 'Process: %') THEN t.amount
+                        WHEN t.transaction_type = 'LOSE' AND (t.description LIKE 'Process: %') THEN -t.amount
+                        WHEN t.transaction_type = 'WIN' AND " . dashboardManualProfitDescSql('t') . " THEN -t.amount
+                        WHEN t.transaction_type = 'LOSE' AND " . dashboardManualProfitDescSql('t') . " THEN t.amount
+                        WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
+                        ELSE 0
+                    END), 0)
+                FROM transactions t
+                WHERE {$groupTxnWhere}
+                  AND t.account_id IN ($idsPlaceholder)
+                  AND t.transaction_date BETWEEN ? AND ?
+                  AND t.transaction_type IN $dailyTxnTypes" . $currencyFilterT . $clearFilter . $contraApproval . $excludeDomainSql;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute(array_merge([$groupScopeId], $accountIds, [$dateFrom, $dateTo], $currencyParamsT));
+            $period = dashboardMoneyAdd($capturePeriod, $stmt->fetchColumn());
+
+            $sql = "SELECT COALESCE(SUM(CASE
+                        WHEN transaction_type = 'CONTRA' THEN t.amount
+                        WHEN transaction_type = 'CLEAR' THEN t.amount
+                        WHEN transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM', 'RATE') THEN t.amount
+                        WHEN t.transaction_type = 'WIN' AND " . dashboardManualProfitDescSql('t') . " THEN t.amount
+                        WHEN t.transaction_type = 'LOSE' AND " . dashboardManualProfitDescSql('t') . " THEN -t.amount
+                        ELSE 0
+                    END), 0)
+                FROM transactions t
+                WHERE {$groupTxnWhere}
+                  AND t.from_account_id IN ($idsPlaceholder)
+                  AND t.transaction_date BETWEEN ? AND ?
+                  AND t.transaction_type IN $dailyFromTxnTypes" . $currencyFilterT . $clearFilter . $contraApproval . $excludeDomainSql;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute(array_merge([$groupScopeId], $accountIds, [$dateFrom, $dateTo], $currencyParamsT));
+            $period = dashboardMoneyAdd($period, $stmt->fetchColumn());
+
+            try {
+                if (dashboardHasTransactionEntry($pdo)) {
+                    $sql = "SELECT COALESCE(SUM(CASE
+                                WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
+                                WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
+                                WHEN e.entry_type = 'RATE_MIDDLEMAN' THEN e.amount
+                                ELSE e.amount
+                            END), 0)
+                        FROM transaction_entry e
+                        JOIN transactions h ON e.header_id = h.id
+                        WHERE {$groupHeaderWhere}
+                          AND e.account_id IN ($idsPlaceholder)
+                          AND h.transaction_date BETWEEN ? AND ?" . $currencyFilterE;
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute(array_merge([$groupScopeId], $accountIds, [$dateFrom, $dateTo], $currencyParamsE));
+                    $period = dashboardMoneyAdd($period, $stmt->fetchColumn());
+                }
+            } catch (Throwable $e) {
+            }
+
+            $total = dashboardMoneyAdd($totalBf, $period);
+            return [
+                'role' => 'PROFIT',
+                'total_balance' => dashboardOut($total),
+                'initial_balance' => dashboardOut($totalBf),
+                'period_total' => dashboardOut($period),
+                'daily_data' => [],
+            ];
         }
 
         $sql = "SELECT DATE(t.transaction_date) AS date,
@@ -858,9 +952,35 @@ function dashboardMergeGroupRateMiddlemanIntoProfit(
         return;
     }
 
+    $kpiOnly = !empty($GLOBALS['DASHBOARD_KPI_ONLY']);
+
     try {
         list($currencyFilterE, $currencyParamsE) = dashboardGroupLedgerCurrencyFilterSql($filterCurrencyCode, $currencyMap, 'e');
         if ($currencyFilterE === ' AND 1=0') {
+            return;
+        }
+
+        if ($kpiOnly) {
+            $rateMMSql = "
+                SELECT COALESCE(SUM(e.amount), 0) AS total
+                FROM transaction_entry e
+                JOIN transactions h ON e.header_id = h.id
+                WHERE h.scope_type = 'group' AND h.scope_id = ?
+                  AND e.entry_type = 'RATE_MIDDLEMAN'
+                  AND h.transaction_date BETWEEN ? AND ?" . $currencyFilterE;
+            $rateMMParams = array_merge([$groupScopeId, $dateFrom, $dateTo], $currencyParamsE);
+            $rateMMStmt = $pdo->prepare($rateMMSql);
+            $rateMMStmt->execute($rateMMParams);
+            $rateMMPeriodTotal = (string) ($rateMMStmt->fetchColumn() ?? '0');
+            if (money_cmp($rateMMPeriodTotal, '0') === 0) {
+                return;
+            }
+            $result['profit']['period_total'] = dashboardOut(
+                dashboardMoneyAdd($result['profit']['period_total'] ?? '0', $rateMMPeriodTotal)
+            );
+            $result['profit']['total_balance'] = dashboardOut(
+                dashboardMoneyAdd($result['profit']['total_balance'] ?? '0', $rateMMPeriodTotal)
+            );
             return;
         }
 
@@ -1606,6 +1726,7 @@ function dashboardBuildGroupScopedSummary(
 ): array {
     $roles = ['CAPITAL', 'EXPENSES', 'PROFIT'];
     $result = [];
+    $kpiOnly = !empty($GLOBALS['DASHBOARD_KPI_ONLY']);
     $hasTransactionCurrency = dashboardHasTransactionCurrency($pdo);
     $currencyMap = dashboardResolveFilterCurrencyMap($pdo, 0, null, $groupScopeId);
     $currencyFilterSql = '';
@@ -1713,6 +1834,68 @@ function dashboardBuildGroupScopedSummary(
 
         $initial = dashboardMoneyAdd($bfTo, $bfFrom);
 
+        if ($kpiOnly) {
+            $periodSql = "
+                SELECT COALESCE(SUM(CASE
+                    WHEN t.account_id IN ($in) THEN
+                        CASE
+                            WHEN t.transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
+                            WHEN t.transaction_type IN ('CONTRA', 'CLEAR') THEN -t.amount
+                            WHEN t.transaction_type = 'PAYMENT' THEN -t.amount
+                            WHEN t.transaction_type = 'WIN' THEN -t.amount
+                            WHEN t.transaction_type = 'LOSE' THEN t.amount
+                            WHEN t.transaction_type = 'ADJUSTMENT' THEN t.amount
+                            ELSE 0
+                        END
+                    WHEN t.from_account_id IN ($in) THEN
+                        CASE
+                            WHEN t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CLAIM', 'CONTRA', 'CLEAR') THEN t.amount
+                            WHEN t.transaction_type = 'WIN' THEN t.amount
+                            WHEN t.transaction_type = 'LOSE' THEN -t.amount
+                            ELSE 0
+                        END
+                    ELSE 0
+                END), 0) AS delta
+                FROM transactions t
+                WHERE t.scope_type = 'group'
+                  AND t.scope_id = ?
+                  AND t.transaction_date BETWEEN ? AND ?
+                  AND (t.account_id IN ($in) OR t.from_account_id IN ($in))" . $currencyFilterSql . $clearFilter . $contraApproval;
+            $periodStmt = $pdo->prepare($periodSql);
+            $periodParams = array_merge(
+                $accountIds,
+                $accountIds,
+                [$groupScopeId, $dateFrom, $dateTo],
+                $accountIds,
+                $currencyFilterParams
+            );
+            $periodStmt->execute($periodParams);
+            $period = (string) ($periodStmt->fetchColumn() ?? '0');
+
+            if ($role === 'EXPENSES') {
+                $captureBundle = dashboardGroupSalaryBonusCaptureBundle(
+                    $pdo,
+                    $groupScopeId,
+                    $accountRows,
+                    $dateFrom,
+                    $dateTo,
+                    $filterCurrencyCode
+                );
+                $initial = dashboardMoneyAdd($initial, $captureBundle['capture_bf']);
+                $period = dashboardMoneyAdd($period, $captureBundle['capture_period'] ?? '0');
+            }
+
+            $total = dashboardMoneyAdd($initial, $period);
+            $result[strtolower($role)] = [
+                'role' => $role,
+                'total_balance' => dashboardOut($total),
+                'initial_balance' => dashboardOut($initial),
+                'period_total' => dashboardOut($period),
+                'daily_data' => [],
+            ];
+            continue;
+        }
+
         $dailySql = "
             SELECT DATE(t.transaction_date) AS d, COALESCE(SUM(CASE
                 WHEN t.account_id IN ($in) THEN
@@ -1757,7 +1940,6 @@ function dashboardBuildGroupScopedSummary(
             $dailyData[(string) $r['d']] = (string) ($r['delta'] ?? '0');
         }
 
-        // EXPENSES：在既有 group scope 交易汇总之上，叠加 SALARY/BONUS Data Capture。
         if ($role === 'EXPENSES') {
             $captureBundle = dashboardGroupSalaryBonusCaptureBundle(
                 $pdo,
@@ -1951,8 +2133,7 @@ function dashboardCollectGroupOnlyAccountIds(PDO $pdo, string $viewGroup): array
     }
 
     $groupScopeId = dashboardResolveGroupScopeId($pdo, $viewGroup);
-    if ($groupScopeId > 0) {
-        dashboardAssertGroupLedgerAccess($pdo, $viewGroup, $groupScopeId);
+    if ($groupScopeId > 0 && gc_session_can_access_group_ledger($pdo, $viewGroup)) {
         $accountIds = array_merge(
             $accountIds,
             dashboardCollectScopeAccountIds($pdo, 0, null, $groupScopeId)
@@ -3322,6 +3503,9 @@ try {
                     . ($dbName !== '' ? ', database=' . $dbName : '')
                     . '). Confirm migration 20260528_dual_tenant_company_group.sql on this database.'
                 );
+            }
+            if (!gc_session_can_access_group_ledger($pdo, $groupLedgerCode)) {
+                throw new Exception('无权访问该 Group Ledger');
             }
             dashboardAssertGroupLedgerAccess($pdo, $groupLedgerCode, $groupScopeId);
         }

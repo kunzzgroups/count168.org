@@ -89,7 +89,7 @@ import {
 import UserModal from "./components/UserModal.jsx";
 import UserConfirmModal from "./components/UserConfirmModal.jsx";
 import { processNotificationAboveAccountZIndex, processNotificationZIndex } from "../../components/ProcessModalPortal.jsx";
-import { getUserListText, translateUserListApiMessage } from "../../translateFile/pages/userListTranslate.js";
+import { formatUserRoleDisplay, formatUserStatusDisplay, getUserListText, translateUserListApiMessage } from "../../translateFile/pages/userListTranslate.js";
 import { validateEmail } from "../../utils/input/emailValidation.js";
 
 function roleBadgeClass(role) {
@@ -318,9 +318,15 @@ export default function UserListPage() {
   );
   const pickerCompanyId = companyId;
   const filteredSorted = useMemo(() => {
-    const f = applyUserFilters(usersRaw, { search, showInactive, showAll, viewerRole: currentUserRole });
+    const f = applyUserFilters(usersRaw, {
+      search,
+      showInactive,
+      showAll,
+      viewerRole: currentUserRole,
+      viewerUserId: currentUserId,
+    });
     return sortUsers(f, sortColumn, sortDirection);
-  }, [usersRaw, search, showInactive, showAll, currentUserRole, sortColumn, sortDirection]);
+  }, [usersRaw, search, showInactive, showAll, currentUserRole, currentUserId, sortColumn, sortDirection]);
 
   const canCreateUser = useMemo(() => getAvailableRolesForCreation(currentUserRole).length > 0, [currentUserRole]);
   const userMutationsBlocked = useMemo(() => isPartnershipAuditReadOnlyLocked(me), [me]);
@@ -2044,6 +2050,7 @@ export default function UserListPage() {
     if (!isEditMode && !form.password.trim()) { notify(t("passwordRequired"), "danger"); return; }
     if (
       useDualTenantUserPicker &&
+      !editingRow?.is_owner_shadow &&
       selectedGroupIds.length === 0 &&
       selectedCompanyIds.length === 0
     ) {
@@ -2054,6 +2061,7 @@ export default function UserListPage() {
       !useDualTenantUserPicker &&
       groupOnlyUserList &&
       (currentUserRole === "admin" || currentUserRole === "owner") &&
+      !editingRow?.is_owner_shadow &&
       selectedCompanyIds.length === 0
     ) {
       notify(t("groupNoneSelected"), "danger");
@@ -2071,7 +2079,7 @@ export default function UserListPage() {
     let saveCompanyIds = selectedCompanyIds;
     let saveGroupCodes = [];
     const shouldForceGroupScope = !useDualTenantUserPicker && groupOnlyUserList;
-    if (useDualTenantUserPicker) {
+    if (useDualTenantUserPicker && !editingRow?.is_owner_shadow) {
       saveGroupCodes = resolveSelectedGroupCodesFromPicker(modalGroupCompanies, selectedGroupIds);
       saveCompanyIds = selectedCompanyIds;
       payload.mixed_tenant_assign = 1;
@@ -2456,8 +2464,8 @@ export default function UserListPage() {
                     <div className="card-item">{r.login_id}</div>
                     <div className="card-item">{r.name}</div>
                     <div className="card-item">{r.email || "-"}</div>
-                    <div className="card-item"><span className={`role-badge ${roleBadgeClass(r.role)}`}>{String(r.role || "").toUpperCase()}</span></div>
-                    <div className="card-item"><span className={`role-badge ${normRole(r.status) === "active" ? "status-active" : "status-inactive"} ${caps.canToggleStatus && !userMutationsBlocked ? "status-clickable" : ""}`} onClick={() => !userMutationsBlocked && caps.canToggleStatus && toggleUserStatus(r)}>{String(r.status || "").toUpperCase()}</span></div>
+                    <div className="card-item"><span className={`role-badge ${roleBadgeClass(r.role)}`}>{formatUserRoleDisplay(t, r.role)}</span></div>
+                    <div className="card-item"><span className={`role-badge ${normRole(r.status) === "active" ? "status-active" : "status-inactive"} ${caps.canToggleStatus && !userMutationsBlocked ? "status-clickable" : ""}`} onClick={() => !userMutationsBlocked && caps.canToggleStatus && toggleUserStatus(r)}>{formatUserStatusDisplay(t, r.status)}</span></div>
                     <div className="card-item">{formatLastLogin(r.last_login)}</div>
                     <div className="card-item">{String(r.created_by || "-").toUpperCase()}</div>
                     <div className="card-item card-item--action">

@@ -100,10 +100,10 @@ body.bg::before {
 
 
 
-/* Main Container — 与 .login-card 450px 对齐，避免子卡比容器宽 */
+/* Main Container — 与 .login-card 同宽，避免子卡比容器宽 */
 .login-container {
     width: 100%;
-    max-width: min(450px, 92vw);
+    max-width: min(var(--login-shell-width, 380px), 92vw);
     margin: 0 auto;
     position: relative;
     z-index: 2;
@@ -113,7 +113,7 @@ body.bg::before {
 .login-card {
     display: flex;
     justify-content: center;
-    width: 450px;
+    width: var(--login-shell-width, 380px);
     max-width: 100%;
     background: rgba(255, 255, 255, 0.95);
     border-radius: 0 0 20px 20px;
@@ -280,8 +280,8 @@ body.bg .login-container .input-group input {
     min-width: 0;
     width: 100%;
     max-width: 100%;
-    min-height: 46.5px;
-    padding: 12px 25px 12px 46px;
+    min-height: 42px;
+    padding: 10px 22px 10px 42px;
     border-width: 2px;
     border-style: solid;
     border-color: var(--login-bg-end);

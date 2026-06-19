@@ -81,6 +81,21 @@ export const ACCOUNT_I18N = {
     roleRequired: "Role *",
     selectRole: "Select Role",
     supplier: "SUPPLIER",
+    roleCapital: "CAPITAL",
+    roleBank: "BANK",
+    roleCash: "CASH",
+    roleProfit: "PROFIT",
+    roleExpenses: "EXPENSES",
+    roleCompany: "COMPANY",
+    rolePartner: "PARTNER",
+    roleStaff: "STAFF",
+    roleAgent: "AGENT",
+    roleMember: "MEMBER",
+    roleDebtor: "DEBTOR",
+    statusActive: "ACTIVE",
+    statusInactive: "INACTIVE",
+    alertOn: "ON",
+    alertOff: "OFF",
     passwordRequired: "Password *",
     payment: "Payment",
     paymentAlert: "Payment Alert",
@@ -268,7 +283,22 @@ export const ACCOUNT_I18N = {
     nameRequired: "姓名 *",
     roleRequired: "角色 *",
     selectRole: "选择角色",
-    supplier: "SUPPLIER",
+    supplier: "供应商",
+    roleCapital: "资本",
+    roleBank: "银行",
+    roleCash: "现金",
+    roleProfit: "利润",
+    roleExpenses: "费用",
+    roleCompany: "公司",
+    rolePartner: "合伙人",
+    roleStaff: "员工",
+    roleAgent: "代理",
+    roleMember: "会员",
+    roleDebtor: "债务人",
+    statusActive: "启用",
+    statusInactive: "停用",
+    alertOn: "是",
+    alertOff: "否",
     passwordRequired: "密码 *",
     payment: "支付",
     paymentAlert: "支付提醒",
@@ -625,6 +655,43 @@ export function formatCurrencyInUseAccountLabels(accounts = []) {
   return (Array.isArray(accounts) ? accounts : [])
     .map(formatAccountInUseLabel)
     .filter(Boolean);
+}
+
+const ACCOUNT_ROLE_I18N_KEYS = {
+  capital: "roleCapital",
+  bank: "roleBank",
+  cash: "roleCash",
+  profit: "roleProfit",
+  expenses: "roleExpenses",
+  company: "roleCompany",
+  partner: "rolePartner",
+  staff: "roleStaff",
+  supplier: "supplier",
+  upline: "supplier",
+  agent: "roleAgent",
+  member: "roleMember",
+  debtor: "roleDebtor",
+};
+
+/** Account list / modal: localized role badge label */
+export function formatAccountRoleDisplay(t, role) {
+  const raw = String(role || "").trim();
+  const key = ACCOUNT_ROLE_I18N_KEYS[raw.toLowerCase()];
+  if (key) return t(key);
+  return raw.toUpperCase();
+}
+
+/** Account list: localized status badge label */
+export function formatAccountStatusDisplay(t, status) {
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "active") return t("statusActive");
+  if (s === "inactive") return t("statusInactive");
+  return String(status || "").toUpperCase();
+}
+
+/** Account list: localized payment alert toggle label */
+export function formatAccountAlertDisplay(t, paymentAlert) {
+  return String(paymentAlert) === "1" ? t("alertOn") : t("alertOff");
 }
 
 export const getAccountText = createGetText(ACCOUNT_I18N);

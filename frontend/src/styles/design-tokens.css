@@ -499,12 +499,15 @@
   --login-danger: #dc3545;
   --login-radius-xl: 28px;
   --login-radius-pill: 999px;
+  /* 登录列宽：≥480px 固定宽度，避免中英切换 / 滚动条导致百分比抖动 */
+  --login-shell-width: 380px;
+  --login-shell-max-width: 388px;
   /* 主提交钮：固定为英文 Login 规格，中英 / 登录中 只换字、高度不变 */
-  --login-submit-height: 51px;
+  --login-submit-height: 46px;
   --login-submit-pad-x: 15px;
   /* 登录白卡最小高度：按中文版 Tab（--text-h2）+ 表单 + 语系条撑满；切 EN 时只换字、外框不降 */
-  --login-card-min-height: 414px;
-  --login-card-min-height-narrow: 528px;
+  --login-card-min-height: 378px;
+  --login-card-min-height-narrow: 460px;
 }
 
 /* Description picker / Process form：≥992px — 与 DevTools 调校一致（1120px / 95vh / 列表区更高） */

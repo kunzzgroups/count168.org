@@ -1,5 +1,6 @@
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { getRowLabel } from "./dataCaptureGridMeta.js";
+import { alignSnapshotRow } from "../paste/core/dataCaptureTotalRowAlign.js";
 
 /** Matches legacy `convertBracketedToNegative` in `js/datacapture.js`. */
 export function convertBracketedToNegative(value) {
@@ -116,6 +117,12 @@ export function createEmptyGrid(rows = 26, cols = 20) {
   return { rows: r, cols: c, cells, rowLabels };
 }
 
+/** Deep clone for paste undo snapshots. */
+export function cloneGrid(grid) {
+  if (!grid) return null;
+  return JSON.parse(JSON.stringify(grid));
+}
+
 export function setCell(grid, rowIndex, colIndex, patch) {
   const r = Math.max(0, Number(rowIndex) || 0);
   const c = Math.max(0, Number(colIndex) || 0);
@@ -220,6 +227,12 @@ export function gridToSnapshot(grid, captureType = "1.Text") {
     });
 
     normalizeIdProductColumnForRow(rowData, captureType, rowIndex);
+
+    const alignedRowData = alignSnapshotRow(rowData);
+    if (alignedRowData !== rowData) {
+      rowData.length = 0;
+      alignedRowData.forEach((cell) => rowData.push(cell));
+    }
 
     const dataCols = rowData.length - 1;
     if (dataCols > maxDataCols) maxDataCols = dataCols;

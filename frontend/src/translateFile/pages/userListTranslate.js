@@ -35,6 +35,17 @@ export const USER_LIST_I18N = {
     email: "Email",
     role: "Role",
     status: "Status",
+    statusActive: "ACTIVE",
+    statusInactive: "INACTIVE",
+    rolePartnership: "Partnership",
+    roleAdmin: "Admin",
+    roleManager: "Manager",
+    roleSupervisor: "Supervisor",
+    roleAccountant: "Accountant",
+    roleAudit: "Audit",
+    roleCustomerService: "Customer Service",
+    roleCompany: "Company",
+    roleOwner: "Owner",
     lastLogin: "Last Login",
     createdBy: "Created By",
     action: "Action",
@@ -165,6 +176,17 @@ export const USER_LIST_I18N = {
     email: "邮箱",
     role: "角色",
     status: "状态",
+    statusActive: "启用",
+    statusInactive: "停用",
+    rolePartnership: "合伙",
+    roleAdmin: "管理员",
+    roleManager: "经理",
+    roleSupervisor: "主管",
+    roleAccountant: "会计",
+    roleAudit: "审计",
+    roleCustomerService: "客服",
+    roleCompany: "公司",
+    roleOwner: "所有者",
     lastLogin: "最后登录",
     createdBy: "创建者",
     action: "操作",
@@ -366,6 +388,33 @@ export function translateUserListApiMessage(lang, apiMessage, fallbackKey = "", 
   }
 
   return message || (fallbackKey ? getUserListText(locale, fallbackKey, params) : "");
+}
+
+const USER_ROLE_I18N_KEYS = {
+  partnership: "rolePartnership",
+  admin: "roleAdmin",
+  manager: "roleManager",
+  supervisor: "roleSupervisor",
+  accountant: "roleAccountant",
+  audit: "roleAudit",
+  "customer service": "roleCustomerService",
+  company: "roleCompany",
+  owner: "roleOwner",
+};
+
+/** User list table / modal: localized role badge */
+export function formatUserRoleDisplay(t, role) {
+  const key = USER_ROLE_I18N_KEYS[String(role || "").trim().toLowerCase()];
+  if (key) return t(key);
+  return String(role || "").toUpperCase();
+}
+
+/** User list table: localized status badge */
+export function formatUserStatusDisplay(t, status) {
+  const s = String(status || "").trim().toLowerCase();
+  if (s === "active") return t("statusActive");
+  if (s === "inactive") return t("statusInactive");
+  return String(status || "").toUpperCase();
 }
 
 export const getUserListText = createGetText(USER_LIST_I18N);

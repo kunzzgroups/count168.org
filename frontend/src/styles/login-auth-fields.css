@@ -23,8 +23,8 @@ body.bg .login-container .input-group input {
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  min-height: 46.5px;
-  padding: 12px 25px 12px 46px;
+  min-height: 42px;
+  padding: 10px 22px 10px 42px;
   border-width: 2px;
   border-style: solid;
   border-color: var(--login-bg-end);

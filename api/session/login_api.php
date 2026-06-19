@@ -29,8 +29,9 @@ header('Pragma: no-cache');
 ob_start();
 
 try {
-    require_once __DIR__ . '/../../includes/config.php';
-    require_once __DIR__ . '/../../includes/session_user_payload_cache.php';
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/password_hashing.php';
+require_once __DIR__ . '/../../includes/session_user_payload_cache.php';
     require_once __DIR__ . '/../../includes/login_scope.php';
     require_once __DIR__ . '/../../includes/group_company_access.php';
     require_once __DIR__ . '/../../includes/company_expiration.php';
@@ -100,7 +101,7 @@ try {
             }
             $is_pwd_valid = false;
             $stored = (string) $row['password'];
-            if (password_verify($password, $stored)) {
+            if (verify_secure_password($password, $stored)) {
                 $is_pwd_valid = true;
             } elseif ($password === $stored) {
                 $is_pwd_valid = true;
@@ -137,10 +138,17 @@ try {
             $passwordForFingerprint = (string) ($account['password'] ?? '');
             // 明文密码登录成功时升级为哈希（与 owner 一致）
             if ($account_record_to_update && (int) $account['id'] === (int) $account_record_to_update['id']) {
-                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                $hashed_password = secure_hash_password($password);
                 $update_stmt = $pdo->prepare('UPDATE account SET password = ? WHERE id = ?');
                 $update_stmt->execute([$hashed_password, $account['id']]);
                 $passwordForFingerprint = $hashed_password;
+            } else {
+                $rehashed = maybe_rehash_password($password, $passwordForFingerprint);
+                if ($rehashed !== null) {
+                    $update_stmt = $pdo->prepare('UPDATE account SET password = ? WHERE id = ?');
+                    $update_stmt->execute([$rehashed, $account['id']]);
+                    $passwordForFingerprint = $rehashed;
+                }
             }
             auth_store_password_fingerprint($passwordForFingerprint);
 
@@ -198,7 +206,7 @@ try {
     $user_password_match = false;
     
     foreach ($matched_users as $row) {
-        if (password_verify($password, $row['password'])) {
+        if (verify_secure_password($password, (string) $row['password'])) {
             $user_password_match = true;
             if (isCompanyExpiredOrUnset($row['expiration_date'] ?? null, $row['company_code'] ?? null, $row['group_id'] ?? null)) {
                 $user_has_expired = true;
@@ -239,6 +247,13 @@ try {
         }
 
         auth_store_password_fingerprint((string) ($user['password'] ?? ''));
+
+        $userStoredPassword = (string) ($user['password'] ?? '');
+        $userRehashed = maybe_rehash_password($password, $userStoredPassword);
+        if ($userRehashed !== null) {
+            $pdo->prepare('UPDATE user SET password = ? WHERE id = ?')->execute([$userRehashed, $user['id']]);
+            auth_store_password_fingerprint($userRehashed);
+        }
 
         // 更新最后登录时间
         $stmt = $pdo->prepare("UPDATE user SET last_login = NOW() WHERE id = ?");
@@ -308,7 +323,7 @@ try {
         foreach ($matched_owners as $row) {
             $is_pwd_valid = false;
             // 先尝试哈希验证（标准方式）
-            if (password_verify($password, $row['password'])) {
+            if (verify_secure_password($password, (string) $row['password'])) {
                 $is_pwd_valid = true;
             } 
             // 如果哈希验证失败，检查是否是明文密码（兼容旧数据）
@@ -332,10 +347,17 @@ try {
             $passwordForFingerprint = (string) ($owner['password'] ?? '');
             // 如果使用明文密码验证成功，自动升级为哈希密码
             if ($owner_record_to_update && $owner['id'] == $owner_record_to_update['id']) {
-                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                $hashed_password = secure_hash_password($password);
                 $update_stmt = $pdo->prepare("UPDATE owner SET password = ? WHERE id = ?");
                 $update_stmt->execute([$hashed_password, $owner['id']]);
                 $passwordForFingerprint = $hashed_password;
+            } else {
+                $ownerRehashed = maybe_rehash_password($password, $passwordForFingerprint);
+                if ($ownerRehashed !== null) {
+                    $update_stmt = $pdo->prepare('UPDATE owner SET password = ? WHERE id = ?');
+                    $update_stmt->execute([$ownerRehashed, $owner['id']]);
+                    $passwordForFingerprint = $ownerRehashed;
+                }
             }
 
             $_SESSION['user_id'] = $owner['id'];

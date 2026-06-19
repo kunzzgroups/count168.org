@@ -29,12 +29,13 @@ function userHasC168AnnouncementPageAccess(string $roleLower): bool
     return userHasC168DomainPageAccess($roleLower);
 }
 
-/** Auto Renew：仅 C168 公司上下文下的 owner / admin */
+/** Auto Renew：C168 公司上下文下的 owner / admin / partnership */
 function c168AutoRenewAllowedRoles(): array
 {
     return [
         'owner',
         'admin',
+        'partnership',
     ];
 }
 

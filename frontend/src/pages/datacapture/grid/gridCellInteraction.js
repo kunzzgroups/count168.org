@@ -5,15 +5,16 @@ import {
   gridAddNewColumn,
   gridAddNewRow,
   gridClearAllSelections,
+  gridClearSelectedCells,
   gridGetSelectedCells,
-  gridHasPasteHistory,
   gridRegisterSelectedCell,
   gridRecomputeSubmitState,
-  gridUndoLastPaste,
   getPasteGridModel,
+  replacePasteGridModel,
   setBridgeTableActive,
-  updateBridgeCell,
 } from "../lib/dataCaptureBridge.js";
+import { commitGridUndoCheckpoint, undoLastPaste } from "./dataCaptureGridPasteHistory.js";
+import { clearCellsInGrid } from "./gridModel.js";
 import { MAX_GRID_COLS, MAX_GRID_ROWS } from "./dataCaptureGridMeta.js";
 
 /** Pending cell focus after grid row/column append (applied on next grid render). */
@@ -34,19 +35,33 @@ function takePendingGridCellFocus() {
 }
 
 function cellPosition(cell) {
-  if (!cell?.parentNode?.parentNode) return null;
-  const row = cell.parentNode;
-  const table = row.parentNode;
-  const rowIndex = Array.from(table.children).indexOf(row);
+  if (!cell?.dataset) return null;
+  const rowIndex = Number.parseInt(cell.dataset.row, 10);
   const colIndex = Number.parseInt(cell.dataset.col, 10);
-  if (rowIndex < 0 || !Number.isFinite(colIndex)) return null;
+  if (!Number.isFinite(rowIndex) || !Number.isFinite(colIndex)) return null;
   return { rowIndex, colIndex };
 }
 
+function clearCellsWithUndo(positions) {
+  if (!positions?.length) return;
+  const grid = getPasteGridModel();
+  if (!grid) return;
+  const nextGrid = clearCellsInGrid(grid, positions);
+  replacePasteGridModel(nextGrid);
+  commitGridUndoCheckpoint(nextGrid);
+}
+
 function clearCellModel(cell) {
+  const selected = getSelectedCells().filter((c) => c?.contentEditable === "true");
+  if (selected.length > 1) {
+    const positions = selected.map(cellPosition).filter(Boolean);
+    clearCellsWithUndo(positions);
+    return;
+  }
+
   const pos = cellPosition(cell);
   if (!pos) return;
-  updateBridgeCell(pos.rowIndex, pos.colIndex, { value: "" });
+  clearCellsWithUndo([pos]);
 }
 
 function clearAllSelections() {
@@ -340,12 +355,8 @@ export function handleCellClick(e, cellEl) {
   moveCaretToClickPosition(cell, e);
 }
 
-function hasPasteHistory() {
-  return gridHasPasteHistory();
-}
-
-function undoLastPaste() {
-  gridUndoLastPaste();
+function undoLastPasteFromHistory() {
+  undoLastPaste();
 }
 
 function getSelectedCells() {
@@ -396,12 +407,9 @@ export function handleCellKeydown(e) {
 
   const key = (e.key || "").toLowerCase();
   if ((e.ctrlKey || e.metaKey) && key === "z" && !e.shiftKey) {
-    if (hasPasteHistory()) {
-      e.preventDefault();
-      e.stopPropagation();
-      undoLastPaste();
-      return;
-    }
+    e.preventDefault();
+    e.stopPropagation();
+    undoLastPasteFromHistory();
     return;
   }
 

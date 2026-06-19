@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { LOGIN_I18N } from "../../translateFile/auth/authTranslate.js";
+import { LOGIN_I18N, localizeAuthApiMessage } from "../../translateFile/auth/authTranslate.js";
 import { buildSpaPath } from "../../utils/core/apiUrl.js";
 import { resolveDefaultLandingPath } from "../../utils/auth/sidebarPermissions.js";
 import { spaPath } from "../../utils/routing/pageRoutes.js";
@@ -203,7 +203,11 @@ export default function LoginPage() {
 
   const showNotice = useCallback(
     (message, title) => {
-      setModal({ open: true, title: title || i18n.notice, message: message || "Unknown error" });
+      setModal({
+        open: true,
+        title: title || i18n.notice,
+        message: message || i18n.unknownError,
+      });
     },
     [i18n.notice]
   );
@@ -374,7 +378,7 @@ export default function LoginPage() {
         }
         return;
       }
-      showNotice(data.message || i18n.loginFailed);
+      showNotice(localizeAuthApiMessage(data.message, lang) || i18n.loginFailed);
     } catch {
       if (tryLoginPageReloadOnce()) return;
       showNotice(i18n.loginError);

@@ -136,7 +136,6 @@ const userModalColStyle = {
 import {
   PERMISSION_KEYS,
   PERMISSION_ICONS,
-  ALL_ROLE_OPTIONS,
   normRole,
   getAvailableRolesForCreation,
   getAvailableRolesForEdit,
@@ -144,6 +143,7 @@ import {
   canInteractWithReadOnlyToggle,
   isUserModalPageReadOnlyLock,
 } from "../userListLogic.js";
+import { formatUserRoleDisplay } from "../../../translateFile/pages/userListTranslate.js";
 import { sanitizeEmailInput } from "../../../utils/input/emailValidation.js";
 
 export default function UserModal({
@@ -195,20 +195,23 @@ export default function UserModal({
 
   const roleOptions = useMemo(() => {
     if (editingRow?.is_owner_shadow) {
-      return [{ value: "owner", label: "Owner" }];
+      return [{ value: "owner", label: formatUserRoleDisplay(t, "owner") }];
     }
     const list = isEditMode
       ? getAvailableRolesForEdit(currentUserRole, editingRow?.role)
       : getAvailableRolesForCreation(currentUserRole);
-    const opts = [...list];
+    const opts = list.map((opt) => ({
+      value: opt.value,
+      label: formatUserRoleDisplay(t, opt.value),
+    }));
     if (isEditMode && form.role && !list.find((x) => x.value === form.role)) {
       opts.push({
         value: form.role,
-        label: ALL_ROLE_OPTIONS.find((x) => x.value === form.role)?.label || String(form.role).toUpperCase(),
+        label: formatUserRoleDisplay(t, form.role),
       });
     }
     return opts;
-  }, [isEditMode, currentUserRole, editingRow, form.role]);
+  }, [isEditMode, currentUserRole, editingRow, form.role, t]);
 
   useEffect(() => {
     if (!open) return undefined;

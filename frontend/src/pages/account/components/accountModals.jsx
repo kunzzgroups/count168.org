@@ -3,6 +3,7 @@ import { accountModalOverlayZIndex, portalToDocumentBody } from "../../../compon
 import ConfirmDeleteModal from "../../../components/ConfirmDeleteModal.jsx";
 import { toUpper } from "../accountLogic.js";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
+import { formatAccountRoleDisplay } from "../../../translateFile/pages/accountTranslate.js";
 
 const confirmModalZIndex = accountModalOverlayZIndex + 50;
 
@@ -242,8 +243,8 @@ export function CurrencySettingModal({
 
   if (!open) return null;
 
-  const roleOptions = [{ value: "", label: t("filterRow") }, ...roles.map(r => ({ value: r, label: toUpper(r) }))];
-  const roleLabel = settingRole ? toUpper(settingRole) : t("filterRow");
+  const roleOptions = [{ value: "", label: t("filterRow") }, ...roles.map(r => ({ value: r, label: formatAccountRoleDisplay(t, r) }))];
+  const roleLabel = settingRole ? formatAccountRoleDisplay(t, settingRole) : t("filterRow");
   const selectedCurrencyMatchesList =
     settingCurrencyId != null &&
     currencies.some((c) => Number(c.id) === Number(settingCurrencyId));

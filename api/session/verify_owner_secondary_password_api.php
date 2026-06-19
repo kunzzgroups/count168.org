@@ -3,6 +3,7 @@ session_start();
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/password_hashing.php';
 
 if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_type']) || $_SESSION['user_type'] !== 'owner') {
     http_response_code(401);
@@ -32,9 +33,14 @@ try {
     $owner = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($owner && !empty($owner['secondary_password'])) {
-        if (!password_verify($secondaryPassword, $owner['secondary_password'])) {
+        $storedSecondary = (string) $owner['secondary_password'];
+        if (!verify_secure_password($secondaryPassword, $storedSecondary)) {
             echo json_encode(['success' => false, 'message' => 'Secondary password is incorrect'], JSON_UNESCAPED_UNICODE);
             exit;
+        }
+        $rehashed = maybe_rehash_password($secondaryPassword, $storedSecondary);
+        if ($rehashed !== null) {
+            $pdo->prepare('UPDATE owner SET secondary_password = ? WHERE id = ?')->execute([$rehashed, $ownerId]);
         }
     }
 

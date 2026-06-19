@@ -5,6 +5,7 @@ import {
   measureHtmlTable,
   sanitizePastedCellHtml,
 } from "./dataCaptureClipboard.js";
+import { alignTotalRowsInMatrix } from "./dataCaptureTotalRowAlign.js";
 
 function emptyPatch() {
   return { value: "" };
@@ -73,8 +74,9 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
     const { allRows, maxCols } = measured;
     const columnOrder = detectColumnReorder(allRows);
     const dataMatrix = allRows.map((sourceRow) => buildRowPatches(sourceRow, maxCols, columnOrder));
+    const alignedMatrix = alignTotalRowsInMatrix(dataMatrix);
 
-    const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
+    const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(alignedMatrix, anchorCell, {
       trimValues: false,
       uppercaseValues: false,
     });

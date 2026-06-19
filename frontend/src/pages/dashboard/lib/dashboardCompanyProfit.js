@@ -68,6 +68,21 @@ export function normalizeSubsidiaryEarningsByCompany(apiRows) {
     .filter((row) => row.company_id);
 }
 
+/**
+ * All-group dashboard: Earning tab only includes companies under groups where the viewer has ownership.
+ * When enabledGroupIds is omitted, rows are unchanged (single-group scope).
+ */
+export function filterCompanyBreakdownRowsForEarningsGroups(rows, enabledGroupIds) {
+  if (!Array.isArray(rows) || !rows.length) return [];
+  if (enabledGroupIds == null) return rows;
+  if (!Array.isArray(enabledGroupIds) || !enabledGroupIds.length) return [];
+  const enabled = new Set(
+    enabledGroupIds.map((g) => String(g || "").trim().toUpperCase()).filter(Boolean)
+  );
+  if (!enabled.size) return [];
+  return rows.filter((row) => enabled.has(String(row.group_id || "").trim().toUpperCase()));
+}
+
 /** Single-subsidiary group ledger: earnings tab row = full group-aggregate earnings (matches KPI card). */
 export function applySingleSubsidiaryGroupEarningsRows(rows, dashboardData, options = {}) {
   if (!Array.isArray(rows) || rows.length !== 1 || !dashboardData) return rows;

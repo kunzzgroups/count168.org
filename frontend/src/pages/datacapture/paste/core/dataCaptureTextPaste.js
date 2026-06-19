@@ -2,6 +2,7 @@ import { applyDataMatrixToGrid, notifyPasteSuccess } from "./dataCapturePasteApp
 import { getClipboardHtml } from "./dataCaptureClipboard.js";
 import { detectHtmlTableInClipboard } from "./dataCaptureClipboard.js";
 import { parseAndFillHtmlTableForText } from "./dataCaptureTextHtmlPaste.js";
+import { alignTotalRowsInMatrix } from "./dataCaptureTotalRowAlign.js";
 
 /** 1.Text — tab-separated Excel paste (always from column 0). */
 export function handleTextTabPaste(e, pastedData, anchorCell) {
@@ -27,7 +28,9 @@ export function handleTextTabPaste(e, pastedData, anchorCell) {
     while (row.length < maxCols) row.push("");
   });
 
-  const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
+  const alignedMatrix = alignTotalRowsInMatrix(dataMatrix);
+
+  const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(alignedMatrix, anchorCell, {
     startColOverride: 0,
     uppercaseValues: false,
     trimValues: false,

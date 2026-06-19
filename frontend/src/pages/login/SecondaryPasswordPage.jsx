@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { SECONDARY_VERIFY_I18N } from "../../translateFile/auth/authTranslate.js";
+import { SECONDARY_VERIFY_I18N, localizeAuthApiMessage } from "../../translateFile/auth/authTranslate.js";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import SecondaryVerifyBackButton from "./SecondaryVerifyBackButton.jsx";
 import { useAuthBackground } from "./useAuthBackground.js";
@@ -147,7 +147,7 @@ export default function SecondaryPasswordPage({ variant }) {
         navigate(spaPath("dashboard"), { replace: true });
         return;
       }
-      setErrorMessage(json?.message || i18n.genericError);
+      setErrorMessage(localizeAuthApiMessage(json?.message, lang) || i18n.genericError);
       inputRef.current?.focus();
     } catch {
       setErrorMessage(i18n.genericError);

@@ -2260,7 +2260,7 @@ body.account-page #forceDeleteCurrencyModal .confirm-delete {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    width: auto;
+    width: 100%;
     max-width: 100%;
     min-width: 0;
 }

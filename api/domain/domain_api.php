@@ -2,6 +2,7 @@
 session_start();
 // session_write_close() 将在 session 写入（回填 company_code）完成后调用
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/password_hashing.php';
 require_once __DIR__ . '/../../includes/email_validation.php';
 require_once __DIR__ . '/../../includes/tenant_scope.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
@@ -3384,8 +3385,8 @@ try {
             }
             
             // Hash passwords
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $hashed_secondary_password = password_hash($secondary_password, PASSWORD_DEFAULT);
+            $hashed_password = secure_hash_password($password);
+            $hashed_secondary_password = secure_hash_password($secondary_password);
             
             // DDL 在 MySQL 中会隐式提交并结束当前事务，须在 beginTransaction 之前执行
             ensureCompanyFeeShareColumn($pdo);
@@ -3562,14 +3563,14 @@ try {
                 $updateValues[] = $email;
                 
                 if (!empty($password)) {
-                    $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                    $hashed_password = secure_hash_password($password);
                     $updateFields[] = "password = ?";
                     $updateValues[] = $hashed_password;
                 }
                 
                 // 只有C168的owner/admin可以修改二级密码
                 if (!empty($secondary_password) && $hasC168Context && $isOwnerOrAdmin) {
-                    $hashed_secondary_password = password_hash($secondary_password, PASSWORD_DEFAULT);
+                    $hashed_secondary_password = secure_hash_password($secondary_password);
                     $updateFields[] = "secondary_password = ?";
                     $updateValues[] = $hashed_secondary_password;
                 }

@@ -40,6 +40,16 @@ export function DashboardTrendChart({
 
   const hasChartData = chartRows.length > 0;
   const chartSessionKey = `${chartVisitKey}-${chartScopeKey || "scope"}-${chartDateRangeText}`;
+  const chartRowsDigest = useMemo(
+    () =>
+      chartRows
+        .map(
+          (row) =>
+            `${row.date}|${row.profit}|${row.expenses}|${row.netProfit}|${row.earnings ?? 0}`
+        )
+        .join(";"),
+    [chartRows]
+  );
 
   const activeDataKeys = useMemo(
     () => chartSeries.filter((s) => chartVisible[s.idx]).map((s) => s.dataKey),
@@ -90,7 +100,7 @@ export function DashboardTrendChart({
       setDisplayRows(null);
       setDrawAnimate(false);
     };
-  }, [chartSessionKey, chartScopeKey, hasChartData, chartDataStable]);
+  }, [chartSessionKey, chartScopeKey, hasChartData, chartDataStable, chartRowsDigest]);
 
   return (
     <div className="dashboard-panel-card dashboard-panel-card--chart">

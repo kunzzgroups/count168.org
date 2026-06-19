@@ -41,14 +41,21 @@ export function DashboardEarningsSummary({
   exchangeRatesLoading,
   exchangeRateScopeKey = "",
   showProfitChartTab = false,
+  showEarningsCompanyTab = false,
   earningsPanelView = "currency",
   onEarningsPanelViewChange,
   companyBreakdownRows = [],
+  companyEarningsBreakdownRows = [],
   companyNetProfitTotal = 0,
+  companyEarningsTotal = 0,
 }) {
   const isNetProfitCompanyView = showProfitChartTab && earningsPanelView === "netProfit";
-  const isCompanyBreakdownView = isNetProfitCompanyView;
-  const companyBreakdownView = "netProfit";
+  const isCompanyEarningView = showProfitChartTab && earningsPanelView === "earning";
+  const isCompanyBreakdownView = isNetProfitCompanyView || isCompanyEarningView;
+  const companyBreakdownView = isCompanyEarningView ? "earnings" : "netProfit";
+  const activeCompanyBreakdownRows = isCompanyEarningView
+    ? companyEarningsBreakdownRows
+    : companyBreakdownRows;
   const pieAreaRef = useRef(null);
   const pieShellRef = useRef(null);
   const [pieShellLayout, setPieShellLayout] = useState({
@@ -61,12 +68,12 @@ export function DashboardEarningsSummary({
 
   const earningsPieSlices = useMemo(() => {
     if (isCompanyBreakdownView) {
-      return buildCompanyBreakdownPieSlices(companyBreakdownRows, companyBreakdownView);
+      return buildCompanyBreakdownPieSlices(activeCompanyBreakdownRows, companyBreakdownView);
     }
     return buildEarningsPieSlices(earningsCurrencyRows, { useConverted: useConvertedEarnings });
   }, [
     isCompanyBreakdownView,
-    companyBreakdownRows,
+    activeCompanyBreakdownRows,
     companyBreakdownView,
     earningsCurrencyRows,
     useConvertedEarnings,
@@ -74,14 +81,14 @@ export function DashboardEarningsSummary({
 
   const earningsShareByCode = useMemo(() => {
     if (isCompanyBreakdownView) {
-      return buildCompanyBreakdownShareByCode(companyBreakdownRows, companyBreakdownView);
+      return buildCompanyBreakdownShareByCode(activeCompanyBreakdownRows, companyBreakdownView);
     }
     return buildEarningsShareByCode(earningsCurrencyRows, currencyCode, {
       useConverted: useConvertedEarnings,
     });
   }, [
     isCompanyBreakdownView,
-    companyBreakdownRows,
+    activeCompanyBreakdownRows,
     companyBreakdownView,
     earningsCurrencyRows,
     currencyCode,
@@ -90,14 +97,14 @@ export function DashboardEarningsSummary({
 
   const pieCenterMetrics = useMemo(() => {
     if (isCompanyBreakdownView) {
-      return computeCompanyBreakdownCenterMetrics(companyBreakdownRows, companyBreakdownView);
+      return computeCompanyBreakdownCenterMetrics(activeCompanyBreakdownRows, companyBreakdownView);
     }
     return computePieCenterMetrics(earningsCurrencyRows, currencyCode, {
       useConverted: useConvertedEarnings,
     });
   }, [
     isCompanyBreakdownView,
-    companyBreakdownRows,
+    activeCompanyBreakdownRows,
     companyBreakdownView,
     earningsCurrencyRows,
     currencyCode,
@@ -107,7 +114,7 @@ export function DashboardEarningsSummary({
   const currencyPieFillByCode = useMemo(() => {
     const map = {};
     if (isCompanyBreakdownView) {
-      companyBreakdownRows.forEach((row, index) => {
+      activeCompanyBreakdownRows.forEach((row, index) => {
         map[row.company_id] = getCurrencyColor(row.company_id, index);
       });
       return map;
@@ -116,7 +123,7 @@ export function DashboardEarningsSummary({
       map[row.code] = getCurrencyColor(row.code, index);
     });
     return map;
-  }, [isCompanyBreakdownView, companyBreakdownRows, earningsCurrencyRows]);
+  }, [isCompanyBreakdownView, activeCompanyBreakdownRows, earningsCurrencyRows]);
 
   const piePaddingAngle = useMemo(
     () => resolveEarningsPiePaddingAngle(earningsPieSlices.length),
@@ -223,7 +230,7 @@ export function DashboardEarningsSummary({
     let sharePct = null;
     let unitRateLabel = null;
     if (isCompanyBreakdownView) {
-      const row = companyBreakdownRows.find(
+      const row = activeCompanyBreakdownRows.find(
         (r) =>
           (r.group_id
             ? `${r.company_id} · ${r.group_id}`
@@ -263,7 +270,7 @@ export function DashboardEarningsSummary({
     hoveredPieSector,
     earningsPieSlices,
     earningsCurrencyRows,
-    companyBreakdownRows,
+    activeCompanyBreakdownRows,
     earningsShareByCode,
     isCompanyBreakdownView,
     companyBreakdownView,
@@ -274,14 +281,22 @@ export function DashboardEarningsSummary({
   ]);
 
   const showMultiCurrencyBreakdown = !isCompanyBreakdownView && currencies.length > 1;
-  /** Few currencies / company rows: stack table directly under pie — no flex gap. */
-  const isCompactBreakdown = !showMultiCurrencyBreakdown;
+  /** Pie + table stack at top of panel (same as group-level layout). */
+  const isStackedLayout = true;
+  /** Single-currency / company rows: table hugs content; multi-currency fills remaining card height. */
+  const isCompactTable = !showMultiCurrencyBreakdown;
   const heroLabel = isNetProfitCompanyView
     ? i18n.netProfitCompanyCaption
-    : summaryPanelLabel || i18n.earnings;
-  const heroValue = isNetProfitCompanyView ? companyNetProfitTotal : summaryEarningsValue;
+    : isCompanyEarningView
+      ? i18n.earningsCompanyCaption
+      : summaryPanelLabel || i18n.earnings;
+  const heroValue = isNetProfitCompanyView
+    ? companyNetProfitTotal
+    : isCompanyEarningView
+      ? companyEarningsTotal
+      : summaryEarningsValue;
   const showPieCenterBadge = isCompanyBreakdownView
-    ? companyBreakdownRows.length > 0
+    ? activeCompanyBreakdownRows.length > 0
     : earningsPieSlices.length > 0;
 
   const summaryHero = (
@@ -304,7 +319,13 @@ export function DashboardEarningsSummary({
   );
 
   const summaryViewTabs = showProfitChartTab ? (
-    <div className="dashboard-summary-view-tabs" role="tablist" aria-label={i18n.statistics}>
+    <div
+      className={`dashboard-summary-view-tabs${
+        showEarningsCompanyTab ? " is-three-tabs" : ""
+      }`}
+      role="tablist"
+      aria-label={i18n.statistics}
+    >
       <button
         type="button"
         role="tab"
@@ -327,6 +348,19 @@ export function DashboardEarningsSummary({
       >
         {i18n.netProfitChartTab}
       </button>
+      {showEarningsCompanyTab && (
+        <button
+          type="button"
+          role="tab"
+          aria-selected={earningsPanelView === "earning"}
+          className={`dashboard-summary-view-tab${
+            earningsPanelView === "earning" ? " is-active" : ""
+          }`}
+          onClick={() => onEarningsPanelViewChange?.("earning")}
+        >
+          {i18n.earningChartTab}
+        </button>
+      )}
     </div>
   ) : null;
 
@@ -334,12 +368,14 @@ export function DashboardEarningsSummary({
     <div
       className={`dashboard-panel-card dashboard-panel-card--summary${
         showProfitChartTab ? " dashboard-panel-card--summary-has-tabs" : ""
-      }${isCompactBreakdown ? " dashboard-panel-card--summary-compact" : ""}`}
+      }${showEarningsCompanyTab ? " dashboard-panel-card--summary-has-earning-tab" : ""}${
+        isStackedLayout ? " dashboard-panel-card--summary-compact" : ""
+      }`}
     >
       <div
         className={`dashboard-summary-layout${
-          isCompactBreakdown ? " is-compact-breakdown" : ""
-        }`}
+          isStackedLayout ? " is-compact-breakdown" : ""
+        }${showMultiCurrencyBreakdown ? " is-multi-currency-layout" : ""}`}
       >
         <div className="dashboard-summary-top-row">
           {summaryViewTabs}
@@ -436,7 +472,7 @@ export function DashboardEarningsSummary({
         <div
           className={`dashboard-summary-currency-list${
             showMultiCurrencyBreakdown ? " is-multi-currency" : ""
-          }${isCompactBreakdown ? " is-compact-breakdown" : ""}${
+          }${isCompactTable ? " is-compact-breakdown" : ""}${
             earningsBreakdownShowsRate ? " is-with-original" : ""
           }${isCompanyBreakdownView ? " is-company-profit" : ""}`}
           aria-label={isCompanyBreakdownView ? i18n.companyBreakdown : i18n.currencyBreakdown}
@@ -469,7 +505,7 @@ export function DashboardEarningsSummary({
           </div>
           <div className="dashboard-summary-currency-list-body" role="list">
             {isCompanyBreakdownView &&
-              companyBreakdownRows.map((row, index) => {
+              activeCompanyBreakdownRows.map((row, index) => {
                 const sharePct = computeCompanyBreakdownSharePct(row, earningsShareByCode);
                 const rowAmount = companyRowDisplayAmount(row, companyBreakdownView);
                 const rowKey = `${row.group_id || ""}:${row.company_pk ?? row.company_id}`;

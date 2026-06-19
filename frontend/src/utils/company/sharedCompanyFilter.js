@@ -15,6 +15,7 @@ import {
 import {
   permissionsIncludeBank,
   permissionsIncludeGames,
+  resolveCompanyCategoryFlags,
   resolveCompanyCategoryFlagsFromRow,
 } from "./companyCategoryFlags.js";
 import {
@@ -1052,7 +1053,7 @@ export function notifyDashboardGroupFilterChanged(selectedGroup, companyId, opti
       if (hasGambling == null) hasGambling = groupFlags.hasGambling;
       if (hasBank == null) hasBank = groupFlags.hasBank;
     }
-  } else if (persistedFilter.groupsAllMode && persistedFilter.sidebarAnchorGroup) {
+  } else if (persistedFilter.groupsAllMode && persistedFilter.sidebarAnchorGroup && cid == null) {
     const groupFlags = resolveGroupsAllSidebarCategoryFlags(persistedFilter);
     if (groupFlags) {
       hasGambling = groupFlags.hasGambling;
@@ -1075,6 +1076,33 @@ export function notifyDashboardGroupFilterChanged(selectedGroup, companyId, opti
   );
 }
 
+/** Sidebar category flags for a concrete company row (cache → permissions). */
+function resolveSidebarCompanyCategoryFlags(companyRow) {
+  if (!companyRow || typeof companyRow !== "object") return null;
+  const fromResolver = resolveCompanyCategoryFlags(companyRow);
+  if (fromResolver) return fromResolver;
+  const id = Number(companyRow.id);
+  if (!Number.isFinite(id) || id <= 0) return null;
+  const cached = peekCompanySessionFlags(id);
+  if (!cached) return null;
+  return {
+    hasGambling: Boolean(cached.has_gambling),
+    hasBank: Boolean(cached.has_bank),
+  };
+}
+
+function applySidebarCompanyRowNotifyOptions(opts, companyRow) {
+  if (!companyRow || typeof companyRow !== "object") return opts;
+  if (companyRow.company_id) opts.companyCode = companyRow.company_id;
+  opts.expirationDate = companyRow.expiration_date ?? null;
+  const flags = resolveSidebarCompanyCategoryFlags(companyRow);
+  if (flags) {
+    opts.hasGambling = flags.hasGambling;
+    opts.hasBank = flags.hasBank;
+  }
+  return opts;
+}
+
 /** Notify options for sidebar sync when dashboard Group / Company filter changes. */
 export function buildDashboardSidebarNotifyOptions(companyRow, selectedGroup, extra = {}) {
   const opts = { ...extra };
@@ -1086,6 +1114,10 @@ export function buildDashboardSidebarNotifyOptions(companyRow, selectedGroup, ex
         ? String(selectedGroup).trim().toUpperCase()
         : null;
   if (persisted.groupsAllMode && anchorGroup) {
+    const companyId = Number(companyRow?.id);
+    if (Number.isFinite(companyId) && companyId > 0) {
+      return applySidebarCompanyRowNotifyOptions(opts, companyRow);
+    }
     const groupFlags = resolveGroupsAllSidebarCategoryFlags({
       ...persisted,
       sidebarAnchorGroup: anchorGroup,
@@ -1096,27 +1128,10 @@ export function buildDashboardSidebarNotifyOptions(companyRow, selectedGroup, ex
     }
     opts.expirationDate =
       resolveSidebarExpirationForFilter({ selectedGroup: anchorGroup, companyId: null }) ?? null;
-    if (companyRow?.company_id) {
-      opts.companyCode = companyRow.company_id;
-    }
     return opts;
   }
   if (companyRow) {
-    if (companyRow.company_id) opts.companyCode = companyRow.company_id;
-    opts.expirationDate = companyRow.expiration_date ?? null;
-    const id = Number(companyRow.id);
-    if (Number.isFinite(id) && id > 0) {
-      const cached = peekCompanySessionFlags(id);
-      const fromRow = resolveCompanyCategoryFlagsFromRow(companyRow);
-      if (cached) {
-        opts.hasGambling = Boolean(cached.has_gambling);
-        opts.hasBank = Boolean(cached.has_bank);
-      } else if (fromRow) {
-        opts.hasGambling = fromRow.hasGambling;
-        opts.hasBank = fromRow.hasBank;
-      }
-    }
-    return opts;
+    return applySidebarCompanyRowNotifyOptions(opts, companyRow);
   }
   const g = selectedGroup ? String(selectedGroup).trim().toUpperCase() : null;
   if (g) {
@@ -1179,7 +1194,8 @@ export function buildDashboardFilterEventDetailFromPersisted() {
   let hasGambling = notifyOpts.hasGambling ?? cachedFlags?.has_gambling;
   let hasBank = notifyOpts.hasBank ?? cachedFlags?.has_bank;
   const groupAllMode = isDashboardGroupAllMode() && effectiveCid == null && !groupOnly;
-  const groupsAllSidebarFlags = resolveGroupsAllSidebarCategoryFlags(filter);
+  const groupsAllSidebarFlags =
+    effectiveCid == null ? resolveGroupsAllSidebarCategoryFlags(filter) : null;
   if (groupsAllSidebarFlags) {
     hasGambling = groupsAllSidebarFlags.hasGambling;
     hasBank = groupsAllSidebarFlags.hasBank;

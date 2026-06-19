@@ -26,6 +26,7 @@ export function dismissAllPortalTooltips() {
  *   enabled?: boolean,
  *   placement?: "top" | "below" | "right" | "auto-top",
  *   anchorClassName?: string,
+ *   tooltipClassName?: string,
  *   showOnFocus?: boolean,
  *   dismissOnPress?: boolean,
  *   children: import("react").ReactNode,
@@ -36,6 +37,7 @@ export default function PortalTooltip({
   enabled = true,
   placement = "auto-top",
   anchorClassName = "",
+  tooltipClassName = "",
   showOnFocus = true,
   dismissOnPress = false,
   children,
@@ -122,7 +124,13 @@ export default function PortalTooltip({
     tooltipPos &&
     createPortal(
       <span
-        className={`app-portal-tooltip app-portal-tooltip--${tooltipPos.placement}`}
+        className={[
+          "app-portal-tooltip",
+          `app-portal-tooltip--${tooltipPos.placement}`,
+          tooltipClassName,
+        ]
+          .filter(Boolean)
+          .join(" ")}
         style={{ left: tooltipPos.left, top: tooltipPos.top }}
         role="tooltip"
       >

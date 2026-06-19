@@ -96,11 +96,10 @@ export default function RemoveWordChipInput({
     }
   };
 
-  const inputWidthCh = Math.max(
-    chips.length === 0 ? Math.min(placeholder.length, 28) : 4,
-    draft.length + 1,
-    4,
-  );
+  const inputStyle =
+    chips.length === 0
+      ? { flex: "1 1 0", minWidth: "4ch" }
+      : { flex: "0 1 auto", width: `${Math.max(draft.length + 1, 4)}ch` };
 
   return (
     <div
@@ -134,7 +133,7 @@ export default function RemoveWordChipInput({
           className="dc-remove-word-chip-input__field"
           value={draft}
           placeholder={chips.length ? "" : placeholder}
-          style={{ width: `${inputWidthCh}ch` }}
+          style={inputStyle}
           onChange={(event) => setDraft(normalizeDraft(event.target.value))}
           onKeyDown={handleKeyDown}
           autoComplete="off"

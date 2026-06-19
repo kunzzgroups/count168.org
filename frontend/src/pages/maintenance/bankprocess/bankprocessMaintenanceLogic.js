@@ -31,17 +31,23 @@ export function isBankprocessMaintenanceRowSelectable(row) {
 }
 
 /**
- * Legacy Maintenance – Bank: one Post/Resend batch shares the same DTS Created timestamp.
+ * One Post/Resend batch: same DTS Created + bank process + period type + transaction date.
  * Clicking any checkbox selects every selectable row in that batch.
  */
 export function bankprocessMaintenanceBatchKey(row) {
   const ts = String(row?.dts_created ?? "").trim();
+  const bpId = Number(row?.source_bank_process_id) || 0;
+  const pt = String(row?.period_type ?? "monthly").trim().toLowerCase() || "monthly";
+  const txDate = String(row?.date ?? "").trim();
+  if (ts && bpId > 0) {
+    return `${ts}|${bpId}|${pt}|${txDate}`;
+  }
   if (ts) return ts;
   const tid = row?.transaction_id;
   return tid != null && tid !== "" ? `__tid_${tid}` : "";
 }
 
-/** @param {Array<{ transaction_id?: number, dts_created?: string, is_deleted?: unknown }>} rows */
+/** @param {Array<{ transaction_id?: number, dts_created?: string, source_bank_process_id?: number, period_type?: string, date?: string, is_deleted?: unknown }>} rows */
 export function bankprocessMaintenanceIdsInBatch(rows, batchKey) {
   if (!batchKey || !Array.isArray(rows)) return [];
   const ids = [];
@@ -56,7 +62,7 @@ export function bankprocessMaintenanceIdsInBatch(rows, batchKey) {
 
 /**
  * @param {number[]} selectedIds
- * @param {Array<{ transaction_id?: number, dts_created?: string, is_deleted?: unknown }>} rows
+ * @param {Array<{ transaction_id?: number, dts_created?: string, source_bank_process_id?: number, period_type?: string, date?: string, is_deleted?: unknown }>} rows
  * @param {number} clickedTransactionId
  */
 export function toggleBankprocessMaintenanceBatchSelection(selectedIds, rows, clickedTransactionId) {
