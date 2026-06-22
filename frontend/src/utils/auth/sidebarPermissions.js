@@ -73,7 +73,7 @@ export function resolveDefaultLandingPath(me) {
       ? spaPath("bank-process-list")
       : spaPath("process-list");
   }
-  if (canAccessPermission(me, "datacapture") && me?.company_has_gambling) {
+  if (canAccessPermission(me, "datacapture") && (me?.company_has_gambling || me?.company_has_bank)) {
     return spaPath("datacapture");
   }
   if (canAccessPermission(me, "payment")) return spaPath("transaction");

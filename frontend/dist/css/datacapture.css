@@ -1039,6 +1039,12 @@ body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .cus
     background-color: #f0f0f0;
 }
 
+.custom-select-option.keyboard-focus {
+    background-color: var(--select-option-keyboard-focus-bg, #0d60ff);
+    color: var(--select-option-keyboard-focus-text, #ffffff);
+    font-weight: 600;
+}
+
 .custom-select-option.selected {
     background-color: var(--dc-accent-soft, #eff6ff);
     font-weight: bold;

@@ -1107,6 +1107,117 @@ function buildVirtualDomainNetProfitHistory(
 }
 
 /**
+ * 未指定 currency 时补充 B/F 币别来源：account_currency + 全历史交易/DCD/RATE。
+ * 与 search_api 一致，确保区间内无动账但仍有期初余额的币别（如仅 B/F 的 USD）纳入 bf_per_currency。
+ *
+ * @param array<string, true> $codeSet
+ */
+function historySupplementBfCurrencyCodeSet(
+    PDO $pdo,
+    array $account_ids,
+    string $account_code,
+    int $company_id,
+    bool $has_currency_id,
+    string $history_txn_where,
+    int $history_txn_bind,
+    bool $history_is_group,
+    array &$codeSet
+): void {
+    $addCode = static function (?string $code) use (&$codeSet): void {
+        $cc = trim((string) $code);
+        if ($cc !== '') {
+            $codeSet[$cc] = true;
+        }
+    };
+
+    if (empty($account_ids)) {
+        return;
+    }
+
+    $phAcc = implode(',', array_fill(0, count($account_ids), '?'));
+    try {
+        $acStmt = $pdo->prepare("
+            SELECT DISTINCT TRIM(c.code) AS code
+            FROM account_currency ac
+            INNER JOIN currency c ON ac.currency_id = c.id
+            WHERE ac.account_id IN ($phAcc)
+              AND c.code IS NOT NULL AND TRIM(c.code) <> ''
+        ");
+        $acStmt->execute($account_ids);
+        while ($row = $acStmt->fetch(PDO::FETCH_ASSOC)) {
+            $addCode($row['code'] ?? '');
+        }
+    } catch (Throwable $e) {
+        // account_currency 表不存在或结构差异时跳过
+    }
+
+    if (!$has_currency_id) {
+        return;
+    }
+
+    try {
+        $txHistStmt = $pdo->prepare("
+            SELECT DISTINCT TRIM(c.code) AS code
+            FROM transactions t
+            INNER JOIN currency c ON t.currency_id = c.id
+            WHERE {$history_txn_where}
+              AND t.transaction_type <> 'RATE'
+              AND (t.account_id IN ($phAcc) OR t.from_account_id IN ($phAcc))
+              AND t.currency_id IS NOT NULL
+        ");
+        $txHistStmt->execute(array_merge([$history_txn_bind], $account_ids, $account_ids));
+        while ($row = $txHistStmt->fetch(PDO::FETCH_ASSOC)) {
+            $addCode($row['code'] ?? '');
+        }
+    } catch (Throwable $e) {
+        // 忽略
+    }
+
+    $accId = (int) ($account_ids[0] ?? 0);
+    $accCode = trim($account_code);
+    try {
+        $dcdStmt = $pdo->prepare("
+            SELECT DISTINCT TRIM(c.code) AS code
+            FROM data_capture_details dcd
+            INNER JOIN currency c ON dcd.currency_id = c.id
+            WHERE (dcd.company_id = ? OR dcd.company_id IS NULL)
+              AND (
+                  TRIM(CAST(dcd.account_id AS CHAR)) = TRIM(CAST(? AS CHAR))
+                  OR (? <> '' AND TRIM(COALESCE(dcd.account_id, '')) = TRIM(?))
+              )
+              AND c.code IS NOT NULL AND TRIM(c.code) <> ''
+        ");
+        $dcdStmt->execute([$company_id, $accId, $accCode, $accCode]);
+        while ($row = $dcdStmt->fetch(PDO::FETCH_ASSOC)) {
+            $addCode($row['code'] ?? '');
+        }
+    } catch (Throwable $e) {
+        // 忽略
+    }
+
+    try {
+        $rateHistStmt = $pdo->prepare("
+            SELECT DISTINCT TRIM(c.code) AS code
+            FROM transaction_entry e
+            INNER JOIN transactions h ON e.header_id = h.id
+            INNER JOIN currency c ON e.currency_id = c.id
+            WHERE " . historyApiTxnWhereSqlForAlias('h') . "
+              " . ($history_is_group ? '' : 'AND e.company_id = ?') . "
+              AND h.transaction_type = 'RATE'
+              AND e.account_id IN ($phAcc)
+              AND c.code IS NOT NULL AND TRIM(c.code) <> ''
+        ");
+        $rateHistParams = array_merge([$history_txn_bind], $history_is_group ? [] : [$company_id], $account_ids);
+        $rateHistStmt->execute($rateHistParams);
+        while ($row = $rateHistStmt->fetch(PDO::FETCH_ASSOC)) {
+            $addCode($row['code'] ?? '');
+        }
+    } catch (Throwable $e) {
+        // 忽略
+    }
+}
+
+/**
  * 未指定 currency 且无法从查询区间识别币别时：单币别 B/F（与旧版 dcd / account_currency 回退一致）
  *
  * @return array{bf: string, bfCurrency: string|null}
@@ -1551,22 +1662,62 @@ try {
             // 忽略：无 transaction_entry 或结构差异时仍依 capture/txn 币别
         }
 
+        $rangeCodeSet = $codeSet;
+        $supplementCodeSet = [];
+        historySupplementBfCurrencyCodeSet(
+            $pdo,
+            $account_ids,
+            $account_code,
+            $company_id,
+            $has_currency_id,
+            $history_txn_where,
+            $history_txn_bind,
+            $history_is_group,
+            $supplementCodeSet
+        );
+
         $bf_per_currency = [];
-        if (!empty($codeSet)) {
-            $codes = array_keys($codeSet);
+        $computeBfForCode = static function (string $code) use ($pdo, $listScope, $account_ids, $date_from_start, $company_id, $account_code): ?string {
+            try {
+                $cid = tx_resolve_currency_id_for_scope($pdo, $code, $listScope);
+            } catch (Throwable $e) {
+                return null;
+            }
+            if ($cid <= 0) {
+                return null;
+            }
+            $bfOne = '0';
+            foreach ($account_ids as $aid) {
+                $bfOne = money_add($bfOne, calculateBFByCurrency($pdo, $aid, (int) $cid, $date_from_start, $company_id, $account_code), 8);
+            }
+            return $bfOne;
+        };
+
+        if (!empty($rangeCodeSet)) {
+            $codes = array_keys($rangeCodeSet);
             sort($codes, SORT_STRING);
             foreach ($codes as $code) {
-                try {
-                    $cid = tx_resolve_currency_id_for_scope($pdo, $code, $listScope);
-                } catch (Throwable $e) {
+                $bfOne = $computeBfForCode($code);
+                if ($bfOne === null) {
                     continue;
                 }
-                if ($cid <= 0) {
+                $bf_per_currency[$code] = $bfOne;
+            }
+        }
+
+        if (!empty($supplementCodeSet)) {
+            $codes = array_keys($supplementCodeSet);
+            sort($codes, SORT_STRING);
+            foreach ($codes as $code) {
+                if (isset($rangeCodeSet[$code])) {
                     continue;
                 }
-                $bfOne = '0';
-                foreach ($account_ids as $aid) {
-                    $bfOne = money_add($bfOne, calculateBFByCurrency($pdo, $aid, (int) $cid, $date_from_start, $company_id, $account_code), 8);
+                $bfOne = $computeBfForCode($code);
+                if ($bfOne === null) {
+                    continue;
+                }
+                if (money_cmp(money_normalize($bfOne, 8), '0', 8) === 0) {
+                    continue;
                 }
                 $bf_per_currency[$code] = $bfOne;
             }

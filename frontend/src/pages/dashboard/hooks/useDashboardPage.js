@@ -2277,7 +2277,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         currenciesByCompanyRef.current.set(singleCid, list);
         persistDashboardCurrencyDisplayOrder(currencyDisplayOrderByCompanyRef, singleCid, list);
       } else {
-        writeDashboardGroupCurrencyCaches(currenciesByGroupRef, {
+        writeDashboardGroupCurrencyCaches(currenciesByGroupRef.current, {
           groupKey,
           groupsAllMode,
           groupAllMode,
@@ -2396,7 +2396,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             : null;
         if (cachedFallback?.length) {
           commitCurrencyList(cachedFallback);
-          writeDashboardGroupCurrencyCaches(currenciesByGroupRef, {
+          writeDashboardGroupCurrencyCaches(currenciesByGroupRef.current, {
             groupKey,
             groupsAllMode,
             groupAllMode,
@@ -2485,7 +2485,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           if (!userCurrencyDisplayOrderRef.current?.length) {
             persistDashboardCurrencyDisplayOrder(currencyDisplayOrderByCompanyRef, orderCompanyId, codes);
           }
-          writeDashboardGroupCurrencyCaches(currenciesByGroupRef, {
+          writeDashboardGroupCurrencyCaches(currenciesByGroupRef.current, {
             groupKey,
             groupsAllMode,
             groupAllMode,
@@ -2754,7 +2754,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         applyCurrencyCodes(codes, singleCid);
       } else if (groupKey) {
         applyCurrencyCodes(codes, null);
-        writeDashboardGroupCurrencyCaches(currenciesByGroupRef, {
+        writeDashboardGroupCurrencyCaches(currenciesByGroupRef.current, {
           groupKey,
           groupsAllMode,
           groupAllMode,
@@ -3032,7 +3032,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             cacheRef: currenciesByCompanyRef.current,
           });
           if (!cancelled && codes.length) {
-            writeDashboardGroupCurrencyCaches(currenciesByGroupRef, {
+            writeDashboardGroupCurrencyCaches(currenciesByGroupRef.current, {
               groupKey: null,
               groupsAllMode: true,
               groupAllMode: true,
@@ -7173,7 +7173,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           });
           return;
         }
-        if (!canUseGroupOnlyMode(me)) return;
+        if (!canUseGroupOnlyMode(me, selectedGroup, companies)) return;
         const g = selectedGroup;
         clearCompanySelection(g);
         primeCurrenciesFromCache({
@@ -7709,7 +7709,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           currenciesByCompanyRef.current.set(orderCompanyId, next);
         }
       }
-      writeDashboardGroupCurrencyCaches(currenciesByGroupRef, {
+      writeDashboardGroupCurrencyCaches(currenciesByGroupRef.current, {
         groupKey: selectedGroup ? String(selectedGroup).trim().toUpperCase() : null,
         groupsAllMode,
         groupAllMode,

@@ -532,17 +532,8 @@ export function patchMeFromCompanyContext(me, ctx = {}) {
     company_code: hasExplicitCode ? code : code || me.company_code,
     is_current_company_c168: isC168,
   };
-  if (isC168) {
-    if (userRoleAllowsC168Domain(me.role)) {
-      next.has_c168_domain_page_access = true;
-    }
-    if (userRoleAllowsC168AutoRenew(me.role, me.user_type)) {
-      next.has_c168_auto_renew_access = true;
-    }
-  } else {
-    next.has_c168_domain_page_access = false;
-    next.has_c168_auto_renew_access = false;
-  }
+  // C168 page access flags come from current_user API (PHP session). Do not
+  // optimistically grant them here — sidebar uses role + isActiveCompanyContextC168.
   if (ctx.hasGambling != null) {
     next.company_has_gambling = Boolean(ctx.hasGambling);
   } else if (companyChanged) {

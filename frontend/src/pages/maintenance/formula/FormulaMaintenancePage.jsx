@@ -52,6 +52,7 @@ import {
   deleteFormulaTemplates,
   updateSessionCompany,
   prepareFormulaRowsForDisplay,
+  filterFormulaRowsBySearch,
   formulaRowIdsMatch,
   patchFormulaRowAfterSave,
 } from "./formulaMaintenanceLogic.js";
@@ -113,6 +114,7 @@ export default function FormulaMaintenancePage() {
   const [companyCode, setCompanyCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState(null);
+  const [textSearch, setTextSearch] = useState("");
   const [activePermission, setActivePermission] = useState("");
   const [processes, setProcesses] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -130,6 +132,7 @@ export default function FormulaMaintenancePage() {
   const toastTimerRef = useRef(null);
   const searchDebounceRef = useRef(null);
   const formulaDataFullRef = useRef([]);
+  const formulaDisplayRef = useRef([]);
   const progressiveRafRef = useRef(null);
   const searchSeqRef = useRef(0);
   const listScrollActiveRef = useRef(false);
@@ -195,8 +198,9 @@ export default function FormulaMaintenancePage() {
           : selectedProcess === ""
             ? "__all__"
             : String(selectedProcess),
+        textSearch.trim().toUpperCase(),
       ]),
-    [formulaScopeKey, activePermission, selectedProcess],
+    [formulaScopeKey, activePermission, selectedProcess, textSearch],
   );
 
   const listQueryEnabled =
@@ -284,12 +288,35 @@ export default function FormulaMaintenancePage() {
       progressiveRafRef.current = null;
     }
     formulaDataFullRef.current = [];
+    formulaDisplayRef.current = [];
     setTotalRowCount(0);
     setFormulaData([]);
     setListHydrating(false);
     setListSyncing(false);
+    setTextSearch("");
     resetSelection();
   }, [resetSelection]);
+
+  const applyFormulaListView = useCallback(
+    (fullList, searchTerm = textSearch) => {
+      if (progressiveRafRef.current) {
+        cancelAnimationFrame(progressiveRafRef.current);
+        progressiveRafRef.current = null;
+      }
+
+      const full = prepareFormulaRowsForDisplay(Array.isArray(fullList) ? fullList : []);
+      formulaDataFullRef.current = full;
+      const filtered = filterFormulaRowsBySearch(full, searchTerm).map((row, index) => ({
+        ...row,
+        no: index + 1,
+      }));
+      formulaDisplayRef.current = filtered;
+      setTotalRowCount(filtered.length);
+      setListHydrating(false);
+      startTransition(() => setFormulaData(filtered));
+    },
+    [textSearch],
+  );
 
   useEffect(() => {
     const handleSwitch = (e) => {
@@ -312,20 +339,17 @@ export default function FormulaMaintenancePage() {
   /** 虚拟列表负责大表渲染；一次性写入 state，不显示分批进度 */
   const hydrateFormulaList = useCallback(
     (fullList) => {
-      if (progressiveRafRef.current) {
-        cancelAnimationFrame(progressiveRafRef.current);
-        progressiveRafRef.current = null;
-      }
-
-      const full = prepareFormulaRowsForDisplay(Array.isArray(fullList) ? fullList : []);
-      formulaDataFullRef.current = full;
-      setTotalRowCount(full.length);
-      setListHydrating(false);
       resetSelection();
-      startTransition(() => setFormulaData(full));
+      applyFormulaListView(fullList);
     },
-    [resetSelection],
+    [resetSelection, applyFormulaListView],
   );
+
+  useEffect(() => {
+    if (!listQueryEnabled) return;
+    applyFormulaListView(formulaDataFullRef.current);
+    resetSelection();
+  }, [textSearch, listQueryEnabled, applyFormulaListView, resetSelection]);
 
   // -- Boot Logic --
   useEffect(() => {
@@ -700,6 +724,7 @@ export default function FormulaMaintenancePage() {
       if (!skipStaleGuard && searchScopeKey !== scopeKeyRef.current) return;
       notify(err.message, "error");
       formulaDataFullRef.current = [];
+      formulaDisplayRef.current = [];
       setTotalRowCount(0);
       setFormulaData([]);
       resetSelection();
@@ -886,10 +911,10 @@ export default function FormulaMaintenancePage() {
   );
 
   const resolveSelectedIds = useCallback(() => {
-    const full = formulaDataFullRef.current;
+    const visible = formulaDisplayRef.current;
     if (selectAllActive) {
-      if (deselectedIds.size === 0) return full.map((r) => r.id);
-      return full.filter((r) => !deselectedIds.has(r.id)).map((r) => r.id);
+      if (deselectedIds.size === 0) return visible.map((r) => r.id);
+      return visible.filter((r) => !deselectedIds.has(r.id)).map((r) => r.id);
     }
     return selectedIds;
   }, [selectAllActive, deselectedIds, selectedIds]);
@@ -996,7 +1021,7 @@ export default function FormulaMaintenancePage() {
       const mergeRow = (row) => patchFormulaRowAfterSave(row, patchOpts);
 
       formulaDataFullRef.current = formulaDataFullRef.current.map(mergeRow);
-      setFormulaData((prev) => prev.map(mergeRow));
+      applyFormulaListView(formulaDataFullRef.current);
       return true;
     } catch (err) {
       notify(err.message || t("saveFailed"), "error");
@@ -1038,6 +1063,8 @@ export default function FormulaMaintenancePage() {
         processes={processes}
         selectedProcess={selectedProcess}
         setSelectedProcess={handleSetSelectedProcess}
+        textSearch={textSearch}
+        setTextSearch={setTextSearch}
         companyId={companyId}
         snapGroupIds={snapGroupIds}
         visibleCompanies={visibleCompanies}

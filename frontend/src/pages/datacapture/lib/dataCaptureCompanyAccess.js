@@ -2,7 +2,12 @@ import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { fetchCompanyPermissionsForDataCapture } from "./dataCaptureApi.js";
 import { canUseGroupOnlyMode } from "../../../utils/company/loginScope.js";
-import { isGroupLedgerCapture } from "../../../utils/company/c168CaptureChannel.js";
+import {
+  isBankOnlySessionUser,
+  isGroupLedgerCapture,
+  syncDataIsBankOnlyPayrollCompany,
+} from "../../../utils/company/c168CaptureChannel.js";
+import { companyMatchesBankOnlyPillScope } from "../../../utils/company/companyCategoryFlags.js";
 
 /** Home route when the active company has no Games / Gambling category. */
 export const DATA_CAPTURE_HOME_PATH = spaPath("dashboard");
@@ -31,6 +36,29 @@ export function sessionUserHasGamblingAccess(sessionUser) {
   return permissionsIncludeGames(sessionUser?.company_permissions);
 }
 
+/** Bank-only company uses company payroll Data Capture (same UI as C168). */
+export function sessionUserHasBankOnlyPayrollAccess(sessionUser) {
+  return isBankOnlySessionUser(sessionUser);
+}
+
+/** Data Capture page: Games/Gambling or bank-only payroll channel. */
+export function sessionUserHasDataCapturePageAccess(sessionUser) {
+  return (
+    sessionUserHasGamblingAccess(sessionUser) ||
+    sessionUserHasBankOnlyPayrollAccess(sessionUser)
+  );
+}
+
+export function companyRowHasBankOnlyPayrollAccess(companyRow) {
+  return companyMatchesBankOnlyPillScope(companyRow);
+}
+
+export function syncDataAllowsDataCaptureAccess(syncData) {
+  if (!syncData) return false;
+  if (syncData.has_gambling === true) return true;
+  return syncDataIsBankOnlyPayrollCompany(syncData);
+}
+
 export async function fetchCompanyHasGamesCategory(companyCode) {
   if (!companyCode) return false;
   try {
@@ -54,25 +82,44 @@ export async function syncDataCaptureCompanySession(companyId) {
 }
 
 /** @returns {Promise<boolean>} true when company may use Data Capture */
-export async function resolveCompanyGamesAccess({ companyId, companyCode, sessionUser }) {
-  if (sessionUserHasGamblingAccess(sessionUser)) return true;
+export async function resolveCompanyGamesAccess({
+  companyId,
+  companyCode,
+  sessionUser,
+  companyRow = null,
+}) {
+  if (sessionUserHasDataCapturePageAccess(sessionUser)) return true;
+  if (companyRow && companyRowHasBankOnlyPayrollAccess(companyRow)) return true;
 
   const numericId = Number(companyId);
   if (!Number.isFinite(numericId) || numericId <= 0) return false;
 
   try {
     const syncJson = await syncDataCaptureCompanySession(numericId);
+    if (syncJson.success && syncJson.data && syncDataAllowsDataCaptureAccess(syncJson.data)) {
+      return true;
+    }
     if (syncJson.success && syncJson.data && syncJson.data.has_gambling === false) {
       return false;
-    }
-    if (syncJson.success && syncJson.data && syncJson.data.has_gambling === true) {
-      return true;
     }
   } catch {
     /* fall through to permissions API */
   }
 
-  return fetchCompanyHasGamesCategory(companyCode);
+  if (await fetchCompanyHasGamesCategory(companyCode)) return true;
+
+  try {
+    const result = await fetchCompanyPermissionsForDataCapture(companyCode);
+    const perms =
+      result.success && result.data && Array.isArray(result.data.permissions)
+        ? result.data.permissions
+        : [];
+    const hasBank = perms.includes("Bank");
+    const hasGames = permissionsIncludeGames(perms);
+    return hasBank && !hasGames;
+  } catch {
+    return false;
+  }
 }
 
 export function isGroupCaptureScope(captureScope, sessionProcessData = null) {
@@ -97,6 +144,8 @@ export async function resolveSummaryPageAccess({
       return true;
     }
   }
+
+  if (sessionUserHasBankOnlyPayrollAccess(sessionUser)) return true;
 
   return resolveCompanyGamesAccess({ companyId, companyCode, sessionUser });
 }

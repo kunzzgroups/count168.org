@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { translateBankProcessApiMessage } from "../../../translateFile/pages/bankProcessTranslate.js";
+import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
 import {
   deriveBankProcessUiStatus,
   normalizeBankIssueFlag,
@@ -165,6 +166,12 @@ export default function BankProcessStatusControl({
   const options = ["ACTIVE", "INACTIVE", "OFFICIAL", "E_INVOICE", "BLOCK"];
   const label = statusLabel(t, ui);
 
+  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+    open,
+    itemCount: options.length,
+    initialIndex: Math.max(0, options.indexOf(ui)),
+  });
+
   return (
     <div className={`bank-status-dropdown${open ? " open" : ""}`} ref={wrapRef}>
       <button
@@ -174,13 +181,28 @@ export default function BankProcessStatusControl({
         disabled={pending}
         aria-busy={pending}
         onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          handleButtonKeyDown(e, {
+            isOpen: open,
+            onToggleOpen: () => setOpen(true),
+            onClose: () => setOpen(false),
+            len: options.length,
+            onSelectIndex: (idx) => {
+              const opt = options[idx];
+              if (opt) void apply(opt);
+            },
+          });
+        }}
       >
         {label}
       </button>
       {open
         ? createPortal(
             <div
-              ref={menuRef}
+              ref={(el) => {
+                menuRef.current = el;
+                listRef.current = el;
+              }}
               className={`bank-status-menu bank-status-menu-floating${openMenuUp ? " bank-status-menu-floating--up" : ""}`}
               role="listbox"
               style={{
@@ -196,17 +218,19 @@ export default function BankProcessStatusControl({
                 zIndex: 10020,
               }}
             >
-              {options.map((opt) => {
+              {options.map((opt, idx) => {
                 const optLabel = statusLabel(t, opt);
                 const cur = ui === opt;
                 return (
                   <button
                     key={opt}
                     type="button"
-                    className={`bank-status-option${cur ? " selected" : ""}`}
+                    className={`bank-status-option${cur ? " selected" : ""}${highlightClass(idx)}`}
                     disabled={pending}
                     onClick={() => void apply(opt)}
                     data-value={opt.toLowerCase()}
+                    data-kb-idx={idx}
+                    onMouseEnter={() => setHighlightIdx(idx)}
                     style={{ display: "block", width: "100%" }}
                   >
                     {optLabel}

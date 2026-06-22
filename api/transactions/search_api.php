@@ -2301,8 +2301,13 @@ try {
         }
 
         // Default list: omit balance 0.00 unless Show Payment Only (show_inactive) is on.
-        // Show Win/Loss Only / Show 0 balance are applied on the client; hide_zero_balance=0 skips this.
-        if ($hide_zero_balance && !$show_inactive && !searchMoneyNonZero($balance)) {
+        // Still return balance 0.00 when the period has W/L or Payment activity so the client
+        // Show Win/Loss Only / Show Payment Only filters can include them (default view hides via applyZeroBalanceFilter).
+        // Show all 0 balance (hide_zero_balance=0) skips this gate entirely.
+        $has_period_activity = $has_win_loss_transactions
+            || $has_period_id_product_rows
+            || $has_crdr_transactions;
+        if ($hide_zero_balance && !$show_inactive && !searchMoneyNonZero($balance) && !$has_period_activity) {
             continue;
         }
 

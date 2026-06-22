@@ -215,7 +215,7 @@ export function BankSearchableAccountPick({ value, onChange, accounts, disabled,
       <button
         ref={buttonRef}
         type="button"
-        className={`custom-select-button${open ? " open" : ""}`}
+        className={`custom-select-button${open ? " open" : ""}${!selected ? " simple-select-button--placeholder" : ""}`}
         disabled={disabled}
         aria-expanded={open}
         aria-haspopup="listbox"

@@ -13,7 +13,10 @@ import {
   saveGroupOnlyProcessPrefs,
   selectedProcessFromGroupOnlyPrefs,
 } from "../lib/dataCaptureGroupOnlyProcessPersistence.js";
-import { selectedProcessFromGroupOnlySession } from "../lib/dataCaptureGroupOnlyProcesses.js";
+import {
+  isGroupPayrollDraftProcessId,
+  selectedProcessFromGroupOnlySession,
+} from "../lib/dataCaptureGroupOnlyProcesses.js";
 import {
   normalizeGroupOnlyDraftCurrencyId,
   restoreGroupOnlyTableDraft,
@@ -358,7 +361,7 @@ export function useDataCaptureFormEngine(
       description_name: null,
     };
     const prev = selectedProcessRef.current;
-    if (prev?.id && prev.id !== next.id) {
+    if (prev?.id && prev.id !== next.id && isGroupPayrollDraftProcessId(prev.id)) {
       const activeCaptureType = getBridgeCaptureType("1.Text");
       saveGroupOnlyTableDraft(
         payrollPrefsKeyRef.current,
@@ -381,11 +384,16 @@ export function useDataCaptureFormEngine(
     });
     setProcessOpen(false);
     setProcessFilter("");
-    if (normalizeGroupOnlyDraftCurrencyId(currencyId)) {
+    if (
+      isGroupPayrollDraftProcessId(next.id) &&
+      normalizeGroupOnlyDraftCurrencyId(currencyId)
+    ) {
       void restoreGroupOnlyTableDraft(payrollPrefsKeyRef.current, next.id, currencyId, {
         captureScope: captureScopeRef.current,
         serverSync: payrollDraftServerSync,
       });
+    } else if (!isGroupPayrollDraftProcessId(next.id)) {
+      callDataCaptureRuntime("clearGridCells");
     }
     scheduleRecomputeSubmitState();
   }, [currencyId, captureDate]);
@@ -440,7 +448,11 @@ export function useDataCaptureFormEngine(
     setSelectedProcess(proc);
     if (prefCurrency) setCurrencyId(prefCurrency);
     if (prefs?.date) setCaptureDate(String(prefs.date));
-    if (proc?.id && normalizeGroupOnlyDraftCurrencyId(prefCurrency)) {
+    if (
+      proc?.id &&
+      isGroupPayrollDraftProcessId(proc.id) &&
+      normalizeGroupOnlyDraftCurrencyId(prefCurrency)
+    ) {
       void restoreGroupOnlyTableDraft(prefsKey, proc.id, prefCurrency, {
         captureScope: captureScopeRef.current,
         serverSync: payrollDraftServerSync,
@@ -632,6 +644,7 @@ export function useDataCaptureFormEngine(
   useEffect(() => {
     const draftBucket = payrollPrefsKeyRef.current;
     if (applyCompanyOnlyFields || !draftBucket || !selectedProcess?.id) return;
+    if (!isGroupPayrollDraftProcessId(selectedProcess.id)) return;
     if (!scriptsReady) return;
     if (!normalizeGroupOnlyDraftCurrencyId(currencyId)) return;
     if (getDataCaptureState().isRestoring) return;

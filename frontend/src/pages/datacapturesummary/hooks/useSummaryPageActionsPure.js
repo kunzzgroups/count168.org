@@ -43,6 +43,10 @@ function buildSummarySubmittedCapturePath(companyId, options = {}) {
   } else if (companyId != null && String(companyId).trim() !== "") {
     params.set("company_id", String(companyId));
   }
+  const groupId = options.groupId ? String(options.groupId).trim().toUpperCase() : "";
+  if (groupId) {
+    params.set("group_id", groupId);
+  }
   return `/datacapture?${params.toString()}`;
 }
 
@@ -158,10 +162,15 @@ export function useSummaryPageActionsPure({
       const session = loadActiveCaptureSession();
 
       const groupOnly = isGroupLedgerCapture(captureScope, session?.processData);
+      const groupId =
+        captureScope?.groupId ||
+        captureScope?.viewGroup ||
+        session?.processData?.captureSelectedGroup ||
+        null;
 
       clearSummarySessionAfterSubmit({ groupOnly });
 
-      navigate(buildSummarySubmittedCapturePath(companyId, { groupOnly }), { replace: true });
+      navigate(buildSummarySubmittedCapturePath(companyId, { groupOnly, groupId }), { replace: true });
 
     },
 

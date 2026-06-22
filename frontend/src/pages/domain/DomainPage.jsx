@@ -20,6 +20,7 @@ import DomainNotification, { showDomainAlert } from "./components/DomainNotifica
 import DomainConfirmModal from "./components/DomainConfirmModal.jsx";
 import DomainFeeModal from "./components/DomainFeeModal.jsx";
 import CompanyExpirationModal from "./components/CompanyExpirationModal.jsx";
+import GroupExpirationModal from "./components/GroupExpirationModal.jsx";
 import DomainFormModal from "./components/DomainFormModal.jsx";
 import { getDomainText } from "../../translateFile/pages/domainTranslate.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
@@ -78,6 +79,7 @@ export default function DomainPage() {
   const [confirmModal, setConfirmModal] = useState(null); // { message, onConfirm }
   const [feeModal, setFeeModal] = useState(false);
   const [expModal, setExpModal] = useState(null);       // companies array
+  const [groupExpModal, setGroupExpModal] = useState(null); // groups array
 
   // ── Domain fee price (for share calc + toolbar chips) ─────────────────────
   const [domainPeriodPrices, setDomainPeriodPrices] = useState(null);
@@ -263,6 +265,24 @@ export default function DomainPage() {
     setExpModal(companiesFull);
   }
 
+  function resolveGroupsFull(domain) {
+    if (Array.isArray(domain?.groups_full) && domain.groups_full.length > 0) {
+      return domain.groups_full;
+    }
+    const raw = String(domain?.group_ids || "").trim();
+    if (!raw) return [];
+    return raw
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter(Boolean)
+      .map((group_code) => ({ group_code, expiration_date: null }));
+  }
+
+  function handleGroupBadgeClick(e, groupsFull) {
+    e.stopPropagation();
+    setGroupExpModal(groupsFull);
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   const isOwnerOrAdmin = ["owner", "admin"].includes(String(me?.role || "").toLowerCase());
 
@@ -367,6 +387,10 @@ export default function DomainPage() {
               const companyList = companiesFull.map((c) => c.company_id).filter(Boolean);
               const visible = companyList.slice(0, MAX_VISIBLE_CHIPS);
               const hidden = companyList.slice(MAX_VISIBLE_CHIPS);
+              const groupsFull = resolveGroupsFull(domain);
+              const groupList = groupsFull.map((g) => g.group_code).filter(Boolean);
+              const visibleGroups = groupList.slice(0, MAX_VISIBLE_CHIPS);
+              const hiddenGroups = groupList.slice(MAX_VISIBLE_CHIPS);
               const isProtected = hasProtectedCompany(companiesFull);
 
               return (
@@ -375,7 +399,44 @@ export default function DomainPage() {
                   <div className="card-item uppercase-text">{domain.owner_code}</div>
                   <div className="card-item">{domain.name}</div>
                   <div className="card-item">{domain.email}</div>
-                  <div className="card-item">{domain.group_ids || "-"}</div>
+                  <div className="card-item groups-column" data-groups={JSON.stringify(groupsFull)}>
+                    {groupList.length === 0 ? "-" : (
+                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                        {visibleGroups.map((gid) => {
+                          const exp = groupsFull.find((g) => g.group_code === gid)?.expiration_date || "";
+                          return (
+                            <span
+                              key={gid}
+                              role="button"
+                              tabIndex={0}
+                              className="domain-company-chip company-badge domain-group-chip"
+                              data-exp={exp || undefined}
+                              onClick={(e) => handleGroupBadgeClick(e, groupsFull)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  handleGroupBadgeClick(e, groupsFull);
+                                }
+                              }}
+                            >
+                              {gid}
+                            </span>
+                          );
+                        })}
+                        {hiddenGroups.length > 0 && (
+                          <button
+                            type="button"
+                            className="domain-company-more chip-more"
+                            title={t("viewMoreGroupsHint")}
+                            aria-label={t("viewMoreGroupsHint")}
+                            onClick={(e) => handleGroupBadgeClick(e, groupsFull)}
+                          >
+                            +{hiddenGroups.length}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="card-item companies-column" data-companies={JSON.stringify(companiesFull)}>
                     {companyList.length === 0 ? "-" : (
                       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
@@ -510,6 +571,14 @@ export default function DomainPage() {
           lang={lang}
           companies={expModal}
           onClose={() => setExpModal(null)}
+        />
+      )}
+
+      {groupExpModal && (
+        <GroupExpirationModal
+          lang={lang}
+          groups={groupExpModal}
+          onClose={() => setGroupExpModal(null)}
         />
       )}
 

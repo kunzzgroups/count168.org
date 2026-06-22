@@ -56,7 +56,8 @@ export function useDataCapturePageLifecycle({
         if (groupOnlyGrid) {
           void applyGroupOnlyPersistedForm?.();
         }
-        stripSearchParamsFromUrl(["submitted", "group_only"]);
+        void refreshSubmittedProcesses?.();
+        stripSearchParamsFromUrl(["submitted", "group_only", "group_id"]);
       }
     }
 

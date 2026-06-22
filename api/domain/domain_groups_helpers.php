@@ -510,3 +510,67 @@ function domainApiOwnerGroupIdsForList(PDO $pdo, int $ownerId): array
         return [];
     }
 }
+
+/**
+ * Group code + expiration for Domain list / expiration status modal.
+ *
+ * @return array<int, array{group_code: string, expiration_date: string|null}>
+ */
+function domainApiOwnerGroupsFullForList(PDO $pdo, int $ownerId): array
+{
+    if ($ownerId <= 0) {
+        return [];
+    }
+
+    $byCode = [];
+    if (domainApiHasGroupsTable($pdo)) {
+        try {
+            $stmt = $pdo->prepare(
+                'SELECT group_code, expiration_date FROM `groups` WHERE owner_id = ? ORDER BY group_code'
+            );
+            $stmt->execute([$ownerId]);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $code = strtoupper(trim((string) ($row['group_code'] ?? '')));
+                if ($code === '') {
+                    continue;
+                }
+                $byCode[$code] = [
+                    'group_code' => $code,
+                    'expiration_date' => $row['expiration_date'] ?? null,
+                ];
+            }
+        } catch (PDOException $e) {
+            // fall through to legacy lookup
+        }
+    }
+
+    foreach (domainApiOwnerGroupIdsForList($pdo, $ownerId) as $code) {
+        if (isset($byCode[$code])) {
+            continue;
+        }
+        $exp = null;
+        try {
+            $stmt = $pdo->prepare("
+                SELECT expiration_date
+                FROM company
+                WHERE owner_id = ?
+                  AND UPPER(TRIM(company_id)) = ?
+                LIMIT 1
+            ");
+            $stmt->execute([$ownerId, $code]);
+            $exp = $stmt->fetchColumn();
+            $exp = $exp !== false && $exp !== null && trim((string) $exp) !== ''
+                ? (string) $exp
+                : null;
+        } catch (PDOException $e) {
+            $exp = null;
+        }
+        $byCode[$code] = ['group_code' => $code, 'expiration_date' => $exp];
+    }
+
+    $out = array_values($byCode);
+    usort($out, static function ($a, $b) {
+        return strcmp((string) $a['group_code'], (string) $b['group_code']);
+    });
+    return $out;
+}

@@ -5,7 +5,7 @@ import {
   normalizeGroupOnlyDraftCurrencyId,
   saveGroupOnlyTableDraft,
 } from "../lib/dataCaptureGroupOnlyTableDraft.js";
-import { isGroupOnlyProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
+import { isGroupPayrollDraftProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
 import { captureTableSnapshot, tableSnapshotHasData } from "../lib/dataCaptureTableSnapshot.js";
 import { registerDataCaptureRuntime, unregisterDataCaptureRuntime } from "../lib/dataCaptureRuntime.js";
 
@@ -51,7 +51,7 @@ export function useGroupOnlyTableDraftFlush({
         currencyId: cid,
         captureType: type,
       } = stateRef.current;
-      if (!on || !bucket || !isGroupOnlyProcessId(processId)) return false;
+      if (!on || !bucket || !isGroupPayrollDraftProcessId(processId)) return false;
       const currencyKey = normalizeGroupOnlyDraftCurrencyId(cid);
       if (!currencyKey) return false;
 

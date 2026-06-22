@@ -3264,6 +3264,7 @@ function getOwnerWithCompanies(PDO $pdo, $owner_id) {
     ");
     $stmt2->execute([$ownerId]);
     $owner['companies_full'] = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+    $owner['groups_full'] = domainApiOwnerGroupsFullForList($pdo, $ownerId);
     return $owner;
 }
 
@@ -3318,6 +3319,7 @@ try {
                     ");
                     $stmt2->execute([$oid]);
                     $domain['companies_full'] = $stmt2->fetchAll(PDO::FETCH_ASSOC);
+                    $domain['groups_full'] = domainApiOwnerGroupsFullForList($pdo, $oid);
                 }
                 unset($domain);
 

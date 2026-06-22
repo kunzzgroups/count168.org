@@ -5,6 +5,8 @@
  * Resend 成功后可置 accounting_resend_relax_created_floor：Inbox / 入账推断里「创建日门槛」与 day_start 取较早者，避免用户修正 day_start 后仍被「旧数据不拿」挡住（正常新建流程不受影响）。
  */
 
+require_once __DIR__ . '/../processes/contract_billing_addon.php';
+
 if (!function_exists('bmp_resend_tableHasColumn')) {
     function bmp_resend_tableHasColumn(PDO $pdo, string $table, string $column): bool
     {
@@ -794,22 +796,7 @@ if (!function_exists('bmp_monthlyDueYmdFromBillingAnchor')) {
         if ($frequency === '1st_of_every_month') {
             return sprintf('%04d-%02d-01', $billY, $billMo);
         }
-        $startTs = strtotime($dayStartYmd);
-        if ($startTs === false) {
-            return null;
-        }
-        $last = (int) date('t', mktime(0, 0, 0, $billMo, 1, $billY));
-        $dueDay = min(max(1, (int) date('j', $startTs)), $last);
-        $dueYmd = sprintf('%04d-%02d-%02d', $billY, $billMo, $dueDay);
-        try {
-            $billYm = sprintf('%04d-%d', $billY, $billMo);
-            if ((new DateTimeImmutable($dayStartYmd))->format('Y-n') === $billYm) {
-                return $dayStartYmd;
-            }
-        } catch (Throwable $e) {
-            // keep $dueYmd
-        }
-        return $dueYmd;
+        return billingMonthlyChainedDueYmdInCalendarMonth($dayStartYmd, $billY, $billMo);
     }
 }
 

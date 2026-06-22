@@ -484,8 +484,7 @@ export function useTransactionSearch({
       const showInactiveForQuery =
         searchState.showZeroBalance && searchState.showPaymentOnly ? false : searchState.showPaymentOnly;
       // Win/Loss Only 始终在前端 applyPaymentWinLossFilters 过滤。
-      // 后端 show_capture_only=1 + hide_zero_balance=1 的 Layer 2 会误删「当日有 W/L 动账但 Balance=0」的组合行
-      //（与 PHP transaction.php 勾选后仍显示此类账号的行为不一致）。
+      // 后端仍返回「本期有 W/L/Payment 动账但 Balance=0」的组合行（search_api Layer 末段），供前端勾选 W/L 或 Payment 时使用。
       const showCaptureOnlyForQuery = false;
 
       const requestKey = JSON.stringify({

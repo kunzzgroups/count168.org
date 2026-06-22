@@ -801,6 +801,12 @@ body.process-page:not(.process-page--bank):not(.process-page--show-all) .content
     transform: translateY(-1px);
 }
 
+.process-page .bank-status-option.keyboard-focus {
+    background-color: var(--select-option-keyboard-focus-bg, #0d60ff);
+    color: var(--select-option-keyboard-focus-text, #ffffff);
+    font-weight: 600;
+}
+
 .process-page .bank-status-option.selected {
     box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
 }
@@ -2821,6 +2827,36 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .b
     overflow-wrap: normal;
 }
 
+body.process-page.process-page--bank .bank-process-table-region .bank-process-cell-text,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-process-cell-text {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+body.process-page.process-page--bank .bank-process-table-region .bank-col-owner .portal-tooltip-anchor,
+body.process-page.process-page--bank .bank-process-table-region .bank-col-supplier .portal-tooltip-anchor,
+body.process-page.process-page--bank .bank-process-table-region .bank-col-bank .portal-tooltip-anchor,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-owner .portal-tooltip-anchor,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-supplier .portal-tooltip-anchor,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-bank .portal-tooltip-anchor {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    flex: 1 1 auto;
+}
+
+body.process-page.process-page--bank .bank-process-table-region .bank-col-bank .portal-tooltip-anchor .bank-cell-display--typed,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-table-region .bank-col-bank .portal-tooltip-anchor .bank-cell-display--typed {
+    width: 100%;
+    min-width: 0;
+}
+
 /* Card Owner：列宽与内边距 */
 body.process-page.process-page--bank .bank-process-table-region .bank-col-owner.bank-virtual-th,
 body.process-page.process-page--bank .bank-process-table-region .bank-col-owner.bank-virtual-cell {
@@ -4784,8 +4820,14 @@ body.process-page > .process-modal {
 }
 
 .process-page .modal .custom-select-option.selected {
-    background-color: #e7f0ff;
-    color: #0D60FF;
+    background-color: #e3f2fd;
+    color: #2563eb;
+    font-weight: 600;
+}
+
+.process-page .modal .custom-select-option.keyboard-focus {
+    background-color: #0d60ff;
+    color: #ffffff;
     font-weight: 600;
 }
 

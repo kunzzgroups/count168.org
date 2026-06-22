@@ -4,7 +4,7 @@ import {
   normalizeGroupOnlyDraftCurrencyId,
   saveGroupOnlyTableDraft,
 } from "../lib/dataCaptureGroupOnlyTableDraft.js";
-import { isGroupOnlyProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
+import { isGroupPayrollDraftProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
 import { captureTableSnapshot } from "../lib/dataCaptureTableSnapshot.js";
 import { getDataCaptureState } from "../lib/dataCaptureRuntime.js";
 import { useDataCaptureContext } from "../context/DataCaptureContext.jsx";
@@ -36,7 +36,7 @@ export function useGroupOnlyTableDraftAutosave({
 
   useEffect(() => {
     if (!enabled || !draftBucket || !processIdRef.current) return;
-    if (!isGroupOnlyProcessId(processIdRef.current)) return;
+    if (!isGroupPayrollDraftProcessId(processIdRef.current)) return;
     const cid = normalizeGroupOnlyDraftCurrencyId(currencyIdRef.current);
     if (!cid) return;
     if (getDataCaptureState().isRestoring) {

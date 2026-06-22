@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { layoutPortalCustomSelect } from "./customSelectPortalLayout.js";
+import { useListboxKeyboard } from "./useListboxKeyboard.js";
 
 const MODAL_SELECTOR =
   ".modal, .process-modal, #confirmBankResendModal, [role='dialog'], .account-modal, #userModal, #account-addModal, #account-editModal, .domain-form-modal-backdrop";
@@ -35,6 +36,39 @@ export default function SimpleSelect({
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
+
+  const renderItems = useMemo(() => {
+    const items = [];
+    if (includeEmptyOption) {
+      items.push({ kind: "empty", key: "__empty__", value: "", label: placeholder });
+    }
+    for (const opt of options) {
+      items.push({
+        kind: opt.disabled ? "disabled" : "option",
+        key: String(opt.value),
+        value: opt.value,
+        label: opt.label,
+        disabled: !!opt.disabled,
+      });
+    }
+    return items;
+  }, [includeEmptyOption, options, placeholder]);
+
+  const selectableItems = useMemo(
+    () => renderItems.filter((item) => item.kind !== "disabled"),
+    [renderItems],
+  );
+
+  const initialHighlight = useMemo(() => {
+    const idx = selectableItems.findIndex((item) => String(item.value) === String(value));
+    return idx >= 0 ? idx : 0;
+  }, [selectableItems, value]);
+
+  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+    open,
+    itemCount: selectableItems.length,
+    initialIndex: initialHighlight,
+  });
 
   const close = useCallback(() => {
     setOpen(false);
@@ -103,8 +137,36 @@ export default function SimpleSelect({
     close();
   };
 
+  const selectByIndex = (idx) => {
+    const item = selectableItems[idx];
+    if (!item) return;
+    pick(item.value);
+  };
+
+  const onButtonKeyDown = (e) => {
+    handleButtonKeyDown(e, {
+      isOpen: open,
+      onToggleOpen: openDropdown,
+      onClose: close,
+      len: selectableItems.length,
+      onSelectIndex: selectByIndex,
+    });
+  };
+
   const placementClass =
     menuPlacement === "above" ? " custom-select-dropdown-above" : " custom-select-dropdown-below";
+
+  const selectableIndexByKey = useMemo(() => {
+    const map = new Map();
+    let idx = 0;
+    for (const item of renderItems) {
+      if (item.kind !== "disabled") {
+        map.set(item.key, idx);
+        idx += 1;
+      }
+    }
+    return map;
+  }, [renderItems]);
 
   const dropdownNode = (
     <div
@@ -115,45 +177,40 @@ export default function SimpleSelect({
       id={id ? `${id}_dropdown` : undefined}
     >
       <div
+        ref={listRef}
         className="custom-select-options"
         style={usePortal ? { flex: "1 1 auto", minHeight: 0, maxHeight: optionsMaxHeight } : { maxHeight: optionsMaxHeight }}
       >
-        {includeEmptyOption ? (
-          <div
-            className={`custom-select-option${!value ? " selected" : ""}`}
-            role="option"
-            aria-selected={!value}
-            tabIndex={0}
-            onClick={() => pick("")}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") pick("");
-            }}
-          >
-            {placeholder}
-          </div>
-        ) : null}
-        {options.map((opt) => (
-          <div
-            key={opt.value}
-            className={`custom-select-option${
-              String(opt.value) === String(value) ? " selected" : ""
-            }${opt.disabled ? " custom-select-option--disabled" : ""}`}
-            role="option"
-            aria-selected={String(opt.value) === String(value)}
-            aria-disabled={opt.disabled || undefined}
-            tabIndex={opt.disabled ? -1 : 0}
-            onClick={() => {
-              if (opt.disabled) return;
-              pick(opt.value);
-            }}
-            onKeyDown={(e) => {
-              if (opt.disabled) return;
-              if (e.key === "Enter" || e.key === " ") pick(opt.value);
-            }}
-          >
-            {opt.label}
-          </div>
-        ))}
+        {renderItems.map((item) => {
+          if (item.kind === "disabled") {
+            return (
+              <div
+                key={item.key}
+                className={`custom-select-option custom-select-option--disabled${String(item.value) === String(value) ? " selected" : ""}`}
+                role="option"
+                aria-selected={String(item.value) === String(value)}
+                aria-disabled
+              >
+                {item.label}
+              </div>
+            );
+          }
+          const kbIdx = selectableIndexByKey.get(item.key);
+          const isSelected = String(item.value) === String(value);
+          return (
+            <div
+              key={item.key}
+              className={`custom-select-option${isSelected ? " selected" : ""}${highlightClass(kbIdx)}`}
+              role="option"
+              aria-selected={isSelected}
+              data-kb-idx={kbIdx}
+              onClick={() => pick(item.value)}
+              onMouseEnter={() => setHighlightIdx(kbIdx)}
+            >
+              {item.label}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -175,6 +232,7 @@ export default function SimpleSelect({
         aria-labelledby={ariaLabelledBy || undefined}
         aria-label={!ariaLabelledBy && ariaLabel ? ariaLabel : undefined}
         onClick={() => (open ? close() : openDropdown())}
+        onKeyDown={onButtonKeyDown}
       >
         {displayLabel}
       </button>

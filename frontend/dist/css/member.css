@@ -700,7 +700,7 @@ body.transaction-page {
     color: #fff;
     padding: var(--report-list-row-padding-block) 10px;
     min-height: var(--report-list-cell-min-height);
-    font-size: clamp(11px, 0.78vw, 13px);
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
     font-weight: 700;
     border: 1px solid #1e3a5f;
     text-align: left;
@@ -994,6 +994,7 @@ body.transaction-page.member-winloss-page .member-dash-unified-bar > .member-das
     --member-winloss-matrix-inline-gutter: 10px;
     --member-mini-ccy-min: clamp(3.75rem, 5vw, 5rem);
     --member-dash-total-col-min: 15rem;
+    --member-wl-report-table-header-font-size: var(--text-medium);
     /* 标签列宽由内容撑开（同 transaction-bottom-filters），勿固定 rem 截断 Account:/Currency: */
     --member-winloss-label-w: 6.75rem;
     display: grid;
@@ -1765,6 +1766,14 @@ body.transaction-page.member-winloss-page .member-dash-col-filters .member-winlo
     align-self: start;
 }
 
+.member-winloss-page .member-dash-col-matrix--empty {
+    align-self: flex-start;
+}
+
+.member-winloss-page .member-dash-col-matrix--empty .member-dash-rail-toolbar {
+    padding-bottom: 0;
+}
+
 /* 矩阵区域默认随内容；≥10 列时再铺满中栏 */
 .member-winloss-page .member-dash-matrix-center-wrap {
     flex: 0 1 auto;
@@ -2311,7 +2320,7 @@ body.member-winloss-page .member-winloss-grid-account-pills .user-gc-segment-gro
     max-width: none;
     min-width: max-content;
     border-collapse: collapse;
-    font-size: 13px;
+    font-size: var(--text-small);
     line-height: 1.25;
     box-sizing: border-box;
 }
@@ -2354,6 +2363,10 @@ body.member-winloss-page .member-winloss-grid-account-pills .user-gc-segment-gro
     border-right: 1px solid #b8cfe8;
     border-bottom: 1px solid #b8cfe8;
     min-height: var(--member-wl-matrix-hdr-h, 40px);
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
+    font-weight: 700;
+    color: #1e3a5f;
+    letter-spacing: 0.03em;
 }
 
 .member-balance-matrix-th {
@@ -2365,7 +2378,7 @@ body.member-winloss-page .member-winloss-grid-account-pills .user-gc-segment-gro
     background: linear-gradient(180deg, #dce9f8 0%, #c5daf2 100%);
     color: #1e3a5f;
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
     letter-spacing: 0.03em;
     text-align: right;
     border-right: 1px solid #b8cfe8;
@@ -2621,7 +2634,7 @@ body.member-winloss-page .member-balance-matrix-th {
     min-height: var(--member-wl-matrix-hdr-h, var(--report-list-cell-min-height));
     padding: var(--report-list-row-padding-block) 12px;
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
     color: #1e3a5f;
     letter-spacing: 0.03em;
     box-sizing: border-box;
@@ -2630,7 +2643,7 @@ body.member-winloss-page .member-balance-matrix-th {
 .member-winloss-page .member-balance-matrix-th {
     min-height: var(--member-wl-matrix-hdr-h, var(--report-list-cell-min-height));
     padding: var(--report-list-row-padding-block) 12px;
-    font-size: 12px;
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
     letter-spacing: 0.03em;
     box-sizing: border-box;
 }
@@ -2658,7 +2671,7 @@ body.member-winloss-page .member-balance-matrix-th {
 .member-winloss-page .member-wl-compact-matrix__amt-hd {
     min-height: var(--member-wl-matrix-hdr-h, var(--report-list-cell-min-height));
     padding: var(--report-list-row-padding-block) 12px;
-    font-size: 12px;
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
     box-sizing: border-box;
 }
 
@@ -2679,11 +2692,9 @@ body.member-winloss-page .member-balance-matrix-th {
     font-size: var(--text-small, 13px);
 }
 
-/* 多币种矩阵与单币种紧凑表共用字号，many-ccy 不再单独缩小 */
-.member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-compact .member-balance-matrix-th,
+/* 多币种矩阵：数据行字号；表头单独与下方报表表头一致 */
 .member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-compact .member-balance-matrix-rowhead,
 .member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-compact .member-balance-matrix-cell,
-.member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-scroll .member-balance-matrix-th,
 .member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-scroll .member-balance-matrix-rowhead,
 .member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-scroll .member-balance-matrix-cell {
     padding: var(--report-list-row-padding-block) 12px;
@@ -2696,13 +2707,15 @@ body.member-winloss-page .member-balance-matrix-th {
 .member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-scroll .member-balance-matrix-th {
     padding: var(--report-list-row-padding-block) 12px;
     min-height: var(--member-wl-matrix-hdr-h, var(--report-list-cell-min-height));
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
+    box-sizing: border-box;
 }
 
 .member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-compact .member-balance-matrix-corner,
 .member-winloss-page .member-balance-mini-matrix--many-ccy.member-balance-mini-matrix--ccy-scroll .member-balance-matrix-corner {
     min-height: var(--member-wl-matrix-hdr-h, var(--report-list-cell-min-height));
     padding: var(--report-list-row-padding-block) 12px;
-    font-size: 12px;
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
     box-sizing: border-box;
 }
 
@@ -2819,7 +2832,7 @@ body.member-winloss-page .member-balance-matrix-th {
     border-bottom: 1px solid #b8cfe8;
     color: #1e3a5f;
     font-weight: 700;
-    font-size: 12px;
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
     letter-spacing: 0.03em;
 }
 
@@ -2895,6 +2908,15 @@ body.member-winloss-page .member-balance-matrix-th {
 .member-winloss-page .member-wl-compact-matrix__account,
 .member-winloss-page .member-wl-compact-matrix__amt {
     min-height: var(--member-wl-matrix-row-h, var(--report-list-cell-min-height));
+}
+
+/* Mini grid 表头与下方 Win/Loss 报表表头：同一字号令牌（--text-medium） */
+body.member-winloss-page .member-winloss-table .transaction-table-header th,
+body.member-winloss-page .member-balance-matrix-corner,
+body.member-winloss-page .member-balance-matrix-th,
+body.member-winloss-page .member-wl-compact-matrix__account-hd,
+body.member-winloss-page .member-wl-compact-matrix__amt-hd {
+    font-size: var(--member-wl-report-table-header-font-size, var(--text-medium));
 }
 
 /* Accounts in grid modal */
@@ -3009,6 +3031,7 @@ body.member-winloss-page .member-balance-matrix-th {
         --member-wl-filters-col-w: clamp(212px, 26vw, 340px);
         --member-wl-matrix-hdr-h: var(--report-list-cell-min-height);
         --member-wl-matrix-row-h: var(--report-list-cell-min-height);
+        --member-wl-report-table-header-font-size: 11px;
         --member-winloss-label-w: 5.5rem;
         --member-winloss-matrix-inline-gutter: 8px;
     }
@@ -3036,7 +3059,7 @@ body.member-winloss-page .member-balance-matrix-th {
 
     .member-winloss-table .transaction-table-header th {
         padding: 6px 8px;
-        font-size: 11px;
+        font-size: var(--member-wl-report-table-header-font-size, 11px);
     }
 
     .member-winloss-table .transaction-table-row td {

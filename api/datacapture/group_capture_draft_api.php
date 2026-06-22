@@ -1,6 +1,6 @@
 <?php
 /**
- * Shared group-only Data Capture table drafts (SALARY / COMMISSION / BONUS).
+ * Shared group-only Data Capture table drafts (SALARY / COMMISSION / BONUS — not PROFIT).
  * Scoped by group_id + process_key + currency_id — not per user or per date.
  */
 require_once __DIR__ . '/../../includes/config.php';
@@ -58,7 +58,7 @@ function dcNormalizeGroupCaptureDraftGroupId(?string $groupId): string
 function dcNormalizeGroupCaptureDraftProcessKey(?string $processKey): string
 {
     $key = strtolower(trim((string) $processKey));
-    if (!dcIsGroupPayrollProcessCode($key)) {
+    if (!dcIsGroupPayrollDraftProcessCode($key)) {
         return '';
     }
     return $key;

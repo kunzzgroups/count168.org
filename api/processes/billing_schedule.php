@@ -58,7 +58,7 @@ function billingContractExclusiveEndYmdFirstOfMonth(string $dayStartYmd, int $te
     }
 }
 
-/** monthly + 非1号：次月起首应付日 + N 月 exclusive（与 inbox / post 一致）。 */
+/** monthly + 非1号：次月起首应付日（链式首段末日）+ N 月 exclusive（与 inbox / post 一致）。 */
 function billingContractExclusiveEndYmdMonthlyAfterPartialFirst(string $dayStartYmd, int $termMonths): ?string
 {
     if ($termMonths < 1) {
@@ -69,13 +69,13 @@ function billingContractExclusiveEndYmdMonthlyAfterPartialFirst(string $dayStart
         if ((int) $start->format('j') === 1) {
             return billingContractExclusiveEndYmd($dayStartYmd, $termMonths);
         }
-        $nextMo = $start->modify('first day of next month');
-        $y = (int) $nextMo->format('Y');
-        $mo = (int) $nextMo->format('n');
-        $dueDay = (int) $start->format('j');
-        $last = (int) date('t', mktime(0, 0, 0, $mo, 1, $y));
-        $d = min(max(1, $dueDay), $last);
-        $firstContractDue = sprintf('%04d-%02d-%02d', $y, $mo, $d);
+        if (!function_exists('billingMonthlyFirstContractDueAfterPartialFirst')) {
+            require_once __DIR__ . '/contract_billing_addon.php';
+        }
+        $firstContractDue = billingMonthlyFirstContractDueAfterPartialFirst($dayStartYmd);
+        if ($firstContractDue === null) {
+            return null;
+        }
 
         return (new DateTimeImmutable($firstContractDue))->modify("+{$termMonths} months")->format('Y-m-d');
     } catch (Throwable $e) {
@@ -96,21 +96,29 @@ function contractExclusiveEndYmdForFrequency(string $startYmd, ?string $contract
 }
 
 /**
- * @return string[] Y-m-d, length = $termMonths (same day-of-month as start, +0 … +(term-1) months)
+ * @return string[] Y-m-d chained monthly due dates for contract term (after partial first month)
  */
 function generateMonthlyBillingDueDates(string $dayStartYmd, int $termMonths): array
 {
     if ($termMonths < 1) {
         return [];
     }
-    try {
-        $start = new DateTimeImmutable($dayStartYmd);
-    } catch (Throwable $e) {
+    if (!function_exists('billingMonthlyFirstContractDueAfterPartialFirst')) {
+        require_once __DIR__ . '/contract_billing_addon.php';
+    }
+    $firstDue = billingMonthlyFirstContractDueAfterPartialFirst($dayStartYmd);
+    if ($firstDue === null) {
         return [];
     }
     $dates = [];
+    $due = $firstDue;
     for ($i = 0; $i < $termMonths; $i++) {
-        $dates[] = $start->modify("+{$i} month")->format('Y-m-d');
+        $dates[] = $due;
+        $next = billingMonthlyChainedNextDueYmd($due, $dayStartYmd);
+        if ($next === null || $next <= $due) {
+            break;
+        }
+        $due = $next;
     }
     return $dates;
 }

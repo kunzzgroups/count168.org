@@ -83,20 +83,219 @@ function billingCalendarMonthDueYmd(int $year, int $month, int $dueDay): string
 }
 
 /**
- * Frequency=monthly（先付 / prepaid）：应付日当天付「从应付日起连续 1 个月」的服务。
- * 区间为 [dueYmd, dueYmd+1月-1日]（例如 6/17 应付 → 6/17–7/16）。
+ * Frequency=monthly（先付 / prepaid）：应付日当天付连续 1 个月服务。
+ * 首期（due=day_start）：[due, due+1月-1日]（5/22→5/22–6/21）。
+ * 链式后续期（due>首段）：[due, due+1月]（6/21→6/21–7/21）；下一期应付 = 上期末日。
  *
+ * @return array{0:string,1:string}
+ */
+function billingMonthlyChainedInclusiveRangeFromDue(string $dueYmd, string $contractStartYmd): array
+{
+    try {
+        $due = new DateTimeImmutable($dueYmd);
+        if ($dueYmd === $contractStartYmd) {
+            return [$dueYmd, $due->modify('+1 month')->modify('-1 day')->format('Y-m-d')];
+        }
+
+        return [$dueYmd, $due->modify('+1 month')->format('Y-m-d')];
+    } catch (Throwable $e) {
+        return [$dueYmd, $dueYmd];
+    }
+}
+
+/**
+ * @deprecated Use billingMonthlyChainedInclusiveRangeFromDue for frequency=monthly.
  * @return array{0:string,1:string}
  */
 function billingMonthlyAnniversaryInclusiveRangeFromDue(string $dueYmd, string $contractStartYmd): array
 {
-    try {
-        $due = new DateTimeImmutable($dueYmd);
+    return billingMonthlyChainedInclusiveRangeFromDue($dueYmd, $contractStartYmd);
+}
 
-        return [$dueYmd, $due->modify('+1 month')->modify('-1 day')->format('Y-m-d')];
-    } catch (Throwable $e) {
-        return [$dueYmd, $dueYmd];
+/** 链式 monthly：本期末日 = 下一期应付日。 */
+function billingMonthlyChainedPeriodEndYmd(string $dueYmd, string $contractStartYmd): ?string
+{
+    [, $end] = billingMonthlyChainedInclusiveRangeFromDue($dueYmd, $contractStartYmd);
+
+    return $end;
+}
+
+function billingMonthlyChainedNextDueYmd(string $currentDueYmd, string $contractStartYmd): ?string
+{
+    return billingMonthlyChainedPeriodEndYmd($currentDueYmd, $contractStartYmd);
+}
+
+/**
+ * 从 day_start 起按链式 monthly 推算，落在指定自然月内的应付日（若无则 null）。
+ */
+function billingMonthlyChainedDueYmdInCalendarMonth(string $dayStartYmd, int $year, int $month): ?string
+{
+    if ($year < 1970 || $month < 1 || $month > 12 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $dayStartYmd)) {
+        return null;
     }
+    try {
+        $monthFirst = sprintf('%04d-%02d-01', $year, $month);
+        $monthLast = (new DateTimeImmutable($monthFirst))->modify('last day of this month')->format('Y-m-d');
+        $due = $dayStartYmd;
+        $guard = 0;
+        while ($guard < 520) {
+            if ($due >= $monthFirst && $due <= $monthLast) {
+                return $due;
+            }
+            if ($due > $monthLast) {
+                return null;
+            }
+            $next = billingMonthlyChainedNextDueYmd($due, $dayStartYmd);
+            if ($next === null || $next <= $due) {
+                return null;
+            }
+            $due = $next;
+            $guard++;
+        }
+    } catch (Throwable $e) {
+        return null;
+    }
+
+    return null;
+}
+
+/** monthly + 非1号：起租首段不计入合同 N 个月；合同首笔应付 = 首段末日（链式）。 */
+function billingMonthlyFirstContractDueAfterPartialFirst(string $dayStartYmd): ?string
+{
+    try {
+        $start = new DateTimeImmutable($dayStartYmd);
+        if ((int) $start->format('j') === 1) {
+            return $dayStartYmd;
+        }
+
+        return billingMonthlyChainedPeriodEndYmd($dayStartYmd, $dayStartYmd);
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+/**
+ * Monthly 先付链式：收集应付日锚点（Y-m-d），规则与 process_accounting_inbox_api::inboxCollectMonthlyPrepaidBillingAnchors 一致。
+ *
+ * @param callable(string,int,int,string):bool $shouldCollect ($dueYmd, $year, $month, $dueYm)
+ * @return string[]
+ */
+function billingCollectMonthlyChainedDueAnchors(
+    string $startDate,
+    string $today,
+    string $createdYmd,
+    ?string $exclusiveEnd,
+    bool $resendRelax,
+    bool $resendSinglePeriod,
+    ?string $onlyAnchorYm,
+    callable $shouldCollect
+): array {
+    if ($startDate === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $startDate)) {
+        return [];
+    }
+    if (!($resendRelax || $today >= $createdYmd)) {
+        return [];
+    }
+
+    $anchors = [];
+    $due = $startDate;
+    $guard = 0;
+    $todayYm = (new DateTimeImmutable($today))->format('Y-n');
+
+    try {
+        $endCap = (new DateTimeImmutable($today))->modify('first day of this month');
+        if ($resendRelax) {
+            $startMonthFirst = (new DateTimeImmutable($startDate))->modify('first day of this month');
+            if ($startMonthFirst > $endCap) {
+                $endCap = $startMonthFirst;
+            }
+        }
+        $endCapYmd = $endCap->format('Y-m-d');
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    while ($guard < 520) {
+        if (!$resendSinglePeriod && $exclusiveEnd !== null && $due >= $exclusiveEnd) {
+            break;
+        }
+
+        try {
+            $dueDt = new DateTimeImmutable($due);
+        } catch (Throwable $e) {
+            break;
+        }
+
+        $dueYm = $dueDt->format('Y-n');
+        $dueMonthFirst = $dueDt->modify('first day of this month')->format('Y-m-d');
+
+        if ($onlyAnchorYm !== null && $dueYm !== $onlyAnchorYm) {
+            $next = billingMonthlyChainedNextDueYmd($due, $startDate);
+            if ($next === null || $next <= $due) {
+                break;
+            }
+            $due = $next;
+            $guard++;
+            continue;
+        }
+
+        if ($resendRelax && $dueMonthFirst > $endCapYmd) {
+            break;
+        }
+
+        if (!$resendRelax && !$resendSinglePeriod && $dueYm !== $todayYm) {
+            $next = billingMonthlyChainedNextDueYmd($due, $startDate);
+            if ($next === null || $next <= $due) {
+                break;
+            }
+            $due = $next;
+            $guard++;
+            continue;
+        }
+
+        if (!$resendRelax && $due < $createdYmd) {
+            try {
+                $createdYmOnly = (new DateTimeImmutable($createdYmd))->format('Y-n');
+                if ($dueYm !== $createdYmOnly) {
+                    $next = billingMonthlyChainedNextDueYmd($due, $startDate);
+                    if ($next === null || $next <= $due) {
+                        break;
+                    }
+                    $due = $next;
+                    $guard++;
+                    continue;
+                }
+            } catch (Throwable $e) {
+                $next = billingMonthlyChainedNextDueYmd($due, $startDate);
+                if ($next === null || $next <= $due) {
+                    break;
+                }
+                $due = $next;
+                $guard++;
+                continue;
+            }
+        }
+
+        $y = (int) $dueDt->format('Y');
+        $mo = (int) $dueDt->format('n');
+
+        if (($today >= $due || $resendRelax) && $shouldCollect($due, $y, $mo, $dueYm)) {
+            $anchors[] = $due;
+        }
+
+        if (!$resendRelax && !$resendSinglePeriod) {
+            break;
+        }
+
+        $next = billingMonthlyChainedNextDueYmd($due, $startDate);
+        if ($next === null || $next <= $due) {
+            break;
+        }
+        $due = $next;
+        $guard++;
+    }
+
+    return $anchors;
 }
 
 /** 含首尾两日的天数；无效或 from>to 时返回 0 */

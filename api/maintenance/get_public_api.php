@@ -23,11 +23,27 @@ if (!isset($pdo) || !$pdo instanceof PDO) {
     exit;
 }
 
+function maintenanceMarqueeHasPrefixColumn(PDO $pdo): bool
+{
+    static $hasPrefix = null;
+    if ($hasPrefix !== null) {
+        return $hasPrefix;
+    }
+    try {
+        $stmt = $pdo->query("SHOW COLUMNS FROM maintenance_marquee LIKE 'prefix'");
+        $hasPrefix = $stmt && $stmt->rowCount() > 0;
+    } catch (PDOException $e) {
+        $hasPrefix = false;
+    }
+    return $hasPrefix;
+}
+
 /**
  * 获取 C168 公司下所有活跃的维护跑马灯内容
  */
 function fetchActiveMaintenanceList(PDO $pdo) {
-    $sql = "SELECT m.id, m.prefix, m.content, m.status
+    $prefixSelect = maintenanceMarqueeHasPrefixColumn($pdo) ? 'm.prefix' : "'' AS prefix";
+    $sql = "SELECT m.id, {$prefixSelect}, m.content, m.status
             FROM maintenance_marquee m
             WHERE m.company_code = 'C168' AND m.status = 'active'
             ORDER BY m.created_at DESC";

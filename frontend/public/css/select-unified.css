@@ -13,8 +13,10 @@
   --select-text: #374151;
   --select-muted: #94a3b8;
   --select-option-hover: #f1f5f9;
-  --select-option-selected: #eff6ff;
-  --select-option-selected-text: #1d4ed8;
+  --select-option-selected: #e3f2fd;
+  --select-option-selected-text: #2563eb;
+  --select-option-keyboard-focus-bg: #0d60ff;
+  --select-option-keyboard-focus-text: #ffffff;
   --select-shadow: 0 4px 12px rgba(15, 23, 42, 0.1);
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
 }
@@ -198,9 +200,15 @@ body.ec-auth-shell .custom-select-option {
   line-height: 1.35 !important;
 }
 
-body.ec-auth-shell .custom-select-option:hover,
-body.ec-auth-shell .custom-select-option.keyboard-focus {
+body.ec-auth-shell .custom-select-option:hover:not(.keyboard-focus) {
   background-color: var(--select-option-hover) !important;
+  color: var(--select-text) !important;
+}
+
+body.ec-auth-shell .custom-select-option.keyboard-focus {
+  background-color: var(--select-option-keyboard-focus-bg) !important;
+  color: var(--select-option-keyboard-focus-text) !important;
+  font-weight: 600 !important;
 }
 
 body.ec-auth-shell .custom-select-option.selected {

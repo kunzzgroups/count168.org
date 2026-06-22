@@ -874,7 +874,9 @@ body.dashboard-page.report-page .transaction-date-range-group .date-range-picker
 }
 
 .transaction-page .custom-select-option.keyboard-focus {
-    background-color: #e3f2fd;
+    background-color: var(--select-option-keyboard-focus-bg, #0d60ff);
+    color: var(--select-option-keyboard-focus-text, #ffffff);
+    font-weight: 600;
 }
 
 .transaction-page .custom-select-option:last-child {

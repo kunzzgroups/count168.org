@@ -304,3 +304,22 @@ export function prepareFormulaRowsForDisplay(rows) {
     _description: toUpperDisplay(row.description),
   }));
 }
+
+/** Client-side search across Process, Account, and Product columns. */
+export function filterFormulaRowsBySearch(rows, searchTerm) {
+  const q = String(searchTerm || "").trim().toUpperCase();
+  if (!q || !Array.isArray(rows)) return rows || [];
+  return rows.filter((row) => {
+    const hay = [
+      row?.process,
+      row?._process,
+      row?.account,
+      row?._account,
+      row?.product,
+      row?._product,
+    ]
+      .map((x) => String(x || "").toUpperCase())
+      .join(" ");
+    return hay.includes(q);
+  });
+}

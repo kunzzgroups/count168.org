@@ -1,5 +1,4 @@
-import { buildApiUrl } from "../../../utils/core/apiUrl.js";
-import { appendDataCaptureScopeParams, fetchGroupProcessIdByCode } from "../../datacapture/lib/dataCaptureApi.js";
+import { fetchGroupProcessIdByCode } from "../../datacapture/lib/dataCaptureApi.js";
 import { normalizeGroupCaptureScope } from "../../datacapture/lib/dataCaptureScope.js";
 import { isGroupLedgerCapture } from "../../../utils/company/c168CaptureChannel.js";
 import { submitSummaryPayload } from "../lib/summaryApi.js";
@@ -87,32 +86,6 @@ async function postSubmitBatch(captureScope, batchData, options = {}) {
   return submitSummaryPayload(captureScope, payload);
 }
 
-async function recordSubmittedProcess(captureScope, parsedProcessData) {
-  if (!parsedProcessData?.process) return;
-  try {
-    const formData = new FormData();
-    formData.append("action", "save_submission");
-    formData.append("process_id", parsedProcessData.process);
-    const selectedDate =
-      parsedProcessData.date ||
-      `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-${String(new Date().getDate()).padStart(2, "0")}`;
-    formData.append("date_submitted", selectedDate);
-    formData.append("capture_date", selectedDate);
-    const scopeParams = new URLSearchParams();
-    appendDataCaptureScopeParams(scopeParams, captureScope);
-    scopeParams.forEach((value, key) => {
-      formData.append(key, value);
-    });
-    await fetch(buildApiUrl("api/processes/submitted_processes_api.php"), {
-      method: "POST",
-      body: formData,
-      credentials: "include",
-    });
-  } catch (error) {
-    console.warn("Failed to record submitted process:", error);
-  }
-}
-
 function verifySubmitPayload(submitData) {
   let jsonData;
   try {
@@ -172,11 +145,6 @@ export async function executeSummarySubmit({
   try {
     const quickResult = await submitBatch(baseData, null, 1, 1, { immediateAck: true });
     if (quickResult?.success && quickResult.queued) {
-      await recordSubmittedProcess(effectiveScope, {
-        ...parsedProcessData,
-        process: baseData.processId ?? parsedProcessData?.process,
-        date: baseData.captureDate ?? parsedProcessData?.date,
-      });
       notify("Success", "Data received by server. Processing in background...", "success");
       await new Promise((resolve) => window.setTimeout(resolve, QUICK_SUBMIT_REDIRECT_MS));
       onSuccess?.({ mode: "quick" });
@@ -282,8 +250,6 @@ export async function executeSummarySubmit({
     `All data submitted successfully! Capture ID: ${finalCaptureId}, total ${summaryRows.length} rows`,
     "success"
   );
-
-  await recordSubmittedProcess(effectiveScope, parsedProcessData);
 
   try {
     localStorage.removeItem("capturedCaptureId");

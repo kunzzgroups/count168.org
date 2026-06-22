@@ -110,7 +110,7 @@ export const MAINTENANCE_I18N = {
     transactionType: "Transaction Type",
     allTypes: "All Types",
     search: "Search",
-    searchFormulaPlaceholder: "Search formula...",
+    searchFormulaPlaceholder: "Search process, account, product...",
     clearFiltersTitle: "Clear Filters",
     selectAccount: "Select Account",
 
@@ -226,7 +226,7 @@ export const MAINTENANCE_I18N = {
     transactionType: "交易类型",
     allTypes: "全部类型",
     search: "搜索",
-    searchFormulaPlaceholder: "搜索公式...",
+    searchFormulaPlaceholder: "搜索流程、账户、产品...",
     clearFiltersTitle: "清除筛选",
     selectAccount: "选择账户",
 

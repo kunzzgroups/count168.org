@@ -3,6 +3,7 @@ import { EDIT_FORMULA_INPUT_METHODS, CALCULATOR_KEYPAD } from "../formula/editFo
 import { formatSummaryAccountDisplay } from "../formula/editFormulaFormState.js";
 import { getSummaryInputMethodLabel } from "../../../translateFile/pages/dataCaptureSummaryTranslate.js";
 import { portalToDocumentBody } from "../../../components/ProcessModalPortal.jsx";
+import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
 
 function CalcButton({ value, action, className = "", clearLabel = "Clr", onPress }) {
   const isOperator = ["/", "*", "-", "+"].includes(value);
@@ -78,6 +79,12 @@ export default function EditFormulaModal({
     });
   }, [accounts, accountSearch]);
 
+  const { highlightIdx, setHighlightIdx, listRef, handleListKeyDown, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+    open: accountOpen,
+    itemCount: filteredAccounts.length,
+    resetToken: accountSearch,
+  });
+
   if (!open || !form) return null;
 
   const lang = localStorage.getItem("login_lang") === "zh" ? "zh" : "en";
@@ -148,6 +155,18 @@ export default function EditFormulaModal({
                             e.preventDefault();
                             setAccountOpen((v) => !v);
                           }}
+                          onKeyDown={(e) => {
+                            handleButtonKeyDown(e, {
+                              isOpen: accountOpen,
+                              onToggleOpen: () => setAccountOpen(true),
+                              onClose: () => setAccountOpen(false),
+                              len: filteredAccounts.length,
+                              onSelectIndex: (idx) => {
+                                const acc = filteredAccounts[idx];
+                                if (acc) selectAccount(acc);
+                              },
+                            });
+                          }}
                         >
                           {form.accountText || t("selectAccount")}
                         </button>
@@ -163,19 +182,27 @@ export default function EditFormulaModal({
                               autoComplete="off"
                               value={accountSearch}
                               onChange={(e) => setAccountSearch(e.target.value)}
+                              onKeyDown={(e) => {
+                                handleListKeyDown(e, {
+                                  len: filteredAccounts.length,
+                                  onSelectIndex: (idx) => {
+                                    const acc = filteredAccounts[idx];
+                                    if (acc) selectAccount(acc);
+                                  },
+                                  onClose: () => setAccountOpen(false),
+                                });
+                              }}
                             />
                           </div>
-                          <div className="custom-select-options">
-                            {filteredAccounts.map((acc) => (
+                          <div className="custom-select-options" ref={listRef}>
+                            {filteredAccounts.map((acc, idx) => (
                               <div
                                 key={String(acc.id)}
-                                className="custom-select-option"
+                                className={`custom-select-option${highlightClass(idx)}`}
                                 role="button"
-                                tabIndex={0}
+                                data-kb-idx={idx}
+                                onMouseEnter={() => setHighlightIdx(idx)}
                                 onClick={() => selectAccount(acc)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") selectAccount(acc);
-                                }}
                               >
                                 {formatSummaryAccountDisplay(acc)}
                               </div>

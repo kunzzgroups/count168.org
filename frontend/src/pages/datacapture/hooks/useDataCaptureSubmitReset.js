@@ -8,7 +8,7 @@ import {
   shouldRestoreFromUrl,
   stripRestoreParamFromUrl,
 } from "../lib/dataCaptureStorage.js";
-import { isGroupOnlyProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
+import { isGroupOnlyProcessId, isGroupPayrollDraftProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
 import {
   cancelAllScheduledServerDraftSaves,
   flushGroupOnlyTableDraftToServer,
@@ -210,7 +210,7 @@ export function useDataCaptureSubmitReset({
       if (
         groupPayrollUi &&
         draftBucket &&
-        isGroupOnlyProcessId(form.selectedProcess?.id)
+        isGroupPayrollDraftProcessId(form.selectedProcess?.id)
       ) {
         const draftPayload = {
           tableData: preConvertSnapshot,
@@ -266,7 +266,7 @@ export function useDataCaptureSubmitReset({
   const reset = useCallback(() => {
     const draftBucket = payrollDraftBucket || selectedGroup;
     const groupOnlyProcessId =
-      groupPayrollUi && draftBucket && isGroupOnlyProcessId(form.selectedProcess?.id)
+      groupPayrollUi && draftBucket && isGroupPayrollDraftProcessId(form.selectedProcess?.id)
         ? form.selectedProcess.id
         : null;
 

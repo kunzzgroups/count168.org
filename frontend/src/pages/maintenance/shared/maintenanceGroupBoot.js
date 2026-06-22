@@ -1,5 +1,5 @@
 import { canUseGroupOnlyMode } from "../../../utils/company/loginScope.js";
-import { isC168CompanyRow } from "../../../utils/company/c168CaptureChannel.js";
+import { isBankOnlyCompanyRow, isC168CompanyRow } from "../../../utils/company/c168CaptureChannel.js";
 import {
   companyRowIsGroupEntity,
   isDashboardGroupOnlyMode,
@@ -44,7 +44,7 @@ export function shouldSkipMaintenanceCategoryGuard({
   companyId = null,
 } = {}) {
   if (groupOnlyBoot) return true;
-  if (companyRow && isC168CompanyRow(companyRow)) return true;
+  if (companyRow && (isC168CompanyRow(companyRow) || isBankOnlyCompanyRow(companyRow))) return true;
   if (scope?.c168Channel) return true;
   if (scope?.mode === "group") {
     const g = String(selectedGroup || scope?.groupId || scope?.viewGroup || "").trim();

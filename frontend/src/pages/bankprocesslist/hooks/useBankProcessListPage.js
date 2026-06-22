@@ -272,6 +272,8 @@ export function useBankProcessListPage() {
 
   const toastTimerRef = useRef(null);
   const listAbortRef = useRef(null);
+  const listFetchGenRef = useRef(0);
+  const companyIdRef = useRef(null);
   const skipNextBankFetchRef = useRef(false);
   const skipCompanyFetchEffectRef = useRef(false);
   const bankProcessListCacheRef = useRef(new Map());
@@ -301,6 +303,21 @@ export function useBankProcessListPage() {
   useEffect(() => {
     rowsRef.current = rows;
   }, [rows]);
+
+  useEffect(() => {
+    companyIdRef.current = companyId;
+  }, [companyId]);
+
+  const prevRowsLenRef = useRef(0);
+  useEffect(() => {
+    const prev = prevRowsLenRef.current;
+    prevRowsLenRef.current = rows.length;
+    if (loading || prev > 0 || rows.length === 0) return undefined;
+    const raf = window.requestAnimationFrame(() => {
+      notifyBankListLayoutChanged();
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [rows.length, loading, notifyBankListLayoutChanged]);
 
   const { mutationsBlocked, guardWrite } = usePartnershipAuditWriteGuard(
     authMe,
@@ -1139,6 +1156,9 @@ export function useBankProcessListPage() {
         bankProcessRowsFingerprint(prev) === bankProcessRowsFingerprint(cached.rows) ? prev : cached.rows,
       );
       setTableLoading(false);
+      if (cached.rows.length > 0) {
+        window.requestAnimationFrame(() => notifyBankListLayoutChanged());
+      }
       if (Array.isArray(cached.currencyCodes) && cached.currencyCodes.length) {
         const ordered = mergeCurrencyCodesWithSavedOrder(
           cached.currencyCodes,
@@ -1152,7 +1172,7 @@ export function useBankProcessListPage() {
       }
       return true;
     },
-    [search, selectedGroup],
+    [search, notifyBankListLayoutChanged],
   );
 
   const warmBankProcessListCompanyCache = useCallback(
@@ -1194,13 +1214,17 @@ export function useBankProcessListPage() {
       const preserveSelection = !!opts.preserveSelection;
       const cid = opts.companyId != null ? Number(opts.companyId) : Number(companyId);
       if (!Number.isFinite(cid) || cid <= 0) return;
+
+      const fetchGen = ++listFetchGenRef.current;
+      if (rowsRef.current.length === 0) setTableLoading(true);
+
       listAbortRef.current?.abort();
       const ac = new AbortController();
       listAbortRef.current = ac;
-      if (!silent && rowsRef.current.length === 0) setTableLoading(true);
       try {
         const slice = await prefetchBankProcessListPayload(cid, { search });
-        if (ac.signal.aborted) return;
+        if (ac.signal.aborted || fetchGen !== listFetchGenRef.current) return;
+        if (Number(companyIdRef.current) !== cid) return;
         if (!slice.rows) {
           if (!silent) notify(t("failedLoadBankProcesses"), "danger");
           return;
@@ -1231,14 +1255,19 @@ export function useBankProcessListPage() {
         if (!preserveSelection) setSelectedIds(new Set());
         if (!preservePage) setCurrentPage(1);
         syncUrl();
+        if (fetchGen === listFetchGenRef.current) {
+          notifyBankListLayoutChanged();
+        }
       } catch {
-        if (ac.signal.aborted) return;
+        if (ac.signal.aborted || fetchGen !== listFetchGenRef.current) return;
         if (!silent) notify(t("failedLoadBankProcesses"), "danger");
       } finally {
-        if (!ac.signal.aborted && !silent) setTableLoading(false);
+        if (fetchGen === listFetchGenRef.current) {
+          setTableLoading(false);
+        }
       }
     },
-    [companyId, selectedGroup, search, notify, syncUrl, t],
+    [companyId, search, notify, syncUrl, t, notifyBankListLayoutChanged],
   );
 
   useEffect(() => {
@@ -1388,7 +1417,7 @@ export function useBankProcessListPage() {
   const resetForm = () => setForm({ ...EMPTY_BANK_FORM });
 
   const onSwitchCompany = useCallback(
-    async (c, { layoutSilent = false } = {}) => {
+    async (c, { layoutSilent = false, backgroundRefresh = false } = {}) => {
       const nextId = Number(c?.id);
       if (!nextId) return;
 
@@ -1396,7 +1425,9 @@ export function useBankProcessListPage() {
       try {
         const sessionCompanyId = authMe?.company_id != null ? Number(authMe.company_id) : null;
         const bankCategoryPromise = isBankCategoryCompany(c.company_id, buildApiUrl);
-        void fetchRows({ companyId: nextId, silent: true, preservePage: true, preserveSelection: true });
+        if (backgroundRefresh) {
+          void fetchRows({ companyId: nextId, silent: true, preservePage: true, preserveSelection: true });
+        }
         if (accountingOpen) void loadAccountingInbox({ silent: true });
 
         try {
@@ -1503,7 +1534,7 @@ export function useBankProcessListPage() {
       persistDashboardFilterState(nextGroup, nextId);
       notifyDashboardGroupFilterChanged(nextGroup, nextId);
 
-      void onSwitchCompanyRef.current?.(c, { layoutSilent: true });
+      void onSwitchCompanyRef.current?.(c, { layoutSilent: true, backgroundRefresh: hadCache });
     },
     [applyBankProcessListCache, companyId, search],
   );
@@ -1907,6 +1938,8 @@ export function useBankProcessListPage() {
       if (!res.ok || !json.success) return notify(apiMsg(json, "transactionPostFailed"), "danger");
       notify(apiMsg(json, "postedToTransaction"));
       notifyTransactionDataChanged("bank-process-list-react");
+      setAccountingOpen(false);
+      setAccountingSelected(new Set());
       loadAccountingInbox(); fetchRows();
     } catch { notify(t("transactionPostFailed"), "danger"); }
   };
@@ -2101,7 +2134,7 @@ export function useBankProcessListPage() {
         return;
       }
 
-      if (canUseGroupOnlyMode(authMe)) {
+      if (canUseGroupOnlyMode(authMe, g, companies)) {
         setGroupFilterKind("follow");
         setSelectedGroup(g);
         persistDashboardGroupFilter(g);
@@ -2136,6 +2169,7 @@ export function useBankProcessListPage() {
           if (hadCache) applyBankProcessListCache(nextCompanyId);
           else {
             setRows([]);
+            setTableLoading(true);
             setCurrencyFilterCode("");
             setCurrencyListOrdered([]);
             setCurrencyPillDisplayOrder(null);
@@ -2145,7 +2179,7 @@ export function useBankProcessListPage() {
         notifyDashboardGroupFilterChanged(g, nextCompanyId, {
           companyCode: pick.company_id,
         });
-        void onSwitchCompanyRef.current?.(pick, { layoutSilent: true });
+        void onSwitchCompanyRef.current?.(pick, { layoutSilent: true, backgroundRefresh: hadCache });
         return;
       }
 
@@ -2156,6 +2190,7 @@ export function useBankProcessListPage() {
     },
     [
       applyBankProcessListCache,
+      authMe,
       companies,
       companyId,
       groupFilterKind,
