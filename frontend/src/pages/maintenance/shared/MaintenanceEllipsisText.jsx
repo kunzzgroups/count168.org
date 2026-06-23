@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import PortalTooltip from "../../../components/PortalTooltip.jsx";
+import { isTextTruncated } from "../../../utils/dom/isTextTruncated.js";
 
 /**
  * Single-line ellipsis with portal tooltip for truncated maintenance table text.
@@ -12,7 +13,7 @@ export default function MaintenanceEllipsisText({ value, className = "payment-ce
 
   const measure = useCallback(() => {
     const el = textRef.current;
-    setTruncated(el ? el.scrollWidth > el.clientWidth + 1 : false);
+    setTruncated(isTextTruncated(el));
   }, []);
 
   useLayoutEffect(() => {
@@ -21,8 +22,19 @@ export default function MaintenanceEllipsisText({ value, className = "payment-ce
     if (!el || typeof ResizeObserver === "undefined") return undefined;
     const ro = new ResizeObserver(() => measure());
     ro.observe(el);
+    if (el.parentElement) ro.observe(el.parentElement);
     return () => ro.disconnect();
   }, [display, measure]);
+
+  useEffect(() => {
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, [measure]);
 
   return (
     <PortalTooltip

@@ -108,6 +108,22 @@
   --account-select-label-checked: #0d60ff;
   --account-select-desc-checked: #797979;
 
+  /*
+   * Add User — Account / Process 选择网格（改此处即可；userlist.css 通过 var() 引用）
+   * 列数宽/紧凑切换：userlist.css @media (max-width: calc(var(--user-modal-access-grid-bp) - 1px))
+   */
+  --user-modal-access-grid-cols-wide: 4;
+  --user-modal-access-grid-cols-compact: 3;
+  --user-modal-access-grid-bp: 1700px;
+  --user-modal-access-card-min-height: 38px;
+  --user-modal-access-card-pad-y: 3px;
+  --user-modal-access-card-pad-x: 5px;
+  --user-modal-access-card-gap: 5px;
+  --user-modal-access-card-radius: 6px;
+  --user-modal-access-card-line-height: 1.12;
+  --user-modal-access-desc-gap: 0px;
+  --user-modal-access-grid-pad-y: 4px;
+
   /* --- 圆角 / 阴影 --- */
   --radius-panel: 1rem;
   --radius-card: 1.2rem;

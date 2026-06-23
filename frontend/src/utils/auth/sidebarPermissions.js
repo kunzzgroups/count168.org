@@ -20,7 +20,13 @@ export function hasFullPermissions(me) {
   return getUserPermissions(me).length === 0;
 }
 
+export function roleSupportsOwnershipPermission(role) {
+  const r = normRole(role);
+  return r === "owner" || r === "partnership";
+}
+
 export function canAccessPermission(me, key) {
+  if (key === "ownership" && !roleSupportsOwnershipPermission(me?.role)) return false;
   if (hasFullPermissions(me)) return true;
   return getUserPermissions(me).includes(key);
 }

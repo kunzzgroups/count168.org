@@ -54,6 +54,23 @@ export function normRole(r) {
   return String(r || "").trim().toLowerCase();
 }
 
+/** Ownership sidebar permission — only owner and partnership roles may have or see it. */
+export function roleSupportsOwnershipPermission(role) {
+  const r = normRole(role);
+  return r === "owner" || r === "partnership";
+}
+
+export function getVisiblePermissionKeys(targetRole) {
+  if (roleSupportsOwnershipPermission(targetRole)) return PERMISSION_KEYS;
+  return PERMISSION_KEYS.filter((k) => k !== "ownership");
+}
+
+export function sanitizeSidebarPermissionsForRole(role, permissions) {
+  if (!Array.isArray(permissions)) return [];
+  if (roleSupportsOwnershipPermission(role)) return permissions;
+  return permissions.filter((p) => p !== "ownership");
+}
+
 /** Partnership / Audit：显示 Read Only 开关 */
 export function roleHasReadOnlyToggle(role) {
   const r = normRole(role);
@@ -128,8 +145,11 @@ export function getCurrentUserRolePermissions(currentUserRole) {
 export function getRoleTemplateSidebarList(role) {
   if (!role) return [];
   const adminDefault = ["home", "admin", "account", "process", "datacapture", "payment", "report", "maintenance"];
+  const ownerDefault = ["home", "admin", "account", "ownership", "process", "datacapture", "payment", "report", "maintenance"];
+  const partnershipDefault = [...ownerDefault];
   const rolePermissions = {
-    partnership: PERMISSION_KEYS,
+    owner: ownerDefault,
+    partnership: partnershipDefault,
     admin: adminDefault,
     manager: ["admin", "account", "process", "datacapture", "payment", "report", "maintenance"],
     supervisor: ["admin", "account", "process", "datacapture", "payment", "report"],
@@ -180,10 +200,11 @@ export function getFinalPermissionsForCreation(selectedRole, manuallySelected, c
   }
   const defaultPermissions = rolePerms[sr] ?? [];
   const manual = new Set(manuallySelected);
-  return defaultPermissions.filter((perm) => {
+  const merged = defaultPermissions.filter((perm) => {
     if (currentUserPermissions.includes(perm)) return manual.has(perm);
     return true;
   });
+  return sanitizeSidebarPermissionsForRole(sr, merged);
 }
 
 /**

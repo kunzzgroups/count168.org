@@ -4758,6 +4758,8 @@ body.process-page > .process-modal {
     letter-spacing: var(--letter-spacing-page-title);
     color: #1f2937;
     line-height: 1.2;
+    background: transparent;
+    border-bottom: none;
 }
 
 .process-page .close {

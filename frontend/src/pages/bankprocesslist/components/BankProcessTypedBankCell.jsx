@@ -1,5 +1,6 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import PortalTooltip from "../../../components/PortalTooltip.jsx";
+import { isTextTruncated } from "../../../utils/dom/isTextTruncated.js";
 import { formatBankWithTypeDisplay } from "../lib/bankProcessHelpers.js";
 import MaintenanceEllipsisText from "../../maintenance/shared/MaintenanceEllipsisText.jsx";
 
@@ -16,9 +17,7 @@ export default function BankProcessTypedBankCell({ bank, type }) {
   const measure = useCallback(() => {
     const nameEl = nameRef.current;
     const typeEl = typeRef.current;
-    const nameTrunc = nameEl ? nameEl.scrollWidth > nameEl.clientWidth + 1 : false;
-    const typeTrunc = typeEl ? typeEl.scrollWidth > typeEl.clientWidth + 1 : false;
-    setTruncated(nameTrunc || typeTrunc);
+    setTruncated(isTextTruncated(nameEl) || isTextTruncated(typeEl));
   }, []);
 
   useLayoutEffect(() => {
@@ -30,10 +29,22 @@ export default function BankProcessTypedBankCell({ bank, type }) {
       if (!el || typeof ResizeObserver === "undefined") return;
       const ro = new ResizeObserver(() => measure());
       ro.observe(el);
+      if (el.parentElement) ro.observe(el.parentElement);
       observers.push(ro);
     });
     return () => observers.forEach((ro) => ro.disconnect());
   }, [display, bankType, measure]);
+
+  useEffect(() => {
+    if (!bankType) return undefined;
+    measure();
+    window.addEventListener("resize", measure);
+    window.visualViewport?.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.visualViewport?.removeEventListener("resize", measure);
+    };
+  }, [bankType, measure]);
 
   if (display === "-") return "-";
   if (!bankType) {

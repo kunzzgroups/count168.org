@@ -20,6 +20,7 @@ import {
   normalizeFeeShareFromServer,
   ensureCompanyFeeShare,
   isFeeShareAllocationsEmpty,
+  applyDefaultProfitAllocation,
   pruneEmptyShareRows,
   sumFeeShareRolePercentages,
   computeShareTotals,
@@ -169,15 +170,21 @@ export default function CompanySettingsModal({
     })
       .then((r) => r.json())
       .then((res) => {
-        setShareAccounts(res.success && Array.isArray(res.data?.accounts) ? res.data.accounts : []);
-        setShareAccountsProfit(res.success && Array.isArray(res.data?.accounts_profit) ? res.data.accounts_profit : []);
-        // Only overwrite fsa if it was empty
-        if (res.success && res.data?.company_exists && isFeeShareAllocationsEmpty(fsa)) {
-          setFsa(normalizeFeeShareFromServer(res.data.allocations));
-        }
+        const accounts = res.success && Array.isArray(res.data?.accounts) ? res.data.accounts : [];
+        const profitAccounts =
+          res.success && Array.isArray(res.data?.accounts_profit) ? res.data.accounts_profit : [];
+        setShareAccounts(accounts);
+        setShareAccountsProfit(profitAccounts);
+        setFsa((prev) => {
+          let next = prev;
+          if (res.success && res.data?.company_exists && isFeeShareAllocationsEmpty(prev)) {
+            next = normalizeFeeShareFromServer(res.data.allocations);
+          }
+          return applyDefaultProfitAllocation(next, profitAccounts);
+        });
       })
       .catch(() => { setShareAccounts([]); setShareAccountsProfit([]); });
-  }, [company.company_id, fsa, isGroup]);
+  }, [company.company_id, isGroup]);
 
   // Load share accounts from API
   useEffect(() => {
@@ -324,7 +331,7 @@ export default function CompanySettingsModal({
       isExtending: false,
       originalExpirationDate: null,
     }));
-    setFsa(defaultFeeShareAllocations());
+    setFsa(applyDefaultProfitAllocation(defaultFeeShareAllocations(), shareAccountsProfit));
     setChargeOnSave(false);
     setExpandedCards({});
     if (isGroup) {

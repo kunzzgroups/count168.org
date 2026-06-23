@@ -24,6 +24,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../bankprocess_maintenance/maintenance_accounting_resend_lib.php';
 require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/../includes/ensure_bank_process_day_end_monthly_cap_column.php';
@@ -2218,10 +2219,24 @@ try {
         jsonResponse(false, '请先登录', null);
         exit;
     }
-    $company_id = (int) ($_SESSION['company_id'] ?? 0);
-    if (!$company_id) {
+    // 与 processlist_api / bank list 一致：优先 GET company_id，避免页面已切子公司但 session 未同步时角标为 0。
+    $company_id = isset($_GET['company_id']) && $_GET['company_id'] !== ''
+        ? (int) $_GET['company_id']
+        : (int) ($_SESSION['company_id'] ?? 0);
+    if ($company_id <= 0) {
         http_response_code(400);
         jsonResponse(false, '缺少公司信息', null);
+        exit;
+    }
+    $viewGroup = isset($_GET['group_id']) ? gc_normalize_view_group((string) $_GET['group_id']) : null;
+    if ($viewGroup === null && gc_is_group_login()) {
+        $viewGroup = gc_session_login_identifier();
+    }
+    try {
+        gc_assert_api_company_access($pdo, $company_id, $viewGroup);
+    } catch (RuntimeException $e) {
+        http_response_code(403);
+        jsonResponse(false, $e->getMessage(), null);
         exit;
     }
 

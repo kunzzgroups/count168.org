@@ -126,7 +126,11 @@ function auto_renew_resolve_profit_target_account(PDO $pdo, int $c168Pk, array $
             WHERE ac.company_id = ?
               AND LOWER(TRIM(COALESCE(a.role, ''))) = 'profit'
               AND (a.status IS NULL OR LOWER(TRIM(a.status)) = 'active')
-            ORDER BY CASE WHEN UPPER(TRIM(COALESCE(a.account_id, ''))) = 'PROFIT' THEN 0 ELSE 1 END, a.id ASC
+            ORDER BY CASE
+                WHEN UPPER(TRIM(COALESCE(a.account_id, ''))) = 'C168' THEN 0
+                WHEN UPPER(TRIM(COALESCE(a.account_id, ''))) = 'PROFIT' THEN 1
+                ELSE 2
+            END, a.id ASC
             LIMIT 1
         ");
         $st->execute([$c168Pk]);

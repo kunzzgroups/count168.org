@@ -46,13 +46,16 @@ export default function TransactionPaymentHistoryPage() {
     }, 150);
   }, [navigate]);
 
-  const { splitScreen, compactHeaders } = usePaymentHistoryLayoutMode();
+  const { isPopup, splitScreen, compactHeaders } = usePaymentHistoryLayoutMode();
 
   useLayoutEffect(() => {
     stripPaymentHistoryUrlQuery();
     document.body.classList.add("dashboard-page", "transaction-page", "transaction-payment-history-page");
-    if (splitScreen) {
+    if (isPopup) {
       document.body.classList.add("transaction-payment-history-page--popup");
+    }
+    if (splitScreen) {
+      document.body.classList.add("transaction-payment-history-page--popup-compact");
     }
     clearInlineScrollLock();
     return () => {
@@ -60,10 +63,11 @@ export default function TransactionPaymentHistoryPage() {
         "transaction-page",
         "transaction-payment-history-page",
         "transaction-payment-history-page--popup",
+        "transaction-payment-history-page--popup-compact",
         "page-ready",
       );
     };
-  }, [splitScreen]);
+  }, [isPopup, splitScreen]);
 
   const initialTitle = useMemo(
     () =>

@@ -368,6 +368,15 @@ if (!function_exists('user_sidebar_permissions_list')) {
 if (!function_exists('user_has_sidebar_permission')) {
     function user_has_sidebar_permission(PDO $pdo, string $key, ?int $userId = null): bool
     {
+        if ($key === 'ownership') {
+            if (session_status() === PHP_SESSION_NONE) {
+                session_start();
+            }
+            if (!role_supports_ownership_permission($_SESSION['role'] ?? '')) {
+                return false;
+            }
+        }
+
         $perms = user_sidebar_permissions_list($pdo, $userId);
         if ($perms === null) {
             return true;
@@ -381,5 +390,32 @@ if (!function_exists('user_can_access_dashboard')) {
     {
         return user_has_sidebar_permission($pdo, 'home', $userId);
     }
+}
+
+if (!function_exists('role_supports_ownership_permission')) {
+  function role_supports_ownership_permission(?string $role): bool
+  {
+    $r = strtolower(trim((string) $role));
+    return $r === 'owner' || $r === 'partnership';
+  }
+}
+
+if (!function_exists('sanitize_sidebar_permissions_for_role')) {
+  /**
+   * @param array<int, string>|null $permissions
+   * @return array<int, string>
+   */
+  function sanitize_sidebar_permissions_for_role(?string $role, $permissions): array
+  {
+    if (!is_array($permissions)) {
+      return [];
+    }
+    if (role_supports_ownership_permission($role)) {
+      return array_values($permissions);
+    }
+    return array_values(array_filter($permissions, static function ($perm) {
+      return $perm !== 'ownership';
+    }));
+  }
 }
 ?>

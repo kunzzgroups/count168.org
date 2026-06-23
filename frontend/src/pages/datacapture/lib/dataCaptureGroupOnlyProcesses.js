@@ -1,6 +1,6 @@
 /** Group payroll UI process choices (Data Capture group-only / company payroll channel). */
 
-export const GROUP_PAYROLL_PROCESS_CODES = ["SALARY", "COMMISSION", "BONUS", "PROFIT"];
+export const GROUP_PAYROLL_PROCESS_CODES = ["PROFIT", "SALARY", "COMMISSION", "BONUS"];
 
 /** Table edits for these codes auto-save to group payroll draft storage (not PROFIT). */
 export const GROUP_PAYROLL_DRAFT_PROCESS_CODES = ["SALARY", "COMMISSION", "BONUS"];

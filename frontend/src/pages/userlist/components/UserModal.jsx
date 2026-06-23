@@ -40,10 +40,10 @@ function getPermissionLabel(key, t) {
 }
 
 /** Large screens: inline checklist; laptop/tablet: same UI inside permission picker modal */
-function PermissionChecklist({ className, permissionsLocked, permDisabledMap, permSelected, setPermSelected, t }) {
+function PermissionChecklist({ className, permissionsLocked, permDisabledMap, visiblePermissionKeys, permSelected, setPermSelected, t }) {
   return (
     <div className={className}>
-      {PERMISSION_KEYS.map((key) => (
+      {visiblePermissionKeys.map((key) => (
         <div key={key} className="permission-item" style={{ opacity: permDisabledMap[key] ? 0.6 : 1 }}>
           <label className="permission-label">
             <input
@@ -74,7 +74,7 @@ function PermissionChecklist({ className, permissionsLocked, permDisabledMap, pe
   );
 }
 
-function PermissionBulkActions({ className, permissionsLocked, permDisabledMap, setPermSelected, t }) {
+function PermissionBulkActions({ className, permissionsLocked, permDisabledMap, visiblePermissionKeys, setPermSelected, t }) {
   return (
     <div className={className}>
       <button
@@ -83,7 +83,7 @@ function PermissionBulkActions({ className, permissionsLocked, permDisabledMap, 
         disabled={permissionsLocked}
         onClick={() => {
           const n = new Set();
-          PERMISSION_KEYS.forEach((k) => {
+          visiblePermissionKeys.forEach((k) => {
             if (!permDisabledMap[k]) n.add(k);
           });
           setPermSelected(n);
@@ -134,7 +134,6 @@ const userModalColStyle = {
   overflow: "hidden",
 };
 import {
-  PERMISSION_KEYS,
   PERMISSION_ICONS,
   normRole,
   getAvailableRolesForCreation,
@@ -159,6 +158,7 @@ export default function UserModal({
   loginDisabled,
   fieldLocks,
   permDisabledMap,
+  visiblePermissionKeys,
   permSelected,
   setPermSelected,
   modalCompanies,
@@ -401,8 +401,8 @@ export default function UserModal({
   const showProcessColumn = dualTenantPicker ? selectedCompanyIds.length > 0 : !groupPickerMode;
 
   const selectedPermissionLabels = useMemo(
-    () => PERMISSION_KEYS.filter((k) => permSelected.has(k)).map((k) => getPermissionLabel(k, t)),
-    [permSelected, t]
+    () => visiblePermissionKeys.filter((k) => permSelected.has(k)).map((k) => getPermissionLabel(k, t)),
+    [visiblePermissionKeys, permSelected, t]
   );
 
   const readOnlyToggleVisible = !editingRow?.is_owner_shadow && roleHasReadOnlyToggle(form.role);
@@ -604,6 +604,7 @@ export default function UserModal({
                     className="permissions-container"
                     permissionsLocked={permissionsLocked}
                     permDisabledMap={permDisabledMap}
+                    visiblePermissionKeys={visiblePermissionKeys}
                     permSelected={permSelected}
                     setPermSelected={setPermSelected}
                     t={t}
@@ -612,6 +613,7 @@ export default function UserModal({
                     className="permissions-actions user-modal-col-actions"
                     permissionsLocked={permissionsLocked}
                     permDisabledMap={permDisabledMap}
+                    visiblePermissionKeys={visiblePermissionKeys}
                     setPermSelected={setPermSelected}
                     t={t}
                   />
@@ -920,7 +922,7 @@ export default function UserModal({
                         disabled={permissionsLocked}
                         onClick={() => {
                           const n = new Set();
-                          PERMISSION_KEYS.forEach((k) => {
+                          visiblePermissionKeys.forEach((k) => {
                             if (!permDisabledMap[k]) n.add(k);
                           });
                           setPermSelected(n);
@@ -942,6 +944,7 @@ export default function UserModal({
                     className="permissions-container user-modal-permission-picker-perms"
                     permissionsLocked={permissionsLocked}
                     permDisabledMap={permDisabledMap}
+                    visiblePermissionKeys={visiblePermissionKeys}
                     permSelected={permSelected}
                     setPermSelected={setPermSelected}
                     t={t}

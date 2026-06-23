@@ -70,6 +70,9 @@ import {
   getDeleteCheckboxState,
   getFinalPermissionsForCreation,
   getRoleTemplateSidebarList,
+  getVisiblePermissionKeys,
+  sanitizeSidebarPermissionsForRole,
+  roleSupportsOwnershipPermission,
   normRole,
   sortUsers,
   roleHasReadOnlyToggle,
@@ -348,6 +351,18 @@ export default function UserListPage() {
     PERMISSION_KEYS.forEach((k) => { m[k] = currentUserRole !== "owner" && !allowed.has(k); });
     return m;
   }, [currentUserRole]);
+
+  const visiblePermissionKeys = useMemo(() => getVisiblePermissionKeys(form.role), [form.role]);
+
+  useEffect(() => {
+    if (roleSupportsOwnershipPermission(form.role)) return;
+    setPermSelected((prev) => {
+      if (!prev.has("ownership")) return prev;
+      const next = new Set(prev);
+      next.delete("ownership");
+      return next;
+    });
+  }, [form.role]);
 
   const syncUrl = useCallback(() => {
     replaceBrowserPathOnly();
@@ -1775,7 +1790,8 @@ export default function UserListPage() {
 
   const applyEditDetail = useCallback((row, detail, accList, procList) => {
     let perms = []; try { perms = detail.permissions ? JSON.parse(detail.permissions) : []; } catch { perms = []; }
-    setPermSelected(new Set(perms.map((p) => String(p).toLowerCase())));
+    perms = sanitizeSidebarPermissionsForRole(normRole(row.role), perms.map((p) => String(p).toLowerCase()));
+    setPermSelected(new Set(perms));
     setForm((f) => ({ ...f, read_only: detail.read_only !== undefined ? parseInt(detail.read_only, 10) === 1 : true }));
     let ap = null, pp = null; try { if (detail.account_permissions != null) ap = typeof detail.account_permissions === "string" ? JSON.parse(detail.account_permissions) : detail.account_permissions; } catch { ap = []; }
     try { if (detail.process_permissions != null) pp = typeof detail.process_permissions === "string" ? JSON.parse(detail.process_permissions) : detail.process_permissions; } catch { pp = []; }
@@ -1820,7 +1836,7 @@ export default function UserListPage() {
       setSelectedGroupIds([]);
     }
     if (row.is_owner_shadow) {
-      setPermSelected(new Set(PERMISSION_KEYS));
+      setPermSelected(new Set(getVisiblePermissionKeys("owner")));
       setSelectedAccountIds(new Set(accList.map((a) => Number(a.id))));
       setSelectedProcessIds(new Set(procList.map((p) => Number(p.id))));
       setSelectedCompanyIds([]);
@@ -1854,7 +1870,7 @@ export default function UserListPage() {
     setForm({ id: "", login_id: "", name: "", email: "", role: "", password: "", secondary_password: "", status: "active", read_only: true });
     setRoleSelectDisabled(false); setLoginDisabled(false);
     setFieldLocks({ name: false, email: false, role: false, password: false, sidebar: false, company: false });
-    const allP = new Set(PERMISSION_KEYS.filter((k) => !permDisabledMap[k])); setPermSelected(allP);
+    const allP = new Set(getVisiblePermissionKeys("").filter((k) => !permDisabledMap[k])); setPermSelected(allP);
     void loadCompaniesForModal();
     const cachedAccess = modalAccessCacheRef.current.get(modalCacheKey);
     const currentAccess =
@@ -1909,7 +1925,9 @@ export default function UserListPage() {
   const applyPermTemplate = (role, force) => {
     if (isEditMode && !force) return;
     const next = new Set();
-    getRoleTemplateSidebarList(role).forEach((k) => next.add(k));
+    getRoleTemplateSidebarList(role).forEach((k) => {
+      if (getVisiblePermissionKeys(role).includes(k)) next.add(k);
+    });
     setPermSelected(next);
     if (roleHasReadOnlyToggle(role)) {
       setForm((f) => ({ ...f, read_only: true }));
@@ -2521,7 +2539,7 @@ export default function UserListPage() {
             document.body
           )
         : null}
-      <UserModal open={modalOpen} onClose={closeModal} isEditMode={isEditMode} editingRow={editingRow} form={form} setForm={setForm} isC168Company={isC168Company} currentUserRole={currentUserRole} currentUserId={currentUserId} roleSelectDisabled={roleSelectDisabled} loginDisabled={loginDisabled} fieldLocks={fieldLocks} permDisabledMap={permDisabledMap} permSelected={permSelected} setPermSelected={setPermSelected} modalCompanies={modalCompanies} selectedCompanyIds={selectedCompanyIds} setSelectedCompanyIds={setSelectedCompanyIds} groupPickerMode={!useDualTenantUserPicker && groupOnlyUserList} dualTenantPicker={useDualTenantUserPicker} modalGroupCompanies={modalGroupCompanies} modalSubsidiaryCompanies={modalSubsidiaryCompanies} selectedGroupIds={selectedGroupIds} setSelectedGroupIds={setSelectedGroupIds} modalAccounts={modalAccounts} selectedAccountIds={selectedAccountIds} setSelectedAccountIds={setSelectedAccountIds} modalProcesses={modalProcesses} selectedProcessIds={selectedProcessIds} setSelectedProcessIds={setSelectedProcessIds} applyPermTemplate={applyPermTemplate} onSave={saveUser} sessionMutationsBlocked={userMutationsBlocked} t={t} />
+      <UserModal open={modalOpen} onClose={closeModal} isEditMode={isEditMode} editingRow={editingRow} form={form} setForm={setForm} isC168Company={isC168Company} currentUserRole={currentUserRole} currentUserId={currentUserId} roleSelectDisabled={roleSelectDisabled} loginDisabled={loginDisabled} fieldLocks={fieldLocks} permDisabledMap={permDisabledMap} visiblePermissionKeys={visiblePermissionKeys} permSelected={permSelected} setPermSelected={setPermSelected} modalCompanies={modalCompanies} selectedCompanyIds={selectedCompanyIds} setSelectedCompanyIds={setSelectedCompanyIds} groupPickerMode={!useDualTenantUserPicker && groupOnlyUserList} dualTenantPicker={useDualTenantUserPicker} modalGroupCompanies={modalGroupCompanies} modalSubsidiaryCompanies={modalSubsidiaryCompanies} selectedGroupIds={selectedGroupIds} setSelectedGroupIds={setSelectedGroupIds} modalAccounts={modalAccounts} selectedAccountIds={selectedAccountIds} setSelectedAccountIds={setSelectedAccountIds} modalProcesses={modalProcesses} selectedProcessIds={selectedProcessIds} setSelectedProcessIds={setSelectedProcessIds} applyPermTemplate={applyPermTemplate} onSave={saveUser} sessionMutationsBlocked={userMutationsBlocked} t={t} />
       <UserConfirmModal open={confirmOpen} message={confirmMessage} onConfirm={confirmDelete} onClose={() => setConfirmOpen(false)} confirmDisabled={userMutationsBlocked} t={t} />
     </>
   );

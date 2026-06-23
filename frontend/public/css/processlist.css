@@ -1829,7 +1829,7 @@ body.ec-auth-shell .process-page #addBankModal .bank-actions .btn-cancel:hover {
 }
 
 .bank-form-row+.bank-form-row {
-    margin-top: 20px;
+    margin-top: 10px;
 }
 
 .bank-form-row-last {
@@ -1910,6 +1910,92 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
 .bank-form-row-last .bank-form-cell-right .bank-remark-wrap .bank-input {
     flex: 1;
     min-height: 2.5em;
+}
+
+.bank-form-row-last .bank-form-cell-right .bank-form-dts-wrap {
+    flex: 0 0 auto;
+    margin-top: 12px;
+    width: 100%;
+}
+
+.bank-form-row-last .bank-form-cell-right .bank-form-dts-wrap .bank-section-title {
+    margin-bottom: 10px;
+}
+
+.bank-form-dts-row {
+    gap: 15px;
+}
+
+#addBankModal .bank-form-dts-readonly {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 2px;
+    padding: 8px 10px;
+    min-height: clamp(2.5rem, 2.25vw, 3rem);
+    background-color: #f8fafc;
+    border: 1px solid #dbe3ee;
+    border-radius: 0.42rem;
+    color: #1f2937;
+    font-size: var(--text-small);
+    font-family: var(--font-ui);
+    line-height: 1.35;
+}
+
+#addBankModal .bank-form-dts-readonly span {
+    min-width: 0;
+}
+
+#addBankModal .bank-form-dts-readonly-user {
+    font-weight: 600;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+@media (max-width: 900px) {
+    #addBankModal .bank-form-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    #addBankModal .bank-form-row-last {
+        min-height: 0;
+    }
+
+    #addBankModal .bank-form-row-last .bank-form-cell-right .bank-remark-wrap {
+        flex: 0 0 auto;
+    }
+
+    #addBankModal .bank-row-two-cols,
+    #addBankModal .bank-form-dts-row {
+        grid-template-columns: 1fr;
+    }
+
+    #addBankModal .bank-form-dts-readonly {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+
+    #addBankModal .bank-form-dts-readonly-user {
+        text-align: left;
+        width: 100%;
+    }
+}
+
+@media (max-width: 600px) {
+    #addBankModal .bank-remark-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    #addBankModal .bank-remark-actions .bank-note-open-btn {
+        width: 100%;
+        min-width: 0;
+    }
 }
 
 .bank-form-cell {

@@ -110,16 +110,14 @@ export default function MemberPage() {
     formatPaymentHistoryMoney,
   } = useMemberWinLoss({ showNotification, lang });
 
-  const today = useMemo(() => new Date(), []);
-  const monday = useMemo(() => {
-    const d = new Date(today);
+  const todayDmy = formatDmyFromDate(new Date());
+  const mondayDmy = formatDmyFromDate((() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
     const day = d.getDay();
-    const toMonday = day === 0 ? 6 : day - 1;
-    d.setDate(d.getDate() - toMonday);
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
     return d;
-  }, [today]);
-  const mondayDmy = useMemo(() => formatDmyFromDate(monday), [monday]);
-  const todayDmy = useMemo(() => formatDmyFromDate(today), [today]);
+  })());
 
   const {
     loading,

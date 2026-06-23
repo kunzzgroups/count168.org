@@ -143,8 +143,47 @@ export function getPeriodFromDate(expirationDate) {
 
 // ===================== Fee Share Helpers =====================
 
+export const DEFAULT_PROFIT_ACCOUNT_CODES = ["C168", "PROFIT"];
+
 export function defaultFeeShareAllocations() {
   return { profit: [], sales: [], cs: [], it: [] };
+}
+
+/** C168 profit-role account for Share % Profit pool (prefer account_id C168). */
+export function resolveDefaultProfitAccountId(accountsProfit) {
+  const list = Array.isArray(accountsProfit) ? accountsProfit : [];
+  for (const code of DEFAULT_PROFIT_ACCOUNT_CODES) {
+    const hit = list.find(
+      (a) => String(a?.account_id ?? "").trim().toUpperCase() === code
+    );
+    const id = hit?.id != null ? parseInt(hit.id, 10) : 0;
+    if (id > 0) return id;
+  }
+  const first = list[0];
+  const firstId = first?.id != null ? parseInt(first.id, 10) : 0;
+  return firstId > 0 ? firstId : 0;
+}
+
+export function profitAllocationHasAssignedAccount(fsa) {
+  const profit = Array.isArray(fsa?.profit) ? fsa.profit : [];
+  return profit.some((r) => parseInt(r?.account_id, 10) > 0);
+}
+
+/** When Profit has no account, default to C168 (profit-role account under C168 company). */
+export function applyDefaultProfitAllocation(fsa, accountsProfit) {
+  const base =
+    fsa && typeof fsa === "object"
+      ? {
+          profit: Array.isArray(fsa.profit) ? [...fsa.profit] : [],
+          sales: Array.isArray(fsa.sales) ? [...fsa.sales] : [],
+          cs: Array.isArray(fsa.cs) ? [...fsa.cs] : [],
+          it: Array.isArray(fsa.it) ? [...fsa.it] : [],
+        }
+      : defaultFeeShareAllocations();
+  if (profitAllocationHasAssignedAccount(base)) return base;
+  const aid = resolveDefaultProfitAccountId(accountsProfit);
+  if (!aid) return base;
+  return { ...base, profit: [{ account_id: aid, percentage: "" }] };
 }
 
 export function normalizeFeeShareFromServer(raw) {

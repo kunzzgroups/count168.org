@@ -9,6 +9,7 @@ header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../includes/permissions.php';
 
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
@@ -96,10 +97,19 @@ function dbCountAffectedUsersInCompany($pdo, $userIds, $company_id) {
 }
 
 function dbUpdateUserPermissionsBatch($pdo, $userIds, $permissionsJson, $accountPermissionsJson, $processPermissionsJson, $company_id) {
+    $roleStmt = $pdo->prepare("SELECT id, role FROM user WHERE id = ? AND company_id = ?");
     $updateStmt = $pdo->prepare("UPDATE user SET permissions = ?, account_permissions = ?, process_permissions = ? WHERE id = ? AND company_id = ?");
     $successCount = 0;
     foreach ($userIds as $userId) {
-        if ($updateStmt->execute([$permissionsJson, $accountPermissionsJson, $processPermissionsJson, $userId, $company_id])) {
+        $roleStmt->execute([$userId, $company_id]);
+        $userRow = $roleStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$userRow) {
+            continue;
+        }
+        $perms = json_decode($permissionsJson, true);
+        $sanitized = sanitize_sidebar_permissions_for_role($userRow['role'] ?? '', is_array($perms) ? $perms : []);
+        $sanitizedJson = json_encode($sanitized);
+        if ($updateStmt->execute([$sanitizedJson, $accountPermissionsJson, $processPermissionsJson, $userId, $company_id])) {
             $successCount++;
         }
     }

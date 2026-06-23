@@ -5,17 +5,9 @@ import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { spaPath } from "../../utils/routing/pageRoutes.js";
 
-const PERMISSION_OPTIONS = [
-  "home",
-  "admin",
-  "account",
-  "ownership",
-  "process",
-  "datacapture",
-  "payment",
-  "report",
-  "maintenance",
-];
+import { getVisiblePermissionKeys } from "../userlist/userListLogic.js";
+
+const PERMISSION_OPTIONS = getVisiblePermissionKeys("");
 
 function parseJsonArray(raw) {
   if (Array.isArray(raw)) return raw;

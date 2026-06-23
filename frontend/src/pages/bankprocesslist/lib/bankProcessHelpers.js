@@ -595,7 +595,33 @@ export const EMPTY_BANK_FORM = {
   status: "active",
   remark: "",
   sop: "",
+  dts_modified: "",
+  modified_by: "",
+  dts_created: "",
+  created_by: "",
+  dts_modified_display: "",
+  dts_modified_user_display: "",
 };
+
+/** @param {Record<string, unknown>} d API row from get_process */
+export function buildBankDtsFormFields(d) {
+  const dtsModified = String(d.dts_modified || "");
+  const dtsCreated = String(d.dts_created || "");
+  let displayModifiedDate = "";
+  let displayModifiedBy = "";
+  if (dtsModified && dtsModified !== dtsCreated) {
+    displayModifiedDate = dtsModified;
+    displayModifiedBy = String(d.modified_by || "");
+  }
+  return {
+    dts_modified: dtsModified,
+    modified_by: String(d.modified_by || ""),
+    dts_created: dtsCreated,
+    created_by: String(d.created_by || ""),
+    dts_modified_display: displayModifiedDate,
+    dts_modified_user_display: displayModifiedBy,
+  };
+}
 
 /** @returns {'monthly'|'week'|'day'|'once'|'1st_of_every_month'} */
 export function bankProcessFrequencyNormalized(v) {

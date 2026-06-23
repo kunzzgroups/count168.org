@@ -45,7 +45,8 @@ export default function PortalTooltip({
   const anchorRef = useRef(null);
   const [tooltipPos, setTooltipPos] = useState(null);
   const text = String(content ?? "").trim();
-  const active = enabled && text.length > 0;
+  const hasContent = text.length > 0;
+  const tooltipActive = enabled && hasContent;
 
   const hideTooltip = useCallback(() => {
     setTooltipPos(null);
@@ -54,7 +55,7 @@ export default function PortalTooltip({
 
   const updateTooltipPos = useCallback(() => {
     const el = anchorRef.current;
-    if (!el || !active) return;
+    if (!el || !tooltipActive) return;
     const rect = el.getBoundingClientRect();
 
     if (placement === "right") {
@@ -90,7 +91,7 @@ export default function PortalTooltip({
       top: placeBelow ? rect.bottom + GAP : rect.top - GAP,
       placement: placeBelow ? "below" : "top",
     });
-  }, [active, placement]);
+  }, [tooltipActive, placement]);
 
   const showTooltip = useCallback(() => {
     dismissOtherTooltips();
@@ -116,7 +117,7 @@ export default function PortalTooltip({
     };
   }, [tooltipPos, hideTooltip]);
 
-  if (!active) return children;
+  if (!hasContent) return children;
 
   const anchorClass = ["portal-tooltip-anchor", anchorClassName].filter(Boolean).join(" ");
 
@@ -144,10 +145,10 @@ export default function PortalTooltip({
       <span
         ref={anchorRef}
         className={anchorClass}
-        onMouseEnter={showTooltip}
-        onMouseLeave={hideTooltip}
-        onFocus={showOnFocus ? showTooltip : undefined}
-        onBlur={showOnFocus ? hideTooltip : undefined}
+        onMouseEnter={tooltipActive ? showTooltip : undefined}
+        onMouseLeave={tooltipActive ? hideTooltip : undefined}
+        onFocus={showOnFocus && tooltipActive ? showTooltip : undefined}
+        onBlur={showOnFocus && tooltipActive ? hideTooltip : undefined}
         onPointerDown={dismissOnPress ? hideTooltip : undefined}
       >
         {children}

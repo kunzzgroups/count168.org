@@ -36,10 +36,10 @@ function dcIsGroupScopeHint(array $resolved): bool
     return $code !== '' && $code === $groupId;
 }
 
-/** Ordered group payroll process codes (Data Capture group-only: SALARY, COMMISSION, BONUS, PROFIT). */
+/** Ordered group payroll process codes (Data Capture group-only: PROFIT first, then SALARY, COMMISSION, BONUS). */
 function dcGroupPayrollProcessCodes(): array
 {
-    return ['SALARY', 'COMMISSION', 'BONUS', 'PROFIT'];
+    return ['PROFIT', 'SALARY', 'COMMISSION', 'BONUS'];
 }
 
 function dcIsGroupPayrollProcessCode(string $code): bool

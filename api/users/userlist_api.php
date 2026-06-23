@@ -15,6 +15,7 @@ require_once __DIR__ . '/../../includes/auth_invalidation.php';
 require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 require_once __DIR__ . '/../../includes/group_company_access.php';
 require_once __DIR__ . '/../../includes/group_scope_resolve.php';
+require_once __DIR__ . '/../../includes/permissions.php';
 require_once __DIR__ . '/../get_companies_helper.php';
 
 session_start();
@@ -2009,7 +2010,11 @@ try {
             }
             
             // 处理权限数据
-            $permissions = isset($input['permissions']) ? json_encode($input['permissions']) : null;
+            $permissionsArray = null;
+            if (isset($input['permissions']) && is_array($input['permissions'])) {
+                $permissionsArray = sanitize_sidebar_permissions_for_role($input['role'] ?? '', $input['permissions']);
+            }
+            $permissions = $permissionsArray !== null ? json_encode($permissionsArray) : null;
 
             // 开始事务
             $pdo->beginTransaction();
@@ -2374,7 +2379,11 @@ try {
 
             // 添加权限字段到更新列表（系统级权限仍然存储在 user 表）
             $updateFields[] = "permissions = ?";
-            $updateValues[] = isset($input['permissions']) ? json_encode($input['permissions']) : null;
+            $permissionsArray = null;
+            if (isset($input['permissions']) && is_array($input['permissions'])) {
+                $permissionsArray = sanitize_sidebar_permissions_for_role($input['role'] ?? '', $input['permissions']);
+            }
+            $updateValues[] = $permissionsArray !== null ? json_encode($permissionsArray) : null;
             
             // Account 和 Process 权限不再更新到 user 表，而是更新到 user_company_permissions 表
             // 这些字段保留在 $input 中，稍后在事务中处理

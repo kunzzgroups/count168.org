@@ -3806,17 +3806,17 @@ body.transaction-payment-history-page--popup .transaction-payment-history-panel.
     max-width: none !important;
 }
 
-body.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table [class*="transaction-history-col-"],
-body.ec-payment-history-chromeless.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table [class*="transaction-history-col-"] {
-    min-width: 0 !important;
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    font-size: var(--txn-history-text-table) !important;
+body.transaction-payment-history-page--popup-compact .transaction-history-modal .transaction-modal-body .transaction-table [class*="transaction-history-col-"],
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compact .transaction-history-modal .transaction-modal-body .transaction-table [class*="transaction-history-col-"] {
+  min-width: 0 !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  font-size: var(--txn-history-text-table) !important;
 }
 
-body.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table thead th[class*="transaction-history-col-"],
-body.ec-payment-history-chromeless.transaction-payment-history-page--popup .transaction-history-modal .transaction-modal-body .transaction-table thead th[class*="transaction-history-col-"] {
+body.transaction-payment-history-page--popup-compact .transaction-history-modal .transaction-modal-body .transaction-table thead th[class*="transaction-history-col-"],
+body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compact .transaction-history-modal .transaction-modal-body .transaction-table thead th[class*="transaction-history-col-"] {
     font-size: var(--txn-history-text-table-head-compact) !important;
     white-space: nowrap !important;
     word-break: normal !important;
