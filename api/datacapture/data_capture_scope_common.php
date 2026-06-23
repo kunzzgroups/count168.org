@@ -1096,7 +1096,8 @@ function dcFixGroupPayrollProcessDescription(PDO $pdo, int $processId): void
 }
 
 /**
- * Resolve process.id; for group SALARY/BONUS auto-create on entity company when missing.
+ * Resolve process.id; auto-create group payroll codes when missing on group ledger or
+ * subsidiary company scope (C168 / bank-only e.g. CX).
  */
 function dcEnsureProcessIdByCode(
     PDO $pdo,
@@ -1113,10 +1114,15 @@ function dcEnsureProcessIdByCode(
         dcFixGroupPayrollProcessDescription($pdo, $existing);
         return $existing;
     }
-    if (!$groupScope) {
+
+    $code = strtoupper(trim($processCode));
+    $mayAutoCreate = $groupScope
+        || (dcIsGroupPayrollProcessCode($code) && dcCompanyScopeAllowsSalaryBonusProcess($pdo, $companyId));
+    if (!$mayAutoCreate) {
         dcSetGroupProcessEnsureError('Process not found for scope');
         return null;
     }
+
     return dcCreateGroupProcessByCode($pdo, $companyId, $processCode, $groupId, $preferredCurrencyId);
 }
 

@@ -70,9 +70,9 @@ function dcSubmissionsApiInit(): array
     }
 
     $groupIdForAccess = dcNormalizeGroupId($scopeParams['group_id'] ?? '');
-    if (!checkReportGamesAccess($pdo, $company_id, $groupIdForAccess !== '' ? $groupIdForAccess : null)) {
+    if (!checkReportMaintenanceAccess($pdo, $company_id, $groupIdForAccess !== '' ? $groupIdForAccess : null)) {
         http_response_code(403);
-        echo json_encode(['success' => false, 'error' => 'Unauthorized category permission (Games required)']);
+        echo json_encode(['success' => false, 'error' => 'Unauthorized category permission (Games or Bank required)']);
         exit;
     }
 
