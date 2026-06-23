@@ -151,6 +151,8 @@ export const BANK_PROCESS_I18N = {
     sop: "SOP",
     sopFilled: "SOP filled",
     remarkFilled: "Remark filled",
+    dtsModified: "DTS Modified:",
+    dtsCreated: "DTS Created:",
     updateProcess: "Update Process",
     cancel: "Cancel",
 
@@ -408,6 +410,8 @@ export const BANK_PROCESS_I18N = {
     sop: "SOP",
     sopFilled: "已填写 SOP",
     remarkFilled: "已填写备注",
+    dtsModified: "修改时间：",
+    dtsCreated: "创建时间：",
     updateProcess: "更新流程",
     cancel: "取消",
 

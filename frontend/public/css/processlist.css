@@ -1753,7 +1753,13 @@ body.ec-auth-shell .process-page #addBankModal .bank-actions .btn-cancel:hover {
 
 /* Title bar separator — match Account / Process form modals (not blue) */
 #addBankModal .modal-header {
-    border-bottom: 1px solid var(--color-border-muted, #e2e8f0);
+    /* border-bottom: 1px solid var(--color-border-muted, #e2e8f0); */
+    border-bottom: none;
+}
+
+#addBankModal .modal-header h2 {
+    border-bottom: none;
+    background: transparent;
 }
 
 /* Bank modal body: flex column — scrollable field area + fixed action bar */
@@ -3091,6 +3097,86 @@ body.process-page .custom-select-dropdown.custom-select-dropdown-portal .custom-
 
 #addBankModal .bank-actions {
     border-top: 1px solid #e5e7eb;
+}
+
+/* Bank edit modal — DTS Modified / DTS Created (no Record section title) */
+#addBankModal .bank-form-dts-section {
+    margin-top: 16px;
+}
+
+#addBankModal .bank-form-dts-section .form-group + .form-group {
+    margin-top: 12px;
+}
+
+#addBankModal .bank-form-dts-readonly {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+    padding: 8px 12px;
+    min-height: 44px;
+    background-color: #f8fafc;
+    border: 1px solid #dbe3ee;
+    border-radius: 8px;
+    color: #1f2937;
+    font-family: var(--font-ui);
+    font-size: var(--text-small);
+    line-height: 1.35;
+}
+
+#addBankModal .bank-form-dts-readonly span {
+    font-family: var(--font-ui);
+    font-size: var(--text-small);
+    line-height: 1.35;
+}
+
+#addBankModal .bank-form-dts-readonly-user {
+    font-weight: var(--font-weight-semibold, 600);
+    flex-shrink: 0;
+    text-align: right;
+}
+
+@media (max-width: 900px) {
+    #addBankModal .bank-form-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    #addBankModal .bank-form-row + .bank-form-row {
+        margin-top: 16px;
+    }
+
+    #addBankModal .bank-form-row-last {
+        min-height: 0;
+    }
+}
+
+@media (max-width: 720px) {
+    .bank-modal .bank-modal-content {
+        width: 100%;
+        max-width: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+
+    #addBankModal .bank-form-dts-readonly {
+        flex-wrap: wrap;
+        align-items: flex-start;
+        min-height: 0;
+        padding: 8px 10px;
+        font-size: clamp(11px, 3.2vw, 14px);
+    }
+
+    #addBankModal .bank-form-dts-readonly span {
+        font-size: clamp(11px, 3.2vw, 14px);
+    }
+
+    #addBankModal .bank-form-dts-readonly-user {
+        margin-left: auto;
+    }
 }
 
 /* Supplier/Customer/Company 下拉可溢出各层祖先显示（但不影响 modal-body / bank-form 的 overflow 控制） */

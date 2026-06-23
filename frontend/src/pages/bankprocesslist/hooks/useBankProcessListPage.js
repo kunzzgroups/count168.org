@@ -1806,6 +1806,14 @@ export function useBankProcessListPage() {
       const json = await res.json();
       if (!res.ok || !json.success || !json.data) return notify(apiMsg(json, "failedLoadBankProcess"), "danger");
       const d = json.data;
+      const dtsModified = d.dts_modified || "";
+      const dtsCreated = d.dts_created || "";
+      let displayModifiedDate = "";
+      let displayModifiedBy = "";
+      if (dtsModified && dtsModified !== dtsCreated) {
+        displayModifiedDate = dtsModified;
+        displayModifiedBy = d.modified_by || "";
+      }
       const nextForm = {
         id: String(d.id || ""),
         country: d.country || "", bank: d.bank || "", type: d.type || "", name: d.name || "",
@@ -1827,6 +1835,11 @@ export function useBankProcessListPage() {
             String(d.day_end_monthly_cap_enabled) === "1"),
         day_start_frequency: bankProcessFrequencyNormalized(d.day_start_frequency),
         status: d.status || "active", remark: d.remark || "", sop: d.sop || "",
+        dts_modified: dtsModified,
+        dts_created: dtsCreated,
+        created_by: d.created_by || "",
+        dts_modified_display: displayModifiedDate,
+        dts_modified_user_display: displayModifiedBy,
       };
       seedContractSyncKeys(nextForm);
       setEditMode(true);

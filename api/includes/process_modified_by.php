@@ -115,3 +115,16 @@ function processModifiedByLoginSql(): string
         END
     )";
 }
+
+/** Same as processModifiedByLoginSql() but for bank_process alias `bp`. */
+function bankProcessModifiedByLoginSql(): string
+{
+    return "COALESCE(
+        u_modified.login_id,
+        o_modified.owner_code,
+        CASE
+            WHEN bp.dts_modified <> bp.dts_created
+            THEN COALESCE(u_created.login_id, o_created.owner_code)
+        END
+    )";
+}
