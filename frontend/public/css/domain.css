@@ -21,10 +21,10 @@ body.domain-page .domain-react-page {
     margin: 0;
     padding: var(--layout-page-top-gap) 40px 20px var(--layout-main-offset);
     width: 100%;
-    min-height: 100vh;
+    height: calc(100vh - var(--layout-page-top-inset));
+    min-height: 0;
     box-sizing: border-box;
-    overflow-x: hidden;
-    overflow-y: visible;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
 }
@@ -39,19 +39,21 @@ body.domain-page .domain-react-page .action-buttons {
     margin-bottom: clamp(10px, 1.04vw, 16px);
     display: flex;
     justify-content: space-between;
-    align-items: start;
-    flex-wrap: wrap;
+    align-items: center;
+    flex-wrap: nowrap;
     gap: 12px;
+    padding-bottom: clamp(10px, 1.04vw, 20px);
+    box-sizing: border-box;
 }
 
 body.domain-page .domain-react-page .domain-toolbar-left {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     gap: 12px;
     flex: 1 1 auto;
     min-width: 0;
-    padding-bottom: clamp(10px, 1.04vw, 20px);
+    padding-bottom: 0;
 }
 
 body.domain-page .domain-react-page .domain-toolbar-right {
@@ -59,6 +61,7 @@ body.domain-page .domain-react-page .domain-toolbar-right {
     align-items: center;
     flex-shrink: 0;
     margin-left: auto;
+    align-self: center;
 }
 
 /* 横线样式 - 超出container */
@@ -448,18 +451,15 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selec
     line-height: 1 !important;
 }
 
-/* 小屏 / 平板：全屏 + 图二左右半栏（Domain | Company）— 由 --compact class 触发（≤1280px） */
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact {
-    --dfm-selected-visible-rows: 4;
-    --dfm-compact-selected-item-height: 30px;
-    --dfm-compact-selected-item-gap: 6px;
+/* 平板 / laptop（≤1366px）：全屏外壳，内容与 desktop 相同布局 */
+body.ec-auth-shell .domain-form-modal-backdrop.domain-form-modal-backdrop--compact {
     overflow: hidden !important;
     background-color: var(--color-surface) !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
 }
 
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-panel {
+body.ec-auth-shell .domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-panel {
     width: 100vw !important;
     max-width: none !important;
     min-height: 100dvh !important;
@@ -470,241 +470,24 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-company-grid-row2 .dfm-selec
     box-shadow: none !important;
 }
 
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-header {
+body.ec-auth-shell .domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-header {
     flex-shrink: 0;
     padding: 18px 16px !important;
 }
 
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-body.dfm-main-split {
-    display: grid !important;
-    flex-direction: unset !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: "domain company";
-    gap: 10px 14px;
-    align-items: stretch;
-    align-content: stretch;
+body.ec-auth-shell .domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-body.dfm-main-split {
     flex: 1 1 auto;
     min-height: 0;
     overflow-x: hidden !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
-    padding: 20px 14px !important;
+    padding: 20px 16px !important;
 }
 
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-main-split > .dfm-section-block:not(.dfm-section-block--company) {
-    grid-area: domain;
-    min-width: 0;
-    min-height: 0;
-    height: 100%;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-main-split > .dfm-section-block--company {
-    grid-area: company;
-    margin-top: 0 !important;
-    min-width: 0;
-    min-height: 0;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-footer-actions {
+body.ec-auth-shell .domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-footer-actions {
     flex-shrink: 0;
     padding: 12px 16px !important;
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
-}
-
-/* 左栏：Domain 字段纵向 */
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid,
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid.dfm-domain-grid--no-secondary {
-    grid-template-columns: minmax(0, 1fr) !important;
-    grid-template-areas:
-        "owner"
-        "name"
-        "email"
-        "password"
-        "secondary" !important;
-    gap: 8px;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid .dfm-field {
-    margin-bottom: 0 !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-panel .dfm-main-split .dfm-field {
-    margin-bottom: 10px !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid .dfm-field input[type="text"],
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-domain-grid .dfm-field input[type="password"] {
-    min-height: 36px !important;
-    padding: 8px 10px !important;
-    font-size: var(--text-small) !important;
-}
-
-/* 右栏：Group ID / Company ID 并排，下方 Group、列表纵向 */
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
-    grid-template-areas:
-        "groupId companyId"
-        "groupPills groupPills" !important;
-    gap: 6px 8px;
-    align-items: end;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 .dfm-field--group-input .dfm-input-with-btn,
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 .dfm-field--company-input .dfm-input-with-btn {
-    max-width: none !important;
-    width: 100%;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 .dfm-field--group-pills .group-pills {
-    height: auto !important;
-    min-height: var(--dfm-row1-control-height) !important;
-    flex-wrap: wrap !important;
-    align-content: flex-start !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-section {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row1 {
-    flex-shrink: 0;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 {
-    grid-template-columns: minmax(0, 1fr) !important;
-    grid-template-rows: auto minmax(0, 1fr) auto minmax(0, 1fr);
-    grid-template-areas:
-        "headGroups"
-        "selectedGroups"
-        "headCompanies"
-        "selectedCompanies" !important;
-    gap: 0;
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-row2-head {
-    min-height: auto;
-    margin: 0;
-    padding: 2px 0;
-    align-self: start;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-row2-head--companies {
-    margin-top: 0;
-    padding-top: 6px;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-selected-companies-label {
-    font-family: var(--font-ui) !important;
-    font-size: var(--text-small) !important;
-    font-weight: 700 !important;
-    color: var(--color-text-label) !important;
-    line-height: 1.3 !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-groups,
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-companies {
-    height: 100% !important;
-    min-height: 0 !important;
-    flex: 1 1 auto !important;
-    align-self: stretch;
-    margin-bottom: 0 !important;
-    display: flex !important;
-    flex-direction: column !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field {
-    margin-bottom: 0 !important;
-}
-
-/* 两列表撑满剩余高度，内容多时在各自区域内滚动 */
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-selected-list {
-    min-height: 0 !important;
-    max-height: none !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-groups .dfm-selected-list,
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-field--selected-companies .dfm-selected-list {
-    box-sizing: border-box;
-    width: 100%;
-    flex: 1 1 auto !important;
-    height: 100% !important;
-    min-height: 0 !important;
-    max-height: none !important;
-    padding: 8px 10px !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    border: 1px solid var(--color-border-strong) !important;
-    border-radius: 8px !important;
-    background-color: var(--color-surface-muted) !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list:has(.company-item) > .company-item:last-child {
-    margin-bottom: 0 !important;
-}
-
-/* 空列表：占满分配高度，提示居中 */
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list:not(:has(.company-item)) {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    text-align: center !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode {
-    display: flex !important;
-    flex-direction: column !important;
-    max-height: none !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode .dfm-mc-panel-head {
-    flex-shrink: 0;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode .dfm-assign-mc-stack,
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list--mc-mode > :not(.dfm-mc-panel-head) {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list .dfm-empty-hint {
-    display: block;
-    width: 100%;
-    font-size: var(--text-tiny) !important;
-    line-height: 1.35 !important;
-    text-align: center !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-section-heading {
-    font-size: var(--text-small) !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .domain-form-modal-panel label {
-    font-size: var(--text-small) !important;
-    margin-bottom: 4px !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list > .company-item {
-    grid-template-columns: auto minmax(48px, 1fr) auto auto !important;
-    padding: 4px 6px !important;
-    min-height: 30px !important;
-    height: 30px !important;
-    max-height: 30px !important;
-}
-
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list .company-item .company-reset-btn,
-.domain-form-modal-backdrop.domain-form-modal-backdrop--compact .dfm-company-grid-row2 .dfm-selected-list .company-item .company-remove-btn {
-    min-width: 36px !important;
-    padding: 0 6px !important;
-    font-size: 10px !important;
 }
 
 /* 图二：DOMAIN / COMPANY 栏目标题 */
@@ -1604,6 +1387,7 @@ body.domain-page .domain-react-page .domain-fee-price-chips {
     align-items: center;
     gap: clamp(6px, 0.5vw, 10px);
     flex-shrink: 0;
+    flex-wrap: nowrap;
 }
 
 body.domain-page .domain-react-page .domain-fee-price-chip {
@@ -2269,6 +2053,78 @@ body.ec-auth-shell .company-expiration-react-modal.modal-content {
 .company-expiration-react-modal .company-exp-status.normal {
     background: var(--color-surface-emerald-tint);
     color: var(--color-emerald-text-dark);
+}
+
+/* 平板 / laptop：到期状态弹窗字号与触控区域加大 */
+@media (max-width: 1366px) {
+    .company-expiration-react-modal {
+        width: min(720px, 94vw);
+        max-width: none;
+        margin: 3vh auto;
+        border-radius: 14px;
+    }
+
+    body.domain-page .company-expiration-react-modal.modal-content,
+    body.ec-auth-shell .company-expiration-react-modal.modal-content {
+        width: min(720px, 94vw) !important;
+        max-width: none !important;
+    }
+
+    .company-expiration-react-modal .modal-header.company-expiration-modal-header {
+        padding: 18px 20px;
+    }
+
+    .company-expiration-react-modal .modal-header.company-expiration-modal-header h2 {
+        font-size: clamp(18px, 2.4vw, 22px);
+        letter-spacing: 1px;
+    }
+
+    .company-expiration-react-modal .modal-header.company-expiration-modal-header .account-close {
+        transform: scale(1.12);
+        transform-origin: center;
+    }
+
+    .company-expiration-react-modal.modal-content .modal-body.company-expiration-modal-body {
+        padding: 16px 20px !important;
+    }
+
+    .company-expiration-react-modal .company-expiration-list {
+        min-height: 120px;
+        max-height: min(62dvh, 540px);
+    }
+
+    .company-expiration-react-modal .company-expiration-empty {
+        padding: 28px 16px;
+        font-size: 15px;
+    }
+
+    .company-expiration-react-modal .company-exp-item {
+        padding: 14px 16px;
+        border-radius: 10px;
+        margin-bottom: 10px;
+    }
+
+    .company-expiration-react-modal .company-exp-item-left {
+        gap: 6px;
+    }
+
+    .company-expiration-react-modal .company-exp-id {
+        font-size: 17px;
+        line-height: 1.3;
+    }
+
+    .company-expiration-react-modal .company-exp-date {
+        font-size: 14px;
+        line-height: 1.35;
+    }
+
+    .company-expiration-react-modal .company-exp-status {
+        margin-left: 14px;
+        padding: 8px 14px;
+        border-radius: 14px;
+        font-size: 14px;
+        line-height: 1.25;
+    }
 }
 
 /* Domain Accounting Due (toolbar + modal) */
@@ -3925,20 +3781,23 @@ body.domain-page .domain-react-page .btn-delete {
     background: var(--btn-delete-gradient);
     color: white;
     font-family: var(--font-heading-page);
-    width: var(--userlist-btn-delete-width);
+    min-width: var(--userlist-btn-add-width);
+    width: auto;
     padding: clamp(6px, 0.42vw, 8px) 20px;
     font-size: var(--text-medium);
     font-weight: var(--font-weight-semibold);
-    margin-left: 10px;
+    margin-left: 0;
     border: none;
     border-radius: 6px;
     box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
     --sweep-color: rgba(255, 255, 255, 0.2);
     cursor: pointer;
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     text-align: center;
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 body.domain-page .domain-react-page .btn-delete:hover {
@@ -4205,47 +4064,47 @@ body.domain-page .user-modal-company-picker-root--above-modals {
     transform: translateY(-1px);
 }
 
-/* Checkbox styles — 删除多选；勿在 var() 后误加 ff，否则边框/底色无效会“看不见” */
+/* Checkbox styles — 与 User List / Process List 一致（16px 原生勾选框） */
 body.domain-page .domain-react-page .domain-checkbox {
-    appearance: none;
-    -webkit-appearance: none;
-    display: inline-block;
-    flex-shrink: 0;
-    margin-left: clamp(10px, 0.73vw, 14px);
-    width: clamp(16px, 1.04vw, 20px);
-    height: clamp(16px, 1.04vw, 20px);
+    width: 16px;
+    height: 16px;
     min-width: 16px;
     min-height: 16px;
-    border: 2px solid var(--color-dfm-assign-ref-grid);
-    border-radius: 3px;
-    cursor: pointer;
-    position: relative;
-    background-color: #fff;
+    margin: 0;
+    flex-shrink: 0;
     vertical-align: middle;
-}
-
-body.domain-page .domain-react-page .domain-checkbox:checked {
-    background-color: var(--color-dfm-assign-ref-grid);
-}
-
-body.domain-page .domain-react-page .domain-checkbox:checked::after {
-    content: '✓';
-    position: absolute;
-    color: white;
-    font-size: var(--domain-fluid-8-073-14);
-    font-weight: bold;
-    top: 40%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+    cursor: pointer;
 }
 
 body.domain-page .domain-react-page .domain-action-cell {
-    display: flex;
+    display: grid;
+    grid-template-columns: 20px 20px;
+    column-gap: 8px;
     align-items: center;
+    justify-content: end;
+    justify-items: center;
     overflow: visible;
-    white-space: normal;
-    gap: 8px;
-    justify-content: flex-start;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 92px;
+    width: 100%;
+}
+
+body.domain-page .domain-react-page .domain-action-cell__edit {
+    grid-column: 1;
+    justify-self: center;
+}
+
+body.domain-page .domain-react-page .domain-action-cell__check {
+    grid-column: 2;
+    justify-self: center;
+}
+
+body.domain-page .domain-react-page .domain-action-cell__check--empty {
+    display: block;
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
 }
 
 #cancelDeleteBtn {
@@ -4732,9 +4591,10 @@ body.domain-page .domain-react-page .search-container.userlist-search-bar {
     display: flex;
     flex-direction: row;
     align-items: center;
-    flex-shrink: 0;
-    width: clamp(200px, 28vw, 320px);
-    max-width: clamp(200px, 28vw, 320px);
+    flex: 1 1 auto;
+    min-width: clamp(140px, 18vw, 200px);
+    width: auto;
+    max-width: clamp(200px, 28vw, 360px);
     min-height: calc(18px + 12px + 2px);
     height: auto;
     border-radius: 999px;
@@ -4818,10 +4678,39 @@ body.ec-auth-shell.domain-page .domain-react-page .search-container.userlist-sea
 }
 
 /* 新的卡片式表格样式 */
+body.domain-page .domain-react-page .domain-list-table {
+    --domain-list-grid-cols:
+        40px
+        minmax(0, 0.9fr)
+        minmax(0, 0.6fr)
+        minmax(0, 1.35fr)
+        minmax(0, 0.95fr)
+        minmax(0, 1.4fr)
+        minmax(0, 0.85fr)
+        92px;
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+body.domain-page .domain-react-page .domain-list-table-inner {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
 body.domain-page .domain-react-page .table-header {
     display: grid;
-    grid-template-columns: 1fr 2fr 3fr 3fr 2fr 4fr 2fr 2fr;
-    gap: 15px;
+    grid-template-columns: var(--domain-list-grid-cols);
+    gap: 10px;
     padding: 14.75px 20px 15px !important;
     background: transparent !important;
     background-image: none !important;
@@ -4840,26 +4729,30 @@ body.domain-page .domain-react-page .table-header > div {
     font-size: var(--text-base);
 }
 
+body.domain-page .domain-react-page .table-header > div:last-child,
+body.domain-page .domain-react-page .domain-action-cell {
+    justify-self: end;
+}
+
 body.domain-page .domain-react-page .domain-cards {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
     flex: 1 1 auto;
     min-height: 0;
-    max-height: calc(100vh - var(--layout-page-top-inset) - clamp(148px, 12vw, 220px));
+    max-height: none;
     overflow-y: auto;
-    overflow-x: visible;
+    overflow-x: hidden;
     padding-top: 2px;
-    padding-bottom: 72px;
+    padding-bottom: 52px;
     box-sizing: border-box;
-    /* 允许 tooltip 显示 */
 }
 
 body.domain-page .domain-react-page .domain-card {
     display: none;
-    grid-template-columns: 1fr 2fr 3fr 3fr 2fr 4fr 2fr 2fr;
-    gap: 15px;
-    padding: clamp(4px, 0.52vw, 6px) 22px;
+    grid-template-columns: var(--domain-list-grid-cols);
+    gap: 8px;
+    padding: clamp(4px, 0.42vw, 5px) 16px;
     background: white;
     border: 1px solid var(--color-border);
     border-radius: 22px;
@@ -4897,9 +4790,31 @@ body.domain-page .domain-react-page .card-item {
     /* 防止文本换行 */
 }
 
-body.domain-page .domain-react-page .card-item.companies-column {
+body.domain-page .domain-react-page .card-item.card-item--name,
+body.domain-page .domain-react-page .card-item.card-item--email {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    align-items: flex-start;
+    line-height: 1.35;
+}
+
+body.domain-page .domain-react-page .card-item.companies-column,
+body.domain-page .domain-react-page .card-item.groups-column {
     overflow: visible;
-    /* 确保 tooltip 可以显示 */
+    white-space: normal;
+    align-items: center;
+}
+
+body.domain-page .domain-react-page .card-item.companies-column > div,
+body.domain-page .domain-react-page .card-item.groups-column > div,
+body.domain-page .domain-react-page .domain-chip-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* Force uppercase for specific columns */
@@ -5589,3 +5504,133 @@ body.domain-page .domain-react-page .domain-renew-badge--approved {
     color: #047857;
 }
 
+/* ================================================================
+   Domain List — Tablet / 小屏本（≤1366px）：保持表格，横向滚动 + 列宽保底
+   ================================================================ */
+@media (max-width: 1366px) {
+    body.ec-auth-shell.domain-page .domain-react-page {
+        padding-left: var(--layout-main-offset);
+        padding-right: clamp(14px, 2vw, 24px);
+        transition: padding-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* 顶栏单行：Add | Search | Price | C/G | Delete（与 tablet 设计稿一致） */
+    body.domain-page .domain-react-page .action-buttons {
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: 10px;
+    }
+
+    body.domain-page .domain-react-page .domain-toolbar-left {
+        flex: 1 1 auto;
+        flex-wrap: nowrap;
+        width: auto;
+        min-width: 0;
+    }
+
+    body.domain-page .domain-react-page .domain-toolbar-right {
+        flex: 0 0 auto;
+        width: auto;
+        margin-left: 0;
+    }
+
+    body.domain-page .domain-react-page .search-container.userlist-search-bar {
+        flex: 0 1 auto;
+        min-width: clamp(120px, 14vw, 160px);
+        max-width: clamp(180px, 22vw, 260px);
+        width: auto;
+    }
+
+    body.domain-page .domain-react-page .btn-add,
+    body.domain-page .domain-react-page .btn-fee-settings {
+        flex-shrink: 0;
+    }
+
+    /* Tablet：隐藏 C/G 价格标签，顶栏留给搜索与按钮 */
+    body.domain-page .domain-react-page .domain-fee-price-chips {
+        display: none !important;
+    }
+
+    body.domain-page .domain-react-page .domain-list-table {
+        --domain-list-grid-cols:
+            36px
+            minmax(0, 1fr)
+            minmax(0, 0.85fr)
+            minmax(0, 1fr)
+            minmax(0, 1.65fr)
+            minmax(0, 0.75fr)
+            92px;
+        overflow-x: hidden;
+    }
+
+    /* Tablet：隐藏 Email 列，空间让给 Group / Companies 等 */
+    body.domain-page .domain-react-page .domain-list-table-header > :nth-child(4),
+    body.domain-page .domain-react-page .domain-list-row .card-item--email {
+        display: none !important;
+    }
+
+    body.domain-page .domain-react-page .domain-list-table-inner {
+        min-width: 0;
+        width: 100%;
+    }
+
+    body.domain-page .domain-react-page .table-header,
+    body.domain-page .domain-react-page .domain-card.domain-list-row.show-card {
+        gap: 8px;
+        padding-left: 12px;
+        padding-right: 12px;
+    }
+
+    body.domain-page .domain-react-page .domain-card.domain-list-row.show-card {
+        align-items: center;
+        padding-top: 5px;
+        padding-bottom: 5px;
+    }
+
+    body.domain-page .domain-react-page .domain-card .card-item {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    body.domain-page .domain-react-page .domain-card .card-item.card-item--name {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.3;
+        align-items: center;
+    }
+
+    body.domain-page .domain-react-page .domain-cards {
+        overflow-x: hidden;
+        padding-bottom: 52px;
+    }
+
+    body.domain-page .domain-react-page .domain-action-cell {
+        min-width: 92px;
+    }
+
+    body.domain-page .domain-react-page .domain-company-chip,
+    body.domain-page .domain-react-page .domain-company-more {
+        min-height: 26px;
+        height: auto;
+        padding: 3px 8px;
+    }
+
+    body.domain-page .domain-react-page .pagination-container {
+        right: clamp(16px, 2vw, 28px);
+        bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    }
+
+    body.domain-page .domain-react-page .pagination-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    body.domain-page .domain-react-page .pagination-info {
+        font-size: 14px;
+        width: auto;
+        min-width: 72px;
+    }
+}

@@ -24,8 +24,8 @@ import { getDomainText } from "../../../translateFile/pages/domainTranslate.js";
 import DomainModalPortal from "./DomainModalPortal.jsx";
 import ConfirmDeleteModal, { CONFIRM_DELETE_NESTED_Z_INDEX } from "../../../components/ConfirmDeleteModal.jsx";
 
-/** 与 AuthenticatedLayout TABLET_MEDIA_QUERY 一致 */
-const DFM_COMPACT_LAYOUT_MQ = "(max-width: 1280px)";
+/** 平板 / laptop 全屏外壳；表单布局与 desktop 一致 */
+const DFM_COMPACT_LAYOUT_MQ = "(max-width: 1366px)";
 
 function useDomainFormCompactLayout() {
   const [compact, setCompact] = useState(() => {

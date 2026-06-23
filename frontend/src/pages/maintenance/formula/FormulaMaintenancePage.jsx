@@ -64,6 +64,7 @@ import {
   formulaMaintenanceUsesGroupProcesses,
   resolveFormulaMaintenanceScope,
 } from "./formulaMaintenanceScope.js";
+import { normalizeMaintenanceSearchInput } from "../shared/maintenanceSearchInput.js";
 
 // Components
 import FormulaMaintenanceFilters from "./components/FormulaMaintenanceFilters.jsx";
@@ -141,6 +142,10 @@ export default function FormulaMaintenancePage() {
   const initialFormulaSearchDoneRef = useRef(false);
   const lastSearchQueryKeyRef = useRef("");
   const suppressNextSearchEffectRef = useRef(false);
+  const processAutoOpenedBySearchRef = useRef(false);
+  const textSearchAutoLoadStartedRef = useRef(false);
+  const textSearchRef = useRef("");
+  const selectedProcessRef = useRef(null);
   const skipMetaAfterBootRef = useRef(false);
   const handledMetaScopeKeyRef = useRef("");
   const switchPermsCacheRef = useRef(null);
@@ -218,6 +223,14 @@ export default function FormulaMaintenancePage() {
     scopeKeyRef.current = formulaScopeKey;
   }, [formulaScopeKey]);
 
+  useEffect(() => {
+    textSearchRef.current = textSearch;
+  }, [textSearch]);
+
+  useEffect(() => {
+    selectedProcessRef.current = selectedProcess;
+  }, [selectedProcess]);
+
   const [totalRowCount, setTotalRowCount] = useState(0);
   const [listHydrating, setListHydrating] = useState(false);
   const [listSyncing, setListSyncing] = useState(false);
@@ -287,6 +300,8 @@ export default function FormulaMaintenancePage() {
       cancelAnimationFrame(progressiveRafRef.current);
       progressiveRafRef.current = null;
     }
+    processAutoOpenedBySearchRef.current = false;
+    textSearchAutoLoadStartedRef.current = false;
     formulaDataFullRef.current = [];
     formulaDisplayRef.current = [];
     setTotalRowCount(0);
@@ -347,6 +362,7 @@ export default function FormulaMaintenancePage() {
 
   useEffect(() => {
     if (!listQueryEnabled) return;
+    if (processAutoOpenedBySearchRef.current && !textSearch.trim()) return;
     applyFormulaListView(formulaDataFullRef.current);
     resetSelection();
   }, [textSearch, listQueryEnabled, applyFormulaListView, resetSelection]);
@@ -706,6 +722,7 @@ export default function FormulaMaintenancePage() {
       });
       if (!skipStaleGuard && seq !== searchSeqRef.current) return;
       if (!skipStaleGuard && searchScopeKey !== scopeKeyRef.current) return;
+      if (processAutoOpenedBySearchRef.current && !textSearchRef.current.trim()) return;
 
       setConfirmDelete(false);
       setFormulaDataSourceCompanyId(formulaMaintenanceScopeCacheCompanyKey(effectiveScope));
@@ -884,11 +901,15 @@ export default function FormulaMaintenancePage() {
   const handleSetSelectedProcess = useCallback(
     (value) => {
       if (value === null || value === undefined) {
+        processAutoOpenedBySearchRef.current = false;
+        textSearchAutoLoadStartedRef.current = false;
         setSelectedProcess(null);
         clearFormulaList();
         lastSearchQueryKeyRef.current = "";
         return;
       }
+      processAutoOpenedBySearchRef.current = false;
+      textSearchAutoLoadStartedRef.current = false;
       setSelectedProcess(value);
       if (!filtersReady || !formulaMaintenanceScopeIsReady(formulaScope)) return;
       suppressNextSearchEffectRef.current = true;
@@ -901,6 +922,50 @@ export default function FormulaMaintenancePage() {
   const handleClearFilters = useCallback(() => {
     handleSetSelectedProcess(null);
   }, [handleSetSelectedProcess]);
+
+  const handleTextSearchChange = useCallback(
+    (value) => {
+      const next = normalizeMaintenanceSearchInput(value);
+      textSearchRef.current = next;
+      setTextSearch(next);
+
+      if (!next.trim() && processAutoOpenedBySearchRef.current) {
+        processAutoOpenedBySearchRef.current = false;
+        textSearchAutoLoadStartedRef.current = false;
+        searchSeqRef.current += 1;
+        suppressNextSearchEffectRef.current = true;
+        lastSearchQueryKeyRef.current = "";
+        setSelectedProcess(null);
+        selectedProcessRef.current = null;
+        formulaDataFullRef.current = [];
+        formulaDisplayRef.current = [];
+        setTotalRowCount(0);
+        setFormulaData([]);
+        setLoading(false);
+        setListSyncing(false);
+        resetSelection();
+        return;
+      }
+
+      if (
+        selectedProcessRef.current === null &&
+        next.trim() &&
+        filtersReady &&
+        formulaMaintenanceScopeIsReady(formulaScope)
+      ) {
+        processAutoOpenedBySearchRef.current = true;
+        selectedProcessRef.current = "";
+        setSelectedProcess("");
+        if (!textSearchAutoLoadStartedRef.current) {
+          textSearchAutoLoadStartedRef.current = true;
+          suppressNextSearchEffectRef.current = true;
+          lastSearchQueryKeyRef.current = "";
+          void performSearchRef.current({ process: "" });
+        }
+      }
+    },
+    [filtersReady, formulaScope, resetSelection],
+  );
 
   const isRowSelected = useCallback(
     (id) => {
@@ -1064,7 +1129,7 @@ export default function FormulaMaintenancePage() {
         selectedProcess={selectedProcess}
         setSelectedProcess={handleSetSelectedProcess}
         textSearch={textSearch}
-        setTextSearch={setTextSearch}
+        onTextSearchChange={handleTextSearchChange}
         companyId={companyId}
         snapGroupIds={snapGroupIds}
         visibleCompanies={visibleCompanies}
@@ -1111,7 +1176,7 @@ export default function FormulaMaintenancePage() {
         accounts={accounts}
         m={m}
         inputMethodOptions={inputMethodOptions}
-        awaitingProcessSelection={selectedProcess === null}
+        awaitingProcessSelection={selectedProcess === null && !textSearch.trim()}
         bootPending={bootPending}
       />
       </div>

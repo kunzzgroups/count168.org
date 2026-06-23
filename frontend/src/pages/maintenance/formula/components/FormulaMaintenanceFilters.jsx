@@ -1,13 +1,12 @@
 import ProcessSelect from "../../shared/ProcessSelect.jsx";
 import ReportGcFilterPanel from "../../../report/shared/ReportGcFilterPanel.jsx";
-import { normalizeMaintenanceSearchInput } from "../../shared/maintenanceSearchInput.js";
 
 export default function FormulaMaintenanceFilters({
   processes,
   selectedProcess,
   setSelectedProcess,
   textSearch,
-  setTextSearch,
+  onTextSearchChange,
   companyId,
   snapGroupIds,
   visibleCompanies,
@@ -99,7 +98,7 @@ export default function FormulaMaintenanceFilters({
                   autoComplete="off"
                   value={textSearch}
                   aria-labelledby="formula-maint-search-legend"
-                  onChange={(e) => setTextSearch(normalizeMaintenanceSearchInput(e.target.value))}
+                  onChange={(e) => onTextSearchChange(e.target.value)}
                   style={{ textTransform: "uppercase" }}
                 />
               </div>

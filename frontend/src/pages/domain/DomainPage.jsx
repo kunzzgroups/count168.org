@@ -369,18 +369,19 @@ export default function DomainPage() {
           </div>
         </div>
 
-        <div className="table-container">
-          <div className="table-header">
-            <div>{t("no")}</div>
-            <div>{t("ownerCodeWithColon")}</div>
-            <div>{t("nameWithColon")}</div>
-            <div>{t("emailWithColon")}</div>
-            <div>Group ID:</div>
-            <div>{t("companiesWithColon")}</div>
-            <div>{t("createdBy")}</div>
-            <div>{t("action")}</div>
-          </div>
-          <div className="domain-cards" id="domainTableBody">
+        <div className="table-container domain-list-table">
+          <div className="domain-list-table-inner">
+            <div className="table-header domain-list-table-header">
+              <div>{t("no")}</div>
+              <div>{t("ownerCodeWithColon")}</div>
+              <div>{t("nameWithColon")}</div>
+              <div>{t("emailWithColon")}</div>
+              <div>{t("groupIdLabel")}:</div>
+              <div>{t("companiesWithColon")}</div>
+              <div>{t("createdBy")}</div>
+              <div>{t("action")}</div>
+            </div>
+            <div className="domain-cards" id="domainTableBody">
             {pagedDomains.map((domain, idx) => {
               const globalIdx = (safePage - 1) * ROWS_PER_PAGE + idx + 1;
               const companiesFull = Array.isArray(domain.companies_full) ? domain.companies_full : [];
@@ -394,14 +395,17 @@ export default function DomainPage() {
               const isProtected = hasProtectedCompany(companiesFull);
 
               return (
-                <div key={domain.id} className="domain-card show-card" data-id={domain.id}>
+                <div key={domain.id} className="domain-card domain-list-row show-card" data-id={domain.id}>
                   <div className="card-item">{globalIdx}</div>
                   <div className="card-item uppercase-text">{domain.owner_code}</div>
-                  <div className="card-item">{domain.name}</div>
-                  <div className="card-item">{domain.email}</div>
-                  <div className="card-item groups-column" data-groups={JSON.stringify(groupsFull)}>
+                  <div className="card-item card-item--name">{domain.name}</div>
+                  <div className="card-item card-item--email">{domain.email}</div>
+                  <div
+                    className="card-item groups-column"
+                    data-groups={JSON.stringify(groupsFull)}
+                  >
                     {groupList.length === 0 ? "-" : (
-                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                      <div className="domain-chip-row">
                         {visibleGroups.map((gid) => {
                           const exp = groupsFull.find((g) => g.group_code === gid)?.expiration_date || "";
                           return (
@@ -437,9 +441,12 @@ export default function DomainPage() {
                       </div>
                     )}
                   </div>
-                  <div className="card-item companies-column" data-companies={JSON.stringify(companiesFull)}>
+                  <div
+                    className="card-item companies-column"
+                    data-companies={JSON.stringify(companiesFull)}
+                  >
                     {companyList.length === 0 ? "-" : (
-                      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                      <div className="domain-chip-row">
                         {visible.map((cid) => {
                           const exp = companiesFull.find((c) => c.company_id === cid)?.expiration_date || "";
                           return (
@@ -475,11 +482,13 @@ export default function DomainPage() {
                       </div>
                     )}
                   </div>
-                  <div className="card-item uppercase-text">{String(domain.created_by || "-").toUpperCase()}</div>
+                  <div className="card-item uppercase-text">
+                    {String(domain.created_by || "-").toUpperCase()}
+                  </div>
                   <div className="card-item domain-action-cell">
                     <button
                       type="button"
-                      className="btn-edit"
+                      className="btn-edit domain-action-cell__edit"
                       onClick={() => openEditModal(domain)}
                       aria-label={t("edit")}
                     >
@@ -488,17 +497,20 @@ export default function DomainPage() {
                     {!isProtected ? (
                       <input
                         type="checkbox"
-                        className="domain-checkbox"
+                        className="domain-checkbox domain-action-cell__check"
                         value={domain.id}
                         checked={checkedIds.has(domain.id)}
                         aria-label={t("selectOwnerForDelete")}
                         onChange={(e) => handleCheckbox(domain.id, e.target.checked)}
                       />
-                    ) : null}
+                    ) : (
+                      <span className="domain-action-cell__check domain-action-cell__check--empty" aria-hidden="true" />
+                    )}
                   </div>
                 </div>
               );
             })}
+            </div>
           </div>
         </div>
 
