@@ -3,7 +3,6 @@ import { assetUrl, buildApiUrl } from "../../utils/core/apiUrl.js";
 import { injectStylesheet } from "../../utils/core/injectStylesheet.js";
 import { MAINTENANCE_I18N } from "../../translateFile/pages/maintenanceTranslate.js";
 import { formatMemberRole, getMemberText } from "../../translateFile/pages/memberTranslate.js";
-import { formatDmyFromDate } from "../maintenance/shared/maintenanceDateHelpers.js";
 import { ensureMaintenanceDateRangePicker } from "../../utils/date/dateRangePicker.js";
 import { useExpirationReminder } from "../../hooks/useExpirationReminder.js";
 import { clearDashboardFilterSession, clearOwnerCompaniesCache } from "../../utils/company/sharedCompanyFilter.js";
@@ -38,7 +37,7 @@ const AVATAR_MAP = {
 /**
  * Member page shell: session bootstrap, sidebar avatar, announcements, logout, toasts.
  */
-export function useMemberPageShell({ navigate, initSession, lang }) {
+export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy, lang }) {
   const t = useCallback((key, params) => getMemberText(lang, key, params), [lang]);
 
   const [loading, setLoading] = useState(true);
@@ -104,8 +103,7 @@ export function useMemberPageShell({ navigate, initSession, lang }) {
         if (!cancelled) {
           setMe(u);
           setCompanies(Array.isArray(cJson?.data) ? cJson.data : []);
-          const todayDmy = formatDmyFromDate(new Date());
-          initSession(u, u.company_id, todayDmy, todayDmy);
+          initSession(u, u.company_id, mondayDmy, todayDmy);
         }
       } catch {
         if (!cancelled) navigate(spaPath("login"), { replace: true });
@@ -116,7 +114,7 @@ export function useMemberPageShell({ navigate, initSession, lang }) {
     return () => {
       cancelled = true;
     };
-  }, [navigate, initSession]);
+  }, [navigate, mondayDmy, todayDmy, initSession]);
 
   const refreshSession = useCallback(async () => {
     try {
