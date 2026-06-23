@@ -39,6 +39,8 @@ export default function ReportDatePicker({
   periodShortcutsAria = "Period shortcuts",
   monthLabels = MONTH_LABELS,
   weekdaysShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+  /** When true, parent hook owns MaintenanceDateRangePicker.init (e.g. member Win/Loss). */
+  skipPickerInit = false,
 }) {
   const anchorLabelId = "report-date-range-outlined-label";
   const onRangeChangeRef = useRef(onRangeChange);
@@ -49,11 +51,18 @@ export default function ReportDatePicker({
   const initialYearLabel = parsedFrom ? String(parsedFrom.getFullYear()) : String(new Date().getFullYear());
   const initialMonthValue = parsedFrom ? String(parsedFrom.getMonth()) : String(new Date().getMonth());
 
+  const pickerReadyRef = useRef(false);
+
   useEffect(() => {
     const fromEl = document.getElementById("date_from");
     const toEl = document.getElementById("date_to");
-    if (fromEl) fromEl.value = ymdToDmy(dateFrom);
-    if (toEl) toEl.value = ymdToDmy(dateTo);
+    if (!fromEl || !toEl) return;
+    const fromDmy = ymdToDmy(dateFrom);
+    const toDmy = ymdToDmy(dateTo);
+    if (fromEl.value !== fromDmy) fromEl.value = fromDmy;
+    if (toEl.value !== toDmy) toEl.value = toDmy;
+    ensureMaintenanceDateRangePicker();
+    window.MaintenanceDateRangePicker?.refreshInputsDisplay?.();
   }, [dateFrom, dateTo]);
 
   useEffect(() => {
@@ -70,10 +79,13 @@ export default function ReportDatePicker({
   }, []);
 
   useEffect(() => {
+    if (skipPickerInit) return undefined;
+
     let disposed = false;
 
     const initPicker = () => {
-      if (disposed || !window?.MaintenanceDateRangePicker?.init) return;
+      if (disposed || pickerReadyRef.current) return;
+      if (!window?.MaintenanceDateRangePicker?.init) return;
       window.MaintenanceDateRangePicker.init({
         allowEmpty: false,
         placeholder,
@@ -86,6 +98,8 @@ export default function ReportDatePicker({
           if (nextFrom && nextTo) onRangeChangeRef.current?.(nextFrom, nextTo);
         },
       });
+      window.MaintenanceDateRangePicker.refreshInputsDisplay?.();
+      pickerReadyRef.current = true;
     };
 
     ensureMaintenanceDateRangePicker();
@@ -93,8 +107,9 @@ export default function ReportDatePicker({
 
     return () => {
       disposed = true;
+      pickerReadyRef.current = false;
     };
-  }, [placeholder, selectEndDateHint]);
+  }, [skipPickerInit, placeholder, selectEndDateHint]);
 
   const dateBar = captureDateStyle ? (
     <div className="transaction-date-range-group">

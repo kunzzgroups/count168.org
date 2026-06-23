@@ -9,8 +9,6 @@ import SidebarMenuTooltip from "../../components/SidebarMenuTooltip.jsx";
 import ReportDatePicker from "../report/common/ReportDatePicker.jsx";
 import {
   buildMaintenancePeriodPresets,
-  formatDmyFromDate,
-  formatDmyFromYmd,
   parseDmy,
 } from "../maintenance/shared/maintenanceDateHelpers.js";
 import "../../../public/css/member.css";
@@ -34,6 +32,7 @@ import {
 } from "./memberPageHelpers.js";
 import { useMemberWinLoss } from "./useMemberWinLoss.js";
 import { useMemberPageShell } from "./useMemberPageShell.js";
+import { useMemberDateRange } from "./useMemberDateRange.js";
 import { useSidebarTabletCollapse } from "../../hooks/useSidebarTabletCollapse.js";
 import { DASHBOARD_I18N } from "../../translateFile/shell/dashboardTranslate.js";
 
@@ -110,17 +109,6 @@ export default function MemberPage() {
     formatPaymentHistoryMoney,
   } = useMemberWinLoss({ showNotification, lang });
 
-  const today = useMemo(() => new Date(), []);
-  const monday = useMemo(() => {
-    const d = new Date(today);
-    const day = d.getDay();
-    const toMonday = day === 0 ? 6 : day - 1;
-    d.setDate(d.getDate() - toMonday);
-    return d;
-  }, [today]);
-  const mondayDmy = useMemo(() => formatDmyFromDate(monday), [monday]);
-  const todayDmy = useMemo(() => formatDmyFromDate(today), [today]);
-
   const {
     loading,
     me,
@@ -146,9 +134,15 @@ export default function MemberPage() {
   } = useMemberPageShell({
     navigate,
     initSession,
-    mondayDmy,
-    todayDmy,
     lang,
+  });
+
+  const { todayDmy } = useMemberDateRange({
+    ready: !loading && !!me,
+    dateFrom,
+    dateTo,
+    setDateFrom,
+    setDateTo,
   });
 
   useEffect(() => {
@@ -269,14 +263,6 @@ export default function MemberPage() {
   );
 
   const periodPresets = useMemo(() => buildMaintenancePeriodPresets(maintenanceLocale), [maintenanceLocale]);
-
-  const handleDateRangeChange = useCallback(
-    (start, end) => {
-      setDateFrom(formatDmyFromYmd(start));
-      setDateTo(formatDmyFromYmd(end));
-    },
-    [setDateFrom, setDateTo],
-  );
 
   useLayoutEffect(() => {
     document.body.classList.remove("bg");
@@ -441,9 +427,9 @@ export default function MemberPage() {
               <div className="member-dash-col member-dash-col-filters" ref={wlFiltersColRef}>
             <div className="member-winloss-date-field">
               <ReportDatePicker
-                dateFrom={parseDmy(dateFrom || mondayDmy)}
+                dateFrom={parseDmy(dateFrom || todayDmy)}
                 dateTo={parseDmy(dateTo || todayDmy)}
-                onRangeChange={handleDateRangeChange}
+                skipPickerInit
                 containerClass="customer-report-filter-group"
                 label={t("dateRange")}
                 placeholder={t("selectDateRange")}
