@@ -595,11 +595,6 @@ export const EMPTY_BANK_FORM = {
   status: "active",
   remark: "",
   sop: "",
-  dts_modified: "",
-  dts_created: "",
-  created_by: "",
-  dts_modified_display: "",
-  dts_modified_user_display: "",
 };
 
 /** @returns {'monthly'|'week'|'day'|'once'|'1st_of_every_month'} */

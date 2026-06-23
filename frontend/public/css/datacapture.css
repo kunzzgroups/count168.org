@@ -1263,14 +1263,14 @@ body.datacapture-page .bottom-section:has(.excel-table-container--group-only) .f
     position: relative;
 }
 
-body.datacapture-page .modal-header h2 {
+.modal-header h2 {
     background-color: #f8fafc;
     margin: 0;
     padding: clamp(10px, 1.04vw, 20px) 32px;
     font-size: clamp(14px, 1.25vw, 24px);
     font-weight: bold;
     color: #1e293b;
-    /* border-bottom: 1px solid #e2e8f0; */
+    border-bottom: 1px solid #e2e8f0;
 }
 
 .close {

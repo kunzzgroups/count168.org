@@ -427,28 +427,6 @@ export default function BankProcessFormModal({
                       )}
                     </div>
                   </div>
-                  {editMode ? (
-                    <div className="bank-form-dts-section">
-                      <div className="form-group">
-                        <label htmlFor="bank_dts_modified">{t("dtsModified")}</label>
-                        <div id="bank_dts_modified" className="bank-form-dts-readonly">
-                          <span id="bank_dts_modified_date">{form.dts_modified_display || ""}</span>
-                          <span id="bank_dts_modified_user" className="bank-form-dts-readonly-user">
-                            {form.dts_modified_user_display || ""}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="form-group">
-                        <label htmlFor="bank_dts_created">{t("dtsCreated")}</label>
-                        <div id="bank_dts_created" className="bank-form-dts-readonly">
-                          <span id="bank_dts_created_date">{form.dts_created || ""}</span>
-                          <span id="bank_dts_created_user" className="bank-form-dts-readonly-user">
-                            {form.created_by || ""}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
                 <div className="bank-form-cell bank-form-cell-right">
                   <div className="form-row bank-row-two-cols">
