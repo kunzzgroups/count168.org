@@ -181,19 +181,19 @@ function rowCrDrAmountNonZero(row) {
 }
 
 /**
- * Selected period has W/L, Id Product, or Payment activity (matches search_api has_period_activity,
- * with column-value fallback when flags are missing).
+ * Win/Loss or Cr/Dr column is non-zero for the selected period (uses win_loss_full when present).
  */
-export function rowHasPeriodActivity(row) {
-  if (rowFlagToBool(row?.has_win_loss_transactions)) return true;
-  if (rowFlagToBool(row?.has_period_id_product_rows)) return true;
-  if (rowFlagToBool(row?.has_crdr_transactions)) return true;
+export function rowHasPeriodColumnActivity(row) {
   return rowWinLossAmountNonZero(row) || rowCrDrAmountNonZero(row);
 }
 
-/** Default list: show non-zero balance or any period W/L / Payment activity (even when Balance = 0.00). */
+/**
+ * Default list: non-zero Balance, or (Balance 0.00 with at least one of Win/Loss / Cr/Dr non-zero).
+ * When both Win/Loss and Cr/Dr are 0.00, hide even if Balance is 0.00.
+ */
 export function rowShouldShowInDefaultView(row) {
-  return rowHasNonZeroBalance(row) || rowHasPeriodActivity(row);
+  if (rowHasNonZeroBalance(row)) return true;
+  return rowHasPeriodColumnActivity(row);
 }
 
 /** @deprecated Prefer {@link applyZeroBalanceFilter} — kept for legacy callers. */
@@ -279,7 +279,7 @@ export function applyZeroBalanceFilter(
   if (showZeroBalance || showCaptureOnly || showPaymentOnly) {
     return { left: filteredLeft, right: filteredRight };
   }
-  // Default: hide only rows with Balance 0.00 and no period W/L or Payment activity.
+  // Default: hide Balance 0.00 when Win/Loss and Cr/Dr are both 0.00.
   return {
     left: filteredLeft.filter(rowShouldShowInDefaultView),
     right: filteredRight.filter(rowShouldShowInDefaultView),
