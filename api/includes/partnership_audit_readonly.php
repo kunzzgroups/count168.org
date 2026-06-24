@@ -39,3 +39,15 @@ function is_partnership_audit_read_only_active(PDO $pdo): bool
 {
     return get_partnership_audit_read_only_flag($pdo) === 1;
 }
+
+/**
+ * User List 更新：只读 Partnership/Audit 仅禁止改自己；编辑下级用户（含权限）仍允许。
+ */
+function partnership_audit_read_only_blocks_userlist_self_edit(PDO $pdo, int $targetUserId): bool
+{
+    if (!is_partnership_audit_read_only_active($pdo)) {
+        return false;
+    }
+    $uid = (int) ($_SESSION['user_id'] ?? 0);
+    return $targetUserId > 0 && $uid > 0 && $targetUserId === $uid;
+}

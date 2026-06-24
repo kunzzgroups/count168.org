@@ -2154,11 +2154,12 @@ try {
             break;
             
         case 'update':
-            if (is_partnership_audit_read_only_active($pdo)) {
-                sendResponse(false, '只读账号无法执行此操作');
-            }
             if (!isset($input['id'])) {
                 sendResponse(false, 'User ID is required');
+            }
+            $updateUserId = (int) $input['id'];
+            if (partnership_audit_read_only_blocks_userlist_self_edit($pdo, $updateUserId)) {
+                sendResponse(false, '只读账号无法执行此操作');
             }
             
             global $current_company_id, $current_user_role;

@@ -28,3 +28,15 @@ export function guardPartnershipAuditWrite(sessionMe, onBlocked) {
   if (typeof onBlocked === "function") onBlocked()
   return true
 }
+
+/**
+ * User List 编辑：Partnership/Audit 只读时仅锁定「编辑自己」；编辑下级账号权限与 admin 一致。
+ * @param {object|null|undefined} sessionMe
+ * @param {number|string|null|undefined} targetUserId
+ * @param {number|string|null|undefined} currentUserId
+ */
+export function isPartnershipAuditReadOnlyBlockingUserEdit(sessionMe, targetUserId, currentUserId) {
+  if (!isPartnershipAuditReadOnlyLocked(sessionMe)) return false
+  if (targetUserId == null || currentUserId == null) return true
+  return Number(targetUserId) === Number(currentUserId)
+}

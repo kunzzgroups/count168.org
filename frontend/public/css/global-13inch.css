@@ -3,7 +3,8 @@
    Smart Density & Readability Enhancements for the Entire System
    ========================================================================== */
 
-@media screen and (max-width: 1440px) {
+/* Touch tablets (iPad, Galaxy Tab) keep desktop tokens; laptop 13" uses fine pointer. */
+@media screen and (max-width: 1440px) and (pointer: fine) {
 
     /* ----------------------------------------------------
        1. Base Typography & Hierarchy
@@ -207,7 +208,7 @@
     body.ec-auth-shell.account-page:not(.account-page--show-all) .account-card {
         padding: 0 22px !important;
         min-height: 0 !important;
-        flex: 0 1 auto !important;
+        flex: 0 0 auto !important;
     }
 
     body.ec-auth-shell .card-item,
@@ -217,6 +218,22 @@
         font-size: var(--text-medium) !important;
         line-height: 1.5 !important;
         letter-spacing: 0.015em !important;
+    }
+
+    body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-card-item {
+        line-height: 1.1 !important;
+        letter-spacing: 0 !important;
+    }
+
+    body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item {
+        line-height: 1.1 !important;
+        letter-spacing: 0 !important;
+    }
+
+    body.ec-auth-shell.user-page:not(.user-page--show-all) .user-card.user-list-row {
+        padding: 0 22px !important;
+        min-height: 0 !important;
+        flex: 0 0 auto !important;
     }
 
 
@@ -668,17 +685,147 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
         max-height: 100vh !important;
     }
 
-    body.user-page:not(.user-page--show-all) .container,
-    body.account-page:not(.account-page--show-all) .container {
+    body.user-page:not(.user-page--show-all) .container {
         height: 100vh !important;
+        min-height: 0 !important;
+        max-height: 100vh !important;
         overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 0 !important;
+        box-sizing: border-box !important;
     }
 
-    body.user-page:not(.user-page--show-all) .content,
-    body.account-page:not(.account-page--show-all) .content {
-        height: calc(100vh - var(--layout-page-top-inset)) !important;
+    body.user-page:not(.user-page--show-all) .content {
+        flex: 1 1 auto !important;
         min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
         overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 0 !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .action-buttons-container {
+        flex-shrink: 0 !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .user-table-wrapper {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 52px !important;
+        box-sizing: border-box !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .user-table-wrapper.user-list-table {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .user-list-table-header {
+        flex-shrink: 0 !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .user-cards {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .user-cards.user-cards--paged-fill {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        grid-template-rows: repeat(25, minmax(0, 1fr)) !important;
+        flex: 1 1 auto !important;
+        align-content: stretch !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .user-cards.user-cards--paged-fill .user-list-row {
+        flex: unset !important;
+        min-height: 0 !important;
+        align-self: stretch !important;
+    }
+
+    body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .role-badge {
+        padding: 4px 10px !important;
+        letter-spacing: 0.025em !important;
+        min-width: max-content !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .user-table-wrapper {
+        padding-bottom: 52px !important;
+    }
+
+    body.user-page:not(.user-page--show-all) .pagination-container {
+        position: fixed !important;
+        right: max(40px, env(safe-area-inset-right, 0px)) !important;
+        bottom: max(20px, env(safe-area-inset-bottom, 0px)) !important;
+        left: auto !important;
+        top: auto !important;
+        margin: 0 !important;
+        z-index: 120 !important;
+        width: fit-content !important;
+        flex-shrink: 0 !important;
+    }
+
+    /* Account List（非 Show All）：与 Games Process List 一屏 flex 布局 */
+    body.account-page:not(.account-page--show-all) .container {
+        height: 100vh !important;
+        min-height: 0 !important;
+        max-height: 100vh !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 0 !important;
+        box-sizing: border-box !important;
+    }
+
+    body.account-page:not(.account-page--show-all) .content {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 0 !important;
+    }
+
+    body.account-page:not(.account-page--show-all) .action-buttons-container {
+        flex-shrink: 0 !important;
+    }
+
+    body.account-page:not(.account-page--show-all) .account-table-wrapper {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+        padding-bottom: 52px !important;
+        box-sizing: border-box !important;
+    }
+
+    body.account-page:not(.account-page--show-all) .account-table-wrapper.account-list-table {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    body.account-page:not(.account-page--show-all) .account-list-table-header,
+    body.account-page:not(.account-page--show-all) .account-table-header.account-list-table-header {
+        flex-shrink: 0 !important;
     }
 
     /* Bank Process（非 Show All）：覆盖下方 Global Unlock，桌面一屏无整页滚动 */
@@ -769,15 +916,41 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
 
     body.user-page:not(.user-page--show-all) .user-cards {
         overflow: hidden !important;
-    }
-
-    body.user-page:not(.user-page--show-all) .user-cards {
-        min-height: var(--list-table-body-min-height) !important;
+        min-height: 0 !important;
     }
 
     body.account-page:not(.account-page--show-all) .account-cards {
-        overflow: hidden !important;
+        flex: 1 1 auto !important;
         min-height: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    body.account-page:not(.account-page--show-all) .account-cards.account-cards--paged-fill {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        grid-template-rows: repeat(25, minmax(0, 1fr)) !important;
+        flex: 1 1 auto !important;
+        align-content: stretch !important;
+    }
+
+    body.account-page:not(.account-page--show-all) .account-cards.account-cards--paged-fill .account-list-row {
+        flex: unset !important;
+        min-height: 0 !important;
+        align-self: stretch !important;
+    }
+
+    body.ec-auth-shell.process-page:not(.process-page--bank) .games-process-row .role-badge,
+    body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-role-badge,
+    body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row span.account-role-badge,
+    body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .role-badge {
+        padding: 4px 10px !important;
+        letter-spacing: 0.025em !important;
+        min-width: max-content !important;
+        flex-shrink: 0;
+        white-space: nowrap;
     }
 
     body.account-page:not(.account-page--show-all) .account-table-wrapper {

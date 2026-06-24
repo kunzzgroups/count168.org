@@ -1,7 +1,7 @@
 <?php
 /**
  * Shared group-only Data Capture table drafts (SALARY / COMMISSION / BONUS — not PROFIT).
- * Scoped by group_id + process_key + currency_id — not per user or per date.
+ * Stored in data_capture_draft with scope_type = 'group' (group_id + process_key + currency_id).
  */
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/permissions.php';
@@ -23,7 +23,7 @@ if (!isset($_SESSION['user_id'])) {
 
 $user_id = (int) $_SESSION['user_id'];
 
-function dcEnsureGroupCaptureDraftTable(PDO $pdo): void
+function dcEnsureCaptureDraftTable(PDO $pdo): void
 {
     static $checked = false;
     if ($checked) {
@@ -32,21 +32,63 @@ function dcEnsureGroupCaptureDraftTable(PDO $pdo): void
     $checked = true;
     try {
         $pdo->exec("
-            CREATE TABLE IF NOT EXISTS data_capture_group_draft (
-                id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-                group_id VARCHAR(16) NOT NULL,
-                process_key VARCHAR(32) NOT NULL,
-                currency_id INT UNSIGNED NOT NULL,
+            CREATE TABLE IF NOT EXISTS data_capture_draft (
+                id INT NOT NULL AUTO_INCREMENT,
+                scope_type ENUM('group', 'company') NOT NULL,
+                group_id VARCHAR(50) NULL,
+                company_id INT NULL,
+                process_key VARCHAR(64) NOT NULL,
+                currency_id INT NOT NULL,
                 draft_json LONGTEXT NOT NULL,
-                updated_by INT UNSIGNED NULL DEFAULT NULL,
+                updated_by INT NULL,
                 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 PRIMARY KEY (id),
-                UNIQUE KEY uk_dc_group_draft_group_process_currency (group_id, process_key, currency_id),
-                KEY idx_dc_group_draft_updated (updated_at)
+                UNIQUE KEY uk_group_process_currency (group_id, process_key, currency_id),
+                UNIQUE KEY uk_company_process_currency (company_id, process_key, currency_id),
+                KEY idx_scope_type (scope_type),
+                KEY idx_group_id (group_id),
+                KEY idx_company_id (company_id),
+                KEY idx_updated_at (updated_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         ");
+        dcMigrateLegacyGroupCaptureDraftIfNeeded($pdo);
     } catch (Throwable $e) {
-        error_log('dcEnsureGroupCaptureDraftTable: ' . $e->getMessage());
+        error_log('dcEnsureCaptureDraftTable: ' . $e->getMessage());
+    }
+}
+
+function dcMigrateLegacyGroupCaptureDraftIfNeeded(PDO $pdo): void
+{
+    static $migrated = false;
+    if ($migrated) {
+        return;
+    }
+    $migrated = true;
+    try {
+        $legacy = $pdo->query("SHOW TABLES LIKE 'data_capture_group_draft'");
+        if (!$legacy || !$legacy->fetch(PDO::FETCH_NUM)) {
+            return;
+        }
+        $pdo->exec("
+            INSERT INTO data_capture_draft
+                (scope_type, group_id, company_id, process_key, currency_id, draft_json, updated_by, updated_at)
+            SELECT
+                'group',
+                group_id,
+                NULL,
+                process_key,
+                currency_id,
+                draft_json,
+                updated_by,
+                updated_at
+            FROM data_capture_group_draft
+            ON DUPLICATE KEY UPDATE
+                draft_json = VALUES(draft_json),
+                updated_by = VALUES(updated_by),
+                updated_at = VALUES(updated_at)
+        ");
+    } catch (Throwable $e) {
+        error_log('dcMigrateLegacyGroupCaptureDraftIfNeeded: ' . $e->getMessage());
     }
 }
 
@@ -189,7 +231,7 @@ if (is_partnership_audit_read_only_active($pdo)) {
     exit;
 }
 
-dcEnsureGroupCaptureDraftTable($pdo);
+dcEnsureCaptureDraftTable($pdo);
 
 if ($action === 'get_group_capture_draft') {
     if ($processKey === '') {
@@ -205,8 +247,11 @@ if ($action === 'get_group_capture_draft') {
     try {
         $stmt = $pdo->prepare("
             SELECT draft_json, updated_at, updated_by
-            FROM data_capture_group_draft
-            WHERE group_id = ? AND process_key = ? AND currency_id = ?
+            FROM data_capture_draft
+            WHERE scope_type = 'group'
+              AND group_id = ?
+              AND process_key = ?
+              AND currency_id = ?
             LIMIT 1
         ");
         $stmt->execute([$groupId, $processKey, $currencyId]);
@@ -258,8 +303,11 @@ if ($action === 'save_group_capture_draft' && $_SERVER['REQUEST_METHOD'] === 'PO
     if (!dcGroupCaptureDraftHasTableData($tableData)) {
         try {
             $del = $pdo->prepare("
-                DELETE FROM data_capture_group_draft
-                WHERE group_id = ? AND process_key = ? AND currency_id = ?
+                DELETE FROM data_capture_draft
+                WHERE scope_type = 'group'
+                  AND group_id = ?
+                  AND process_key = ?
+                  AND currency_id = ?
             ");
             $del->execute([$groupId, $processKey, $currencyId]);
         } catch (Throwable $e) {
@@ -284,8 +332,9 @@ if ($action === 'save_group_capture_draft' && $_SERVER['REQUEST_METHOD'] === 'PO
 
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO data_capture_group_draft (group_id, process_key, currency_id, draft_json, updated_by, updated_at)
-            VALUES (?, ?, ?, ?, ?, NOW())
+            INSERT INTO data_capture_draft
+                (scope_type, group_id, company_id, process_key, currency_id, draft_json, updated_by, updated_at)
+            VALUES ('group', ?, NULL, ?, ?, ?, ?, NOW())
             ON DUPLICATE KEY UPDATE
                 draft_json = VALUES(draft_json),
                 updated_by = VALUES(updated_by),
@@ -314,8 +363,11 @@ if ($action === 'clear_group_capture_draft') {
     }
     try {
         $stmt = $pdo->prepare("
-            DELETE FROM data_capture_group_draft
-            WHERE group_id = ? AND process_key = ? AND currency_id = ?
+            DELETE FROM data_capture_draft
+            WHERE scope_type = 'group'
+              AND group_id = ?
+              AND process_key = ?
+              AND currency_id = ?
         ");
         $stmt->execute([$groupId, $processKey, $currencyId]);
         echo json_encode(['success' => true]);

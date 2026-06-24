@@ -1,4 +1,5 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { getDataCaptureWeekdayLabels } from "../../../translateFile/pages/dataCaptureTranslate.js";
 import { dataCaptureScopeApiParams, dataCaptureScopeCacheKey } from "./dataCaptureScope.js";
 
 /** Data Capture submissions + process picker (canonical). Legacy: api/processes/submitted_processes_api.php */
@@ -81,7 +82,8 @@ export function getLocalDateString(date = null) {
   return `${y}-${m}-${day}`;
 }
 
-export function buildDateOptions() {
+export function buildDateOptions(lang = "en") {
+  const weekdayNames = getDataCaptureWeekdayLabels(lang);
   const today = new Date();
   const opts = [];
   for (let i = 6; i >= -6; i -= 1) {
@@ -91,7 +93,6 @@ export function buildDateOptions() {
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
     const dateString = `${year}-${month}-${day}`;
-    const weekdayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
     const weekday = weekdayNames[date.getDay()];
     opts.push({
       value: dateString,

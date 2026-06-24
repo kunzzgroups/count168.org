@@ -851,12 +851,13 @@ export default function AutoRenewPage() {
                             {formatRemainingForRow(row, t)}
                           </span>
                         </div>
-                        <div className="card-item auto-renew-col-control">
+                        <div className="card-item auto-renew-col-control auto-renew-col-period">
                           {isPendingEditable ? (
                             <select
-                              className="auto-renew-inline-select"
+                              className={`auto-renew-inline-select${draft.period ? " auto-renew-inline-select--filled" : " auto-renew-inline-select--empty"}`}
                               value={draft.period}
                               disabled={rowBusy}
+                              aria-label={t("colPeriod")}
                               onChange={(e) => updateDraft(row.request_id, { period: e.target.value })}
                             >
                               <option value="">{t("selectPeriod")}</option>
@@ -866,8 +867,10 @@ export default function AutoRenewPage() {
                                 </option>
                               ))}
                             </select>
+                          ) : row.period ? (
+                            <span className="auto-renew-period-badge">{t(periodToLabelKey(row.period))}</span>
                           ) : (
-                            <span className="auto-renew-cell-readonly">{row.period ? t(periodToLabelKey(row.period)) : "-"}</span>
+                            <span className="auto-renew-table-muted">—</span>
                           )}
                         </div>
                         <div className="card-item auto-renew-col-control auto-renew-col-control--status">{renderStatusCell(row)}</div>

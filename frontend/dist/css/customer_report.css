@@ -296,7 +296,7 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
     margin-top: 20px;
     font-weight: bold;
     color: white;
-    font-size: var(--text-base);
+    font-size: var(--text-medium);
     min-width: 0;
 }
 
@@ -395,7 +395,7 @@ body.dashboard-page.report-page .customer-report-showall-group .user-filter-chip
     border-top: 2px solid #0F61FF;
     border-radius: 0 0 8px 8px;
     font-weight: bold;
-    font-size: clamp(12px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     color: #1e293b;
 }
 
@@ -503,10 +503,6 @@ body.dashboard-page.report-page .content > .report-header:empty {
 
 @media (max-width: 1400px) {
 
-    .customer-report-card-item{
-        font-size: clamp(9px, 0.85vw, 14px);
-    }
-
     .custom-select-option{
         font-size: clamp(9px, 0.85vw, 14px);
     }
@@ -514,10 +510,6 @@ body.dashboard-page.report-page .content > .report-header:empty {
 }
 
 @media (max-width: 1200px) {
-
-    .customer-report-card-item{
-        font-size: clamp(9px, 0.85vw, 14px);
-    }
 
     .custom-select-option{
         font-size: clamp(9px, 0.85vw, 14px);

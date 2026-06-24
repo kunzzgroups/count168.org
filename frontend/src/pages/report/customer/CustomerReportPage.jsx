@@ -467,9 +467,6 @@ export default function CustomerReportPage() {
         setReportData(data);
       });
       setReportSnapshot(REPORT_PAGE_KEY, buildReportSnapshotKey(reportParams), data);
-      if (!data?.data?.length) {
-        notify(t("noDataAdjustSearch"), "info");
-      }
     } catch (err) {
       if (err?.name === "AbortError" || !isReportFetchCurrent(seq)) return;
       const msg = err.message || t("loadReportFailed");

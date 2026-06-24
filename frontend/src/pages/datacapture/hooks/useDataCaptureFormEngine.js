@@ -140,6 +140,7 @@ export function useDataCaptureFormEngine(
   {
     applyCompanyOnlyFields = true,
     companyPayrollUi = false,
+    lang = "en",
     payrollPrefsKey = null,
     payrollDraftServerSync = true,
     selectedGroup = null,
@@ -147,7 +148,7 @@ export function useDataCaptureFormEngine(
   } = {},
 ) {
   const { setSelectedDescriptions, clearSelectedDescriptions } = useDataCaptureContext();
-  const dateOptions = useMemo(() => buildDateOptions(), []);
+  const dateOptions = useMemo(() => buildDateOptions(lang), [lang]);
   const defaultDate = useMemo(() => getLocalDateString(), []);
   const restoredProcessData = useMemo(() => readRestoredProcessData(), []);
   const initialGroupOnlyPrefs = useMemo(

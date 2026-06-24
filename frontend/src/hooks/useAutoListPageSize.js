@@ -25,7 +25,18 @@ function readCssPx(el, varName, fallback) {
 }
 
 function cellMinHeight(region) {
+  const accountRow = readCssPx(region, "--account-list-row-min-height", 0);
+  if (accountRow > 0) return accountRow;
   return readCssPx(region, "--bank-list-cell-min-height", DEFAULT_FALLBACK_ROW_HEIGHT);
+}
+
+function findPaginationEl(region, paginationSelector) {
+  const scopes = [region.closest(".bank-process-list-body"), region.closest(".content")].filter(Boolean);
+  for (const scope of scopes) {
+    const el = scope.querySelector(paginationSelector);
+    if (el) return el;
+  }
+  return null;
 }
 
 function rowHeightPx(row) {
@@ -46,15 +57,14 @@ function compactStride(region, rows) {
 /**
  * 可见数据区下沿：取 clip 底与分页条上沿中更靠上的（更严格），避免 fixed 分页条导致多算行数。
  */
-function rowDisplayLimitBottom(region) {
+function rowDisplayLimitBottom(region, paginationSelector) {
   const limits = [];
 
   const clip = region.querySelector(".bank-virtual-scroll-clip");
   const clipBottom = clip?.getBoundingClientRect().bottom;
   if (clipBottom && clipBottom > 0) limits.push(clipBottom);
 
-  const listBody = region.closest(".bank-process-list-body");
-  const pagination = listBody?.querySelector(".pagination-container");
+  const pagination = findPaginationEl(region, paginationSelector);
   if (pagination) {
     limits.push(pagination.getBoundingClientRect().top - PAGINATION_TOP_GAP_PX);
   }
@@ -64,11 +74,11 @@ function rowDisplayLimitBottom(region) {
 }
 
 /** 表头下沿 → 可见区下沿 */
-function measureBudget(region, headerSelector) {
+function measureBudget(region, headerSelector, paginationSelector) {
   const minH = cellMinHeight(region);
   const header = region.querySelector(headerSelector);
   const headerBottom = header?.getBoundingClientRect().bottom ?? 0;
-  const limitBottom = rowDisplayLimitBottom(region);
+  const limitBottom = rowDisplayLimitBottom(region, paginationSelector);
 
   if (headerBottom > 0 && limitBottom != null && limitBottom > headerBottom) {
     return Math.max(0, limitBottom - headerBottom - BUDGET_SAFETY_PX);
@@ -84,8 +94,8 @@ function measureBudget(region, headerSelector) {
 }
 
 /** 当前 DOM 中完整可见的行数（任一行底沿超出可见区则停止） */
-function countRowsFullyVisible(region, rowSelector) {
-  const limit = rowDisplayLimitBottom(region);
+function countRowsFullyVisible(region, rowSelector, paginationSelector) {
+  const limit = rowDisplayLimitBottom(region, paginationSelector);
   if (limit == null) return 0;
 
   const rows = [...region.querySelectorAll(rowSelector)];
@@ -138,6 +148,7 @@ export function useAutoListPageSize({
   enabled = true,
   rowSelector = ".bank-virtual-data-row:not(.bank-virtual-data-row--message)",
   headerSelector = ".bank-virtual-head-row.table-header",
+  paginationSelector = ".pagination-container",
   minRows = MIN_ROWS,
   maxRows = MAX_ROWS,
   remeasureDeps = [],
@@ -155,14 +166,14 @@ export function useAutoListPageSize({
       const el = listRegionRef.current;
       if (!el) return;
 
-      const budget = measureBudget(el, headerSelector);
+      const budget = measureBudget(el, headerSelector, paginationSelector);
       if (budget < cellMinHeight(el)) return;
 
       const rows = [...el.querySelectorAll(rowSelector)];
       const budgetFit = computePageSize(el, budget, rowSelector, minRows, maxRows);
       let next = budgetFit;
 
-      const visible = countRowsFullyVisible(el, rowSelector);
+      const visible = countRowsFullyVisible(el, rowSelector, paginationSelector);
       if (visible > 0) {
         // Currency 等筛选后 DOM 可能只有 1 行，勿把 pageSize 锁死；数据变多后应信任预算重算
         const domUnderfilled = rows.length > 0 && rows.length < budgetFit;
@@ -191,9 +202,10 @@ export function useAutoListPageSize({
     const clip = region.querySelector(".bank-virtual-scroll-clip");
     if (clip) ro.observe(clip);
 
-    const listBody = region.closest(".bank-process-list-body");
-    const pagination = listBody?.querySelector(".pagination-container");
+    const pagination = findPaginationEl(region, paginationSelector);
     if (pagination) ro.observe(pagination);
+    const tableInner = region.querySelector(".account-list-table-inner");
+    if (tableInner) ro.observe(tableInner);
 
     const onWindow = () => measure();
     window.addEventListener("resize", onWindow);
@@ -211,7 +223,7 @@ export function useAutoListPageSize({
       window.visualViewport?.removeEventListener("resize", onWindow);
       window.visualViewport?.removeEventListener("scroll", onWindow);
     };
-  }, [enabled, listRegionRef, headerSelector, rowSelector, minRows, maxRows, ...remeasureDeps]);
+  }, [enabled, listRegionRef, headerSelector, rowSelector, paginationSelector, minRows, maxRows, ...remeasureDeps]);
 
   return enabled ? pageSize : maxRows;
 }

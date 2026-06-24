@@ -42,7 +42,7 @@ import {
   sumConvertedKpiMetrics,
   warmFrankfurterRatesForCurrencies,
 } from "../../../utils/dashboard/frankfurterRates.js";
-import { DASHBOARD_API, DASHBOARD_BOOTSTRAP_API, DASHBOARD_PROFIT_COLOR, isDashboardHistoricalOwnershipMonth } from "../lib/dashboardConstants.js";
+import { DASHBOARD_API, DASHBOARD_BOOTSTRAP_API, DASHBOARD_PANEL_ANIM_DURATION_MS, DASHBOARD_PROFIT_COLOR, isDashboardHistoricalOwnershipMonth } from "../lib/dashboardConstants.js";
 import {
   buildChartRows,
   buildSkeletonChartRows,
@@ -6940,6 +6940,42 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         : companyBreakdownRows.length > 0)
     : currencies.length <= 1 ||
       (allCurrencyEarningsReady && !earningsByCurrencyLoading && !exchangeRatesLoading);
+  const panelsAnimReady = useMemo(() => {
+    if (!chartDataStable) return false;
+    if (companyBreakdownPanelActive) return earningsPanelStable;
+    if (currencies.length <= 1) return true;
+    return earningsPanelStable;
+  }, [
+    chartDataStable,
+    companyBreakdownPanelActive,
+    currencies.length,
+    earningsPanelStable,
+  ]);
+  const panelsAnimSessionRef = useRef("");
+  const [panelAnimEpoch, setPanelAnimEpoch] = useState(0);
+  useEffect(() => {
+    const sessionKey = [
+      dashboardScopeKey,
+      dateFrom,
+      dateTo,
+      earningsPanelView,
+      currencies.length > 1 ? [...currencies].sort().join(",") : "",
+    ].join("|");
+    if (!panelsAnimReady) {
+      panelsAnimSessionRef.current = "";
+      return;
+    }
+    if (panelsAnimSessionRef.current === sessionKey) return;
+    panelsAnimSessionRef.current = sessionKey;
+    setPanelAnimEpoch((n) => n + 1);
+  }, [
+    panelsAnimReady,
+    dashboardScopeKey,
+    dateFrom,
+    dateTo,
+    earningsPanelView,
+    currencies,
+  ]);
   const kpiLoading = loading && !dashboardData;
 
   useLayoutEffect(() => {
@@ -7765,6 +7801,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     chartDateRangeText,
     chartXAxisLayout,
     chartDataStable,
+    panelsAnimReady,
+    panelAnimEpoch,
+    panelAnimDuration: DASHBOARD_PANEL_ANIM_DURATION_MS,
     dashboardScopeKey,
     earningsCurrencyRows,
     useConvertedEarnings,

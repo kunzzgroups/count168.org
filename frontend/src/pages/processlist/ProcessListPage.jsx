@@ -28,6 +28,7 @@ import "../../../public/css/processlist.css";
 import "../../../public/css/remove-word-chip.css";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
+import "../../../public/css/list-badge-scale.css";
 import {
   PAGE_SIZE,
   EMPTY_FORM,

@@ -10,7 +10,7 @@ import {
   normalizeCompanyGroupId,
 } from "../../utils/company/sharedCompanyFilter.js";
 
-export const PAGE_SIZE = 20;
+export const PAGE_SIZE = 25;
 
 export const ROLE_HIERARCHY = {
   owner: 0,
@@ -132,6 +132,7 @@ export function getUserEditFieldLocks(row, currentUserId, currentUserRole) {
 export function getCurrentUserRolePermissions(currentUserRole) {
   const rolePermissions = {
     owner: ["home", "admin", "account", "ownership", "process", "datacapture", "payment", "report", "maintenance"],
+    partnership: ["home", "admin", "account", "ownership", "process", "datacapture", "payment", "report", "maintenance"],
     admin: ["home", "admin", "account", "process", "datacapture", "payment", "report", "maintenance"],
     manager: ["admin", "account", "process", "datacapture", "payment", "report", "maintenance"],
     supervisor: ["admin", "account", "process", "datacapture", "payment", "report"],

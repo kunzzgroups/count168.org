@@ -190,7 +190,7 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     margin-top: 20px;
     font-weight: bold;
     color: white;
-    font-size: clamp(10px, 0.89vw, 17px);
+    font-size: var(--text-medium);
 }
 
 .domain-report-table-header > div:nth-child(2),
@@ -271,7 +271,7 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     border-top: 2px solid #0F61FF;
     border-radius: 0 0 8px 8px;
     /* font-weight: bold; */
-    font-size: clamp(12px, 0.82vw, 15px);
+    font-size: var(--text-medium);
     color: #1e293b;
     align-items: center;
 }
@@ -366,10 +366,6 @@ body.dashboard-page.report-page .content > .report-header:empty {
     .custom-select-option{
         font-size: clamp(9px, 0.85vw, 14px);
     }
-
-    .domain-report-card-item{
-        font-size: clamp(9px, 0.85vw, 14px);
-    }
 }
 
 @media (max-width: 1200px) {
@@ -379,10 +375,6 @@ body.dashboard-page.report-page .content > .report-header:empty {
     }
 
     .custom-select-option{
-        font-size: clamp(9px, 0.85vw, 14px);
-    }
-
-    .domain-report-card-item{
         font-size: clamp(9px, 0.85vw, 14px);
     }
 }

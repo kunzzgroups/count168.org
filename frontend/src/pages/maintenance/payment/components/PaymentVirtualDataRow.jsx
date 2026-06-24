@@ -66,9 +66,9 @@ const PaymentVirtualDataRow = memo(function PaymentVirtualDataRow({
         role="cell"
         className="maintenance-virtual-cell maintenance-virtual-cell--left maintenance-cell-amount"
       >
-        <span className="payment-cell-text">
-          {row.currency || ""} {formatAmount(row.amount)}
-        </span>
+        <MaintenanceEllipsisText
+          value={`${row.currency || ""} ${formatAmount(row.amount)}`.trim()}
+        />
       </div>
       <div
         role="cell"

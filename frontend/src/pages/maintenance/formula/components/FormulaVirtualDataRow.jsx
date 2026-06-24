@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { toUpperDisplay, syncEditFormSourcePercent } from "../formulaMaintenanceLogic.js";
 import { assetUrl } from "../../../../utils/core/apiUrl.js";
+import MaintenanceEllipsisText from "../../shared/MaintenanceEllipsisText.jsx";
 
 const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
   row,
@@ -28,8 +29,11 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
       <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left">
         {row.no ?? index + 1}
       </div>
-      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap" title={row.process}>
-        <span className="formula-cell-clamp-2 process-display">{row._process ?? toUpperDisplay(row.process)}</span>
+      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap">
+        <MaintenanceEllipsisText
+          value={row._process ?? toUpperDisplay(row.process)}
+          className="formula-cell-clamp-2 process-display"
+        />
       </div>
       <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap">
         {isEditing ? (
@@ -46,13 +50,17 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
             ))}
           </select>
         ) : (
-          <span className="formula-cell-clamp-2 account-display" title={row.account}>
-            {row._account ?? toUpperDisplay(row.account)}
-          </span>
+          <MaintenanceEllipsisText
+            value={row._account ?? toUpperDisplay(row.account)}
+            className="formula-cell-clamp-2 account-display"
+          />
         )}
       </div>
       <div role="cell" className="maintenance-virtual-cell maintenance-cell-currency">
-        {row._currency ?? toUpperDisplay(row.currency)}
+        <MaintenanceEllipsisText
+          value={row._currency ?? toUpperDisplay(row.currency)}
+          className="formula-cell-clamp-2"
+        />
       </div>
       <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap">
         {isEditing ? (
@@ -63,13 +71,17 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
             onChange={(e) => onEditFormChange((prev) => syncEditFormSourcePercent(prev, e.target.value))}
           />
         ) : (
-          <span className="formula-cell-clamp-2 source-display" title={row.source}>
-            {row._source ?? toUpperDisplay(row.source)}
-          </span>
+          <MaintenanceEllipsisText
+            value={row._source ?? toUpperDisplay(row.source)}
+            className="formula-cell-clamp-2 source-display"
+          />
         )}
       </div>
-      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap formula-virtual-cell--product" title={row.product}>
-        <span className="formula-cell-clamp-2 product-display">{row._product ?? toUpperDisplay(row.product)}</span>
+      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap formula-virtual-cell--product">
+        <MaintenanceEllipsisText
+          value={row._product ?? toUpperDisplay(row.product)}
+          className="formula-cell-clamp-2 product-display"
+        />
       </div>
       <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap formula-virtual-cell--input-method">
         {isEditing ? (
@@ -85,12 +97,13 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
             ))}
           </select>
         ) : (
-          <span className="formula-cell-clamp-2 input-method-display" title={row.input_method}>
-            {row._inputMethod ?? toUpperDisplay(row.input_method)}
-          </span>
+          <MaintenanceEllipsisText
+            value={row._inputMethod ?? toUpperDisplay(row.input_method)}
+            className="formula-cell-clamp-2 input-method-display"
+          />
         )}
       </div>
-      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap formula-virtual-cell--formula" title={row.formula}>
+      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap formula-virtual-cell--formula">
         {isEditing ? (
           <input
             type="text"
@@ -99,10 +112,13 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
             onChange={(e) => patchForm("formula", e.target.value)}
           />
         ) : (
-          <span className="formula-cell-clamp-2 formula-display">{row._formula ?? toUpperDisplay(row.formula)}</span>
+          <MaintenanceEllipsisText
+            value={row._formula ?? toUpperDisplay(row.formula)}
+            className="formula-cell-clamp-2 formula-display"
+          />
         )}
       </div>
-      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap" title={row.description}>
+      <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell--wrap">
         {isEditing ? (
           <input
             type="text"
@@ -111,7 +127,10 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
             onChange={(e) => patchForm("description", e.target.value)}
           />
         ) : (
-          <span className="formula-cell-clamp-2 description-display">{row._description ?? toUpperDisplay(row.description)}</span>
+          <MaintenanceEllipsisText
+            value={row._description ?? toUpperDisplay(row.description)}
+            className="formula-cell-clamp-2 description-display"
+          />
         )}
       </div>
       <div role="cell" className="maintenance-virtual-cell maintenance-virtual-cell--left formula-virtual-cell-actions">

@@ -83,8 +83,10 @@ export default function TransactionDashboardPage() {
               onToggleSeries={page.toggleChartSeries}
               chartDateRangeText={page.chartDateRangeText}
               chartXAxisLayout={page.chartXAxisLayout}
-              chartDataStable={page.chartDataStable}
               chartScopeKey={page.dashboardScopeKey}
+              panelAnimActive={page.panelsAnimReady}
+              panelAnimEpoch={page.panelAnimEpoch}
+              panelAnimDuration={page.panelAnimDuration}
             />
             <DashboardEarningsSummary
               i18n={i18n}
@@ -111,6 +113,9 @@ export default function TransactionDashboardPage() {
               companyEarningsBreakdownRows={page.companyEarningsBreakdownRows}
               companyNetProfitTotal={page.companyNetProfitTotal}
               companyEarningsTotal={page.companyEarningsTotal}
+              panelAnimActive={page.panelsAnimReady}
+              panelAnimEpoch={page.panelAnimEpoch}
+              panelAnimDuration={page.panelAnimDuration}
             />
           </div>
         </div>

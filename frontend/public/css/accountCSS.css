@@ -40,23 +40,45 @@ body.account-page {
     font-size: var(--text-medium) !important;
 }
 
+/* 非 Show All：全视口一屏，禁止整页纵向滚动（与 Games Process List 一致） */
+html:has(body.account-page:not(.account-page--show-all)) {
+    height: 100%;
+    overflow: hidden;
+}
+
 body.account-page:not(.account-page--show-all) {
     overflow-x: hidden !important;
     overflow-y: hidden !important;
     height: 100vh !important;
+    max-height: 100vh !important;
 }
 
 body.account-page:not(.account-page--show-all) .container {
     height: 100vh !important;
+    max-height: 100vh !important;
     overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    box-sizing: border-box !important;
 }
 
 body.account-page:not(.account-page--show-all) .content {
-    height: calc(100vh - var(--layout-page-top-inset)) !important;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+body.account-page:not(.account-page--show-all) .action-buttons-container {
+    flex-shrink: 0;
+    margin-top: clamp(12px, 1.04vw, 20px) !important;
+}
+
+body.account-page:not(.account-page--show-all) .action-buttons-container .user-gc-inline-panel {
+    padding: 12px 18px 14px 18px;
 }
 
 body.account-page .action-buttons-container {
@@ -75,9 +97,9 @@ body.account-page .action-buttons-container {
 body.account-page .action-buttons {
     padding: 10px 20px;
     display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
     flex: 0 0 auto;
 }
 
@@ -151,12 +173,18 @@ body.account-page .account-table-wrapper {
     font-family: inherit;
 }
 
+body.account-page:not(.account-page--show-all) .account-list-table .account-list-table-header,
+body.account-page:not(.account-page--show-all) .account-table-header.account-list-table-header {
+    margin-top: 12px;
+}
+
 /*
  * Account List table（与 Games Process / Customer Report 同模式）
  * 表头与数据行共用 grid 变量；minmax 保证 Role / Last Login 等列在 tablet 不过窄
  */
 .account-list-table {
     width: 100%;
+    --account-list-row-min-height: 26px;
     --account-list-grid-cols:
         38px
         minmax(120px, 1.5fr)
@@ -223,9 +251,41 @@ body.account-page .account-table-wrapper {
     justify-content: left;
 }
 
-.account-list-table .account-list-table-header .account-header-item:last-child,
-.account-list-table .account-list-row .account-card-item:last-child {
+.account-list-table .account-list-table-header .account-header-item:last-child:not(.account-header-item--action),
+.account-list-table .account-list-row .account-card-item:last-child:not(.account-card-item--action) {
     justify-content: center;
+}
+
+.account-list-table .account-list-table-header .account-header-item--action,
+.account-list-table .account-list-row .account-card-item--action {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.account-list-table .account-list-row .account-card-item--action .account-action-tools {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    vertical-align: middle;
+}
+
+.account-list-table .account-list-row .account-card-item--action .btn.btn-edit.account-edit-btn,
+.account-list-table .account-list-row .account-card-item--action .account-edit-btn {
+    background: transparent;
+    border: transparent;
+    box-shadow: none;
+}
+
+.account-list-table .account-list-row .account-card-item--action .btn.btn-edit.account-edit-btn:hover,
+.account-list-table .account-list-row .account-card-item--action .account-edit-btn:hover {
+    background: transparent;
+    box-shadow: none;
+    transform: none;
 }
 
 body.account-page:not(.account-page--show-all) .account-cards {
@@ -239,21 +299,68 @@ body.account-page:not(.account-page--show-all) .account-cards {
     justify-content: flex-start;
 }
 
+/* 满页 25 条：grid 均分剩余高度，与 Process 贴底效果一致 */
+body.account-page:not(.account-page--show-all) .account-cards.account-cards--paged-fill {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(25, minmax(0, 1fr));
+    flex: 1 1 auto;
+    align-content: stretch;
+}
+
+body.account-page:not(.account-page--show-all) .account-cards.account-cards--paged-fill .account-list-row {
+    flex: unset;
+    min-height: 0;
+    height: auto;
+    align-items: center;
+    align-self: stretch;
+}
+
 body.account-page:not(.account-page--show-all) .account-list-table .account-list-row {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     width: 100%;
     height: auto;
     min-height: 0;
     box-sizing: border-box;
+    align-items: center;
 }
 
 body.account-page:not(.account-page--show-all) .account-card {
-    flex: 0 1 auto;
+    flex: 0 0 auto;
     width: 100%;
     height: auto;
     min-height: 0;
     padding: 0 22px;
     box-sizing: border-box;
+}
+
+/* 分页模式：行高密度与 Games Process .card-item（line-height: 1.1）对齐，保证 25 行完整可见 */
+body.account-page:not(.account-page--show-all) .account-list-row .account-card-item,
+body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-card-item {
+    font-size: var(--text-medium) !important;
+    font-weight: bold !important;
+    line-height: 1.1 !important;
+    letter-spacing: 0 !important;
+}
+
+/* 分页列表：Role / Alert / Status 药丸与 Games Process .role-badge 一致 */
+body.account-page:not(.account-page--show-all) .account-list-row .account-role-badge,
+body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-role-badge,
+body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row span.account-role-badge {
+    padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
+    line-height: inherit;
+    font-size: var(--text-tiny);
+    letter-spacing: 0.025em;
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-width: max-content;
+}
+
+body.account-page:not(.account-page--show-all) .account-list-row .account-card-item:has(.account-role-badge) {
+    overflow: visible;
+    text-overflow: clip;
+    flex-shrink: 0;
+    min-width: min-content;
 }
 
 /* 分页：固定右下角（与 User List 一致），避免 25 行时流内分页被挤出视口 */
@@ -2561,11 +2668,12 @@ body.account-page #forceDeleteCurrencyModal .confirm-delete {
 .account-role-badge {
     display: inline-flex;
     align-items: center;
-    padding: clamp(0px, 0vw, 2px) clamp(4px, 0.42vw, 8px);
+    padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
     border-radius: 20px;
     font-size: var(--text-tiny);
     font-weight: bold;
     text-transform: capitalize;
+    letter-spacing: 0.025em;
 }
 
 .account-status-active {

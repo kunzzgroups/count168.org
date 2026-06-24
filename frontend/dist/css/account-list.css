@@ -1012,7 +1012,8 @@ body.account-page .search-container.userlist-search-bar .userlist-search-input {
         -webkit-overflow-scrolling: touch;
     }
 
-    body.account-page .account-list-table-inner {
+    body.account-page .account-list-table .account-list-table-header,
+    body.account-page .account-list-table .account-cards {
         min-width: max(100%, 980px);
         width: 100%;
         box-sizing: border-box;
@@ -1020,7 +1021,7 @@ body.account-page .search-container.userlist-search-bar .userlist-search-input {
 
     body.account-page:not(.account-page--show-all) .account-cards {
         overflow-x: visible !important;
-        overflow-y: auto !important;
+        overflow-y: hidden !important;
     }
 
     body.account-page .account-toolbar-top-row {

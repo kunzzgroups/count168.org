@@ -3,6 +3,7 @@ import { toUpperDisplay, syncEditFormSourcePercent, createFormulaEditFormFromRow
 import { assetUrl } from "../../../../utils/core/apiUrl.js";
 import FormulaVirtualRows, { FormulaVirtualTableHead } from "./FormulaVirtualRows.jsx";
 import { MAINTENANCE_FORMULA_EDIT_ROW_HEIGHT, MAINTENANCE_REPORT_ROW_HEIGHT } from "../../shared/maintenanceReportRowMetrics.js";
+import MaintenanceEllipsisText from "../../shared/MaintenanceEllipsisText.jsx";
 
 const ROW_HEIGHT = MAINTENANCE_REPORT_ROW_HEIGHT;
 const EDIT_ROW_HEIGHT = MAINTENANCE_FORMULA_EDIT_ROW_HEIGHT;
@@ -131,8 +132,11 @@ export default function FormulaMaintenanceTable({
         style={rowStyle}
       >
         <td className="maintenance-table-cell">{row.no}</td>
-        <td className="maintenance-table-cell" title={row.process}>
-          <span className="formula-cell-clamp-2 process-display">{toUpperDisplay(row.process)}</span>
+        <td className="maintenance-table-cell">
+          <MaintenanceEllipsisText
+            value={toUpperDisplay(row.process)}
+            className="formula-cell-clamp-2 process-display"
+          />
         </td>
         <td className="maintenance-table-cell">
           {isEditing ? (
@@ -150,7 +154,10 @@ export default function FormulaMaintenanceTable({
               ))}
             </select>
           ) : (
-            <span className="formula-cell-clamp-2 account-display" title={row.account}>{toUpperDisplay(row.account)}</span>
+            <MaintenanceEllipsisText
+              value={toUpperDisplay(row.account)}
+              className="formula-cell-clamp-2 account-display"
+            />
           )}
         </td>
         <td className="maintenance-table-cell maintenance-cell-currency">{toUpperDisplay(row.currency)}</td>
@@ -164,13 +171,17 @@ export default function FormulaMaintenanceTable({
               style={{ display: "block", width: "100%" }}
             />
           ) : (
-            <span className="formula-cell-clamp-2 source-display" title={row.source}>
-              {toUpperDisplay(row.source)}
-            </span>
+            <MaintenanceEllipsisText
+              value={toUpperDisplay(row.source)}
+              className="formula-cell-clamp-2 source-display"
+            />
           )}
         </td>
-        <td className="maintenance-table-cell" title={row.product}>
-          <span className="formula-cell-clamp-2 product-display">{toUpperDisplay(row.product)}</span>
+        <td className="maintenance-table-cell">
+          <MaintenanceEllipsisText
+            value={toUpperDisplay(row.product)}
+            className="formula-cell-clamp-2 product-display"
+          />
         </td>
         <td className="maintenance-table-cell formula-cell-text">
           {isEditing ? (
@@ -187,9 +198,10 @@ export default function FormulaMaintenanceTable({
               ))}
             </select>
           ) : (
-            <span className="formula-cell-clamp-2 input-method-display" title={row.input_method}>
-              {toUpperDisplay(row.input_method)}
-            </span>
+            <MaintenanceEllipsisText
+              value={toUpperDisplay(row.input_method)}
+              className="formula-cell-clamp-2 input-method-display"
+            />
           )}
         </td>
         <td className="maintenance-table-cell formula-cell-text">
@@ -202,9 +214,10 @@ export default function FormulaMaintenanceTable({
               style={{ display: "block", width: "100%" }}
             />
           ) : (
-            <span className="formula-cell-clamp-2 formula-display" title={row.formula}>
-              {toUpperDisplay(row.formula)}
-            </span>
+            <MaintenanceEllipsisText
+              value={toUpperDisplay(row.formula)}
+              className="formula-cell-clamp-2 formula-display"
+            />
           )}
         </td>
         <td className="maintenance-table-cell formula-cell-text">
@@ -217,9 +230,10 @@ export default function FormulaMaintenanceTable({
               style={{ display: "block", width: "100%" }}
             />
           ) : (
-            <span className="formula-cell-clamp-2 description-display" title={row.description}>
-              {toUpperDisplay(row.description)}
-            </span>
+            <MaintenanceEllipsisText
+              value={toUpperDisplay(row.description)}
+              className="formula-cell-clamp-2 description-display"
+            />
           )}
         </td>
         <td className="maintenance-table-cell maintenance-cell-checkbox">

@@ -10,6 +10,7 @@ import ExpirationReminderModal from "./ExpirationReminderModal.jsx";
 import { AuthSessionProvider } from "../context/AuthSessionContext.jsx";
 import SidebarLangSwitch from "./SidebarLangSwitch.jsx";
 import { DASHBOARD_I18N } from "../translateFile/shell/dashboardTranslate.js";
+import { formatUserRoleDisplay, getUserListText } from "../translateFile/pages/userListTranslate.js";
 import { getExpirationReminderText } from "../translateFile/shell/expirationReminderTranslate.js";
 import { getAutoRenewText } from "../translateFile/pages/autoRenewTranslate.js";
 import {
@@ -1000,7 +1001,11 @@ export default function AuthenticatedLayout() {
   }, [me, sidebarGcTick]);
   
   const avatarSrc = useMemo(() => AVATAR_MAP[selectedAvatarId] || AVATAR_MAP.male1, [selectedAvatarId]);
-  const roleLabel = me?.role ? me.role.charAt(0).toUpperCase() + me.role.slice(1).toLowerCase() : "";
+  const roleLabel = useMemo(() => {
+    if (!me?.role) return "";
+    const t = (key) => getUserListText(lang, key);
+    return formatUserRoleDisplay(t, me.role);
+  }, [lang, me?.role]);
   const processSpaPath =
     me?.company_has_bank && !me?.company_has_gambling ? spaPath("bank-process-list") : spaPath("process-list");
   const performLogout = async () => {

@@ -48,7 +48,7 @@ const BankprocessVirtualDataRow = memo(function BankprocessVirtualDataRow({
         role="cell"
         className="maintenance-virtual-cell maintenance-virtual-cell--left maintenance-cell-currency-amount"
       >
-        <span className="bankprocess-cell-text">{amountDisplay}</span>
+        <MaintenanceEllipsisText value={amountDisplay} className="bankprocess-cell-text" />
       </div>
       <div
         role="cell"

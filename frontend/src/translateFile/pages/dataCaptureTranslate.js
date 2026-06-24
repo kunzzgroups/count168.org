@@ -113,6 +113,7 @@ export const DATA_CAPTURE_I18N = {
     pasteSuccessPrefixRows:
       "{prefix}: successfully pasted {rows} rows × {cols} columns.",
     pasteFailedClipboard: "Failed to access clipboard",
+    weekdayLabels: ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"],
   },
   zh: {
     pageTitle: "数据采集",
@@ -226,10 +227,16 @@ export const DATA_CAPTURE_I18N = {
     pasteSuccessPrefixRows:
       "{prefix}：成功粘贴 {rows} 行 x {cols} 列数据!",
     pasteFailedClipboard: "无法访问剪贴板",
+    weekdayLabels: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
   },
 };
 
 export const getDataCaptureText = createGetText(DATA_CAPTURE_I18N);
+
+export function getDataCaptureWeekdayLabels(lang) {
+  const locale = lang === "zh" ? "zh" : "en";
+  return DATA_CAPTURE_I18N[locale].weekdayLabels;
+}
 
 /** Map validation / API message keys used in hooks. */
 export function translateDataCaptureMessage(lang, message) {

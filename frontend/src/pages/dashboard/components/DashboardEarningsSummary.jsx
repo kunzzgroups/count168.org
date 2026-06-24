@@ -18,7 +18,7 @@ import {
   resolveEarningsPiePaddingAngle,
   resolveEarningsRowDisplayAmounts,
 } from "../lib/dashboardEarnings.js";
-import { DASHBOARD_EARNINGS_PIE_MIN_ANGLE } from "../lib/dashboardConstants.js";
+import { DASHBOARD_EARNINGS_PIE_MIN_ANGLE, DASHBOARD_PANEL_ANIM_BEGIN_MS, DASHBOARD_PANEL_ANIM_DURATION_MS, DASHBOARD_PANEL_ANIM_EASING } from "../lib/dashboardConstants.js";
 import { useAnimatedNumber } from "../hooks/useAnimatedNumber.js";
 import { formatCurrency, formatI18nTemplate } from "../lib/dashboardFormat.js";
 import { DashboardAnimatedValue } from "./DashboardAnimatedValue.jsx";
@@ -48,6 +48,9 @@ export function DashboardEarningsSummary({
   companyEarningsBreakdownRows = [],
   companyNetProfitTotal = 0,
   companyEarningsTotal = 0,
+  panelAnimActive = false,
+  panelAnimEpoch = 0,
+  panelAnimDuration = DASHBOARD_PANEL_ANIM_DURATION_MS,
 }) {
   const isNetProfitCompanyView = showProfitChartTab && earningsPanelView === "netProfit";
   const isCompanyEarningView = showProfitChartTab && earningsPanelView === "earning";
@@ -136,22 +139,21 @@ export function DashboardEarningsSummary({
   /** Unique per page visit so pie enter animation replays when navigating back to Dashboard. */
   const [pieVisitKey] = useState(() => Date.now());
   const [pieFlowIdle, setPieFlowIdle] = useState(false);
-  const pieAnimKey = `${pieVisitKey}-${exchangeRateScopeKey || "scope"}-${
-    summaryPieReady ? "ready" : "pending"
-  }`;
+  const pieAnimKey = `${pieVisitKey}-${exchangeRateScopeKey || "scope"}-${panelAnimEpoch}`;
+  const panelAnimPlaying = panelAnimActive && summaryPieReady;
 
   useEffect(() => {
-    if (!summaryPieReady) {
+    if (!panelAnimPlaying) {
       setPieFlowIdle(false);
       return undefined;
     }
-    const timer = window.setTimeout(() => setPieFlowIdle(true), 920);
+    const timer = window.setTimeout(() => setPieFlowIdle(true), panelAnimDuration);
     return () => window.clearTimeout(timer);
-  }, [pieAnimKey, summaryPieReady]);
+  }, [pieAnimKey, panelAnimPlaying, panelAnimDuration]);
 
   const animatedPiePct = useAnimatedNumber(Number(pieCenterMetrics.pct) || 0, {
-    duration: 920,
-    active: summaryPieReady,
+    duration: panelAnimDuration,
+    active: panelAnimPlaying,
   });
 
   useEffect(() => {
@@ -308,7 +310,8 @@ export function DashboardEarningsSummary({
       <div className="dashboard-summary-hero-value">
         <DashboardAnimatedValue
           value={heroValue}
-          active={!summaryEarningsLoading}
+          active={panelAnimPlaying}
+          duration={panelAnimDuration}
           className="dashboard-summary-hero-value-anim"
         />
       </div>
@@ -389,7 +392,7 @@ export function DashboardEarningsSummary({
             <div
               ref={pieShellRef}
               className={`dashboard-summary-pie-chart-shell${
-                summaryPieReady ? " is-enter is-flow-active" : ""
+                panelAnimPlaying ? " is-enter is-flow-active" : ""
               }`}
             >
               <ResponsiveContainer width="100%" height="100%">
@@ -413,10 +416,10 @@ export function DashboardEarningsSummary({
                     strokeWidth={2}
                     label={false}
                     activeShape={false}
-                    isAnimationActive={summaryPieReady}
-                    animationBegin={80}
-                    animationDuration={920}
-                    animationEasing="ease-out"
+                    isAnimationActive={panelAnimPlaying}
+                    animationBegin={DASHBOARD_PANEL_ANIM_BEGIN_MS}
+                    animationDuration={panelAnimDuration}
+                    animationEasing={DASHBOARD_PANEL_ANIM_EASING}
                     onMouseEnter={handlePieSectorEnter}
                     onMouseLeave={() => setHoveredPieSector(null)}
                   >
@@ -435,7 +438,7 @@ export function DashboardEarningsSummary({
                 showPieCenterBadge && (
                 <div
                   key={pieAnimKey}
-                  className={`dashboard-summary-pie-center${summaryPieReady ? " is-enter" : ""}`}
+                  className={`dashboard-summary-pie-center${panelAnimPlaying ? " is-enter" : ""}`}
                   aria-hidden="true"
                 >
                   <span className="dashboard-summary-pie-center-pct">{animatedPiePct.toFixed(1)}%</span>

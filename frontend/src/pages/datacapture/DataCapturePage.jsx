@@ -326,6 +326,7 @@ function DataCapturePageContent() {
   const form = useDataCaptureFormEngine(captureScope, {
     applyCompanyOnlyFields: showCompanyProcessUi,
     companyPayrollUi: companyPayrollChannel,
+    lang,
     payrollPrefsKey: payrollDraft.prefsKey,
     payrollDraftServerSync: payrollDraft.serverSync,
     selectedGroup,

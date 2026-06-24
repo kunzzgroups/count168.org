@@ -1468,7 +1468,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 }
 
 .dashboard-summary-pie-chart-shell.is-enter {
-    animation: dashboard-pie-shell-in 0.78s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: dashboard-pie-shell-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .dashboard-summary-pie-chart-shell.is-enter::after {
@@ -1487,7 +1487,7 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     pointer-events: none;
     z-index: 7;
     mix-blend-mode: soft-light;
-    animation: dashboard-pie-shine-orbit 1.05s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation: dashboard-pie-shine-orbit 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .dashboard-summary-pie-wrap.is-flow-idle .dashboard-summary-pie-chart-shell {

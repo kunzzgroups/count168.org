@@ -400,6 +400,14 @@ body.maintenance-page .formula-cell-clamp-2 {
     text-align: left !important;
 }
 
+body.maintenance-page .maintenance-virtual-cell .portal-tooltip-anchor {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    flex: 1 1 auto;
+}
+
 body.maintenance-page .maintenance-cell-currency,
 body.maintenance-page .maintenance-cell-currency-amount,
 body.maintenance-page .maintenance-cell-amount,

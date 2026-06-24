@@ -59,6 +59,7 @@ import { assetUrl, buildApiUrl } from "../../utils/core/apiUrl.js";
 import "../../../public/css/account-list.css";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
+import "../../../public/css/list-badge-scale.css";
 
 // Logic & Constants..
 import {
@@ -2727,8 +2728,7 @@ export default function AccountListPage() {
         <div className="content">
           <div className="action-buttons-container">
             <div className="action-buttons">
-              <div className="account-toolbar-top-row">
-                <div className="action-controls-row account-toolbar-primary">
+                <div className="action-controls-row account-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 <button
                   type="button"
                   className="btn btn-add"
@@ -2788,7 +2788,7 @@ export default function AccountListPage() {
                   </button>
                 </div>
                 </div>
-                <div className="user-toolbar-actions-right">
+                <div className="user-toolbar-actions-right" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
                   <button
                     type="button"
                     className="btn btn-currency-setting"
@@ -2806,7 +2806,6 @@ export default function AccountListPage() {
                     {t("deleteWithCount", { count: selectedDeleteIds.size })}
                   </button>
                 </div>
-              </div>
             </div>
             <GcInlineFilterPanel
               t={t}
@@ -2829,7 +2828,6 @@ export default function AccountListPage() {
           </div>
 
           <div className="account-table-wrapper account-list-table">
-            <div className="account-list-table-inner">
             <div className="account-table-header account-list-table-header">
               <div className="account-header-item">{t("no")}</div>
               {renderSortableHeader(t("account"), "account")}
@@ -2839,9 +2837,11 @@ export default function AccountListPage() {
               {renderSortableHeader(t("status"), "status")}
               {renderSortableHeader(t("lastLogin"), "lastLogin")}
               {renderSortableHeader(t("remark"), "remark")}
-              <div className="account-header-item">{t("action")}</div>
+              <div className="account-header-item account-header-item--action">{t("action")}</div>
             </div>
-            <div className={`account-cards${showAll ? " account-cards--show-all" : ""}`}>
+            <div
+              className={`account-cards${showAll ? " account-cards--show-all" : ""}${!showAll && pageRows.length > 0 ? " account-cards--paged-fill" : ""}`}
+            >
               {pageRows.map((a, idx) => {
                 const alertOn = String(a.payment_alert) === "1";
                 const isInactive = String(a.status || "").toLowerCase() === "inactive";
@@ -2855,19 +2855,29 @@ export default function AccountListPage() {
                     <div className="account-card-item"><span className={`account-role-badge ${isInactive ? "account-status-inactive" : "account-status-active"}${accountMutationsBlocked ? "" : " status-clickable"}`} onClick={accountMutationsBlocked ? () => notify(t("readOnlyActionBlocked"), "danger") : () => toggleAccountStatus(a.id)} style={accountMutationsBlocked ? { cursor: "not-allowed" } : undefined}>{formatAccountStatusDisplay(t, a.status)}</span></div>
                     <div className="account-card-item">{toUpper(a.last_login)}</div>
                     <div className="account-card-item">{toUpper(a.remark)}</div>
-                    <div className="account-card-item">
-                      <button type="button" className="account-edit-btn" disabled={accountMutationsBlocked} onClick={() => openEdit(a.id)}><img src={assetUrl("images/edit.svg")} alt={t("edit")} /></button>
-                      <button type="button" className="account-edit-btn" disabled={accountMutationsBlocked} onClick={() => openLink(a.id)} style={{ marginLeft: 5 }} title={t("linkAccountTitle")}>
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                        </svg>
-                      </button>
-                      {isInactive && <input type="checkbox" style={{ marginLeft: 10 }} disabled={accountMutationsBlocked} checked={selectedDeleteIds.has(Number(a.id))} onChange={(e) => setSelectedDeleteIds(prev => { const n = new Set(prev); if (e.target.checked) n.add(Number(a.id)); else n.delete(Number(a.id)); return n; })} />}
+                    <div className="account-card-item account-card-item--action">
+                      <div className="account-action-tools">
+                        <button type="button" className="btn btn-edit account-edit-btn" disabled={accountMutationsBlocked} onClick={() => openEdit(a.id)} aria-label={t("edit")} title={t("edit")}>
+                          <img src={assetUrl("images/edit.svg")} alt={t("edit")} />
+                        </button>
+                        <button type="button" className="btn account-edit-btn" disabled={accountMutationsBlocked} onClick={() => openLink(a.id)} title={t("linkAccountTitle")} aria-label={t("linkAccountTitle")}>
+                          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <path d="M8 3V13M3 8H13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          </svg>
+                        </button>
+                        {isInactive && (
+                          <input
+                            type="checkbox"
+                            disabled={accountMutationsBlocked}
+                            checked={selectedDeleteIds.has(Number(a.id))}
+                            onChange={(e) => setSelectedDeleteIds(prev => { const n = new Set(prev); if (e.target.checked) n.add(Number(a.id)); else n.delete(Number(a.id)); return n; })}
+                          />
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
               })}
-            </div>
             </div>
           </div>
           {!showAll && (
