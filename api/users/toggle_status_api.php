@@ -380,6 +380,22 @@ function toggle_find_target(PDO $pdo, int $targetId, array $scopeCompanyIds): ?a
     return null;
 }
 
+function toggleRoleLevel(string $role): int
+{
+    $hierarchy = [
+        'owner' => 0,
+        'partnership' => 1,
+        'admin' => 2,
+        'manager' => 3,
+        'supervisor' => 4,
+        'accountant' => 5,
+        'audit' => 6,
+        'customer service' => 7,
+    ];
+
+    return $hierarchy[strtolower(trim($role))] ?? 999;
+}
+
 function updateUserStatus(PDO $pdo, string $newStatus, int $userId): void {
     $stmt = $pdo->prepare("UPDATE user SET status = ? WHERE id = ?");
     $stmt->execute([$newStatus, $userId]);
@@ -453,15 +469,19 @@ try {
         exit;
     }
 
-    $lowPrivilegeRoles = ['manager', 'supervisor', 'accountant', 'audit', 'customer service', 'partnership'];
-    if (in_array($currentUserRole, $lowPrivilegeRoles, true) && in_array($targetRole, ['admin', 'owner'], true)) {
-        api_error('You do not have permission to toggle status of admin or owner accounts', 403);
-        exit;
-    }
+    if (!$isOwnerShadow) {
+        $currentUserLevel = toggleRoleLevel($currentUserRole);
+        $targetUserLevel = toggleRoleLevel($targetRole);
 
-    if ($currentUserRole === 'admin' && $targetRole === 'admin') {
-        api_error('Admin accounts cannot toggle status of other admin accounts', 403);
-        exit;
+        if ($currentUserLevel === $targetUserLevel) {
+            api_error('You cannot toggle status of accounts with the same role level', 403);
+            exit;
+        }
+
+        if ($targetUserLevel < $currentUserLevel) {
+            api_error('You cannot toggle status of accounts with higher role level', 403);
+            exit;
+        }
     }
 
     if ($isOwnerShadow) {

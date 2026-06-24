@@ -1008,6 +1008,17 @@ body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal,
 body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .custom-select-search,
 .custom-select-dropdown.dc-process-select-portal .custom-select-search {
     flex-shrink: 0;
+    padding: clamp(4px, 0.35vw, 6px) !important;
+}
+
+body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .custom-select-search input,
+.custom-select-dropdown.dc-process-select-portal .custom-select-search input {
+    font-size: var(--text-small) !important;
+    font-weight: 700 !important;
+    font-family: var(--font-ui) !important;
+    line-height: 1.35 !important;
+    min-height: clamp(24px, 1.75vw, 28px) !important;
+    padding: clamp(3px, 0.25vw, 5px) clamp(6px, 0.4vw, 8px) !important;
 }
 
 body.datacapture-page .custom-select-dropdown.custom-select-dropdown-portal .custom-select-options,

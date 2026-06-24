@@ -246,7 +246,7 @@ export function computeRowCapabilities(row, currentUserId, currentUserRole) {
   }
 
   canToggleStatus = canEditDelete && !isSelf;
-  if (normRole(currentUserRole) === "admin" && targetRole === "admin" && !isSelf) {
+  if (!isOwnerShadow && (isSameLevel || isHigherLevel)) {
     canToggleStatus = false;
   }
 

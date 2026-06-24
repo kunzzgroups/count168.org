@@ -138,68 +138,21 @@ export function sanitizeSearchApiData(data) {
   };
 }
 
-const ROW_MONEY_EPS = "0.00001";
-
 /** True when ending balance is non-zero (2dp display tolerance). */
 export function rowHasNonZeroBalance(row) {
   const num = parseBalanceValue(row.balance);
   if (num === null) return true;
   try {
-    return MoneyDecimal.toDecimal(String(num), 0).abs().gt(ROW_MONEY_EPS);
+    return MoneyDecimal.toDecimal(String(num), 0).abs().gt("0.00001");
   } catch {
     return Math.abs(num) > 1e-5;
   }
-}
-
-function rowFlagToBool(v) {
-  if (typeof v === "boolean") return v;
-  if (typeof v === "number") return v !== 0;
-  return parseInt(String(v || "0"), 10) !== 0;
-}
-
-function rowMoneyCellNonZero(value) {
-  const num = parseBalanceValue(value);
-  if (num === null) return false;
-  try {
-    return MoneyDecimal.toDecimal(String(num), 0).abs().gt(ROW_MONEY_EPS);
-  } catch {
-    return Math.abs(num) > 1e-5;
-  }
-}
-
-function rowWinLossAmountNonZero(row) {
-  const probeFull =
-    row?.win_loss_full !== undefined && row?.win_loss_full !== null && String(row.win_loss_full).trim() !== ""
-      ? String(row.win_loss_full).replace(/,/g, "").trim()
-      : null;
-  const probes = probeFull != null ? [probeFull, row?.win_loss] : [row?.win_loss];
-  return probes.some((candidate) => rowMoneyCellNonZero(candidate));
-}
-
-function rowCrDrAmountNonZero(row) {
-  return rowMoneyCellNonZero(row?.cr_dr);
-}
-
-/**
- * Win/Loss or Cr/Dr column is non-zero for the selected period (uses win_loss_full when present).
- */
-export function rowHasPeriodColumnActivity(row) {
-  return rowWinLossAmountNonZero(row) || rowCrDrAmountNonZero(row);
-}
-
-/**
- * Default list: non-zero Balance, or (Balance 0.00 with at least one of Win/Loss / Cr/Dr non-zero).
- * When both Win/Loss and Cr/Dr are 0.00, hide even if Balance is 0.00.
- */
-export function rowShouldShowInDefaultView(row) {
-  if (rowHasNonZeroBalance(row)) return true;
-  return rowHasPeriodColumnActivity(row);
 }
 
 /** @deprecated Prefer {@link applyZeroBalanceFilter} — kept for legacy callers. */
 export function rowPassesHideZeroBalanceFilter(showZero, row) {
   if (showZero) return true;
-  return rowShouldShowInDefaultView(row);
+  return rowHasNonZeroBalance(row);
 }
 
 export function normalizeRateRowsByCrDr(leftRows, rightRows, isRate) {
@@ -243,14 +196,67 @@ export function applyPaymentWinLossFilters(rawLeft, rawRight, { showPaymentOnly,
     return { filteredLeft: safeLeft, filteredRight: safeRight };
   }
 
-  const hasCrdr = (row) => rowFlagToBool(row?.has_crdr_transactions) || rowCrDrAmountNonZero(row);
+  const eps = "0.00001";
 
-  const isZeroBalance = (row) => !rowHasNonZeroBalance(row);
+  const flagToBool = (v) => {
+    if (typeof v === "boolean") return v;
+    if (typeof v === "number") return v !== 0;
+    return parseInt(String(v || "0"), 10) !== 0;
+  };
 
-  const hasWinLoss = (row) =>
-    rowFlagToBool(row?.has_win_loss_transactions) ||
-    rowFlagToBool(row?.has_period_id_product_rows) ||
-    rowWinLossAmountNonZero(row);
+  const hasCrdr = (row) => {
+    const byFlag =
+      typeof row.has_crdr_transactions === "boolean"
+        ? row.has_crdr_transactions
+        : typeof row.has_crdr_transactions === "number"
+          ? row.has_crdr_transactions !== 0
+          : parseInt(String(row.has_crdr_transactions || "0"), 10) !== 0;
+    const crdr = parseBalanceValue(row.cr_dr);
+    let byValue = false;
+    if (crdr !== null) {
+      try {
+        byValue = MoneyDecimal.toDecimal(crdr, 0).abs().gt(eps);
+      } catch {
+        byValue = Math.abs(crdr) > 1e-5;
+      }
+    }
+    return byFlag || byValue;
+  };
+
+  const isZeroBalance = (row) => {
+    const bal = parseBalanceValue(row.balance);
+    if (bal === null) return false;
+    try {
+      return MoneyDecimal.toDecimal(bal, 0).abs().lte(eps);
+    } catch {
+      return Math.abs(bal) <= 1e-5;
+    }
+  };
+
+  const winLossAmountNonZero = (row) => {
+    const probeFull =
+      row.win_loss_full !== undefined && row.win_loss_full !== null && String(row.win_loss_full).trim() !== ""
+        ? String(row.win_loss_full).replace(/,/g, "").trim()
+        : null;
+    const probes = probeFull != null ? [probeFull, row.win_loss] : [row.win_loss];
+    for (const candidate of probes) {
+      const wl = parseBalanceValue(candidate);
+      if (wl === null) continue;
+      try {
+        if (MoneyDecimal.toDecimal(wl, 0).abs().gt(eps)) return true;
+      } catch {
+        if (Math.abs(wl) > 1e-5) return true;
+      }
+    }
+    return false;
+  };
+
+  const hasWinLoss = (row) => {
+    if (flagToBool(row.has_win_loss_transactions) || flagToBool(row.has_period_id_product_rows)) {
+      return true;
+    }
+    return winLossAmountNonZero(row);
+  };
 
   let shouldShow = () => true;
   if (showPaymentOnly && showCaptureOnly) {
@@ -279,10 +285,10 @@ export function applyZeroBalanceFilter(
   if (showZeroBalance || showCaptureOnly || showPaymentOnly) {
     return { left: filteredLeft, right: filteredRight };
   }
-  // Default: hide Balance 0.00 when Win/Loss and Cr/Dr are both 0.00.
+  // Default: hide rows whose ending balance is 0.00.
   return {
-    left: filteredLeft.filter(rowShouldShowInDefaultView),
-    right: filteredRight.filter(rowShouldShowInDefaultView),
+    left: filteredLeft.filter(rowHasNonZeroBalance),
+    right: filteredRight.filter(rowHasNonZeroBalance),
   };
 }
 
