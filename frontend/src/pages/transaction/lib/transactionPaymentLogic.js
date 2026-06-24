@@ -149,10 +149,44 @@ export function rowHasNonZeroBalance(row) {
   }
 }
 
+function rowFlagToBool(v) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  return parseInt(String(v || "0"), 10) !== 0;
+}
+
+function moneyNonZero(value, eps = "0.00001") {
+  try {
+    return MoneyDecimal.toDecimal(cleanMoneyCell(value), 0).abs().gt(eps);
+  } catch {
+    const n = parseBalanceValue(value);
+    return n !== null && Math.abs(n) > 1e-5;
+  }
+}
+
+/** True when the selected date range has W/L, Id Product, or Payment activity (matches search_api has_period_activity). */
+export function rowHasPeriodActivity(row) {
+  return (
+    rowFlagToBool(row?.has_win_loss_transactions) ||
+    rowFlagToBool(row?.has_period_id_product_rows) ||
+    rowFlagToBool(row?.has_crdr_transactions)
+  );
+}
+
+/** True when period Win/Loss or Cr/Dr columns carry a non-zero amount (e.g. PG-JUNHONG net balance 0). */
+export function rowHasNonZeroPeriodAmounts(row) {
+  return moneyNonZero(row?.cr_dr) || moneyNonZero(row?.win_loss) || moneyNonZero(row?.win_loss_full);
+}
+
+/** Default list visibility: non-zero balance or period activity within the date range. */
+export function rowShouldShowInDefaultView(row) {
+  return rowHasNonZeroBalance(row) || rowHasPeriodActivity(row) || rowHasNonZeroPeriodAmounts(row);
+}
+
 /** @deprecated Prefer {@link applyZeroBalanceFilter} — kept for legacy callers. */
 export function rowPassesHideZeroBalanceFilter(showZero, row) {
   if (showZero) return true;
-  return rowHasNonZeroBalance(row);
+  return rowShouldShowInDefaultView(row);
 }
 
 export function normalizeRateRowsByCrDr(leftRows, rightRows, isRate) {
@@ -285,10 +319,10 @@ export function applyZeroBalanceFilter(
   if (showZeroBalance || showCaptureOnly || showPaymentOnly) {
     return { left: filteredLeft, right: filteredRight };
   }
-  // Default: hide rows whose ending balance is 0.00.
+  // Default: hide rows whose ending balance is 0.00 unless the period has W/L or Payment activity.
   return {
-    left: filteredLeft.filter(rowHasNonZeroBalance),
-    right: filteredRight.filter(rowHasNonZeroBalance),
+    left: filteredLeft.filter(rowShouldShowInDefaultView),
+    right: filteredRight.filter(rowShouldShowInDefaultView),
   };
 }
 
@@ -317,11 +351,17 @@ function cleanMoneyCell(value) {
   return s;
 }
 
-/** Match `js/transaction.js` calculateTotals (bf/cr_dr sum; win_loss from win_loss_full; balance = bf+wl+cr). */
+/** Match search_api.php calculateTotals: accumulate, normalize to 6dp, half-up bf/wl/cr; balance = sum of row balances. */
+function normalizeMoney6(value) {
+  return MoneyDecimal.formatFixed(value ?? "0", 6);
+}
+
+/** Match `js/transaction.js` calculateTotals (bf/cr_dr sum; win_loss from win_loss_full). */
 export function calculateTotals(rows) {
   let bfAcc = MoneyDecimal.toDecimal("0", 0);
   let wlAcc = MoneyDecimal.toDecimal("0", 0);
   let crAcc = MoneyDecimal.toDecimal("0", 0);
+  let balAcc = MoneyDecimal.toDecimal("0", 0);
   for (const row of rows || []) {
     try {
       bfAcc = bfAcc.plus(MoneyDecimal.toDecimal(cleanMoneyCell(row?.bf), 0));
@@ -338,11 +378,19 @@ export function calculateTotals(rows) {
     } catch {
       /* skip */
     }
+    try {
+      balAcc = balAcc.plus(MoneyDecimal.toDecimal(cleanMoneyCell(row?.balance), 0));
+    } catch {
+      /* skip */
+    }
   }
-  const bfTot = MoneyDecimal.formatFixed(bfAcc.toString(), 2);
-  const wlTot = MoneyDecimal.formatFixedHalfUp(wlAcc.toString(), 2);
-  const crTot = MoneyDecimal.formatFixed(crAcc.toString(), 2);
-  const balTot = MoneyDecimal.formatFixedHalfUp(MoneyDecimal.add(MoneyDecimal.add(bfTot, wlTot), crTot).toString(), 2);
+  const bf6 = normalizeMoney6(bfAcc.toString());
+  const wl6 = normalizeMoney6(wlAcc.toString());
+  const cr6 = normalizeMoney6(crAcc.toString());
+  const bfTot = MoneyDecimal.formatFixedHalfUp(bf6, 2);
+  const wlTot = MoneyDecimal.formatFixedHalfUp(wl6, 2);
+  const crTot = MoneyDecimal.formatFixedHalfUp(cr6, 2);
+  const balTot = MoneyDecimal.formatFixedHalfUp(balAcc.toString(), 2);
   return { bf: bfTot, win_loss: wlTot, cr_dr: crTot, balance: balTot };
 }
 
