@@ -1,10 +1,17 @@
 <?php
 /**
- * EC2 / 本地覆盖数据库（复制为 config.local.php，已在 .gitignore）
+ * count168.org 专用数据库覆盖（复制为 config.local.php，已在 .gitignore）
  *
  *   cp includes/config.local.php.example includes/config.local.php
+ *
+ * EC2 org 线上：
+ *   sudo cp /var/www/count168.org/includes/config.local.php.example \
+ *           /var/www/count168.org/includes/config.local.php
+ *   sudo nano /var/www/count168.org/includes/config.local.php
+ *
+ * 勿改 includes/config.php（那是 count168.site / live 默认）。
  */
 $host = '127.0.0.1';
-$dbname = 'u857194726_c168site';
+$dbname = 'c168_org';
 $dbuser = 'admin';
-$dbpass = 'C168_site';
+$dbpass = 'C168_org';
