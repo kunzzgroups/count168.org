@@ -14,4 +14,4 @@
 $host = '127.0.0.1';
 $dbname = 'c168_org';
 $dbuser = 'admin';
-$dbpass = 'C168_org';
+$dbpass = 'C168_site'; // EC2 上 admin 与 site 同用户同密码；仅 $dbname 区分 org
