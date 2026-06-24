@@ -149,10 +149,30 @@ export function rowHasNonZeroBalance(row) {
   }
 }
 
+function rowFlagToBool(v) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  return parseInt(String(v || "0"), 10) !== 0;
+}
+
+/** True when the selected date range has W/L, Id Product, or Payment activity (matches search_api has_period_activity). */
+export function rowHasPeriodActivity(row) {
+  return (
+    rowFlagToBool(row?.has_win_loss_transactions) ||
+    rowFlagToBool(row?.has_period_id_product_rows) ||
+    rowFlagToBool(row?.has_crdr_transactions)
+  );
+}
+
+/** Default list visibility: non-zero balance or period activity within the date range. */
+export function rowShouldShowInDefaultView(row) {
+  return rowHasNonZeroBalance(row) || rowHasPeriodActivity(row);
+}
+
 /** @deprecated Prefer {@link applyZeroBalanceFilter} — kept for legacy callers. */
 export function rowPassesHideZeroBalanceFilter(showZero, row) {
   if (showZero) return true;
-  return rowHasNonZeroBalance(row);
+  return rowShouldShowInDefaultView(row);
 }
 
 export function normalizeRateRowsByCrDr(leftRows, rightRows, isRate) {
@@ -285,10 +305,10 @@ export function applyZeroBalanceFilter(
   if (showZeroBalance || showCaptureOnly || showPaymentOnly) {
     return { left: filteredLeft, right: filteredRight };
   }
-  // Default: hide rows whose ending balance is 0.00.
+  // Default: hide rows whose ending balance is 0.00 unless the period has W/L or Payment activity.
   return {
-    left: filteredLeft.filter(rowHasNonZeroBalance),
-    right: filteredRight.filter(rowHasNonZeroBalance),
+    left: filteredLeft.filter(rowShouldShowInDefaultView),
+    right: filteredRight.filter(rowShouldShowInDefaultView),
   };
 }
 
