@@ -67,8 +67,12 @@ export default function TransactionSearchSection({
   const [currencyLayout, setCurrencyLayout] = useState({ containerWidth: 0, segmentWidths: [] });
 
   const currencyCells = useMemo(() => {
-    const cells = [{ type: "all" }];
-    (currencyRowsOrdered || []).forEach((c) => {
+    const rows = currencyRowsOrdered || [];
+    const cells = [];
+    if (rows.length >= 2) {
+      cells.push({ type: "all" });
+    }
+    rows.forEach((c) => {
       const code = String(c.code || "").toUpperCase().trim();
       if (code) cells.push({ type: "code", code });
     });

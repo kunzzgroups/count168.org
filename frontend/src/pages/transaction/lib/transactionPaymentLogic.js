@@ -536,6 +536,33 @@ export function readTxListFromSessionStorage(sessionKey) {
   }
 }
 
+/** Row count in rendered table presentation (after client-side filters). */
+export function countTransactionPresentationRows(tp) {
+  if (!tp || tp.mode === "none") return 0;
+  if (tp.mode === "grouped") {
+    return (tp.grouped || []).reduce(
+      (sum, g) => sum + (g.left?.length || 0) + (g.right?.length || 0),
+      0,
+    );
+  }
+  return (tp.defaultLeft?.length || 0) + (tp.defaultRight?.length || 0);
+}
+
+export function hasTransactionCurrencyFilter(showAllCurrencies, selectedCurrencies) {
+  return Boolean(showAllCurrencies) || (Array.isArray(selectedCurrencies) && selectedCurrencies.length > 0);
+}
+
+export function shouldShowTransactionTablesSection({
+  showAllCurrencies,
+  selectedCurrencies,
+  tablePresentation,
+  searchLoading,
+}) {
+  if (!hasTransactionCurrencyFilter(showAllCurrencies, selectedCurrencies)) return false;
+  if (countTransactionPresentationRows(tablePresentation) > 0) return true;
+  return Boolean(searchLoading);
+}
+
 export function buildTxListSessionKey({
   companyId,
   dateFrom,

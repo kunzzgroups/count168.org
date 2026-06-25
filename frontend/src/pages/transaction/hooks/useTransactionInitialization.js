@@ -142,7 +142,7 @@ export function useTransactionInitialization({
     let nextShowAll = false;
     let nextSel = [];
 
-    if (saved?.showAll) {
+    if (saved?.showAll && codes.length >= 2) {
       nextShowAll = true;
       nextSel = [];
     } else if (saved?.currencies?.length) {

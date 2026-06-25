@@ -201,6 +201,7 @@ export function useTransactionSearch({
   );
 
   const toggleAllCurrenciesBtn = useCallback(() => {
+    if (txCurrencyCodes.length < 2) return;
     bootCurrencyDefaultRef.current = false;
     if (showAllCurrencies) {
       const avail = new Set(txCurrencyCodes);
@@ -236,6 +237,30 @@ export function useTransactionSearch({
     scheduleAutoSearch,
     transactionScope?.selectedGroup,
     notifySingleCurrencyIfNeeded,
+  ]);
+
+  /** All 仅在两种及以上货币时可用；仅一种时退出 All 并选中该货币。 */
+  useEffect(() => {
+    if (txCurrencyCodes.length >= 2 || !showAllCurrencies) return;
+    const code = txCurrencyCodes[0];
+    setShowAllCurrencies(false);
+    setSelectedCurrencies(code ? [code] : []);
+    persistCurrencyFilter(
+      scopeCacheCompanyKey,
+      false,
+      code ? [code] : [],
+      transactionScope?.selectedGroup,
+    );
+    if (code) notifySingleCurrencyIfNeeded([code]);
+    scheduleAutoSearch();
+  }, [
+    txCurrencyCodes,
+    showAllCurrencies,
+    scopeCacheCompanyKey,
+    transactionScope?.selectedGroup,
+    persistCurrencyFilter,
+    notifySingleCurrencyIfNeeded,
+    scheduleAutoSearch,
   ]);
 
   suppressCrossPageCurrencyRef.current =
@@ -473,6 +498,7 @@ export function useTransactionSearch({
         return;
       }
       if (!showAllCurrencies && selectedCurrencies.length === 0) {
+        setRawSearchData(null);
         setTablesVisible(false);
         pushToast(m.pleaseSelectAtLeastOneCurrency, "info");
         return;
@@ -536,7 +562,9 @@ export function useTransactionSearch({
 
       if (instantData) {
         setRawSearchData(instantData);
-        setTablesVisible(true);
+        const instantRows =
+          (instantData.left_table?.length || 0) + (instantData.right_table?.length || 0);
+        setTablesVisible(instantRows > 0);
       }
 
       let didSetBlockingLoading = false;
@@ -546,7 +574,9 @@ export function useTransactionSearch({
         setSearchLoading(true);
         didSetBlockingLoading = true;
       }
-      setTablesVisible(true);
+      if (!instantData) {
+        setTablesVisible((prev) => (showLoadingIndicator ? true : prev));
+      }
 
       const subsidiarySearch =
         scopeApi.subsidiaryAccountsOnly ||
@@ -584,6 +614,7 @@ export function useTransactionSearch({
         lastCompletedSearchTsRef.current = Date.now();
         const totalAccounts = (cleaned.left_table?.length || 0) + (cleaned.right_table?.length || 0);
         const displayed = countDisplayedRows(cleaned, searchState, txType);
+        setTablesVisible(displayed > 0);
         if (!silent) {
           if (totalAccounts === 0) {
             pushToast(m.searchCompletedNoData, "info");
@@ -708,6 +739,13 @@ export function useTransactionSearch({
       queryClient.cancelQueries({ queryKey: transactionQueryKeys.searchRoot() });
     };
   }, [queryClient]);
+
+  useEffect(() => {
+    if (!showAllCurrencies && selectedCurrencies.length === 0) {
+      setRawSearchData(null);
+      setTablesVisible(false);
+    }
+  }, [showAllCurrencies, selectedCurrencies]);
 
   const baseRowsPresentation = useMemo(() => {
     if (!rawSearchData) {
@@ -920,9 +958,12 @@ export function useTransactionSearch({
 
       if (instantReplay) {
         setRawSearchData(instantReplay);
-        setTablesVisible(true);
+        const replayRows =
+          (instantReplay.left_table?.length || 0) + (instantReplay.right_table?.length || 0);
+        setTablesVisible(replayRows > 0);
       } else {
         setRawSearchData(null);
+        setTablesVisible(false);
       }
 
       if (!currencyPrefs.showAll && currencyPrefs.currencies.length > 0) {
@@ -942,8 +983,8 @@ export function useTransactionSearch({
     }
 
     prevScopeKeyForSearchRef.current = scopeKey;
-    setTablesVisible((prev) => (prev ? prev : true));
     if (scopeChanged) {
+      setTablesVisible(false);
       lastCompletedSearchKeyRef.current = "";
       initialSearchDoneRef.current = false;
       lastInitialSearchKeyRef.current = "";
@@ -1000,7 +1041,8 @@ export function useTransactionSearch({
       const replay = key ? readTxListFromSessionStorage(key) : null;
       if (replay) {
         setRawSearchData(replay);
-        setTablesVisible(true);
+        const replayRows = (replay.left_table?.length || 0) + (replay.right_table?.length || 0);
+        setTablesVisible(replayRows > 0);
         lastSearchCommitMsRef.current = Date.now();
         hadReplay = true;
       }

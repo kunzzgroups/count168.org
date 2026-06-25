@@ -15,7 +15,7 @@ import { useTransactionSync } from "./hooks/useTransactionSync.js";
 import { useTransactionDateRange } from "./hooks/useTransactionDateRange.js";
 import { useTransactionInitialization } from "./hooks/useTransactionInitialization.js";
 import { installTransactionExcelCopy } from "./lib/transactionExcelCopy.js";
-import { getRoleClass } from "./lib/transactionPaymentLogic.js";
+import { getRoleClass, shouldShowTransactionTablesSection } from "./lib/transactionPaymentLogic.js";
 import "../../../public/css/report-outlined-fields.css";
 import "../../../public/css/transaction.css";
 import "../../../public/css/userlist.css";
@@ -247,7 +247,12 @@ function TransactionPaymentPageMain() {
     filterSnapshot && scopeCacheKey && data.currencyScopeBundle?.scopeKey !== scopeCacheKey,
   );
   const tablesLoading = search.searchLoading || scopeDataPending;
-  const tablesVisible = search.tablesVisible || Boolean(filterSnapshot);
+  const tablesVisible = shouldShowTransactionTablesSection({
+    showAllCurrencies: search.showAllCurrencies,
+    selectedCurrencies: search.selectedCurrencies,
+    tablePresentation: search.tablePresentation,
+    searchLoading: tablesLoading,
+  });
 
   return (
     <div className="container-fluid transaction-container">
