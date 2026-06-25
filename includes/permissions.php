@@ -318,6 +318,15 @@ if (!function_exists('checkCompanyCategoryPermission')) {
     }
 }
 
+if (!function_exists('checkCompanyGamesOrBankCategoryPermission')) {
+    /** Data Capture / maintenance process list: Games/Gambling or Bank (e.g. CX payroll channel). */
+    function checkCompanyGamesOrBankCategoryPermission(PDO $pdo, $companyId): bool
+    {
+        return checkCompanyCategoryPermission($pdo, $companyId, 'Games')
+            || checkCompanyCategoryPermission($pdo, $companyId, 'Bank');
+    }
+}
+
 if (!function_exists('user_sidebar_permissions_list')) {
     /**
      * Sidebar permission keys from user.permissions JSON.

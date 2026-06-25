@@ -84,6 +84,26 @@ function searchApiDcdCompanyId(): int
 }
 
 /**
+ * account_currency / currency JOIN scope — align with getaccount_api & bulk_account_currency_api.
+ *
+ * @return array{sql: string, bind: int}
+ */
+function searchApiCurrencyJoinScope(PDO $pdo, bool $isGroupLedger, int $groupScopeId): array
+{
+    if ($isGroupLedger && tenant_table_has_scope_columns($pdo, 'currency') && $groupScopeId > 0) {
+        return [
+            'sql' => "c.scope_type = 'group' AND c.scope_id = ?",
+            'bind' => $groupScopeId,
+        ];
+    }
+
+    return [
+        'sql' => 'c.company_id = ?' . tenant_sql_currency_subsidiary_only($pdo, 'c'),
+        'bind' => searchApiDcdCompanyId(),
+    ];
+}
+
+/**
  * Bulk DCD 查询的 ledger 隔离（与 history_api / dcBuildCaptureLedgerFilter 对齐）。
  * Group ledger 使用 anchor company_id；dual-tenant 再按 scope_type/scope_id 过滤。
  *
@@ -792,7 +812,8 @@ function searchApiApplyDomainSourceCompanyRows(
     string $date_from_db,
     string $date_to_db,
     array $filter_currency_codes,
-    array $currency_id_map
+    array $currency_id_map,
+    bool $hide_zero_balance = true
 ): void {
     $currencyFilterIds = [];
     if (!empty($filter_currency_codes)) {
@@ -908,18 +929,20 @@ function searchApiApplyDomainSourceCompanyRows(
     }
     unset($row);
 
-    $results = array_values(array_filter($results, function ($r) {
-        $aid = (int) ($r['account_db_id'] ?? 0);
-        if ($aid <= 0) {
-            return true;
-        }
-        $has = (int) ($r['has_crdr_transactions'] ?? 0) === 1;
-        $nonZero = searchMoneyNonZero($r['bf'] ?? '0')
-            || searchMoneyNonZero($r['win_loss'] ?? '0')
-            || searchMoneyNonZero($r['cr_dr'] ?? '0')
-            || searchMoneyNonZero($r['balance'] ?? '0');
-        return $has || $nonZero;
-    }));
+    if ($hide_zero_balance) {
+        $results = array_values(array_filter($results, function ($r) {
+            $aid = (int) ($r['account_db_id'] ?? 0);
+            if ($aid <= 0) {
+                return true;
+            }
+            $has = (int) ($r['has_crdr_transactions'] ?? 0) === 1;
+            $nonZero = searchMoneyNonZero($r['bf'] ?? '0')
+                || searchMoneyNonZero($r['win_loss'] ?? '0')
+                || searchMoneyNonZero($r['cr_dr'] ?? '0')
+                || searchMoneyNonZero($r['balance'] ?? '0');
+            return $has || $nonZero;
+        }));
+    }
 }
 
 if (!defined('SEARCH_API_LIBRARY_MODE')) {
@@ -1386,6 +1409,7 @@ try {
             "SELECT id, UPPER(code) AS code 
              FROM currency 
              WHERE company_id = ?"
+            . tenant_sql_currency_subsidiary_only($pdo)
         );
         $currency_stmt->execute([$company_id]);
         $currency_rows = $currency_stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -1559,13 +1583,18 @@ try {
         if ($has_account_currency_table) {
             $placeholders = implode(',', array_fill(0, count($accounts), '?'));
             $ids = array_column($accounts, 'id');
+            $acCurScope = searchApiCurrencyJoinScope(
+                $pdo,
+                $search_is_group_ledger,
+                (int) ($search_list_scope['group_scope_id'] ?? 0)
+            );
             $stmt = $pdo->prepare("
                 SELECT DISTINCT UPPER(c.code) AS code
                 FROM account_currency ac
-                INNER JOIN currency c ON ac.currency_id = c.id AND c.company_id = ?
+                INNER JOIN currency c ON ac.currency_id = c.id AND {$acCurScope['sql']}
                 WHERE ac.account_id IN ($placeholders)
             ");
-            $stmt->execute(array_merge([$company_id], $ids));
+            $stmt->execute(array_merge([$acCurScope['bind']], $ids));
             $active_currency_codes = array_column($stmt->fetchAll(PDO::FETCH_ASSOC), 'code');
             $active_currency_codes = array_values(array_unique($active_currency_codes));
         }
@@ -1583,6 +1612,11 @@ try {
         $all_ids = array_column($accounts, 'id');
         $all_ph = implode(',', array_fill(0, count($all_ids), '?'));
         $bulk_cur_company_id = searchApiDcdCompanyId();
+        $bulk_ac_cur_scope = searchApiCurrencyJoinScope(
+            $pdo,
+            $search_is_group_ledger,
+            (int) ($search_list_scope['group_scope_id'] ?? 0)
+        );
         $dcd_ledger_where = searchApiDcdBulkLedgerWhere($pdo, $search_is_group_ledger, $search_list_scope);
         $bulk_txn_scope_sql = $search_txn_where;
         $bulk_txn_scope_bind = $search_txn_bind;
@@ -1592,11 +1626,11 @@ try {
             $st = $pdo->prepare("
                 SELECT ac.account_id, ac.currency_id, UPPER(c.code) AS currency_code
                 FROM account_currency ac
-                INNER JOIN currency c ON ac.currency_id = c.id AND c.company_id = ?
+                INNER JOIN currency c ON ac.currency_id = c.id AND {$bulk_ac_cur_scope['sql']}
                 WHERE ac.account_id IN ($all_ph)
                 ORDER BY ac.account_id, ac.currency_id ASC
             ");
-            $st->execute(array_merge([$bulk_cur_company_id], $all_ids));
+            $st->execute(array_merge([$bulk_ac_cur_scope['bind']], $all_ids));
             while ($r = $st->fetch(PDO::FETCH_ASSOC)) {
                 $bulk_ac[(int) $r['account_id']][(int) $r['currency_id']] = strtoupper($r['currency_code']);
             }
@@ -1781,6 +1815,39 @@ try {
                     if (!isset($account_currency_ids[$cid])) {
                         $account_currencies[] = ['currency_id' => $cid, 'currency_code' => $code];
                         $account_currency_ids[$cid] = true;
+                    }
+                }
+            }
+        }
+
+        // Show all 0 balance: ensure every scoped account gets a row per filtered currency.
+        // Dormant members may have no period txn/DCD but still need MYR 0.00 visible.
+        if (!$hide_zero_balance) {
+            if (!empty($filter_currency_codes)) {
+                foreach ($filter_currency_codes as $fcc) {
+                    $code = strtoupper((string) $fcc);
+                    if ($code === '' || !isset($currency_map[$code])) {
+                        continue;
+                    }
+                    addAccountCurrencyCombo(
+                        $account_currencies,
+                        $account_currency_ids,
+                        (int) $currency_map[$code],
+                        $code
+                    );
+                }
+            } elseif ($has_account_currency_table) {
+                foreach ($bulk_ac[$account_id] ?? [] as $cid => $code) {
+                    addAccountCurrencyCombo($account_currencies, $account_currency_ids, (int) $cid, $code);
+                }
+                if (empty($account_currencies)) {
+                    foreach ($currency_map as $code => $cid) {
+                        addAccountCurrencyCombo(
+                            $account_currencies,
+                            $account_currency_ids,
+                            (int) $cid,
+                            strtoupper((string) $code)
+                        );
                     }
                 }
             }
@@ -2369,7 +2436,8 @@ try {
         $date_from_db,
         $date_to_db,
         $filter_currency_codes,
-        $currency_id_map
+        $currency_id_map,
+        $hide_zero_balance
     );
     // Domain 净利润行已停用：最终利润由 Share/Commission 实际分配结果体现。
     // 按 currency 和 account_id 排序

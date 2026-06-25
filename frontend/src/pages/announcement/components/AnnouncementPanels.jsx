@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 
-export function AnnouncementPanel({ t, announcements, onEdit, onDelete }) {
+export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublished, onPublishFailed }) {
   const [form, setForm] = useState({ title: "", content: "" });
   const [submitting, setSubmitting] = useState(false);
 
@@ -21,8 +21,12 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete }) {
       const json = await res.json();
       if (json.success) {
         setForm({ title: "", content: "" });
-        onEdit(); // triggers reload in parent
+        onPublished?.();
+      } else {
+        onPublishFailed?.(json.message || "Unknown error");
       }
+    } catch (err) {
+      onPublishFailed?.(err.message);
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +100,7 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete }) {
   );
 }
 
-export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete }) {
+export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPublished, onPublishFailed }) {
   const [form, setForm] = useState({ prefix: "", content: "" });
   const [submitting, setSubmitting] = useState(false);
   const canCreate = maintenanceList.length === 0;
@@ -117,8 +121,12 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete }) {
       const json = await res.json();
       if (json.success) {
         setForm({ prefix: "", content: "" });
-        onEdit(); // triggers reload in parent
+        onPublished?.();
+      } else {
+        onPublishFailed?.(json.message || "Unknown error");
       }
+    } catch (err) {
+      onPublishFailed?.(err.message);
     } finally {
       setSubmitting(false);
     }

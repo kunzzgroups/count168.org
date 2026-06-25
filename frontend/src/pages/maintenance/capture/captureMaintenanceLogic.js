@@ -50,15 +50,15 @@ export async function fetchCompanyPermissions(companyCode) {
 }
 
 export async function fetchProcesses(companyId, scope = null) {
-  const c168Channel = Boolean(scope?.c168Channel);
-  if (scope && captureMaintenanceUsesGroupProcesses(scope) && !c168Channel) {
+  const payrollChannel = Boolean(scope?.c168Channel || scope?.companyPayrollChannel);
+  if (scope && captureMaintenanceUsesGroupProcesses(scope) && !payrollChannel) {
     const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
     return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList));
   }
   const effectiveId = scope?.scopeCompanyId ?? companyId;
   const rows = await fetchMaintenanceProcesses(effectiveId, { credentials: "include" });
   let mapped = mapProcessesForMaintenanceSelect(rows);
-  if (c168Channel) {
+  if (payrollChannel) {
     const payrollCodes = new Set(GROUP_ONLY_PROCESS_CODES);
     mapped = mapped.filter((p) =>
       payrollCodes.has(String(p.process_name ?? "").trim().toUpperCase()),

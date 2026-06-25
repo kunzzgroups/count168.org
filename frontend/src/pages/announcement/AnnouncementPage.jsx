@@ -9,6 +9,7 @@ import { spaPath } from "../../utils/routing/pageRoutes.js";
 import { AnnouncementToast, AnnouncementConfirmModal } from "./components/AnnouncementCommon.jsx";
 import { EditAnnouncementModal, EditMaintenanceModal } from "./components/AnnouncementModals.jsx";
 import { AnnouncementPanel, MaintenancePanel } from "./components/AnnouncementPanels.jsx";
+import PagePillTabSwitch from "../../components/PagePillTabSwitch.jsx";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
 
@@ -75,7 +76,12 @@ export default function AnnouncementPage() {
     try {
       const res = await fetch(buildApiUrl("api/announcements/announcement_list_api.php"), { credentials: "include" });
       const json = await res.json();
-      setAnnouncements(json.success && Array.isArray(json.data) ? json.data : []);
+      if (json.success && Array.isArray(json.data)) {
+        setAnnouncements(json.data);
+      } else {
+        setAnnouncements([]);
+        if (!json.success) showNotice(t("loadAnnouncementsFailed", { message: json.message || "Unknown error" }), "error");
+      }
     } catch (err) { showNotice(t("loadAnnouncementsFailed", { message: err.message }), "error"); }
   }, [showNotice, t]);
 
@@ -83,7 +89,12 @@ export default function AnnouncementPage() {
     try {
       const res = await fetch(buildApiUrl("api/maintenance/list_api.php"), { credentials: "include" });
       const json = await res.json();
-      setMaintenanceList(json.success && Array.isArray(json.data) ? json.data : []);
+      if (json.success && Array.isArray(json.data)) {
+        setMaintenanceList(json.data);
+      } else {
+        setMaintenanceList([]);
+        if (!json.success) showNotice(t("loadMaintenanceFailed", { message: json.message || "Unknown error" }), "error");
+      }
     } catch (err) { showNotice(t("loadMaintenanceFailed", { message: err.message }), "error"); }
   }, [showNotice, t]);
 
@@ -109,7 +120,7 @@ export default function AnnouncementPage() {
 
   // Handlers
   function handleAnnouncementEdit(item) {
-    if (!item) { loadAnnouncements(); showNotice(t("announcementPublishedSuccess")); return; }
+    if (!item) return;
     setEditAnnouncement({ id: item.id, title: item.title || "", content: item.content || "" });
     setAnnouncementModalOpen(true);
   }
@@ -142,7 +153,7 @@ export default function AnnouncementPage() {
   }
 
   function handleMaintenanceEdit(item) {
-    if (!item) { loadMaintenance(); showNotice(t("maintenancePublishedSuccess")); return; }
+    if (!item) return;
     setEditMaintenance({ id: item.id, prefix: item.prefix || "", content: item.content || "" });
     setMaintenanceModalOpen(true);
   }
@@ -180,13 +191,35 @@ export default function AnnouncementPage() {
     <>
       <div className="container announcement-page-container">
         <div className="page-header">
-          <div className="page-tabs" role="tablist">
-            <button type="button" role="tab" aria-selected={activeTab === "announcement"} className={`page-tab${activeTab === "announcement" ? " active" : ""}`} onClick={() => setActiveTab("announcement")}>{t("announcementTab")}</button>
-            <button type="button" role="tab" aria-selected={activeTab === "maintenance"} className={`page-tab${activeTab === "maintenance" ? " active" : ""}`} onClick={() => setActiveTab("maintenance")}>{t("maintenanceTab")}</button>
-          </div>
+          <PagePillTabSwitch
+            value={activeTab}
+            onChange={setActiveTab}
+            options={[
+              { value: "announcement", label: t("announcementTab") },
+              { value: "maintenance", label: t("maintenanceTab") },
+            ]}
+          />
         </div>
-        {activeTab === "announcement" && <AnnouncementPanel t={t} announcements={announcements} onEdit={handleAnnouncementEdit} onDelete={handleAnnouncementDelete} />}
-        {activeTab === "maintenance" && <MaintenancePanel t={t} maintenanceList={maintenanceList} onEdit={handleMaintenanceEdit} onDelete={handleMaintenanceDelete} />}
+        {activeTab === "announcement" && (
+          <AnnouncementPanel
+            t={t}
+            announcements={announcements}
+            onEdit={handleAnnouncementEdit}
+            onDelete={handleAnnouncementDelete}
+            onPublished={() => { loadAnnouncements(); showNotice(t("announcementPublishedSuccess")); }}
+            onPublishFailed={(message) => showNotice(t("publishFailed", { message }), "error")}
+          />
+        )}
+        {activeTab === "maintenance" && (
+          <MaintenancePanel
+            t={t}
+            maintenanceList={maintenanceList}
+            onEdit={handleMaintenanceEdit}
+            onDelete={handleMaintenanceDelete}
+            onPublished={() => { loadMaintenance(); showNotice(t("maintenancePublishedSuccess")); }}
+            onPublishFailed={(message) => showNotice(t("publishFailed", { message }), "error")}
+          />
+        )}
       </div>
       <AnnouncementToast notices={notices} />
       <EditAnnouncementModal t={t} open={announcementModalOpen} draft={editAnnouncement} setDraft={setEditAnnouncement} onClose={() => setAnnouncementModalOpen(false)} onSave={saveEditedAnnouncement} />

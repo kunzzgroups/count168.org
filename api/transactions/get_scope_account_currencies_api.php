@@ -88,7 +88,8 @@ try {
             $currencyCompanyIds = [$entityId];
         }
         $accountIds = dashboardCollectGroupOnlyAccountIds($pdo, $viewGroup);
-        if (!$groupAggregateOnly) {
+        // Group-only currency: never merge subsidiary / linked company accounts.
+        if (!$groupAggregateOnly && $primaryCompanyId > 0) {
             $subsidiaryIds = gc_company_numeric_ids_for_group_code($pdo, $viewGroup);
             foreach ($subsidiaryIds as $subId) {
                 $accountIds = array_merge(

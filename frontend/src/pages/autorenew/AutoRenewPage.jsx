@@ -20,6 +20,7 @@ import {
 } from "./autoRenewTenantSettings.js";
 import { DashboardCalendarPopup } from "../dashboard/components/DashboardCalendarPopup.jsx";
 import ConfirmDeleteModal from "../../components/ConfirmDeleteModal.jsx";
+import PagePillTabSwitch from "../../components/PagePillTabSwitch.jsx";
 import {
   approveAutoRenew,
   AUTO_RENEW_PERIODS,
@@ -703,34 +704,39 @@ export default function AutoRenewPage() {
       <div className="container">
         <div className="content">
           <div className="auto-renew-page-header">
-            <div className="page-tabs" role="tablist" aria-label={t("filterGroupLabel")}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={entityTab === "company"}
-                className={`page-tab${entityTab === "company" ? " active" : ""}${tabPendingCounts.company > 0 ? " has-pending-badge" : ""}`}
-                onClick={() => handleEntityTabChange("company")}
-              >
-                <span className="page-tab__label">{t("companyTab")}</span>
-                <TabPendingBadge
-                  count={tabPendingCounts.company}
-                  label={t("tabPendingBadgeCompany", { count: tabPendingCounts.company })}
-                />
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={entityTab === "group"}
-                className={`page-tab${entityTab === "group" ? " active" : ""}${tabPendingCounts.group > 0 ? " has-pending-badge" : ""}`}
-                onClick={() => handleEntityTabChange("group")}
-              >
-                <span className="page-tab__label">{t("groupTab")}</span>
-                <TabPendingBadge
-                  count={tabPendingCounts.group}
-                  label={t("tabPendingBadgeGroup", { count: tabPendingCounts.group })}
-                />
-              </button>
-            </div>
+            <PagePillTabSwitch
+              value={entityTab}
+              onChange={handleEntityTabChange}
+              ariaLabel={t("filterGroupLabel")}
+              options={[
+                {
+                  value: "company",
+                  className: tabPendingCounts.company > 0 ? "has-pending-badge" : "",
+                  children: (
+                    <>
+                      <span className="page-tab__label">{t("companyTab")}</span>
+                      <TabPendingBadge
+                        count={tabPendingCounts.company}
+                        label={t("tabPendingBadgeCompany", { count: tabPendingCounts.company })}
+                      />
+                    </>
+                  ),
+                },
+                {
+                  value: "group",
+                  className: tabPendingCounts.group > 0 ? "has-pending-badge" : "",
+                  children: (
+                    <>
+                      <span className="page-tab__label">{t("groupTab")}</span>
+                      <TabPendingBadge
+                        count={tabPendingCounts.group}
+                        label={t("tabPendingBadgeGroup", { count: tabPendingCounts.group })}
+                      />
+                    </>
+                  ),
+                },
+              ]}
+            />
           </div>
 
           <div className="action-buttons-container">

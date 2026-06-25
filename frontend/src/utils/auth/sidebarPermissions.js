@@ -42,7 +42,7 @@ export function canAccessFullMaintenance(me) {
 export function canAccessLimitedMaintenance(me) {
   if (isOwnerUser(me) || hasFullPermissions(me)) return false;
   if (canAccessFullMaintenance(me)) return false;
-  return !!me?.company_has_gambling;
+  return !!(me?.company_has_gambling || me?.company_has_bank);
 }
 
 export function showMaintenanceInSidebar(me) {
@@ -52,6 +52,12 @@ export function showMaintenanceInSidebar(me) {
 /** Transaction / Formula maintenance pages (limited path for non-owner). */
 export function canAccessTransactionFormulaMaintenance(me) {
   return canAccessFullMaintenance(me) || canAccessLimitedMaintenance(me);
+}
+
+/** Capture maintenance: full Maintenance, or limited path when session company has Bank. */
+export function canAccessCaptureMaintenance(me) {
+  if (canAccessFullMaintenance(me)) return true;
+  return canAccessLimitedMaintenance(me) && Boolean(me?.company_has_bank);
 }
 
 export function canAccessDashboard(me) {

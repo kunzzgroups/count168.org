@@ -6,6 +6,7 @@
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/maintenance_common.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -21,21 +22,6 @@ function jsonResponse($success, $message, $data = null, $httpCode = null) {
 if (!isset($pdo) || !$pdo instanceof PDO) {
     jsonResponse(false, 'Database unavailable', null, 503);
     exit;
-}
-
-function maintenanceMarqueeHasPrefixColumn(PDO $pdo): bool
-{
-    static $hasPrefix = null;
-    if ($hasPrefix !== null) {
-        return $hasPrefix;
-    }
-    try {
-        $stmt = $pdo->query("SHOW COLUMNS FROM maintenance_marquee LIKE 'prefix'");
-        $hasPrefix = $stmt && $stmt->rowCount() > 0;
-    } catch (PDOException $e) {
-        $hasPrefix = false;
-    }
-    return $hasPrefix;
 }
 
 /**

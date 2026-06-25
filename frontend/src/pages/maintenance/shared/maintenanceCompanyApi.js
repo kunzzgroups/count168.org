@@ -65,6 +65,14 @@ export function isBankOnlyCategoryCompany(permissions) {
   return hasBank && !hasGames;
 }
 
+/** Capture / Transaction maintenance: company has Games/Gambling or Bank category. */
+export function companyPermsAllowDataCaptureMaintenance(permissions) {
+  if (!Array.isArray(permissions) || permissions.length === 0) return true;
+  const hasGames = permissions.includes("Games") || permissions.includes("Gambling");
+  const hasBank = permissions.includes("Bank");
+  return hasGames || hasBank;
+}
+
 /**
  * Process list for maintenance filters.
  */

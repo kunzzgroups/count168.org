@@ -9,6 +9,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
+require_once __DIR__ . '/maintenance_common.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -37,7 +38,8 @@ function requireC168InformationManagementAccess(PDO $pdo): void {
  * 获取 C168 下所有维护记录（含创建人信息）
  */
 function fetchMaintenanceList(PDO $pdo) {
-    $sql = "SELECT m.id, m.prefix, m.content, m.status,
+    $prefixSelect = maintenanceMarqueeHasPrefixColumn($pdo) ? 'm.prefix' : "'' AS prefix";
+    $sql = "SELECT m.id, {$prefixSelect}, m.content, m.status,
                    DATE_FORMAT(m.created_at, '%d/%m/%Y %H:%i:%s') as created_at,
                    COALESCE(u.name, o.name) as created_by_name,
                    COALESCE(u.login_id, o.owner_code) as created_by_login

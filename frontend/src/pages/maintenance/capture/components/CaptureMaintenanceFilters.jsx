@@ -25,6 +25,7 @@ export default function CaptureMaintenanceFilters({
   onPickCompany,
   onClearCompany,
   allowClearCompany = true,
+  switchingCompany = false,
   onPickAllGroups,
   onPickAllInGroup,
   groupsAllMode = false,
@@ -112,6 +113,7 @@ export default function CaptureMaintenanceFilters({
             onSwitchCompany={onPickCompany}
             onClearCompany={onClearCompany}
             allowClearCompany={allowClearCompany}
+            switchingCompany={switchingCompany}
             t={(key) => {
               if (key === "groupId") return m.groupId;
               if (key === "company") return m.company;

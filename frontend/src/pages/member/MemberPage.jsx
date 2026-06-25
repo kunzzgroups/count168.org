@@ -111,13 +111,6 @@ export default function MemberPage() {
   } = useMemberWinLoss({ showNotification, lang });
 
   const todayDmy = formatDmyFromDate(new Date());
-  const mondayDmy = formatDmyFromDate((() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    const day = d.getDay();
-    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
-    return d;
-  })());
 
   const {
     loading,
@@ -144,7 +137,6 @@ export default function MemberPage() {
   } = useMemberPageShell({
     navigate,
     initSession,
-    mondayDmy,
     todayDmy,
     lang,
   });
@@ -439,7 +431,7 @@ export default function MemberPage() {
               <div className="member-dash-col member-dash-col-filters" ref={wlFiltersColRef}>
             <div className="member-winloss-date-field">
               <ReportDatePicker
-                dateFrom={parseDmy(dateFrom || mondayDmy)}
+                dateFrom={parseDmy(dateFrom || todayDmy)}
                 dateTo={parseDmy(dateTo || todayDmy)}
                 onRangeChange={handleDateRangeChange}
                 containerClass="customer-report-filter-group"

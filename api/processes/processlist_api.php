@@ -254,19 +254,28 @@ if ($req_company_id) {
         'get_selected_banks', 'save_selected_banks', 'update_bank_process'
     ];
 
-    $requiredCategory = 'Games'; // Default fallback
     if (in_array($action, $bankOnlyActions)) {
-        $requiredCategory = 'Bank';
-    } else {
-        $reqPermission = $_GET['permission'] ?? $_POST['permission'] ?? '';
-        if ($reqPermission === 'Bank') {
-            $requiredCategory = 'Bank';
+        if (!checkCompanyCategoryPermission($pdo, $req_company_id, 'Bank')) {
+            jsonResponse(false, 'Unauthorized permission category');
+            exit;
         }
-    }
-
-    if (!checkCompanyCategoryPermission($pdo, $req_company_id, $requiredCategory)) {
-        jsonResponse(false, 'Unauthorized permission category');
-        exit;
+    } else {
+        $reqPermission = trim((string) ($_GET['permission'] ?? $_POST['permission'] ?? ''));
+        if ($reqPermission === 'Bank') {
+            if (!checkCompanyCategoryPermission($pdo, $req_company_id, 'Bank')) {
+                jsonResponse(false, 'Unauthorized permission category');
+                exit;
+            }
+        } elseif ($reqPermission === 'Games' || $reqPermission === 'Gambling') {
+            if (!checkCompanyCategoryPermission($pdo, $req_company_id, 'Games')) {
+                jsonResponse(false, 'Unauthorized permission category');
+                exit;
+            }
+        } elseif (!checkCompanyGamesOrBankCategoryPermission($pdo, $req_company_id)) {
+            // Default process list (incl. Data Capture / capture maintenance on bank-only companies).
+            jsonResponse(false, 'Unauthorized permission category');
+            exit;
+        }
     }
 }
 // --- END DATA-LEVEL CATEGORY PERMISSION VALIDATION ---

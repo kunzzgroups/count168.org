@@ -1066,7 +1066,7 @@ try {
         ]);
         $scopeProcessFilter = $maintenance_scope_group
             ? dcSqlGroupProcessFilter('p')
-            : dcSqlCompanyProcessFilter('p');
+            : dcSqlDataCaptureCompanyProcessFilter($pdo, (int) $company_id, 'p');
         $scopeCompanySql = $maintenance_scope_group
             ? ''
             : dcSqlCaptureOnSubsidiaryCompany('dc');

@@ -224,9 +224,9 @@ body.user-page .user-list-table .table-header.user-list-table-header {
     margin-top: 12px;
     background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%);
     border-radius: 8px 8px 0 0;
-    font-weight: bold;
+    font-weight: var(--userlist-weight-table-head);
     color: white;
-    font-size: var(--text-base);
+    font-size: var(--userlist-text-table-head);
     font-family: inherit;
     min-width: 0;
 }
@@ -1132,8 +1132,8 @@ body.datacapture-summary-page .btn-cancel:hover {
     align-items: center;
     padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
     border-radius: 20px;
-    font-size: var(--text-tiny);
-    font-weight: bold;
+    font-size: var(--userlist-text-badge);
+    font-weight: var(--userlist-weight-badge);
     text-transform: capitalize;
 }
 
@@ -3327,9 +3327,9 @@ body.user-page:not(.user-page--show-all) .user-list-table .user-list-row {
 
 body.user-page:not(.user-page--show-all) .user-list-row .card-item,
 body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item {
-    font-size: var(--text-medium) !important;
-    font-weight: bold !important;
-    line-height: 1.1 !important;
+    font-size: var(--userlist-text-table-cell) !important;
+    font-weight: var(--userlist-weight-table-cell) !important;
+    line-height: var(--userlist-line-height-cell) !important;
     letter-spacing: 0 !important;
 }
 
@@ -3337,7 +3337,7 @@ body.user-page:not(.user-page--show-all) .user-list-row .role-badge,
 body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .role-badge {
     padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
     line-height: inherit;
-    font-size: var(--text-tiny);
+    font-size: var(--userlist-text-badge);
     letter-spacing: 0.025em;
     flex-shrink: 0;
     white-space: nowrap;
@@ -3386,8 +3386,8 @@ body.user-page:not(.user-page--show-all) .user-card.show-card {
 }
 
 .card-item {
-    font-size: var(--text-medium);
-    font-weight: bold;
+    font-size: var(--userlist-text-table-cell);
+    font-weight: var(--userlist-weight-table-cell);
     color: #374151;
     display: flex;
     align-items: center;

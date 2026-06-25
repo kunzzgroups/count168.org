@@ -1793,9 +1793,6 @@ body.ec-auth-shell .process-page #addBankModal .bank-actions .btn-cancel:hover {
 
 /* Laptop screens: compact the form spacing */
 @media (max-height: 820px) {
-    #addBankModal .bank-form-fields-scroll .bank-form-row + .bank-form-row {
-        margin-top: 12px;
-    }
     #addBankModal .bank-form-fields-scroll .bank-form-row {
         gap: 20px;
     }
@@ -1828,22 +1825,55 @@ body.ec-auth-shell .process-page #addBankModal .bank-actions .btn-cancel:hover {
     min-height: 0;
 }
 
-.bank-form-row+.bank-form-row {
-    margin-top: 10px;
-}
-
 .bank-form-row-last {
-    min-height: 160px;
+    align-items: stretch;
+    min-height: 0;
 }
 
-/* 右侧 Remark 区域拉伸至与左侧 Selected Profit Sharing 底部对齐 */
+.bank-form-row-last .bank-form-cell-left {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.bank-form-row-last .bank-form-cell-left .bank-day-start-frequency-wrap {
+    flex: 0 0 auto;
+    margin-bottom: 12px !important;
+}
+
+.bank-form-row-last .bank-form-cell-left .bank-profit-sharing-container {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 0;
+}
+
+#addBankModal .bank-form-row-last .bank-profit-sharing-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+}
+
+#addBankModal .bank-form-row-last .bank-profit-sharing-list:has(.no-profit-sharing) {
+    display: flex;
+    flex-direction: column;
+}
+
+#addBankModal .bank-form-row-last .no-profit-sharing {
+    flex: 1 1 auto;
+    justify-content: center;
+}
+
+/* 左侧 Selected Profit Sharing 拉伸至与右侧 Record（DTS Created）底部对齐 */
 .bank-form-row-last .bank-form-cell-right {
     display: flex;
     flex-direction: column;
 }
 
 .bank-form-row-last .bank-form-cell-right .bank-remark-wrap {
-    flex: 1;
+    flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -1912,18 +1942,34 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
     min-height: 2.5em;
 }
 
-.bank-form-row-last .bank-form-cell-right .bank-form-dts-wrap {
+.bank-form-row-last .bank-form-cell-right .bank-form-section--record {
     flex: 0 0 auto;
     margin-top: 12px;
     width: 100%;
 }
 
-.bank-form-row-last .bank-form-cell-right .bank-form-dts-wrap .bank-section-title {
-    margin-bottom: 10px;
+#addBankModal .bank-form-section--record .account-section-header {
+    font-size: var(--text-h2);
+    font-weight: 700;
+    font-family: var(--font-heading-page);
+    color: #64748b;
+    margin: 0 0 calc(var(--space-gap, 0.75rem) * 0.65) 0;
+    padding-bottom: 0.25rem;
+    border-bottom: 0.125rem solid #e2e8f0;
+    border-left: none;
+    position: relative;
+    line-height: 1.25;
+    text-align: left;
 }
 
-.bank-form-dts-row {
-    gap: 15px;
+#addBankModal .bank-form-section--record .account-section-header::after {
+    content: '';
+    position: absolute;
+    bottom: -0.125rem;
+    left: 0;
+    width: 2.5rem;
+    height: 0.125rem;
+    background: linear-gradient(90deg, #94a3b8, #64748b);
 }
 
 #addBankModal .bank-form-dts-readonly {
@@ -1963,14 +2009,33 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
 
     #addBankModal .bank-form-row-last {
         min-height: 0;
+        align-items: start;
+    }
+
+    #addBankModal .bank-form-row-last .bank-form-cell-left .bank-profit-sharing-container {
+        flex: 0 0 auto;
+        display: block;
+    }
+
+    #addBankModal .bank-form-row-last .bank-profit-sharing-list {
+        flex: 0 0 auto;
+        max-height: 180px;
+    }
+
+    #addBankModal .bank-form-row-last .bank-profit-sharing-list:has(.no-profit-sharing) {
+        display: block;
+    }
+
+    #addBankModal .bank-form-row-last .no-profit-sharing {
+        flex: 0 0 auto;
+        justify-content: flex-start;
     }
 
     #addBankModal .bank-form-row-last .bank-form-cell-right .bank-remark-wrap {
         flex: 0 0 auto;
     }
 
-    #addBankModal .bank-row-two-cols,
-    #addBankModal .bank-form-dts-row {
+    #addBankModal .bank-row-two-cols {
         grid-template-columns: 1fr;
     }
 

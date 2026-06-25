@@ -102,7 +102,7 @@ export const PROCESS_LIST_I18N = {
     enterWordsToRemove: "Enter words to remove",
     removeWordsHelp: "Press Enter to add a word chip; saved for this process for next time.",
     removeWordChipRemove: "Remove",
-    allDay: "All Day",
+    allDay: "ALL DAY",
     replaceFrom: "Replace From",
     oldWord: "Old word",
     wordToBeReplaced: "(Word to be replaced)",

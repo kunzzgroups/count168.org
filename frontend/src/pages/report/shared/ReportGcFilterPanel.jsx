@@ -18,6 +18,7 @@ export default function ReportGcFilterPanel({
   onClearCompany,
   /** When false (company login), clicking the active company pill does not clear selection. */
   allowClearCompany = true,
+  switchingCompany = false,
   /** "dashboard" = embedded GcInlineFilterPanel layout (not the Home dashboard route). */
   layout = "legacy",
   /** Group/Company "All" pills — only the Home dashboard enables this. */
@@ -58,6 +59,7 @@ export default function ReportGcFilterPanel({
             onPickAllInGroup={onPickAllInGroup}
             onPickCompany={onSwitchCompany}
             allowCompanyDeselect={allowClearCompany}
+            switchingCompany={switchingCompany}
             onClearCompanyPill={
               allowClearCompany
                 ? (c) => {

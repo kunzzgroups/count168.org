@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { spaPath } from "../../../utils/routing/pageRoutes.js";
+import { canAccessCaptureMaintenance } from "../../../utils/auth/sidebarPermissions.js";
 /* 与 DataCapture 相同：打进 Vite 产物，避免 dynamic import 在生产包中被拆成空 chunk、样式从未加载 */
 import "../../../../public/css/accountCSS.css";
 import "../../../../public/css/userlist.css";
@@ -16,7 +17,6 @@ import { ensureMaintenanceDateRangePicker } from "../../../utils/date/dateRangeP
 import { formatYmd } from "../../../utils/date/dateUtils.js";
 import { useMaintenanceGroupCompanyFilter } from "../shared/useMaintenanceGroupCompanyFilter.js";
 import { runMaintenanceCompanySwitch } from "../shared/maintenanceCompanySwitch.js";
-import { useMaintenanceBankOnlyGuard } from "../shared/useMaintenanceBankOnlyGuard.js";
 import { useMaintenancePageScrollLock } from "../shared/useMaintenancePageScrollLock.js";
 import {
   isMaintenanceGroupOnlyBoot,
@@ -47,6 +47,7 @@ import {
   deleteCaptureItems,
   updateSessionCompany,
 } from "./captureMaintenanceLogic.js";
+import { companyPermsAllowDataCaptureMaintenance } from "../shared/maintenanceCompanyApi.js";
 import {
   captureMaintenanceScopeCacheCompanyKey,
   captureMaintenanceScopeCacheKey,
@@ -118,6 +119,8 @@ export default function CaptureMaintenancePage() {
   const [loading, setLoading] = useState(false);
   /** 与 Report 页一致：非首次拉数时用细条 + 保留旧表，避免切换公司整表 Loading 卡顿感 */
   const [listSyncing, setListSyncing] = useState(false);
+  /** 仅 session 切换期间防抖；勿与 listSyncing 混用，否则拉数时无法点其它公司 */
+  const [companySwitchInFlight, setCompanySwitchInFlight] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   
@@ -155,7 +158,8 @@ export default function CaptureMaintenancePage() {
     switchCompany: (c) => switchCompanyRef.current(c),
     onPrepareCompanySelect: (c) => onPrepareCompanySelectRef.current(c),
     onClearCompany: (...args) => onClearCompanyRef.current(...args),
-    pillCategory: "games",
+    pillCategory: "datacapture",
+    switchingCompany: companySwitchInFlight,
   });
 
   const captureScope = useMemo(
@@ -201,7 +205,6 @@ export default function CaptureMaintenancePage() {
   }, []);
 
   const { guardWrite } = usePartnershipAuditWriteGuard(me, notify);
-  useMaintenanceBankOnlyGuard(companyId);
   useMaintenancePageScrollLock();
 
   // -- Initialization --
@@ -240,12 +243,7 @@ export default function CaptureMaintenancePage() {
         const u = me;
 
         // Permissions check
-        const perms = Array.isArray(u.permissions) ? u.permissions : [];
-        const hasFull = perms.length === 0;
-        const canMaintenance = hasFull || perms.includes("maintenance");
-
-        // Sidebar visibility check
-        if (!canMaintenance) {
+        if (!canAccessCaptureMaintenance(u)) {
           navigate(spaPath("dashboard"), { replace: true });
           return;
         }
@@ -351,13 +349,7 @@ export default function CaptureMaintenancePage() {
             companyId: initialCompanyId,
           });
           if (!skipCategoryGuard) {
-            const hasGames = companyPerms.includes("Games") || companyPerms.includes("Gambling");
-            const bankOnly = companyPerms.includes("Bank") && !hasGames;
-            if (bankOnly) {
-              navigate(spaPath("dashboard"), { replace: true });
-              return;
-            }
-            if (!hasGames) {
+            if (!companyPermsAllowDataCaptureMaintenance(companyPerms)) {
               navigate(spaPath("dashboard"), { replace: true });
               return;
             }
@@ -434,6 +426,7 @@ export default function CaptureMaintenancePage() {
         setListSyncing(true);
       }
       setSelectedIds([]);
+      scopeKeyRef.current = searchScopeKey;
       try {
         const data = await searchCaptureData(
           {
@@ -538,21 +531,15 @@ export default function CaptureMaintenancePage() {
       const nextId = Number(c.id);
       const nextCode = c.company_id || "";
       const newGroup = c.group_id ? String(c.group_id).toUpperCase().trim() : null;
-      const nextScope = resolveCaptureMaintenanceScope({
-        companies,
-        selectedGroup: newGroup,
-        companyId: nextId,
-        groupsAllMode,
-        groupAllMode,
-      });
+      setCompanySwitchInFlight(true);
       suppressNextSearchEffectRef.current = true;
       setCompanyId(nextId);
       setCompanyCode(nextCode);
       setSelectedGroup(newGroup);
+      setSelectedProcess("");
       persistDashboardFilterState(newGroup, nextId);
-      void performSearch({ scope: nextScope });
     },
-    [companies, performSearch, groupsAllMode, groupAllMode],
+    [],
   );
 
   onPrepareCompanySelectRef.current = onPrepareCompanySelect;
@@ -569,15 +556,26 @@ export default function CaptureMaintenancePage() {
         navigate,
         updateSessionCompany,
         onStay: async () => {
-          const switchedScope = resolveCaptureMaintenanceScope({
-            companies,
-            selectedGroup: c.group_id ? String(c.group_id).toUpperCase().trim() : null,
-            companyId: Number(c.id),
-            groupsAllMode,
-            groupAllMode,
-          });
-          await performSearch({ scope: switchedScope });
-          notify(t("switchedTo", { company: nextCode }), "success");
+          suppressNextSearchEffectRef.current = true;
+          try {
+            const perms = await fetchCompanyPermissions(nextCode);
+            if (!companyPermsAllowDataCaptureMaintenance(perms)) {
+              navigate(spaPath("dashboard"), { replace: true });
+              return;
+            }
+            const switchedScope = resolveCaptureMaintenanceScope({
+              companies,
+              selectedGroup: c.group_id ? String(c.group_id).toUpperCase().trim() : null,
+              companyId: Number(c.id),
+              groupsAllMode,
+              groupAllMode,
+            });
+            await performSearch({ scope: switchedScope });
+            notify(t("switchedTo", { company: nextCode }), "success");
+          } catch (stayErr) {
+            console.error("Company switch search error:", stayErr);
+            notify(stayErr?.message || t("switchFailed"), "error");
+          }
         },
       });
       if (redirected) return;
@@ -588,6 +586,9 @@ export default function CaptureMaintenancePage() {
         return;
       }
       notify(err.message || t("switchFailed"), "error");
+    } finally {
+      setCompanySwitchInFlight(false);
+      setListSyncing(false);
     }
   };
 
@@ -678,6 +679,7 @@ export default function CaptureMaintenancePage() {
           onPickCompany={handlePickCompany}
           onClearCompany={handleClearCompany}
           allowClearCompany={allowClearCompany}
+          switchingCompany={companySwitchInFlight}
           onPickAllGroups={handlePickAllGroups}
           onPickAllInGroup={handlePickAllInGroup}
           groupsAllMode={groupsAllMode}

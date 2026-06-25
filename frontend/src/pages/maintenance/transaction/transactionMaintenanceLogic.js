@@ -14,6 +14,7 @@ import {
 } from "../shared/maintenanceCompanyApi.js";
 import { fetchProcesses as fetchDomainReportProcesses } from "../../report/domain/domainReportApi.js";
 import { mapDomainGroupProcesses } from "../../report/domain/domainReportGroupProcesses.js";
+import { GROUP_ONLY_PROCESS_CODES } from "../../datacapture/lib/dataCaptureGroupOnlyProcesses.js";
 import {
   transactionMaintenanceScopeApiParams,
   transactionMaintenanceScopeCacheKey,
@@ -129,16 +130,26 @@ export async function fetchProcessesForPermission(companyId, permission, scope =
 }
 
 export async function fetchProcessesForMaintenance(companyId, permission, scope = null) {
-  if (scope && transactionMaintenanceUsesGroupProcesses(scope)) {
+  const payrollChannel = Boolean(scope?.c168Channel || scope?.companyPayrollChannel);
+  if (scope && transactionMaintenanceUsesGroupProcesses(scope) && !payrollChannel) {
     const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
     return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList));
   }
   const effectiveId = scope?.scopeCompanyId ?? companyId;
+  const permForApi =
+    payrollChannel && String(permission).toLowerCase() === "bank" ? "" : permission;
   const rows = await fetchMaintenanceProcesses(effectiveId, {
     credentials: true,
-    permission,
+    permission: permForApi,
   });
-  return mapProcessesForMaintenanceSelect(rows);
+  let mapped = mapProcessesForMaintenanceSelect(rows);
+  if (payrollChannel) {
+    const payrollCodes = new Set(GROUP_ONLY_PROCESS_CODES);
+    mapped = mapped.filter((p) =>
+      payrollCodes.has(String(p.process_name ?? "").trim().toUpperCase()),
+    );
+  }
+  return mapped;
 }
 
 /**
@@ -202,12 +213,16 @@ export function pickTransactionMaintenancePermission(permissions, saved) {
 }
 
 /** 传给 maintenance_search_api 的 category（Loan/Rate/Money → Games）。 */
-export function resolveTransactionMaintenanceCategory(permission) {
+export function resolveTransactionMaintenanceCategory(permission, scope = null) {
   const raw = String(permission ?? "").trim();
   if (!raw) return "";
   const lower = raw.toLowerCase();
   if (TXN_MAINTENANCE_EMPTY_CATEGORIES.has(lower)) return "Games";
   if (lower === "gambling") return "Games";
+  // Bank-only payroll subsidiaries (e.g. CX): Data Capture uses Games semantics, not Bank ledger.
+  if (lower === "bank" && (scope?.companyPayrollChannel || scope?.c168Channel)) {
+    return "Games";
+  }
   return raw;
 }
 
@@ -281,7 +296,7 @@ export async function searchTransactionData({
   onProgress,
 }) {
   const processFilter = normalizeMaintenanceProcessFilter(process);
-  const categoryFilter = resolveTransactionMaintenanceCategory(category);
+  const categoryFilter = resolveTransactionMaintenanceCategory(category, scope);
   const emitProgress = (rows) => {
     if (!rows.length) return;
     const snapshot = renumberMaintenanceRows([...rows]);

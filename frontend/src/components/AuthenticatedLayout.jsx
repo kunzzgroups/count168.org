@@ -21,6 +21,7 @@ import { useExpirationReminder } from "../hooks/useExpirationReminder.js";
 import { applyLoginLang } from "../utils/i18n/useLoginLang.js";
 import {
   canAccessDashboard,
+  canAccessCaptureMaintenance,
   canAccessFullMaintenance,
   canAccessLimitedMaintenance,
   canAccessPermission,
@@ -203,6 +204,11 @@ export default function AuthenticatedLayout() {
   const [searchParams] = useSearchParams();
   const path = location.pathname;
   const pageKey = pathnameToPageKey(path);
+  const isDataCaptureSidebarActive =
+    pageKey === "datacapture" ||
+    pageKey === "datacapturesummary" ||
+    pageKey === "capture-maintenance" ||
+    pageKey === "transaction-maintenance";
   const chromelessPaymentHistory = isPaymentHistoryChromelessPath(path, searchParams);
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -295,6 +301,13 @@ export default function AuthenticatedLayout() {
       document.body.classList.add("process-page");
     }
   }, [location.pathname]);
+
+  /* Transaction Payment：layout 阶段即挂 transaction-page，避免 lazy chunk 加载前 Global Unlock 双 scrollbar */
+  useLayoutEffect(() => {
+    const onTransactionPayment =
+      pathnameIs("transaction", location.pathname) && !chromelessPaymentHistory;
+    document.body.classList.toggle("transaction-page", onTransactionPayment);
+  }, [location.pathname, chromelessPaymentHistory]);
 
   useLayoutEffect(() => {
     document.body.classList.toggle("ec-payment-history-chromeless", chromelessPaymentHistory);
@@ -1264,9 +1277,7 @@ export default function AuthenticatedLayout() {
               </SidebarNavTip>
             </div>
           )}
-          {(canAccess("datacapture") &&
-            (me?.company_has_gambling ||
-              (me?.company_has_bank && !me?.company_has_gambling))) && (
+          {canAccess("datacapture") && (me?.company_has_gambling || me?.company_has_bank) && (
             <div className="informationmenu-section">
               <SidebarNavTip label={i18n.sidebarDataCapture} enabled={sidebarIconOnly}>
                 <SidebarSectionLink
@@ -1277,7 +1288,7 @@ export default function AuthenticatedLayout() {
                       clearDataCaptureRoundLocalStorage();
                     }
                   }}
-                  className={`informationmenu-section-title ${pageKey === "datacapture" ? "current-page" : "account-direct"}`}
+                  className={`informationmenu-section-title ${isDataCaptureSidebarActive ? "current-page" : "account-direct"}`}
                 >
                   <svg className="section-icon" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" />
@@ -1392,7 +1403,8 @@ export default function AuthenticatedLayout() {
                   onMouseLeave={() => setHoverSection(null)}
                 >
                   <div className="submenu-content">
-                    {showFullMaintenanceMenu && me?.company_has_gambling && (
+                    {(showFullMaintenanceMenu || (showLimitedMaintenanceMenu && me?.company_has_bank)) &&
+                      (me?.company_has_gambling || me?.company_has_bank) && (
                       <a
                         {...sidebarSubmenuLinkProps("/capture-maintenance", goTo)}
                         className={`submenu-item ${pageKey === "capture-maintenance" ? "current-page" : ""}`}
@@ -1401,7 +1413,8 @@ export default function AuthenticatedLayout() {
                         <span>{i18n.sidebarDataCapture}</span>
                       </a>
                     )}
-                    {me?.company_has_gambling && (showFullMaintenanceMenu || showLimitedMaintenanceMenu) && (
+                    {(me?.company_has_gambling || me?.company_has_bank) &&
+                      (showFullMaintenanceMenu || showLimitedMaintenanceMenu) && (
                       <a
                         {...sidebarSubmenuLinkProps("/transaction-maintenance", goTo)}
                         className={`submenu-item ${pageKey === "transaction-maintenance" ? "current-page" : ""}`}

@@ -144,6 +144,19 @@
   --userlist-btn-add-width: clamp(80px, 7.25vw, 120px);
   --userlist-btn-delete-width: clamp(90px, 7.25vw, 120px);
 
+  /*
+   * User List — 表头/行/徽章字阶（desktop 与 tablet 共用；改 --text-* 阶梯即连带缩放）
+   */
+  --userlist-text-table-head: var(--text-base);
+  --userlist-text-table-cell: var(--text-medium);
+  --userlist-text-toolbar: var(--text-medium);
+  --userlist-text-badge: var(--text-tiny);
+  --userlist-weight-table-head: var(--font-weight-bold);
+  --userlist-weight-table-cell: var(--font-weight-bold);
+  --userlist-weight-badge: var(--font-weight-bold);
+  --userlist-weight-toolbar: var(--font-weight-semibold);
+  --userlist-line-height-cell: 1.1;
+
   /* --- 列表页主标题（对应 clamp(26px, 2.08vw, 40px)）--- */
   --text-page-title: clamp(2.6rem, 2.08vw, 4rem);
   --text-page-title-mt: var(--layout-page-first-block-mt);
@@ -288,6 +301,29 @@
   --txn-history-cell-pad-inline-full: clamp(0.55rem, 0.52vw, 0.65rem);
   --txn-history-cell-min-height: clamp(2.4rem, 2.2vw, 2.75rem);
   --txn-history-row-height-full: clamp(2.6rem, 2.4vw, 2.75rem);
+
+  /*
+   * Auto Renew — 与 User List 表头/行字阶一致；控件与 badge 用 --text-small
+   */
+  --auto-renew-text-table-head: var(--text-base);
+  --auto-renew-text-table-cell: var(--text-medium);
+  --auto-renew-text-toolbar: var(--text-medium);
+  --auto-renew-text-control: var(--text-small);
+  --auto-renew-text-badge: var(--text-small);
+  --auto-renew-text-tab-badge: var(--text-tiny);
+  --auto-renew-text-empty-title: var(--text-h3);
+  --auto-renew-text-empty-hint: var(--text-medium);
+  --auto-renew-text-notice: var(--text-medium);
+  --auto-renew-text-toast: var(--text-medium);
+  --auto-renew-line-height: 1.35;
+  --auto-renew-weight-table-head: var(--font-weight-bold);
+  --auto-renew-weight-table-cell: var(--font-weight-bold);
+  --auto-renew-weight-table-cell-strong: var(--font-weight-bold);
+  --auto-renew-weight-control: var(--font-weight-semibold);
+  --auto-renew-weight-badge: var(--font-weight-bold);
+  --auto-renew-weight-muted: 500;
+  --auto-renew-weight-toolbar-date: 500;
+  --auto-renew-weight-toolbar-date-active: var(--font-weight-bold);
 
   /*
    * Accounting Due inbox (Bank Process List) — grid + spacing aligned with Contra Inbox

@@ -294,7 +294,9 @@ try {
     }
 
     $action = isset($_GET['action']) ? trim($_GET['action']) : '';
-    $resolved = resolveReportRequestCompanyScope($pdo, $_GET);
+    // Process picker for capture/maintenance may target bank-only subsidiaries (e.g. CX).
+    $scopeCategory = ($action === 'processes') ? 'maintenance' : 'games';
+    $resolved = resolveReportRequestCompanyScope($pdo, $_GET, $scopeCategory);
     $scopeCtx = resolveDomainReportCaptureScope($pdo, $resolved, $_GET);
     $company_id = (int) ($scopeCtx['company_id'] ?? 0);
     $groupScope = (bool) ($scopeCtx['group_scope'] ?? $scopeCtx['is_group_scope'] ?? false);

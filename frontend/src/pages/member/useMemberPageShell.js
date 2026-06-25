@@ -37,7 +37,7 @@ const AVATAR_MAP = {
 /**
  * Member page shell: session bootstrap, sidebar avatar, announcements, logout, toasts.
  */
-export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy, lang }) {
+export function useMemberPageShell({ navigate, initSession, todayDmy, lang }) {
   const t = useCallback((key, params) => getMemberText(lang, key, params), [lang]);
 
   const [loading, setLoading] = useState(true);
@@ -103,7 +103,7 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
         if (!cancelled) {
           setMe(u);
           setCompanies(Array.isArray(cJson?.data) ? cJson.data : []);
-          initSession(u, u.company_id, mondayDmy, todayDmy);
+          initSession(u, u.company_id, todayDmy, todayDmy);
         }
       } catch {
         if (!cancelled) navigate(spaPath("login"), { replace: true });
@@ -114,7 +114,7 @@ export function useMemberPageShell({ navigate, initSession, mondayDmy, todayDmy,
     return () => {
       cancelled = true;
     };
-  }, [navigate, mondayDmy, todayDmy, initSession]);
+  }, [navigate, todayDmy, initSession]);
 
   const refreshSession = useCallback(async () => {
     try {

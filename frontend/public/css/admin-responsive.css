@@ -127,58 +127,61 @@
     margin-right: 0.45rem !important;
   }
 
-  body.user-page .search-container.userlist-search-bar .userlist-search-input,
-  body.ec-auth-shell.user-page .search-container.userlist-search-bar .userlist-search-input {
-    font-size: 10px !important;
+  body.user-page:not(.auto-renew-page-body) .search-container.userlist-search-bar .userlist-search-input,
+  body.ec-auth-shell.user-page:not(.auto-renew-page-body) .search-container.userlist-search-bar .userlist-search-input {
+    font-size: var(--userlist-text-toolbar) !important;
   }
 
-  body.user-page .user-filter-chip__label {
-    font-size: 10px !important;
+  body.user-page:not(.auto-renew-page-body) .user-filter-chip__label {
+    font-size: var(--userlist-text-toolbar) !important;
+    font-weight: var(--userlist-weight-toolbar) !important;
   }
 
-  body.user-page .action-buttons .btn-add,
-  body.user-page .action-buttons .btn-delete,
-  body.ec-auth-shell.user-page .btn-add,
-  body.ec-auth-shell.user-page .btn-delete {
-    font-size: 10px !important;
+  body.user-page:not(.auto-renew-page-body) .action-buttons .btn-add,
+  body.user-page:not(.auto-renew-page-body) .action-buttons .btn-delete,
+  body.ec-auth-shell.user-page:not(.auto-renew-page-body) .btn-add,
+  body.ec-auth-shell.user-page:not(.auto-renew-page-body) .btn-delete {
+    font-size: var(--userlist-text-toolbar) !important;
     padding: 6px 10px !important;
   }
 
-  body.user-page .user-gc-inline-label,
-  body.user-page .user-gc-segment {
-    font-size: 10px !important;
+  body.user-page:not(.auto-renew-page-body) .user-gc-inline-label,
+  body.user-page:not(.auto-renew-page-body) .user-gc-segment {
+    font-size: var(--userlist-text-toolbar) !important;
   }
 
-  body.user-page .user-list-table .user-list-table-header {
-    font-size: 11px !important;
+  body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header {
+    font-size: var(--userlist-text-table-head) !important;
+    font-weight: var(--userlist-weight-table-head) !important;
     padding-top: 4px !important;
     padding-bottom: 4px !important;
   }
 
-  body.user-page .user-list-table .user-list-table-header .header-item,
-  body.user-page .user-list-table .user-list-row .card-item,
-  body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item {
-    font-size: 10px !important;
-    font-weight: 600 !important;
+  body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header .header-item,
+  body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-row .card-item,
+  body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .card-item {
+    font-size: var(--userlist-text-table-cell) !important;
+    font-weight: var(--userlist-weight-table-cell) !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
-    line-height: 1.1 !important;
+    line-height: var(--userlist-line-height-cell) !important;
   }
 
-  body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item:nth-child(5),
-  body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item:nth-child(6),
-  body.user-page .user-list-table .user-list-table-header .header-item:nth-child(5),
-  body.user-page .user-list-table .user-list-table-header .header-item:nth-child(6) {
-    font-size: 9px !important;
-    font-weight: 400 !important;
-    line-height: 1.15 !important;
+  body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .card-item:nth-child(5),
+  body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .card-item:nth-child(6),
+  body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header .header-item:nth-child(5),
+  body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header .header-item:nth-child(6) {
+    font-size: var(--userlist-text-table-cell) !important;
+    font-weight: var(--userlist-weight-table-cell) !important;
+    line-height: var(--userlist-line-height-cell) !important;
   }
 
-  body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .role-badge,
-  body.user-page .user-card .role-badge,
-  body.user-page .user-list-row .role-badge,
-  body.user-page .role-badge {
-    font-size: 8px !important;
+  body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .role-badge,
+  body.user-page:not(.auto-renew-page-body) .user-card .role-badge,
+  body.user-page:not(.auto-renew-page-body) .user-list-row .role-badge,
+  body.user-page:not(.auto-renew-page-body) .role-badge {
+    font-size: var(--userlist-text-badge) !important;
+    font-weight: var(--userlist-weight-badge) !important;
     padding: 1px 6px !important;
     line-height: 1.15 !important;
     min-width: 0 !important;

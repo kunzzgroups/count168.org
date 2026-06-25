@@ -2230,7 +2230,9 @@ function dashboardRestrictCurrencyMapToGroupTenant(PDO $pdo, string $groupCode, 
 }
 
 /**
- * Group tab / group login: currencies from group-ledger accounts intersected with group Currency Setting.
+ * Group tab / group login: currencies from group-ledger account_currency only.
+ * Does not list subsidiary-synced Currency Setting rows — a code appears only when
+ * a group-scoped account has that currency enabled (e.g. after a group-ledger payment).
  *
  * @return array<int, string>
  */
@@ -2241,20 +2243,15 @@ function dashboardResolveGroupScopeCurrencyMap(PDO $pdo, string $viewGroup): arr
         return [];
     }
 
-    if (!function_exists('tenant_load_group_tenant_currency_map')) {
-        require_once __DIR__ . '/../../includes/tenant_scope.php';
-    }
-
-    $groupTenantMap = tenant_load_group_tenant_currency_map($pdo, $viewGroup);
-    if ($groupTenantMap !== []) {
-        return $groupTenantMap;
-    }
-
     $accountIds = dashboardCollectGroupOnlyAccountIds($pdo, $viewGroup);
+    if ($accountIds === []) {
+        return [];
+    }
+
     $entityId = tx_resolve_group_entity_company_id($pdo, $viewGroup);
     $companyIds = $entityId > 0 ? [$entityId] : [];
 
-    $map = dashboardLoadAccountCurrencyMap($pdo, $accountIds, $companyIds, false);
+    $map = dashboardLoadAccountCurrencyMap($pdo, $accountIds, $companyIds, true);
 
     return dashboardRestrictCurrencyMapToGroupTenant($pdo, $viewGroup, $map);
 }

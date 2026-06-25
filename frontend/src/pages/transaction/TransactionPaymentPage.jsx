@@ -155,14 +155,14 @@ function TransactionPaymentPageMain() {
 
   const applyTransactionBodyClasses = useCallback(() => {
     document.body.classList.remove(...ROUTE_BODY_CLASSES_TO_CLEAR, "bg");
-    document.body.classList.add("dashboard-page", "transaction-page");
+    document.body.classList.add("dashboard-page");
     clearInlineScrollLock();
   }, []);
 
   useLayoutEffect(() => {
     applyTransactionBodyClasses();
     return () => {
-      document.body.classList.remove("transaction-page", "page-ready");
+      document.body.classList.remove("page-ready");
     };
   }, [applyTransactionBodyClasses]);
 

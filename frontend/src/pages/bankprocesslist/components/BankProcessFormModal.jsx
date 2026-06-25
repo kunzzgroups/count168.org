@@ -335,7 +335,7 @@ export default function BankProcessFormModal({
               </div>
               <div className="bank-form-row bank-form-row-last">
                 <div className="bank-form-cell bank-form-cell-left">
-                  <div className="form-group bank-day-start-frequency-wrap" style={{ marginBottom: 20 }}>
+                  <div className="form-group bank-day-start-frequency-wrap">
                     <label htmlFor="bank_day_start_frequency">{t("frequency")}</label>
                     <BankSimpleSelect
                       id="bank_day_start_frequency"
@@ -459,9 +459,9 @@ export default function BankProcessFormModal({
                     ) : null}
                   </div>
                   {editMode ? (
-                    <div className="bank-form-dts-wrap">
-                      <h3 className="bank-section-title">{t("recordSection")}</h3>
-                      <div className="form-row bank-row-two-cols bank-form-dts-row">
+                    <div className="bank-form-section bank-form-section--record">
+                      <h3 className="account-section-header">{t("recordSection")}</h3>
+                      <div className="form-row">
                         <div className="form-group">
                           <label htmlFor="bank_dts_modified">{t("dtsModified")}</label>
                           <div id="bank_dts_modified" className="bank-form-dts-readonly">
@@ -471,6 +471,8 @@ export default function BankProcessFormModal({
                             </span>
                           </div>
                         </div>
+                      </div>
+                      <div className="form-row">
                         <div className="form-group">
                           <label htmlFor="bank_dts_created">{t("dtsCreated")}</label>
                           <div id="bank_dts_created" className="bank-form-dts-readonly">

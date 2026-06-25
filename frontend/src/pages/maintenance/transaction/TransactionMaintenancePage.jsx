@@ -7,7 +7,7 @@ import { removeOtherMaintenanceStylesheets } from "../../../utils/maintenance/ma
 import { ensureMaintenanceDateRangePicker } from "../../../utils/date/dateRangePicker.js";
 import { useMaintenanceGroupCompanyFilter } from "../shared/useMaintenanceGroupCompanyFilter.js";
 import { runMaintenanceCompanySwitch } from "../shared/maintenanceCompanySwitch.js";
-import { useMaintenanceBankOnlyGuard } from "../shared/useMaintenanceBankOnlyGuard.js";
+import { companyPermsAllowDataCaptureMaintenance } from "../shared/maintenanceCompanyApi.js";
 import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import {
   companiesInGroupList,
@@ -100,7 +100,6 @@ export default function TransactionMaintenancePage() {
 
   // -- Filter State --
   const [companyId, setCompanyId] = useState(readInitialMaintenanceCompanyId);
-  useMaintenanceBankOnlyGuard(companyId);
   const [companyCode, setCompanyCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(readInitialMaintenanceSelectedGroup);
   const [selectedProcess, setSelectedProcess] = useState("");
@@ -153,6 +152,8 @@ export default function TransactionMaintenancePage() {
   const [maintenanceDataComplete, setMaintenanceDataComplete] = useState(false);
   const [listLoading, setListLoading] = useState(false);
   const [listSyncing, setListSyncing] = useState(false);
+  /** 仅 session 切换期间防抖；勿与 listSyncing 混用，否则拉数时无法点其它公司 */
+  const [companySwitchInFlight, setCompanySwitchInFlight] = useState(false);
   const [searchError, setSearchError] = useState(null);
 
   const processFilter = useMemo(
@@ -188,7 +189,8 @@ export default function TransactionMaintenancePage() {
     onPrepareCompanySelect: (c) => onPrepareCompanySelectRef.current(c),
     onClearCompany: (...args) => onClearCompanyRef.current(...args),
     enableGroupAnchorSession: false,
-    pillCategory: "games",
+    pillCategory: "datacapture",
+    switchingCompany: companySwitchInFlight,
   });
 
   const transactionScope = useMemo(
@@ -344,7 +346,9 @@ export default function TransactionMaintenancePage() {
           category,
           scope: effectiveScope,
           signal: ac.signal,
-          onProgress: (progressRows) => {
+          onProgress: quietRefresh
+            ? undefined
+            : (progressRows) => {
             if (seq !== maintenanceSeqRef.current) return;
             if (searchScopeKey !== scopeKeyRef.current) return;
             const applyProgress = () => {
@@ -726,13 +730,7 @@ export default function TransactionMaintenancePage() {
           // Fetch permissions first to pick the correct category for downstream APIs.
           const companyPerms = await fetchCompanyPermissions(code);
 
-          const hasGames = companyPerms.includes("Games") || companyPerms.includes("Gambling");
-          const bankOnly = companyPerms.includes("Bank") && !hasGames;
-          if (bankOnly) {
-            navigate(spaPath("dashboard"), { replace: true });
-            return;
-          }
-          if (!hasGames) {
+          if (!companyPermsAllowDataCaptureMaintenance(companyPerms)) {
             navigate(spaPath("dashboard"), { replace: true });
             return;
           }
@@ -985,19 +983,29 @@ export default function TransactionMaintenancePage() {
     const nextCompanyId = Number(c.id);
     const code = c.company_id || "";
     const newGroup = c.group_id ? String(c.group_id).toUpperCase().trim() : null;
+    const nextScope = resolveTransactionMaintenanceScope({
+      companies,
+      selectedGroup: newGroup,
+      companyId: nextCompanyId,
+      groupsAllMode,
+      groupAllMode,
+    });
     switchPermsCacheRef.current = null;
     resetAnchorSessionRef();
+    setCompanySwitchInFlight(true);
     suppressNextSearchEffectRef.current = true;
-    if (initialSearchDoneRef.current) {
-      setListLoading(false);
-      setListSyncing(true);
-    }
+    handledMetaScopeKeyRef.current = buildMaintenanceMetaEffectKey(
+      transactionMaintenanceScopeCacheKey(nextScope),
+      nextCompanyId,
+      code,
+      newGroup,
+    );
     setSelectedGroup(newGroup);
     setCompanyCode(code);
     setCompanyId(nextCompanyId);
     setSelectedProcess("");
     persistDashboardFilterState(newGroup, nextCompanyId);
-  }, [resetAnchorSessionRef]);
+  }, [companies, groupsAllMode, groupAllMode, resetAnchorSessionRef]);
 
   onPrepareCompanySelectRef.current = onPrepareCompanySelect;
 
@@ -1008,11 +1016,6 @@ export default function TransactionMaintenancePage() {
     const newGroup = c.group_id ? String(c.group_id).toUpperCase().trim() : null;
     const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
 
-    if (initialSearchDoneRef.current) {
-      setListLoading(false);
-      setListSyncing(true);
-    }
-
     try {
       const { redirected } = await runMaintenanceCompanySwitch({
         companyRow: c,
@@ -1021,21 +1024,32 @@ export default function TransactionMaintenancePage() {
         navigate,
         updateSessionCompany,
         onStay: async () => {
+          suppressNextSearchEffectRef.current = true;
           const perms = await fetchCompanyPermissions(code);
+          if (!companyPermsAllowDataCaptureMaintenance(perms)) {
+            navigate(spaPath("dashboard"), { replace: true });
+            return;
+          }
           const nextActive = pickTransactionMaintenancePermission(perms, savedPerm);
           switchPermsCacheRef.current = { companyCode: code, perms };
           setActivePermission(nextActive);
           setPermissions(perms);
-          handledMetaScopeKeyRef.current = "";
+
+          const nextScope = resolveTransactionMaintenanceScope({
+            companies,
+            selectedGroup: newGroup,
+            companyId: nextCompanyId,
+            groupsAllMode,
+            groupAllMode,
+          });
+          handledMetaScopeKeyRef.current = buildMaintenanceMetaEffectKey(
+            transactionMaintenanceScopeCacheKey(nextScope),
+            nextCompanyId,
+            code,
+            newGroup,
+          );
 
           try {
-            const nextScope = resolveTransactionMaintenanceScope({
-              companies,
-              selectedGroup: newGroup,
-              companyId: nextCompanyId,
-              groupsAllMode,
-              groupAllMode,
-            });
             const procList = await fetchProcessesForPermission(nextCompanyId, nextActive, nextScope);
             setProcesses(procList);
             setSelectedProcess("");
@@ -1050,18 +1064,16 @@ export default function TransactionMaintenancePage() {
           notify(t("switchedTo", { company: c.company_id }), "success");
         },
       });
-      if (redirected) {
-        setListSyncing(false);
-        return;
-      }
+      if (redirected) return;
     } catch (err) {
-      setListSyncing(false);
       const msg = String(err?.message || "");
       if (msg.toLowerCase().includes("unauthorized permission category")) {
         navigate(spaPath("dashboard"), { replace: true });
         return;
       }
       notify(err.message || t("switchFailed"), "error");
+    } finally {
+      setCompanySwitchInFlight(false);
     }
   }, [companies, groupsAllMode, groupAllMode, location.pathname, navigate, notify, performMaintenanceSearch, t]);
 
@@ -1142,7 +1154,7 @@ export default function TransactionMaintenancePage() {
             topLoadingLabel={listStatusMessage || t("loading")}
             listSyncing={listSyncing}
             dataIncomplete={!maintenanceDataComplete && listRowCount > 0}
-            scrollResetKey={searchQueryKey}
+            scrollResetKey={transactionScopeKey}
             m={m}
           />
         </div>

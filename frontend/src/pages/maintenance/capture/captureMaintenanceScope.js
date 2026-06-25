@@ -5,13 +5,29 @@ import {
   customerReportScopeIsReady,
   resolveCustomerReportScope,
 } from "../../report/shared/reportScope.js";
+import {
+  isBankOnlyCompanyRow,
+  isC168CompanyRow,
+} from "../../../utils/company/c168CaptureChannel.js";
 
 export {
   customerReportScopeIsReady as captureMaintenanceScopeIsReady,
   customerReportScopeCacheCompanyKey as captureMaintenanceScopeCacheCompanyKey,
   customerReportScopeCacheKey as captureMaintenanceScopeCacheKey,
-  resolveCustomerReportScope as resolveCaptureMaintenanceScope,
 };
+
+/** Enrich scope with payroll-channel flags (C168 / bank-only e.g. CX). */
+export function resolveCaptureMaintenanceScope(args) {
+  const base = resolveCustomerReportScope(args);
+  if (!base) return base;
+  const cid = args?.companyId != null ? Number(args.companyId) : Number.NaN;
+  const row = Number.isFinite(cid) && cid > 0
+    ? (args?.companies ?? []).find((c) => Number(c.id) === cid)
+    : null;
+  const c168Channel = Boolean(row && isC168CompanyRow(row));
+  const companyPayrollChannel = Boolean(row && (c168Channel || isBankOnlyCompanyRow(row)));
+  return { ...base, c168Channel, companyPayrollChannel };
+}
 
 /** Group entity, C168, or bank-only company payroll: SALARY / BONUS / COMMISSION / PROFIT process list. */
 export function captureMaintenanceUsesGroupProcesses(scope) {

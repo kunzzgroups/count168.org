@@ -9,6 +9,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
+require_once __DIR__ . '/maintenance_common.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -46,8 +47,14 @@ function findMaintenanceById(PDO $pdo, int $id) {
  * 更新维护内容
  */
 function updateMaintenanceContent(PDO $pdo, int $id, string $prefix, string $content) {
-    $stmt = $pdo->prepare("UPDATE maintenance_marquee SET prefix = ?, content = ?, updated_at = NOW() WHERE id = ? AND company_code = 'C168'");
-    $stmt->execute([$prefix, $content, $id]);
+    ensureMaintenanceMarqueePrefixColumn($pdo);
+    if (maintenanceMarqueeHasPrefixColumn($pdo)) {
+        $stmt = $pdo->prepare("UPDATE maintenance_marquee SET prefix = ?, content = ?, updated_at = NOW() WHERE id = ? AND company_code = 'C168'");
+        $stmt->execute([$prefix, $content, $id]);
+        return;
+    }
+    $stmt = $pdo->prepare("UPDATE maintenance_marquee SET content = ?, updated_at = NOW() WHERE id = ? AND company_code = 'C168'");
+    $stmt->execute([$prefix !== '' ? ($prefix . ' ' . $content) : $content, $id]);
 }
 
 try {

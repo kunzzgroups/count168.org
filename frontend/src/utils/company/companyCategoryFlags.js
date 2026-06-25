@@ -79,9 +79,24 @@ function filterCompaniesByPillCategory(companies, matchesScope, preferredCompany
   });
 }
 
-/** Games pages (Data Capture, Process List, …): hide bank-only companies such as CX. */
+/** Games pages (Process List, …): hide bank-only companies such as CX. */
 export function filterCompaniesForGamesPills(companies, preferredCompanyId = null) {
   return filterCompaniesByPillCategory(companies, companyMatchesGamesPillScope, preferredCompanyId);
+}
+
+/** Data Capture / Transaction maintenance: Games + bank-only companies. */
+export function companyMatchesDataCaptureMaintenancePillScope(companyRow) {
+  const flags = resolveCompanyCategoryFlags(companyRow);
+  if (!flags) return true;
+  return flags.hasGambling || flags.hasBank;
+}
+
+export function filterCompaniesForDataCaptureMaintenancePills(companies, preferredCompanyId = null) {
+  return filterCompaniesByPillCategory(
+    companies,
+    companyMatchesDataCaptureMaintenancePillScope,
+    preferredCompanyId,
+  );
 }
 
 /** Has Bank permission (incl. Games+Bank). */

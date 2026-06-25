@@ -9,6 +9,7 @@ session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
+require_once __DIR__ . '/maintenance_common.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -45,10 +46,18 @@ function countActiveMaintenance(PDO $pdo) {
  * 插入新维护内容
  */
 function insertMaintenance(PDO $pdo, string $prefix, string $content, $createdBy, string $userType) {
-    $sql = "INSERT INTO maintenance_marquee (prefix, content, company_code, created_by, user_type, status)
-            VALUES (?, ?, 'C168', ?, ?, 'active')";
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$prefix, $content, $createdBy, $userType]);
+    ensureMaintenanceMarqueePrefixColumn($pdo);
+    if (maintenanceMarqueeHasPrefixColumn($pdo)) {
+        $sql = "INSERT INTO maintenance_marquee (prefix, content, company_code, created_by, user_type, status)
+                VALUES (?, ?, 'C168', ?, ?, 'active')";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$prefix, $content, $createdBy, $userType]);
+    } else {
+        $sql = "INSERT INTO maintenance_marquee (content, company_code, created_by, user_type, status)
+                VALUES (?, 'C168', ?, ?, 'active')";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$prefix !== '' ? ($prefix . ' ' . $content) : $content, $createdBy, $userType]);
+    }
     return (int) $pdo->lastInsertId();
 }
 

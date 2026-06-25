@@ -557,9 +557,9 @@ export function buildTxListSessionKey({
     cur = [...selectedCurrencies].sort().join(",");
   }
   const cid = companyId != null ? String(companyId) : "";
-  const hideZero = hideZeroBalance ? "0" : "1";
+  const hideZb = hideZeroBalance ? "1" : "0";
   return (
     TX_LIST_SESSION_PREFIX +
-    [cid, dateFrom, dateTo, cat, showInactive ? "1" : "0", showCaptureOnly ? "1" : "0", hideZero, cur, showAllCurrencies ? "1" : "0"].join("|")
+    [cid, dateFrom, dateTo, cat, showInactive ? "1" : "0", showCaptureOnly ? "1" : "0", hideZb, cur, showAllCurrencies ? "1" : "0"].join("|")
   );
 }

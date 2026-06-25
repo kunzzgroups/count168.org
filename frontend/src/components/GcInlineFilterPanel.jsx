@@ -91,6 +91,7 @@ export default function GcInlineFilterPanel({
                     onMouseEnter={() => onWarmCompany?.(c)}
                     onFocus={() => onWarmCompany?.(c)}
                     onClick={() => {
+                      if (switchingCompany) return;
                       if (active && allowCompanyDeselect && onClearCompanyPill) {
                         onClearCompanyPill(c);
                         return;

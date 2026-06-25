@@ -1,5 +1,6 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import GcInlineFilterPanel from "../../../components/GcInlineFilterPanel.jsx";
+import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
 import { splitWinLossAccountBands } from "../../member/memberPageHelpers.js";
 import { buildTransactionCompanyStripRows } from "../lib/transactionCompanyStrip.js";
 
@@ -115,6 +116,62 @@ export default function TransactionSearchSection({
     };
   }, [currencyCells, showAllCurrencies, selectedCurrencies, m.all]);
 
+  const categoryItemCount = 1 + categories.length;
+  const categoryAllChecked =
+    selectedCategories.length === 0 ||
+    (categories.length > 0 && selectedCategories.length === categories.length);
+
+  const closeCategoryMenu = useCallback(() => {
+    if (categoryOpen) toggleCategory();
+  }, [categoryOpen, toggleCategory]);
+
+  const openCategoryMenu = useCallback(() => {
+    if (!categoryOpen) toggleCategory();
+  }, [categoryOpen, toggleCategory]);
+
+  const activateCategoryIndex = useCallback(
+    (idx) => {
+      if (idx === 0) {
+        if (!categoryAllChecked) onCategoryAllChange(true);
+        return;
+      }
+      const cat = categories[idx - 1];
+      if (cat) toggleCategoryValue(cat);
+    },
+    [categories, categoryAllChecked, onCategoryAllChange, toggleCategoryValue],
+  );
+
+  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+    open: categoryOpen,
+    itemCount: categoryItemCount,
+    initialIndex: 0,
+  });
+
+  const onCategoryButtonKeyDown = useCallback(
+    (e) => {
+      handleButtonKeyDown(e, {
+        isOpen: categoryOpen,
+        onToggleOpen: openCategoryMenu,
+        onClose: closeCategoryMenu,
+        len: categoryItemCount,
+        onSelectIndex: activateCategoryIndex,
+      });
+      if (categoryOpen && e.key === " ") {
+        e.preventDefault();
+        activateCategoryIndex(highlightIdx >= 0 ? highlightIdx : 0);
+      }
+    },
+    [
+      activateCategoryIndex,
+      categoryItemCount,
+      categoryOpen,
+      closeCategoryMenu,
+      handleButtonKeyDown,
+      highlightIdx,
+      openCategoryMenu,
+    ],
+  );
+
   return (
     <div className="transaction-search-section">
       <div className="transaction-category-date-row">
@@ -133,7 +190,10 @@ export default function TransactionSearchSection({
                     className="category-dropdown-button"
                     id="category_dropdown_button"
                     aria-labelledby="transaction-category-outlined-label"
+                    aria-haspopup="listbox"
+                    aria-expanded={categoryOpen}
                     onClick={toggleCategory}
+                    onKeyDown={onCategoryButtonKeyDown}
                   >
                     <div id="category_selected_tags" className="category-selected-tags">
                       {selectedCategories.length === 0 ? (
@@ -168,8 +228,21 @@ export default function TransactionSearchSection({
                     </div>
                     <i className="fas fa-chevron-down" />
                   </button>
-                  <div className="category-dropdown-menu" id="category_dropdown_menu" style={{ display: categoryOpen ? "block" : "none" }}>
-                    <div className="category-option">
+                  <div
+                    className={`category-dropdown-menu${categoryOpen ? " show" : ""}`}
+                    id="category_dropdown_menu"
+                    style={{ display: categoryOpen ? "block" : "none" }}
+                    role="listbox"
+                    aria-multiselectable="true"
+                    ref={listRef}
+                  >
+                    <div
+                      className={`category-option${highlightClass(0)}`}
+                      data-kb-idx={0}
+                      role="option"
+                      aria-selected={categoryAllChecked}
+                      onMouseEnter={() => setHighlightIdx(0)}
+                    >
                       <label className="category-checkbox-label">
                         <input
                           ref={categoryAllCheckboxRef}
@@ -177,18 +250,25 @@ export default function TransactionSearchSection({
                           value=""
                           className="category-checkbox"
                           id="category_all"
-                          checked={
-                            selectedCategories.length === 0 ||
-                            (categories.length > 0 && selectedCategories.length === categories.length)
-                          }
+                          checked={categoryAllChecked}
                           onChange={(e) => onCategoryAllChange(e.target.checked)}
+                          tabIndex={-1}
                         />
                         <span>{m.selectAllCategories}</span>
                       </label>
                     </div>
                     <div id="category_options_container">
-                      {categories.map((c) => (
-                        <div className="category-option" key={c}>
+                      {categories.map((c, catIdx) => (
+                        <div
+                          className={`category-option${highlightClass(catIdx + 1)}`}
+                          data-kb-idx={catIdx + 1}
+                          key={c}
+                          role="option"
+                          aria-selected={
+                            selectedCategories.length === 0 ? false : selectedCategories.includes(c)
+                          }
+                          onMouseEnter={() => setHighlightIdx(catIdx + 1)}
+                        >
                           <label className="category-checkbox-label">
                             <input
                               type="checkbox"
@@ -196,6 +276,7 @@ export default function TransactionSearchSection({
                               value={c}
                               checked={selectedCategories.length === 0 ? false : selectedCategories.includes(c)}
                               onChange={() => toggleCategoryValue(c)}
+                              tabIndex={-1}
                             />
                             <span>{c}</span>
                           </label>

@@ -100,6 +100,7 @@ export async function resolveCompanyGamesAccess({
       return true;
     }
     if (syncJson.success && syncJson.data && syncJson.data.has_gambling === false) {
+      if (syncDataAllowsDataCaptureAccess(syncJson.data)) return true;
       return false;
     }
   } catch {

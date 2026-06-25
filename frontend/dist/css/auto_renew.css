@@ -66,8 +66,8 @@ body.auto-renew-page-body .auto-renew-tab-pending-badge {
   border-radius: 999px;
   background: #ef4444;
   color: #fff;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: var(--auto-renew-text-tab-badge);
+  font-weight: var(--auto-renew-weight-badge);
   font-variant-numeric: tabular-nums;
   line-height: 1;
   pointer-events: none;
@@ -162,7 +162,7 @@ body.auto-renew-page-body .auto-renew-date-range-group #date-range-display {
   min-width: 0;
   color: #64748b;
   font-size: var(--drp-trigger-text);
-  font-weight: 500;
+  font-weight: var(--auto-renew-weight-toolbar-date);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -171,7 +171,7 @@ body.auto-renew-page-body .auto-renew-date-range-group #date-range-display {
 
 body.auto-renew-page-body .auto-renew-date-range-group .date-range-picker:has(#date-range-display:not(:empty)) #date-range-display {
   color: #1f2937;
-  font-weight: 700;
+  font-weight: var(--auto-renew-weight-toolbar-date-active);
 }
 
 body.auto-renew-page-body .auto-renew-date-range-group .transaction-date-range-chevron {
@@ -359,6 +359,32 @@ body.auto-renew-page-body .auto-renew-col-control > .auto-renew-cell-readonly {
   min-width: 0;
 }
 
+body.auto-renew-page-body .user-list-table.auto-renew-table .table-header.user-list-table-header.auto-renew-table-header {
+  font-size: var(--auto-renew-text-table-head);
+  font-weight: var(--auto-renew-weight-table-head);
+  font-family: inherit;
+}
+
+body.auto-renew-page-body .user-list-table.auto-renew-table .user-list-table-header .header-item,
+body.auto-renew-page-body .auto-renew-table-row .card-item {
+  font-size: var(--auto-renew-text-table-cell);
+  font-weight: var(--auto-renew-weight-table-cell);
+  line-height: var(--auto-renew-line-height);
+  font-family: inherit;
+}
+
+body.auto-renew-page-body .auto-renew-toolbar-left .search-container.userlist-search-bar .userlist-search-input {
+  font-size: var(--auto-renew-text-toolbar) !important;
+}
+
+body.auto-renew-page-body .auto-renew-filter-chips .user-filter-chip__label {
+  font-size: var(--auto-renew-text-toolbar) !important;
+}
+
+body.auto-renew-page-body .auto-renew-date-range-group #date-range-display {
+  font-size: var(--drp-trigger-text, var(--auto-renew-text-toolbar));
+}
+
 /* Period — pill badge (approved / readonly rows) */
 body.auto-renew-page-body .auto-renew-period-badge {
   display: inline-flex;
@@ -375,8 +401,8 @@ body.auto-renew-page-body .auto-renew-period-badge {
   border: 1px solid rgba(124, 58, 237, 0.42);
   background: linear-gradient(180deg, #f5f3ff 0%, #ede9fe 100%);
   color: #5b21b6;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--auto-renew-text-badge);
+  font-weight: var(--auto-renew-weight-badge);
   line-height: 1;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -482,15 +508,15 @@ body.auto-renew-page-body .auto-renew-empty-state__icon svg {
 
 body.auto-renew-page-body .auto-renew-empty-state__title {
   margin: 0 0 8px;
-  font-size: clamp(15px, 1vw, 17px);
-  font-weight: 700;
+  font-size: var(--auto-renew-text-empty-title);
+  font-weight: var(--auto-renew-weight-badge);
   color: #334155;
 }
 
 body.auto-renew-page-body .auto-renew-empty-state__hint {
   margin: 0;
   max-width: 28rem;
-  font-size: clamp(13px, 0.85vw, 14px);
+  font-size: var(--auto-renew-text-empty-hint);
   line-height: 1.55;
   color: #94a3b8;
 }
@@ -526,8 +552,8 @@ body.auto-renew-page-body .auto-renew-cell-readonly {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #475569;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--auto-renew-text-control);
+  font-weight: var(--auto-renew-weight-muted);
 }
 
 body.auto-renew-page-body .auto-renew-table-row.show-card:last-child {
@@ -535,7 +561,7 @@ body.auto-renew-page-body .auto-renew-table-row.show-card:last-child {
 }
 
 body.auto-renew-page-body .card-item--strong {
-  font-weight: 700;
+  font-weight: var(--auto-renew-weight-table-cell-strong);
   color: #0f172a;
 }
 
@@ -553,8 +579,8 @@ body.auto-renew-page-body .auto-renew-status-badge {
   padding: 0 10px;
   border-radius: var(--auto-renew-pill-radius);
   border: 1px solid transparent;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--auto-renew-text-badge);
+  font-weight: var(--auto-renew-weight-badge);
   line-height: 1;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -605,8 +631,8 @@ body.auto-renew-page-body .auto-renew-approval-badge {
   padding: 0 12px;
   border-radius: var(--auto-renew-pill-radius);
   border: 1px solid transparent;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--auto-renew-text-badge);
+  font-weight: var(--auto-renew-weight-badge);
   line-height: 1;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -646,8 +672,8 @@ body.auto-renew-page-body .auto-renew-inline-select {
   padding: 0 26px 0 12px;
   border: 1px solid #e2e8f0;
   border-radius: var(--auto-renew-pill-radius);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--auto-renew-text-control);
+  font-weight: var(--auto-renew-weight-control);
   line-height: 1.2;
   background-color: #ffffff;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
@@ -667,7 +693,7 @@ body.auto-renew-page-body .auto-renew-inline-select--empty {
   border: 1.5px dashed rgba(124, 58, 237, 0.45);
   background-color: #faf5ff;
   color: #7c3aed;
-  font-weight: 600;
+  font-weight: var(--auto-renew-weight-control);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237c3aed' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
 }
 
@@ -729,8 +755,8 @@ body.auto-renew-page-body .auto-renew-btn {
   min-width: 64px;
   padding: 0 12px;
   border-radius: var(--auto-renew-pill-radius);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: var(--auto-renew-text-control);
+  font-weight: var(--auto-renew-weight-control);
   line-height: 1;
   cursor: pointer;
   border: none;
@@ -742,7 +768,7 @@ body.auto-renew-page-body .auto-renew-btn--sm {
   min-height: var(--auto-renew-control-height);
   height: auto;
   padding: 5px 10px;
-  font-size: 11px;
+  font-size: var(--auto-renew-text-control);
   line-height: 1.2;
 }
 
@@ -844,8 +870,8 @@ body.auto-renew-page-body .auto-renew-chip-count {
   padding: 0 5px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.08);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--auto-renew-text-badge);
+  font-weight: var(--auto-renew-weight-badge);
 }
 
 body.auto-renew-page-body .user-filter-chip.is-selected .auto-renew-chip-count {
@@ -856,7 +882,7 @@ body.auto-renew-page-body .user-filter-chip.is-selected .auto-renew-chip-count {
 body.auto-renew-page-body .auto-renew-notice {
   padding: 14px 16px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: var(--auto-renew-text-notice);
   line-height: 1.5;
   margin-bottom: 14px;
 }
@@ -880,8 +906,8 @@ body.auto-renew-page-body .auto-renew-toast-wrap {
 body.auto-renew-page-body .auto-renew-toast {
   padding: 10px 16px;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--auto-renew-text-toast);
+  font-weight: var(--auto-renew-weight-muted);
   color: #fff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
@@ -1143,37 +1169,31 @@ body.auto-renew-page-body .auto-renew-filter-chips .user-filter-chip:active:not(
   }
 
   body.auto-renew-page-body .user-list-table.auto-renew-table .table-header.user-list-table-header.auto-renew-table-header {
-    font-size: 11px !important;
-    padding-top: 6px !important;
-    padding-bottom: 6px !important;
+    padding-top: calc(var(--auto-renew-row-padding-y) + 2px) !important;
+    padding-bottom: calc(var(--auto-renew-row-padding-y) + 2px) !important;
   }
 
   body.auto-renew-page-body .user-list-table.auto-renew-table .table-header.user-list-table-header .header-item,
   body.auto-renew-page-body .auto-renew-table-row .card-item {
-    font-size: 10px !important;
-    line-height: 1.35;
+    line-height: 1.35 !important;
   }
 
   body.auto-renew-page-body .auto-renew-inline-select {
-    font-size: 11px;
     padding: 0 24px 0 10px;
     background-position: right 8px center;
     background-size: 10px;
   }
 
   body.auto-renew-page-body .auto-renew-period-badge {
-    font-size: 11px;
     padding: 0 10px;
   }
 
   body.auto-renew-page-body .auto-renew-btn,
   body.auto-renew-page-body .auto-renew-btn--sm {
-    font-size: 10px;
     padding: 0 7px;
   }
 
   body.auto-renew-page-body .auto-renew-approval-badge {
-    font-size: 10px;
     padding: 0 8px;
   }
 
@@ -1183,7 +1203,6 @@ body.auto-renew-page-body .auto-renew-filter-chips .user-filter-chip:active:not(
   }
 
   body.auto-renew-page-body .auto-renew-status-badge {
-    font-size: 10px;
     padding: 0 8px;
     min-height: var(--auto-renew-control-height);
     height: var(--auto-renew-control-height);
@@ -1195,7 +1214,7 @@ body.auto-renew-page-body .auto-renew-filter-chips .user-filter-chip:active:not(
 
   body.auto-renew-page-body .auto-renew-empty-state__hint {
     max-width: 22rem;
-    font-size: 12px;
+    font-size: var(--auto-renew-text-empty-hint);
   }
 }
 
@@ -1230,7 +1249,53 @@ body.auto-renew-page-body .auto-renew-filter-chips .user-filter-chip:active:not(
   }
 
   body.auto-renew-page-body .auto-renew-period-badge {
-    font-size: 11px;
-    font-weight: 700;
+    font-weight: var(--auto-renew-weight-badge);
+  }
+}
+
+/* Tablet / laptop — keep typography aligned with desktop (override admin-responsive.css) */
+@media (max-width: 1366px) {
+  body.auto-renew-page-body .search-container.userlist-search-bar .userlist-search-input,
+  body.ec-auth-shell.user-page.auto-renew-page-body .search-container.userlist-search-bar .userlist-search-input {
+    font-size: var(--auto-renew-text-toolbar) !important;
+  }
+
+  body.auto-renew-page-body .auto-renew-filter-chips .user-filter-chip__label {
+    font-size: var(--auto-renew-text-toolbar) !important;
+  }
+
+  body.auto-renew-page-body .user-list-table.auto-renew-table .user-list-table-header,
+  body.auto-renew-page-body .user-list-table.auto-renew-table .table-header.user-list-table-header.auto-renew-table-header,
+  body.ec-auth-shell.user-page.auto-renew-page-body .user-list-table.auto-renew-table .user-list-table-header {
+    font-size: var(--auto-renew-text-table-head) !important;
+    font-weight: var(--auto-renew-weight-table-head) !important;
+    font-family: inherit;
+  }
+
+  body.auto-renew-page-body .user-list-table.auto-renew-table .user-list-table-header .header-item,
+  body.auto-renew-page-body .user-list-table.auto-renew-table .auto-renew-table-row .card-item,
+  body.ec-auth-shell.user-page.auto-renew-page-body:not(.user-page--show-all) .auto-renew-table-row .card-item {
+    font-size: var(--auto-renew-text-table-cell) !important;
+    font-weight: var(--auto-renew-weight-table-cell) !important;
+    font-family: inherit;
+    line-height: var(--auto-renew-line-height) !important;
+    letter-spacing: normal !important;
+  }
+
+  body.auto-renew-page-body .auto-renew-table-row .card-item--strong {
+    font-weight: var(--auto-renew-weight-table-cell-strong) !important;
+  }
+
+  body.ec-auth-shell.user-page.auto-renew-page-body:not(.user-page--show-all) .auto-renew-table-row .card-item:nth-child(5),
+  body.ec-auth-shell.user-page.auto-renew-page-body:not(.user-page--show-all) .auto-renew-table-row .card-item:nth-child(6),
+  body.auto-renew-page-body .user-list-table.auto-renew-table .user-list-table-header .header-item:nth-child(5),
+  body.auto-renew-page-body .user-list-table.auto-renew-table .user-list-table-header .header-item:nth-child(6) {
+    font-size: var(--auto-renew-text-table-cell) !important;
+    font-weight: var(--auto-renew-weight-table-cell) !important;
+    line-height: var(--auto-renew-line-height) !important;
+  }
+
+  body.auto-renew-page-body .auto-renew-date-range-group #date-range-display {
+    font-size: var(--drp-trigger-text, var(--auto-renew-text-toolbar));
   }
 }
