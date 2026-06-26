@@ -233,7 +233,7 @@ body.datacapture-page .top-section .form-column > .form-container {
     /* Pin the form card height to ~the bottom of the Description / Replace
        Word row; the remaining fields (Remove Word, Remark, help) scroll
        inside the form. The submitted card follows this height. */
-    max-height: 274px;
+    max-height: 334px;
     margin: 0;
     box-sizing: border-box;
     overflow: hidden;
@@ -468,7 +468,7 @@ body.datacapture-page .process-form .dc-form-company-layout {
     min-width: 0;
     max-width: 100%;
     box-sizing: border-box;
-    margin-bottom: clamp(10px, 0.85vw, 14px);
+    /* margin-bottom: clamp(10px, 0.85vw, 14px); */
 }
 
 body.datacapture-page .process-form .dc-form-company-layout__date {
@@ -805,7 +805,7 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
 .form-container {
     background: white;
     border-radius: 10px;
-    padding: clamp(14px, 1.25vw, 22px);
+    padding: 10px;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 14px rgba(15, 23, 42, 0.06);
     flex: 1 1 auto;
     width: 100%;
@@ -828,7 +828,7 @@ body.datacapture-page .process-form .dc-form-row-full .form-group {
 .submitted-container {
     background: white;
     border-radius: 10px;
-    padding: clamp(14px, 1.25vw, 22px);
+    padding: 10px;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 4px 14px rgba(15, 23, 42, 0.06);
     flex: 1 1 auto;
     width: 100%;
