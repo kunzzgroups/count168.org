@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import TransactionHistoryTable from "./components/TransactionHistoryTable.jsx";
+import PaymentHistoryExportPdfModal from "./components/PaymentHistoryExportPdfModal.jsx";
 import { formatHistoryMoney, formatHistoryBalanceMoney } from "./lib/transactionFormat.js";
 import { getHistory, transactionQueryKeys } from "./lib/transactionApi.js";
 import { spaPath } from "../../utils/routing/pageRoutes.js";
@@ -16,6 +17,8 @@ import {
 import { TRANSACTION_SHOW_DESCRIPTION_COLUMN } from "./lib/transactionPaymentPageUtils.js";
 import "../../../public/css/transaction.css";
 import "../../../public/css/portal-tooltip.css";
+import "../../../public/css/date-range-picker.css";
+import "../../../public/css/report-outlined-fields.css";
 import "./transactionPaymentHistoryPage.css";
 import { useLoginLang } from "../../utils/i18n/useLoginLang.js";
 import { TRANSACTION_I18N } from "../../translateFile/pages/transactionTranslate.js";
@@ -47,6 +50,9 @@ export default function TransactionPaymentHistoryPage() {
   }, [navigate]);
 
   const { isPopup, splitScreen, compactHeaders } = usePaymentHistoryLayoutMode();
+  const [exportPdfOpen, setExportPdfOpen] = useState(false);
+  const onOpenExportPdf = useCallback(() => setExportPdfOpen(true), []);
+  const onCloseExportPdf = useCallback(() => setExportPdfOpen(false), []);
 
   useLayoutEffect(() => {
     stripPaymentHistoryUrlQuery();
@@ -147,8 +153,14 @@ export default function TransactionPaymentHistoryPage() {
         <div className="transaction-modal-content transaction-history-modal transaction-payment-history-panel">
           <div className="transaction-modal-header transaction-payment-history-header">
             <div className="transaction-payment-history-header__brand">
-              <div className="transaction-payment-history-header__icon" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <button
+                type="button"
+                className="transaction-payment-history-header__icon transaction-payment-history-export-btn"
+                aria-label={m.exportPdf}
+                title={m.exportPdf}
+                onClick={onOpenExportPdf}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                   <path
                     d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
                     stroke="currentColor"
@@ -158,7 +170,7 @@ export default function TransactionPaymentHistoryPage() {
                   <path d="M15 3v5h5" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
                   <path d="M9 12h6M9 16h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
                 </svg>
-              </div>
+              </button>
               <div className="transaction-payment-history-header__text">
                 <h3 id="modal_title">{title}</h3>
               </div>
@@ -196,6 +208,12 @@ export default function TransactionPaymentHistoryPage() {
           </div>
         </div>
       </div>
+      <PaymentHistoryExportPdfModal
+        open={exportPdfOpen}
+        onClose={onCloseExportPdf}
+        scope={scope}
+        accountTitle={title}
+      />
     </div>
   );
 }

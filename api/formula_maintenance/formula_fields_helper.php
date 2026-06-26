@@ -167,15 +167,6 @@ function resolveTemplateFormulaBaseAndPercent(array $row) {
 
     $base = removeTrailingSourcePercentSuffix($raw);
 
-    if (shouldMergeRowTailFromResolvedSourcesPhp($source)) {
-        $displayStripped = removeTrailingSourcePercentSuffix($row['formula_display'] ?? '');
-        $base = mergeFormulaOperatorsWithResolvedTailPhp(
-            $base,
-            $row['last_source_value'] ?? '',
-            $displayStripped
-        );
-    }
-
     return [$base, $source, $enable];
 }
 

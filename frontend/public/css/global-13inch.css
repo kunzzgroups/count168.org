@@ -165,7 +165,7 @@
     }
 
     body.ec-auth-shell.account-page .account-table-header {
-        font-size: var(--text-base) !important;
+        font-size: 1.6rem !important;
     }
 
     /* Process List（Games 等）：与 User / Account 表头一致 — 字号 + padding token */
@@ -221,6 +221,7 @@
     }
 
     body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-card-item {
+        font-size: 1.4rem !important;
         line-height: 1.1 !important;
         letter-spacing: 0 !important;
     }
@@ -280,11 +281,9 @@
        5. Status & Role Badges (Visual Cues)
        ---------------------------------------------------- */
     .role-badge,
-    .account-role-badge,
     .contract-badge,
     .status-badge,
-    .member-badge,
-    span.account-role-badge {
+    .member-badge {
         font-size: 10px !important;
         /* Set slightly smaller but perfectly legible, overriding the user's 9px edit */
         padding: 4px 10px !important;
@@ -296,12 +295,6 @@
         align-items: center !important;
         box-sizing: border-box !important;
         line-height: 1 !important;
-    }
-
-    /* Account List：Role / Alert / Status 药丸与 design token 对齐 */
-    .account-role-badge,
-    span.account-role-badge {
-        font-size: var(--text-tiny) !important;
     }
 
     /* User List：Role / Status 药丸（.role-badge） */
@@ -335,9 +328,16 @@
             minmax(84px, 0.7fr)
             minmax(52px, 0.42fr)
             minmax(72px, 0.55fr)
-            minmax(130px, 1fr)
+            minmax(131px, 1fr)
             minmax(60px, 1.2fr)
-            minmax(92px, 0.55fr);
+            minmax(64px, 0.25fr);
+    }
+
+    body.ec-auth-shell.account-page .account-list-table-header,
+    body.ec-auth-shell.account-page .account-cards {
+        min-width: max(100%, var(--list-table-min-width, 980px)) !important;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     body.ec-auth-shell.account-page .account-list-table-header .account-header-item,
@@ -809,7 +809,9 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
         flex: 1 1 auto !important;
         min-height: 0 !important;
         max-height: none !important;
-        overflow: hidden !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch;
         display: flex !important;
         flex-direction: column !important;
         padding-bottom: 52px !important;
@@ -931,7 +933,7 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
     body.account-page:not(.account-page--show-all) .account-cards.account-cards--paged-fill {
         display: grid !important;
         grid-template-columns: 1fr !important;
-        grid-template-rows: repeat(25, minmax(0, 1fr)) !important;
+        grid-template-rows: repeat(var(--account-list-page-size, 15), minmax(0, 1fr)) !important;
         flex: 1 1 auto !important;
         align-content: stretch !important;
     }
@@ -943,8 +945,6 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
     }
 
     body.ec-auth-shell.process-page:not(.process-page--bank) .games-process-row .role-badge,
-    body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-role-badge,
-    body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row span.account-role-badge,
     body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .role-badge {
         padding: 4px 10px !important;
         letter-spacing: 0.025em !important;

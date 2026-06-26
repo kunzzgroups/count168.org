@@ -601,7 +601,9 @@ export function useTransactionSearch({
         queryClient.fetchQuery({
           queryKey: transactionQueryKeys.search(params),
           queryFn: ({ signal }) => searchTransactionsApi({ ...params, signal }),
-          staleTime: 5 * 60_000,
+          // forceRefresh (e.g. right after submit): bypass React Query staleTime so the
+          // table reflects the new transaction immediately instead of returning cached data.
+          staleTime: forceRefresh ? 0 : 5 * 60_000,
           gcTime: 15 * 60_000,
         });
 

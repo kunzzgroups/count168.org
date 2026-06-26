@@ -149,6 +149,26 @@ export function rowHasNonZeroBalance(row) {
   }
 }
 
+function rowFlagToBool(v) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  return parseInt(String(v || "0"), 10) !== 0;
+}
+
+/** 查询期内有 Payment 流水，或当日有 CONTRA/CLEAR 清账（含待审批 contra）。 */
+export function rowHasPeriodPaymentOrContraClear(row) {
+  if (rowFlagToBool(row?.has_crdr_transactions) || rowFlagToBool(row?.has_contra_clear_period)) {
+    return true;
+  }
+  const crdr = parseBalanceValue(row?.cr_dr);
+  if (crdr === null) return false;
+  try {
+    return MoneyDecimal.toDecimal(crdr, 0).abs().gt("0.00001");
+  } catch {
+    return Math.abs(crdr) > 1e-5;
+  }
+}
+
 /** @deprecated Prefer {@link applyZeroBalanceFilter} — kept for legacy callers. */
 export function rowPassesHideZeroBalanceFilter(showZero, row) {
   if (showZero) return true;
@@ -285,10 +305,11 @@ export function applyZeroBalanceFilter(
   if (showZeroBalance || showCaptureOnly || showPaymentOnly) {
     return { left: filteredLeft, right: filteredRight };
   }
-  // Default: hide rows whose ending balance is 0.00.
+  // Default: hide zero-balance rows unless the period had Payment/Contra/Clear activity (e.g. 清账后余额为 0).
+  const keepRow = (row) => rowHasNonZeroBalance(row) || rowHasPeriodPaymentOrContraClear(row);
   return {
-    left: filteredLeft.filter(rowHasNonZeroBalance),
-    right: filteredRight.filter(rowHasNonZeroBalance),
+    left: filteredLeft.filter(keepRow),
+    right: filteredRight.filter(keepRow),
   };
 }
 

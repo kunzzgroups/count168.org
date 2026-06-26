@@ -108,3 +108,20 @@ body.ec-auth-shell.account-page:not(.account-page--show-all) .content {
 body.ec-auth-shell.process-page:not(.process-page--bank):not(.process-page--show-all) .content {
   min-height: 0 !important;
 }
+
+/* Account List — 全宽度横向滚动安全网（125% 缩放 / 窄屏：列不被压扁） */
+body.ec-auth-shell.account-page .account-table-wrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+body.ec-auth-shell.account-page .account-list-table-header,
+body.ec-auth-shell.account-page .account-cards {
+  min-width: var(--list-table-min-width, 980px);
+}
+
+body.account-page:not(.account-page--show-all) .account-cards {
+  overflow-x: visible !important;
+  overflow-y: hidden !important;
+}

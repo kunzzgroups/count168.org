@@ -150,6 +150,22 @@ function contraApprovedWhere(PDO $pdo, string $alias = 't'): string
     return tx_sql_transaction_approval_where($pdo, $alias);
 }
 
+/**
+ * Period CONTRA/CLEAR count for list visibility (includes PENDING contra — balance still excludes them).
+ *
+ * @param array<string, mixed>|null $bulk
+ */
+function searchApiContraClearPeriodCount($bulk, int $accountId, int $currencyId): int
+{
+    if ($bulk === null || $accountId <= 0) {
+        return 0;
+    }
+    $to = (int) ($bulk['contra_clear_to'][$accountId][$currencyId]['period_count'] ?? 0);
+    $from = (int) ($bulk['contra_clear_from'][$accountId][$currencyId]['period_count'] ?? 0);
+
+    return $to + $from;
+}
+
 function searchApiAccountHasCreatedSourceColumn(PDO $pdo): bool
 {
     static $v = null;
@@ -1884,6 +1900,8 @@ try {
             'txn_win_lose' => [],
             'txn_crdr_to' => [],
             'txn_crdr_from' => [],
+            'contra_clear_to' => [],
+            'contra_clear_from' => [],
             'entry' => []
         ];
         $contra_where_t = contraApprovedWhere($pdo, 't');
@@ -2137,6 +2155,38 @@ try {
             ];
         }
 
+        // CONTRA/CLEAR visibility: include PENDING contra so 清账账户在当日仍出现在列表（余额口径仍只计已批准）。
+        $sql = "SELECT t.account_id, t.currency_id,
+                       SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS period_count
+                FROM transactions t
+                WHERE {$search_txn_where}
+                  AND t.transaction_type IN ('CONTRA', 'CLEAR')
+                  AND t.currency_id IS NOT NULL
+                GROUP BY t.account_id, t.currency_id";
+        $stmt_bulk = $pdo->prepare($sql);
+        $stmt_bulk->execute([$date_from_db, $date_to_db, $search_txn_bind]);
+        while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
+            $bulk['contra_clear_to'][$r['account_id']][$r['currency_id']] = [
+                'period_count' => (int) ($r['period_count'] ?? 0),
+            ];
+        }
+
+        $sql = "SELECT t.from_account_id AS account_id, t.currency_id,
+                       SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS period_count
+                FROM transactions t
+                WHERE {$search_txn_where}
+                  AND t.from_account_id IS NOT NULL
+                  AND t.transaction_type IN ('CONTRA', 'CLEAR')
+                  AND t.currency_id IS NOT NULL
+                GROUP BY t.from_account_id, t.currency_id";
+        $stmt_bulk = $pdo->prepare($sql);
+        $stmt_bulk->execute([$date_from_db, $date_to_db, $search_txn_bind]);
+        while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
+            $bulk['contra_clear_from'][$r['account_id']][$r['currency_id']] = [
+                'period_count' => (int) ($r['period_count'] ?? 0),
+            ];
+        }
+
         $rateNonMmRowAmt = '(CASE
                       WHEN e.entry_type IN (\'RATE_FIRST_FROM\',\'RATE_TRANSFER_FROM\') THEN -e.amount
                       WHEN e.entry_type IN (\'RATE_FIRST_TO\',\'RATE_TRANSFER_TO\') THEN -e.amount
@@ -2221,6 +2271,7 @@ try {
         $cr_dr_result = calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from_db, $date_to_db, $company_id, $bulk);
         $cr_dr = $cr_dr_result['value'];
         $has_crdr_transactions = $cr_dr_result['has_transactions'];
+        $has_contra_clear_period = searchApiContraClearPeriodCount($bulk, (int) $account_id, (int) $currency_id) > 0;
 
         // Layer 2：(账户+币种) 级筛选。
         // 勿仅因「本期无 Win/Loss 动账」就整行丢弃——否则仅剩 B/F 或 Cr/Dr 轧差的户被藏起来，
@@ -2239,7 +2290,7 @@ try {
         }
         // 对称：勿仅因本期无 PAYMENT 类 Cr/Dr 动账就丢弃——无 Cr/Dr 交易但仍承担 Win/Loss 或期初轧差的户要保留。
         if ($hide_zero_balance && $show_inactive && !$show_capture_only) {
-            if (!$has_crdr_transactions) {
+            if (!$has_crdr_transactions && !$has_contra_clear_period) {
                 $bf_near = trunc2($bf);
                 $cr_near = trunc2($cr_dr);
                 $wl_full_chk = $wlPack['win_loss_full'] ?? '0';
@@ -2370,10 +2421,12 @@ try {
         // Default list: omit balance 0.00 unless Show Payment Only (show_inactive) is on.
         // Still return balance 0.00 when the period has W/L or Payment activity so the client
         // Show Win/Loss Only / Show Payment Only filters can include them (default view hides via applyZeroBalanceFilter).
+        // CONTRA/CLEAR 清账后余额常为 0：has_contra_clear_period 保证当日仍返回行（含待审批 contra）。
         // Show all 0 balance (hide_zero_balance=0) skips this gate entirely.
         $has_period_activity = $has_win_loss_transactions
             || $has_period_id_product_rows
-            || $has_crdr_transactions;
+            || $has_crdr_transactions
+            || $has_contra_clear_period;
         if ($hide_zero_balance && !$show_inactive && !searchMoneyNonZero($balance) && !$has_period_activity) {
             continue;
         }
@@ -2393,6 +2446,7 @@ try {
             'balance' => $balance,
             'balance_full' => $balance_full,
             'has_crdr_transactions' => $has_crdr_transactions ? 1 : 0,
+            'has_contra_clear_period' => $has_contra_clear_period ? 1 : 0,
             'has_win_loss_transactions' => $has_win_loss_transactions ? 1 : 0,
             'has_win_loss_history' => $has_win_loss_history ? 1 : 0,
             'has_period_id_product_rows' => $has_period_id_product_rows ? 1 : 0,

@@ -33,6 +33,37 @@ export function toUpper(v) {
   return String(v || "").toUpperCase();
 }
 
+function parseAccountLastLogin(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const d = new Date(s.replace(" ", "T"));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Last Login 列：仅展示日期 YYYY-MM-DD */
+export function formatAccountLastLoginDate(raw) {
+  const d = parseAccountLastLogin(raw);
+  if (!d) {
+    const s = String(raw || "").trim();
+    return s || "-";
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Last Login 悬浮提示：仅时间 HH:MM:SS */
+export function formatAccountLastLoginTimeTitle(raw) {
+  const d = parseAccountLastLogin(raw);
+  if (!d) return "";
+  const h = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const sec = String(d.getSeconds()).padStart(2, "0");
+  return `${h}:${min}:${sec}`;
+}
+
 export function normalizeAlertAmount(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";

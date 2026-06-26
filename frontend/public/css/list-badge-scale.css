@@ -1,6 +1,7 @@
 /* ==========================================================================
    Small viewports — scale list badges & filter pills only (design unchanged).
-   Import last on Process / User / Account list pages so rules win over page CSS.
+   Import last on Process / User list pages so rules win over page CSS.
+   Account 页不缩小 badge，由 accountCSS.css 控制。
    ========================================================================== */
 
 @media (max-width: 1440px) {
@@ -8,16 +9,12 @@
     --user-gc-segment-padding: 3px 9px;
   }
 
-  /* Status / Role / Alert pills */
+  /* Status / Role / Alert pills（User / Process；不含 Account） */
   body.ec-auth-shell .role-badge,
-  body.ec-auth-shell .account-role-badge,
-  body.ec-auth-shell span.account-role-badge,
   body.ec-auth-shell .contract-badge,
   body.ec-auth-shell .status-badge,
   body.ec-auth-shell .member-badge,
   body.ec-auth-shell.process-page:not(.process-page--bank) .games-process-row .role-badge,
-  body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-role-badge,
-  body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row span.account-role-badge,
   body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .role-badge {
     font-size: 8px !important;
     padding: 1px 6px !important;
@@ -29,7 +26,6 @@
     border-width: 1px !important;
   }
 
-  body.ec-auth-shell.account-page:not(.account-page--show-all) .account-list-row .account-card-item:has(> .account-role-badge),
   body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item:nth-child(5),
   body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item:nth-child(6) {
     font-size: 8px !important;

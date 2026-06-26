@@ -248,6 +248,8 @@
    * max 48rem：在 2vh 下常见分辨率几乎不会触发（2vh 远小于 48rem），仅作 clamp 上界与极端超高 vh 的保险。
    */
   --list-table-body-min-height: clamp(1rem, 2vh, 48rem);
+  /* 列表表格横向滚动安全网默认下限（各页 .X-list-table 可覆盖） */
+  --list-table-min-width: 980px;
 
   /* Account 表头蓝条 padding（accountCSS .account-table-header） */
   --table-header-height: 6px 22px;

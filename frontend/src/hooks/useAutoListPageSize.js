@@ -151,6 +151,11 @@ export function useAutoListPageSize({
   paginationSelector = ".pagination-container",
   minRows = MIN_ROWS,
   maxRows = MAX_ROWS,
+  /**
+   * 用固定行高（cellMinHeight，读 CSS 变量）按 floor(budget / rowHeight) 直接定页大小，
+   * 不依赖渲染后被 1fr 拉伸的实际行高 → 消除「行高↔行数」反馈环导致的刷新结果漂移。
+   */
+  stableRowHeight = false,
   remeasureDeps = [],
 }) {
   const [pageSize, setPageSize] = useState(DEFAULT_FALLBACK_PAGE_SIZE);
@@ -169,16 +174,23 @@ export function useAutoListPageSize({
       const budget = measureBudget(el, headerSelector, paginationSelector);
       if (budget < cellMinHeight(el)) return;
 
-      const rows = [...el.querySelectorAll(rowSelector)];
-      const budgetFit = computePageSize(el, budget, rowSelector, minRows, maxRows);
-      let next = budgetFit;
+      let next;
+      if (stableRowHeight) {
+        // 固定行高定页：结果只取决于可用高度，刷新结果一致（行渲染仍用 1fr 填满）
+        const rowH = cellMinHeight(el);
+        next = Math.max(minRows, Math.min(maxRows, Math.floor(budget / rowH)));
+      } else {
+        const rows = [...el.querySelectorAll(rowSelector)];
+        const budgetFit = computePageSize(el, budget, rowSelector, minRows, maxRows);
+        next = budgetFit;
 
-      const visible = countRowsFullyVisible(el, rowSelector, paginationSelector);
-      if (visible > 0) {
-        // Currency 等筛选后 DOM 可能只有 1 行，勿把 pageSize 锁死；数据变多后应信任预算重算
-        const domUnderfilled = rows.length > 0 && rows.length < budgetFit;
-        if (!domUnderfilled) {
-          next = Math.min(next, visible);
+        const visible = countRowsFullyVisible(el, rowSelector, paginationSelector);
+        if (visible > 0) {
+          // Currency 等筛选后 DOM 可能只有 1 行，勿把 pageSize 锁死；数据变多后应信任预算重算
+          const domUnderfilled = rows.length > 0 && rows.length < budgetFit;
+          if (!domUnderfilled) {
+            next = Math.min(next, visible);
+          }
         }
       }
 
@@ -223,7 +235,7 @@ export function useAutoListPageSize({
       window.visualViewport?.removeEventListener("resize", onWindow);
       window.visualViewport?.removeEventListener("scroll", onWindow);
     };
-  }, [enabled, listRegionRef, headerSelector, rowSelector, paginationSelector, minRows, maxRows, ...remeasureDeps]);
+  }, [enabled, listRegionRef, headerSelector, rowSelector, paginationSelector, minRows, maxRows, stableRowHeight, ...remeasureDeps]);
 
   return enabled ? pageSize : maxRows;
 }

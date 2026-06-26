@@ -188,16 +188,12 @@ function mapRowsToDisplay(array $rows, bool $isGroupScope = false) {
         }
     }
 
-    $rawById = [];
     $data = [];
     foreach ($displayRowsByKey as $item) {
         $entry = $item['entry'];
         unset($entry['_score']);
-        $rawById[(int)$entry['id']] = $item['raw'];
         $data[] = $entry;
     }
-
-    $data = applyPeerRowCoefficientInferencePhp($data, $rawById);
 
     $no = 1;
     foreach ($data as $idx => $row) {

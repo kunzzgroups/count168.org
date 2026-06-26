@@ -1006,24 +1006,6 @@ body.account-page .search-container.userlist-search-bar .userlist-search-input {
         transition: padding-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* 主列表：窄屏横向滚动，表头/行共用 inner 宽度 */
-    body.account-page .account-table-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    body.account-page .account-list-table .account-list-table-header,
-    body.account-page .account-list-table .account-cards {
-        min-width: max(100%, 980px);
-        width: 100%;
-        box-sizing: border-box;
-    }
-
-    body.account-page:not(.account-page--show-all) .account-cards {
-        overflow-x: visible !important;
-        overflow-y: hidden !important;
-    }
-
     body.account-page .account-toolbar-top-row {
         flex-wrap: wrap;
         row-gap: 10px;
