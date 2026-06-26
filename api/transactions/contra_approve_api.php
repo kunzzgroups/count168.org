@@ -32,9 +32,9 @@ function approveContraTransaction(PDO $pdo, int $transactionId, array $scope, st
     $hasApprovedBy = tableHasColumn($pdo, 'transactions', 'approved_by');
     $hasApprovedByOwner = tableHasColumn($pdo, 'transactions', 'approved_by_owner');
     $hasApprovedAt = tableHasColumn($pdo, 'transactions', 'approved_at');
-    $scopeWhere = tx_sql_transaction_scope_where($scope);
+    $scopeWhere = tx_sql_transaction_scope_where($scope, 't');
     $scopeBind = tx_bind_transaction_scope_id($scope);
-    $stmt = $pdo->prepare("SELECT id, company_id, transaction_type, approval_status FROM transactions WHERE id = ? AND {$scopeWhere} FOR UPDATE");
+    $stmt = $pdo->prepare("SELECT id, company_id, transaction_type, approval_status FROM transactions t WHERE t.id = ? AND {$scopeWhere} FOR UPDATE");
     $stmt->execute([$transactionId, $scopeBind]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) throw new Exception('记录不存在或不属于当前范围');
@@ -47,7 +47,7 @@ function approveContraTransaction(PDO $pdo, int $transactionId, array $scope, st
     if ($hasApprovedAt) $setParts[] = "approved_at = NOW()";
     $params[] = $transactionId;
     $params[] = $scopeBind;
-    $sql = "UPDATE transactions SET " . implode(', ', $setParts) . " WHERE id = ? AND {$scopeWhere}";
+    $sql = "UPDATE transactions t SET " . implode(', ', $setParts) . " WHERE t.id = ? AND {$scopeWhere}";
     $pdo->prepare($sql)->execute($params);
 }
 

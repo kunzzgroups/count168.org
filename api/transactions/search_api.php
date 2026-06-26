@@ -166,6 +166,67 @@ function searchApiContraClearPeriodCount($bulk, int $accountId, int $currencyId)
     return $to + $from;
 }
 
+/** SQL IN list for CONTRA/CLEAR (concatenated — avoids double-quoted PHP string edge cases). */
+function searchApiSqlInContraClearTypes(): string
+{
+    return "'CONTRA','CLEAR'";
+}
+
+/**
+ * Period CONTRA/CLEAR counts for list visibility (includes PENDING contra).
+ * Isolated + try/catch so a SQL issue here cannot break the whole search response.
+ *
+ * @param array<string, mixed> $bulk
+ */
+function searchApiBulkLoadContraClearPeriodCounts(
+    PDO $pdo,
+    array &$bulk,
+    string $searchTxnWhere,
+    int $searchTxnBind,
+    string $dateFromDb,
+    string $dateToDb
+): void {
+    $txnWhere = $searchTxnWhere !== '' ? $searchTxnWhere : searchApiTxnWhereSql('t');
+    $inTypes = searchApiSqlInContraClearTypes();
+    $queries = [
+        [
+            'key' => 'contra_clear_to',
+            'sql' => 'SELECT t.account_id, t.currency_id,
+                       SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS period_count
+                FROM transactions t
+                WHERE ' . $txnWhere . '
+                  AND t.transaction_type IN (' . $inTypes . ')
+                  AND t.currency_id IS NOT NULL
+                GROUP BY t.account_id, t.currency_id',
+        ],
+        [
+            'key' => 'contra_clear_from',
+            'sql' => 'SELECT t.from_account_id AS account_id, t.currency_id,
+                       SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS period_count
+                FROM transactions t
+                WHERE ' . $txnWhere . '
+                  AND t.from_account_id IS NOT NULL
+                  AND t.transaction_type IN (' . $inTypes . ')
+                  AND t.currency_id IS NOT NULL
+                GROUP BY t.from_account_id, t.currency_id',
+        ],
+    ];
+
+    foreach ($queries as $q) {
+        try {
+            $stmt = $pdo->prepare($q['sql']);
+            $stmt->execute([$dateFromDb, $dateToDb, $searchTxnBind]);
+            while ($r = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                $bulk[$q['key']][$r['account_id']][$r['currency_id']] = [
+                    'period_count' => (int) ($r['period_count'] ?? 0),
+                ];
+            }
+        } catch (Throwable $e) {
+            error_log('search_api contra_clear bulk failed (' . $q['key'] . '): ' . $e->getMessage());
+        }
+    }
+}
+
 function searchApiAccountHasCreatedSourceColumn(PDO $pdo): bool
 {
     static $v = null;
@@ -2097,8 +2158,8 @@ try {
                 FROM transactions t
                 WHERE {$search_txn_where}
                   AND t.transaction_type IN ('PAYMENT', 'RECEIVE', 'CONTRA', 'CLEAR', 'CLAIM')
-                  AND t.currency_id IS NOT NULL 
-                  $contra_where_t
+                  AND t.currency_id IS NOT NULL"
+            . $contra_where_t . "
                 GROUP BY t.account_id, t.currency_id";
         $stmt_bulk = $pdo->prepare($sql);
         $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $search_txn_bind]);
@@ -2142,8 +2203,8 @@ try {
                   AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_SHARE_COMMISSION|%'
                   AND COALESCE(t.sms, '') NOT LIKE '[AUTO_RENEW|COMMISSION|%'
                   AND COALESCE(t.sms, '') NOT LIKE '[DOMAIN_NET_PROFIT|%'
-                  AND COALESCE(t.sms, '') NOT LIKE '[AUTO_RENEW|NET_PROFIT|%'
-                  $contra_where_t
+                  AND COALESCE(t.sms, '') NOT LIKE '[AUTO_RENEW|NET_PROFIT|%'"
+            . $contra_where_t . "
                 GROUP BY t.from_account_id, t.currency_id";
         $stmt_bulk = $pdo->prepare($sql);
         $stmt_bulk->execute([$date_from_db, $date_from_db, $date_to_db, $date_from_db, $date_to_db, $search_txn_bind]);
@@ -2156,36 +2217,14 @@ try {
         }
 
         // CONTRA/CLEAR visibility: include PENDING contra so 清账账户在当日仍出现在列表（余额口径仍只计已批准）。
-        $sql = "SELECT t.account_id, t.currency_id,
-                       SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS period_count
-                FROM transactions t
-                WHERE {$search_txn_where}
-                  AND t.transaction_type IN ('CONTRA', 'CLEAR')
-                  AND t.currency_id IS NOT NULL
-                GROUP BY t.account_id, t.currency_id";
-        $stmt_bulk = $pdo->prepare($sql);
-        $stmt_bulk->execute([$date_from_db, $date_to_db, $search_txn_bind]);
-        while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
-            $bulk['contra_clear_to'][$r['account_id']][$r['currency_id']] = [
-                'period_count' => (int) ($r['period_count'] ?? 0),
-            ];
-        }
-
-        $sql = "SELECT t.from_account_id AS account_id, t.currency_id,
-                       SUM(CASE WHEN t.transaction_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS period_count
-                FROM transactions t
-                WHERE {$search_txn_where}
-                  AND t.from_account_id IS NOT NULL
-                  AND t.transaction_type IN ('CONTRA', 'CLEAR')
-                  AND t.currency_id IS NOT NULL
-                GROUP BY t.from_account_id, t.currency_id";
-        $stmt_bulk = $pdo->prepare($sql);
-        $stmt_bulk->execute([$date_from_db, $date_to_db, $search_txn_bind]);
-        while ($r = $stmt_bulk->fetch(PDO::FETCH_ASSOC)) {
-            $bulk['contra_clear_from'][$r['account_id']][$r['currency_id']] = [
-                'period_count' => (int) ($r['period_count'] ?? 0),
-            ];
-        }
+        searchApiBulkLoadContraClearPeriodCounts(
+            $pdo,
+            $bulk,
+            $search_txn_where,
+            $search_txn_bind,
+            $date_from_db,
+            $date_to_db
+        );
 
         $rateNonMmRowAmt = '(CASE
                       WHEN e.entry_type IN (\'RATE_FIRST_FROM\',\'RATE_TRANSFER_FROM\') THEN -e.amount

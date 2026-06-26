@@ -233,8 +233,8 @@ function TransactionPaymentPageMain() {
   );
 
   const onRejectContra = useCallback(
-    (opts) => ui.onRejectContra(opts.transactionId, scopeApi),
-    [ui.onRejectContra, scopeApi],
+    (opts) => ui.onRejectContra(opts.transactionId, scopeApi, search.runSearch),
+    [ui.onRejectContra, scopeApi, search.runSearch],
   );
 
   if (forbidden) {

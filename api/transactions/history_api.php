@@ -1302,6 +1302,11 @@ try {
     ensureHistoryRatePrecision($pdo);
     $sessionUserType = isset($_SESSION['user_type']) ? strtolower((string) $_SESSION['user_type']) : '';
     $isMemberUser = ($sessionUserType === 'member');
+    // Member Win/Loss export (from Transaction Payment History, viewed by agent/admin):
+    // force the same description formatting the member sees, without changing any amounts.
+    if (!empty($_GET['member_view'])) {
+        $isMemberUser = true;
+    }
 
     $listScope = tx_resolve_transaction_list_scope($pdo, $_GET);
     $historyScopeFilter = tx_search_transaction_filter($pdo, $listScope, 't');

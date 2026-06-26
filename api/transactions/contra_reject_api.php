@@ -23,9 +23,9 @@ function canRejectTransactionType(string $transactionType): bool {
 }
 
 function deleteContraTransaction(PDO $pdo, int $transactionId, array $scope): void {
-    $scopeWhere = tx_sql_transaction_scope_where($scope);
+    $scopeWhere = tx_sql_transaction_scope_where($scope, 't');
     $scopeBind = tx_bind_transaction_scope_id($scope);
-    $stmt = $pdo->prepare("SELECT id, company_id, transaction_type FROM transactions WHERE id = ? AND {$scopeWhere} FOR UPDATE");
+    $stmt = $pdo->prepare("SELECT id, company_id, transaction_type FROM transactions t WHERE t.id = ? AND {$scopeWhere} FOR UPDATE");
     $stmt->execute([$transactionId, $scopeBind]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$row) throw new Exception('记录不存在或不属于当前范围');
@@ -42,7 +42,7 @@ function deleteContraTransaction(PDO $pdo, int $transactionId, array $scope): vo
         // 兼容旧环境：忽略
     }
 
-    $del = $pdo->prepare("DELETE FROM transactions WHERE id = ? AND {$scopeWhere}");
+    $del = $pdo->prepare("DELETE t FROM transactions t WHERE t.id = ? AND {$scopeWhere}");
     $del->execute([$transactionId, $scopeBind]);
     if ($del->rowCount() === 0) throw new Exception('删除失败，记录可能已被删除');
 }

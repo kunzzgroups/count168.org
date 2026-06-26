@@ -44,16 +44,27 @@ export async function fetchPaymentHistoryExportCurrencies(accountId, companyId, 
     .filter(Boolean);
 }
 
-/** Member page report rows — same API as Win/Loss history table. */
+/**
+ * Member Win/Loss table rows — same request + same formatting as the Member page.
+ * `member_view=1` forces the backend to apply the member-side description rules
+ * (PAYMENT → Payment Settlement, CLAIM → Claim Settlement, RATE → Currency Exchange,
+ * CONTRA → Contra Account) even when an agent/admin triggers the export.
+ */
 export async function fetchMemberReportHistory({ accountId, companyId, dateFrom, dateTo, currency, signal }) {
+  const id = Number(accountId) || 0;
+  const cid = Number(companyId) || 0;
+  if (!id || !cid) {
+    throw new Error("Account or company is missing");
+  }
   const params = new URLSearchParams({
-    account_id: String(accountId),
+    account_id: String(id),
     date_from: String(dateFrom),
     date_to: String(dateTo),
-    company_id: String(companyId),
+    company_id: String(cid),
     currency: String(currency || "")
       .trim()
       .toUpperCase(),
+    member_view: "1",
   });
   const res = await fetch(buildApiUrl(`api/transactions/history_api.php?${params}&_t=${Date.now()}`), {
     credentials: "include",
