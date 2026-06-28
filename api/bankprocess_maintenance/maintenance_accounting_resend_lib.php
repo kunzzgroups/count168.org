@@ -485,6 +485,7 @@ if (!function_exists('bmp_restoreNormalAccountingDueDismissals')) {
                AND period_type NOT IN ('resend_monthly_reopen', 'resend_consolidated_range')"
         );
         $delSoft->execute([$companyId]);
+        // 兼容旧数据：此前正常流程 Delete 只写了 monthly_skipped，Refresh 时一并清除（非 Resend 永久 dismiss）。
         try {
             $delLegacy = $pdo->prepare(
                 "DELETE pap FROM process_accounting_posted pap

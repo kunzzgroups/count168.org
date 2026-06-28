@@ -256,7 +256,7 @@ export default function AccountingDueModal({
                   <button
                     type="button"
                     className="accounting-due-inbox-btn accounting-due-inbox-refresh"
-                    onClick={() => refreshRef.current?.()}
+                    onClick={() => refreshRef.current?.({ restoreDismissed: true })}
                     disabled={accountingLoading}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">

@@ -3,7 +3,6 @@
  */
 import { gridToSnapshot, snapshotToGrid } from "../grid/gridModel.js";
 import { getRowLabel } from "../grid/dataCaptureGridMeta.js";
-import { alignTotalRowsInSnapshot } from "../paste/core/dataCaptureTotalRowAlign.js";
 import {
   getBridgeCaptureType,
   getPasteGridModel,
@@ -98,17 +97,16 @@ function padSnapshotColumns(tableData, colCount) {
  */
 export function convertTableFormatOnSubmitSnapshot(tableData, captureType) {
   const resolvedType = resolveCaptureType(captureType);
-  const aligned = alignTotalRowsInSnapshot(tableData);
 
   if (resolvedType === "WBET" || resolvedType === "WBET_API") {
-    return aligned;
+    return tableData;
   }
 
-  if (!aligned?.rows?.length) {
-    return aligned;
+  if (!tableData?.rows?.length) {
+    return tableData;
   }
 
-  const working = cloneTableSnapshot(aligned);
+  const working = cloneTableSnapshot(tableData);
   const rows = working.rows;
 
   let subTotalRowIndex = -1;
