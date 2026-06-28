@@ -21,7 +21,13 @@ export function parseFormatHtmlTableStructure(htmlString) {
   const dataRows = [];
 
   allRows.forEach((tr) => {
-    if (tr.querySelectorAll("th").length > 0) {
+    // Match PHP: only <thead> rows, or rows that are entirely <th> (no <td>).
+    // Rows that start with <th scope="row"> but include <td> are data rows (e.g. DEMOS).
+    const inThead = !!tr.closest("thead");
+    const thCount = tr.querySelectorAll("th").length;
+    const tdCount = tr.querySelectorAll("td").length;
+    const isHeaderRow = inThead || (thCount > 0 && tdCount === 0);
+    if (isHeaderRow) {
       headerRows.push(tr);
     } else {
       dataRows.push(tr);

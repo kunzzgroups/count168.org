@@ -20,6 +20,7 @@ import {
   clearAllSelections,
   getSelectedCellPositions,
 } from "../grid/dataCaptureGridSelection.js";
+import { clearCellsInGrid } from "../grid/gridModel.js";
 import { undoLastPaste as undoPasteFromHistory, commitGridUndoCheckpoint } from "../grid/dataCaptureGridPasteHistory.js";
 import {
   appendColumnInGrid,
@@ -312,26 +313,28 @@ export function useDataCapturePureReactGridInteraction(engineReady) {
       const grid = getGrid();
       if (!grid) return;
 
-      const bounds = resolveSelectionBounds();
       let nextGrid = grid;
 
-      if (bounds) {
+      // Clear ONLY the cells actually selected. Using the rectangular bounding box
+      // here would also wipe unselected cells that happen to fall inside the box
+      // (e.g. selecting A1 + B2 would otherwise also clear A2 and B1).
+      const positions = getSelectedCellPositions();
+      if (positions.length) {
+        nextGrid = clearCellsInGrid(
+          nextGrid,
+          positions.map((p) => ({ row: p.rowIndex, col: p.colIndex })),
+        );
+      } else {
+        // Fallback for header (row/column) selections where individual cells
+        // aren't tracked: clear the resolved rectangle.
+        const bounds = resolveSelectionBounds();
+        if (!bounds) return;
         nextGrid = clearCellRangeInGrid(
           nextGrid,
           bounds.minRow,
           bounds.maxRow,
           bounds.minCol,
           bounds.maxCol,
-        );
-      } else {
-        const positions = getSelectedCellPositions();
-        if (!positions.length) return;
-        nextGrid = clearCellRangeInGrid(
-          nextGrid,
-          Math.min(...positions.map((p) => p.rowIndex)),
-          Math.max(...positions.map((p) => p.rowIndex)),
-          Math.min(...positions.map((p) => p.colIndex)),
-          Math.max(...positions.map((p) => p.colIndex)),
         );
       }
 

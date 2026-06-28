@@ -51,15 +51,21 @@ function clearCellsWithUndo(positions) {
   commitGridUndoCheckpoint(nextGrid);
 }
 
+/** clearCellsInGrid expects { row, col }; cellPosition yields { rowIndex, colIndex }. */
+function toClearPosition(pos) {
+  if (!pos) return null;
+  return { row: pos.rowIndex, col: pos.colIndex };
+}
+
 function clearCellModel(cell) {
   const selected = getSelectedCells().filter((c) => c?.contentEditable === "true");
   if (selected.length > 1) {
-    const positions = selected.map(cellPosition).filter(Boolean);
+    const positions = selected.map(cellPosition).map(toClearPosition).filter(Boolean);
     clearCellsWithUndo(positions);
     return;
   }
 
-  const pos = cellPosition(cell);
+  const pos = toClearPosition(cellPosition(cell));
   if (!pos) return;
   clearCellsWithUndo([pos]);
 }

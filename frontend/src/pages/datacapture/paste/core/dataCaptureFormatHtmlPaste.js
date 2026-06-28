@@ -37,6 +37,7 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
       startRowOverride: startRow,
       startColOverride: 0,
       trimValues: false,
+      alignTotalRows: false,
     });
 
     const successCount = bodySuccessCount;
