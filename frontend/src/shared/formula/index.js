@@ -21,6 +21,8 @@ export {
   createFormulaDisplayFromExpression,
 } from "./buildFormulaDisplay.js";
 
+export { formatNegativeNumbersInFormula } from "./formatNegativeNumbersInFormula.js";
+
 export {
   resolveEffectiveSourcePercentForRow,
   resolveTemplateFormulaBaseAndPercent,

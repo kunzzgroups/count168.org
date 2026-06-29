@@ -11,19 +11,33 @@ function emptyPatch() {
   return { value: "" };
 }
 
+function isBlankPastedCellText(text) {
+  const collapsed = String(text ?? "")
+    .replace(/\u00a0/g, " ")
+    .trim();
+  if (collapsed === "") return true;
+  return /^&(?:nbsp|#0*160);?$/i.test(collapsed);
+}
+
+function getPlainPastedCellValue(sourceCell) {
+  const text = sourceCell.textContent ?? sourceCell.innerText ?? "";
+  if (isBlankPastedCellText(text)) return "";
+  return text;
+}
+
 function patchFromSourceCell(sourceCell) {
   let cellContent = sourceCell.innerHTML;
   if (!cellContent || cellContent.trim() === "") {
     cellContent = sourceCell.textContent || "";
   }
 
-  const cellText = (sourceCell.textContent || sourceCell.innerText || "").trim();
+  const cellText = getPlainPastedCellValue(sourceCell);
   const cleanContent = sanitizePastedCellHtml(cellContent);
 
   if (cleanContent.includes("<") && cleanContent.includes(">")) {
     return { value: cellText, html: cleanContent };
   }
-  return { value: cellContent };
+  return { value: cellText };
 }
 
 function buildRowPatches(sourceRow, maxCols, columnOrder) {

@@ -1,4 +1,5 @@
 import { formatSourcePercent } from "./formatSourcePercent.js";
+import { formatNegativeNumbersInFormula } from "./formatNegativeNumbersInFormula.js";
 import { isSourceOne } from "./isMisplacedCommission.js";
 
 /** True when source is an arithmetic expression (e.g. 0.18/2), not a plain number. */
@@ -42,7 +43,7 @@ export function buildFormulaEditFromParts(base) {
  */
 export function createFormulaDisplayFromExpression(formula, sourcePercentValue, enableSourcePercent = true) {
   if (!formula) return "Formula";
-  const trimmedFormula = String(formula).trim();
+  const trimmedFormula = formatNegativeNumbersInFormula(String(formula).trim());
   if (!enableSourcePercent) return trimmedFormula;
 
   if (!sourcePercentValue || String(sourcePercentValue).trim() === "") {
