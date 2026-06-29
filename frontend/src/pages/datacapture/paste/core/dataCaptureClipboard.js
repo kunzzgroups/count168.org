@@ -169,12 +169,28 @@ export function getTopLevelTables(root) {
   });
 }
 
-/** The table with the most td/th cells (the real data table). */
+/** Count only a table's OWN cells (cells not belonging to a nested table). */
+function ownCellCount(table) {
+  let count = 0;
+  table.querySelectorAll("td, th").forEach((cell) => {
+    if (cell.closest("table") === table) count += 1;
+  });
+  return count;
+}
+
+/**
+ * The table with the most of its OWN td/th cells (the real data table).
+ *
+ * Counting own cells (not nested descendants) is what lets us drill into a
+ * report that wraps the real data grid inside a single cell of an outer layout
+ * table: the outer wrapper has few own cells, the inner data grid has many, so
+ * the inner grid wins instead of dumping the whole grid into one cell.
+ */
 function pickLargestTable(tables) {
   let best = null;
   let bestScore = -1;
   tables.forEach((t) => {
-    const score = t.querySelectorAll("td, th").length;
+    const score = ownCellCount(t);
     if (score > bestScore) {
       bestScore = score;
       best = t;
