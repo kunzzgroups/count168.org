@@ -2,7 +2,7 @@ import { applyDataMatrixToGrid, notifyPasteSuccess } from "./dataCapturePasteApp
 import { recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 import {
   detectColumnReorder,
-  measureHtmlTable,
+  measureTopLevelTables,
   sanitizePastedCellHtml,
 } from "./dataCaptureClipboard.js";
 import { alignTotalRowsInMatrix } from "./dataCaptureTotalRowAlign.js";
@@ -34,23 +34,13 @@ function buildRowPatches(sourceRow, maxCols, columnOrder) {
       ? columnOrder.map((i) => rawCells[i])
       : Array.from(rawCells);
 
-  let currentCol = 0;
-
-  sourceCells.forEach((sourceCell) => {
-    const colspan = Number.parseInt(sourceCell.getAttribute("colspan") || "1", 10);
-
-    if (currentCol < maxCols) {
-      row[currentCol] = patchFromSourceCell(sourceCell);
+  // Match PHP 1.TEXT: place each source cell left-to-right, one column each,
+  // ignoring colspan. Expanding colspan into blank columns would push a
+  // spanning label row (e.g. "SUB (MYR)") one column to the right of PHP.
+  sourceCells.forEach((sourceCell, index) => {
+    if (index < maxCols) {
+      row[index] = patchFromSourceCell(sourceCell);
     }
-
-    for (let i = 1; i < colspan; i += 1) {
-      currentCol += 1;
-      if (currentCol < maxCols) {
-        row[currentCol] = emptyPatch();
-      }
-    }
-
-    currentCol += 1;
   });
 
   return row;
@@ -68,7 +58,10 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
     const table = tempDiv.querySelector("table");
     if (!table) return false;
 
-    const measured = measureHtmlTable(table);
+    // Collect rows across every top-level table: some reports split the data
+    // rows and the TOTAL footer row into separate sibling tables, so reading
+    // only the first table would drop the TOTAL row (matches the PHP site).
+    const measured = measureTopLevelTables(tempDiv);
     if (!measured) return false;
 
     const { allRows, maxCols } = measured;

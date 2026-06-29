@@ -63,24 +63,25 @@
     flex: 1 1 auto !important;
     min-height: 0 !important;
     max-height: none !important;
-    overflow: hidden !important;
+    overflow-x: visible !important;
+    overflow-y: hidden !important;
     display: flex !important;
     flex-direction: column !important;
   }
 
-  /* 满页 25 条：grid 均分剩余高度，整页一屏展示 */
+  /* 动态满页行数：grid 均分剩余高度，整页一屏展示 */
   body.user-page:not(.user-page--show-all) .user-cards.user-cards--paged-fill {
     display: grid !important;
     grid-template-columns: 1fr !important;
-    grid-template-rows: repeat(25, minmax(0, 1fr)) !important;
-    flex: 1 1 auto !important;
+    grid-template-rows: repeat(var(--user-list-page-size, 15), minmax(0, 1fr)) !important;
+    flex: 1 1 0 !important;
     align-content: stretch !important;
   }
 
   body.user-page:not(.user-page--show-all) .user-cards.user-cards--paged-fill .user-list-row {
     flex: unset !important;
     min-height: 0 !important;
-    height: auto !important;
+    height: 100% !important;
     align-self: stretch !important;
     overflow: hidden !important;
   }
@@ -129,11 +130,11 @@
 
   body.user-page:not(.auto-renew-page-body) .search-container.userlist-search-bar .userlist-search-input,
   body.ec-auth-shell.user-page:not(.auto-renew-page-body) .search-container.userlist-search-bar .userlist-search-input {
-    font-size: var(--userlist-text-toolbar) !important;
+    font-size: 1.2rem !important;
   }
 
   body.user-page:not(.auto-renew-page-body) .user-filter-chip__label {
-    font-size: var(--userlist-text-toolbar) !important;
+    font-size: 1.2rem !important;
     font-weight: var(--userlist-weight-toolbar) !important;
   }
 
@@ -141,18 +142,18 @@
   body.user-page:not(.auto-renew-page-body) .action-buttons .btn-delete,
   body.ec-auth-shell.user-page:not(.auto-renew-page-body) .btn-add,
   body.ec-auth-shell.user-page:not(.auto-renew-page-body) .btn-delete {
-    font-size: var(--userlist-text-toolbar) !important;
+    font-size: 1.4rem !important;
     padding: 6px 10px !important;
   }
 
   body.user-page:not(.auto-renew-page-body) .user-gc-inline-label,
   body.user-page:not(.auto-renew-page-body) .user-gc-segment {
-    font-size: var(--userlist-text-toolbar) !important;
+    font-size: 1.2rem !important;
   }
 
   body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header {
-    font-size: var(--userlist-text-table-head) !important;
-    font-weight: var(--userlist-weight-table-head) !important;
+    font-size: 1.6rem !important;
+    font-weight: bold !important;
     padding-top: 4px !important;
     padding-bottom: 4px !important;
   }
@@ -160,32 +161,35 @@
   body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header .header-item,
   body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-row .card-item,
   body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .card-item {
-    font-size: var(--userlist-text-table-cell) !important;
-    font-weight: var(--userlist-weight-table-cell) !important;
+    font-size: 1.4rem !important;
+    font-weight: bold !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
-    line-height: var(--userlist-line-height-cell) !important;
+    line-height: 1.1 !important;
   }
 
   body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .card-item:nth-child(5),
   body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .card-item:nth-child(6),
   body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header .header-item:nth-child(5),
   body.user-page:not(.auto-renew-page-body) .user-list-table .user-list-table-header .header-item:nth-child(6) {
-    font-size: var(--userlist-text-table-cell) !important;
-    font-weight: var(--userlist-weight-table-cell) !important;
-    line-height: var(--userlist-line-height-cell) !important;
+    font-size: 1.4rem !important;
+    font-weight: bold !important;
+    line-height: 1.1 !important;
   }
 
   body.ec-auth-shell.user-page:not(.auto-renew-page-body):not(.user-page--show-all) .user-list-row .role-badge,
   body.user-page:not(.auto-renew-page-body) .user-card .role-badge,
   body.user-page:not(.auto-renew-page-body) .user-list-row .role-badge,
   body.user-page:not(.auto-renew-page-body) .role-badge {
-    font-size: var(--userlist-text-badge) !important;
-    font-weight: var(--userlist-weight-badge) !important;
-    padding: 1px 6px !important;
-    line-height: 1.15 !important;
-    min-width: 0 !important;
+    box-sizing: border-box !important;
+    height: var(--user-list-pill-height, 20px) !important;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    padding: 0 8px !important;
+    line-height: 1.1 !important;
+    min-width: max-content !important;
     border-width: 1px !important;
+    border-radius: 6px !important;
   }
 }
 

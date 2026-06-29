@@ -42,9 +42,18 @@ function InfoIcon() {
   );
 }
 
-export default function PaymentHistoryExportPdfModal({ open, onClose, scope, accountTitle }) {
+export default function PaymentHistoryExportPdfModal({
+  open,
+  onClose,
+  scope,
+  accountTitle,
+  messages,
+  pickerInstanceId = "",
+  shareCalendarPopup = false,
+}) {
   const lang = useLoginLang();
-  const m = useMemo(() => TRANSACTION_I18N[lang] || TRANSACTION_I18N.en, [lang]);
+  const defaultM = useMemo(() => TRANSACTION_I18N[lang] || TRANSACTION_I18N.en, [lang]);
+  const m = useMemo(() => ({ ...defaultM, ...messages }), [defaultM, messages]);
   const maintenanceLocale = useMemo(() => MAINTENANCE_I18N[lang] || MAINTENANCE_I18N.en, [lang]);
   const periodPresets = useMemo(() => buildMaintenancePeriodPresets(maintenanceLocale), [maintenanceLocale]);
 
@@ -252,6 +261,8 @@ export default function PaymentHistoryExportPdfModal({ open, onClose, scope, acc
                 placeholder={m.exportPdfSelectDateRange}
                 selectEndDateHint={m.exportPdfSelectEndDate}
                 captureDateStyle
+                instanceId={pickerInstanceId}
+                shareCalendarPopup={shareCalendarPopup}
                 periodPresets={periodPresets}
                 periodShortcutsAria={m.exportPdfPeriod}
                 monthLabels={m.monthsShort}

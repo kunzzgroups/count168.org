@@ -160,3 +160,34 @@ export function measureHtmlTable(table) {
   if (maxCols === 0) return null;
   return { allRows: Array.from(allRows), maxCols };
 }
+
+/** Top-level tables only (ignore tables nested inside a cell). */
+export function getTopLevelTables(root) {
+  return Array.from(root.querySelectorAll("table")).filter((t) => {
+    const parentTable = t.parentElement ? t.parentElement.closest("table") : null;
+    return !parentTable;
+  });
+}
+
+/**
+ * Stack the rows of every top-level table vertically. Some reports (e.g. the
+ * MarioClub Win-Lose report) render the data rows and the TOTAL footer row in
+ * separate sibling tables; reading only the first table would drop the TOTAL
+ * row. Matches the PHP site, which keeps every copied row.
+ */
+export function measureTopLevelTables(root) {
+  const tables = getTopLevelTables(root);
+  if (!tables.length) return null;
+
+  const allRows = [];
+  let maxCols = 0;
+  tables.forEach((table) => {
+    table.querySelectorAll("tr").forEach((tr) => {
+      allRows.push(tr);
+      maxCols = Math.max(maxCols, countRowCols(tr));
+    });
+  });
+
+  if (!allRows.length || maxCols === 0) return null;
+  return { allRows, maxCols };
+}

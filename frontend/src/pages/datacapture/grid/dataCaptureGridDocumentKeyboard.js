@@ -179,6 +179,17 @@ const key = (e.key || '').toLowerCase();
             return;
         }
 
+        // 任意自定义下拉（如 capture type 1.TEXT/2.FORMAT…）打开或获得焦点时，
+        // 让下拉自身处理上下箭头，避免被表格抢去做单元格导航。
+        const activeInCustomSelect = activeElement && activeElement.closest && (
+            activeElement.closest('.custom-select-button') ||
+            activeElement.closest('.custom-select-dropdown')
+        );
+        const anyCustomSelectOpen = document.querySelector('.custom-select-dropdown.show');
+        if (activeInCustomSelect || anyCustomSelectOpen) {
+            return;
+        }
+
         // 检查是否在 process 下拉菜单中（锁定表格，让 process 下拉菜单处理箭头键）
         const processButton = document.getElementById('capture_process');
         const processDropdown = document.getElementById('capture_process_dropdown');

@@ -142,6 +142,31 @@ export function getAssignedCompanyIds(me) {
 }
 
 /**
+ * Restrict owner company rows to a user's explicit per-company / per-group
+ * assignment — mirrors backend `gc_session_can_access_company_id`:
+ * a user mapped to specific companies may only see those companies (plus any
+ * company under a group they are assigned to). Owners and users without an
+ * explicit per-company assignment keep the full list.
+ */
+export function filterCompaniesForAssignedScope(companies, me) {
+  if (!Array.isArray(companies) || companies.length === 0 || !me) return companies || [];
+  const role = String(me.role || "").trim().toLowerCase();
+  if (role === "owner") return companies;
+  const assignedIds = getAssignedCompanyIds(me);
+  if (assignedIds.length === 0) return companies;
+  const idSet = new Set(assignedIds);
+  const groupSet = new Set(getAssignedGroupCodes(me));
+  return companies.filter((c) => {
+    if (idSet.has(Number(c?.id))) return true;
+    const gid = String(c?.group_id || "").trim().toUpperCase();
+    if (gid && groupSet.has(gid)) return true;
+    const link = c?.link_source_group ? String(c.link_source_group).trim().toUpperCase() : "";
+    if (link && groupSet.has(link)) return true;
+    return false;
+  });
+}
+
+/**
  * May the session call transaction scope APIs for this company_id?
  * Mirrors tx_resolve_request_company_id / gc_session_can_access_company_id (frontend-safe).
  *

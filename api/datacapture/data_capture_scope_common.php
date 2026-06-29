@@ -1368,6 +1368,31 @@ function dcSqlCurrencyCompanyLedgerOnly(string $cAlias = 'c'): string
 }
 
 /**
+ * Summary account label: `CODE [Name]` unless role is profit (code only).
+ */
+function dcSummaryFormatAccountDisplay(string $code, string $name, string $role = '', $fallbackId = ''): string
+{
+    $code = trim($code);
+    $name = trim($name);
+    $role = strtolower(trim($role));
+    if ($role === 'profit') {
+        return $code !== '' ? $code : (string) $fallbackId;
+    }
+    if ($code !== '' && $name !== '') {
+        return $code . ' [' . $name . ']';
+    }
+    if ($code !== '') {
+        return $code;
+    }
+    $fallback = trim((string) $fallbackId);
+    if ($fallback !== '') {
+        return $fallback;
+    }
+
+    return $name;
+}
+
+/**
  * Summary Edit Formula: active accounts for group ledger (scope_type=group).
  *
  * @return list<array<string, mixed>>

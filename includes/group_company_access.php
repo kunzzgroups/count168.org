@@ -216,6 +216,60 @@ function gc_company_linked_to_target_group(PDO $pdo, int $companyId, string $sou
 }
 
 /**
+ * Does the given company belong to (or sit under) any of the supplied group codes?
+ * Checks group_company_map first, then falls back to the native company.group_id.
+ *
+ * @param list<string> $groupCodes
+ */
+function gc_company_matches_group_codes(PDO $pdo, int $companyId, array $groupCodes): bool
+{
+    if ($companyId <= 0) {
+        return false;
+    }
+    $codes = [];
+    foreach ($groupCodes as $g) {
+        $g = strtoupper(trim((string) $g));
+        if ($g !== '') {
+            $codes[] = $g;
+        }
+    }
+    $codes = array_values(array_unique($codes));
+    if (empty($codes)) {
+        return false;
+    }
+
+    try {
+        if ($pdo->query("SHOW TABLES LIKE 'group_company_map'")->rowCount() > 0) {
+            $placeholders = implode(',', array_fill(0, count($codes), '?'));
+            $mapStmt = $pdo->prepare("
+                SELECT 1
+                FROM group_company_map gcm
+                INNER JOIN `groups` g ON g.id = gcm.group_id
+                WHERE gcm.company_id = ?
+                  AND UPPER(TRIM(g.group_code)) IN ($placeholders)
+                LIMIT 1
+            ");
+            $mapStmt->execute(array_merge([$companyId], $codes));
+            if ($mapStmt->fetchColumn()) {
+                return true;
+            }
+        }
+    } catch (Throwable $e) {
+        // fall through to native group check
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT UPPER(TRIM(group_id)) FROM company WHERE id = ? LIMIT 1');
+        $stmt->execute([$companyId]);
+        $nativeGid = (string) $stmt->fetchColumn();
+    } catch (Throwable $e) {
+        return false;
+    }
+
+    return $nativeGid !== '' && in_array($nativeGid, $codes, true);
+}
+
+/**
  * Whether the numeric company id is visible under the current login scope.
  * Group login: native group, group_company_map, ownership link, or view_group pill (IG tab).
  * Company login: caller should still validate owner/user_company_map; this returns true.
@@ -229,7 +283,29 @@ function gc_session_can_access_company_id(PDO $pdo, int $companyId, ?string $vie
     }
 
     if (!gc_is_group_login()) {
-        return true;
+        // Owners always keep full access.
+        $role = strtolower(trim((string) ($_SESSION['role'] ?? '')));
+        if ($role === 'owner') {
+            return true;
+        }
+        // Users explicitly scoped to specific companies (e.g. a supervisor mapped
+        // to a single company via user_company_map) may only access those companies,
+        // plus any company under a group they are assigned to. Users without an
+        // explicit per-company scope (group-assigned admins, unrestricted users,
+        // etc.) keep full access — preserving the previous behaviour.
+        $assignedCompanyIds = gc_session_assigned_company_ids();
+        if (empty($assignedCompanyIds)) {
+            return true;
+        }
+        if (in_array($companyId, $assignedCompanyIds, true)) {
+            return true;
+        }
+        $assignedGroupCodes = gc_session_assigned_group_codes();
+        if (!empty($assignedGroupCodes)
+            && gc_company_matches_group_codes($pdo, $companyId, $assignedGroupCodes)) {
+            return true;
+        }
+        return false;
     }
 
     $stmt = $pdo->prepare(

@@ -50,6 +50,19 @@ body *::-webkit-scrollbar-button:vertical:increment {
     height: 0;
 }
 
+html::-webkit-scrollbar-button:horizontal:decrement,
+html::-webkit-scrollbar-button:horizontal:increment,
+body::-webkit-scrollbar-button:horizontal:decrement,
+body::-webkit-scrollbar-button:horizontal:increment,
+body #root::-webkit-scrollbar-button:horizontal:decrement,
+body #root::-webkit-scrollbar-button:horizontal:increment,
+body *::-webkit-scrollbar-button:horizontal:decrement,
+body *::-webkit-scrollbar-button:horizontal:increment {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
 html::-webkit-scrollbar-track,
 body::-webkit-scrollbar-track,
 body #root::-webkit-scrollbar-track,

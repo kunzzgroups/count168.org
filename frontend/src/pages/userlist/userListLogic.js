@@ -253,6 +253,37 @@ export function computeRowCapabilities(row, currentUserId, currentUserRole) {
   return { canEditDelete, canDelete, canToggleStatus, isSelf, isSameLevel, isHigherLevel, isOwnerShadow };
 }
 
+function parseUserLastLogin(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const d = new Date(s.replace(" ", "T"));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Last Login 列：仅展示日期 YYYY-MM-DD */
+export function formatUserLastLoginDate(raw) {
+  const d = parseUserLastLogin(raw);
+  if (!d) {
+    const s = String(raw || "").trim();
+    return s || "-";
+  }
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** Last Login 悬浮提示：仅时间 HH:MM:SS */
+export function formatUserLastLoginTimeTitle(raw) {
+  const d = parseUserLastLogin(raw);
+  if (!d) return "";
+  const h = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  const sec = String(d.getSeconds()).padStart(2, "0");
+  return `${h}:${min}:${sec}`;
+}
+
 export function formatLastLogin(raw) {
   if (!raw) return "-";
   const s = String(raw).trim();

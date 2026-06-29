@@ -1,6 +1,26 @@
 import { formatSourcePercent } from "./formatSourcePercent.js";
 import { isSourceOne } from "./isMisplacedCommission.js";
 
+/** True when source is an arithmetic expression (e.g. 0.18/2), not a plain number. */
+function isArithmeticSourceExpression(value) {
+  const s = String(value ?? "").trim();
+  if (s === "") return false;
+  return /[+\-*/]/.test(s.replace(/^[+-]/, ""));
+}
+
+/**
+ * Source value as shown inside the formula's "*(...)" suffix.
+ * Arithmetic expressions are preserved verbatim (e.g. 0.18/2 → 0.18/2),
+ * matching the legacy PHP Summary display; plain numbers are formatted.
+ */
+export function formatSourceForFormulaSuffix(value) {
+  const s = String(value ?? "").trim();
+  if (isArithmeticSourceExpression(s)) {
+    return s.replace(/\s+/g, "");
+  }
+  return formatSourcePercent(s);
+}
+
 /** Formula column display = base + (source≠1 ? " * (source)" : "") */
 export function buildFormulaDisplayParenFromParts(base, sourcePercent, enableSourcePercent) {
   const b = String(base ?? "").trim();
@@ -8,7 +28,7 @@ export function buildFormulaDisplayParenFromParts(base, sourcePercent, enableSou
   const en = Number(enableSourcePercent) ? 1 : 0;
   if (!b) return "";
   if (!en || pct === "" || isSourceOne(pct)) return b;
-  return `${b} * (${formatSourcePercent(pct)})`;
+  return `${b} * (${formatSourceForFormulaSuffix(pct)})`;
 }
 
 /** Edit box holds formula base only — no Source suffix. */
@@ -32,7 +52,7 @@ export function createFormulaDisplayFromExpression(formula, sourcePercentValue, 
   const pct = String(sourcePercentValue).trim();
   if (isSourceOne(pct)) return trimmedFormula;
 
-  const formatted = formatSourcePercent(pct);
+  const formatted = formatSourceForFormulaSuffix(pct);
   const formulaTrimmed = trimmedFormula.replace(/\s+/g, "");
   const srcNorm = pct.replace(/\s+/g, "");
   const alreadyHas =

@@ -1432,7 +1432,7 @@ function mergeDetailOnlyTemplates(PDO $pdo, int $companyId, int $captureId, arra
     if (!empty($accountIds)) {
         $placeholders = implode(',', array_fill(0, count($accountIds), '?'));
         $accStmt = $pdo->prepare("
-            SELECT a.id, a.account_id AS code, a.name
+            SELECT a.id, a.account_id AS code, a.name, a.role
             FROM account a
             INNER JOIN account_company ac ON a.id = ac.account_id
             WHERE ac.company_id = ? AND a.id IN ($placeholders)
@@ -1442,7 +1442,8 @@ function mergeDetailOnlyTemplates(PDO $pdo, int $companyId, int $captureId, arra
             $id = (int)$row['id'];
             $code = $row['code'] ?? '';
             $name = $row['name'] ?? '';
-            $accountDisplayMap[$id] = $code !== '' && $name !== '' ? ($code . ' [' . $name . ']') : ($code ?: (string)$id);
+            $role = $row['role'] ?? '';
+            $accountDisplayMap[$id] = dcSummaryFormatAccountDisplay((string) $code, (string) $name, (string) $role, $id);
             $accountDisplayMap[(string)$id] = $accountDisplayMap[$id];
         }
     }
@@ -1555,7 +1556,8 @@ function resolveAccountDisplayInTemplatesForGroup(PDO $pdo, string $groupCode, a
         }
         $code = isset($row['account_id']) ? trim((string) $row['account_id']) : '';
         $name = isset($row['name']) ? trim((string) $row['name']) : '';
-        $label = ($code !== '' && $name !== '') ? ($code . ' [' . $name . ']') : ($code !== '' ? $code : (string) $id);
+        $role = isset($row['role']) ? trim((string) $row['role']) : '';
+        $label = dcSummaryFormatAccountDisplay($code, $name, $role, $id);
         $map[$id] = $map[(string) $id] = $label;
     }
     foreach ($templates as $key => &$group) {
@@ -1621,7 +1623,7 @@ function resolveAccountDisplayInTemplates(PDO $pdo, int $companyId, array &$temp
     }
     $placeholders = implode(',', array_fill(0, count($accountIds), '?'));
     $stmt = $pdo->prepare("
-        SELECT a.id, a.account_id AS code, a.name
+        SELECT a.id, a.account_id AS code, a.name, a.role
         FROM account a
         INNER JOIN account_company ac ON a.id = ac.account_id
         WHERE ac.company_id = ? AND a.id IN ($placeholders)
@@ -1632,7 +1634,8 @@ function resolveAccountDisplayInTemplates(PDO $pdo, int $companyId, array &$temp
         $id = (int)$row['id'];
         $code = isset($row['code']) ? trim((string)$row['code']) : '';
         $name = isset($row['name']) ? trim((string)$row['name']) : '';
-        $map[$id] = $map[(string)$id] = ($code !== '' && $name !== '') ? ($code . ' [' . $name . ']') : ($code !== '' ? $code : (string)$id);
+        $role = isset($row['role']) ? trim((string)$row['role']) : '';
+        $map[$id] = $map[(string)$id] = dcSummaryFormatAccountDisplay($code, $name, $role, $id);
     }
     foreach ($templates as $key => &$group) {
         if (!empty($group['main']['account_id'])) {
@@ -1907,14 +1910,15 @@ function inheritFormulasToSubAccounts(PDO $pdo, int $companyId, array $templates
         if (!empty($subAccountDisplayMap)) {
             $subIds = array_keys($subAccountDisplayMap);
             $placeholders = implode(',', array_fill(0, count($subIds), '?'));
-            $accStmt = $pdo->prepare("SELECT id, account_id, name FROM account WHERE id IN ($placeholders)");
+            $accStmt = $pdo->prepare("SELECT id, account_id, name, role FROM account WHERE id IN ($placeholders)");
             $accStmt->execute($subIds);
             foreach ($accStmt->fetchAll(PDO::FETCH_ASSOC) as $accRow) {
-                $display = trim((string)$accRow['account_id']);
-                if (!empty($accRow['name'])) {
-                    $display .= ' (' . trim((string)$accRow['name']) . ')';
-                }
-                $subAccountDisplayMap[(int)$accRow['id']] = $display;
+                $subAccountDisplayMap[(int)$accRow['id']] = dcSummaryFormatAccountDisplay(
+                    (string) ($accRow['account_id'] ?? ''),
+                    (string) ($accRow['name'] ?? ''),
+                    (string) ($accRow['role'] ?? ''),
+                    (int) ($accRow['id'] ?? 0)
+                );
             }
         }
 

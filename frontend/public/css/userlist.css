@@ -67,9 +67,42 @@ body.user-page:not(.user-page--show-all) .user-table-wrapper {
     min-height: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: 52px;
     box-sizing: border-box;
+}
+
+body.ec-auth-shell.user-page:not(.user-page--show-all) .user-table-wrapper.user-list-table {
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+}
+
+body.ec-auth-shell.user-page .user-list-table .user-list-table-header,
+body.ec-auth-shell.user-page .user-list-table .user-cards {
+    min-width: max(100%, var(--list-table-min-width, 980px));
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* 工具栏字号 / 药丸内边距（User 页，覆盖小屏 list-badge-scale 缩放） */
+body.ec-auth-shell.user-page .action-buttons .btn {
+    font-size: 1.4rem !important;
+}
+
+body.ec-auth-shell.user-page .user-gc-segment {
+    padding: 4px 18px !important;
+    font-size: 1.2rem !important;
+}
+
+body.ec-auth-shell.user-page .user-filter-chip {
+    font-size: 1.2rem !important;
+}
+
+body.ec-auth-shell.user-page .search-container.userlist-search-bar .userlist-search-input,
+body.ec-auth-shell.user-page .search-container.userlist-search-bar .userlist-search-input.search-input {
+    font-size: 1.2rem !important;
 }
 
 body.user-page:not(.user-page--show-all) .user-list-table .user-list-table-header {
@@ -116,7 +149,9 @@ body.user-page:not(.user-page--show-all) .user-list-table .user-list-table-heade
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: 52px;
     box-sizing: border-box;
 }
@@ -131,6 +166,9 @@ body.user-page:not(.user-page--show-all) .user-list-table .user-list-table-heade
  * 表头与数据行共用 grid 变量；完整显示 Action / Last Login / Created By 等标题
  */
 .user-list-table {
+    --list-table-min-width: 980px;
+    --user-list-row-min-height: 26px;
+    --user-list-pill-height: 20px;
     --user-list-grid-cols:
         38px
         minmax(92px, 1fr)
@@ -224,9 +262,9 @@ body.user-page .user-list-table .table-header.user-list-table-header {
     margin-top: 12px;
     background: linear-gradient(180deg, #60C1FE 0%, #0F61FF 100%);
     border-radius: 8px 8px 0 0;
-    font-weight: var(--userlist-weight-table-head);
+    font-weight: bold;
     color: white;
-    font-size: var(--userlist-text-table-head);
+    font-size: 1.6rem;
     font-family: inherit;
     min-width: 0;
 }
@@ -310,6 +348,69 @@ body.user-page .user-list-table .user-card.user-list-row {
     text-align: left;
     padding-left: 0 !important;
     padding-right: 0 !important;
+    overflow: visible;
+}
+
+.user-list-table .user-list-row .card-item--action .user-action-tools {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    vertical-align: middle;
+}
+
+/* Action 列：扁平图标 + hover 灰底方块 */
+.user-list-table .user-list-row .card-item--action .user-action-tools-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.user-list-table .user-list-row .card-item--action .user-action-tools-bar .user-edit-btn {
+    box-sizing: border-box;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #374151;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none;
+    transition: background 0.12s ease;
+    flex-shrink: 0;
+}
+
+.user-list-table .user-list-row .card-item--action .user-action-tools-bar .user-edit-btn:hover:not(:disabled) {
+    background: #c5ccd6;
+    color: #1f2937;
+    box-shadow: none;
+    transform: none;
+}
+
+.user-list-table .user-list-row .card-item--action .user-action-tools-bar .user-edit-btn:active:not(:disabled) {
+    background: #b3bbc7;
+    transform: none;
+}
+
+.user-list-table .user-list-row .card-item--action .user-action-tools-bar .user-edit-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+}
+
+body.ec-auth-shell.user-page .user-list-table .user-list-row .card-item--action .user-action-tools-bar .user-edit-btn img {
+    width: 16px !important;
+    height: 16px !important;
+    display: block;
+    object-fit: contain;
+    flex-shrink: 0;
+    filter: none;
 }
 
 .user-list-table .user-list-row .card-item--action .btn.btn-edit {
@@ -3294,7 +3395,8 @@ body.user-page:not(.user-page--show-all) .user-cards {
     width: 100%;
     min-height: 0;
     max-height: none;
-    overflow: hidden;
+    overflow-x: visible;
+    overflow-y: hidden;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -3303,15 +3405,17 @@ body.user-page:not(.user-page--show-all) .user-cards {
 body.user-page:not(.user-page--show-all) .user-cards.user-cards--paged-fill {
     display: grid;
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(25, minmax(0, 1fr));
-    flex: 1 1 auto;
+    grid-template-rows: repeat(var(--user-list-page-size, 15), minmax(0, 1fr));
+    flex: 1 1 0;
+    min-height: 0;
     align-content: stretch;
+    align-self: stretch;
 }
 
 body.user-page:not(.user-page--show-all) .user-cards.user-cards--paged-fill .user-list-row {
     flex: unset;
     min-height: 0;
-    height: auto;
+    height: 100%;
     align-items: center;
     align-self: stretch;
 }
@@ -3327,21 +3431,33 @@ body.user-page:not(.user-page--show-all) .user-list-table .user-list-row {
 
 body.user-page:not(.user-page--show-all) .user-list-row .card-item,
 body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .card-item {
-    font-size: var(--userlist-text-table-cell) !important;
-    font-weight: var(--userlist-weight-table-cell) !important;
-    line-height: var(--userlist-line-height-cell) !important;
+    font-size: 1.4rem !important;
+    font-weight: bold !important;
+    line-height: 1.1 !important;
     letter-spacing: 0 !important;
 }
 
 body.user-page:not(.user-page--show-all) .user-list-row .role-badge,
 body.ec-auth-shell.user-page:not(.user-page--show-all) .user-list-row .role-badge {
-    padding: clamp(0px, 0.1vw, 2px) clamp(4px, 0.42vw, 8px);
-    line-height: inherit;
-    font-size: var(--userlist-text-badge);
-    letter-spacing: 0.025em;
+    box-sizing: border-box;
+    height: var(--user-list-pill-height, 20px);
+    padding: 0 8px !important;
+    line-height: 1.1 !important;
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.02em !important;
+    border-radius: 6px !important;
     flex-shrink: 0;
     white-space: nowrap;
-    min-width: max-content;
+    min-width: max-content !important;
+    border-width: 1px !important;
+}
+
+body.user-page:not(.user-page--show-all) .user-list-row .card-item:has(.role-badge) {
+    overflow: visible;
+    text-overflow: clip;
+    flex-shrink: 0;
+    min-width: min-content;
 }
 
 /* 非 Show All：行高随内容；勿用 flex-grow 撑满半屏 */

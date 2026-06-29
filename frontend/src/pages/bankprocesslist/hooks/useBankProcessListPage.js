@@ -2393,6 +2393,7 @@ export function useBankProcessListPage() {
     enabled: !showAll,
     minRows: PAGE_SIZE_MIN,
     maxRows: PAGE_SIZE_MAX,
+    stableRowHeight: true,
     remeasureDeps: [
       visibleRows.length,
       tableLoading,

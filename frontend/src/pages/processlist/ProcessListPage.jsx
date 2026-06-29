@@ -29,8 +29,9 @@ import "../../../public/css/remove-word-chip.css";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
 import "../../../public/css/list-badge-scale.css";
+import { useAutoListPageSize } from "../../hooks/useAutoListPageSize.js";
+import { PAGE_SIZE_MAX, PAGE_SIZE_MIN } from "../../constants/listPageSize.js";
 import {
-  PAGE_SIZE,
   EMPTY_FORM,
   normalizeRows,
   dedupeCompanyRowsForSwitcher,
@@ -146,6 +147,7 @@ export default function ProcessListPage() {
   const activeCompanyIdRef = useRef(null);
   const companySessionAbortRef = useRef(null);
   const listPaginationCompanyRef = useRef(null);
+  const listRegionRef = useRef(null);
 
   const [existingProcesses, setExistingProcesses] = useState([]);
 
@@ -849,16 +851,47 @@ export default function ProcessListPage() {
     [rows, sortColumn, sortDirection],
   );
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(sortedDisplayRows.length / PAGE_SIZE)), [sortedDisplayRows]);
+  const showSelectColumn = showInactive || showAll;
+  const pageSize = useAutoListPageSize({
+    listRegionRef,
+    enabled: !showAll,
+    rowSelector: ".games-process-row",
+    headerSelector: ".games-process-table-header",
+    paginationSelector: ".pagination-container",
+    minRows: PAGE_SIZE_MIN,
+    maxRows: PAGE_SIZE_MAX,
+    stableRowHeight: true,
+    remeasureDeps: [
+      sortedDisplayRows.length,
+      showAll,
+      showInactive,
+      debouncedSearch,
+      lang,
+      currentPage,
+      loading,
+      awaitingRows,
+      companyId,
+      selectedGroup,
+      groupFilterKind,
+      showSelectColumn,
+    ],
+  });
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(sortedDisplayRows.length / pageSize)), [sortedDisplayRows.length, pageSize]);
   const effectivePage = useMemo(
     () => Math.min(Math.max(1, currentPage), totalPages),
     [currentPage, totalPages],
   );
+  useEffect(() => {
+    if (showAll) return;
+    setCurrentPage((p) => Math.min(p, totalPages));
+  }, [showAll, totalPages, pageSize]);
+
   const pageRows = useMemo(() => {
     if (showAll) return sortedDisplayRows;
-    const start = (effectivePage - 1) * PAGE_SIZE;
-    return sortedDisplayRows.slice(start, start + PAGE_SIZE);
-  }, [sortedDisplayRows, effectivePage, showAll]);
+    const start = (effectivePage - 1) * pageSize;
+    return sortedDisplayRows.slice(start, start + pageSize);
+  }, [sortedDisplayRows, effectivePage, pageSize, showAll]);
 
   const handleProcessTableSort = useCallback((column) => {
     setSortDirection((direction) => (sortColumn === column && direction === "asc" ? "desc" : "asc"));
@@ -1546,11 +1579,12 @@ export default function ProcessListPage() {
 
         <ProcessTable
           showAll={showAll}
-          showSelectColumn={showInactive || showAll}
+          showSelectColumn={showSelectColumn}
           suppressEmpty={awaitingRows || loading}
           pageRows={pageRows}
           currentPage={effectivePage}
-          PAGE_SIZE={PAGE_SIZE}
+          pageSize={pageSize}
+          listRegionRef={listRegionRef}
           sortColumn={sortColumn}
           sortDirection={sortDirection}
           onSort={handleProcessTableSort}

@@ -17,15 +17,20 @@ function normalizeSpaces(text) {
 
 /**
  * Account label for Summary UI — matches backend template display:
- * `CODE [Name]` when both exist (see resolveAccountDisplayInTemplates in summary_api.php).
+ * `CODE [Name]` when both exist; role=profit shows CODE only.
  */
 export function formatSummaryAccountDisplay(acc, fallbackId = "") {
-  const existing = String(acc?.account_display || acc?.account || "").trim();
-  if (existing) return existing;
-
   const code = String(acc?.account_id ?? acc?.code ?? "").trim();
   const name = String(acc?.name ?? "").trim();
   const id = String(acc?.id ?? fallbackId ?? "").trim();
+  const role = String(acc?.role ?? "").trim().toLowerCase();
+
+  if (role === "profit") {
+    return code || id;
+  }
+
+  const existing = String(acc?.account_display || acc?.account || "").trim();
+  if (existing) return existing;
 
   if (code && name) return `${code} [${name}]`;
   if (code) return code;

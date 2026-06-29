@@ -40,6 +40,8 @@ export const DATA_CAPTURE_I18N = {
     tableSizeAddColumns: "Add Columns",
     tableSizeAddSummary:
       "Rows: {currentRows} + {addRows} = {totalRows} · Cols: {currentCols} + {addCols} = {totalCols}",
+    tableExpand: "Expand table",
+    tableCollapse: "Exit expanded view",
     deleteRowData: "Delete Row Data",
     selectRowToDeleteData: "Select a row header to delete its data",
     pasteFormattedTableHint: "Paste a formatted table below",
@@ -154,6 +156,8 @@ export const DATA_CAPTURE_I18N = {
     tableSizeAddColumns: "新增列数",
     tableSizeAddSummary:
       "行：{currentRows} + {addRows} = {totalRows} · 列：{currentCols} + {addCols} = {totalCols}",
+    tableExpand: "展开表格",
+    tableCollapse: "退出展开",
     deleteRowData: "删除行数据",
     selectRowToDeleteData: "请先选择行标题以删除该行数据",
     pasteFormattedTableHint: "请在下方粘贴格式化表格",

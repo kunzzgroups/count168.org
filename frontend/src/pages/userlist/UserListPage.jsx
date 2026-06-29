@@ -42,6 +42,7 @@ import {
   canClearCompanySelection,
   canUseGroupOnlyMode,
   companyLoginRequiresSubsidiaryWithGroup,
+  filterCompaniesForAssignedScope,
   isCompanyLogin,
   isGroupLedgerMode,
   isGroupLogin,
@@ -58,13 +59,15 @@ import "../../../public/css/userlist.css";
 import "../../../public/css/admin-responsive.css";
 import "../../../public/css/select-unified.css";
 import "../../../public/css/list-badge-scale.css";
+import { useAutoListPageSize } from "../../hooks/useAutoListPageSize.js";
+import { PAGE_SIZE_MAX, PAGE_SIZE_MIN } from "../../constants/listPageSize.js";
 import {
   ALL_ROLE_OPTIONS,
-  PAGE_SIZE,
   PERMISSION_KEYS,
   applyUserFilters,
   computeRowCapabilities,
-  formatLastLogin,
+  formatUserLastLoginDate,
+  formatUserLastLoginTimeTitle,
   getAvailableRolesForCreation,
   getAvailableRolesForEdit,
   getCurrentUserRolePermissions,
@@ -253,6 +256,7 @@ export default function UserListPage() {
   const modalLoadSeqRef = useRef(0);
   const editUserDetailCacheRef = useRef(new Map());
   const editUserDetailPendingRef = useRef(new Map());
+  const listRegionRef = useRef(null);
   const bootInitializedRef = useRef(false);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -339,16 +343,51 @@ export default function UserListPage() {
     [me, currentUserId],
   );
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredSorted.length / PAGE_SIZE)), [filteredSorted.length]);
-
   /** 与顶部 chip 一致：仅「显示停用」或「显示全部」时展示批量删除勾选列（默认活跃分页不展示） */
   const showBulkDeleteColumn = showInactive || showAll;
 
+  const pageSize = useAutoListPageSize({
+    listRegionRef,
+    enabled: !showAll,
+    rowSelector: ".user-list-row",
+    headerSelector: ".user-list-table-header",
+    paginationSelector: ".pagination-container",
+    minRows: PAGE_SIZE_MIN,
+    maxRows: PAGE_SIZE_MAX,
+    stableRowHeight: true,
+    remeasureDeps: [
+      filteredSorted.length,
+      showAll,
+      showInactive,
+      search,
+      lang,
+      currentPage,
+      bootLoading,
+      companyId,
+      selectedGroup,
+      showBulkDeleteColumn,
+    ],
+  });
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredSorted.length / pageSize)),
+    [filteredSorted.length, pageSize],
+  );
+  const effectivePage = useMemo(
+    () => Math.min(Math.max(1, currentPage), totalPages),
+    [currentPage, totalPages],
+  );
+
+  useEffect(() => {
+    if (showAll) return;
+    setCurrentPage((p) => Math.min(p, totalPages));
+  }, [showAll, totalPages, pageSize]);
+
   const pageRows = useMemo(() => {
     if (showAll) return filteredSorted;
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredSorted.slice(start, start + PAGE_SIZE);
-  }, [filteredSorted, currentPage, showAll]);
+    const start = (effectivePage - 1) * pageSize;
+    return filteredSorted.slice(start, start + pageSize);
+  }, [filteredSorted, effectivePage, pageSize, showAll]);
 
   const permDisabledMap = useMemo(() => {
     const allowed = new Set(getCurrentUserRolePermissions(currentUserRole));
@@ -427,7 +466,10 @@ export default function UserListPage() {
           navigate(landing || spaPath("login"), { replace: true });
           return;
         }
-        const rows = (await fetchOwnerCompaniesAll()).map(normalizeCompanyRow);
+        const rows = filterCompaniesForAssignedScope(
+          (await fetchOwnerCompaniesAll()).map(normalizeCompanyRow),
+          me,
+        );
         if (cancelled) return;
         setCompanies(rows);
         applyLoginScopeToSessionStorageIfNeeded(me, rows);
@@ -2328,7 +2370,10 @@ export default function UserListPage() {
               showAllOption={false}
             />
           </div>
-          <div className={`user-table-wrapper user-list-table${showBulkDeleteColumn ? " user-table-wrapper--bulk-delete-col" : ""}`}>
+          <div
+            ref={listRegionRef}
+            className={`user-table-wrapper user-list-table${showBulkDeleteColumn ? " user-table-wrapper--bulk-delete-col" : ""}`}
+          >
             <div className="table-header user-list-table-header">
               <div
                 className="header-item header-item--with-sort-icon header-sortable"
@@ -2477,6 +2522,7 @@ export default function UserListPage() {
             </div>
             <div
               className={`user-cards${!showAll && pageRows.length > 0 ? " user-cards--paged-fill" : ""}`}
+              style={!showAll && pageRows.length > 0 ? { "--user-list-page-size": Math.max(pageSize, pageRows.length) } : undefined}
             >
               {pageRows.map((r, idx) => {
                 const caps = computeRowCapabilities(r, currentUserId, currentUserRole);
@@ -2484,26 +2530,34 @@ export default function UserListPage() {
                 const editReady = caps.canEditDelete;
                 return (
                   <div key={`${r.id}-${r.is_owner_shadow ? "o" : "u"}`} className={`user-card user-list-row show-card ${idx % 2 === 0 ? "row-even" : "row-odd"}`}>
-                    <div className="card-item">{showAll ? idx + 1 : (currentPage - 1) * PAGE_SIZE + idx + 1}</div>
+                    <div className="card-item">{showAll ? idx + 1 : (effectivePage - 1) * pageSize + idx + 1}</div>
                     <div className="card-item">{r.login_id}</div>
                     <div className="card-item">{r.name}</div>
                     <div className="card-item">{r.email || "-"}</div>
                     <div className="card-item"><span className={`role-badge ${roleBadgeClass(r.role)}`}>{formatUserRoleDisplay(t, r.role)}</span></div>
                     <div className="card-item"><span className={`role-badge ${normRole(r.status) === "active" ? "status-active" : "status-inactive"} ${caps.canToggleStatus && !userMutationsBlocked ? "status-clickable" : ""}`} onClick={() => !userMutationsBlocked && caps.canToggleStatus && toggleUserStatus(r)}>{formatUserStatusDisplay(t, r.status)}</span></div>
-                    <div className="card-item">{formatLastLogin(r.last_login)}</div>
+                    <div
+                      className="card-item"
+                      title={formatUserLastLoginTimeTitle(r.last_login) || undefined}
+                    >
+                      {formatUserLastLoginDate(r.last_login)}
+                    </div>
                     <div className="card-item">{String(r.created_by || "-").toUpperCase()}</div>
                     <div className="card-item card-item--action">
-                      <button
-                        type="button"
-                        className="btn btn-edit"
-                        onClick={() => openEdit(r)}
-                        disabled={!editReady || isUserEditBlockedByReadOnly(r)}
-                        aria-label={t("edit")}
-                        title={t("edit")}
-                        style={{ opacity: editReady && !isUserEditBlockedByReadOnly(r) ? 1 : 0.3 }}
-                      >
-                        <img src={assetUrl("images/edit.svg")} alt={t("edit")} />
-                      </button>
+                      <div className="user-action-tools">
+                        <div className="user-action-tools-bar">
+                          <button
+                            type="button"
+                            className="btn btn-edit user-edit-btn"
+                            onClick={() => openEdit(r)}
+                            disabled={!editReady || isUserEditBlockedByReadOnly(r)}
+                            aria-label={t("edit")}
+                            title={t("edit")}
+                          >
+                            <img src={assetUrl("images/edit.svg")} alt={t("edit")} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     {showBulkDeleteColumn && (
                       <div className="card-item card-item--select">
@@ -2533,9 +2587,9 @@ export default function UserListPage() {
           </div>
           {!showAll && (
             <div className="pagination-container">
-              <button className="pagination-btn" disabled={currentPage <= 1} onClick={() => setCurrentPage(p => p - 1)}>◀</button>
-            <span className="pagination-info">{t("paginationOf", { page: currentPage, total: totalPages })}</span>
-              <button className="pagination-btn" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>▶</button>
+              <button className="pagination-btn" disabled={effectivePage <= 1} onClick={() => setCurrentPage(p => p - 1)}>◀</button>
+            <span className="pagination-info">{t("paginationOf", { page: effectivePage, total: totalPages })}</span>
+              <button className="pagination-btn" disabled={effectivePage >= totalPages} onClick={() => setCurrentPage(p => p + 1)}>▶</button>
             </div>
           )}
         </div>

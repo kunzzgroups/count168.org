@@ -2061,6 +2061,59 @@ body.datacapture-page .excel-table-scroll-body .excel-table tbody td {
     font-size: clamp(12px, 0.94vw, 18px);
     font-weight: 700;
     color: #0f172a;
+    position: relative;
+}
+
+.dc-table-expand-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    z-index: 30;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: 1px solid var(--dc-border, #e2e8f0);
+    border-radius: 6px;
+    background: #fff;
+    color: #475569;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 0;
+    touch-action: manipulation;
+}
+
+.dc-table-expand-btn svg {
+    pointer-events: none;
+}
+
+.dc-table-expand-btn:hover {
+    border-color: var(--dc-accent, #2563eb);
+    color: var(--dc-accent, #2563eb);
+    background: var(--dc-accent-soft, #eff6ff);
+}
+
+.dc-table-expand-btn[aria-pressed="true"] {
+    border-color: var(--dc-accent, #2563eb);
+    color: var(--dc-accent, #2563eb);
+    background: var(--dc-accent-soft, #eff6ff);
+}
+
+body.datacapture-page.datacapture-table-expanded .dc-page-toolbar,
+body.datacapture-page.datacapture-table-expanded .top-section {
+    display: none !important;
+}
+
+body.datacapture-page.datacapture-table-expanded .container {
+    gap: 8px;
+}
+
+body.datacapture-page.datacapture-table-expanded .bottom-section {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .excel-table-header .dc-table-header-main {
@@ -2108,6 +2161,7 @@ body.datacapture-page .excel-table-container--group-only {
     position: relative;
     flex: 0 0 auto;
     margin-left: auto;
+    margin-right: 42px;
 }
 
 .dc-table-size-trigger-row {

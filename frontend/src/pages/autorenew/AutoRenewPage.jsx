@@ -39,7 +39,6 @@ import {
   useAutoRenewDateRangeState,
 } from "./hooks/useAutoRenewDateRange.js";
 import {
-  AUTO_RENEW_PAGE_SIZE,
   canApproveRow,
   canDeleteRow,
   filterAutoRenewRows,
@@ -47,12 +46,13 @@ import {
   formatSubmitterAt,
   getAutoRenewApproveDisabledReason,
   getRowDraftValues,
-  paginateRows,
   periodToLabelKey,
   resolveAutoRenewDisplayPrice,
   rowStableKey,
   sortAutoRenewRows,
 } from "./autoRenewPageHelpers.js";
+import { useAutoListPageSize } from "../../hooks/useAutoListPageSize.js";
+import { PAGE_SIZE_MAX, PAGE_SIZE_MIN } from "../../constants/listPageSize.js";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
 import "../../../public/css/admin-responsive.css";
@@ -171,6 +171,7 @@ export default function AutoRenewPage() {
   const [settingsModal, setSettingsModal] = useState(null);
   const [commLoadingKey, setCommLoadingKey] = useState(null);
   const [domainPeriodPrices, setDomainPeriodPrices] = useState(null);
+  const listRegionRef = useRef(null);
 
   const notify = useCallback((message, type = "success") => {
     const id = Date.now();
@@ -545,15 +546,54 @@ export default function AutoRenewPage() {
     () => sortAutoRenewRows(filterAutoRenewRows(rows, { searchTerm }), sortColumn, sortDirection),
     [rows, searchTerm, sortColumn, sortDirection],
   );
+  const showSubmitterColumn = statusFilter === "approved" || statusFilter === "rejected";
 
-  const pagination = useMemo(
-    () => paginateRows(filteredRows, currentPage, AUTO_RENEW_PAGE_SIZE),
-    [filteredRows, currentPage],
+  const pageSize = useAutoListPageSize({
+    listRegionRef,
+    enabled: !showAll,
+    rowSelector: ".auto-renew-table-row",
+    headerSelector: ".auto-renew-table-header",
+    paginationSelector: ".pagination-container",
+    minRows: Math.max(PAGE_SIZE_MIN, 15),
+    maxRows: PAGE_SIZE_MAX,
+    stableRowHeight: true,
+    remeasureDeps: [
+      filteredRows.length,
+      showAll,
+      statusFilter,
+      entityTab,
+      searchTerm,
+      sortColumn,
+      sortDirection,
+      showSubmitterColumn,
+      listRefreshing,
+      bootLoading,
+      lang,
+    ],
+  });
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredRows.length / pageSize)),
+    [filteredRows.length, pageSize],
   );
 
+  const effectivePage = useMemo(
+    () => Math.min(Math.max(1, currentPage), totalPages),
+    [currentPage, totalPages],
+  );
+
+  useEffect(() => {
+    if (showAll) return;
+    setCurrentPage((p) => Math.min(p, totalPages));
+  }, [showAll, totalPages, pageSize]);
+
   const displayRows = useMemo(
-    () => (showAll ? filteredRows : pagination.rows),
-    [showAll, filteredRows, pagination.rows],
+    () => {
+      if (showAll) return filteredRows;
+      const start = (effectivePage - 1) * pageSize;
+      return filteredRows.slice(start, start + pageSize);
+    },
+    [showAll, filteredRows, effectivePage, pageSize],
   );
 
   const renderSortIcon = (column) => (
@@ -681,8 +721,6 @@ export default function AutoRenewPage() {
     );
   };
 
-  const showSubmitterColumn = statusFilter === "approved" || statusFilter === "rejected";
-
   if (loadError) {
     return (
       <div className="auto-renew-page">
@@ -809,6 +847,7 @@ export default function AutoRenewPage() {
           )}
 
           <div
+            ref={listRegionRef}
             className={`user-table-wrapper user-list-table auto-renew-table${showSubmitterColumn ? " auto-renew-table--with-submitter" : ""}`}
           >
             <div className="user-list-table-inner auto-renew-table-inner">
@@ -826,14 +865,18 @@ export default function AutoRenewPage() {
                 {showSubmitterColumn ? renderHeader("submitter", t("colSubmitter")) : null}
               </div>
 
-              <div className="user-cards auto-renew-cards" aria-busy={listRefreshing || Boolean(busyRequestId)}>
+              <div
+                className={`user-cards auto-renew-cards${!showAll && displayRows.length > 0 ? " auto-renew-cards--paged-fill" : ""}`}
+                aria-busy={listRefreshing || Boolean(busyRequestId)}
+                style={!showAll && displayRows.length > 0 ? { "--auto-renew-page-size": Math.max(pageSize, displayRows.length, 15) } : undefined}
+              >
                 {displayRows.length === 0 ? (
                   <EmptyState statusFilter={statusFilter} searchTerm={searchTerm} t={t} />
                 ) : (
                   displayRows.map((row, idx) => {
                     const globalIdx = showAll
                       ? idx + 1
-                      : (pagination.page - 1) * AUTO_RENEW_PAGE_SIZE + idx + 1;
+                      : (effectivePage - 1) * pageSize + idx + 1;
                     const isPendingEditable = row.status === "pending" && canEditGlobal && !row.is_payment_deleted;
                     const draft = getRowDraftValues(row, rowDrafts);
                     const displayPrice = resolveAutoRenewDisplayPrice(row, rowDrafts, feeSettings);
@@ -898,19 +941,19 @@ export default function AutoRenewPage() {
               <button
                 type="button"
                 className="pagination-btn"
-                disabled={pagination.page <= 1}
+                disabled={effectivePage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 aria-label={t("prevPage")}
               >
                 ◀
               </button>
               <span className="pagination-info">
-                {t("paginationOf", { page: pagination.page, total: pagination.totalPages })}
+                {t("paginationOf", { page: effectivePage, total: totalPages })}
               </span>
               <button
                 type="button"
                 className="pagination-btn"
-                disabled={pagination.page >= pagination.totalPages}
+                disabled={effectivePage >= totalPages}
                 onClick={() => setCurrentPage((p) => p + 1)}
                 aria-label={t("nextPage")}
               >

@@ -3,10 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { assetUrl } from "../../utils/core/apiUrl.js";
 import { applyLoginLang, useLoginLang } from "../../utils/i18n/useLoginLang.js";
 import { MAINTENANCE_I18N } from "../../translateFile/pages/maintenanceTranslate.js";
+import { TRANSACTION_I18N } from "../../translateFile/pages/transactionTranslate.js";
 import { formatMemberRowDescription, getMemberText } from "../../translateFile/pages/memberTranslate.js";
 import SidebarLangSwitch from "../../components/SidebarLangSwitch.jsx";
 import SidebarMenuTooltip from "../../components/SidebarMenuTooltip.jsx";
 import ReportDatePicker from "../report/common/ReportDatePicker.jsx";
+import PaymentHistoryExportPdfModal from "../transaction/components/PaymentHistoryExportPdfModal.jsx";
 import {
   buildMaintenancePeriodPresets,
   formatDmyFromDate,
@@ -19,6 +21,7 @@ import "../../../public/css/userlist.css";
 import "../../../public/css/date-range-picker.css";
 import "../../../public/css/report-outlined-fields.css";
 import "../../../public/css/transaction.css";
+import "../transaction/transactionPaymentHistoryPage.css";
 import AvatarPickerModal from "../../components/AvatarPickerModal.jsx";
 import ConfirmLogoutModal from "../../components/ConfirmLogoutModal.jsx";
 import ExpirationReminderModal from "../../components/ExpirationReminderModal.jsx";
@@ -62,6 +65,9 @@ export default function MemberPage() {
   const [accountLayout, setAccountLayout] = useState({ containerWidth: 0, segmentWidths: [] });
   const [currencyLayout, setCurrencyLayout] = useState({ containerWidth: 0, segmentWidths: [] });
   const [notifications, setNotifications] = useState([]);
+  const [exportPdfOpen, setExportPdfOpen] = useState(false);
+  const onOpenExportPdf = useCallback(() => setExportPdfOpen(true), []);
+  const onCloseExportPdf = useCallback(() => setExportPdfOpen(false), []);
 
   const showNotification = useCallback((message, type = "info") => {
     if (!message) return;
@@ -260,6 +266,64 @@ export default function MemberPage() {
 
   const periodPresets = useMemo(() => buildMaintenancePeriodPresets(maintenanceLocale), [maintenanceLocale]);
 
+  const exportMessages = useMemo(() => {
+    const base = TRANSACTION_I18N[lang] || TRANSACTION_I18N.en;
+    return {
+      ...base,
+      exportPdf: t("exportPdf"),
+      exportPdfTitle: t("exportPdfTitle"),
+      exportPdfHint: t("exportPdfHint"),
+      exportPdfCurrency: t("exportPdfCurrency"),
+      exportPdfDateRange: t("exportPdfDateRange"),
+      exportPdfSelectDateRange: t("exportPdfSelectDateRange"),
+      exportPdfSelectEndDate: t("exportPdfSelectEndDate"),
+      exportPdfPeriod: t("exportPdfPeriod"),
+      exportPdfCancel: t("exportPdfCancel"),
+      exportPdfExporting: t("exportPdfExporting"),
+      exportPdfFailed: t("exportPdfFailed"),
+      exportPdfPopupBlocked: t("exportPdfPopupBlocked"),
+      exportPdfLoadCurrenciesFailed: t("exportPdfLoadCurrenciesFailed"),
+      exportPdfNoCurrencies: t("exportPdfNoCurrencies"),
+      exportPdfMissingAccount: t("exportPdfMissingAccount"),
+      pleaseSelectDateRange: t("pleaseSelectDateRange"),
+      pleaseSelectCurrency: t("pleaseSelectCurrency"),
+      close: t("close"),
+      loading: t("loading"),
+    };
+  }, [lang, t]);
+
+  const exportScope = useMemo(() => {
+    const acc = linkedAccounts.find((row) => Number(row.id) === Number(viewAccountId));
+    const currencyPref = isAllSelected
+      ? selectedCurrencies[0] || availableCurrencies[0] || ""
+      : selectedCurrencies[0] || availableCurrencies[0] || "";
+    return {
+      accountDbId: viewAccountId,
+      companyId,
+      dateFrom,
+      dateTo,
+      currency: currencyPref,
+      accountCode: String(acc?.account_id || "").trim(),
+      accountName: String(acc?.name || acc?.account_name || "").trim(),
+    };
+  }, [
+    linkedAccounts,
+    viewAccountId,
+    companyId,
+    dateFrom,
+    dateTo,
+    isAllSelected,
+    selectedCurrencies,
+    availableCurrencies,
+  ]);
+
+  const exportAccountTitle = useMemo(() => {
+    const code = exportScope.accountCode;
+    const name = exportScope.accountName;
+    if (code && name && name !== code) return `${code} (${name})`;
+    return code || name || "";
+  }, [exportScope.accountCode, exportScope.accountName]);
+
   const handleDateRangeChange = useCallback(
     (start, end) => {
       setDateFrom(formatDmyFromYmd(start));
@@ -429,22 +493,43 @@ export default function MemberPage() {
               style={wlFiltersSyncPx != null ? { ["--member-winloss-filters-h"]: `${wlFiltersSyncPx}px` } : undefined}
             >
               <div className="member-dash-col member-dash-col-filters" ref={wlFiltersColRef}>
-            <div className="member-winloss-date-field">
-              <ReportDatePicker
-                dateFrom={parseDmy(dateFrom || todayDmy)}
-                dateTo={parseDmy(dateTo || todayDmy)}
-                onRangeChange={handleDateRangeChange}
-                containerClass="customer-report-filter-group"
-                label={t("dateRange")}
-                placeholder={t("selectDateRange")}
-                selectEndDateHint={t("selectEndDate")}
-                outlinedFloatingLabel
-                captureDateStyle
-                periodPresets={periodPresets}
-                periodShortcutsAria={t("period")}
-                monthLabels={maintenanceLocale.monthsShort}
-                weekdaysShort={maintenanceLocale.weekdaysShort}
-              />
+            <div className="member-winloss-date-export-row">
+              <div className="member-winloss-date-field">
+                <ReportDatePicker
+                  dateFrom={parseDmy(dateFrom || todayDmy)}
+                  dateTo={parseDmy(dateTo || todayDmy)}
+                  onRangeChange={handleDateRangeChange}
+                  containerClass="customer-report-filter-group"
+                  label={t("dateRange")}
+                  placeholder={t("selectDateRange")}
+                  selectEndDateHint={t("selectEndDate")}
+                  outlinedFloatingLabel
+                  captureDateStyle
+                  periodPresets={periodPresets}
+                  periodShortcutsAria={t("period")}
+                  monthLabels={maintenanceLocale.monthsShort}
+                  weekdaysShort={maintenanceLocale.weekdaysShort}
+                />
+              </div>
+              <button
+                type="button"
+                className="member-winloss-export-pdf-btn"
+                aria-label={t("exportPdf")}
+                title={t("exportPdf")}
+                disabled={!viewAccountId || !companyId}
+                onClick={onOpenExportPdf}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinejoin="round"
+                  />
+                  <path d="M15 3v5h5" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
+                  <path d="M9 12h6M9 16h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                </svg>
+              </button>
             </div>
             <div className="user-gc-inline-panel member-winloss-gc-panel" id="member_gc_filter_panel">
               {companies.length > 1 && (
@@ -801,6 +886,16 @@ export default function MemberPage() {
         maleLabel={t("male")}
         femaleLabel={t("female")}
         cancelLabel={t("cancel")}
+      />
+
+      <PaymentHistoryExportPdfModal
+        open={exportPdfOpen}
+        onClose={onCloseExportPdf}
+        scope={exportScope}
+        accountTitle={exportAccountTitle}
+        messages={exportMessages}
+        pickerInstanceId="member-export"
+        shareCalendarPopup
       />
 
       <ConfirmLogoutModal
