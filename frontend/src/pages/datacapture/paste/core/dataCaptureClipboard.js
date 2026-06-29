@@ -169,19 +169,63 @@ export function getTopLevelTables(root) {
   });
 }
 
+/** The table with the most td/th cells (the real data table). */
+function pickLargestTable(tables) {
+  let best = null;
+  let bestScore = -1;
+  tables.forEach((t) => {
+    const score = t.querySelectorAll("td, th").length;
+    if (score > bestScore) {
+      bestScore = score;
+      best = t;
+    }
+  });
+  return best;
+}
+
+/** Widest row's column count (colspan-aware). */
+function tableColCount(table) {
+  let maxCols = 0;
+  table.querySelectorAll("tr").forEach((tr) => {
+    maxCols = Math.max(maxCols, countRowCols(tr));
+  });
+  return maxCols;
+}
+
 /**
- * Stack the rows of every top-level table vertically. Some reports (e.g. the
- * MarioClub Win-Lose report) render the data rows and the TOTAL footer row in
- * separate sibling tables; reading only the first table would drop the TOTAL
- * row. Matches the PHP site, which keeps every copied row.
+ * Pick the real data table and the rows to paste.
+ *
+ * - The largest table (most cells) is the data table. When a report wraps the
+ *   real table inside a single cell of an outer layout table (e.g. the M8BET
+ *   Win-Lose report), this drills into the nested table instead of dumping the
+ *   whole table into one cell.
+ * - Only when the data table is itself top-level do we also stack sibling
+ *   top-level tables that have the SAME column count — this keeps the MarioClub
+ *   report's separate TOTAL footer table while ignoring unrelated side tables
+ *   (which have a different column count).
  */
 export function measureTopLevelTables(root) {
-  const tables = getTopLevelTables(root);
-  if (!tables.length) return null;
+  const allTables = Array.from(root.querySelectorAll("table"));
+  if (!allTables.length) return null;
+
+  const primary = pickLargestTable(allTables);
+  if (!primary) return null;
+
+  const topTables = getTopLevelTables(root);
+  const primaryIsTopLevel = topTables.includes(primary);
+
+  let tablesToStack;
+  if (primaryIsTopLevel) {
+    const primaryCols = tableColCount(primary);
+    tablesToStack = topTables.filter((t) => tableColCount(t) === primaryCols);
+    if (!tablesToStack.includes(primary)) tablesToStack.push(primary);
+  } else {
+    tablesToStack = [primary];
+  }
 
   const allRows = [];
   let maxCols = 0;
-  tables.forEach((table) => {
+  tablesToStack.forEach((table) => {
     table.querySelectorAll("tr").forEach((tr) => {
       allRows.push(tr);
       maxCols = Math.max(maxCols, countRowCols(tr));
