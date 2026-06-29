@@ -27,22 +27,30 @@ export default function SimpleSelect({
   dropdownCap = 260,
   minWidth = 180,
   forcePortal = false,
+  searchable = false,
+  searchPlaceholder = "",
+  noResultsText = "No results",
 }) {
   const [open, setOpen] = useState(false);
   const [usePortal, setUsePortal] = useState(false);
   const [menuStyle, setMenuStyle] = useState(null);
   const [menuPlacement, setMenuPlacement] = useState("below");
   const [optionsMaxHeight, setOptionsMaxHeight] = useState(240);
+  const [q, setQ] = useState("");
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
+  const searchRef = useRef(null);
 
   const renderItems = useMemo(() => {
     const items = [];
-    if (includeEmptyOption) {
+    const query = searchable ? q.trim().toLowerCase() : "";
+    // While searching keep the placeholder hidden so only matches show.
+    if (includeEmptyOption && !query) {
       items.push({ kind: "empty", key: "__empty__", value: "", label: placeholder });
     }
     for (const opt of options) {
+      if (query && !String(opt.label ?? "").toLowerCase().includes(query)) continue;
       items.push({
         kind: opt.disabled ? "disabled" : "option",
         key: String(opt.value),
@@ -52,7 +60,7 @@ export default function SimpleSelect({
       });
     }
     return items;
-  }, [includeEmptyOption, options, placeholder]);
+  }, [includeEmptyOption, options, placeholder, searchable, q]);
 
   const selectableItems = useMemo(
     () => renderItems.filter((item) => item.kind !== "disabled"),
@@ -64,16 +72,18 @@ export default function SimpleSelect({
     return idx >= 0 ? idx : 0;
   }, [selectableItems, value]);
 
-  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, handleListKeyDown, highlightClass } = useListboxKeyboard({
     open,
     itemCount: selectableItems.length,
     initialIndex: initialHighlight,
+    resetToken: searchable ? q : null,
   });
 
   const close = useCallback(() => {
     setOpen(false);
     setMenuStyle(null);
-  }, []);
+    if (searchable) setQ("");
+  }, [searchable]);
 
   const positionMenu = useCallback(() => {
     const btn = buttonRef.current;
@@ -118,6 +128,12 @@ export default function SimpleSelect({
     };
   }, [open, close]);
 
+  useEffect(() => {
+    if (!open || !searchable) return undefined;
+    const timer = window.setTimeout(() => searchRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [open, searchable]);
+
   const selected = options.find((opt) => String(opt.value) === String(value));
   const displayLabel = selected ? selected.label : placeholder;
   const showPlaceholderTone = !selected && placeholder;
@@ -128,6 +144,7 @@ export default function SimpleSelect({
     const shouldPortal = forcePortal || inModal;
     setUsePortal(shouldPortal);
     if (!shouldPortal) setMenuPlacement("below");
+    if (searchable) setQ("");
     setOpen(true);
     if (shouldPortal) positionMenu();
   };
@@ -176,11 +193,34 @@ export default function SimpleSelect({
       role="listbox"
       id={id ? `${id}_dropdown` : undefined}
     >
+      {searchable ? (
+        <div className="custom-select-search">
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder={searchPlaceholder || placeholder}
+            autoComplete="off"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                close();
+                return;
+              }
+              handleListKeyDown(e, { len: selectableItems.length, onSelectIndex: selectByIndex, onClose: close });
+            }}
+          />
+        </div>
+      ) : null}
       <div
         ref={listRef}
         className="custom-select-options"
         style={usePortal ? { flex: "1 1 auto", minHeight: 0, maxHeight: optionsMaxHeight } : { maxHeight: optionsMaxHeight }}
       >
+        {searchable && selectableItems.length === 0 ? (
+          <div className="custom-select-no-results">{noResultsText}</div>
+        ) : null}
         {renderItems.map((item) => {
           if (item.kind === "disabled") {
             return (

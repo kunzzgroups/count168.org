@@ -1000,8 +1000,10 @@ function stripTrailingEmbeddedCommissionFactors(expr, sourceDecimal, options) {
                 if (hasBinaryAdditiveAtDepthZero(nextPrefix)) {
                     break
                 }
+                // 只剥一份与 Source 重复的尾乘子；公式自身相同系数(如 *0.10)必须保留，
+                // 否则 *0.10*(0.1) 会被剥成两份，少乘一次。
                 s = nextPrefix
-                continue
+                break
             }
         }
         const mStar = s.match(/^(.*)\*([0-9.]+)$/)
@@ -1012,8 +1014,10 @@ function stripTrailingEmbeddedCommissionFactors(expr, sourceDecimal, options) {
                 if (hasBinaryAdditiveAtDepthZero(nextPrefix)) {
                     break
                 }
+                // 只剥一份与 Source 重复的尾乘子；公式自身相同系数(如 *0.10)必须保留，
+                // 否则 *0.10*(0.1) 会被剥成两份，少乘一次。
                 s = nextPrefix
-                continue
+                break
             }
         }
         break

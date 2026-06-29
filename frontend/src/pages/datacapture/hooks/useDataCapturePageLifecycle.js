@@ -31,6 +31,9 @@ export function useDataCapturePageLifecycle({
 
     const urlParams = new URLSearchParams(window.location.search);
     const shouldRestore = shouldRestoreFromUrl();
+    if (!shouldRestore) {
+      getDataCaptureState().restoreCompleted = false;
+    }
     const alreadyInit = dcFormGate.dataset.dcPageInit === "1";
 
     clearStaleFormatPreviewForFreshEntry(shouldRestore);

@@ -397,6 +397,10 @@ export default function AuthenticatedLayout() {
     let cancelled = false;
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), 25000);
+    const initialPathname = typeof window !== "undefined" ? window.location.pathname : "";
+    if (pathnameToPageKey(initialPathname) === "dashboard") {
+      prefetchRouteModule(initialPathname);
+    }
     (async () => {
       try {
         const res = await fetch(buildApiUrl("api/session/current_user_api.php"), {
@@ -887,6 +891,7 @@ export default function AuthenticatedLayout() {
     };
 
     const runIdleWarm = () => {
+      if (pageKey === "dashboard") return;
       runCompanies();
       runProcessListWarm();
       if (pathnameIs("dashboard", path) || pathnameIs("account-list", path)) {
@@ -898,12 +903,12 @@ export default function AuthenticatedLayout() {
     };
 
     if (typeof window.requestIdleCallback === "function") {
-      const idleId = window.requestIdleCallback(runIdleWarm, { timeout: 2500 });
+      const idleId = window.requestIdleCallback(runIdleWarm, { timeout: 5000 });
       return () => window.cancelIdleCallback(idleId);
     }
-    const timerId = window.setTimeout(runIdleWarm, 300);
+    const timerId = window.setTimeout(runIdleWarm, 2000);
     return () => window.clearTimeout(timerId);
-  }, [loading, me, path]);
+  }, [loading, me, pageKey, path]);
 
   useEffect(() => {
     const root = menuContentRef.current;

@@ -125,7 +125,17 @@ export default function EditFormulaModal({
       aria-labelledby="edit-formula-title"
     >
       <div className="summary-confirm-modal-content" id="editFormulaModalContent">
-        <div id="editFormulaForm" className="edit-formula-form-container">
+        <div
+          id="editFormulaForm"
+          className="edit-formula-form-container"
+          onKeyDown={(e) => {
+            // Enter = Save（账户下拉/数据网格已 preventDefault，故跳过；下拉打开时不触发）
+            if (e.key !== "Enter" || e.defaultPrevented || accountOpen) return
+            if (saveDisabled || saving) return
+            e.preventDefault()
+            onSave?.()
+          }}
+        >
           <div className="form-header">
             <h3 id="edit-formula-title">{t("editFormula")}</h3>
             <button type="button" className="account-close" onClick={onClose} aria-label={t("close")} />

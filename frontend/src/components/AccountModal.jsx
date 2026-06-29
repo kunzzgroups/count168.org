@@ -340,6 +340,9 @@ export default function AccountModal({
                   onChange={(v) => setForm((f) => ({ ...f, role: v }))}
                   options={roleOptions}
                   placeholder={text("selectRole")}
+                  searchable
+                  searchPlaceholder={text("searchRole")}
+                  noResultsText={text("noRolesFound")}
                   required
                 />
               </div>
