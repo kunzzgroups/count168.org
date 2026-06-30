@@ -175,7 +175,7 @@ export default function ProcessFormModal({
                               autoComplete="off"
                               value={copySearch}
                               disabled={ro}
-                              onChange={(e) => setCopySearch(e.target.value)}
+                              onChange={(e) => setCopySearch(e.target.value.toUpperCase())}
                               onKeyDown={(e) => {
                                 copyKeyboard.handleListKeyDown(e, {
                                   len: copyListCount,

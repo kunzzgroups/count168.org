@@ -134,7 +134,7 @@ export default function ProcessSelect({
               autoComplete="off"
               value={searchTerm}
               onChange={(e) => {
-                setSearchTerm(e.target.value);
+                setSearchTerm(e.target.value.toUpperCase());
               }}
               onKeyDown={handleKeyDown}
               ref={searchInputRef}
