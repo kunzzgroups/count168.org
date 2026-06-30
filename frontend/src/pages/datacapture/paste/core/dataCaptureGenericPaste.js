@@ -54,12 +54,12 @@ export function handleGenericPaste(e, pastedData) {
             }
         }
 
-        // 通用多行表格数据处理：如果HTML解析失败，但数据是多行制表符分隔的，使用简单分割
+        // 通用 TSV 表格数据处理：支持 Excel 单行 / 多行复制。
         const normalizedData = pastedData.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         const lines = normalizedData.split('\n').map(line => line.trim()).filter(line => line !== '');
 
-        // 检查是否是多行制表符分隔的数据（标准表格格式，如从Excel复制）
-        if (lines.length >= 2) {
+        // 检查是否是制表符分隔的数据（标准表格格式，如从Excel复制）
+        if (lines.length >= 1) {
             const hasTabSeparator = lines.some(line => line.includes('\t'));
 
             if (hasTabSeparator) {

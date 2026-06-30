@@ -26,6 +26,10 @@ export const CAPTURE_RESTORE_BOOT_KEY = "dc_capture_restore_boot";
 
 export { normalizeStoredCaptureType, isCitibetCaptureType };
 
+function toPhpStoredCaptureType(captureType) {
+  return captureType === "CITIBET" ? "CITIBET_MAJOR" : captureType;
+}
+
 function captureStorageKeys(scope) {
   const suffix = dataCaptureScopeCacheCompanyKey(scope);
   if (suffix == null) {
@@ -80,7 +84,9 @@ function migrateLegacyStorageToScope(scope) {
 }
 
 export function saveCaptureSession(tableData, processData, captureType, context = {}) {
-  const type = normalizeStoredCaptureType(captureType || processData?.dataCaptureType) || "1.Text";
+  const type = toPhpStoredCaptureType(
+    normalizeStoredCaptureType(captureType || processData?.dataCaptureType) || "1.Text",
+  );
   const groupPayrollUi = context.groupPayrollUi === true || context.groupOnly === true;
   const groupLedgerCapture = context.groupOnly === true && context.groupPayrollCapture !== true;
   const groupPayrollCapture = context.groupPayrollCapture === true;

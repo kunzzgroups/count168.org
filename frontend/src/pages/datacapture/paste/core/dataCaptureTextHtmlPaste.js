@@ -1,11 +1,9 @@
 import { applyDataMatrixToGrid, notifyPasteSuccess } from "./dataCapturePasteApply.js";
 import { recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 import {
-  detectColumnReorder,
   measureTopLevelTables,
   sanitizePastedCellHtml,
 } from "./dataCaptureClipboard.js";
-import { alignTotalRowsInMatrix } from "./dataCaptureTotalRowAlign.js";
 
 function emptyPatch() {
   return { value: "" };
@@ -48,9 +46,7 @@ function buildRowPatches(sourceRow, maxCols, columnOrder) {
       ? columnOrder.map((i) => rawCells[i])
       : Array.from(rawCells);
 
-  // Match PHP 1.TEXT: place each source cell left-to-right, one column each,
-  // ignoring colspan. Expanding colspan into blank columns would push a
-  // spanning label row (e.g. "SUB (MYR)") one column to the right of PHP.
+  // 1.Text follows Excel's visible left-to-right cell order without report fixes.
   sourceCells.forEach((sourceCell, index) => {
     if (index < maxCols) {
       row[index] = patchFromSourceCell(sourceCell);
@@ -79,13 +75,12 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
     if (!measured) return false;
 
     const { allRows, maxCols } = measured;
-    const columnOrder = detectColumnReorder(allRows);
-    const dataMatrix = allRows.map((sourceRow) => buildRowPatches(sourceRow, maxCols, columnOrder));
-    const alignedMatrix = alignTotalRowsInMatrix(dataMatrix);
+    const dataMatrix = allRows.map((sourceRow) => buildRowPatches(sourceRow, maxCols, null));
 
-    const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(alignedMatrix, anchorCell, {
+    const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
       trimValues: false,
       uppercaseValues: false,
+      alignTotalRows: false,
     });
 
     if (successCount > 0) {

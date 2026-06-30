@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EDIT_FORMULA_INPUT_METHODS, CALCULATOR_KEYPAD } from "../formula/editFormulaConstants.js";
 import { formatSummaryAccountDisplay } from "../formula/editFormulaFormState.js";
 import { getSummaryInputMethodLabel } from "../../../translateFile/pages/dataCaptureSummaryTranslate.js";
@@ -47,17 +47,8 @@ export default function EditFormulaModal({
   onCalculatorPress,
 }) {
   const [accountOpen, setAccountOpen] = useState(false);
-  const [accountSearch, setAccountSearch] = useState("");
   const accountWrapperRef = useRef(null);
-  const accountSearchInputRef = useRef(null);
-
-  useEffect(() => {
-    if (!accountOpen) return undefined;
-    const raf = requestAnimationFrame(() => {
-      accountSearchInputRef.current?.focus();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [accountOpen]);
+  const formulaInputRef = useRef(null);
 
   useEffect(() => {
     if (!accountOpen) return undefined;
@@ -70,19 +61,15 @@ export default function EditFormulaModal({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [accountOpen]);
 
-  const filteredAccounts = useMemo(() => {
-    const q = accountSearch.trim().toLowerCase();
-    return accounts.filter((acc) => {
-      if (!q) return true;
-      const label = formatSummaryAccountDisplay(acc).toLowerCase();
-      return label.includes(q);
-    });
-  }, [accounts, accountSearch]);
+  const getItemLabel = useCallback(
+    (idx) => formatSummaryAccountDisplay(accounts[idx]),
+    [accounts],
+  );
 
-  const { highlightIdx, setHighlightIdx, listRef, handleListKeyDown, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
     open: accountOpen,
-    itemCount: filteredAccounts.length,
-    resetToken: accountSearch,
+    itemCount: accounts.length,
+    getItemLabel,
   });
 
   if (!open || !form) return null;
@@ -103,7 +90,6 @@ export default function EditFormulaModal({
     setField({ accountId: id, accountText: label, currencyId: "", currencyLabel: "" });
     onAccountSelect?.(id);
     setAccountOpen(false);
-    setAccountSearch("");
   };
 
   const handleCurrencyChange = (e) => {
@@ -113,6 +99,17 @@ export default function EditFormulaModal({
       currencyId,
       currencyLabel: opt?.textContent?.trim() || "",
     });
+  };
+
+  const handleFormulaGridItemClickAndFocus = (item) => {
+    onFormulaGridItemClick?.(item);
+    setTimeout(() => {
+      if (formulaInputRef.current) {
+        formulaInputRef.current.focus();
+        const len = formulaInputRef.current.value.length;
+        formulaInputRef.current.setSelectionRange(len, len);
+      }
+    }, 0);
   };
 
   return portalToDocumentBody(
@@ -170,9 +167,9 @@ export default function EditFormulaModal({
                               isOpen: accountOpen,
                               onToggleOpen: () => setAccountOpen(true),
                               onClose: () => setAccountOpen(false),
-                              len: filteredAccounts.length,
+                              len: accounts.length,
                               onSelectIndex: (idx) => {
-                                const acc = filteredAccounts[idx];
+                                const acc = accounts[idx];
                                 if (acc) selectAccount(acc);
                               },
                             });
@@ -184,28 +181,8 @@ export default function EditFormulaModal({
                           className={`custom-select-dropdown${accountOpen ? " show" : ""}`}
                           id="account_dropdown"
                         >
-                          <div className="custom-select-search">
-                            <input
-                              ref={accountSearchInputRef}
-                              type="text"
-                              placeholder={t("searchAccount")}
-                              autoComplete="off"
-                              value={accountSearch}
-                              onChange={(e) => setAccountSearch(e.target.value)}
-                              onKeyDown={(e) => {
-                                handleListKeyDown(e, {
-                                  len: filteredAccounts.length,
-                                  onSelectIndex: (idx) => {
-                                    const acc = filteredAccounts[idx];
-                                    if (acc) selectAccount(acc);
-                                  },
-                                  onClose: () => setAccountOpen(false),
-                                });
-                              }}
-                            />
-                          </div>
                           <div className="custom-select-options" ref={listRef}>
-                            {filteredAccounts.map((acc, idx) => (
+                            {accounts.map((acc, idx) => (
                               <div
                                 key={String(acc.id)}
                                 className={`custom-select-option${highlightClass(idx)}`}
@@ -293,6 +270,7 @@ export default function EditFormulaModal({
                   <div className="form-group">
                     <label htmlFor="formula">{t("formula")}</label>
                     <input
+                      ref={formulaInputRef}
                       type="text"
                       id="formula"
                       placeholder={t("formulaPlaceholder")}
@@ -333,11 +311,11 @@ export default function EditFormulaModal({
                               className="formula-data-grid-item"
                               role="button"
                               tabIndex={0}
-                              onClick={() => onFormulaGridItemClick?.(item)}
+                              onClick={() => handleFormulaGridItemClickAndFocus(item)}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
-                                  onFormulaGridItemClick?.(item);
+                                  handleFormulaGridItemClickAndFocus(item);
                                 }
                               }}
                             >

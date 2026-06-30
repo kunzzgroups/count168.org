@@ -36,11 +36,68 @@ export function clipboardLooksLikeGridPaste(clipboard) {
   }
   try {
     const text = clipboard.getData?.("text/plain") || "";
-    if (text && text.includes("\t") && (text.includes("\n") || text.includes("\r"))) return true;
+    if (!text || !text.trim()) return false;
+    // Excel 单行复制也带 Tab；多行 TSV 同样支持
+    if (text.includes("\t")) return true;
+    if (text.includes("\n") || text.includes("\r")) return true;
+    // 单个值也可贴入选中格
+    return true;
   } catch {
     /* ignore */
   }
   return false;
+}
+
+/** Read clipboard for programmatic paste (Ctrl+V on selected cells). */
+export async function readClipboardForPaste() {
+  if (navigator.clipboard?.read) {
+    try {
+      const items = await navigator.clipboard.read();
+      let text = "";
+      let html = "";
+      for (const item of items) {
+        for (const type of item.types) {
+          if (type === "text/plain") {
+            text = await (await item.getType(type)).text();
+          } else if (type === "text/html") {
+            html = await (await item.getType(type)).text();
+          }
+        }
+      }
+      if (text || html) return { text, html };
+    } catch (err) {
+      console.warn("clipboard.read failed, falling back to readText:", err);
+    }
+  }
+
+  if (navigator.clipboard?.readText) {
+    const text = await navigator.clipboard.readText();
+    return { text, html: "" };
+  }
+
+  throw new Error("clipboard unavailable");
+}
+
+/** Synthetic paste event with text/html payloads (for Ctrl+V / context menu paste). */
+export function buildSyntheticPasteEvent(target, { text = "", html = "" } = {}) {
+  const types = [];
+  if (html) types.push("text/html");
+  if (text || !html) types.push("text/plain");
+
+  return {
+    preventDefault() {},
+    stopPropagation() {},
+    clipboardData: {
+      types,
+      getData(type) {
+        if (type === "text/html") return html || "";
+        if (type === "text/plain" || type === "text" || type === "Text") return text || "";
+        return "";
+      },
+    },
+    target,
+    currentTarget: target,
+  };
 }
 
 export function getClipboardPlainText(e) {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
 import RemoveWordChipInput from "../../../components/RemoveWordChipInput.jsx";
 import { toProcessFormUpperInput } from "../processListHelpers.js";
@@ -87,9 +87,19 @@ export default function ProcessFormModal({
 
   const currencyListCount = currencies.length + 1;
 
+  const getCurrencyItemLabel = useCallback(
+    (idx) => {
+      if (idx === 0) return t("clear");
+      const c = currencies[idx - 1];
+      return c ? `${c.code || ""} - ${c.name || ""}` : "";
+    },
+    [currencies, t],
+  );
+
   const currencyKeyboard = useListboxKeyboard({
     open: currencyOpen,
     itemCount: currencyListCount,
+    getItemLabel: getCurrencyItemLabel,
   });
 
   const multiUseRows = useMemo(() => uniqueProcessesForMultiUse(form.existingProcesses), [form.existingProcesses]);

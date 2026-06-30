@@ -1,16 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  createTypeAheadState,
+  isTypeAheadKey,
+  matchTypeAheadIndex,
+  resetTypeAheadState,
+} from "./typeAheadMatch.js";
 
 /**
- * Keyboard navigation for custom listbox dropdowns (ArrowUp/Down, Enter, Escape).
- * Works with searchable dropdowns (search input) or button-only dropdowns.
+ * Keyboard navigation for custom listbox dropdowns (ArrowUp/Down, Enter, Escape, type-ahead).
  */
-export function useListboxKeyboard({ open, itemCount, resetToken = null, initialIndex = 0 }) {
+export function useListboxKeyboard({ open, itemCount, resetToken = null, initialIndex = 0, getItemLabel = null, onTypeAheadChange = null }) {
   const [highlightIdx, setHighlightIdx] = useState(initialIndex);
+  const [typeAheadPrefix, setTypeAheadPrefix] = useState("");
   const listRef = useRef(null);
+  const typeAheadRef = useRef(createTypeAheadState());
+
+  const clearTypeAhead = useCallback(() => {
+    resetTypeAheadState(typeAheadRef.current);
+    setTypeAheadPrefix("");
+    onTypeAheadChange?.("");
+  }, [onTypeAheadChange]);
 
   useEffect(() => {
-    if (!open) setHighlightIdx(initialIndex);
-  }, [open, initialIndex]);
+    if (!open) {
+      setHighlightIdx(initialIndex);
+      clearTypeAhead();
+    }
+  }, [open, initialIndex, clearTypeAhead]);
 
   useEffect(() => {
     if (open) setHighlightIdx(initialIndex);
@@ -22,21 +38,41 @@ export function useListboxKeyboard({ open, itemCount, resetToken = null, initial
     node?.scrollIntoView({ block: "nearest" });
   }, [highlightIdx, open, itemCount]);
 
-  const moveDown = useCallback(
+  const buildLabels = useCallback(
     (len) => {
-      if (len <= 0) return;
-      setHighlightIdx((hi) => (hi < 0 ? 0 : (hi + 1) % len));
+      const count = len ?? itemCount;
+      if (!getItemLabel || count <= 0) return [];
+      return Array.from({ length: count }, (_, idx) => getItemLabel(idx));
     },
-    [],
+    [getItemLabel, itemCount],
   );
 
-  const moveUp = useCallback(
-    (len) => {
-      if (len <= 0) return;
-      setHighlightIdx((hi) => (hi <= 0 ? len - 1 : hi - 1));
+  const tryTypeAhead = useCallback(
+    (key, len) => {
+      if (!getItemLabel) return -1;
+      const labels = buildLabels(len);
+      const idx = matchTypeAheadIndex(labels, key, typeAheadRef.current);
+      if (idx >= 0) {
+        setTypeAheadPrefix(typeAheadRef.current.buffer);
+        onTypeAheadChange?.(typeAheadRef.current.buffer);
+        setHighlightIdx(idx);
+      }
+      return idx;
     },
-    [],
+    [buildLabels, getItemLabel, onTypeAheadChange],
   );
+
+  const moveDown = useCallback((len) => {
+    if (len <= 0) return;
+    clearTypeAhead();
+    setHighlightIdx((hi) => (hi < 0 ? 0 : (hi + 1) % len));
+  }, [clearTypeAhead]);
+
+  const moveUp = useCallback((len) => {
+    if (len <= 0) return;
+    clearTypeAhead();
+    setHighlightIdx((hi) => (hi <= 0 ? len - 1 : hi - 1));
+  }, [clearTypeAhead]);
 
   const handleListKeyDown = useCallback(
     (e, { len, onSelectIndex, onClose }) => {
@@ -47,6 +83,15 @@ export function useListboxKeyboard({ open, itemCount, resetToken = null, initial
         return;
       }
       if (count <= 0) return;
+
+      if (getItemLabel && isTypeAheadKey(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const idx = tryTypeAhead(e.key, count);
+        if (idx >= 0) {
+          e.preventDefault();
+          return;
+        }
+      }
+
       if (e.key === "ArrowDown") {
         e.preventDefault();
         moveDown(count);
@@ -59,7 +104,7 @@ export function useListboxKeyboard({ open, itemCount, resetToken = null, initial
         onSelectIndex?.(idx);
       }
     },
-    [highlightIdx, itemCount, moveDown, moveUp],
+    [highlightIdx, itemCount, getItemLabel, tryTypeAhead, moveDown, moveUp],
   );
 
   const handleButtonKeyDown = useCallback(
@@ -91,5 +136,7 @@ export function useListboxKeyboard({ open, itemCount, resetToken = null, initial
     handleListKeyDown,
     handleButtonKeyDown,
     highlightClass,
+    typeAheadPrefix,
+    clearTypeAhead,
   };
 }

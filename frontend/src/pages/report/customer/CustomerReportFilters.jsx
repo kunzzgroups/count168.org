@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import ReportDatePicker from "../common/ReportDatePicker.jsx";
 import ReportGcFilterPanel from "../shared/ReportGcFilterPanel.jsx";
 import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
@@ -36,7 +36,6 @@ export default function CustomerReportFilters({
   monthLabels,
   weekdaysShort,
 }) {
-  const [accountSearch, setAccountSearch] = useState("");
   const [accountDropdownOpen, setAccountDropdownOpen] = useState(false);
 
   const accountDropdownRef = useRef(null);
@@ -49,22 +48,21 @@ export default function CustomerReportFilters({
     return () => document.removeEventListener("mousedown", handle);
   }, []);
 
-  const filteredAccounts = useMemo(() => {
-    if (!accountSearch.trim()) return accounts;
-    const s = accountSearch.toLowerCase();
-    return accounts.filter(a =>
-      (a.account_id || "").toLowerCase().includes(s) ||
-      (a.name || "").toLowerCase().includes(s) ||
-      (a.display_text || "").toLowerCase().includes(s)
-    );
-  }, [accounts, accountSearch]);
+  const listItemCount = accounts.length > 0 ? accounts.length + 1 : 1;
 
-  const listItemCount = filteredAccounts.length > 0 ? filteredAccounts.length + 1 : 1;
+  const getItemLabel = useCallback(
+    (idx) => {
+      if (idx === 0) return t("allAccounts");
+      const a = accounts[idx - 1];
+      return a ? (a.display_text || `${a.account_id} - ${a.name}`) : "";
+    },
+    [accounts, t],
+  );
 
-  const { highlightIdx, setHighlightIdx, listRef, handleListKeyDown, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
     open: accountDropdownOpen,
     itemCount: listItemCount,
-    resetToken: accountSearch,
+    getItemLabel,
   });
 
   const selectedAccountLabel = useMemo(() => {
@@ -105,7 +103,7 @@ export default function CustomerReportFilters({
                           setAccountId("");
                           setAccountDropdownOpen(false);
                         } else {
-                          const a = filteredAccounts[idx - 1];
+                          const a = accounts[idx - 1];
                           if (a) {
                             setAccountId(a.id);
                             setAccountDropdownOpen(false);
@@ -119,34 +117,6 @@ export default function CustomerReportFilters({
                 </button>
                 {accountDropdownOpen && (
                   <div className="custom-select-dropdown show">
-                    <div className="custom-select-search">
-                      <input
-                        type="text"
-                        placeholder={t("searchAccount")}
-                        autoComplete="off"
-                        value={accountSearch}
-                        onChange={(e) => setAccountSearch(e.target.value)}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          handleListKeyDown(e, {
-                            len: listItemCount,
-                            onSelectIndex: (idx) => {
-                              if (idx === 0) {
-                                setAccountId("");
-                                setAccountDropdownOpen(false);
-                              } else {
-                                const a = filteredAccounts[idx - 1];
-                                if (a) {
-                                  setAccountId(a.id);
-                                  setAccountDropdownOpen(false);
-                                }
-                              }
-                            },
-                            onClose: () => setAccountDropdownOpen(false),
-                          });
-                        }}
-                      />
-                    </div>
                     <div className="custom-select-options" ref={listRef}>
                       <div
                         className={`custom-select-option ${!accountId ? "selected" : ""}${highlightClass(0)}`}
@@ -156,7 +126,7 @@ export default function CustomerReportFilters({
                       >
                         {t("allAccounts")}
                       </div>
-                      {filteredAccounts.map((a, idx) => {
+                      {accounts.map((a, idx) => {
                         const kbIdx = idx + 1;
                         return (
                         <div
@@ -170,9 +140,6 @@ export default function CustomerReportFilters({
                         </div>
                         );
                       })}
-                      {filteredAccounts.length === 0 && (
-                        <div className="custom-select-no-results">{t("noResultsFound")}</div>
-                      )}
                     </div>
                   </div>
                 )}

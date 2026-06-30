@@ -45,9 +45,7 @@ function normalizeRemoveWordValue(value) {
 }
 
 const PROCESS_PLACEHOLDER = "Select Process";
-/** Cap initial option nodes when list is huge (e.g. Monday with 200+ processes). */
 const PROCESS_OPTIONS_RENDER_CAP = 80;
-
 function readRestoredProcessData() {
   try {
     if (!shouldRestoreFromUrl()) return null;
@@ -619,7 +617,7 @@ export function useDataCaptureFormEngine(
 
   const processListTruncated = useMemo(
     () => !processFilter.trim() && processRows.length > PROCESS_OPTIONS_RENDER_CAP,
-    [processFilter, processRows.length]
+    [processFilter, processRows.length],
   );
 
   const visibleProcesses = useMemo(() => {
@@ -630,8 +628,8 @@ export function useDataCaptureFormEngine(
   const processSearchInputRef = useRef(null);
   useEffect(() => {
     if (processOpen && processSearchInputRef.current) {
-      const t = setTimeout(() => processSearchInputRef.current?.focus(), 10);
-      return () => clearTimeout(t);
+      const timer = setTimeout(() => processSearchInputRef.current?.focus(), 10);
+      return () => clearTimeout(timer);
     }
   }, [processOpen]);
 

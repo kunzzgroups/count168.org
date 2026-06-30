@@ -35,9 +35,12 @@ export default function OwnAccountSelect({ value, onChange, accounts, displayLab
 
   const menuItems = useMemo(() => [{ id: "", label: placeholder }, ...accounts.map((a) => ({ id: a.id, label: formatOwnAccountLabel(a, t), acc: a }))], [accounts, placeholder, t]);
 
+  const getItemLabel = useCallback((idx) => menuItems[idx]?.label ?? "", [menuItems]);
+
   const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
     open,
     itemCount: menuItems.length,
+    getItemLabel,
   });
 
   const selected = useMemo(

@@ -62,7 +62,6 @@ export default function DataCaptureProcessSelect({
   processListTruncated,
   processRowsCount,
   visibleProcesses,
-  filteredProcesses,
   selectProcessRow,
   displayTextFromProcessRow,
   onBeforeToggle,

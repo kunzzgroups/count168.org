@@ -58,9 +58,7 @@ function normalizeCellPatch(patch) {
 
 function isPlaceholderIdColumn(value) {
   const trimmed = String(value || "").trim();
-  if (!trimmed) return true;
-  if (/^\d{1,2}$/.test(trimmed)) return true;
-  return FORMAT_LABEL_FIRST_COLUMNS.has(trimmed.toUpperCase());
+  return !trimmed;
 }
 
 function swapRowDataCells(a, b) {

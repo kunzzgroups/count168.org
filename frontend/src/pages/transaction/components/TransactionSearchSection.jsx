@@ -145,10 +145,16 @@ export default function TransactionSearchSection({
     [categories, categoryAllChecked, onCategoryAllChange, toggleCategoryValue],
   );
 
+  const getCategoryItemLabel = useCallback(
+    (idx) => (idx === 0 ? m.selectAllCategories : categories[idx - 1] ?? ""),
+    [categories, m.selectAllCategories],
+  );
+
   const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
     open: categoryOpen,
     itemCount: categoryItemCount,
     initialIndex: 0,
+    getItemLabel: getCategoryItemLabel,
   });
 
   const onCategoryButtonKeyDown = useCallback(

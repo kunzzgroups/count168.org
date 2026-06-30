@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { translateBankProcessApiMessage } from "../../../translateFile/pages/bankProcessTranslate.js";
 import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
@@ -166,10 +166,13 @@ export default function BankProcessStatusControl({
   const options = ["ACTIVE", "INACTIVE", "OFFICIAL", "E_INVOICE", "BLOCK"];
   const label = statusLabel(t, ui);
 
+  const getItemLabel = useCallback((idx) => statusLabel(t, options[idx]), [options, t]);
+
   const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
     open,
     itemCount: options.length,
     initialIndex: Math.max(0, options.indexOf(ui)),
+    getItemLabel,
   });
 
   return (

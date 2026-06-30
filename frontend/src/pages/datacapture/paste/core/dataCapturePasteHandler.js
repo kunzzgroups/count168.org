@@ -5,11 +5,7 @@ import {
   resolvePasteCell,
 } from "./dataCaptureClipboard.js";
 import { getDefaultPasteAnchorCell } from "./dataCapturePasteApply.js";
-import {
-  autoDetectCaptureTypeFromPaste,
-  parseCitibetPasteData,
-  shouldExitCitibetMode,
-} from "./dataCapturePasteDetect.js";
+import { parseCitibetPasteData } from "./dataCapturePasteDetect.js";
 import { handleCitibetPaste } from "../vendors/dataCaptureCitibetPaste.js";
 import { handleTextModePaste } from "./dataCaptureTextPaste.js";
 import { handleFormatCellPaste } from "./dataCaptureFormatPasteHandler.js";
@@ -28,7 +24,6 @@ import { handleAlipayPaste } from "../vendors/dataCaptureAlipayPaste.js";
 import { handleC8PlayPaste } from "../vendors/dataCaptureC8PlayPaste.js";
 import { handleMaxbetPaste } from "../vendors/dataCaptureMaxbetPaste.js";
 import {
-  applyActiveCaptureType,
   getActiveCaptureType,
   setTableActiveForPaste,
 } from "../../lib/dataCaptureBridge.js";
@@ -142,13 +137,6 @@ export function handleCellPasteEvent(e) {
   e.preventDefault();
 
   const pastedData = getClipboardPlainText(e);
-  const detected = autoDetectCaptureTypeFromPaste(pastedData);
-  if (detected) {
-    applyActiveCaptureType(detected);
-  } else if (shouldExitCitibetMode(pastedData, getActiveCaptureType())) {
-    applyActiveCaptureType("1.Text");
-  }
-
   const captureType = getActiveCaptureType();
 
   if (captureType === "2.Format") {
@@ -159,12 +147,17 @@ export function handleCellPasteEvent(e) {
 
   if (TYPED_CAPTURE_TYPES.has(captureType)) {
     if (handleTypedCapturePaste(e, pastedData, captureType)) return;
-    invokeGenericPasteFallback(e, pastedData);
+    // 4.RETURN / API_RETURN must not fall back to generic tab/HTML paste (keeps formulas intact).
+    if (captureType !== "4.RETURN" && captureType !== "API_RETURN") {
+      invokeGenericPasteFallback(e, pastedData);
+    }
     return;
   }
 
   if (captureType === "1.Text") {
     if (handleTextModePaste(e, pastedData, cell)) return;
+    invokeGenericPasteFallback(e, pastedData);
+    return;
   }
 
   const citibetParsed = parseCitibetPasteData(pastedData, captureType);

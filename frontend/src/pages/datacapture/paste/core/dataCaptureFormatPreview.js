@@ -337,7 +337,8 @@ export function clipboardLooksLikeTable(clipboard) {
     } catch (_) { }
     try {
         const text = (clipboard && clipboard.getData) ? (clipboard.getData('text/plain') || '') : '';
-        if (text && text.includes('\t') && (text.includes('\n') || text.includes('\r'))) return true;
+        if (text && text.includes('\t')) return true;
+        if (text && (text.includes('\n') || text.includes('\r'))) return true;
     } catch (_) { }
     return false;
 }

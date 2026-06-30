@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from "react-dom";
 import { getProcessModalDropdownZIndex } from "../../../components/ProcessModalPortal.jsx";
 import SimpleSelect from "../../../components/SimpleSelect.jsx";
+import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
 import FormDateField from "../../../components/FormDateField.jsx";
 import { filterBankPickAccounts, formatBankAccountDisplay } from "../lib/bankProcessHelpers.js";
 
@@ -9,7 +10,7 @@ const PORTAL_MIN_WIDTH = 180;
 const ACCOUNT_PICK_MIN_WIDTH = 220;
 const PORTAL_EDGE_PAD = 16;
 const PORTAL_GAP = 1;
-const ACCOUNT_SEARCH_RESERVE = 52;
+const ACCOUNT_SEARCH_RESERVE = 0;
 const PORTAL_DROPDOWN_CAP_ACCOUNT = 280;
 
 function layoutPortalDropdown(buttonEl, wrapEl, { minWidth, searchReserve = 0, minMenu = 160, dropdownCap }) {
@@ -68,18 +69,15 @@ function accountLabel(account) {
 
 export function BankSearchableAccountPick({ value, onChange, accounts, disabled, t }) {
   const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
   const [usePortal, setUsePortal] = useState(false);
   const [menuStyle, setMenuStyle] = useState(null);
   const [optionsMaxHeight, setOptionsMaxHeight] = useState(320);
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
-  const searchRef = useRef(null);
 
   const close = useCallback(() => {
     setOpen(false);
-    setQ("");
     setMenuStyle(null);
   }, []);
 
@@ -124,23 +122,23 @@ export function BankSearchableAccountPick({ value, onChange, accounts, disabled,
     return () => document.removeEventListener("mousedown", fn);
   }, [open, close]);
 
-  useEffect(() => {
-    if (!open) return;
-    const id = window.setTimeout(() => searchRef.current?.focus(), 0);
-    return () => window.clearTimeout(id);
-  }, [open]);
+  const pickableAccounts = useMemo(() => {
+    const list = filterBankPickAccounts(accounts);
+    return list.slice().sort((a, b) => accountLabel(a).localeCompare(accountLabel(b), undefined, { sensitivity: "base" }));
+  }, [accounts]);
 
-  const pickableAccounts = useMemo(() => filterBankPickAccounts(accounts), [accounts]);
+  const menuItems = useMemo(() => {
+    const placeholder = t("selectAccount");
+    return [{ id: "", label: placeholder }, ...pickableAccounts.map((a) => ({ id: a.id, label: accountLabel(a) }))];
+  }, [pickableAccounts, t]);
 
-  const filtered = useMemo(() => {
-    const list = pickableAccounts;
-    const qq = q.trim().toLowerCase();
-    let rows = list;
-    if (qq) {
-      rows = list.filter((a) => accountLabel(a).toLowerCase().includes(qq));
-    }
-    return rows.slice().sort((a, b) => accountLabel(a).localeCompare(accountLabel(b), undefined, { sensitivity: "base" }));
-  }, [pickableAccounts, q]);
+  const getItemLabel = useCallback((idx) => menuItems[idx]?.label ?? "", [menuItems]);
+
+  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+    open,
+    itemCount: menuItems.length,
+    getItemLabel,
+  });
 
   const selected = pickableAccounts.find((a) => String(a.id) === String(value));
   const placeholder = t("selectAccount");
@@ -149,7 +147,6 @@ export function BankSearchableAccountPick({ value, onChange, accounts, disabled,
     if (disabled) return;
     const inModal = !!wrapRef.current?.closest("#addBankModal, #profitSharingModal");
     setUsePortal(inModal);
-    setQ("");
     setOpen(true);
     if (inModal) positionMenu();
   };
@@ -166,46 +163,24 @@ export function BankSearchableAccountPick({ value, onChange, accounts, disabled,
       style={usePortal && menuStyle ? menuStyle : undefined}
       role="listbox"
     >
-      <div className="custom-select-search">
-        <input
-          ref={searchRef}
-          type="text"
-          placeholder={t("searchAccount")}
-          autoComplete="off"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") close();
-          }}
-        />
-      </div>
       <div
+        ref={listRef}
         className="custom-select-options"
         style={usePortal ? { flex: "1 1 auto", minHeight: 0 } : { maxHeight: optionsMaxHeight }}
       >
-        <div
-          className={`custom-select-option${!value ? " selected" : ""}`}
-          role="option"
-          aria-selected={!value}
-          onClick={() => pick("")}
-        >
-          {placeholder}
-        </div>
-        {filtered.length === 0 ? (
-          <div className="custom-select-no-results">{t("noAccountsFound")}</div>
-        ) : (
-          filtered.map((a) => (
-            <div
-              key={a.id}
-              className={`custom-select-option${String(value) === String(a.id) ? " selected" : ""}`}
-              role="option"
-              aria-selected={String(value) === String(a.id)}
-              onClick={() => pick(a.id)}
-            >
-              {accountLabel(a)}
-            </div>
-          ))
-        )}
+        {menuItems.map((item, idx) => (
+          <div
+            key={item.id || "placeholder"}
+            className={`custom-select-option${String(value) === String(item.id) ? " selected" : ""}${highlightClass(idx)}`}
+            role="option"
+            aria-selected={String(value) === String(item.id)}
+            data-kb-idx={idx}
+            onMouseEnter={() => setHighlightIdx(idx)}
+            onClick={() => pick(item.id)}
+          >
+            {item.label}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -220,6 +195,18 @@ export function BankSearchableAccountPick({ value, onChange, accounts, disabled,
         aria-expanded={open}
         aria-haspopup="listbox"
         onClick={() => (open ? close() : openDropdown())}
+        onKeyDown={(e) => {
+          handleButtonKeyDown(e, {
+            isOpen: open,
+            onToggleOpen: openDropdown,
+            onClose: close,
+            len: menuItems.length,
+            onSelectIndex: (idx) => {
+              const item = menuItems[idx];
+              if (item) pick(item.id);
+            },
+          });
+        }}
       >
         {selected ? accountLabel(selected) : placeholder}
       </button>
