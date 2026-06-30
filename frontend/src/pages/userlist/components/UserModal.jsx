@@ -419,6 +419,7 @@ export default function UserModal({
   }, [open, pageReadOnlyLock]);
 
   const permissionsLocked = fieldLocks.sidebar || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
+  const accountProcessLocked = !!fieldLocks.accountProcess || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
   const showSecondaryPassword = isC168Company || !!editingRow?.is_owner_shadow;
 
   const userModalShell = (
@@ -631,7 +632,7 @@ export default function UserModal({
                         type="checkbox"
                         id={`acc-${a.id}`}
                         checked={selectedAccountIds.has(Number(a.id))}
-                        disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock}
+                        disabled={accountProcessLocked}
                         onChange={(e) => {
                           setSelectedAccountIds((prev) => {
                             const n = new Set(prev);
@@ -648,8 +649,8 @@ export default function UserModal({
                   ))}
                 </div>
                 <div className="account-control-buttons user-modal-col-actions">
-                  <button type="button" className="btn-account-control" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedAccountIds(new Set(accountIdList)))}>{t("selectAll")}</button>
-                  <button type="button" className="btn-clearall" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedAccountIds(new Set()))}>{t("clearAll")}</button>
+                  <button type="button" className="btn-account-control" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedAccountIds(new Set(accountIdList)))}>{t("selectAll")}</button>
+                  <button type="button" className="btn-clearall" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedAccountIds(new Set()))}>{t("clearAll")}</button>
                 </div>
               </div>
 
@@ -663,7 +664,7 @@ export default function UserModal({
                           type="checkbox"
                           id={`proc-${p.id}`}
                           checked={selectedProcessIds.has(Number(p.id))}
-                          disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock}
+                          disabled={accountProcessLocked}
                           onChange={(e) => {
                             setSelectedProcessIds((prev) => {
                               const n = new Set(prev);
@@ -679,8 +680,8 @@ export default function UserModal({
                     ))}
                   </div>
                   <div className="account-control-buttons user-modal-col-actions">
-                    <button type="button" className="btn-account-control" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set(processIdList)))}>{t("selectAll")}</button>
-                    <button type="button" className="btn-clearall" disabled={!!editingRow?.is_owner_shadow || pageReadOnlyLock} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set()))}>{t("clearAll")}</button>
+                    <button type="button" className="btn-account-control" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set(processIdList)))}>{t("selectAll")}</button>
+                    <button type="button" className="btn-clearall" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set()))}>{t("clearAll")}</button>
                   </div>
                 </div>
             ) : null}

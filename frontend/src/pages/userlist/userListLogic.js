@@ -110,7 +110,7 @@ export function isOwnerEditingOwnerShadow(row, currentUserRole) {
  */
 export function getUserEditFieldLocks(row, currentUserId, currentUserRole) {
   if (isOwnerEditingOwnerShadow(row, currentUserRole)) {
-    return { name: false, email: false, role: true, password: false, sidebar: true, company: true };
+    return { name: false, email: false, role: true, password: false, sidebar: true, company: true, accountProcess: true };
   }
   const caps = computeRowCapabilities(row, currentUserId, currentUserRole);
   const curLevel = ROLE_HIERARCHY[normRole(currentUserRole)] ?? 999;
@@ -126,6 +126,8 @@ export function getUserEditFieldLocks(row, currentUserId, currentUserRole) {
     password: false,
     sidebar: isSelf || isSame || isLower,
     company: isSelf || isSame || isLower || !canPickCompany,
+    // 自己编辑自己时锁定账户/流程，避免把自己的账户全部清空后造成自我锁定（账户页无数据）
+    accountProcess: isSelf,
   };
 }
 
