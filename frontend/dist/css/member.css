@@ -1402,7 +1402,7 @@ body.member-winloss-page .member-winloss-account-measure .user-gc-segment {
     box-sizing: border-box;
     width: auto;
     min-width: max-content;
-    font-size: var(--text-medium) !important;
+    font-size: 1.4rem !important;
     line-height: 1.25;
     display: inline-flex;
     align-items: center;
@@ -1442,7 +1442,7 @@ body.member-winloss-page .member-winloss-currency-measure .user-gc-segment {
     box-sizing: border-box;
     width: auto;
     min-width: max-content;
-    font-size: var(--text-medium) !important;
+    font-size: 1.4rem !important;
     line-height: 1.25;
     display: inline-flex;
     align-items: center;
@@ -1492,7 +1492,7 @@ body.member-winloss-page .member-winloss-grid-account-pills .user-gc-segment {
     max-width: none;
     flex: 0 0 auto;
     line-height: 1.25;
-    font-size: var(--text-medium) !important;
+    font-size: 1.4rem !important;
     font-weight: var(--font-weight-semibold) !important;
     box-sizing: border-box;
 }
@@ -1505,7 +1505,7 @@ body.member-winloss-page #member_currency_buttons .member-winloss-currency-segme
     min-width: max-content;
     max-width: none;
     flex: 0 0 auto;
-    font-size: var(--text-medium) !important;
+    font-size: 1.4rem !important;
     font-weight: var(--font-weight-semibold) !important;
     line-height: 1.25;
     align-items: center;
@@ -1936,7 +1936,7 @@ body.member-winloss-page .member-winloss-grid-account-pills .user-gc-segment-gro
     max-width: none;
     flex: 0 0 auto;
     overflow: visible;
-    font-size: var(--text-medium) !important;
+    font-size: 1.4rem !important;
     line-height: 1.25;
     align-items: center;
     justify-content: center;

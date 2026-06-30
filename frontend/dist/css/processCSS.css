@@ -270,7 +270,7 @@ body.ec-auth-shell.process-page:not(.process-page--bank) .action-buttons .btn {
 
 body.ec-auth-shell.process-page:not(.process-page--bank) .user-gc-segment {
     padding: 4px 18px !important;
-    font-size: 1.2rem !important;
+    font-size: 1.4rem !important;
 }
 
 body.ec-auth-shell.process-page:not(.process-page--bank) .user-filter-chip {
@@ -289,7 +289,7 @@ body.ec-auth-shell.process-page.process-page--bank .action-buttons .btn {
 
 body.ec-auth-shell.process-page.process-page--bank .user-gc-segment {
     padding: 4px 18px !important;
-    font-size: 1.2rem !important;
+    font-size: 1.4rem !important;
 }
 
 body.ec-auth-shell.process-page.process-page--bank .user-filter-chip {

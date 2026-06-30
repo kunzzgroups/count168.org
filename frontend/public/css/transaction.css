@@ -356,7 +356,7 @@ body.transaction-page .transaction-bottom-filters #currency-buttons-wrapper .tra
     min-width: max-content;
     padding: var(--user-gc-segment-padding, 4px clamp(10px, 1.2vw, 18px));
     box-sizing: border-box;
-    font-size: var(--text-medium) !important;
+    font-size: 1.4rem !important;
     line-height: 1.25;
     display: inline-flex;
     align-items: center;
@@ -410,7 +410,7 @@ body.transaction-page .transaction-bottom-filters .user-gc-segment {
     border-right: 1px solid var(--color-border, #e5e7eb);
     background: var(--color-surface, #ffffff);
     color: #1f2937;
-    font-size: var(--text-medium) !important;
+    font-size: 1.4rem !important;
     font-weight: var(--font-weight-semibold) !important;
     font-family: inherit;
     cursor: pointer;
@@ -965,7 +965,7 @@ body.transaction-page .transaction-search-section .transaction-checkboxes,
     gap: 8px;
 }
 
-/* 单行 chip：窄屏或文案较长时横向滚动，不折行撑高区块 */
+/* 单行 chip：随视口等比压缩；仍放不下时横向滚动兜底 */
 body.transaction-page .transaction-search-section .transaction-checkboxes.userlist-filter-chips {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -974,6 +974,7 @@ body.transaction-page .transaction-search-section .transaction-checkboxes.userli
     min-width: 0;
     width: 100%;
     align-items: center;
+    gap: clamp(5px, 0.42vw, 8px);
     padding-bottom: 0px;
 }
 
@@ -984,8 +985,8 @@ body.transaction-page .transaction-search-section .transaction-checkboxes.userli
 body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter-chip {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 6px 14px 6px 10px;
+    gap: clamp(5px, 0.42vw, 8px);
+    padding: clamp(5px, 0.42vw, 6px) clamp(8px, 0.73vw, 14px) clamp(5px, 0.42vw, 6px) clamp(6px, 0.52vw, 10px);
     margin: 0;
     border: 1px solid var(--color-border, #e5e7eb);
     border-radius: 999px;
@@ -993,7 +994,7 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
     box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
     cursor: pointer;
     font-family: inherit;
-    font-size: var(--text-small);
+    font-size: clamp(11px, 0.72vw, 13px);
     font-weight: var(--font-weight-semibold);
     color: #475569;
     line-height: 1.2;
@@ -1022,8 +1023,8 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
 
 body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter-chip__dot {
     flex-shrink: 0;
-    width: 18px;
-    height: 18px;
+    width: clamp(14px, 1vw, 18px);
+    height: clamp(14px, 1vw, 18px);
     border-radius: 50%;
     background: #e2e8f0;
     display: flex;
@@ -1038,23 +1039,13 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
 }
 
 body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter-chip__check {
-    width: 11px;
-    height: 11px;
+    width: clamp(9px, 0.62vw, 11px);
+    height: clamp(9px, 0.62vw, 11px);
     display: block;
 }
 
 body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter-chip__label {
     white-space: nowrap;
-}
-
-body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter-chip:nth-child(1) {
-    min-width: 8.25rem;
-    justify-content: flex-start;
-}
-
-body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter-chip:nth-child(2) {
-    min-width: 6.75rem;
-    justify-content: flex-start;
 }
 
 .transaction-page .transaction-checkbox-label {
