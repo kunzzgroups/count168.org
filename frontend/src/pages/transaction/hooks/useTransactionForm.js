@@ -42,6 +42,7 @@ export function useTransactionForm({
   const [txFromAccount, setTxFromAccount] = useState(null);
   const [txCurrency, setTxCurrency] = useState("");
   const [txAmount, setTxAmount] = useState("");
+  const [txFullAmount, setTxFullAmount] = useState("");
   const [txRemark, setTxRemark] = useState("");
   const [txConfirm, setTxConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -52,6 +53,7 @@ export function useTransactionForm({
   const [rateCurrencyFrom, setRateCurrencyFrom] = useState("");
   const [rateCurrencyTo, setRateCurrencyTo] = useState("");
   const [rateCurrencyFromAmount, setRateCurrencyFromAmount] = useState("");
+  const [rateFullAmount, setRateFullAmount] = useState("");
   const [rateExchangeRateRaw, setRateExchangeRateRaw] = useState("");
   const [rateCurrencyToAmount, setRateCurrencyToAmount] = useState("");
   /** Legacy `rate_currency_to_amount.dataset.grossAmount` — submit uses this, not the net preview in `rateCurrencyToAmount`. */
@@ -66,6 +68,16 @@ export function useTransactionForm({
   const [rateMiddlemanRate, setRateMiddlemanRate] = useState("");
   const [rateMiddlemanAmount, setRateMiddlemanAmount] = useState("");
   const queryClient = useQueryClient();
+
+  const changeTxAmount = useCallback((val) => {
+    setTxAmount(val);
+    setTxFullAmount("");
+  }, []);
+
+  const changeRateCurrencyFromAmount = useCallback((val) => {
+    setRateCurrencyFromAmount(val);
+    setRateFullAmount("");
+  }, []);
   const scopeKeyRef = useRef(transactionScopeCacheKey(transactionScope));
 
   useEffect(() => {
@@ -79,6 +91,8 @@ export function useTransactionForm({
     setRateTransferToAccount(null);
     setRateTransferFromAccount(null);
     setRateMiddlemanAccount(null);
+    setTxFullAmount("");
+    setRateFullAmount("");
   }, [transactionScope]);
 
   const submitMutation = useMutation({
@@ -121,6 +135,13 @@ export function useTransactionForm({
       let amountDisplay = "";
 
       if (parsedBalance !== null) {
+        const absFullVal = MoneyDecimal.abs(String(balanceAttr)).toString();
+        if (isRateView) {
+          setRateFullAmount(absFullVal);
+        } else {
+          setTxFullAmount(absFullVal);
+        }
+
         if (isProfitType) {
           try {
             const balDec = MoneyDecimal.toDecimal(String(parsedBalance), 0);
@@ -238,6 +259,7 @@ export function useTransactionForm({
   const onRateCurrencyRowReverse = useCallback(() => {
     const tmpAmt = rateCurrencyFromAmount;
     setRateCurrencyFromAmount(rateCurrencyToAmount);
+    setRateFullAmount("");
     setRateCurrencyToAmount(tmpAmt);
     const tmpGrossTo = rateToAmountGrossStr;
     setRateToAmountGrossStr(rateFromAmountGrossStr);
@@ -282,7 +304,8 @@ export function useTransactionForm({
         pushToast(m.pleaseSelectBothCurrencies, "error");
         return;
       }
-      const fromAmt = toNumberLike(rateCurrencyFromAmount);
+      const finalRateAmount = rateFullAmount || rateCurrencyFromAmount;
+      const fromAmt = toNumberLike(finalRateAmount);
       const toGrossRaw = String(rateToAmountGrossStr || "").trim().replace(/,/g, "");
       const toGrossStr = toGrossRaw !== "" ? toGrossRaw : String(rateCurrencyToAmount || "").trim().replace(/,/g, "");
       const grossNum = toNumberLike(toGrossStr);
@@ -324,7 +347,7 @@ export function useTransactionForm({
         const { payload } = buildRatePayload({
           toId,
           fromId,
-          fromAmt: rateCurrencyFromAmount,
+          fromAmt: finalRateAmount,
           toGrossStr,
           rateDate,
           txRemark,
@@ -352,6 +375,7 @@ export function useTransactionForm({
           await refreshContraInboxBadge(scopeApi);
           setTxConfirm(false);
           setRateCurrencyFromAmount("");
+          setRateFullAmount("");
           setRateExchangeRateRaw("");
           setRateCurrencyToAmount("");
           setRateToAmountGrossStr("");
@@ -408,7 +432,8 @@ export function useTransactionForm({
       return;
     }
 
-    const cleanedAmt = MoneyDecimal.cleanMoneyInput(txAmount);
+    const finalAmount = txFullAmount || txAmount;
+    const cleanedAmt = MoneyDecimal.cleanMoneyInput(finalAmount);
     if (cleanedAmt === "") {
       pushToast(
         isAdjustment ? m.pleaseEnterNonZeroAdjustment : m.pleaseEnterValidAmount,
@@ -452,7 +477,7 @@ export function useTransactionForm({
         transaction_type: isProfitTx ? (amtDec.lt(0) ? "LOSE" : "WIN") : txType,
         account_id: toId,
         from_account_id: isAdjustment ? "" : fromId || "",
-        amount: isProfitTx ? MoneyDecimal.formatFixedHalfUp(amtDec.abs().toString(), 2) : txAmount,
+        amount: isProfitTx ? MoneyDecimal.formatFixedHalfUp(amtDec.abs().toString(), 2) : finalAmount,
         transaction_date: txDate,
         description: "",
         sms: txRemark,
@@ -469,6 +494,7 @@ export function useTransactionForm({
         }
         await refreshContraInboxBadge(scopeApi);
         setTxAmount("");
+        setTxFullAmount("");
         setTxConfirm(false);
         await onSearch({ forceRefresh: true });
         return;
@@ -494,7 +520,7 @@ export function useTransactionForm({
     txCurrency,
     setTxCurrency,
     txAmount,
-    setTxAmount,
+    setTxAmount: changeTxAmount,
     txRemark,
     setTxRemark,
     txConfirm,
@@ -516,7 +542,7 @@ export function useTransactionForm({
     rateCurrencyTo,
     setRateCurrencyTo,
     rateCurrencyFromAmount,
-    setRateCurrencyFromAmount,
+    setRateCurrencyFromAmount: changeRateCurrencyFromAmount,
     rateExchangeRateRaw,
     setRateExchangeRateRaw,
     rateCurrencyToAmount,

@@ -3,8 +3,8 @@ import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import {
   TRANSACTION_CURRENCY_FILTER_KEY_PREFIX,
   TX_LIST_INVALIDATE_LS_KEY,
-  applyPaymentWinLossFilters,
-  applyZeroBalanceFilter,
+  buildTransactionSearchQueryFilters,
+  filterTransactionTableRows,
   applySummaryWinLossDisplayTolerance,
   buildTxListSessionKey,
   calculateTotals,
@@ -405,7 +405,7 @@ export function useTransactionSearch({
     scheduleAutoSearch,
   ]);
 
-  // Show 0 balance 需重搜（后端 account×currency 范围变化）；Win/Loss / Payment 勾选仅前端即时过滤（取消 Payment/Win-Loss 时再拉全量）。
+  // Show 0 balance / Payment Only / Win-Loss Only 均影响 API 参数或组合范围，切换后必须重搜。
   useEffect(() => {
     if (!initialSearchDoneRef.current) return;
     if (!scopeReady) return;
@@ -425,12 +425,14 @@ export function useTransactionSearch({
 
     const prev = prevServerSideFiltersRef.current;
     const zeroBalanceChanged = prev.showZeroBalance !== current.showZeroBalance;
-    const paymentTurnedOff = prev.showPaymentOnly && !current.showPaymentOnly;
-    const captureTurnedOff = prev.showCaptureOnly && !current.showCaptureOnly;
+    const filtersChanged =
+      zeroBalanceChanged ||
+      prev.showPaymentOnly !== current.showPaymentOnly ||
+      prev.showCaptureOnly !== current.showCaptureOnly;
 
     prevServerSideFiltersRef.current = current;
 
-    if (!zeroBalanceChanged && !paymentTurnedOff && !captureTurnedOff) return;
+    if (!filtersChanged) return;
 
     scheduleAutoSearch({ delayMs: 80, forceRefresh: zeroBalanceChanged });
   }, [
@@ -448,14 +450,15 @@ export function useTransactionSearch({
   const saveTxListToSession = useCallback(
     (data) => {
       try {
+        const queryFilters = buildTransactionSearchQueryFilters(searchState);
         const key = buildTxListSessionKey({
           companyId: scopeCacheCompanyKey,
           dateFrom: effectiveDateFrom,
           dateTo: effectiveDateTo,
           selectedCategories,
-          showInactive: searchState.showPaymentOnly,
-          showCaptureOnly: searchState.showCaptureOnly,
-          hideZeroBalance: !searchState.showZeroBalance,
+          showInactive: queryFilters.showInactiveForQuery,
+          showCaptureOnly: queryFilters.showCaptureOnlyForQuery,
+          hideZeroBalance: queryFilters.hideZeroBalanceForQuery,
           showAllCurrencies,
           selectedCurrencies,
         });
@@ -511,13 +514,9 @@ export function useTransactionSearch({
       const singleSelectedCurrency =
         !showAllCurrencies && selectedCurrencies.length === 1 ? String(selectedCurrencies[0] || "").toUpperCase() : "";
 
-      const showInactiveForQuery =
-        searchState.showZeroBalance && searchState.showPaymentOnly ? false : searchState.showPaymentOnly;
-      // Win/Loss Only 始终在前端 applyPaymentWinLossFilters 过滤。
-      // 后端仍返回「本期有 W/L/Payment 动账但 Balance=0」的组合行（search_api Layer 末段），供前端勾选 W/L 或 Payment 时使用。
-      const showCaptureOnlyForQuery = false;
+      const queryFilters = buildTransactionSearchQueryFilters(searchState);
+      const { showInactiveForQuery, showCaptureOnlyForQuery, hideZeroBalanceForQuery } = queryFilters;
 
-      const hideZeroBalanceForQuery = !searchState.showZeroBalance;
       const requestKey = buildTransactionSearchRequestKey({
         scopeCacheCompanyKey: cid,
         dateFrom: effectiveDateFrom,
@@ -791,17 +790,13 @@ export function useTransactionSearch({
         singleCurrencyTitle: null,
       };
     }
-    const pf = applyPaymentWinLossFilters(baseRowsPresentation.baseLeft, baseRowsPresentation.baseRight, {
-      showPaymentOnly: searchState.showPaymentOnly,
-      showCaptureOnly: searchState.showCaptureOnly,
+    const filtered = filterTransactionTableRows(baseRowsPresentation.baseLeft, baseRowsPresentation.baseRight, {
       showZeroBalance: searchState.showZeroBalance,
-    });
-    const z = applyZeroBalanceFilter(pf.filteredLeft, pf.filteredRight, searchState.showZeroBalance, {
-      showCaptureOnly: searchState.showCaptureOnly,
       showPaymentOnly: searchState.showPaymentOnly,
+      showCaptureOnly: searchState.showCaptureOnly,
     });
-    const sortedLeft = z.left;
-    const sortedRight = z.right;
+    const sortedLeft = filtered.left;
+    const sortedRight = filtered.right;
     const totalsLeft = calculateTotals(sortedLeft);
     const totalsRight = calculateTotals(sortedRight);
     const totalsSummary = applySummaryWinLossDisplayTolerance(calculateTotals([...sortedLeft, ...sortedRight]));
@@ -1039,14 +1034,15 @@ export function useTransactionSearch({
 
     let hadReplay = false;
     try {
+      const queryFilters = buildTransactionSearchQueryFilters(searchState);
       const key = buildTxListSessionKey({
         companyId: scopeCacheCompanyKey,
         dateFrom: effectiveDateFrom,
         dateTo: effectiveDateTo,
         selectedCategories,
-        showInactive: searchState.showPaymentOnly,
-        showCaptureOnly: searchState.showCaptureOnly,
-        hideZeroBalance: !searchState.showZeroBalance,
+        showInactive: queryFilters.showInactiveForQuery,
+        showCaptureOnly: queryFilters.showCaptureOnlyForQuery,
+        hideZeroBalance: queryFilters.hideZeroBalanceForQuery,
         showAllCurrencies,
         selectedCurrencies,
       });

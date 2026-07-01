@@ -21,7 +21,6 @@ import "../../../public/css/userlist.css";
 import "../../../public/css/date-range-picker.css";
 import "../../../public/css/report-outlined-fields.css";
 import "../../../public/css/transaction.css";
-import "../transaction/transactionPaymentHistoryPage.css";
 import AvatarPickerModal from "../../components/AvatarPickerModal.jsx";
 import ConfirmLogoutModal from "../../components/ConfirmLogoutModal.jsx";
 import ExpirationReminderModal from "../../components/ExpirationReminderModal.jsx";
@@ -272,6 +271,7 @@ export default function MemberPage() {
       ...base,
       exportPdf: t("exportPdf"),
       exportPdfTitle: t("exportPdfTitle"),
+      exportPdfTitleWithAccount: t("exportPdfTitleWithAccount"),
       exportPdfHint: t("exportPdfHint"),
       exportPdfCurrency: t("exportPdfCurrency"),
       exportPdfDateRange: t("exportPdfDateRange"),
@@ -287,6 +287,7 @@ export default function MemberPage() {
       exportPdfMissingAccount: t("exportPdfMissingAccount"),
       pleaseSelectDateRange: t("pleaseSelectDateRange"),
       pleaseSelectCurrency: t("pleaseSelectCurrency"),
+      all: t("all"),
       close: t("close"),
       loading: t("loading"),
     };
@@ -295,8 +296,8 @@ export default function MemberPage() {
   const exportScope = useMemo(() => {
     const acc = linkedAccounts.find((row) => Number(row.id) === Number(viewAccountId));
     const currencyPref = isAllSelected
-      ? selectedCurrencies[0] || availableCurrencies[0] || ""
-      : selectedCurrencies[0] || availableCurrencies[0] || "";
+      ? availableCurrencies.join(",")
+      : selectedCurrencies.join(",");
     return {
       accountDbId: viewAccountId,
       companyId,

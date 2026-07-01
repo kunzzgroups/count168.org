@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { portalToDocumentBody } from "../../../components/ProcessModalPortal.jsx";
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
 import { TRANSACTION_I18N } from "../../../translateFile/pages/transactionTranslate.js";
@@ -9,15 +9,20 @@ import {
   parseDmy,
 } from "../../maintenance/shared/maintenanceDateHelpers.js";
 import {
+  closeMaintenanceCalendarPopup,
+  ensureMaintenanceDateRangePicker,
+} from "../../../utils/date/dateRangePicker.js";
+import {
   buildMemberReportFilename,
-  buildMemberReportPrintHtml,
+  downloadMemberReportPdf,
+  exportCurrencyCodes,
   fetchMemberReportHistory,
   fetchPaymentHistoryExportCurrencies,
-  openReportPrintWindow,
-  renderReportToWindow,
-  resolveExportCurrencyDefault,
+  resolveExportCurrenciesDefault,
   ymdRangeToDmy,
 } from "../lib/paymentHistoryMemberReportExport.js";
+import { applyCurrencyToggle, splitWinLossAccountBands } from "../../member/memberPageHelpers.js";
+import "./PaymentHistoryExportPdfModal.css";
 
 function ExportPdfIcon() {
   return (
@@ -29,15 +34,6 @@ function ExportPdfIcon() {
         strokeLinejoin="round"
       />
       <path d="M14 2v6h6M8 13h8M8 17h5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function InfoIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.75" />
-      <path d="M12 10v6M12 7.5v.5" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
     </svg>
   );
 }
@@ -74,12 +70,88 @@ export default function PaymentHistoryExportPdfModal({
   const [dateFromYmd, setDateFromYmd] = useState(initialFromYmd);
   const [dateToYmd, setDateToYmd] = useState(initialToYmd);
   const [currencies, setCurrencies] = useState([]);
-  const [selectedCurrency, setSelectedCurrency] = useState("");
+  const [isAllSelected, setIsAllSelected] = useState(true);
+  const [selectedCurrencies, setSelectedCurrencies] = useState([]);
   const [loadingCurrencies, setLoadingCurrencies] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const abortRef = useRef(null);
-  const singleCurrency = currencies.length === 1;
+
+  const exportModalTitle = useMemo(() => {
+    const code = accountContextLabel?.code || "";
+    const reportTitle = String(m.exportPdfTitle || "WIN/LOSE REPORT").trim();
+    if (code) return `${code} - ${reportTitle}`;
+    return reportTitle;
+  }, [accountContextLabel, m.exportPdfTitle]);
+
+  const exportCodes = useMemo(
+    () => exportCurrencyCodes(isAllSelected, selectedCurrencies, currencies),
+    [isAllSelected, selectedCurrencies, currencies],
+  );
+
+  const currencyButtonsRef = useRef(null);
+  const currencyMeasureRef = useRef(null);
+  const [currencyLayout, setCurrencyLayout] = useState({ containerWidth: 0, segmentWidths: [] });
+
+  const currencyCells = useMemo(() => {
+    const codes = Array.isArray(currencies) ? currencies : [];
+    const cells = [];
+    if (codes.length > 1) cells.push({ type: "all" });
+    codes.forEach((code) => cells.push({ type: "code", code }));
+    return cells;
+  }, [currencies]);
+
+  const currencyFilterBands = useMemo(
+    () =>
+      splitWinLossAccountBands(
+        currencyCells,
+        currencyLayout.segmentWidths,
+        currencyLayout.containerWidth,
+      ),
+    [currencyCells, currencyLayout.containerWidth, currencyLayout.segmentWidths],
+  );
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const container = currencyButtonsRef.current;
+    const measure = currencyMeasureRef.current;
+    if (!container || !measure) return undefined;
+
+    const update = () => {
+      const containerWidth = Math.max(container.clientWidth, 0);
+      const buttons = measure.querySelectorAll("button.user-gc-segment");
+      const segmentWidths = Array.from(buttons).map((btn) => btn.offsetWidth);
+      setCurrencyLayout((prev) => {
+        if (
+          prev.containerWidth === containerWidth
+          && prev.segmentWidths.length === segmentWidths.length
+          && prev.segmentWidths.every((w, i) => w === segmentWidths[i])
+        ) {
+          return prev;
+        }
+        return { containerWidth, segmentWidths };
+      });
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("resize", update);
+      ro.disconnect();
+    };
+  }, [open, currencyCells, isAllSelected, selectedCurrencies, m.all]);
+
+  useEffect(() => {
+    if (!open) closeMaintenanceCalendarPopup();
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    ensureMaintenanceDateRangePicker();
+    window.MaintenanceDateRangePicker?.bindPickers?.();
+  }, [open, pickerInstanceId]);
 
   useEffect(() => {
     if (!open) return;
@@ -94,7 +166,8 @@ export default function PaymentHistoryExportPdfModal({
     const companyId = scope?.companyId;
     if (!accountId || !companyId) {
       setCurrencies([]);
-      setSelectedCurrency("");
+      setIsAllSelected(true);
+      setSelectedCurrencies([]);
       return undefined;
     }
     if (abortRef.current) abortRef.current.abort();
@@ -105,13 +178,16 @@ export default function PaymentHistoryExportPdfModal({
     void fetchPaymentHistoryExportCurrencies(accountId, companyId, controller.signal)
       .then((list) => {
         if (controller.signal.aborted) return;
+        const defaults = resolveExportCurrenciesDefault(scope?.currency, list);
         setCurrencies(list);
-        setSelectedCurrency(resolveExportCurrencyDefault(scope?.currency, list));
+        setIsAllSelected(defaults.isAllSelected);
+        setSelectedCurrencies(defaults.codes);
       })
       .catch((err) => {
         if (err?.name === "AbortError" || controller.signal.aborted) return;
         setCurrencies([]);
-        setSelectedCurrency("");
+        setIsAllSelected(true);
+        setSelectedCurrencies([]);
         setError(err?.message || m.exportPdfLoadCurrenciesFailed);
       })
       .finally(() => {
@@ -126,17 +202,31 @@ export default function PaymentHistoryExportPdfModal({
     setError("");
   }, []);
 
+  const handleToggleCurrency = useCallback(
+    (code) => {
+      const next = applyCurrencyToggle(currencies, isAllSelected, selectedCurrencies, code);
+      setIsAllSelected(next.isAllSelected);
+      setSelectedCurrencies(next.selectedCurrencies);
+      setError("");
+    },
+    [currencies, isAllSelected, selectedCurrencies],
+  );
+
+  const handleSelectAllCurrencies = useCallback(() => {
+    setIsAllSelected(true);
+    setSelectedCurrencies([]);
+    setError("");
+  }, []);
+
   const handleExport = useCallback(async () => {
     const accountId = scope?.accountDbId;
     const { dateFrom, dateTo } = ymdRangeToDmy(dateFromYmd, dateToYmd);
-    const currency = String(selectedCurrency || "")
-      .trim()
-      .toUpperCase();
+    const codes = exportCodes;
     if (!dateFrom || !dateTo) {
       setError(m.pleaseSelectDateRange);
       return;
     }
-    if (!currency) {
+    if (!codes.length) {
       setError(m.pleaseSelectCurrency);
       return;
     }
@@ -144,44 +234,39 @@ export default function PaymentHistoryExportPdfModal({
       setError(m.exportPdfMissingAccount);
       return;
     }
-    const printWin = openReportPrintWindow(m.exportPdfExporting);
-    if (!printWin) {
-      setError(m.exportPdfPopupBlocked);
-      return;
-    }
+    const filename = buildMemberReportFilename({
+      accountCode,
+      currencies: codes,
+      dateFrom,
+      dateTo,
+    });
     setExporting(true);
     setError("");
     try {
-      const rows = await fetchMemberReportHistory({
-        accountId,
-        companyId: scope.companyId,
-        dateFrom,
-        dateTo,
-        currency,
-      });
-      const html = buildMemberReportPrintHtml({
-        rows,
-        currency,
+      const sections = await Promise.all(
+        codes.map(async (currency) => {
+          const rows = await fetchMemberReportHistory({
+            accountId,
+            companyId: scope.companyId,
+            dateFrom,
+            dateTo,
+            currency,
+          });
+          return { currency, rows };
+        }),
+      );
+      await downloadMemberReportPdf({
+        sections,
         accountCode,
         accountName,
         dateFrom,
         dateTo,
         lang,
+        filename,
       });
-      const filename = buildMemberReportFilename({ accountCode, currency, dateFrom, dateTo });
-      renderReportToWindow(printWin, { html, documentTitle: filename });
       onClose?.();
     } catch (err) {
-      try {
-        if (printWin && !printWin.closed) printWin.close();
-      } catch {
-        /* ignore */
-      }
       if (err?.name === "AbortError") return;
-      if (err?.message === "Popup blocked") {
-        setError(m.exportPdfPopupBlocked);
-        return;
-      }
       setError(err?.message || m.exportPdfFailed);
     } finally {
       setExporting(false);
@@ -190,7 +275,7 @@ export default function PaymentHistoryExportPdfModal({
     scope,
     dateFromYmd,
     dateToYmd,
-    selectedCurrency,
+    exportCodes,
     accountCode,
     accountName,
     lang,
@@ -206,17 +291,21 @@ export default function PaymentHistoryExportPdfModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-history-export-title"
-      onClick={(e) => {
-        if (e.target === e.currentTarget && !exporting) onClose?.();
-      }}
     >
+      <button
+        type="button"
+        className="transaction-payment-history-export-overlay__backdrop"
+        aria-label={m.close}
+        disabled={exporting}
+        onClick={() => {
+          closeMaintenanceCalendarPopup();
+          onClose?.();
+        }}
+      />
       <div className="transaction-payment-history-export-modal">
         <div className="transaction-payment-history-export-modal__header">
-          <div className="transaction-payment-history-export-modal__title-row">
-            <span className="transaction-payment-history-export-modal__title-icon" aria-hidden="true">
-              <ExportPdfIcon />
-            </span>
-            <h3 id="payment-history-export-title">{m.exportPdfTitle}</h3>
+          <div className="transaction-payment-history-export-modal__heading">
+            <h3 id="payment-history-export-title">{exportModalTitle}</h3>
           </div>
           <button
             type="button"
@@ -229,35 +318,18 @@ export default function PaymentHistoryExportPdfModal({
           </button>
         </div>
 
-        {accountContextLabel ? (
-          <div className="transaction-payment-history-export-modal__account">
-            <span className="transaction-payment-history-export-modal__account-code">
-              {accountContextLabel.code}
-            </span>
-            {accountContextLabel.name ? (
-              <span className="transaction-payment-history-export-modal__account-name">
-                {accountContextLabel.name}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-
         <div className="transaction-payment-history-export-modal__body">
-          <p className="transaction-payment-history-export-modal__hint">
-            <span className="transaction-payment-history-export-modal__hint-icon" aria-hidden="true">
-              <InfoIcon />
-            </span>
-            <span>{m.exportPdfHint}</span>
-          </p>
-
           <div className="transaction-payment-history-export-modal__form">
-            <div className="transaction-payment-history-export-modal__field transaction-payment-history-export-modal__field--date">
+            <span className="transaction-payment-history-export-modal__inline-label transaction-payment-history-export-modal__inline-label--date">
+              {m.exportPdfDateRange}:
+            </span>
+            <div className="transaction-payment-history-export-modal__inline-control transaction-payment-history-export-modal__inline-control--date">
               <ReportDatePicker
                 dateFrom={dateFromYmd}
                 dateTo={dateToYmd}
                 onRangeChange={handleRangeChange}
                 containerClass="transaction-payment-history-export-date"
-                label={m.exportPdfDateRange}
+                label=""
                 placeholder={m.exportPdfSelectDateRange}
                 selectEndDateHint={m.exportPdfSelectEndDate}
                 captureDateStyle
@@ -269,32 +341,83 @@ export default function PaymentHistoryExportPdfModal({
                 weekdaysShort={m.weekdaysShort}
               />
             </div>
+            <p className="transaction-payment-history-export-modal__field-hint">{m.exportPdfHint}</p>
 
-            <div className="transaction-payment-history-export-modal__field transaction-payment-history-export-modal__field--currency">
-              <span className="transaction-payment-history-export-modal__label">{m.exportPdfCurrency}</span>
-              {loadingCurrencies ? (
-                <p className="transaction-payment-history-export-modal__loading">{m.loading}</p>
-              ) : currencies.length === 0 ? (
-                <p className="transaction-payment-history-export-modal__empty">{m.exportPdfNoCurrencies}</p>
-              ) : singleCurrency ? (
-                <span className="transaction-payment-history-export-currency-badge">{selectedCurrency}</span>
-              ) : (
-                <div className="transaction-payment-history-export-chips" role="group" aria-label={m.exportPdfCurrency}>
-                  {currencies.map((code) => (
-                    <button
-                      key={code}
-                      type="button"
-                      className={`transaction-payment-history-export-chip${selectedCurrency === code ? " is-on" : ""}`}
-                      onClick={() => {
-                        setSelectedCurrency(code);
-                        setError("");
-                      }}
+            <span className="transaction-payment-history-export-modal__inline-label transaction-payment-history-export-modal__inline-label--currency">
+              {m.exportPdfCurrency}:
+            </span>
+            <div className="transaction-payment-history-export-modal__inline-control transaction-payment-history-export-modal__inline-control--currency">
+                {loadingCurrencies ? (
+                  <p className="transaction-payment-history-export-modal__loading">{m.loading}</p>
+                ) : currencies.length === 0 ? (
+                  <p className="transaction-payment-history-export-modal__empty">{m.exportPdfNoCurrencies}</p>
+                ) : (
+                  <div
+                    className="transaction-payment-history-export-modal__currency-pills user-gc-inline-pills"
+                    ref={currencyButtonsRef}
+                    role="group"
+                    aria-label={m.exportPdfCurrency}
+                  >
+                    <div
+                      ref={currencyMeasureRef}
+                      className="transaction-payment-history-export-modal__currency-measure"
+                      aria-hidden="true"
                     >
-                      {code}
-                    </button>
-                  ))}
-                </div>
-              )}
+                      {currencyCells.map((cell) =>
+                        cell.type === "all" ? (
+                          <button key="export-ccy-measure-all" type="button" tabIndex={-1} className="user-gc-segment">
+                            {m.all || "ALL"}
+                          </button>
+                        ) : (
+                          <button
+                            key={`export-ccy-measure-${cell.code}`}
+                            type="button"
+                            tabIndex={-1}
+                            className="user-gc-segment"
+                          >
+                            {cell.code}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                    {currencyFilterBands.map((band, segIdx) => (
+                      <div
+                        key={`export-ccy-band-${segIdx}`}
+                        className="user-gc-segment-group transaction-payment-history-export-modal__currency-segments"
+                        style={{
+                          width: "fit-content",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        {band.map((cell) =>
+                          cell.type === "all" ? (
+                            <button
+                              key="all"
+                              type="button"
+                              className={`user-gc-segment${isAllSelected ? " is-on" : ""}`}
+                              data-currency-code="ALL"
+                              onClick={handleSelectAllCurrencies}
+                            >
+                              {m.all || "ALL"}
+                            </button>
+                          ) : (
+                            <button
+                              key={cell.code}
+                              type="button"
+                              className={`user-gc-segment${
+                                !isAllSelected && selectedCurrencies.includes(cell.code) ? " is-on" : ""
+                              }`}
+                              data-currency-code={cell.code}
+                              onClick={() => handleToggleCurrency(cell.code)}
+                            >
+                              {cell.code}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
             </div>
           </div>
 
@@ -317,7 +440,7 @@ export default function PaymentHistoryExportPdfModal({
           <button
             type="button"
             className="transaction-payment-history-export-modal__btn transaction-payment-history-export-modal__btn--primary"
-            disabled={exporting || loadingCurrencies || !selectedCurrency}
+            disabled={exporting || loadingCurrencies || exportCodes.length === 0}
             onClick={() => void handleExport()}
           >
             <ExportPdfIcon />

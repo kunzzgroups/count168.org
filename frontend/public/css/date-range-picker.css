@@ -719,6 +719,46 @@ body.transaction-page .transaction-category-date-row .transaction-outlined-field
     box-sizing: border-box;
 }
 
+/* Open state: grid layout must not depend on inline display: block substring matching */
+#calendar-popup.calendar-popup--transaction-range[data-open="true"] {
+    display: grid !important;
+    pointer-events: auto;
+}
+
+#calendar-popup.calendar-popup--transaction-range .transaction-calendar-presets {
+    grid-column: 1;
+    grid-row: 1;
+    position: relative;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+#calendar-popup.calendar-popup--transaction-range .transaction-calendar-panel {
+    grid-column: 2;
+    grid-row: 1;
+    position: relative;
+    z-index: 1;
+    min-width: 0;
+    pointer-events: auto;
+}
+
+#calendar-popup.calendar-popup--transaction-range .transaction-calendar-preset {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* Calendar overlaps filter pills below the trigger — suspend their hit-testing while open */
+body[data-calendar-open="true"] .transaction-bottom-filters,
+body[data-calendar-open="true"] .member-dash-col-filters .user-gc-inline-pills,
+body[data-calendar-open="true"] .member-dash-col-filters .user-gc-segment-group {
+    pointer-events: none;
+}
+
+#calendar-popup.calendar-popup--above-export-modal {
+    z-index: 100001 !important;
+    pointer-events: auto;
+}
+
 /* Centered Date Range Typography and Balanced Spacing */
 .report-date-range-picker-container .date-range-picker {
     display: flex !important;

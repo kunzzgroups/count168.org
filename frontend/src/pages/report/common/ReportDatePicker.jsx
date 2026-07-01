@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
   bindMaintenanceCalendarDismissListeners,
   ensureMaintenanceDateRangePicker,
@@ -84,21 +84,15 @@ export default function ReportDatePicker({
   }, []);
 
   useEffect(() => {
-    let disposed = false;
+    if (instanceId) return undefined;
 
+    let disposed = false;
     const initPicker = () => {
       if (disposed || !window?.MaintenanceDateRangePicker?.init) return;
       window.MaintenanceDateRangePicker.init({
         allowEmpty: false,
         placeholder,
         selectEndDateHint,
-        onChange: () => {
-          const nextFromDmy = window.MaintenanceDateRangePicker.getDateFrom?.() || "";
-          const nextToDmy = window.MaintenanceDateRangePicker.getDateTo?.() || "";
-          const nextFrom = dmyToYmd(nextFromDmy);
-          const nextTo = dmyToYmd(nextToDmy);
-          if (nextFrom && nextTo) onRangeChangeRef.current?.(nextFrom, nextTo);
-        },
       });
     };
 
@@ -108,7 +102,44 @@ export default function ReportDatePicker({
     return () => {
       disposed = true;
     };
-  }, [placeholder, selectEndDateHint]);
+  }, [placeholder, selectEndDateHint, instanceId]);
+
+  useLayoutEffect(() => {
+    ensureMaintenanceDateRangePicker();
+    window.MaintenanceDateRangePicker?.bindPickers?.();
+  }, [ids.picker]);
+
+  useEffect(() => {
+    const picker = document.getElementById(ids.picker);
+    if (!picker) return undefined;
+
+    const onChanged = () => {
+      const fromEl = document.getElementById(ids.dateFrom);
+      const toEl = document.getElementById(ids.dateTo);
+      const nextFrom = dmyToYmd(fromEl?.value || "");
+      const nextTo = dmyToYmd(toEl?.value || "");
+      if (nextFrom && nextTo) onRangeChangeRef.current?.(nextFrom, nextTo);
+    };
+
+    picker.addEventListener("ec:date-changed", onChanged);
+    return () => picker.removeEventListener("ec:date-changed", onChanged);
+  }, [ids.picker, ids.dateFrom, ids.dateTo]);
+
+  const openCalendar = useCallback((event) => {
+    event.stopPropagation();
+    ensureMaintenanceDateRangePicker();
+    window.MaintenanceDateRangePicker?.togglePicker?.(event.currentTarget);
+  }, []);
+
+  const onPickerKeyDown = useCallback(
+    (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openCalendar(event);
+      }
+    },
+    [openCalendar],
+  );
 
   const pickerDataAttrs = {
     "data-drp-from": ids.dateFrom,
@@ -124,6 +155,8 @@ export default function ReportDatePicker({
         role="button"
         tabIndex={0}
         aria-labelledby={outlinedFloatingLabel ? anchorLabelId : undefined}
+        onClick={openCalendar}
+        onKeyDown={onPickerKeyDown}
         {...pickerDataAttrs}
       >
         <i className="fas fa-calendar-alt" />
@@ -139,6 +172,8 @@ export default function ReportDatePicker({
     <div
       className="date-range-picker"
       id={ids.picker}
+      onClick={openCalendar}
+      onKeyDown={onPickerKeyDown}
       {...pickerDataAttrs}
       {...(outlinedFloatingLabel
         ? { role: "button", tabIndex: 0, "aria-labelledby": anchorLabelId }
