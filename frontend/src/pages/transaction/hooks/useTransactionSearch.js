@@ -22,7 +22,7 @@ import {
   saveUserCurrencyOrder,
   transactionQueryKeys,
 } from "../lib/transactionApi.js";
-import { getTxSearchCache, setTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
+import { getTxSearchCache, setTxSearchCache, clearTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
 import {
   buildDefaultSearchApiParams,
   buildTransactionSearchRequestKey,
@@ -545,6 +545,16 @@ export function useTransactionSearch({
         showAllCurrencies,
         selectedCurrencies,
       });
+
+      if (forceRefresh) {
+        clearTxSearchCache();
+        try {
+          if (sessionKey) sessionStorage.removeItem(sessionKey);
+        } catch {
+          /* ignore */
+        }
+        await queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
+      }
 
       let instantData = null;
       if (!forceRefresh) {

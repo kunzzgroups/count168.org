@@ -175,17 +175,19 @@ function ensureTransactionsAllowZeroAmount(PDO $pdo): void
  */
 function clearTransactionSearchCache(): void
 {
-    $cacheDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'count168_tx_search';
-    if (!is_dir($cacheDir)) {
-        return;
-    }
-    foreach (scandir($cacheDir) as $file) {
-        if ($file === '.' || $file === '..') {
+    foreach (['count168_tx_search', 'count168_tx_search_cache'] as $dirName) {
+        $cacheDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . $dirName;
+        if (!is_dir($cacheDir)) {
             continue;
         }
-        $fullPath = $cacheDir . DIRECTORY_SEPARATOR . $file;
-        if (is_file($fullPath)) {
-            @unlink($fullPath);
+        foreach (scandir($cacheDir) as $file) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            $fullPath = $cacheDir . DIRECTORY_SEPARATOR . $file;
+            if (is_file($fullPath)) {
+                @unlink($fullPath);
+            }
         }
     }
 }
