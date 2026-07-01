@@ -89,6 +89,8 @@ export default function PaymentHistoryExportPdfModal({
     [isAllSelected, selectedCurrencies, currencies],
   );
 
+  const currencySelectionRequired = currencies.length > 0 && !loadingCurrencies && exportCodes.length === 0;
+
   const currencyButtonsRef = useRef(null);
   const currencyMeasureRef = useRef(null);
   const [currencyLayout, setCurrencyLayout] = useState({ containerWidth: 0, segmentWidths: [] });
@@ -418,6 +420,11 @@ export default function PaymentHistoryExportPdfModal({
                     ))}
                   </div>
                 )}
+              {currencySelectionRequired ? (
+                <p className="transaction-payment-history-export-modal__currency-warn" role="alert">
+                  {m.pleaseSelectCurrency}
+                </p>
+              ) : null}
             </div>
           </div>
 

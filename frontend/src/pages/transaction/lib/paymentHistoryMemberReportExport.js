@@ -1,4 +1,5 @@
-import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { assetUrl, buildApiUrl } from "../../../utils/core/apiUrl.js";
+import pdfBrandLogoUrl from "../../../assets/images/count_brandlogo.png?url";
 import { formatDmyFromYmd } from "../../maintenance/shared/maintenanceDateHelpers.js";
 import { computeTableTotals, formatPaymentHistoryMoney } from "../../member/memberPageHelpers.js";
 import { parseJsonResponse } from "../../member/memberWinLossApi.js";
@@ -281,6 +282,9 @@ export function resolveExportCurrenciesDefault(scopeCurrency, currencies) {
   if (!list.length) {
     return { isAllSelected: true, codes: [] };
   }
+  if (list.length === 1) {
+    return { isAllSelected: false, codes: [list[0]] };
+  }
   const raw = String(scopeCurrency || "")
     .trim()
     .toUpperCase();
@@ -304,9 +308,12 @@ export function resolveExportCurrenciesDefault(scopeCurrency, currencies) {
 export function exportCurrencyCodes(isAllSelected, selectedCurrencies, availableCurrencies) {
   const list = Array.isArray(availableCurrencies) ? availableCurrencies : [];
   if (!list.length) return [];
+  if (list.length === 1) {
+    const code = list[0];
+    return (selectedCurrencies || []).includes(code) ? [code] : [];
+  }
   if (isAllSelected) return [...list];
-  const picked = (selectedCurrencies || []).filter((c) => list.includes(c));
-  return picked.length ? picked : [...list];
+  return (selectedCurrencies || []).filter((c) => list.includes(c));
 }
 
 export function ymdRangeToDmy(dateFromYmd, dateToYmd) {
@@ -599,16 +606,125 @@ function applyPdfMoneyStyle(cell, rawValue) {
   }
 }
 
-/** A4 portrait — column widths total ~190mm (210mm page − 10mm margins). */
+const PDF_LOGO_PATH = "images/count_brandlogo.png";
+const PDF_LOGO_HEIGHT_MM = 8;
+const PDF_LOGO_TOP_TRIM_MM = 1.1;
+const PDF_TITLE_FONT_PT = 14;
+const PDF_META_FONT_PT = 9;
+const PDF_HEADER_TOP_MM = 10;
+const PDF_FIRST_PAGE_TOP_MARGIN_MM = 30;
+const PDF_OTHER_PAGE_TOP_MARGIN_MM = 22;
+const PDF_BRAND_BAR_RGB = [0, 44, 73];
+const PDF_FOOTER_BOTTOM_MM = 10;
+
+function resolvePdfLogoUrls(relativePath) {
+  const clean = String(relativePath || "").replace(/^\//, "");
+  const urls = [];
+  const base = String(import.meta.env?.BASE_URL || "/");
+  const basePath = base.endsWith("/") ? base : `${base}/`;
+  urls.push(new URL(clean, `${window.location.origin}${basePath}`).href);
+  urls.push(assetUrl(clean));
+  urls.push(new URL(`/${clean}`, window.location.origin).href);
+  return [...new Set(urls)];
+}
+
+async function loadPdfLogoAsset() {
+  const urls = [pdfBrandLogoUrl, ...resolvePdfLogoUrls(PDF_LOGO_PATH)];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        credentials: "same-origin",
+        cache: "force-cache",
+      });
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+      const dims = await new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ w: img.naturalWidth || 1, h: img.naturalHeight || 1 });
+        img.onerror = () => resolve({ w: 1, h: 1 });
+        img.src = dataUrl;
+      });
+      if (dims.w > 1 && dims.h > 1) {
+        return { dataUrl, dims };
+      }
+    } catch {
+      /* try next URL */
+    }
+  }
+  return null;
+}
+
+function pdfCapHeightMm(fontSizePt) {
+  return fontSizePt * 0.352778 * 0.72;
+}
+
+function pdfLineHeightMm(fontSizePt) {
+  return fontSizePt * 0.352778 * 1.15;
+}
+
+function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, showTitle }) {
+  const capTopY = PDF_HEADER_TOP_MM;
+  let blockBottomY = capTopY;
+  const leftX = marginX;
+
+  let logoImgW = 0;
+  if (logo?.dataUrl) {
+    const imgH = PDF_LOGO_HEIGHT_MM;
+    const imgW = imgH * (logo.dims.w / logo.dims.h);
+    logoImgW = imgW;
+    const logoTopY = capTopY - PDF_LOGO_TOP_TRIM_MM;
+    doc.addImage(logo.dataUrl, "PNG", pageW - marginX - imgW, logoTopY, imgW, imgH);
+    blockBottomY = Math.max(blockBottomY, logoTopY + imgH);
+  }
+
+  if (showTitle && title) {
+    const titleMaxW = pageW - marginX * 2 - (logoImgW > 0 ? logoImgW + 4 : 0);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(PDF_TITLE_FONT_PT);
+    doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
+    const titleBaselineY = capTopY + pdfCapHeightMm(PDF_TITLE_FONT_PT);
+    doc.text(title, leftX, titleBaselineY, { align: "left", maxWidth: titleMaxW });
+    blockBottomY = Math.max(blockBottomY, titleBaselineY);
+    if (meta) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(PDF_META_FONT_PT);
+      doc.setTextColor(100, 116, 139);
+      const metaBaselineY = titleBaselineY + pdfLineHeightMm(PDF_META_FONT_PT);
+      doc.text(meta, leftX, metaBaselineY, { align: "left", maxWidth: titleMaxW });
+      blockBottomY = Math.max(blockBottomY, metaBaselineY);
+    }
+  }
+
+  const sepY = blockBottomY + 4;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.35);
+  doc.line(marginX, sepY, pageW - marginX, sepY);
+  return sepY + 4;
+}
+
+function drawPdfPageFooter(doc, { pageW, pageH, pageLabel }) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  doc.text(pageLabel, pageW / 2, pageH - PDF_FOOTER_BOTTOM_MM, { align: "center" });
+}
+
+/** A4 portrait — column widths total 190mm; Date fits dd/mm/yyyy on one line. */
 const PDF_TABLE_COLUMN_STYLES = {
-  0: { cellWidth: 21 },
-  1: { cellWidth: 23 },
-  2: { cellWidth: 11, halign: "right" },
-  3: { cellWidth: 19, halign: "right" },
-  4: { cellWidth: 19, halign: "right" },
-  5: { cellWidth: 19, halign: "right" },
-  6: { cellWidth: 65 },
-  7: { cellWidth: 13, halign: "center" },
+  0: { cellWidth: 24, halign: "left", overflow: "hidden", fontStyle: "bold" },
+  1: { cellWidth: 22, overflow: "hidden", fontStyle: "bold" },
+  2: { cellWidth: 16, halign: "right", overflow: "hidden" },
+  3: { cellWidth: 18, halign: "right", overflow: "hidden" },
+  4: { cellWidth: 18, halign: "right", overflow: "hidden" },
+  5: { cellWidth: 20, halign: "right", overflow: "hidden" },
+  6: { cellWidth: 54, overflow: "linebreak" },
+  7: { cellWidth: 18, halign: "center", overflow: "hidden" },
 };
 
 /**
@@ -632,7 +748,7 @@ export async function downloadMemberReportPdf({
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const marginX = 10;
-  let cursorY = 14;
+  const logo = await loadPdfLogoAsset();
 
   const headerSection = buildMemberReportSectionData({
     rows: sections?.[0]?.rows || [],
@@ -644,17 +760,9 @@ export async function downloadMemberReportPdf({
     lang,
   });
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(0, 44, 73);
-  doc.text(headerSection.docTitle, marginX, cursorY);
-  cursorY += 7;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(71, 85, 105);
-  doc.text(headerSection.docMeta, marginX, cursorY);
-  cursorY += 9;
+  const t = (key, params) => getMemberText(lang, key, params);
+  let titleDrawn = false;
+  let cursorY = PDF_FIRST_PAGE_TOP_MARGIN_MM;
 
   const sectionList = sections || [];
   sectionList.forEach((section, sectionIdx) => {
@@ -668,17 +776,19 @@ export async function downloadMemberReportPdf({
       lang,
     });
     const sourceRows = section.rows || [];
+    let tableStartY = sectionIdx === 0 ? undefined : cursorY;
 
     if (sectionList.length > 1) {
       if (sectionIdx > 0 && cursorY > pageH - 40) {
         doc.addPage();
-        cursorY = 14;
+        tableStartY = undefined;
       }
+      const currencyTitleY = tableStartY ?? PDF_OTHER_PAGE_TOP_MARGIN_MM;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
       doc.setTextColor(31, 41, 55);
-      doc.text(sectionData.currencyTitle, marginX, cursorY);
-      cursorY += 6;
+      doc.text(sectionData.currencyTitle, marginX, currencyTitleY);
+      tableStartY = currencyTitleY + 6;
     }
 
     const body = sourceRows.map((row) => rowToTableCells(row, lang));
@@ -697,13 +807,40 @@ export async function downloadMemberReportPdf({
     ];
 
     autoTable(doc, {
-      startY: cursorY,
-      margin: { left: marginX, right: marginX },
+      startY: tableStartY,
+      margin: {
+        top: sectionIdx === 0 ? PDF_FIRST_PAGE_TOP_MARGIN_MM : PDF_OTHER_PAGE_TOP_MARGIN_MM,
+        left: marginX,
+        right: marginX,
+        bottom: PDF_FOOTER_BOTTOM_MM + 4,
+      },
       tableWidth: pageW - marginX * 2,
       head: [sectionData.headers],
       body,
       foot,
+      showFoot: "lastPage",
       theme: "grid",
+      didDrawPage: (hookData) => {
+        const pageNum = hookData.pageNumber;
+        if (pageNum > 1) {
+          hookData.settings.margin.top = PDF_OTHER_PAGE_TOP_MARGIN_MM;
+        }
+        const showTitle = !titleDrawn && pageNum === 1 && sectionIdx === 0;
+        if (showTitle) titleDrawn = true;
+        drawPdfPageHeader(doc, {
+          logo,
+          pageW,
+          marginX,
+          title: headerSection.docTitle,
+          meta: headerSection.docMeta,
+          showTitle,
+        });
+        drawPdfPageFooter(doc, {
+          pageW,
+          pageH,
+          pageLabel: t("exportPdfPageLabel", { page: pageNum }),
+        });
+      },
       styles: {
         font: "helvetica",
         fontSize: 9,
@@ -719,6 +856,8 @@ export async function downloadMemberReportPdf({
         textColor: 255,
         fontStyle: "bold",
         fontSize: 9,
+        minCellHeight: 8,
+        valign: "middle",
       },
       footStyles: {
         fillColor: [238, 244, 255],
@@ -729,11 +868,18 @@ export async function downloadMemberReportPdf({
       alternateRowStyles: { fillColor: [244, 247, 252] },
       columnStyles: PDF_TABLE_COLUMN_STYLES,
       didParseCell: (hookData) => {
+        if (hookData.section === "head") {
+          hookData.cell.styles.cellPadding = { top: 3, right: 2, bottom: 3, left: 2 };
+        }
         if (hookData.section === "body") {
           const row = sourceRows[hookData.row.index];
           if (row?.row_type === "bf") {
             hookData.cell.styles.fillColor = [238, 244, 255];
             hookData.cell.styles.textColor = [30, 58, 95];
+          }
+          if (hookData.column.index === 0) {
+            hookData.cell.styles.overflow = "hidden";
+            hookData.cell.styles.whiteSpace = "nowrap";
           }
           if (hookData.column.index === 3) applyPdfMoneyStyle(hookData.cell, row?.win_loss);
           if (hookData.column.index === 4) applyPdfMoneyStyle(hookData.cell, row?.cr_dr);
@@ -754,7 +900,7 @@ export async function downloadMemberReportPdf({
       },
     });
 
-    cursorY = (doc.lastAutoTable?.finalY || cursorY) + 12;
+    cursorY = (doc.lastAutoTable?.finalY || tableStartY || PDF_FIRST_PAGE_TOP_MARGIN_MM) + 12;
   });
 
   const safeName = String(filename || "WinLoss-Report").replace(/[<>:"/\\|?*]+/g, "_");

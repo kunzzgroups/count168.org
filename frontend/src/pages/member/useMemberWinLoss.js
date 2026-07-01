@@ -514,9 +514,13 @@ export function useMemberWinLoss({ showNotification, lang }) {
 
       let useAll = selectionOverride?.isAllSelected ?? isAllSelected;
       let useSelected = selectionOverride?.selectedCurrencies ?? selectedCurrencies;
-      if (!useAll && (!useSelected?.length) && availableCurrencies.length > 0) {
-        useAll = true;
-        useSelected = [];
+      if (!useAll && (!useSelected?.length)) {
+        setHistoryRows([]);
+        commitTableDisplayContext(false, [], [], availableCurrencies);
+        finishHistoryFetch(seq);
+        const gridCur = getMemberMiniGridCurrencies(availableCurrencies, false, []);
+        void refreshMiniGrid(seq, gridCur, dateFrom, dateTo, viewAccountId, companyId);
+        return;
       }
       const cacheKey = buildViewCacheKey(viewAccountId, companyId, dateFrom, dateTo, useAll, useSelected);
       const targetCurrencies = useAll ? availableCurrencies : [...useSelected];

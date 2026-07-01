@@ -399,6 +399,12 @@ body.ec-auth-shell .transaction-payment-history-export-overlay .transaction-paym
   color: #64748b;
 }
 
+.transaction-payment-history-export-modal__currency-warn {
+  margin: 8px 0 0;
+  font-size: var(--export-modal-text);
+  color: #b91c1c;
+}
+
 .transaction-payment-history-export-modal__error {
   margin: 0;
   padding: 12px 14px;

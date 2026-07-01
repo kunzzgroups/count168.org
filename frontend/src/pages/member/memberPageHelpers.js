@@ -488,7 +488,7 @@ export function applyCurrencyAllToggle(available, isAllSelected) {
   return { isAllSelected: true, selectedCurrencies: [] };
 }
 
-/** 切换币种按钮：至少保留一项（无选中时回退为 All）。 */
+/** 切换币种按钮：可全部取消；无选中时不展示数据表。 */
 export function applyCurrencyToggle(available, isAllSelected, selectedCurrencies, code) {
   if (!available?.length) {
     return { isAllSelected: true, selectedCurrencies: [] };
@@ -499,7 +499,7 @@ export function applyCurrencyToggle(available, isAllSelected, selectedCurrencies
   if (selectedCurrencies.includes(code)) {
     const next = selectedCurrencies.filter((c) => c !== code);
     if (next.length === 0) {
-      return { isAllSelected: true, selectedCurrencies: [] };
+      return { isAllSelected: false, selectedCurrencies: [] };
     }
     return { isAllSelected: false, selectedCurrencies: next };
   }
@@ -512,11 +512,15 @@ export function sanitizeCurrencySelection(available, isAllSelected, selectedCurr
   if (!available.length) {
     return { isAllSelected: true, selectedCurrencies: [] };
   }
+  // 初始进入：仅一个币种且仍为 All 语义时，默认选中该币种以便高亮
+  if (available.length === 1 && isAllSelected && retained.length === 0) {
+    return { isAllSelected: false, selectedCurrencies: [available[0]] };
+  }
   if (isAllSelected) {
     return { isAllSelected: true, selectedCurrencies: [] };
   }
   if (retained.length === 0) {
-    return { isAllSelected: true, selectedCurrencies: [] };
+    return { isAllSelected: false, selectedCurrencies: [] };
   }
   return { isAllSelected: false, selectedCurrencies: retained };
 }
