@@ -43,6 +43,8 @@ import {
   buildEditDescriptionSelection,
   processListCacheHasEntry,
   processListCacheHasRows,
+  emptyCopyFromSyncFields,
+  buildCopyFromFormPatch,
 } from "./processListHelpers.js";
 import {
   fetchGamesProcessListSlice,
@@ -1169,6 +1171,54 @@ export default function ProcessListPage() {
     setDescriptionPickerOpen(false);
   };
 
+  const handleCopyFromSelect = useCallback(
+    async (processId) => {
+      const id = String(processId ?? "").trim();
+      if (!id) {
+        setForm((prev) => ({
+          ...prev,
+          copy_from: "",
+          ...emptyCopyFromSyncFields(),
+        }));
+        return;
+      }
+
+      try {
+        const url = new URL(buildApiUrl("api/processes/addprocess_api.php"));
+        url.searchParams.set("action", "copy_from");
+        url.searchParams.set("process_id", id);
+        if (companyId) url.searchParams.set("company_id", String(companyId));
+
+        const res = await fetch(url.toString(), { credentials: "include" });
+        const json = await res.json();
+        if (!res.ok || !json.success || !json.data) {
+          notify(json.message || json.error || t("failedLoadProcess"), "danger");
+          return;
+        }
+
+        const data = json.data;
+        const patch = buildCopyFromFormPatch(data, { currencies, descriptions });
+
+        if (data.currency_warning && !patch.currency_id) {
+          if (data.currency_code) {
+            notify(t("currencyWarningWithCode", { code: String(data.currency_code).toUpperCase() }), "danger");
+          } else {
+            notify(t("currencyWarningNoCompany"), "danger");
+          }
+        }
+
+        setForm((prev) => ({
+          ...prev,
+          copy_from: String(data.source_process_id ?? id),
+          ...patch,
+        }));
+      } catch {
+        notify(t("failedLoadProcess"), "danger");
+      }
+    },
+    [companyId, currencies, descriptions, t],
+  );
+
   const openEdit = async (id) => {
     if (processMutationsBlocked) {
       notify(t("readOnlyActionBlocked"), "danger");
@@ -1632,6 +1682,7 @@ export default function ProcessListPage() {
           }}
           onSubmit={submitForm}
           onOpenDescriptionPicker={() => setDescriptionPickerOpen(true)}
+          onCopyFromSelect={handleCopyFromSelect}
           t={t}
         />
       )}

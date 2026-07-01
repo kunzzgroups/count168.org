@@ -59,6 +59,7 @@ export default function ProcessFormModal({
   onClose,
   onSubmit,
   onOpenDescriptionPicker,
+  onCopyFromSelect,
   t,
 }) {
   const ro = Boolean(readOnly);
@@ -113,6 +114,15 @@ export default function ProcessFormModal({
   const selectedCopyRow = copyOptions.find((p) => String(p.process_id) === String(form.copy_from));
   const selectedCurrency = currencies.find((c) => String(c.id) === String(form.currency_id));
 
+  const applyCopyFromSelection = useCallback(
+    (processId) => {
+      setCopyOpen(false);
+      setCopySearch("");
+      void onCopyFromSelect?.(processId ?? "");
+    },
+    [onCopyFromSelect],
+  );
+
   return (
     <ProcessModalPortal>
     <div id={editMode ? "editModal" : "addModal"} className="modal" style={processModalBackdropStyle}>
@@ -146,16 +156,10 @@ export default function ProcessFormModal({
                           len: copyListCount,
                           onSelectIndex: (idx) => {
                             if (idx === 0) {
-                              setForm((prev) => ({ ...prev, copy_from: "" }));
-                              setCopyOpen(false);
-                              setCopySearch("");
+                              applyCopyFromSelection("");
                             } else {
                               const p = filteredCopy[idx - 1];
-                              if (p) {
-                                setForm((prev) => ({ ...prev, copy_from: String(p.process_id ?? "") }));
-                                setCopyOpen(false);
-                                setCopySearch("");
-                              }
+                              if (p) applyCopyFromSelection(String(p.process_id ?? ""));
                             }
                           },
                         });
@@ -181,16 +185,10 @@ export default function ProcessFormModal({
                                   len: copyListCount,
                                   onSelectIndex: (idx) => {
                                     if (idx === 0) {
-                                      setForm((prev) => ({ ...prev, copy_from: "" }));
-                                      setCopyOpen(false);
-                                      setCopySearch("");
+                                      applyCopyFromSelection("");
                                     } else {
                                       const p = filteredCopy[idx - 1];
-                                      if (p) {
-                                        setForm((prev) => ({ ...prev, copy_from: String(p.process_id ?? "") }));
-                                        setCopyOpen(false);
-                                        setCopySearch("");
-                                      }
+                                      if (p) applyCopyFromSelection(String(p.process_id ?? ""));
                                     }
                                   },
                                   onClose: () => setCopyOpen(false),
@@ -208,11 +206,7 @@ export default function ProcessFormModal({
                               role="button"
                               data-kb-idx={0}
                               onMouseEnter={() => copyKeyboard.setHighlightIdx(0)}
-                              onClick={() => {
-                                setForm((prev) => ({ ...prev, copy_from: "" }));
-                                setCopyOpen(false);
-                                setCopySearch("");
-                              }}
+                              onClick={() => applyCopyFromSelection("")}
                             >
                               {t("clear")}
                             </div>
@@ -225,11 +219,7 @@ export default function ProcessFormModal({
                                 role="button"
                                 data-kb-idx={kbIdx}
                                 onMouseEnter={() => copyKeyboard.setHighlightIdx(kbIdx)}
-                                onClick={() => {
-                                  setForm((prev) => ({ ...prev, copy_from: String(p.process_id ?? "") }));
-                                  setCopyOpen(false);
-                                  setCopySearch("");
-                                }}
+                                onClick={() => applyCopyFromSelection(String(p.process_id ?? ""))}
                               >
                                 {`${p.process_name || t("unknown")} - ${p.description_name || t("noDescription")}`}
                               </div>
@@ -271,6 +261,7 @@ export default function ProcessFormModal({
                         aria-pressed={Boolean(form.is_multi_process)}
                         onClick={() => {
                           const next = !form.is_multi_process;
+                          const prevCopyFrom = form.copy_from;
                           setForm((prev) => ({
                             ...prev,
                             is_multi_process: next,
@@ -278,6 +269,9 @@ export default function ProcessFormModal({
                             selected_processes: next ? prev.selected_processes : [],
                             process_name: next ? "" : prev.process_name,
                           }));
+                          if (next && prevCopyFrom) {
+                            void onCopyFromSelect?.(prevCopyFrom);
+                          }
                         }}
                       >
                         {t("multiProcess")}

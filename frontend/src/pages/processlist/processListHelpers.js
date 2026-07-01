@@ -1,4 +1,5 @@
 import { excludeGroupLabelsFromCompanyPicker } from "../../utils/company/sharedCompanyFilter.js";
+import { parseRemoveWordChips, serializeRemoveWordChips } from "../../lib/removeWordChips.js";
 
 export const PAGE_SIZE = 25;
 
@@ -215,6 +216,62 @@ export function sortProcessTableRows(rows, sortColumn, sortDirection) {
 /** Same ordering as js/processlist.js after fetch (Games). */
 export function sortProcessRows(rows) {
   return sortProcessTableRows(rows, "processId", "asc");
+}
+
+/** Add-form fields populated or cleared by Copy From (legacy js/processlist.js). */
+export function emptyCopyFromSyncFields() {
+  return {
+    currency_id: "",
+    selected_descriptions: [],
+    remove_word: "",
+    replace_word_from: "",
+    replace_word_to: "",
+    remark: "",
+    day_use: [],
+    currency_warning: null,
+  };
+}
+
+/** Map addprocess_api.php copy_from payload into partial add-form state. */
+export function buildCopyFromFormPatch(data, { currencies = [], descriptions = [] } = {}) {
+  const patch = emptyCopyFromSyncFields();
+  if (!data || typeof data !== "object") return patch;
+
+  let currencyId =
+    data.currency_id != null && data.currency_id !== "" ? String(data.currency_id) : "";
+  if (currencyId) {
+    const exists = currencies.some((c) => String(c.id) === currencyId);
+    if (!exists) currencyId = "";
+  }
+  if (!currencyId && data.currency_code) {
+    const code = String(data.currency_code).toUpperCase();
+    const match = currencies.find((c) => String(c.code || "").toUpperCase() === code);
+    if (match) currencyId = String(match.id);
+  }
+  patch.currency_id = currencyId;
+  patch.currency_warning = data.currency_warning || null;
+
+  if (data.remove_word) {
+    patch.remove_word = serializeRemoveWordChips(parseRemoveWordChips(data.remove_word));
+  }
+  if (data.replace_word_from) patch.replace_word_from = String(data.replace_word_from);
+  if (data.replace_word_to) patch.replace_word_to = String(data.replace_word_to);
+  if (data.remark) patch.remark = parseRemarkForForm(data.remark);
+  if (data.day_use) {
+    patch.day_use = String(data.day_use)
+      .split(",")
+      .map((v) => v.trim())
+      .filter(Boolean);
+  }
+  if (data.description_name) {
+    const name = String(data.description_name).trim();
+    if (name) {
+      const fromApi = descriptions.find((d) => String(d.name) === name);
+      patch.selected_descriptions = [{ id: fromApi?.id ?? name, name }];
+    }
+  }
+
+  return patch;
 }
 
 /** Legacy editProcess remarks handling (JSON meta.user_remarks). */

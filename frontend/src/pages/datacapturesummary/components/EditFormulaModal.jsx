@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EDIT_FORMULA_INPUT_METHODS, CALCULATOR_KEYPAD } from "../formula/editFormulaConstants.js";
 import { formatSummaryAccountDisplay } from "../formula/editFormulaFormState.js";
 import { getSummaryInputMethodLabel } from "../../../translateFile/pages/dataCaptureSummaryTranslate.js";
@@ -47,8 +47,21 @@ export default function EditFormulaModal({
   onCalculatorPress,
 }) {
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountSearch, setAccountSearch] = useState("");
   const accountWrapperRef = useRef(null);
+  const accountSearchInputRef = useRef(null);
   const formulaInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!accountOpen) {
+      setAccountSearch("");
+      return undefined;
+    }
+    const raf = requestAnimationFrame(() => {
+      accountSearchInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [accountOpen]);
 
   useEffect(() => {
     if (!accountOpen) return undefined;
@@ -61,15 +74,19 @@ export default function EditFormulaModal({
     return () => document.removeEventListener("mousedown", onDocClick);
   }, [accountOpen]);
 
-  const getItemLabel = useCallback(
-    (idx) => formatSummaryAccountDisplay(accounts[idx]),
-    [accounts],
-  );
+  const filteredAccounts = useMemo(() => {
+    const q = accountSearch.trim().toUpperCase();
+    return accounts.filter((acc) => {
+      if (!q) return true;
+      const label = formatSummaryAccountDisplay(acc).toUpperCase();
+      return label.includes(q);
+    });
+  }, [accounts, accountSearch]);
 
-  const { highlightIdx, setHighlightIdx, listRef, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
+  const { highlightIdx, setHighlightIdx, listRef, handleListKeyDown, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
     open: accountOpen,
-    itemCount: accounts.length,
-    getItemLabel,
+    itemCount: filteredAccounts.length,
+    resetToken: accountSearch,
   });
 
   if (!open || !form) return null;
@@ -90,6 +107,7 @@ export default function EditFormulaModal({
     setField({ accountId: id, accountText: label, currencyId: "", currencyLabel: "" });
     onAccountSelect?.(id);
     setAccountOpen(false);
+    setAccountSearch("");
   };
 
   const handleCurrencyChange = (e) => {
@@ -167,9 +185,9 @@ export default function EditFormulaModal({
                               isOpen: accountOpen,
                               onToggleOpen: () => setAccountOpen(true),
                               onClose: () => setAccountOpen(false),
-                              len: accounts.length,
+                              len: filteredAccounts.length,
                               onSelectIndex: (idx) => {
-                                const acc = accounts[idx];
+                                const acc = filteredAccounts[idx];
                                 if (acc) selectAccount(acc);
                               },
                             });
@@ -181,8 +199,28 @@ export default function EditFormulaModal({
                           className={`custom-select-dropdown${accountOpen ? " show" : ""}`}
                           id="account_dropdown"
                         >
+                          <div className="custom-select-search">
+                            <input
+                              ref={accountSearchInputRef}
+                              type="text"
+                              placeholder={t("searchAccount")}
+                              autoComplete="off"
+                              value={accountSearch}
+                              onChange={(e) => setAccountSearch(e.target.value.toUpperCase())}
+                              onKeyDown={(e) => {
+                                handleListKeyDown(e, {
+                                  len: filteredAccounts.length,
+                                  onSelectIndex: (idx) => {
+                                    const acc = filteredAccounts[idx];
+                                    if (acc) selectAccount(acc);
+                                  },
+                                  onClose: () => setAccountOpen(false),
+                                });
+                              }}
+                            />
+                          </div>
                           <div className="custom-select-options" ref={listRef}>
-                            {accounts.map((acc, idx) => (
+                            {filteredAccounts.map((acc, idx) => (
                               <div
                                 key={String(acc.id)}
                                 className={`custom-select-option${highlightClass(idx)}`}
