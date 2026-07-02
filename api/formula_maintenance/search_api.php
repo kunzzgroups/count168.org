@@ -23,14 +23,17 @@ try {
     $process_name = $_GET['process'] ?? null; // process.process_id (字符串，如 'L22KZMASTER')
     $search_filter = $_GET['search'] ?? null; // 搜索公式名称
     
-    // 如果指定了 process_name，先查找对应的 process.id
+    // 如果指定了 process_name，查找同一 process 代码下的所有 process.id
     $process_id_filter = null;
+    $process_id_filters = [];
     if ($process_name) {
-        $stmt = $pdo->prepare("SELECT id FROM process WHERE process_id = ? AND company_id = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id FROM process WHERE process_id = ? AND company_id = ? ORDER BY id ASC");
         $stmt->execute([$process_name, $company_id]);
-        $process_id_filter = $stmt->fetchColumn();
-        if (!$process_id_filter) {
-            // 如果找不到对应的 process，返回空结果
+        $process_id_filters = array_values(array_filter(
+            array_map(static fn ($id): int => (int) $id, $stmt->fetchAll(PDO::FETCH_COLUMN)),
+            static fn (int $id): bool => $id > 0
+        ));
+        if ($process_id_filters === []) {
             echo json_encode([
                 'success' => true,
                 'data' => [],
@@ -38,6 +41,7 @@ try {
             ]);
             return;
         }
+        $process_id_filter = $process_id_filters[0];
     }
     
     // 构建查询条件
@@ -46,9 +50,10 @@ try {
     
     // 添加Process筛选条件（可选：不选则取全部）
     // 如果选择了 Process，只显示该 Process 的记录（process_id 不为 NULL）
-    if ($process_id_filter) {
-        $where_conditions[] = "dct.process_id = ?";
-        $params[] = $process_id_filter;
+    if ($process_id_filters !== []) {
+        $placeholders = implode(',', array_fill(0, count($process_id_filters), '?'));
+        $where_conditions[] = "dct.process_id IN ({$placeholders})";
+        $params = array_merge($params, $process_id_filters);
     }
     
     // 添加company_id过滤

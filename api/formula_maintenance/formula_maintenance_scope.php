@@ -701,6 +701,51 @@ function formulaMaintenanceFormatProcessDisplay(
 }
 
 /**
+ * Related process.id rows for list filter: all rows sharing the same process code,
+ * except payroll codes where group/subsidiary scope picks a single id.
+ *
+ * @return list<int>
+ */
+function formulaMaintenanceResolveRelatedProcessIds(
+    PDO $pdo,
+    int $companyId,
+    int $processId,
+    bool $isGroupScope
+): array {
+    if ($processId <= 0 || $companyId <= 0) {
+        return [];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT UPPER(TRIM(process_id)) FROM process WHERE id = ? AND company_id = ? LIMIT 1'
+    );
+    $stmt->execute([$processId, $companyId]);
+    $code = strtoupper(trim((string) ($stmt->fetchColumn() ?: '')));
+    if ($code === '') {
+        return [$processId];
+    }
+
+    if (dcIsGroupPayrollProcessCode($code)) {
+        $scoped = formulaMaintenanceResolveScopedPayrollProcessId($pdo, $companyId, $code, $isGroupScope);
+
+        return $scoped !== null && $scoped > 0 ? [$scoped] : [$processId];
+    }
+
+    $stmt = $pdo->prepare(
+        'SELECT id FROM process
+         WHERE company_id = ? AND UPPER(TRIM(process_id)) = ?
+         ORDER BY id ASC'
+    );
+    $stmt->execute([$companyId, $code]);
+    $ids = array_values(array_filter(
+        array_map(static fn ($id): int => (int) $id, $stmt->fetchAll(PDO::FETCH_COLUMN)),
+        static fn (int $id): bool => $id > 0
+    ));
+
+    return $ids !== [] ? $ids : [$processId];
+}
+
+/**
  * SQL JOIN process + template binding; scope-aware when multiple SALARY rows share one company_id.
  */
 function formulaMaintenanceSqlTemplateProcessJoin(
@@ -709,19 +754,6 @@ function formulaMaintenanceSqlTemplateProcessJoin(
     ?int $processIdFilter = null,
     bool $isGroupScope = false
 ): string {
-    if ($processIdFilter !== null && $processIdFilter > 0) {
-        $pid = (int) $processIdFilter;
-        return "INNER JOIN process p ON p.company_id = dct.company_id
-            AND p.id = {$pid}
-            AND (
-                (dct.process_id REGEXP '^[0-9]+$' AND CAST(dct.process_id AS UNSIGNED) = {$pid})
-                OR (
-                    dct.process_id NOT REGEXP '^[0-9]+$'
-                    AND UPPER(TRIM(dct.process_id)) = UPPER(TRIM(p.process_id))
-                )
-            )";
-    }
-
     $class = formulaMaintenanceClassifyPayrollProcessIds($pdo, $companyId);
     $pool = $isGroupScope ? $class['group'] : $class['subsidiary'];
     $poolInSql = '0';
@@ -729,7 +761,7 @@ function formulaMaintenanceSqlTemplateProcessJoin(
         $poolInSql = implode(',', array_map('intval', $pool));
     }
 
-    return "INNER JOIN process p ON p.company_id = dct.company_id
+    $join = "INNER JOIN process p ON p.company_id = dct.company_id
         AND (
             (dct.process_id REGEXP '^[0-9]+$' AND p.id = CAST(dct.process_id AS UNSIGNED))
             OR (
@@ -741,4 +773,24 @@ function formulaMaintenanceSqlTemplateProcessJoin(
                 )
             )
         )";
+
+    if ($processIdFilter !== null && $processIdFilter > 0) {
+        $relatedIds = formulaMaintenanceResolveRelatedProcessIds(
+            $pdo,
+            $companyId,
+            (int) $processIdFilter,
+            $isGroupScope
+        );
+        $idList = implode(',', array_map('intval', $relatedIds));
+
+        return $join . " AND (
+            (dct.process_id REGEXP '^[0-9]+$' AND CAST(dct.process_id AS UNSIGNED) IN ({$idList}))
+            OR (
+                dct.process_id NOT REGEXP '^[0-9]+$'
+                AND p.id IN ({$idList})
+            )
+        )";
+    }
+
+    return $join;
 }
