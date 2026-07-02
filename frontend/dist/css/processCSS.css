@@ -6834,6 +6834,18 @@ body.process-page > .modal.show:has(.description-selection-modal) {
     overflow-y: auto;
 }
 
+.process-confirm-error {
+    margin: 0 clamp(20px, 1.67vw, 28px) 20px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    font-size: var(--text-medium);
+    line-height: 1.5;
+    text-align: left;
+}
+
 .process-confirm-actions {
     display: flex;
     gap: 12px;

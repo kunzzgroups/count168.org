@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
 import RemoveWordChipInput from "../../../components/RemoveWordChipInput.jsx";
 import { toProcessFormUpperInput } from "../processListHelpers.js";
@@ -67,6 +67,7 @@ export default function ProcessFormModal({
   const [copyOpen, setCopyOpen] = useState(false);
   const [copySearch, setCopySearch] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const copySearchRef = useRef(null);
 
   const copyOptions = useMemo(() => sortedCopyFromOptions(form.existingProcesses), [form.existingProcesses]);
   const filteredCopy = useMemo(() => {
@@ -111,8 +112,21 @@ export default function ProcessFormModal({
       : "";
 
   const placeholderBtn = t("selectProcessToCopyFrom");
-  const selectedCopyRow = copyOptions.find((p) => String(p.process_id) === String(form.copy_from));
+  const selectedCopyRow = copyOptions.find(
+    (p) =>
+      String(p.process_id) === String(form.copy_from) ||
+      String(p.process_name || "") === String(form.copy_from),
+  );
   const selectedCurrency = currencies.find((c) => String(c.id) === String(form.currency_id));
+
+  useEffect(() => {
+    if (!copyOpen) {
+      setCopySearch("");
+      return undefined;
+    }
+    const frame = window.requestAnimationFrame(() => copySearchRef.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [copyOpen]);
 
   const applyCopyFromSelection = useCallback(
     (processId) => {
@@ -149,6 +163,18 @@ export default function ProcessFormModal({
                       disabled={ro}
                       hasSearch
                       onButtonKeyDown={(e) => {
+                        if (
+                          !copyOpen &&
+                          e.key.length === 1 &&
+                          !e.ctrlKey &&
+                          !e.metaKey &&
+                          !e.altKey
+                        ) {
+                          e.preventDefault();
+                          setCopySearch(e.key.toUpperCase());
+                          setCopyOpen(true);
+                          return;
+                        }
                         copyKeyboard.handleButtonKeyDown(e, {
                           isOpen: copyOpen,
                           onToggleOpen: () => setCopyOpen(true),
@@ -174,6 +200,7 @@ export default function ProcessFormModal({
                         <>
                           <div className="custom-select-search">
                             <input
+                              ref={copySearchRef}
                               type="text"
                               placeholder={t("searchProcess")}
                               autoComplete="off"

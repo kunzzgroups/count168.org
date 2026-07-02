@@ -38,6 +38,9 @@ export const PROCESS_LIST_I18N = {
     copySyncNotSet: "Sync not set: source process not found for this company",
     processSkippedConflicts: "{count} process(es) were skipped due to conflicts.",
     deleteFailed: "Delete failed",
+    errProcessLinkedToFormula: "Cannot delete: this process is linked to formula(s). Remove them in Formula Maintenance first.",
+    errProcessHasTransactions: "Cannot delete: this process has linked transactions.",
+    errNoInactiveToDelete: "Only inactive processes can be deleted.",
     processDeletedOne: "1 process deleted successfully",
     processDeletedMany: "{count} processes deleted successfully",
     statusUpdateFailed: "Status update failed",
@@ -162,6 +165,9 @@ export const PROCESS_LIST_I18N = {
     copySyncNotSet: "未设置同步：当前公司找不到源流程",
     processSkippedConflicts: "有 {count} 个流程因冲突被跳过。",
     deleteFailed: "删除失败",
+    errProcessLinkedToFormula: "无法删除：该流程已关联公式，请先在 Formula Maintenance 中删除相关公式。",
+    errProcessHasTransactions: "无法删除：该流程已有关联交易记录。",
+    errNoInactiveToDelete: "只能删除已停用的流程。",
     processDeletedOne: "已成功删除 1 个流程",
     processDeletedMany: "已成功删除 {count} 个流程",
     statusUpdateFailed: "状态更新失败",
@@ -293,3 +299,39 @@ export function formatProcessDayUseDisplay(t, dayUse) {
 }
 
 export const getProcessListText = createGetText(PROCESS_LIST_I18N);
+
+const PROCESS_LIST_API_ERROR_CODE_KEYS = {
+  process_linked_to_formula: "errProcessLinkedToFormula",
+  process_has_transactions: "errProcessHasTransactions",
+  no_inactive_processes: "errNoInactiveToDelete",
+};
+
+function normProcessListApiMessage(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[.!?]+$/g, "");
+}
+
+const PROCESS_LIST_API_MESSAGE_KEYS = {
+  [normProcessListApiMessage("Process linked to formula")]: "errProcessLinkedToFormula",
+  [normProcessListApiMessage("Process has transactions")]: "errProcessHasTransactions",
+  [normProcessListApiMessage("No inactive processes to delete")]: "errNoInactiveToDelete",
+};
+
+/** Map delete/update API payload to localized process-list message. */
+export function translateProcessListApiMessage(lang, payload, fallback = "") {
+  const message = String(payload?.message ?? payload ?? "").trim();
+  const errorCode = payload?.data?.error ?? payload?.error ?? payload?.error_code ?? payload?.errorCode;
+  const locale = lang === "zh" ? "zh" : "en";
+
+  if (errorCode && PROCESS_LIST_API_ERROR_CODE_KEYS[errorCode]) {
+    return getProcessListText(locale, PROCESS_LIST_API_ERROR_CODE_KEYS[errorCode]);
+  }
+
+  const key = PROCESS_LIST_API_MESSAGE_KEYS[normProcessListApiMessage(message)];
+  if (key) return getProcessListText(locale, key);
+
+  return message || fallback;
+}

@@ -10,20 +10,30 @@ body.transaction-page .transaction-category-date-row .report-outlined-anchor {
 
 /* Maintenance filter row: Process / Transaction Type — same width as Date Range container */
 body.maintenance-page .customer-report-filters > .customer-report-filter-group.report-outlined-anchor,
-body.maintenance-page .customer-report-filters > .customer-report-filter-group.report-outlined-anchor .report-outlined-shell {
+body.dashboard-page.report-page .customer-report-filters > .customer-report-filter-group.report-outlined-anchor,
+body.dashboard-page.report-page .domain-report-filters > .customer-report-filter-group.report-outlined-anchor,
+body.maintenance-page .customer-report-filters > .customer-report-filter-group.report-outlined-anchor .report-outlined-shell,
+body.dashboard-page.report-page .customer-report-filters > .customer-report-filter-group.report-outlined-anchor .report-outlined-shell,
+body.dashboard-page.report-page .domain-report-filters > .customer-report-filter-group.report-outlined-anchor .report-outlined-shell {
     min-width: var(--drp-popup-width, clamp(316px, 22vw, 336px)) !important;
     width: var(--drp-popup-width, clamp(316px, 22vw, 336px)) !important;
     max-width: 100%;
     box-sizing: border-box;
 }
 
-body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group {
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group,
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group {
     min-width: 0 !important;
     width: 100%;
 }
 
 body.maintenance-page .customer-report-filters .report-outlined-inner .custom-select-button,
-body.maintenance-page .customer-report-filters .report-outlined-inner .maintenance-select {
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .custom-select-button,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .custom-select-button,
+body.maintenance-page .customer-report-filters .report-outlined-inner .maintenance-select,
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .maintenance-select,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .maintenance-select {
     min-height: clamp(32px, 2.25vw, 36px);
     font-size: clamp(9px, 0.63vw, 12px);
     font-weight: 600;
@@ -31,21 +41,29 @@ body.maintenance-page .customer-report-filters .report-outlined-inner .maintenan
     color: #000;
 }
 
-body.maintenance-page .customer-report-filters .report-outlined-inner .maintenance-select option {
+body.maintenance-page .customer-report-filters .report-outlined-inner .maintenance-select option,
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .maintenance-select option,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .maintenance-select option {
     font-size: clamp(9px, 0.63vw, 12px);
     font-weight: 600;
     font-family: var(--font-heading-page);
 }
 
-body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker {
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker,
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker {
     min-width: 0 !important;
     width: 100%;
     max-width: 100%;
-    min-height: clamp(32px, 2.25vw, 36px) !important;
+    min-height: clamp(38px, 2.45vw, 40px) !important;
 }
 
 body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group #date-range-display,
-body.maintenance-page .customer-report-filters .report-outlined-inner .date-range-picker #date-range-display {
+body.maintenance-page .customer-report-filters .report-outlined-inner .date-range-picker #date-range-display,
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group #date-range-display,
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .date-range-picker #date-range-display,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group #date-range-display,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .date-range-picker #date-range-display {
     font-size: var(--drp-trigger-text, var(--text-medium));
     font-weight: 700;
     font-family: var(--font-heading-page);

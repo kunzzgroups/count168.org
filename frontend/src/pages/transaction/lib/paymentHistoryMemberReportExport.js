@@ -216,6 +216,13 @@ function remarkCell(row) {
   return String(raw).toUpperCase();
 }
 
+/** PDF remark: break at word boundaries so labels like STARTING BALANCE do not split mid-word. */
+function pdfRemarkText(row) {
+  const text = remarkCell(row);
+  if (!text || text === "-" || !/\s/.test(text)) return text;
+  return text.trim().split(/\s+/).join("\n");
+}
+
 /** Account currencies for export modal (member report scope). */
 export async function fetchPaymentHistoryExportCurrencies(accountId, companyId, signal) {
   const id = Number(accountId) || 0;
@@ -575,7 +582,7 @@ function rowToTableCells(row, lang) {
     formatPaymentHistoryMoney(row.cr_dr),
     formatPaymentHistoryMoney(row.balance),
     formatMemberRowDescription(lang, row),
-    remarkCell(row),
+    pdfRemarkText(row),
   ];
 }
 
@@ -589,6 +596,8 @@ function moneyTone(value) {
 function applyPdfMoneyStyle(cell, rawValue) {
   const tone = moneyTone(rawValue);
   cell.styles.halign = "right";
+  cell.styles.overflow = "hidden";
+  cell.styles.whiteSpace = "nowrap";
   if (tone === "pos") {
     cell.styles.textColor = [23, 42, 159];
     cell.styles.fontStyle = "bold";
@@ -611,6 +620,7 @@ const PDF_LOGO_HEIGHT_MM = 8;
 const PDF_LOGO_TOP_TRIM_MM = 1.1;
 const PDF_TITLE_FONT_PT = 14;
 const PDF_META_FONT_PT = 9;
+const PDF_CURRENCY_FONT_PT = 11;
 const PDF_HEADER_TOP_MM = 10;
 const PDF_FIRST_PAGE_TOP_MARGIN_MM = 30;
 const PDF_OTHER_PAGE_TOP_MARGIN_MM = 22;
@@ -668,13 +678,13 @@ function pdfLineHeightMm(fontSizePt) {
   return fontSizePt * 0.352778 * 1.15;
 }
 
-function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, showTitle }) {
+function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTitle, showTitle, showLogo }) {
   const capTopY = PDF_HEADER_TOP_MM;
   let blockBottomY = capTopY;
   const leftX = marginX;
 
   let logoImgW = 0;
-  if (logo?.dataUrl) {
+  if (showLogo && logo?.dataUrl) {
     const imgH = PDF_LOGO_HEIGHT_MM;
     const imgW = imgH * (logo.dims.w / logo.dims.h);
     logoImgW = imgW;
@@ -683,8 +693,9 @@ function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, showTitle }
     blockBottomY = Math.max(blockBottomY, logoTopY + imgH);
   }
 
+  const titleMaxW = pageW - marginX * 2 - (logoImgW > 0 ? logoImgW + 4 : 0);
+
   if (showTitle && title) {
-    const titleMaxW = pageW - marginX * 2 - (logoImgW > 0 ? logoImgW + 4 : 0);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(PDF_TITLE_FONT_PT);
     doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
@@ -701,7 +712,30 @@ function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, showTitle }
     }
   }
 
+  if (currencyTitle) {
+    const currencyBaselineY = blockBottomY + 3 + pdfCapHeightMm(PDF_CURRENCY_FONT_PT);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(PDF_CURRENCY_FONT_PT);
+    doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
+    doc.text(currencyTitle, leftX, currencyBaselineY, { align: "left", maxWidth: titleMaxW });
+    blockBottomY = Math.max(blockBottomY, currencyBaselineY);
+  }
+
   const sepY = blockBottomY + 4;
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.35);
+  doc.line(marginX, sepY, pageW - marginX, sepY);
+  return sepY + 4;
+}
+
+function drawPdfSectionCurrencyHeading(doc, { pageW, marginX, startY, currencyTitle }) {
+  const titleMaxW = pageW - marginX * 2;
+  const currencyBaselineY = startY + pdfCapHeightMm(PDF_CURRENCY_FONT_PT);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(PDF_CURRENCY_FONT_PT);
+  doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
+  doc.text(currencyTitle, marginX, currencyBaselineY, { align: "left", maxWidth: titleMaxW });
+  const sepY = currencyBaselineY + 4;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.35);
   doc.line(marginX, sepY, pageW - marginX, sepY);
@@ -719,12 +753,12 @@ function drawPdfPageFooter(doc, { pageW, pageH, pageLabel }) {
 const PDF_TABLE_COLUMN_STYLES = {
   0: { cellWidth: 24, halign: "left", overflow: "hidden", fontStyle: "bold" },
   1: { cellWidth: 22, overflow: "hidden", fontStyle: "bold" },
-  2: { cellWidth: 16, halign: "right", overflow: "hidden" },
-  3: { cellWidth: 18, halign: "right", overflow: "hidden" },
-  4: { cellWidth: 18, halign: "right", overflow: "hidden" },
-  5: { cellWidth: 20, halign: "right", overflow: "hidden" },
-  6: { cellWidth: 54, overflow: "linebreak" },
-  7: { cellWidth: 18, halign: "center", overflow: "hidden" },
+  2: { cellWidth: 14, halign: "right", overflow: "hidden" },
+  3: { cellWidth: 20, halign: "right", overflow: "hidden" },
+  4: { cellWidth: 20, halign: "right", overflow: "hidden" },
+  5: { cellWidth: 24, halign: "right", overflow: "hidden" },
+  6: { cellWidth: 42, overflow: "linebreak" },
+  7: { cellWidth: 24, halign: "center", overflow: "linebreak" },
 };
 
 /**
@@ -763,8 +797,11 @@ export async function downloadMemberReportPdf({
   const t = (key, params) => getMemberText(lang, key, params);
   let titleDrawn = false;
   let cursorY = PDF_FIRST_PAGE_TOP_MARGIN_MM;
+  const headerPagesDrawn = new Set();
+  let pendingCurrencyHeading = null;
 
   const sectionList = sections || [];
+  const multiCurrency = sectionList.length > 1;
   sectionList.forEach((section, sectionIdx) => {
     const sectionData = buildMemberReportSectionData({
       rows: section.rows,
@@ -778,17 +815,19 @@ export async function downloadMemberReportPdf({
     const sourceRows = section.rows || [];
     let tableStartY = sectionIdx === 0 ? undefined : cursorY;
 
-    if (sectionList.length > 1) {
-      if (sectionIdx > 0 && cursorY > pageH - 40) {
+    if (multiCurrency && sectionIdx > 0) {
+      if (cursorY > pageH - 40) {
         doc.addPage();
         tableStartY = undefined;
+        pendingCurrencyHeading = sectionData.currencyTitle;
+      } else {
+        tableStartY = drawPdfSectionCurrencyHeading(doc, {
+          pageW,
+          marginX,
+          startY: cursorY,
+          currencyTitle: sectionData.currencyTitle,
+        });
       }
-      const currencyTitleY = tableStartY ?? PDF_OTHER_PAGE_TOP_MARGIN_MM;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(31, 41, 55);
-      doc.text(sectionData.currencyTitle, marginX, currencyTitleY);
-      tableStartY = currencyTitleY + 6;
     }
 
     const body = sourceRows.map((row) => rowToTableCells(row, lang));
@@ -821,24 +860,51 @@ export async function downloadMemberReportPdf({
       showFoot: "lastPage",
       theme: "grid",
       didDrawPage: (hookData) => {
-        const pageNum = hookData.pageNumber;
-        if (pageNum > 1) {
-          hookData.settings.margin.top = PDF_OTHER_PAGE_TOP_MARGIN_MM;
+        const docPage = doc.internal.getCurrentPageInfo().pageNumber;
+
+        if (!headerPagesDrawn.has(docPage)) {
+          headerPagesDrawn.add(docPage);
+          const showTitle = docPage === 1 && !titleDrawn;
+          if (showTitle) titleDrawn = true;
+
+          let tableTopY = PDF_OTHER_PAGE_TOP_MARGIN_MM;
+          if (docPage === 1) {
+            const headerEndY = drawPdfPageHeader(doc, {
+              logo,
+              pageW,
+              marginX,
+              title: headerSection.docTitle,
+              meta: headerSection.docMeta,
+              currencyTitle: showTitle && multiCurrency ? headerSection.currencyTitle : null,
+              showTitle,
+              showLogo: true,
+            });
+            tableTopY = headerEndY + 2;
+            if (pendingCurrencyHeading) {
+              tableTopY = drawPdfSectionCurrencyHeading(doc, {
+                pageW,
+                marginX,
+                startY: headerEndY,
+                currencyTitle: pendingCurrencyHeading,
+              });
+              pendingCurrencyHeading = null;
+            }
+          } else if (pendingCurrencyHeading) {
+            tableTopY = drawPdfSectionCurrencyHeading(doc, {
+              pageW,
+              marginX,
+              startY: PDF_HEADER_TOP_MM,
+              currencyTitle: pendingCurrencyHeading,
+            });
+            pendingCurrencyHeading = null;
+          }
+          hookData.settings.margin.top = tableTopY;
         }
-        const showTitle = !titleDrawn && pageNum === 1 && sectionIdx === 0;
-        if (showTitle) titleDrawn = true;
-        drawPdfPageHeader(doc, {
-          logo,
-          pageW,
-          marginX,
-          title: headerSection.docTitle,
-          meta: headerSection.docMeta,
-          showTitle,
-        });
+
         drawPdfPageFooter(doc, {
           pageW,
           pageH,
-          pageLabel: t("exportPdfPageLabel", { page: pageNum }),
+          pageLabel: t("exportPdfPageLabel", { page: docPage }),
         });
       },
       styles: {
@@ -848,7 +914,7 @@ export async function downloadMemberReportPdf({
         lineColor: [232, 237, 243],
         lineWidth: 0.2,
         textColor: [15, 23, 42],
-        overflow: "linebreak",
+        overflow: "hidden",
         valign: "middle",
       },
       headStyles: {
@@ -886,9 +952,13 @@ export async function downloadMemberReportPdf({
           if (hookData.column.index === 5) applyPdfMoneyStyle(hookData.cell, row?.balance);
           if (hookData.column.index === 6) {
             hookData.cell.styles.fontStyle = "bold";
+            hookData.cell.styles.overflow = "linebreak";
           }
           if (hookData.column.index === 2 || hookData.column.index === 7) {
             hookData.cell.styles.textColor = [100, 116, 139];
+          }
+          if (hookData.column.index === 7) {
+            hookData.cell.styles.overflow = "linebreak";
           }
         }
         if (hookData.section === "foot") {
@@ -896,11 +966,15 @@ export async function downloadMemberReportPdf({
           if (col === 3) applyPdfMoneyStyle(hookData.cell, sectionData.totalWinLoss.toString());
           if (col === 4) applyPdfMoneyStyle(hookData.cell, sectionData.totalCrDr.toString());
           if (col === 5) applyPdfMoneyStyle(hookData.cell, sectionData.closingBalance.toString());
+          if (col === 6 || col === 7) {
+            hookData.cell.styles.overflow = "linebreak";
+          }
         }
       },
     });
 
     cursorY = (doc.lastAutoTable?.finalY || tableStartY || PDF_FIRST_PAGE_TOP_MARGIN_MM) + 12;
+    pendingCurrencyHeading = null;
   });
 
   const safeName = String(filename || "WinLoss-Report").replace(/[<>:"/\\|?*]+/g, "_");

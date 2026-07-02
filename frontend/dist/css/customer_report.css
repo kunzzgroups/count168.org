@@ -104,16 +104,18 @@ body.maintenance-page .customer-report-filters .report-outlined-inner .transacti
 }
 
 /* Account 下拉与 Date Range 同一行：统一 outlined 内控件高度，避免 flex-end 造成顶边错位 */
-body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .custom-select-button {
-    min-height: clamp(32px, 2.25vw, 36px);
+body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .custom-select-button,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .custom-select-button {
+    min-height: clamp(38px, 2.45vw, 40px);
 }
 
 body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker,
-body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker {
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker {
     min-width: 0 !important;
     width: 100%;
     max-width: 100%;
-    min-height: clamp(32px, 2.25vw, 36px) !important;
+    min-height: clamp(38px, 2.45vw, 40px) !important;
     padding: 0 clamp(8px, 0.75vw, 12px) 0 0 !important;
     border-radius: 0 !important;
     gap: clamp(8px, 0.7vw, 12px);
@@ -123,7 +125,8 @@ body.maintenance-page .customer-report-filters .report-outlined-inner .transacti
 }
 
 body.dashboard-page.report-page .customer-report-filters .report-outlined-inner:has(.transaction-date-range-group),
-body.maintenance-page .customer-report-filters .report-outlined-inner:has(.transaction-date-range-group) {
+body.maintenance-page .customer-report-filters .report-outlined-inner:has(.transaction-date-range-group),
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner:has(.transaction-date-range-group) {
     overflow: hidden;
     border-radius: inherit;
 }
@@ -146,7 +149,8 @@ body.maintenance-page .customer-report-filters .report-outlined-label--txn-captu
 
 /* Calendar icon pill — shared with dashboard via transaction.css; outlined shell clips left corner */
 body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
-body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
+body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
+body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
     border-radius: clamp(6px, 0.52vw, 8px) 0 0 clamp(6px, 0.52vw, 8px);
     z-index: 5;
 }

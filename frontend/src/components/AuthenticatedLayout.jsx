@@ -76,6 +76,7 @@ import {
 import { pathnameIs, pathnameToPageKey, spaPath } from "../utils/routing/pageRoutes.js";
 import { stripPrivateQueryFromBrowserUrl } from "../utils/routing/privateBrowserUrl.js";
 import { resetDashboardSessionCaches } from "../utils/dashboard/dashboardCache.js";
+import { resetMaintenanceCalendarPopupOnNavigation } from "../utils/date/dateRangePicker.js";
 import "../../public/css/modal-close-unified.css";
 import "../../public/css/select-unified.css";
 
@@ -126,6 +127,7 @@ function handleSidebarSpaLinkClick(event, path, onNavigate) {
   }
   if (event.button !== 0) return;
   event.preventDefault();
+  resetMaintenanceCalendarPopupOnNavigation();
   onNavigate?.();
 }
 
@@ -194,6 +196,7 @@ export default function AuthenticatedLayout() {
   const navigate = useNavigate();
   const goTo = useCallback(
     (path) => {
+      resetMaintenanceCalendarPopupOnNavigation();
       startTransition(() => {
         navigate(buildSpaPath(path));
       });
@@ -302,11 +305,14 @@ export default function AuthenticatedLayout() {
     }
   }, [location.pathname]);
 
-  /* Transaction Payment：layout 阶段即挂 transaction-page，避免 lazy chunk 加载前 Global Unlock 双 scrollbar */
+  /* Transaction Payment / Dashboard：layout 阶段挂 transaction-page，避免 lazy chunk 加载前样式错位 */
   useLayoutEffect(() => {
+    const onDashboard = pathnameIs("dashboard", location.pathname);
     const onTransactionPayment =
       pathnameIs("transaction", location.pathname) && !chromelessPaymentHistory;
-    document.body.classList.toggle("transaction-page", onTransactionPayment);
+    document.body.classList.toggle("transaction-page", onTransactionPayment || onDashboard);
+    document.body.classList.toggle("dashboard-home-page", onDashboard);
+    resetMaintenanceCalendarPopupOnNavigation();
   }, [location.pathname, chromelessPaymentHistory]);
 
   useLayoutEffect(() => {

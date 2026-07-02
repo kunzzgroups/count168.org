@@ -45,6 +45,9 @@ import {
   processListCacheHasRows,
   emptyCopyFromSyncFields,
   buildCopyFromFormPatch,
+  invalidateProcessListCompanyCache,
+  buildOptimisticProcessRows,
+  mergeProcessRowsById,
 } from "./processListHelpers.js";
 import {
   fetchGamesProcessListSlice,
@@ -58,7 +61,7 @@ import ProcessFormModal from "./components/ProcessFormModal.jsx";
 import DescriptionPickerModal from "./components/DescriptionPickerModal.jsx";
 import ProcessDeleteConfirmModal from "./components/ProcessDeleteConfirmModal.jsx";
 import AddProcessIcon from "./components/AddProcessIcon.jsx";
-import { getProcessListText } from "../../translateFile/pages/processListTranslate.js";
+import { getProcessListText, translateProcessListApiMessage } from "../../translateFile/pages/processListTranslate.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { useC168ProcessRouteGuard } from "./useC168ProcessRouteGuard.js";
 
@@ -131,6 +134,7 @@ export default function ProcessListPage() {
   const [toasts, setToasts] = useState([]);
   const [descriptionPickerOpen, setDescriptionPickerOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmError, setDeleteConfirmError] = useState("");
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   /** Partnership/Audit read_only 时禁用流程写操作 — synced from layout session */
   const sessionMe = sessionMeFromLayout;
@@ -159,9 +163,10 @@ export default function ProcessListPage() {
     requestAnimationFrame(() => {
       setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, visible: true } : t)));
     });
+    const durationMs = type === "danger" ? 6000 : 1500;
     window.setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 1500);
+    }, durationMs);
   }, []);
 
   // Layout phase (with BankProcessListPage): avoid deferred useEffect cleanup stripping body.process-page after route swap.
@@ -570,14 +575,16 @@ export default function ProcessListPage() {
   const fetchRows = useCallback(
     async (opts = {}) => {
       const silent = !!opts.silent;
+      const force = !!opts.force;
       const cid = opts.companyId != null ? Number(opts.companyId) : Number(companyId);
       if (!Number.isFinite(cid) || cid <= 0) return;
 
       const fetchGen = ++fetchGenRef.current;
-      const shouldAwaitEmpty = rowsRef.current.length === 0;
+      const shouldAwaitEmpty = rowsRef.current.length === 0 && !force;
       if (shouldAwaitEmpty) setAwaitingRows(true);
+      if (force) setAwaitingRows(false);
 
-      if (fetchAbortRef.current) fetchAbortRef.current.abort();
+      if (!opts.keepInFlight && fetchAbortRef.current) fetchAbortRef.current.abort();
       const ac = new AbortController();
       fetchAbortRef.current = ac;
       try {
@@ -589,7 +596,7 @@ export default function ProcessListPage() {
         });
         if (ac.signal.aborted || fetchGen !== fetchGenRef.current) return;
         if (!Array.isArray(slice.rows)) {
-          if (!silent) notify(t("failedLoadProcessList"), "danger");
+          if (!silent && !force) notify(t("failedLoadProcessList"), "danger");
           return;
         }
         if (Number(activeCompanyIdRef.current) !== cid) return;
@@ -601,12 +608,22 @@ export default function ProcessListPage() {
           currencyCodes: slice.currencyCodes,
         });
         setRows((prev) => {
-          if (silent && processRowsFingerprint(prev) === processRowsFingerprint(nextRows)) {
+          if (!force && silent && processRowsFingerprint(prev) === processRowsFingerprint(nextRows)) {
             return prev;
+          }
+          const preserveIds = Array.isArray(opts.preserveIds)
+            ? opts.preserveIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+            : [];
+          if (force && preserveIds.length > 0) {
+            const serverIds = new Set(nextRows.map((row) => Number(row.id)));
+            const pending = (prev || []).filter(
+              (row) => preserveIds.includes(Number(row.id)) && !serverIds.has(Number(row.id)),
+            );
+            return pending.length > 0 ? mergeProcessRowsById(nextRows, pending) : nextRows;
           }
           return nextRows;
         });
-        if (!silent) {
+        if (!silent || force) {
           listPaginationCompanyRef.current = String(cid);
           resetProcessListPagination();
           syncUrl({ companyId: cid });
@@ -615,7 +632,7 @@ export default function ProcessListPage() {
         }
       } catch (err) {
         if (ac.signal.aborted || err?.name === "AbortError" || fetchGen !== fetchGenRef.current) return;
-        if (!silent) notify(t("failedLoadProcessList"), "danger");
+        if (!silent && !force) notify(t("failedLoadProcessList"), "danger");
       } finally {
         if (fetchGen === fetchGenRef.current) {
           setAwaitingRows(false);
@@ -1183,11 +1200,14 @@ export default function ProcessListPage() {
         return;
       }
 
+      setForm((prev) => ({ ...prev, copy_from: id }));
+
       try {
         const url = new URL(buildApiUrl("api/processes/addprocess_api.php"));
         url.searchParams.set("action", "copy_from");
         url.searchParams.set("process_id", id);
-        if (companyId) url.searchParams.set("company_id", String(companyId));
+        const scopeId = activeCompanyId ?? companyId;
+        if (scopeId) url.searchParams.set("company_id", String(scopeId));
 
         const res = await fetch(url.toString(), { credentials: "include" });
         const json = await res.json();
@@ -1209,14 +1229,14 @@ export default function ProcessListPage() {
 
         setForm((prev) => ({
           ...prev,
-          copy_from: String(data.source_process_id ?? id),
+          copy_from: id,
           ...patch,
         }));
       } catch {
         notify(t("failedLoadProcess"), "danger");
       }
     },
-    [companyId, currencies, descriptions, t],
+    [activeCompanyId, companyId, currencies, descriptions, t],
   );
 
   const openEdit = async (id) => {
@@ -1372,7 +1392,8 @@ export default function ProcessListPage() {
     fd.append("remark", form.remark || "");
     if (form.copy_from) fd.append("copy_from", form.copy_from);
     fd.append("permission", "Games");
-    if (companyId) fd.append("company_id", String(companyId));
+    const submitCompanyId = activeCompanyId ?? companyId;
+    if (submitCompanyId) fd.append("company_id", String(submitCompanyId));
 
     try {
       const res = await fetch(buildApiUrl("api/processes/addprocess_api.php"), {
@@ -1385,8 +1406,13 @@ export default function ProcessListPage() {
         notify(json.message || json.error || t("createFailed"), "danger");
         return;
       }
-      let message = json.message || t("processAdded");
       const d = json.data;
+      const created = Array.isArray(d?.created_processes) ? d.created_processes : [];
+      if (created.length === 0) {
+        notify(json.message || json.error || t("createFailed"), "danger");
+        return;
+      }
+      let message = json.message || t("processAdded");
       if (d && typeof d === "object") {
         if (d.copy_from_used && Number(d.source_templates_found) === 0) message += ` (${t("copyNoTemplates")})`;
         if (d.copy_from_used && d.sync_source_set) message += ` [${t("copySyncEnabled")}]`;
@@ -1398,7 +1424,21 @@ export default function ProcessListPage() {
       notify(message, "success");
       notifyTransactionDataChanged("processlist-react");
       setModalOpen(false);
-      fetchRows();
+
+      const optimisticRows = buildOptimisticProcessRows(created, form, { currencies, days });
+      if (optimisticRows.length > 0) {
+        setRows((prev) => mergeProcessRowsById(prev, optimisticRows));
+        setAwaitingRows(false);
+        resetProcessListPagination();
+      }
+
+      invalidateProcessListCompanyCache(processListCacheRef, submitCompanyId);
+      await loadFormMeta(submitCompanyId);
+      await fetchRows({
+        companyId: submitCompanyId,
+        force: true,
+        preserveIds: optimisticRows.map((row) => row.id),
+      });
     } catch {
       notify(t("createFailed"), "danger");
     }
@@ -1419,6 +1459,7 @@ export default function ProcessListPage() {
       return;
     }
     if (!selectedIds.size) return;
+    setDeleteConfirmError("");
     setDeleteConfirmOpen(true);
   };
 
@@ -1433,6 +1474,7 @@ export default function ProcessListPage() {
       return;
     }
     setDeleteSubmitting(true);
+    setDeleteConfirmError("");
     try {
       const res = await fetch(buildApiUrl("api/processes/delete_processes_api.php"), {
         method: "POST",
@@ -1442,17 +1484,22 @@ export default function ProcessListPage() {
       });
       const json = await res.json();
       if (!res.ok || !json.success) {
-        notify(json.message || json.error || t("deleteFailed"), "danger");
+        const msg = translateProcessListApiMessage(lang, json, t("deleteFailed"));
+        setDeleteConfirmError(msg);
+        notify(msg, "danger");
         return;
       }
       const n = json?.data?.deleted ?? selectedIds.size;
       notify(n === 1 ? t("processDeletedOne") : t("processDeletedMany", { count: n }), "success");
       notifyTransactionDataChanged("processlist-react");
       setDeleteConfirmOpen(false);
+      setDeleteConfirmError("");
       setSelectedIds(new Set());
       fetchRows();
     } catch {
-      notify(t("deleteFailed"), "danger");
+      const msg = t("deleteFailed");
+      setDeleteConfirmError(msg);
+      notify(msg, "danger");
     } finally {
       setDeleteSubmitting(false);
     }
@@ -1704,8 +1751,14 @@ export default function ProcessListPage() {
         open={deleteConfirmOpen}
         count={selectedIds.size}
         deleting={deleteSubmitting}
+        errorMessage={deleteConfirmError}
         confirmDisabled={processMutationsBlocked}
-        onCancel={() => !deleteSubmitting && setDeleteConfirmOpen(false)}
+        onCancel={() => {
+          if (!deleteSubmitting) {
+            setDeleteConfirmError("");
+            setDeleteConfirmOpen(false);
+          }
+        }}
         onConfirm={confirmDeleteProcesses}
         t={t}
       />

@@ -42,6 +42,54 @@ export function normalizeRows(data) {
   return Array.isArray(data) ? data : [];
 }
 
+/** Drop all cached process-list slices for one company (after add/edit/delete). */
+export function invalidateProcessListCompanyCache(cacheRef, companyId) {
+  const cid = Number(companyId);
+  if (!Number.isFinite(cid) || cid <= 0 || !cacheRef?.current) return;
+  const prefix = `company:${cid}|`;
+  for (const key of cacheRef.current.keys()) {
+    if (key.startsWith(prefix)) cacheRef.current.delete(key);
+  }
+}
+
+/** Minimal table rows so the list updates immediately after addprocess_api succeeds. */
+export function buildOptimisticProcessRows(created, form, { currencies = [], days = [] } = {}) {
+  if (!Array.isArray(created) || created.length === 0) return [];
+  const currency = currencies.find((c) => String(c.id) === String(form?.currency_id));
+  const dayNames = (form?.day_use || [])
+    .map((dayId) => days.find((d) => String(d.id) === String(dayId))?.day_name)
+    .filter(Boolean)
+    .join(",");
+  const descriptions = Array.isArray(form?.selected_descriptions) ? form.selected_descriptions : [];
+  const descById = new Map(descriptions.map((d) => [String(d.id), d.name]));
+
+  return created.map((row) => ({
+    id: row.id,
+    process_name: row.process_id,
+    description: descById.get(String(row.description_id)) || descriptions[0]?.name || "",
+    status: "active",
+    currency: currency?.code || "",
+    day_use: dayNames,
+    has_transactions: false,
+  }));
+}
+
+export function mergeProcessRowsById(existingRows, incomingRows) {
+  const next = Array.isArray(existingRows) ? [...existingRows] : [];
+  const indexById = new Map(next.map((row, idx) => [Number(row.id), idx]));
+  for (const row of incomingRows || []) {
+    const id = Number(row?.id);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    if (indexById.has(id)) {
+      next[indexById.get(id)] = { ...next[indexById.get(id)], ...row };
+    } else {
+      indexById.set(id, next.length);
+      next.push(row);
+    }
+  }
+  return next;
+}
+
 export function rowCurrencyCodesFromRows(rows) {
   const set = new Set();
   for (const row of rows || []) {

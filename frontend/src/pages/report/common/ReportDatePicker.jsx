@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
   bindMaintenanceCalendarDismissListeners,
+  closeMaintenanceCalendarPopup,
   ensureMaintenanceDateRangePicker,
+  resetMaintenanceCalendarPopupOnNavigation,
 } from "../../../utils/date/dateRangePicker.js";
 import { formatDmy, parseYmd } from "../../../utils/date/dateUtils.js";
 
@@ -81,7 +83,13 @@ export default function ReportDatePicker({
 
   useEffect(() => {
     bindMaintenanceCalendarDismissListeners();
-  }, []);
+    return () => {
+      closeMaintenanceCalendarPopup();
+      if (!shareCalendarPopup) {
+        resetMaintenanceCalendarPopupOnNavigation();
+      }
+    };
+  }, [shareCalendarPopup]);
 
   useEffect(() => {
     if (instanceId) return undefined;

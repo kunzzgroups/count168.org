@@ -1183,11 +1183,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     );
   }, []);
 
-  useLayoutEffect(() => {
-    document.body.classList.add("transaction-page", "dashboard-home-page");
-    return () => document.body.classList.remove("transaction-page", "dashboard-home-page");
-  }, []);
-
   useEffect(
     () => () => {
       dashboardFetchAbortRef.current?.abort();
