@@ -132,7 +132,11 @@ export function handleGlobalGridPaste(e) {
  * Full paste orchestrator — all formats in React.
  */
 export function handleCellPasteEvent(e) {
-  const cell = resolvePasteCell(e.target);
+  let cell = resolvePasteCell(e.target);
+  if (!cell?.closest?.("#dataTable")) {
+    cell = getDefaultPasteAnchorCell();
+  }
+  if (!cell) return;
 
   e.preventDefault();
 
