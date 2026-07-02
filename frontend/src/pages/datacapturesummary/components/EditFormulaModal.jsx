@@ -51,6 +51,67 @@ export default function EditFormulaModal({
   const accountWrapperRef = useRef(null);
   const accountSearchInputRef = useRef(null);
   const formulaInputRef = useRef(null);
+  const onSaveRef = useRef(onSave);
+  const formRef = useRef(form);
+  const saveDisabledRef = useRef(saveDisabled);
+  const savingRef = useRef(saving);
+  const accountOpenRef = useRef(accountOpen);
+
+  onSaveRef.current = onSave;
+  formRef.current = form;
+  saveDisabledRef.current = saveDisabled;
+  savingRef.current = saving;
+  accountOpenRef.current = accountOpen;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const raf = requestAnimationFrame(() => {
+      formulaInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
+
+  const readLiveFormSnapshot = () => {
+    const base = formRef.current || {};
+    return {
+      ...base,
+      formula: formulaInputRef.current?.value ?? base.formula ?? "",
+      sourcePercent:
+        document.getElementById("sourcePercent")?.value ?? base.sourcePercent ?? "",
+      description: document.getElementById("description")?.value ?? base.description ?? "",
+      inputMethod: document.getElementById("inputMethod")?.value ?? base.inputMethod ?? "",
+      currencyId: document.getElementById("currency")?.value ?? base.currencyId ?? "",
+      currencyLabel: (() => {
+        const sel = document.getElementById("currency");
+        const opt = sel?.selectedOptions?.[0];
+        return opt?.textContent?.trim() || base.currencyLabel || "";
+      })(),
+    };
+  };
+
+  const triggerEnterSave = (e) => {
+    if (e.key !== "Enter" || e.defaultPrevented) return false;
+    if (accountOpenRef.current || saveDisabledRef.current || savingRef.current) return false;
+    const tag = String(e.target?.tagName || "").toUpperCase();
+    if (tag === "BUTTON") return false;
+    if (e.target?.closest?.(".formula-data-grid-item")) return false;
+    if (e.target?.closest?.(".custom-select-dropdown")) return false;
+    e.preventDefault();
+    e.stopPropagation();
+    onSaveRef.current?.(readLiveFormSnapshot());
+    return true;
+  };
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDocKeyDown = (e) => {
+      if (e.key !== "Enter") return;
+      if (!document.getElementById("editFormulaModal")) return;
+      triggerEnterSave(e);
+    };
+    document.addEventListener("keydown", onDocKeyDown, true);
+    return () => document.removeEventListener("keydown", onDocKeyDown, true);
+  }, [open]);
 
   useEffect(() => {
     if (!accountOpen) {
@@ -93,7 +154,7 @@ export default function EditFormulaModal({
 
   const lang = localStorage.getItem("login_lang") === "zh" ? "zh" : "en";
 
-  const setField = (patch) => onFormChange?.({ ...form, ...patch });
+  const setField = (patch) => onFormChange?.((prev) => ({ ...prev, ...patch }));
 
   const handleOpenAddAccount = (e) => {
     e.preventDefault();
@@ -144,11 +205,7 @@ export default function EditFormulaModal({
           id="editFormulaForm"
           className="edit-formula-form-container"
           onKeyDown={(e) => {
-            // Enter = Save（账户下拉/数据网格已 preventDefault，故跳过；下拉打开时不触发）
-            if (e.key !== "Enter" || e.defaultPrevented || accountOpen) return
-            if (saveDisabled || saving) return
-            e.preventDefault()
-            onSave?.()
+            triggerEnterSave(e);
           }}
         >
           <div className="form-header">
@@ -453,7 +510,7 @@ export default function EditFormulaModal({
               id="editFormulaSaveBtn"
               className="btn btn-save"
               disabled={saveDisabled || saving}
-              onClick={onSave}
+              onClick={() => onSave?.(readLiveFormSnapshot())}
             >
               {saving ? t("saving") : t("save")}
             </button>

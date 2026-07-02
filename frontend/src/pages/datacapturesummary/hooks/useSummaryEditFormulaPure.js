@@ -130,23 +130,25 @@ export function useSummaryEditFormulaPure({
     [tableData, anchorRow, open]
   );
 
-  const refreshPreview = useCallback((nextForm) => {
-    setForm(computeFormulaDisplayPreview(nextForm, anchorRef.current || {}));
-  }, []);
-
   const handleFormChange = useCallback(
-    (nextForm) => {
-      let patched = nextForm;
-      if (nextForm?.descriptionSelect1 !== form?.descriptionSelect1) {
-        const opts = buildRowDataOptionsForIdProduct(tableData, nextForm.descriptionSelect1);
-        patched = {
-          ...nextForm,
-          descriptionSelect2: opts[0]?.value || "",
-        };
-      }
-      refreshPreview(patched);
+    (nextFormOrUpdater) => {
+      setForm((prev) => {
+        const nextForm =
+          typeof nextFormOrUpdater === "function"
+            ? nextFormOrUpdater(prev || {})
+            : nextFormOrUpdater;
+        let patched = nextForm;
+        if (nextForm?.descriptionSelect1 !== prev?.descriptionSelect1) {
+          const opts = buildRowDataOptionsForIdProduct(tableData, nextForm.descriptionSelect1);
+          patched = {
+            ...nextForm,
+            descriptionSelect2: opts[0]?.value || "",
+          };
+        }
+        return computeFormulaDisplayPreview(patched, anchorRef.current || {});
+      });
     },
-    [form?.descriptionSelect1, refreshPreview, tableData]
+    [tableData]
   );
 
   const loadCurrenciesForAccount = useCallback(
@@ -270,38 +272,38 @@ export function useSummaryEditFormulaPure({
     };
   }, [open, sessionKey, captureScope]);
 
-  const handleCalculatorPress = useCallback(
-    (payload) => {
-      if (!form) return;
-      refreshPreview(applyCalculatorToForm(form, payload, anchorRef.current || {}));
-    },
-    [form, refreshPreview]
-  );
+  const handleCalculatorPress = useCallback((payload) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      return applyCalculatorToForm(prev, payload, anchorRef.current || {});
+    });
+  }, []);
 
   const handleAddSelectedData = useCallback(() => {
-    if (!form) return;
-    const result = addSelectedDescriptionToForm(form, tableData, anchorRef.current || {});
-    if (!result.ok) {
-      pushSummaryNotification("Info", "Please select row data first.", "info");
-      return;
-    }
-    setForm(result.form);
-  }, [form, tableData]);
+    setForm((prev) => {
+      if (!prev) return prev;
+      const result = addSelectedDescriptionToForm(prev, tableData, anchorRef.current || {});
+      if (!result.ok) {
+        pushSummaryNotification("Info", "Please select row data first.", "info");
+        return prev;
+      }
+      return result.form;
+    });
+  }, [tableData]);
 
-  const insertCapturedCellValue = useCallback(
-    (cellMeta) => {
-      if (!form) return;
-      const result = insertCapturedCellIntoForm(form, cellMeta, anchorRef.current || {});
+  const insertCapturedCellValue = useCallback((cellMeta) => {
+    setForm((prev) => {
+      if (!prev) return prev;
+      const result = insertCapturedCellIntoForm(prev, cellMeta, anchorRef.current || {});
       if (!result.ok) {
         if (result.reason === "no_numbers") {
           pushSummaryNotification("Info", "No numbers or symbols were found in the cell.", "info");
         }
-        return;
+        return prev;
       }
-      setForm(result.form);
-    },
-    [form]
-  );
+      return result.form;
+    });
+  }, []);
 
   const handleCapturedCellClick = useCallback(
     (cellMeta) => {
@@ -329,16 +331,17 @@ export function useSummaryEditFormulaPure({
     [open, form, insertCapturedCellValue]
   );
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (formSnapshot) => {
     if (saveInFlightRef.current) return;
     const anchor = anchorRef.current;
-    if (!anchor || !form) return;
+    const formToSave = formSnapshot || form;
+    if (!anchor || !formToSave) return;
 
     saveInFlightRef.current = true;
     setSaving(true);
     try {
 
-    const result = buildFormulaSavePatchFromForm(form, anchor);
+    const result = buildFormulaSavePatchFromForm(formToSave, anchor);
     if (!result.ok) {
       pushSummaryNotification("Error", result.message, "error");
       return;
