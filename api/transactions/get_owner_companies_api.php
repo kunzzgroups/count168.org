@@ -46,8 +46,9 @@ try {
             $active_companies[] = $c; // Keep active or no-expiration
         }
         
-        gc_hydrate_accessible_group_ids($pdo, $active_companies);
         $active_companies = gc_filter_companies_for_login_scope($active_companies);
+        $active_companies = gc_filter_companies_for_assigned_scope($pdo, $active_companies);
+        gc_hydrate_accessible_group_ids($pdo, $active_companies);
 
         if (gc_is_company_login() || gc_is_group_login()) {
             echo json_encode([
@@ -75,8 +76,9 @@ try {
         $active_companies[] = $c; // Keep active or no-expiration
     }
     
-    gc_hydrate_accessible_group_ids($pdo, $active_companies);
     $active_companies = gc_filter_companies_for_login_scope($active_companies);
+    $active_companies = gc_filter_companies_for_assigned_scope($pdo, $active_companies);
+    gc_hydrate_accessible_group_ids($pdo, $active_companies);
 
     if (gc_is_company_login() || gc_is_group_login()) {
         echo json_encode([

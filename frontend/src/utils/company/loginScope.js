@@ -62,6 +62,9 @@ export function resolveCompanyLoginGroupId(me, companies = []) {
 
 /** Linked group ids for filter pills (AP+IG when domain/ownership links). */
 export function resolveAccessibleGroupIds(me, companies = []) {
+  if (userHasExplicitAssignedScope(me)) {
+    return resolveAssignedScopeGroupIds(me, companies);
+  }
   const fromSession = readAccessibleGroupIds(me);
   const set = new Set(fromSession);
   const ident = getLoginIdentifier(me);
@@ -141,6 +144,37 @@ export function getAssignedCompanyIds(me) {
   return out.sort((a, b) => a - b);
 }
 
+/** Owner / unrestricted users keep full group pills; assigned users do not. */
+export function userHasExplicitAssignedScope(me) {
+  const role = String(me?.role || "").trim().toLowerCase();
+  if (role === "owner") return false;
+  return getAssignedCompanyIds(me).length > 0 || getAssignedGroupCodes(me).length > 0;
+}
+
+/** Group pills derived from admin-assigned companies / groups only. */
+export function resolveAssignedScopeGroupIds(me, companies = []) {
+  const assignedGroups = getAssignedGroupCodes(me);
+  const assignedCompanyIds = getAssignedCompanyIds(me);
+  const out = new Set();
+
+  for (const g of assignedGroups) {
+    const norm = String(g || "").trim().toUpperCase();
+    if (norm) out.add(norm);
+  }
+
+  if (assignedCompanyIds.length > 0) {
+    const idSet = new Set(assignedCompanyIds);
+    for (const c of companies || []) {
+      const id = Number(c?.id);
+      if (!Number.isFinite(id) || id <= 0 || !idSet.has(id)) continue;
+      const gid = normalizeNativeCompanyGroupId(c);
+      if (gid) out.add(gid);
+    }
+  }
+
+  return [...out].sort();
+}
+
 /**
  * Restrict owner company rows to a user's explicit per-company / per-group
  * assignment — mirrors backend `gc_session_can_access_company_id`:
@@ -164,6 +198,11 @@ export function filterCompaniesForAssignedScope(companies, me) {
     if (link && groupSet.has(link)) return true;
     return false;
   });
+}
+
+/** Login scope + admin-assigned company/group scope (all GC filter pages). */
+export function filterCompaniesForUserScope(companies, me) {
+  return filterCompaniesForAssignedScope(filterCompaniesForLoginScope(companies, me), me);
 }
 
 /**
@@ -432,6 +471,14 @@ export function canClearCompanySelection(me, groupCode = null) {
  */
 export function resolveVisibleGroupIds(groupIds, me, companies = []) {
   const ids = Array.isArray(groupIds) ? groupIds : [];
+  if (!me) return ids;
+
+  if (userHasExplicitAssignedScope(me)) {
+    const scoped = resolveAssignedScopeGroupIds(me, companies);
+    if (scoped.length) return scoped;
+    return ids;
+  }
+
   const scope = getLoginScope(me);
   if (!scope) return ids;
 

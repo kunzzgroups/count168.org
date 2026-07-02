@@ -256,7 +256,7 @@ export default function PaymentMaintenancePage() {
         }
 
         // Load Companies
-        const rows = await fetchOwnerCompaniesAll();
+        const rows = await fetchOwnerCompaniesAll({ me: u });
         if (cancelled) return;
         setCompanies(rows);
 

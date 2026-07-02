@@ -622,7 +622,7 @@ export default function TransactionMaintenancePage() {
           return;
         }
 
-        const filtered = await fetchOwnerCompaniesAll();
+        const filtered = await fetchOwnerCompaniesAll({ me: u });
         if (cancelled) return;
         setCompanies(filtered);
 

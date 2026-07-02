@@ -21,7 +21,6 @@ import {
   readPersistedDashboardGcFilter,
   resolveBootCompanyId,
   resolveInitialSelectedGroupFromSession,
-  filterCompaniesForLoginScope,
   fetchOwnerCompaniesAll,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { syncCompanySessionApi } from "../../utils/company/companySessionSync.js";
@@ -507,7 +506,7 @@ function DataCapturePageContent() {
       }
       try {
         const u = me;
-        const raw = filterCompaniesForLoginScope(await fetchOwnerCompaniesAll(), u);
+        const raw = await fetchOwnerCompaniesAll({ me: u });
 
         const url = new URL(window.location.href);
         const restoreBoot = readCaptureRestoreBoot();

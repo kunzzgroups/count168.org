@@ -139,6 +139,99 @@ function gc_filter_companies_for_login_scope(array $companies): array
 }
 
 /**
+ * Restrict owner company rows to admin-assigned subsidiaries / groups
+ * (user_company_map scope_type=company, user_group_map).
+ * Owners and users without explicit per-company assignment keep the full list.
+ *
+ * @return array<int, array<string, mixed>>
+ */
+function gc_filter_companies_for_assigned_scope(PDO $pdo, array $companies): array
+{
+    $role = strtolower(trim((string) ($_SESSION['role'] ?? '')));
+    if ($role === 'owner') {
+        return $companies;
+    }
+
+    gc_hydrate_session_assigned_tenants($pdo);
+    $assignedIds = gc_session_assigned_company_ids();
+    if ($assignedIds === []) {
+        return $companies;
+    }
+
+    $groupSet = [];
+    foreach (gc_session_assigned_group_codes() as $g) {
+        $norm = strtoupper(trim((string) $g));
+        if ($norm !== '') {
+            $groupSet[$norm] = true;
+        }
+    }
+
+    $idSet = array_flip($assignedIds);
+
+    return array_values(array_filter($companies, static function (array $c) use ($idSet, $groupSet): bool {
+        $id = (int) ($c['id'] ?? 0);
+        if ($id > 0 && isset($idSet[$id])) {
+            return true;
+        }
+        $gid = strtoupper(trim((string) ($c['group_id'] ?? '')));
+        if ($gid !== '' && isset($groupSet[$gid])) {
+            return true;
+        }
+        $link = strtoupper(trim((string) ($c['link_source_group'] ?? '')));
+        if ($link !== '' && isset($groupSet[$link])) {
+            return true;
+        }
+
+        return false;
+    }));
+}
+
+/**
+ * Group pills for users with explicit company/group assignment (not owner / unrestricted).
+ *
+ * @param array<int, array<string, mixed>> $companies Filtered portfolio rows
+ * @return list<string> Empty when user has no explicit assignment scope
+ */
+function gc_resolve_assigned_scope_group_codes(PDO $pdo, array $companies): array
+{
+    $role = strtolower(trim((string) ($_SESSION['role'] ?? '')));
+    if ($role === 'owner') {
+        return [];
+    }
+
+    gc_hydrate_session_assigned_tenants($pdo);
+    $assignedCompanyIds = gc_session_assigned_company_ids();
+    $assignedGroupCodes = gc_session_assigned_group_codes();
+    if ($assignedCompanyIds === [] && $assignedGroupCodes === []) {
+        return [];
+    }
+
+    $allowed = [];
+    foreach ($assignedGroupCodes as $g) {
+        $norm = strtoupper(trim((string) $g));
+        if ($norm !== '') {
+            $allowed[$norm] = true;
+        }
+    }
+
+    if ($assignedCompanyIds !== []) {
+        $idSet = array_flip($assignedCompanyIds);
+        foreach ($companies as $c) {
+            $cid = (int) ($c['id'] ?? 0);
+            if ($cid <= 0 || !isset($idSet[$cid])) {
+                continue;
+            }
+            $native = strtoupper(trim((string) ($c['native_group_id'] ?? $c['group_id'] ?? '')));
+            if ($native !== '') {
+                $allowed[$native] = true;
+            }
+        }
+    }
+
+    return array_keys($allowed);
+}
+
+/**
  * Normalize optional dashboard view_group (GroupID pill).
  */
 function gc_normalize_view_group(?string $viewGroup): ?string
@@ -923,6 +1016,14 @@ function gc_session_can_access_group_code(PDO $pdo, string $groupCode): bool
 function gc_hydrate_accessible_group_ids(PDO $pdo, array $companies): void
 {
     if (gc_session_login_scope() === null) {
+        return;
+    }
+
+    $scopedGroups = gc_resolve_assigned_scope_group_codes($pdo, $companies);
+    if ($scopedGroups !== []) {
+        $_SESSION['accessible_group_ids'] = $scopedGroups;
+        sort($_SESSION['accessible_group_ids']);
+
         return;
     }
 

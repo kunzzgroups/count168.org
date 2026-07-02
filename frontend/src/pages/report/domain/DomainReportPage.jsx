@@ -191,7 +191,7 @@ export default function DomainReportPage() {
     let cancelled = false;
     (async () => {
       try {
-        const rows = await fetchOwnerCompaniesAll();
+        const rows = await fetchOwnerCompaniesAll({ me: u });
         if (cancelled) return;
         setCompanies(rows);
 

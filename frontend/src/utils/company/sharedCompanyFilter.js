@@ -21,6 +21,7 @@ import {
 import {
   canUseGroupOnlyMode,
   filterCompaniesForLoginScope,
+  filterCompaniesForUserScope,
   getLoginIdentifier,
   getLoginScope,
   isCompanyLogin,
@@ -30,11 +31,15 @@ import {
 
 export {
   canUseGroupOnlyMode,
+  filterCompaniesForAssignedScope,
   filterCompaniesForLoginScope,
+  filterCompaniesForUserScope,
   getLoginIdentifier,
   getLoginScope,
   isCompanyLogin,
   isGroupLogin,
+  resolveAssignedScopeGroupIds,
+  userHasExplicitAssignedScope,
 } from "./loginScope.js";
 
 export const DASHBOARD_GROUP_FILTER_KEY = "dashboard_group_filter";
@@ -1340,8 +1345,8 @@ export async function loadOwnerCompaniesCached(fetcher) {
 
 /** Shared GET owner companies — one HTTP request per session (Layout prefetch + page boot). */
 export async function fetchOwnerCompaniesAll(options = {}) {
-  const { signal, throwOnError = false } = options;
-  return loadOwnerCompaniesCached(async () => {
+  const { signal, throwOnError = false, me = null } = options;
+  const rows = await loadOwnerCompaniesCached(async () => {
     const res = await fetch(buildApiUrl("api/transactions/get_owner_companies_api.php?all=1"), {
       credentials: "include",
       signal,
@@ -1351,9 +1356,10 @@ export async function fetchOwnerCompaniesAll(options = {}) {
     if (throwOnError && (!res.ok || !json.success || !Array.isArray(json.data))) {
       throw new Error(json?.message || json?.error || "Failed to load companies");
     }
-    const rows = Array.isArray(json?.data) ? json.data : [];
-    return rows.map((r) => normalizeOwnerCompanyRow(r)).filter(Boolean);
+    const list = Array.isArray(json?.data) ? json.data : [];
+    return list.map((r) => normalizeOwnerCompanyRow(r)).filter(Boolean);
   });
+  return me ? filterCompaniesForUserScope(rows, me) : rows;
 }
 
 /**

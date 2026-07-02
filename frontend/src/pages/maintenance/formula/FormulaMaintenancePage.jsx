@@ -387,7 +387,7 @@ export default function FormulaMaintenancePage() {
           return;
         }
 
-        const rows = await fetchOwnerCompaniesAll();
+        const rows = await fetchOwnerCompaniesAll({ me: u });
         if (cancelled) return;
         setCompanies(rows);
 

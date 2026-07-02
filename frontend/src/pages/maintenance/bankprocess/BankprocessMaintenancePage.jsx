@@ -145,7 +145,7 @@ export default function BankprocessMaintenancePage() {
     setBootLoading(true);
     (async () => {
       try {
-        const allRows = await fetchOwnerCompaniesAll();
+        const allRows = await fetchOwnerCompaniesAll({ me });
         const compRows = allRows.filter((c) => c.company_id);
         if (cancelled) return;
 

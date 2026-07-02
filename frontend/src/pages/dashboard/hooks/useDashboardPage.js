@@ -104,7 +104,6 @@ import {
   applyLoginScopeToSessionStorageIfNeeded,
   resolveBootCompanyId,
   resolveInitialSelectedGroupFromSession,
-  filterCompaniesForLoginScope,
   sortedUniqueGroupIds,
   resolveOwnerDashboardGroupIds,
   isVirtualGroupLinkCompanyRow,
@@ -1201,9 +1200,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     const u = meRef.current;
     if (!sessionReady || !u) return;
     try {
-      const cjRows = await fetchOwnerCompaniesAll({ signal, throwOnError: true });
+      const cjRows = await fetchOwnerCompaniesAll({ signal, throwOnError: true, me: u });
       await fetchOwnerGroupsAll(u, { signal });
-      const scopedCompanies = filterCompaniesForLoginScope(cjRows, u);
+      const scopedCompanies = cjRows;
       setCompanies((prev) =>
         companiesListSignature(prev) === companiesListSignature(scopedCompanies)
           ? prev

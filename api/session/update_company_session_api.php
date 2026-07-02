@@ -124,6 +124,7 @@ try {
         $user_companies = getUserCompanies($pdo, $current_user_id, $current_user_role, $current_user_type);
         $user_companies = gc_filter_real_company_rows($user_companies);
         $user_companies = gc_apply_login_scope_company_filter($pdo, $user_companies);
+        $user_companies = gc_filter_companies_for_assigned_scope($pdo, $user_companies);
     } catch (PDOException $e) {
         error_log("获取用户 company 列表失败: " . $e->getMessage());
         jsonResponse(false, '获取公司列表失败', null, 500);

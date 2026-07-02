@@ -356,7 +356,7 @@ export default function ProcessListPage() {
           return;
         }
 
-        const cs = await fetchOwnerCompaniesAll();
+        const cs = await fetchOwnerCompaniesAll({ me: layoutMe });
         setCompanies(cs);
 
         const url = new URL(window.location.href);

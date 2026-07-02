@@ -805,7 +805,7 @@ export function useBankProcessListPage() {
           return;
         }
 
-        const cs = await fetchOwnerCompaniesAll();
+        const cs = await fetchOwnerCompaniesAll({ me: authMe });
         setCompanies(cs);
         const sessionUser = authMe;
         if (!sessionUser) {

@@ -42,7 +42,6 @@ import {
   canClearCompanySelection,
   canUseGroupOnlyMode,
   companyLoginRequiresSubsidiaryWithGroup,
-  filterCompaniesForAssignedScope,
   isCompanyLogin,
   isGroupLedgerMode,
   isGroupLogin,
@@ -466,10 +465,7 @@ export default function UserListPage() {
           navigate(landing || spaPath("login"), { replace: true });
           return;
         }
-        const rows = filterCompaniesForAssignedScope(
-          (await fetchOwnerCompaniesAll()).map(normalizeCompanyRow),
-          me,
-        );
+        const rows = (await fetchOwnerCompaniesAll({ me })).map(normalizeCompanyRow);
         if (cancelled) return;
         setCompanies(rows);
         applyLoginScopeToSessionStorageIfNeeded(me, rows);
@@ -1758,7 +1754,7 @@ export default function UserListPage() {
 
   const loadCompaniesForModal = async () => {
     try {
-      const rows = (await fetchOwnerCompaniesAll()).map(normalizeCompanyRow);
+      const rows = (await fetchOwnerCompaniesAll({ me })).map(normalizeCompanyRow);
       // Group-only mode => choose group list.
       // Company-selected mode => choose companies visible under selected group, including linked groups (AP<->IG).
       if (groupOnlyUserList) {

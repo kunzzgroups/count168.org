@@ -864,7 +864,7 @@ export default function AuthenticatedLayout() {
     }
 
     const runCompanies = () => {
-      void fetchOwnerCompaniesAll();
+      void fetchOwnerCompaniesAll({ me });
       void fetchOwnerGroupsAll(me);
     };
 

@@ -221,7 +221,7 @@ export function useTransactionData({
           return;
         }
 
-        const rows = await fetchOwnerCompaniesAll();
+        const rows = await fetchOwnerCompaniesAll({ me: u });
         if (cancelled) return;
 
         const url = new URL(window.location.href);

@@ -103,7 +103,7 @@ export default function DomainPage() {
         if (!allowed) {
           const { companyId } = readPersistedDashboardGcFilter();
           if (companyId != null) {
-            await fetchOwnerCompaniesAll();
+            await fetchOwnerCompaniesAll({ me });
             allowed = canAccessC168DomainPages(me);
           }
         }

@@ -696,7 +696,7 @@ export default function AccountListPage() {
 
     (async () => {
       try {
-        const rows = (await fetchOwnerCompaniesAll()).map(normalizeCompanyRow);
+        const rows = (await fetchOwnerCompaniesAll({ me: sessionMe })).map(normalizeCompanyRow);
         if (cancelled) return;
 
         setCompanies((prev) => {
