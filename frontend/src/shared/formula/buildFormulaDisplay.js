@@ -1,6 +1,7 @@
 import { formatSourcePercent } from "./formatSourcePercent.js";
 import { formatNegativeNumbersInFormula } from "./formatNegativeNumbersInFormula.js";
 import { isSourceOne } from "./isMisplacedCommission.js";
+import { removeTrailingSourcePercentExpression } from "./removeTrailingSourcePercent.js";
 
 /** True when source is an arithmetic expression (e.g. 0.18/2), not a plain number. */
 function isArithmeticSourceExpression(value) {
@@ -54,15 +55,8 @@ export function createFormulaDisplayFromExpression(formula, sourcePercentValue, 
   if (isSourceOne(pct)) return trimmedFormula;
 
   const formatted = formatSourceForFormulaSuffix(pct);
-  const formulaTrimmed = trimmedFormula.replace(/\s+/g, "");
-  const srcNorm = pct.replace(/\s+/g, "");
-  const alreadyHas =
-    formulaTrimmed.endsWith(`*(${srcNorm})`) ||
-    formulaTrimmed.endsWith(`*${srcNorm}`) ||
-    formulaTrimmed.endsWith(`*(${formatted})`) ||
-    formulaTrimmed.endsWith(`*${formatted}`);
-  if (alreadyHas) return trimmedFormula;
-
-  return `${trimmedFormula}*(${formatted})`;
+  // Formula-body multipliers (e.g. *0.10) are independent of Source; always append bracketed Source.
+  const base = removeTrailingSourcePercentExpression(trimmedFormula);
+  return `${base}*(${formatted})`;
 }
 
