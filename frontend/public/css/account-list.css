@@ -307,6 +307,29 @@
     text-align: center;
 }
 
+.currency-setting-pill.currency-setting-pill-toggle {
+    justify-content: space-between;
+    padding: 6px 8px 6px 12px;
+    gap: 4px;
+}
+
+.currency-setting-pill-toggle .currency-setting-pill-code {
+    flex: 1;
+    text-align: center;
+}
+
+#currencySettingModal .currency-setting-pill-toggle .currency-delete-btn {
+    flex-shrink: 0;
+    color: #dc3545;
+    opacity: 0.85;
+}
+
+#currencySettingModal .currency-setting-pill-toggle .currency-delete-btn:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    opacity: 1;
+}
+
 .currency-setting-pill.active,
 .currency-setting-pill.selected {
     background: var(--btn-add-gradient);

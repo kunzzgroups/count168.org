@@ -309,7 +309,8 @@ export function calculateTotals(rows) {
   let wlAcc = MoneyDecimal.toDecimal("0", 0);
   let crAcc = MoneyDecimal.toDecimal("0", 0);
   for (const row of rows || []) {
-    try {      bfAcc = bfAcc.plus(MoneyDecimal.toDecimal(cleanMoneyCell(row?.bf), 0));
+    try {
+      bfAcc = bfAcc.plus(MoneyDecimal.toDecimal(cleanMoneyCell(row?.bf), 0));
     } catch {
       /* skip bad row */
     }

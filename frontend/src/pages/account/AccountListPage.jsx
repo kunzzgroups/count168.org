@@ -2009,6 +2009,18 @@ export default function AccountListPage() {
 
   const appendCurrencyScopeParams = appendAccountScopeParams;
 
+  const buildCurrencyScopePayload = useCallback((ledgerScope) => {
+    const payload = {};
+    const scope = ledgerScope ?? pageLedgerScope;
+    if (scope.groupId) payload.group_id = scope.groupId;
+    if (scope.ledger === "group") {
+      payload.group_only = true;
+    } else if (scope.companyId) {
+      payload.company_id = scope.companyId;
+    }
+    return payload;
+  }, [pageLedgerScope]);
+
   const appendModalCurrencyScopeParams = useCallback(
     (params, scopeOverride = undefined) => {
       const modalScope =
@@ -2297,19 +2309,17 @@ export default function AccountListPage() {
     }
     try {
       const modalScope = currencySettingOpen ? pageLedgerScope : resolveActiveModalLedgerScope();
-      const payload = { code };
-      if (modalScope.groupId) payload.group_id = modalScope.groupId;
-      if (modalScope.ledger === "group") {
-        payload.group_only = true;
-      } else if (modalScope.companyId) {
-        payload.company_id = modalScope.companyId;
-      }
+      const payload = { code, ...buildCurrencyScopePayload(modalScope) };
       const res = await fetch(buildApiUrl("api/accounts/create_currency_api.php"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "include" });
       const json = await res.json();
       if (json.success) {
         const newId = Number(json.data.id);
-        setCurrencies((prev) => [...prev, { id: newId, code: json.data.code, is_linked: false }]);
-        setSelectedCurrencyIds((prev) => (prev.map(Number).includes(newId) ? prev : [...prev, newId]));
+        if (currencySettingOpen) {
+          await loadSelectionMeta(null, false, { forcePageLedgerScope: true, selectCode: code });
+        } else {
+          setCurrencies((prev) => [...prev, { id: newId, code: json.data.code, is_linked: false }]);
+          setSelectedCurrencyIds((prev) => (prev.map(Number).includes(newId) ? prev : [...prev, newId]));
+        }
         setCurrencyInput("");
       } else {
         const msg = String(json.message || json.error || "");
@@ -2337,13 +2347,17 @@ export default function AccountListPage() {
     [appendModalCurrencyScopeParams, isEditMode, form.id],
   );
 
-  const fetchAccountsUsingCurrency = async (currencyId) => {
+  const fetchAccountsUsingCurrency = async (currencyId, scopeOverride = undefined) => {
     try {
       const params = new URLSearchParams({
         action: "get_linked_accounts_by_currency",
         currency_id: String(currencyId),
       });
-      appendModalCurrencyScopeParams(params);
+      if (scopeOverride) {
+        applyTenantLedgerToParams(params, scopeOverride);
+      } else {
+        appendModalCurrencyScopeParams(params);
+      }
       const res = await fetch(
         buildApiUrl(`api/accounts/bulk_account_currency_api.php?${params.toString()}`),
         { method: "POST", credentials: "include" },
@@ -2393,23 +2407,24 @@ export default function AccountListPage() {
     setSelectedCurrencyIds((prev) => prev.filter((x) => Number(x) !== id));
     setHiddenCurrencyIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setCurrencies((prev) => prev.filter((c) => Number(c.id) !== id));
+    setSettingCurrencyId((prev) => {
+      if (Number(prev) === id) {
+        setSettingLinked(new Set());
+        setSettingInitial(new Set());
+        return null;
+      }
+      return prev;
+    });
   }, []);
 
   const requestCurrencyDelete = useCallback(
-    async (currencyId, { force = false } = {}) => {
+    async (currencyId, { force = false, scope = null } = {}) => {
       const id = Number(currencyId);
+      const ledgerScope = scope ?? resolveActiveModalLedgerScope();
       const deleteUrl = new URL(buildApiUrl("api/accounts/delete_currency_api.php"));
-      appendModalCurrencyScopeParams(deleteUrl.searchParams);
-      const deletePayload = { id };
+      applyTenantLedgerToParams(deleteUrl.searchParams, ledgerScope);
+      const deletePayload = { id, ...buildCurrencyScopePayload(ledgerScope) };
       if (force) deletePayload.force = true;
-      const modalScope = resolveActiveModalLedgerScope();
-      if (modalScope.ledger === "group") {
-        deletePayload.group_only = true;
-        if (modalScope.groupId) deletePayload.group_id = modalScope.groupId;
-      } else {
-        if (modalScope.companyId) deletePayload.company_id = modalScope.companyId;
-        if (modalScope.groupId) deletePayload.group_id = modalScope.groupId;
-      }
       const res = await fetch(deleteUrl.toString(), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2423,7 +2438,7 @@ export default function AccountListPage() {
         msg: String(json.message || json.error || ""),
       };
     },
-    [appendModalCurrencyScopeParams, resolveActiveModalLedgerScope],
+    [buildCurrencyScopePayload, resolveActiveModalLedgerScope],
   );
 
   const confirmForceCurrencyDelete = useCallback(async () => {
@@ -2431,7 +2446,10 @@ export default function AccountListPage() {
     setForceCurrencyDeletePrompt(null);
     if (!prompt?.id) return;
     try {
-      const { success, msg } = await requestCurrencyDelete(prompt.id, { force: true });
+      const { success, msg } = await requestCurrencyDelete(prompt.id, {
+        force: true,
+        scope: prompt.scope ?? null,
+      });
       if (success) {
         dropCurrencyFromUi(prompt.id);
         notifyApi(msg, "currencyDeleted", "success");
@@ -2442,6 +2460,52 @@ export default function AccountListPage() {
       notify(t("failedDeleteCurrency"), "danger");
     }
   }, [dropCurrencyFromUi, forceCurrencyDeletePrompt, notify, notifyApi, requestCurrencyDelete, t]);
+
+  /** Delete currency from Currency Setting page (no edit-account unlink). */
+  const removeSettingCurrency = async (currencyId) => {
+    if (accountMutationsBlocked) {
+      notify(t("readOnlyActionBlocked"), "danger");
+      return;
+    }
+    const id = Number(currencyId);
+    const currencyRow = currencies.find((c) => Number(c.id) === id);
+    if (currencyRow?.deletable === false) {
+      notify(t("apiCurrencySyncedFromSubsidiary"), "danger");
+      return;
+    }
+    if (settingCurrencyId != null && Number(settingCurrencyId) === id) {
+      notify(t("deselectCurrencyBeforeDelete"), "danger");
+      return;
+    }
+
+    const settingScope = pageLedgerScope;
+    try {
+      const otherAccountsInUse = await fetchAccountsUsingCurrency(id, settingScope);
+      const { success, json, msg } = await requestCurrencyDelete(id, { scope: settingScope });
+      if (success) {
+        dropCurrencyFromUi(id);
+        notifyApi(msg, "currencyDeleted", "success");
+        return;
+      }
+      if (isHistoricalOnlyCurrencyDeleteBlock(msg, otherAccountsInUse)) {
+        const code = currencies.find((c) => Number(c.id) === id)?.code || "";
+        setForceCurrencyDeletePrompt({
+          id,
+          code: toUpper(String(code)),
+          detail: formatCurrencyUsageDetail(lang, msg),
+          scope: settingScope,
+        });
+        return;
+      }
+      const apiData =
+        otherAccountsInUse.length > 0
+          ? { ...(json?.data || {}), accounts_in_use: otherAccountsInUse }
+          : json?.data ?? null;
+      await handleCurrencyDeleteBlocked(id, { ...json, data: apiData }, msg);
+    } catch {
+      notify(t("failedDeleteCurrency"), "danger");
+    }
+  };
 
   /** Permanently delete currency; only when deselected. Unlink from current account if still linked in DB. */
   const removeModalCurrency = async (currencyId) => {
@@ -3022,7 +3086,7 @@ export default function AccountListPage() {
         onClose={() => setForceCurrencyDeletePrompt(null)}
         t={t}
       />
-      <CurrencySettingModal open={currencySettingOpen} onClose={() => setCurrencySettingOpen(false)} currencies={currencies} settingCurrencyId={settingCurrencyId} setSettingCurrencyId={setSettingCurrencyId} settingLinked={settingLinked} setSettingLinked={setSettingLinked} settingSearch={settingSearch} setSettingSearch={setSettingSearch} settingRole={settingRole} setSettingRole={setSettingRole} onLoadCurrencyLinks={loadCurrencyLinks} onClearCurrencySelection={clearCurrencySettingSelection} onSave={saveCurrencySetting} accounts={accounts} roles={roles} currencyInput={currencyInput} setCurrencyInput={setCurrencyInput} onCreateCurrency={createCurrency} t={t} />
+      <CurrencySettingModal open={currencySettingOpen} onClose={() => setCurrencySettingOpen(false)} currencies={currencies} settingCurrencyId={settingCurrencyId} setSettingCurrencyId={setSettingCurrencyId} settingLinked={settingLinked} setSettingLinked={setSettingLinked} settingSearch={settingSearch} setSettingSearch={setSettingSearch} settingRole={settingRole} setSettingRole={setSettingRole} onLoadCurrencyLinks={loadCurrencyLinks} onClearCurrencySelection={clearCurrencySettingSelection} onSave={saveCurrencySetting} accounts={accounts} roles={roles} currencyInput={currencyInput} setCurrencyInput={setCurrencyInput} onCreateCurrency={createCurrency} onRemoveCurrency={removeSettingCurrency} t={t} />
       <LinkAccountModal open={linkModalOpen} accounts={linkAccountsPool} currentAccountId={linkingAccountId} selectedIds={selectedLinkedIds} setSelectedIds={setSelectedLinkedIds} linkType={linkType} setLinkType={setLinkType} searchTerm={linkSearchTerm} setSearchTerm={setLinkSearchTerm} onSave={saveLinks} onClose={() => setLinkModalOpen(false)} t={t} />
     </>
   );

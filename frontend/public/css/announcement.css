@@ -210,45 +210,69 @@ body.announcement-page .page-header h1 {
     flex: 1;
 }
 
-.announcement-delete-btn,
-.announcement-edit-btn {
-    background: #ef4444;
-    color: white;
+.announcement-item-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+body.announcement-page .announcement-item-actions .btn-save {
+    background: var(--btn-add-gradient);
+    color: #ffffff;
+    font-family: var(--font-heading-page);
+    min-width: clamp(56px, 5vw, 80px);
+    width: auto;
+    padding: clamp(6px, 0.42vw, 8px) clamp(12px, 1vw, 20px);
+    font-size: clamp(10px, 0.73vw, 14px);
+    font-weight: var(--font-weight-semibold);
+    margin: 0;
     border: none;
     border-radius: 6px;
-    padding: clamp(4px, 0.31vw, 6px) clamp(8px, 0.625vw, 12px);
-    font-size: clamp(8px, 0.625vw, 12px);
+    box-shadow: var(--shadow-btn-add-page);
     cursor: pointer;
-    transition: background 0.2s;
-    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
-.announcement-edit-btn {
-    background: #3b82f6;
+body.announcement-page .announcement-item-actions .btn-save:hover {
+    background: var(--btn-add-gradient-hover);
+    box-shadow: var(--shadow-btn-add-page-hover);
+    transform: translateY(-1px);
 }
 
-.announcement-edit-btn:hover {
-    background: #2563eb;
-}
-
-.announcement-delete-btn:hover {
-    background: #dc2626;
-}
-
-.maintenance-edit-btn {
-    background: #3b82f6;
-    color: white;
+body.announcement-page .announcement-item-actions .btn-delete {
+    background: var(--btn-delete-gradient);
+    color: #ffffff;
+    font-family: var(--font-heading-page);
+    min-width: clamp(64px, 5.5vw, 90px);
+    width: auto;
+    padding: clamp(6px, 0.42vw, 8px) clamp(12px, 1vw, 20px);
+    font-size: clamp(10px, 0.73vw, 14px);
+    font-weight: var(--font-weight-semibold);
+    margin: 0;
     border: none;
     border-radius: 6px;
-    padding: clamp(4px, 0.31vw, 6px) clamp(8px, 0.625vw, 12px);
-    font-size: clamp(8px, 0.625vw, 12px);
+    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
     cursor: pointer;
-    transition: background 0.2s;
-    margin-left: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    white-space: nowrap;
+    flex-shrink: 0;
+    box-sizing: border-box;
 }
 
-.maintenance-edit-btn:hover {
-    background: #2563eb;
+body.announcement-page .announcement-item-actions .btn-delete:hover {
+    background: var(--btn-delete-gradient-hover);
+    box-shadow: 0 4px 8px rgba(220, 53, 69, 0.4);
+    transform: translateY(-1px);
 }
 
 .announcement-content {
@@ -276,33 +300,6 @@ body.announcement-page .page-header h1 {
 .empty-state p {
     margin: 0;
     font-size: 16px;
-}
-
-.notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 12px 20px;
-    border-radius: 8px;
-    color: white;
-    font-weight: 500;
-    z-index: 10000;
-    opacity: 0;
-    transform: translateX(100%);
-    transition: all 0.3s;
-}
-
-.notification.show {
-    opacity: 1;
-    transform: translateX(0);
-}
-
-.notification.success {
-    background: #10b981;
-}
-
-.notification.error {
-    background: #ef4444;
 }
 
 /* 横线样式 - 超出container */
@@ -378,22 +375,6 @@ body.announcement-page .page-header h1 {
     margin-bottom: clamp(8px, 0.625vw, 12px);
     white-space: pre-wrap;
     word-break: break-word;
-}
-
-.maintenance-delete-btn {
-    background: #ef4444;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    padding: clamp(4px, 0.31vw, 6px) clamp(8px, 0.625vw, 12px);
-    font-size: clamp(8px, 0.625vw, 12px);
-    cursor: pointer;
-    transition: background 0.2s;
-    margin-left: 12px;
-}
-
-.maintenance-delete-btn:hover {
-    background: #dc2626;
 }
 
 .maintenance-list-header {

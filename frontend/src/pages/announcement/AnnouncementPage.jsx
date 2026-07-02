@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { getAnnouncementText } from "../../translateFile/pages/announcementTranslate.js";
 import "../../../public/css/announcement.css";
+import "../../../public/css/accountCSS.css";
 import { spaPath } from "../../utils/routing/pageRoutes.js";
 
 // Components

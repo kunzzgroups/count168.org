@@ -4114,8 +4114,7 @@ body.domain-page .domain-react-page .domain-action-cell__check--empty {
     box-sizing: border-box !important;
 }
 
-/* Notification styles - 高于所有弹窗（含内联 z-index:10001~10003），确保 Company Settings 等操作的成功提示始终显示在最前 */
-/* 使用 #domainNotificationContainer 提高特异性，避免 announcement.css 等全局 `.notification { color: white }` 盖掉 danger 文字色 */
+/* Notification styles — 与 account / userlist 统一（浅底 + 左侧色条） */
 .notification-container {
     position: fixed;
     top: 20px;
@@ -4168,27 +4167,6 @@ body.domain-page .domain-react-page .domain-action-cell__check--empty {
     background-color: var(--color-surface-warn-tint);
     color: var(--color-warning-text);
     border-left-color: var(--color-warning-border-strong);
-}
-
-#domainNotificationContainer .notification.notification-success {
-    background: var(--gradient-domain-success) !important;
-    color: var(--color-text-inverse) !important;
-    border-left-color: var(--color-success-border-dark) !important;
-    box-shadow: 0 10px 24px -6px rgba(5, 150, 105, 0.45), 0 4px 8px -2px rgba(0, 0, 0, 0.08) !important;
-}
-
-#domainNotificationContainer .notification.notification-danger {
-    background: var(--gradient-domain-danger-soft) !important;
-    color: var(--color-text-inverse) !important;
-    border-left-color: var(--color-danger-border-dark) !important;
-    box-shadow: 0 10px 24px -6px rgba(220, 38, 38, 0.45), 0 4px 8px -2px rgba(0, 0, 0, 0.08) !important;
-}
-
-#domainNotificationContainer .notification.notification-warning {
-    background: var(--gradient-domain-warning) !important;
-    color: var(--color-text-inverse) !important;
-    border-left-color: var(--color-warning-text) !important;
-    box-shadow: 0 10px 24px -6px rgba(217, 119, 6, 0.4), 0 4px 8px -2px rgba(0, 0, 0, 0.08) !important;
 }
 
 .domain-info-panel h3 {

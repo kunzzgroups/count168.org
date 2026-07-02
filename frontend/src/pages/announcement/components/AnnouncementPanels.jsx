@@ -80,9 +80,9 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublis
                 <div className="announcement-item" key={item.id}>
                   <div className="announcement-item-header">
                     <h3 className="announcement-title">{item.title}</h3>
-                    <div>
-                      <button className="announcement-edit-btn" onClick={() => onEdit(item)}>{t("edit")}</button>
-                      <button className="announcement-delete-btn" onClick={() => onDelete(item)}>{t("delete")}</button>
+                    <div className="announcement-item-actions">
+                      <button type="button" className="btn btn-save" onClick={() => onEdit(item)}>{t("edit")}</button>
+                      <button type="button" className="btn btn-delete" onClick={() => onDelete(item)}>{t("delete")}</button>
                     </div>
                   </div>
                   <div className="announcement-content">{item.content}</div>
@@ -187,9 +187,9 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPubli
                 <div className="maintenance-item" key={item.id}>
                   <div className="maintenance-item-header">
                     <div style={{ flex: 1 }} />
-                    <div>
-                      <button className="maintenance-edit-btn" onClick={() => onEdit(item)}>{t("edit")}</button>
-                      <button className="maintenance-delete-btn" onClick={() => onDelete(item)}>{t("delete")}</button>
+                    <div className="announcement-item-actions">
+                      <button type="button" className="btn btn-save" onClick={() => onEdit(item)}>{t("edit")}</button>
+                      <button type="button" className="btn btn-delete" onClick={() => onDelete(item)}>{t("delete")}</button>
                     </div>
                   </div>
                   <div className="maintenance-content">

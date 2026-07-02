@@ -217,6 +217,7 @@ export function CurrencySettingModal({
   currencyInput,
   setCurrencyInput,
   onCreateCurrency,
+  onRemoveCurrency,
   t,
 }) {
   const roleDropdownRef = useRef(null);
@@ -295,25 +296,54 @@ export function CurrencySettingModal({
             <div className="currency-setting-list-row-stacked">
               <label>{t("currency")}</label>
               <div className="currency-setting-pill-list">
-                {currencies.map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className={`currency-setting-pill ${settingCurrencyId === Number(c.id) ? "active" : ""}`}
-                    aria-pressed={settingCurrencyId === Number(c.id)}
-                    onClick={() => {
-                      const id = Number(c.id);
-                      if (settingCurrencyId === id) {
-                        onClearCurrencySelection();
-                      } else {
-                        setSettingCurrencyId(id);
-                        onLoadCurrencyLinks(id);
-                      }
-                    }}
-                  >
-                    {c.code}
-                  </button>
-                ))}
+                {currencies.map((c) => {
+                  const id = Number(c.id);
+                  const isActive = settingCurrencyId === id;
+                  return (
+                    <div
+                      key={c.id}
+                      className={`currency-setting-pill currency-setting-pill-toggle ${isActive ? "active" : ""}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={isActive}
+                      onClick={() => {
+                        if (isActive) {
+                          onClearCurrencySelection();
+                        } else {
+                          setSettingCurrencyId(id);
+                          onLoadCurrencyLinks(id);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (isActive) {
+                            onClearCurrencySelection();
+                          } else {
+                            setSettingCurrencyId(id);
+                            onLoadCurrencyLinks(id);
+                          }
+                        }
+                      }}
+                    >
+                      <span className="currency-setting-pill-code">{c.code}</span>
+                      {!isActive && c.deletable !== false && typeof onRemoveCurrency === "function" ? (
+                        <button
+                          type="button"
+                          className="currency-delete-btn"
+                          aria-label={`${t("delete")} ${c.code}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onRemoveCurrency(c.id);
+                          }}
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

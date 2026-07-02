@@ -3,6 +3,7 @@
  * Regenerate: node frontend/scripts/extract-summary-formula-reference.mjs
  */
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
+import { stripDuplicateTrailingMultiplier } from "../../../shared/formula/stripDuplicateTrailingMultiplier.js";
 import { evaluateExpression } from "./summaryFormulaEvaluate.js";
 import { parseIdProductColumnRef, removeThousandsSeparators } from "./summaryFormulaParseUtils.js";
 import { normalizeSummaryIdProductText } from "../lib/summaryIdProductUtils.js";
@@ -552,11 +553,115 @@ function getColumnValueFromCellReference(cellReference, processValue, rowIndexOv
 // Example: "[iphsp3 : 4] + [iphsp3 : 2]" -> "17 + 42"
 // Also supports cell references: "A4 + A3" -> "17 + 42"
 
+function normalizeNumericTokenForCompare(value) {
+    const s = String(value ?? '').trim().replace(/,/g, '');
+    if (s === '') return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Remove redundant literal multiplier after $N when it duplicates column N's value.
+ * e.g. ...*$9*0.6720623 when col 9 is 0.6720623 → ...*$9
+ */
+export function stripRedundantLiteralAfterDollarRefs(
+    formula,
+    processValueOverride = null,
+    clickedCellRefsOverride = undefined,
+    rowIndexOverride = null
+) {
+    const s = String(formula || '').trim();
+    const m = s.match(/^(.*)\$(\d+)\*([0-9.]+)\s*$/);
+    if (!m) return s;
+
+    const processValue = processValueOverride != null && String(processValueOverride).trim() !== ''
+        ? String(processValueOverride).trim()
+        : null;
+    if (!processValue) return s;
+
+    const prefix = m[1];
+    const columnNumber = parseInt(m[2], 10);
+    const literal = m[3];
+    const litNum = normalizeNumericTokenForCompare(literal);
+    if (litNum == null || Number.isNaN(columnNumber) || columnNumber <= 0) return s;
+
+    const dataColumnIndex = columnNumber - 1;
+    let columnValue = null;
+
+    let clickedCellRefs = '';
+    if (clickedCellRefsOverride === undefined) {
+        const formulaInput = document.getElementById('formula');
+        clickedCellRefs = (formulaInput ? (formulaInput.getAttribute('data-clicked-cell-refs') || '') : '').trim();
+    } else {
+        clickedCellRefs = String(clickedCellRefsOverride || '').trim();
+    }
+
+    if (clickedCellRefs) {
+        const refs = clickedCellRefs.split(/\s+/).filter((r) => r.trim() !== '');
+        for (const ref of refs) {
+            const parsed = parseIdProductColumnRef(ref);
+            if (!parsed || parsed.dataColumnIndex !== dataColumnIndex) continue;
+            columnValue = getCellValueByIdProductAndColumn(
+                parsed.idProduct,
+                parsed.dataColumnIndex,
+                parsed.rowLabel,
+                parsed.captureRowIndex
+            );
+            if (columnValue !== null) break;
+        }
+    }
+
+    if (columnValue === null) {
+        columnValue = getCellValueByIdProductAndColumn(
+            processValue,
+            dataColumnIndex,
+            null,
+            rowIndexOverride
+        );
+    }
+
+    const cellNum = normalizeNumericTokenForCompare(columnValue);
+    if (cellNum != null && Math.abs(cellNum - litNum) < 1e-6) {
+        return `${prefix}$${columnNumber}`;
+    }
+    return s;
+}
+
+/** Normalize $ refs before expand/evaluate to avoid duplicate rate multipliers. */
+export function normalizeFormulaBeforeReferenceExpand(
+    formula,
+    processValueOverride = null,
+    clickedCellRefsOverride = undefined,
+    rowIndexOverride = null
+) {
+    let s = String(formula || '').trim();
+    if (!s) return s;
+    s = stripRedundantLiteralAfterDollarRefs(
+        s,
+        processValueOverride,
+        clickedCellRefsOverride,
+        rowIndexOverride
+    );
+    return s;
+}
+
+/** After $/[id:n] expansion, remove duplicate trailing multipliers. */
+export function normalizeFormulaAfterReferenceExpand(expr) {
+    return stripDuplicateTrailingMultiplier(String(expr || '').trim());
+}
+
 export function parseReferenceFormula(formula, processValueOverride = null, clickedCellRefsOverride = undefined, rowIndexOverride = null) {
     try {
         if (!formula || formula.trim() === '') {
             return '';
         }
+
+        formula = normalizeFormulaBeforeReferenceExpand(
+            formula,
+            processValueOverride,
+            clickedCellRefsOverride,
+            rowIndexOverride
+        );
 
         // Get process value from form
         const processInput = document.getElementById('process');
@@ -876,7 +981,7 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
             }
         }
 
-        return parsedFormula;
+        return normalizeFormulaAfterReferenceExpand(parsedFormula);
     } catch (error) {
         console.error('Error parsing reference formula:', error);
         return formula; // Return original if parsing fails
@@ -1032,7 +1137,12 @@ export function calculateFormulaResultFromExpression(formula, sourcePercentValue
         }
 
         // 先解析 $/[id:n]；仅当尾段与 Source 同值时才剥，避免与 Source 叠乘，且不剥用户手写的 *0.2（Source≈1 时）
-        const afterRefs = parseReferenceFormula(String(formula).trim(), processValueForRefs, clickedCellRefsOverride, rowIndexOverride)
+        const afterRefs = parseReferenceFormula(
+            String(formula).trim(),
+            processValueForRefs,
+            clickedCellRefsOverride,
+            rowIndexOverride
+        );
 
         let shouldStripDuplicateOfSource = false
         let sourceDecimalForStrip = 1

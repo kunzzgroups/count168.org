@@ -879,17 +879,12 @@ export default function BankProcessListPage() {
         currencyDeleteOnlyWhenDeselected
         t={tAccount}
       />
-      {typeof document !== "undefined"
-        ? createPortal(
-            <DashboardCalendarPopup
-              className="calendar-popup--bank-process-modal"
-              i18n={calendarI18n}
-              periodPresets={periodPresets}
-              dateFrom={dateFrom}
-            />,
-            document.body
-          )
-        : null}
+      <DashboardCalendarPopup
+        className="calendar-popup--bank-process-modal"
+        i18n={calendarI18n}
+        periodPresets={periodPresets}
+        dateFrom={dateFrom}
+      />
       {toast && typeof document !== "undefined" && document.body
         ? createPortal(
             <div

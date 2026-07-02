@@ -2,6 +2,7 @@ import { createFormulaDisplayFromExpression } from "../../../shared/formula/inde
 import {
   calculateFormulaResultFromExpression,
   evaluateFormulaExpression,
+  normalizeFormulaBeforeReferenceExpand,
   parseReferenceFormula,
 } from "./summaryFormulaReference.js";
 import {
@@ -531,10 +532,16 @@ export function buildFormulaSavePatchFromForm(form, row) {
   const enableSourcePercent = resolveEnableSourcePercent(sourcePercentValue);
   const clickedRefs = form.clickedColumns || "";
   const processValue = row?.idProduct || form.processValue || "";
-  const hasDollarSign = formulaValue.includes("$");
+  const normalizedFormula = normalizeFormulaBeforeReferenceExpand(
+    formulaValue,
+    processValue,
+    clickedRefs,
+    row?.rowIndex ?? null
+  );
+  const hasDollarSign = normalizedFormula.includes("$");
 
   const expanded = buildExpandedFormulaDisplay(
-    formulaValue,
+    normalizedFormula,
     processValue,
     clickedRefs,
     row?.rowIndex ?? null
@@ -547,7 +554,7 @@ export function buildFormulaSavePatchFromForm(form, row) {
 
   const processedAmount = roundProcessedAmountTo2Decimals(
     calculateFormulaResultFromExpression(
-      formulaValue,
+      normalizedFormula,
       sourcePercentValue,
       inputMethodValue,
       enableInputMethod,
@@ -559,7 +566,7 @@ export function buildFormulaSavePatchFromForm(form, row) {
   );
 
   const sourceColumns = hasDollarSign
-    ? buildSourceColumnsFromFormula(formulaValue, clickedRefs)
+    ? buildSourceColumnsFromFormula(normalizedFormula, clickedRefs)
     : "";
 
   return {
@@ -573,9 +580,9 @@ export function buildFormulaSavePatchFromForm(form, row) {
           : `(${form.currencyLabel})`
         : "",
       currencyId,
-      formula: formulaValue,
+      formula: normalizedFormula,
       formulaDisplay,
-      formulaOperators: formulaValue,
+      formulaOperators: normalizedFormula,
       sourceColumns,
       sourcePercent: sourcePercentValue,
       enableSourcePercent,

@@ -9,11 +9,14 @@ export { formatSourcePercent, formatSourcePercentForDisplay } from "./formatSour
 export { isMisplacedCommission, isSourceOne } from "./isMisplacedCommission.js";
 
 export {
+  endsWithDollarColumnRef,
   extractRowCoefficientTail,
   hasRowCoefficientTail,
   mergeFormulaOperatorsWithResolvedTail,
   shouldMergeRowTailFromResolvedSources,
 } from "./mergeFormulaTail.js";
+
+export { stripDuplicateTrailingMultiplier } from "./stripDuplicateTrailingMultiplier.js";
 
 export {
   buildFormulaDisplayParenFromParts,

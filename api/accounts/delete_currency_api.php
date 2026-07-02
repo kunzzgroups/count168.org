@@ -55,6 +55,8 @@ function resolveDeleteCurrencyContext(PDO $pdo, array $input): array
     $explicitCompanyId = 0;
     if (isset($input['company_id']) && $input['company_id'] !== '' && $input['company_id'] !== null) {
         $explicitCompanyId = (int) $input['company_id'];
+    } elseif (isset($_GET['company_id']) && $_GET['company_id'] !== '' && $_GET['company_id'] !== null) {
+        $explicitCompanyId = (int) $_GET['company_id'];
     }
 
     if (gc_is_group_login()) {

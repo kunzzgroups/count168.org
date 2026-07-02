@@ -2,6 +2,12 @@ import { removeTrailingSourcePercentExpression } from "./removeTrailingSourcePer
 import { isMisplacedCommission } from "./isMisplacedCommission.js";
 
 const ROW_TAIL_PATTERN = /^(.*)\*([0-9.]+)\s*$/;
+const DOLLAR_COLUMN_TAIL_PATTERN = /\$(\d+)\s*$/;
+
+/** True when formula ends with a $column ref (e.g. ...*$9), not a numeric tail. */
+export function endsWithDollarColumnRef(formulaText) {
+  return DOLLAR_COLUMN_TAIL_PATTERN.test(String(formulaText ?? "").trim());
+}
 
 /** Extract trailing row coefficient (*0.90, *0.10) from a formula string. */
 export function extractRowCoefficientTail(formulaText) {
@@ -27,6 +33,9 @@ export function mergeFormulaOperatorsWithResolvedTail(body, ...resolvedSources) 
   let base = String(body ?? "").trim();
   if (!base) return base;
   if (hasRowCoefficientTail(base)) return base;
+  // Do not merge numeric tail from saved display when body already ends with $N;
+  // $N will expand to the same rate on render — merging would duplicate it.
+  if (endsWithDollarColumnRef(base)) return base;
 
   for (const src of resolvedSources) {
     if (!src) continue;
