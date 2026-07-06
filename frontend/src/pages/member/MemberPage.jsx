@@ -38,6 +38,7 @@ import { useMemberWinLoss } from "./useMemberWinLoss.js";
 import { useMemberPageShell } from "./useMemberPageShell.js";
 import { useSidebarTabletCollapse } from "../../hooks/useSidebarTabletCollapse.js";
 import { DASHBOARD_I18N } from "../../translateFile/shell/dashboardTranslate.js";
+import { bindMediaQueryChange } from "../../utils/dom/bindMediaQueryChange.js";
 
 export default function MemberPage() {
   const navigate = useNavigate();
@@ -150,8 +151,7 @@ export default function MemberPage() {
     const mq = window.matchMedia(WINLOSS_ACCOUNT_SEGMENT_NARROW_MQ);
     const update = () => setAccountNarrowViewport(mq.matches);
     update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
+    return bindMediaQueryChange(mq, update);
   }, []);
 
   const accountFilterBands = useMemo(
@@ -372,10 +372,10 @@ export default function MemberPage() {
     const ro = new ResizeObserver(() => update());
     if (filtersEl) ro.observe(filtersEl);
     if (matrixEl) ro.observe(matrixEl);
-    mq.addEventListener("change", update);
+    const unbindMediaQuery = bindMediaQueryChange(mq, update);
     window.addEventListener("resize", update);
     return () => {
-      mq.removeEventListener("change", update);
+      unbindMediaQuery();
       window.removeEventListener("resize", update);
       ro.disconnect();
     };

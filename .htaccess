@@ -102,6 +102,10 @@ RewriteRule ^payment_maintenance$ /payment-maintenance/0cc1f0cd-e901-48ce-8a30-0
 RewriteRule ^auto_renew$ /auto-renew/148b6740-9f41-47e8-b8ca-e52db63cd4b2 [R=302,L,NC]
 RewriteRule ^logout$ /api/session/logout_api.php [L,NC,QSA]
 
+# --- C168 Mobile SPA (shares site-root /api/) ---
+RewriteRule ^c168_mobile/?$ /c168_mobile/login [R=302,L,NC]
+RewriteRule ^c168_mobile/(login|dashboard|home|member|report|transaction|more|reset-password|owner-secondary-password|user-secondary-password)(/.*)?$ /c168_mobile/frontend/dist/index.html [L,NC,QSA]
+
 # /{page}/{uuid} or bare /{page} (React adds uuid) -> React build
 RewriteRule ^(login|member|reset-password|owner-secondary-password|user-secondary-password|dashboard|domain|announcement|auto-renew|account-list|add-account|process-list|games-process-list|bank-process-list|userlist|useraccess|deleted-log|ownership|datacapture|datacapturesummary|transaction|customer-report|domain-report|capture-maintenance|transaction-maintenance|formula-maintenance|bankprocess-maintenance|payment-maintenance)(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?$ /frontend/dist/index.html [L,NC,QSA]
 RewriteRule ^transaction/payment-history(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})?$ /frontend/dist/index.html [L,NC,QSA]

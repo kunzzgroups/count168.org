@@ -9,15 +9,16 @@ import {
   seedDashboardFilterFromLogin,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { useAuthBackground } from "./useAuthBackground.js";
+import { safeLocal, safeSession } from "../../utils/storage/safeStorage.js";
 
 const LOGIN_ASSET_RETRY_KEY = "ec_login_asset_retry";
 
 function tryLoginPageReloadOnce() {
-  if (sessionStorage.getItem(LOGIN_ASSET_RETRY_KEY)) {
-    sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
+  if (safeSession.getItem(LOGIN_ASSET_RETRY_KEY)) {
+    safeSession.removeItem(LOGIN_ASSET_RETRY_KEY);
     return false;
   }
-  sessionStorage.setItem(LOGIN_ASSET_RETRY_KEY, "1");
+  safeSession.setItem(LOGIN_ASSET_RETRY_KEY, "1");
   const url = new URL(window.location.href);
   url.searchParams.set("_", String(Date.now()));
   window.location.replace(url.toString());
@@ -101,7 +102,7 @@ export default function LoginPage() {
   const [maintenanceList, setMaintenanceList] = useState([]);
   const [modal, setModal] = useState({ open: false, title: "Notice", message: "" });
   const [submitting, setSubmitting] = useState(false);
-  const [lang, setLang] = useState(() => localStorage.getItem("login_lang") || "en");
+  const [lang, setLang] = useState(() => safeLocal.getItem("login_lang") || "en");
 
   const verifyTimeoutRef = useRef(null);
   const langThumbRef = useRef(null);
@@ -113,7 +114,7 @@ export default function LoginPage() {
   }, [roleFromUrl]);
 
   useEffect(() => {
-    localStorage.setItem("login_lang", lang);
+    safeLocal.setItem("login_lang", lang);
   }, [lang]);
 
   useEffect(() => {
@@ -153,12 +154,12 @@ export default function LoginPage() {
   }, [lang]);
 
   useEffect(() => {
-    sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
+    safeSession.removeItem(LOGIN_ASSET_RETRY_KEY);
   }, []);
 
   useEffect(() => {
-    if (sessionStorage.getItem("ec_skip_session_bootstrap") === "1") {
-      sessionStorage.removeItem("ec_skip_session_bootstrap");
+    if (safeSession.getItem("ec_skip_session_bootstrap") === "1") {
+      safeSession.removeItem("ec_skip_session_bootstrap");
       return undefined;
     }
 
@@ -315,7 +316,7 @@ export default function LoginPage() {
         return;
       }
       if (data.status === "success" && data.redirect) {
-        sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
+        safeSession.removeItem(LOGIN_ASSET_RETRY_KEY);
         clearDashboardFilterSession();
         const loginScope = String(data.login_scope || "").trim().toLowerCase();
         const loginIdentifier = String(data.login_identifier || companyId).trim().toUpperCase();
@@ -397,7 +398,7 @@ export default function LoginPage() {
         {maintenanceVisible && (
           <div className="sc-login-maintenance-wrapper">
             <div className="sc-login-maintenance-track">
-              {[...maintenanceList, ...maintenanceList].map((item, index) => (
+              {[...maintenanceList, ...maintenanceList].filter(Boolean).map((item, index) => (
                 <div className="sc-login-maintenance-item" key={`${item.id}-${index}`}>
                   <span className="sc-login-maintenance-dot" />
                   <span className="sc-login-maintenance-label">{item.prefix || i18n.maintenanceLabel}</span>

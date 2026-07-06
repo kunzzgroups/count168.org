@@ -580,7 +580,6 @@ function ownership_build_company_history_rows_from_payload(array $owners, array 
         $real_id = $raw_id;
         $is_group_entry = false;
         $group_ref = null;
-        $isExternal = !empty($owner['is_external_partner']);
 
         if (strpos($raw_id, 'G_') === 0) {
             $owner_type = 'group';
@@ -610,8 +609,7 @@ function ownership_build_company_history_rows_from_payload(array $owners, array 
             }
         }
 
-        $pctRaw = $isExternal ? '0' : ($owner['percentage'] ?? 0);
-        $pctOut = money_out(money_normalize($pctRaw, 2), 2);
+        $pctOut = money_out(money_normalize($owner['percentage'] ?? 0, 2), 2);
 
         $historyRows[] = [
             'account_id' => (int) $real_id,
@@ -647,7 +645,6 @@ function ownership_build_group_history_rows_from_payload(
         $real_id = 0;
         $pgid = null;
         $roVal = isset($owner['read_only']) ? (int) $owner['read_only'] : 1;
-        $isExternal = !empty($owner['is_external_partner']);
 
         if (strpos($raw_id, 'G_') === 0) {
             $owner_type = 'group';
@@ -676,8 +673,7 @@ function ownership_build_group_history_rows_from_payload(
             $real_id = (int) $raw_id;
         }
 
-        $pctRaw = $isExternal ? '0' : ($owner['percentage'] ?? 0);
-        $pctOut = money_out(money_normalize($pctRaw, 2), 2);
+        $pctOut = money_out(money_normalize($owner['percentage'] ?? 0, 2), 2);
 
         $historyRows[] = [
             'account_id' => $real_id,

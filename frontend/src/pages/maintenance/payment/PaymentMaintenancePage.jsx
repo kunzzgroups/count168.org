@@ -69,6 +69,7 @@ export default function PaymentMaintenancePage() {
   const [companyCode, setCompanyCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [transactionType, setTransactionType] = useState("");
+  const [query, setQuery] = useState("");
   const [activePermission, setActivePermission] = useState("");
   const [currencies, setCurrencies] = useState([]);
   const [selectedCurrency, setSelectedCurrency] = useState(null);
@@ -453,6 +454,7 @@ export default function PaymentMaintenancePage() {
           dateFrom,
           dateTo,
           transactionType,
+          query,
           companyId: effectiveScope.scopeCompanyId,
           currency: overrides.currency ?? selectedCurrency,
           scope: effectiveScope,
@@ -489,7 +491,7 @@ export default function PaymentMaintenancePage() {
         }
       }
     },
-    [companies, selectedGroup, companyId, dateFrom, dateTo, transactionType, selectedCurrency, notify, t],
+    [companies, selectedGroup, companyId, dateFrom, dateTo, transactionType, query, selectedCurrency, notify, t],
   );
 
   // Auto-search when filters change（defer 0ms；切换公司已手动 performSearch 时跳过一轮避免重复）
@@ -507,6 +509,7 @@ export default function PaymentMaintenancePage() {
     listQueryEnabled,
     paymentScopeKey,
     transactionType,
+    query,
     dateFrom,
     dateTo,
     selectedCurrency,
@@ -756,6 +759,8 @@ export default function PaymentMaintenancePage() {
       <PaymentMaintenanceFilters 
         transactionType={transactionType}
         setTransactionType={setTransactionType}
+        query={query}
+        setQuery={setQuery}
         dateFrom={dateFrom}
         dateTo={dateTo}
         setDateFrom={setDateFrom}

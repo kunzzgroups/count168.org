@@ -80,3 +80,26 @@ function ownership_owners_order_by_sql(string $alias = 'co'): string
 {
     return "ORDER BY {$alias}.sort_order ASC, {$alias}.id ASC";
 }
+
+/**
+ * Ensure linked partner rows (O_* != native owner) carry is_external_partner for save validation.
+ *
+ * @param array<int, array<string, mixed>> $owners
+ */
+function ownership_enrich_external_partner_flags(array &$owners, int $nativeOwnerId): void
+{
+    foreach ($owners as &$owner) {
+        if (!empty($owner['is_external_partner'])) {
+            continue;
+        }
+        $rawId = (string) ($owner['account_id'] ?? '');
+        if (strpos($rawId, 'O_') !== 0) {
+            continue;
+        }
+        $oid = (int) substr($rawId, 2);
+        if ($oid > 0 && $oid !== $nativeOwnerId) {
+            $owner['is_external_partner'] = true;
+        }
+    }
+    unset($owner);
+}

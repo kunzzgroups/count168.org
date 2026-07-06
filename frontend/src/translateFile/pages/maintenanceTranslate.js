@@ -115,6 +115,7 @@ export const MAINTENANCE_I18N = {
     selectAccount: "Select Account",
 
     bankSearchPlaceholder: "e.g. TEST M16(CIMB) / CIMB",
+    paymentSearchPlaceholder: "e.g. ACCOUNT / DESCRIPTION",
 
     edit: "Edit",
     save: "Save",
@@ -231,6 +232,7 @@ export const MAINTENANCE_I18N = {
     selectAccount: "选择账户",
 
     bankSearchPlaceholder: "例如 TEST M16(CIMB) / CIMB",
+    paymentSearchPlaceholder: "例如 账号 / 描述",
 
     edit: "编辑",
     save: "保存",

@@ -141,6 +141,23 @@ function deleteByIds(PDO $pdo, string $table, string $column, array $ids): void
         }
     }
 
+    // groups 需要先清理 company_auto_renew_request 子记录，
+    // 以防外键约束 fk_car_group 未成功添加（被 catch 了）导致孤立记录残留
+    if ($table === 'groups' && $column === 'id') {
+        try {
+            $hasAutoRenewReq = $pdo->query("SHOW TABLES LIKE 'company_auto_renew_request'")->rowCount() > 0;
+            if ($hasAutoRenewReq) {
+                $grpPh = buildInPlaceholders(count($ids));
+                $delReq = $pdo->prepare(
+                    "DELETE FROM `company_auto_renew_request` WHERE `entity_type` = 'group' AND `group_id` IN ($grpPh)"
+                );
+                $delReq->execute($ids);
+            }
+        } catch (Exception $e) {
+            // 环境不支持时忽略
+        }
+    }
+
     $sql = sprintf("DELETE FROM `%s` WHERE `%s` IN (%s)", $table, $column, $placeholders);
     $stmt = $pdo->prepare($sql);
     $stmt->execute($ids);
@@ -351,6 +368,10 @@ function domainApiDetachCompaniesFromOwner(PDO $pdo, array $companyDbIds, int $o
 
     if (domainApiTableExists($pdo, 'group_company_map')) {
         deleteByIds($pdo, 'group_company_map', 'company_id', $allowedIds);
+    }
+
+    if (domainApiTableExists($pdo, 'company_auto_renew_request')) {
+        domainApiDeleteRowsByCompanyIds($pdo, 'company_auto_renew_request', $allowedIds);
     }
 }
 
@@ -3838,6 +3859,15 @@ try {
                         normalizeIds(array_column($toHardDelete, 'id')),
                         array_map(static fn ($row) => (string) ($row['company_id'] ?? ''), $toHardDelete)
                     );
+                }
+
+                if (domainApiHasGroupsTable($pdo)) {
+                    $grpStmt = $pdo->prepare('SELECT id FROM `groups` WHERE owner_id = ?');
+                    $grpStmt->execute([$id]);
+                    $ownerGroupIds = normalizeIds($grpStmt->fetchAll(PDO::FETCH_COLUMN));
+                    if ($ownerGroupIds !== []) {
+                        deleteByIds($pdo, 'groups', 'id', $ownerGroupIds);
+                    }
                 }
                 
                 // 删除 owner 直接创建的数据 (data_captures / transactions)

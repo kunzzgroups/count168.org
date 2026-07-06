@@ -1,0 +1,26 @@
+{
+  "name": "c168-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:php": "php -S localhost:8000 -t ..",
+    "dev:all": "concurrently -k -n php,vite -c blue,green \"npm run dev:php\" \"npm run dev\"",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "recharts": "^3.9.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.3",
+    "tailwindcss": "^4.3.2",
+    "vite": "^5.4.11"
+  }
+}

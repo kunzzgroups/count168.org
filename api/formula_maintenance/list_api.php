@@ -142,9 +142,9 @@ function mapRowsToDisplay(array $rows, bool $isGroupScope = false) {
         // 若省略则会被合并为一条，导致 Maintenance 行数少于 Data Capture Summary（例如少显示第 4 行）。
         $descriptionKey = strtolower(trim((string) $description));
 
-        // 只要「同一个 Process + Account + Currency + Product + 类型 + 说明」，
-        // 就视为同一条当前有效公式，只保留最新一条（id 最大），
-        // 历史上旧公式仍保留在表里，但不会额外占一行，避免 Data Summary 25 条而 Maintenance - Formula 显示 26 条的情况。
+        // 同一「Process + Account + Currency + Product + 类型 + 说明 + 公式 base」视为同一条，
+        // 只保留评分最高 / id 最大的一条。加入 formulaBase 避免不同公式被合并导致数据丢失。
+        $formulaBaseKey = strtolower(trim((string)$resolvedBase));
         $keyParts = [
             strtolower(trim((string)$processDisplay)),
             strtolower(trim((string)$accountDisplay)),
@@ -152,6 +152,7 @@ function mapRowsToDisplay(array $rows, bool $isGroupScope = false) {
             strtolower(trim((string)$product)),
             $productType,
             $descriptionKey,
+            $formulaBaseKey,
         ];
         $dedupKey = implode('|', $keyParts);
 

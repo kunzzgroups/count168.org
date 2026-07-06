@@ -1,0 +1,19 @@
+:root {
+  --login-bg-start: #004ff9;
+  --login-bg-end: #56ccf2;
+  --login-surface: rgba(255, 255, 255, 0.95);
+  --login-text: #333333;
+  --login-muted: #666666;
+  --login-danger: #dc3545;
+  --login-radius-xl: 24px;
+  --login-radius-pill: 999px;
+  --login-shell-width: 100%;
+  --login-shell-max-width: 420px;
+  --login-submit-height: 48px;
+  --login-submit-pad-x: 16px;
+  --login-card-min-height: 360px;
+  --login-input-cursor: text;
+  --text-h2: 1.125rem;
+  --text-base: 1rem;
+  --text-small: 0.875rem;
+}

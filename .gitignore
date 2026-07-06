@@ -2,6 +2,7 @@ config.local.php
 includes/config.local.php
 node_modules/
 frontend/node_modules/
+c168_mobile/frontend/node_modules/
 .env
 .env.*
 .env.local
@@ -9,7 +10,14 @@ frontend/node_modules/
 *.log
 .DS_Store
 Thumbs.db
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/agents/
+!.cursor/agents/**
+!.cursor/mcp.env.example
+.cursor/mcp.json
+.cursor/mcp.env
 
 # database: regenerable import intermediates
 database/generated/*.sql

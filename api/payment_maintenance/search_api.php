@@ -477,6 +477,35 @@ function paymentMaintenanceSortTimestamp(array $item): int {
     return 0;
 }
 
+/**
+ * Keyword filter on rendered list columns (account, description, remark, etc.).
+ */
+function paymentMaintenanceItemMatchesSearch(array $item, ?string $raw): bool
+{
+    if ($raw === null || trim($raw) === '') {
+        return true;
+    }
+    $q = strtoupper(trim($raw));
+    $fields = [
+        'account',
+        'from_account',
+        'description',
+        'remark',
+        'created_by',
+        'currency',
+        'transaction_type',
+        'amount',
+        'date',
+    ];
+    foreach ($fields as $field) {
+        $value = strtoupper(trim((string) ($item[$field] ?? '')));
+        if ($value !== '' && strpos($value, $q) !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function resolveDomainSubmitter(PDO $pdo, array $listScope, string $dateFromDb, string $dateToDb): string
 {
     $scopeFilter = paymentMaintenanceScopeFilter($pdo, $listScope, 't');
@@ -936,6 +965,9 @@ try {
     $date_from = $_GET['date_from'] ?? null;
     $date_to = $_GET['date_to'] ?? null;
     $transaction_type = isset($_GET['transaction_type']) ? strtoupper(trim($_GET['transaction_type'])) : '';
+    $text_search = isset($_GET['q']) && $_GET['q'] !== ''
+        ? (string) $_GET['q']
+        : (isset($_GET['search']) ? (string) $_GET['search'] : '');
     $currency_filters = [];
     if (isset($_GET['currency']) && $_GET['currency'] !== '') {
         foreach (explode(',', $_GET['currency']) as $code) {
@@ -999,6 +1031,13 @@ try {
         foreach ($deletedRows as $row) {
             $data[] = rowToItem($row, 1, $companyOwnerCode, $profitDisplayCode);
         }
+    }
+
+    if (trim($text_search) !== '') {
+        $data = array_values(array_filter(
+            $data,
+            static fn(array $item): bool => paymentMaintenanceItemMatchesSearch($item, $text_search)
+        ));
     }
 
     usort($data, function ($a, $b) {

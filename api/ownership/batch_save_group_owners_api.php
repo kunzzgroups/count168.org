@@ -43,7 +43,21 @@ function ownershipPctOut($value): string {
     return money_out($value, 2);
 }
 
-// Validate total percentage (external partners at 0% are excluded)
+$nativeOwnerId = 0;
+if (strtolower($_SESSION['role'] ?? '') === 'owner') {
+    $nativeOwnerId = (int) ($_SESSION['real_owner_id'] ?? $_SESSION['owner_id'] ?? $_SESSION['user_id']);
+}
+if ($nativeOwnerId <= 0) {
+    $stmtOwn = $pdo->prepare('SELECT DISTINCT owner_id FROM company WHERE UPPER(TRIM(group_id)) = UPPER(TRIM(?)) LIMIT 1');
+    $stmtOwn->execute([$group_id]);
+    $nativeOwnerId = (int) $stmtOwn->fetchColumn();
+}
+if ($nativeOwnerId <= 0) {
+    $nativeOwnerId = ownership_history_resolve_group_owner_id($pdo, (string) $group_id);
+}
+ownership_enrich_external_partner_flags($owners, $nativeOwnerId);
+
+// Validate total percentage (external partners may hold equity; 0% allowed while unallocated)
 $total_percentage = '0.00';
 foreach ($owners as $owner) {
     if (!isset($owner['account_id']) || !isset($owner['percentage'])) {
@@ -52,14 +66,11 @@ foreach ($owners as $owner) {
     }
     $isExternal = !empty($owner['is_external_partner']);
     $pct = ownershipPct($owner['percentage']);
-    if ($isExternal) {
-        if (money_cmp($pct, '0', 2) !== 0) {
-            echo json_encode(['status' => 'error', 'message' => 'External partner rows must stay at 0%']);
-            exit();
-        }
-        continue;
-    }
     if (money_cmp($pct, '0', 2) < 0 || money_cmp($pct, '100', 2) > 0) {
+        echo json_encode(['status' => 'error', 'message' => 'Percentage must be between 0 and 100']);
+        exit();
+    }
+    if (!$isExternal && money_cmp($pct, '0', 2) <= 0) {
         echo json_encode(['status' => 'error', 'message' => 'Percentage must be between 0 and 100']);
         exit();
     }

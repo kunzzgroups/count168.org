@@ -54,8 +54,8 @@ const MEMBER_REPORT_PRINT_CSS = `
     print-color-adjust: exact;
   }
   .doc-header {
-    margin: 0 0 14px;
-    padding-bottom: 10px;
+    margin: 0 0 4px;
+    padding-bottom: 5px;
     border-bottom: 2px solid #002c49;
   }
   .doc-title {
@@ -96,6 +96,7 @@ const MEMBER_REPORT_PRINT_CSS = `
   }
   table.report-table {
     width: 100%;
+    margin-top: 0;
     border-collapse: collapse;
     table-layout: fixed;
     border: 1px solid #e2e8f0;
@@ -621,9 +622,12 @@ const PDF_LOGO_TOP_TRIM_MM = 1.1;
 const PDF_TITLE_FONT_PT = 14;
 const PDF_META_FONT_PT = 9;
 const PDF_CURRENCY_FONT_PT = 11;
-const PDF_HEADER_TOP_MM = 10;
-const PDF_FIRST_PAGE_TOP_MARGIN_MM = 30;
-const PDF_OTHER_PAGE_TOP_MARGIN_MM = 22;
+const PDF_HEADER_TOP_MM = 8;
+const PDF_FIRST_PAGE_TOP_MARGIN_MM = 24;
+const PDF_OTHER_PAGE_TOP_MARGIN_MM = 18;
+/** 分割线（doc-header 底边）与表头之间的垂直留白 */
+const PDF_HEADER_TABLE_GAP_MM = 1.5;
+const PDF_HEADER_META_SEP_GAP_MM = 1.5;
 const PDF_BRAND_BAR_RGB = [0, 44, 73];
 const PDF_FOOTER_BOTTOM_MM = 10;
 
@@ -713,7 +717,7 @@ function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTit
   }
 
   if (currencyTitle) {
-    const currencyBaselineY = blockBottomY + 3 + pdfCapHeightMm(PDF_CURRENCY_FONT_PT);
+    const currencyBaselineY = blockBottomY + 2 + pdfCapHeightMm(PDF_CURRENCY_FONT_PT);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(PDF_CURRENCY_FONT_PT);
     doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
@@ -721,11 +725,11 @@ function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTit
     blockBottomY = Math.max(blockBottomY, currencyBaselineY);
   }
 
-  const sepY = blockBottomY + 4;
+  const sepY = blockBottomY + PDF_HEADER_META_SEP_GAP_MM;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.35);
   doc.line(marginX, sepY, pageW - marginX, sepY);
-  return sepY + 4;
+  return sepY + PDF_HEADER_TABLE_GAP_MM;
 }
 
 function drawPdfSectionCurrencyHeading(doc, { pageW, marginX, startY, currencyTitle }) {
@@ -735,11 +739,11 @@ function drawPdfSectionCurrencyHeading(doc, { pageW, marginX, startY, currencyTi
   doc.setFontSize(PDF_CURRENCY_FONT_PT);
   doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
   doc.text(currencyTitle, marginX, currencyBaselineY, { align: "left", maxWidth: titleMaxW });
-  const sepY = currencyBaselineY + 4;
+  const sepY = currencyBaselineY + PDF_HEADER_META_SEP_GAP_MM;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.35);
   doc.line(marginX, sepY, pageW - marginX, sepY);
-  return sepY + 4;
+  return sepY + PDF_HEADER_TABLE_GAP_MM;
 }
 
 function drawPdfPageFooter(doc, { pageW, pageH, pageLabel }) {
@@ -795,13 +799,29 @@ export async function downloadMemberReportPdf({
   });
 
   const t = (key, params) => getMemberText(lang, key, params);
-  let titleDrawn = false;
   let cursorY = PDF_FIRST_PAGE_TOP_MARGIN_MM;
   const headerPagesDrawn = new Set();
   let pendingCurrencyHeading = null;
 
   const sectionList = sections || [];
   const multiCurrency = sectionList.length > 1;
+
+  // 首页表头必须在 autoTable 之前绘制并锁定 startY；didDrawPage 里改 margin.top 对已落笔的表无效。
+  let firstPageTableStartY = PDF_FIRST_PAGE_TOP_MARGIN_MM;
+  if (sectionList.length > 0) {
+    firstPageTableStartY = drawPdfPageHeader(doc, {
+      logo,
+      pageW,
+      marginX,
+      title: headerSection.docTitle,
+      meta: headerSection.docMeta,
+      currencyTitle: multiCurrency ? headerSection.currencyTitle : null,
+      showTitle: true,
+      showLogo: true,
+    });
+    headerPagesDrawn.add(1);
+  }
+
   sectionList.forEach((section, sectionIdx) => {
     const sectionData = buildMemberReportSectionData({
       rows: section.rows,
@@ -813,7 +833,7 @@ export async function downloadMemberReportPdf({
       lang,
     });
     const sourceRows = section.rows || [];
-    let tableStartY = sectionIdx === 0 ? undefined : cursorY;
+    let tableStartY = sectionIdx === 0 ? firstPageTableStartY : cursorY;
 
     if (multiCurrency && sectionIdx > 0) {
       if (cursorY > pageH - 40) {
@@ -848,7 +868,7 @@ export async function downloadMemberReportPdf({
     autoTable(doc, {
       startY: tableStartY,
       margin: {
-        top: sectionIdx === 0 ? PDF_FIRST_PAGE_TOP_MARGIN_MM : PDF_OTHER_PAGE_TOP_MARGIN_MM,
+        top: sectionIdx === 0 ? firstPageTableStartY : PDF_OTHER_PAGE_TOP_MARGIN_MM,
         left: marginX,
         right: marginX,
         bottom: PDF_FOOTER_BOTTOM_MM + 4,
@@ -864,32 +884,8 @@ export async function downloadMemberReportPdf({
 
         if (!headerPagesDrawn.has(docPage)) {
           headerPagesDrawn.add(docPage);
-          const showTitle = docPage === 1 && !titleDrawn;
-          if (showTitle) titleDrawn = true;
-
           let tableTopY = PDF_OTHER_PAGE_TOP_MARGIN_MM;
-          if (docPage === 1) {
-            const headerEndY = drawPdfPageHeader(doc, {
-              logo,
-              pageW,
-              marginX,
-              title: headerSection.docTitle,
-              meta: headerSection.docMeta,
-              currencyTitle: showTitle && multiCurrency ? headerSection.currencyTitle : null,
-              showTitle,
-              showLogo: true,
-            });
-            tableTopY = headerEndY + 2;
-            if (pendingCurrencyHeading) {
-              tableTopY = drawPdfSectionCurrencyHeading(doc, {
-                pageW,
-                marginX,
-                startY: headerEndY,
-                currencyTitle: pendingCurrencyHeading,
-              });
-              pendingCurrencyHeading = null;
-            }
-          } else if (pendingCurrencyHeading) {
+          if (pendingCurrencyHeading) {
             tableTopY = drawPdfSectionCurrencyHeading(doc, {
               pageW,
               marginX,

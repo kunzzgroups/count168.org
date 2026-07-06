@@ -25,7 +25,7 @@ export function formatSourceForFormulaSuffix(value) {
 
 /** Formula column display = base + (source≠1 ? " * (source)" : "") */
 export function buildFormulaDisplayParenFromParts(base, sourcePercent, enableSourcePercent) {
-  const b = String(base ?? "").trim();
+  const b = formatNegativeNumbersInFormula(String(base ?? "").trim());
   const pct = String(sourcePercent ?? "").trim();
   const en = Number(enableSourcePercent) ? 1 : 0;
   if (!b) return "";

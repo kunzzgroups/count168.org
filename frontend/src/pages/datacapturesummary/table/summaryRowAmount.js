@@ -82,12 +82,18 @@ function applyRateValueToAmount(processedAmount, rateValueStr) {
 /** Resolve expression used to calculate base processed amount (legacy recalculateAndRenderProcessedAmount). */
 export function resolveFormulaTextForCalculation(row) {
   const operators = String(row.formulaOperators || "").trim();
-  let displayExpanded = String(row.formulaDisplay || row.formula || "").trim();
-  const hasDollarColumnRef = /\$(\d+)/.test(displayExpanded);
-  if (displayExpanded && displayExpanded !== "Formula" && !hasDollarColumnRef) {
+  const displayExpanded = String(row.formulaDisplay || row.formula || "").trim();
+
+  // formulaOperators holds $refs; formulaDisplay may show parenthesized negatives with implicit
+  // multiplication between adjacent factors — evaluateMoneyExpression handles )( as *.
+  if (operators) {
+    return operators;
+  }
+
+  if (displayExpanded && displayExpanded !== "Formula") {
     return displayExpanded;
   }
-  return operators || displayExpanded || "";
+  return "";
 }
 
 export function calculateBaseProcessedAmount(row) {

@@ -10,6 +10,9 @@
  */
 require_once '../../includes/session_check.php';
 require_once '../../includes/config.php';
+require_once '../includes/ownership_history.php';
+require_once '../includes/ownership_schema.php';
+require_once __DIR__ . '/../domain/domain_groups_helpers.php';
 
 header('Content-Type: application/json');
 
@@ -58,6 +61,22 @@ try {
     // Update group_id
     $updateStmt = $pdo->prepare("UPDATE company SET group_id = ? WHERE id = ?");
     $updateStmt->execute([$group_id, $company_id]);
+
+    // Keep group_company_map in sync (get_companies_api re-hydrates group_id from this map)
+    if (function_exists('domainApiSyncGroupCompanyMap')) {
+        domainApiSyncGroupCompanyMap($pdo, $owner_id);
+    }
+
+    // Ungroup: drop stale Group Equity rows (owner_type = group) for this company
+    if ($group_id === null
+        && ownership_table_exists($pdo, 'company_ownership')
+        && ownership_column_exists($pdo, 'company_ownership', 'owner_type')
+    ) {
+        $del = $pdo->prepare("DELETE FROM company_ownership WHERE company_id = ? AND owner_type = 'group'");
+        $del->execute([$company_id]);
+        $savedBy = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
+        ownership_history_snapshot_company_from_live_safe($pdo, $company_id, $savedBy);
+    }
 
     $action = $group_id ? "joined group \"$group_id\"" : "removed from group";
     echo json_encode(['status' => 'success', 'message' => "Company $action successfully"]);

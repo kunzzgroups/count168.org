@@ -352,19 +352,16 @@ function formulaMaintenanceSqlTemplateGroupLedgerLegacy(string $dctAlias = 'dct'
 }
 
 /**
- * Legacy company templates on anchor: scope_id = company.id, or unset scope_id with AG/EXPENSES.
+ * Legacy company templates on anchor: scope_id = company.id, or unset scope_id (pre-dual-tenant data).
+ * scope_id IS NULL / 0 的行是 dual-tenant 迁移前的合法历史数据，不再限制必须为 AG/EXPENSES 账户。
  */
 function formulaMaintenanceSqlTemplateCompanyLedgerLegacy(string $dctAlias = 'dct'): string
 {
     $a = preg_replace('/[^a-zA-Z0-9_]/', '', $dctAlias) ?: 'dct';
-    $companyStyle = formulaMaintenanceSqlTemplateAnchorPayrollCompanyStyle($a);
 
     return "(
         ({$a}.scope_id IS NOT NULL AND {$a}.scope_id > 0 AND {$a}.scope_id = {$a}.company_id)
-        OR (
-            ({$a}.scope_id IS NULL OR {$a}.scope_id = 0)
-            AND ({$companyStyle})
-        )
+        OR ({$a}.scope_id IS NULL OR {$a}.scope_id = 0)
     )";
 }
 

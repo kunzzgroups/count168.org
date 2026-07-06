@@ -49,12 +49,14 @@ function resolveEditFormulaLedgerScope(captureScope, companyId) {
 }
 
 function normalizeAccountCurrencyRow(c) {
+  const id = c?.currency_id ?? c?.id;
+  const code = c?.currency_code ?? c?.code;
   return {
-    id: c.id,
-    code: c.code,
-    currency_id: c.id,
-    currency_code: c.code,
-    is_linked: !!c.is_linked,
+    id,
+    code,
+    currency_id: id,
+    currency_code: code,
+    is_linked: c?.is_linked != null ? !!c.is_linked : true,
   };
 }
 
@@ -78,7 +80,7 @@ function pickDefaultAccountCurrency(list, preferredCurrencyId = null) {
 
 async function fetchAccountCurrencies(accountId, captureScope, companyId) {
   if (!accountId) return [];
-  const params = new URLSearchParams({ action: "get_available_currencies" });
+  const params = new URLSearchParams({ action: "get_account_currencies" });
   params.set("account_id", String(accountId));
   applyTenantLedgerToParams(params, resolveEditFormulaLedgerScope(captureScope, companyId));
   const response = await fetch(
@@ -178,6 +180,7 @@ export function useSummaryEditFormulaPure({
 
   const handleAccountSelect = useCallback(
     (accountId) => {
+      setCurrencies([]);
       void loadCurrenciesForAccount(accountId);
     },
     [loadCurrenciesForAccount]

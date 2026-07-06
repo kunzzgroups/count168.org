@@ -322,7 +322,7 @@ if (!function_exists('getCompaniesByOwner')) {
      *   also appears with `group_id = T`. Dashboard views only — do NOT enable for
      *   ownership-management pages.
      */
-    function getCompaniesByOwner(PDO $pdo, int $ownerId, bool $fetchAll, bool $includeGroupLinkVirtualRows = false): array {
+    function getCompaniesByOwner(PDO $pdo, int $ownerId, bool $fetchAll, bool $includeGroupLinkVirtualRows = false, bool $ownershipNativeGroupsOnly = false): array {
         // Check if group_ownership table exists (group-level partner linking)
         $hasGroupOwnership = false;
         try {
@@ -368,7 +368,9 @@ if (!function_exists('getCompaniesByOwner')) {
             $stmt->execute($params);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $rows = gc_enrich_owner_company_rows_with_group_map($pdo, $ownerId, $rows);
+            if (!$ownershipNativeGroupsOnly) {
+                $rows = gc_enrich_owner_company_rows_with_group_map($pdo, $ownerId, $rows);
+            }
 
             if ($includeGroupLinkVirtualRows) {
                 // Real-owner session — only their own group-links produce virtual rows.

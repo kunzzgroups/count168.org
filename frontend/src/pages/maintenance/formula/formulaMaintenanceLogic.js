@@ -305,7 +305,7 @@ export function prepareFormulaRowsForDisplay(rows) {
   }));
 }
 
-/** Client-side search across Process, Account, and Product columns. */
+/** Client-side search across all visible columns (aligned with server-side search). */
 export function filterFormulaRowsBySearch(rows, searchTerm) {
   const q = String(searchTerm || "").trim().toUpperCase();
   if (!q || !Array.isArray(rows)) return rows || [];
@@ -317,6 +317,15 @@ export function filterFormulaRowsBySearch(rows, searchTerm) {
       row?._account,
       row?.product,
       row?._product,
+      row?.formula,
+      row?._formula,
+      row?.currency,
+      row?.description,
+      row?._description,
+      row?.source,
+      row?._source,
+      row?.input_method,
+      row?._inputMethod,
     ]
       .map((x) => String(x || "").toUpperCase())
       .join(" ");

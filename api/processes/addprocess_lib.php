@@ -216,8 +216,9 @@ function insertProcess(PDO $pdo, array $row): int {
     $stmt = $pdo->prepare("
         INSERT INTO process (
             process_id, description_id, currency_id, remove_word, replace_word_from, replace_word_to, remark,
-            created_by, created_by_type, created_by_owner_id, dts_created, company_id, sync_source_process_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            created_by, created_by_type, created_by_owner_id, dts_created, company_id, sync_source_process_id,
+            status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
     ");
     $stmt->execute([
         $row['process_id'], $row['description_id'], $row['currency_id'], $row['remove_word'],

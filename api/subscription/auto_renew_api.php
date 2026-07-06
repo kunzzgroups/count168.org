@@ -184,7 +184,7 @@ try {
         }
         $row = auto_renew_reject($pdo, $requestId, $input, $_SESSION);
         session_write_close();
-        auto_renew_json_response(true, 'Selection cleared', $row);
+        auto_renew_json_response(true, 'Renewal rejected', $row);
     }
 
     session_write_close();

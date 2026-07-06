@@ -16,8 +16,14 @@ function hasMeaningfulFormulaOperators(value) {
 
 /**
  * Resolve formula display when applying a saved template (legacy applyTemplateToSummaryRow logic).
+ * Outer wrapper ensures every code path returns negative numbers wrapped in parentheses.
  */
-export function resolveTemplateFormulaDisplay({
+export function resolveTemplateFormulaDisplay(params) {
+  const result = resolveTemplateFormulaDisplayCore(params);
+  return result ? formatNegativeNumbersInFormula(result) : result;
+}
+
+function resolveTemplateFormulaDisplayCore({
   row,
   template,
   sourceColumns = "",

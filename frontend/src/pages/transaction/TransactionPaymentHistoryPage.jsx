@@ -20,6 +20,7 @@ import "../../../public/css/portal-tooltip.css";
 import "../../../public/css/date-range-picker.css";
 import "../../../public/css/report-outlined-fields.css";
 import "./transactionPaymentHistoryPage.css";
+import "./components/PaymentHistoryExportButton.css";
 import { useLoginLang } from "../../utils/i18n/useLoginLang.js";
 import { TRANSACTION_I18N } from "../../translateFile/pages/transactionTranslate.js";
 import { clearInlineScrollLock } from "../../utils/layout/clearInlineScrollLock.js";
@@ -153,27 +154,34 @@ export default function TransactionPaymentHistoryPage() {
         <div className="transaction-modal-content transaction-history-modal transaction-payment-history-panel">
           <div className="transaction-modal-header transaction-payment-history-header">
             <div className="transaction-payment-history-header__brand">
+              <div className="transaction-payment-history-header__text">
+                <h3 id="modal_title">{title}</h3>
+              </div>
               <button
                 type="button"
-                className="transaction-payment-history-header__icon transaction-payment-history-export-btn"
+                className="transaction-payment-history-export-btn"
                 aria-label={m.exportPdf}
                 title={m.exportPdf}
                 onClick={onOpenExportPdf}
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                   <path
-                    d="M7 3h8l4 4v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"
+                    d="M12 3v10M8 9l4 4 4-4"
                     stroke="currentColor"
-                    strokeWidth="1.75"
+                    strokeWidth="2"
+                    strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-                  <path d="M15 3v5h5" stroke="currentColor" strokeWidth="1.75" strokeLinejoin="round" />
-                  <path d="M9 12h6M9 16h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                  <path
+                    d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
+                <span className="transaction-payment-history-export-btn__label">PDF</span>
               </button>
-              <div className="transaction-payment-history-header__text">
-                <h3 id="modal_title">{title}</h3>
-              </div>
             </div>
             <button
               type="button"

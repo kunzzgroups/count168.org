@@ -295,14 +295,22 @@ try {
             throw $e;
         }
 
-        $message = "Successfully created " . count($createdProcesses) . " process(es)";
-        if ($copiedTemplatesCount > 0) {
-            $message .= " and copied " . $copiedTemplatesCount . " template(s)";
-        } elseif ($copyFromProcessId !== '') {
-            $message .= ". Note: No templates were copied from source process.";
-        }
-        if (!empty($errors)) {
-            $message .= ". " . count($errors) . " process(es) were skipped due to conflicts.";
+        $createdCount = count($createdProcesses);
+        $skippedCount = count($errors);
+        $allSkipped = $createdCount === 0 && $skippedCount > 0;
+
+        if ($allSkipped) {
+            $message = $skippedCount . " process(es) already exist and were skipped.";
+        } else {
+            $message = "Successfully created " . $createdCount . " process(es)";
+            if ($copiedTemplatesCount > 0) {
+                $message .= " and copied " . $copiedTemplatesCount . " template(s)";
+            } elseif ($copyFromProcessId !== '') {
+                $message .= ". Note: No templates were copied from source process.";
+            }
+            if ($skippedCount > 0) {
+                $message .= ". " . $skippedCount . " process(es) were skipped due to conflicts.";
+            }
         }
         $data = [
             'created_processes' => $createdProcesses,
@@ -312,7 +320,7 @@ try {
             'source_templates_found' => count($sourceTemplates),
             'errors' => $errors
         ];
-        jsonResponse(true, $message, $data);
+        jsonResponse(!$allSkipped, $message, $data);
         exit;
     }
 

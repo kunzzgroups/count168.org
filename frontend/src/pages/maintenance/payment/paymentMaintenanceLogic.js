@@ -53,6 +53,7 @@ export async function searchPaymentData({
   dateFrom,
   dateTo,
   transactionType,
+  query,
   companyId,
   currency,
   scope,
@@ -62,6 +63,7 @@ export async function searchPaymentData({
   params.append("date_from", dateFrom);
   params.append("date_to", dateTo);
   if (transactionType) params.append("transaction_type", transactionType);
+  if (query?.trim()) params.set("q", query.trim().toUpperCase());
   if (companyId && scope?.mode !== "group") {
     params.append("company_id", String(companyId));
   }

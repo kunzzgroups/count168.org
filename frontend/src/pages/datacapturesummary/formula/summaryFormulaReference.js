@@ -702,7 +702,7 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                 if (!isNaN(numericValue) && numericValue < 0) {
                     // 检查前一个字符，确定是否需要括号
                     const charBefore = bracketMatch.index > 0 ? parsedFormula[bracketMatch.index - 1] : '';
-                    const needsParentheses = bracketMatch.index === 0 || /[+\-*/\(\s]/.test(charBefore);
+                    const needsParentheses = bracketMatch.index === 0 || /[+\-*/)(\s]/.test(charBefore);
 
                     if (needsParentheses) {
                         // 保留负号，然后用括号包裹：-264.34 -> (-264.34)
@@ -813,7 +813,7 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                         if (!isNaN(numericValue) && numericValue < 0) {
                             // Check if the character before $数字 is an operator or at the start
                             const charBefore = dollarMatch.index > 0 ? parsedFormula[dollarMatch.index - 1] : '';
-                            const needsParentheses = dollarMatch.index === 0 || /[+\-*/\(\s]/.test(charBefore);
+                            const needsParentheses = dollarMatch.index === 0 || /[+\-*/)(\s]/.test(charBefore);
                             if (needsParentheses) {
                                 replacementValue = `(${columnValue})`;
                             }
@@ -848,7 +848,7 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                             if (!isNaN(numericValue) && numericValue < 0) {
                                 // Check if the character before $数字 is an operator or at the start
                                 const charBefore = dollarMatch.index > 0 ? parsedFormula[dollarMatch.index - 1] : '';
-                                const needsParentheses = dollarMatch.index === 0 || /[+\-*/\(\s]/.test(charBefore);
+                                const needsParentheses = dollarMatch.index === 0 || /[+\-*/)(\s]/.test(charBefore);
                                 if (needsParentheses) {
                                     replacementValue = `(${columnValue})`;
                                 }
@@ -909,7 +909,7 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                 if (!isNaN(numericValue) && numericValue < 0) {
                     // 检查前一个字符，确定是否需要括号
                     const charBefore = ref.index > 0 ? parsedFormula[ref.index - 1] : '';
-                    const needsParentheses = ref.index === 0 || /[+\-*/\(\s]/.test(charBefore);
+                    const needsParentheses = ref.index === 0 || /[+\-*/)(\s]/.test(charBefore);
 
                     if (needsParentheses) {
                         // 保留负号，然后用括号包裹：-264.34 -> (-264.34)
@@ -957,7 +957,7 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                     // 检查前一个字符，确定是否需要括号
                     const matchIndex = parsedFormula.indexOf(fullMatch);
                     const charBefore = matchIndex > 0 ? parsedFormula[matchIndex - 1] : '';
-                    const needsParentheses = matchIndex === 0 || /[+\-*/\(\s]/.test(charBefore);
+                    const needsParentheses = matchIndex === 0 || /[+\-*/)(\s]/.test(charBefore);
 
                     if (needsParentheses) {
                         // 保留负号，然后用括号包裹：-264.34 -> (-264.34)
