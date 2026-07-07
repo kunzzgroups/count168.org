@@ -126,13 +126,14 @@ try {
     $partner = null;
     $matched_by_group = null;
 
-    if ($partnerByLogin && $partnerByGroup && (int)$partnerByLogin['id'] !== (int)$partnerByGroup['id']) {
+    if ($partnerByLogin && $partnerByGroup && $force_type === '') {
         echo json_encode([
             'status'  => 'conflict',
             'message' => 'Multiple matches found.',
             'data'    => [
                 'login_partner' => $partnerByLogin['name'] . ' (' . $partnerByLogin['owner_code'] . ')',
-                'group_partner' => $partnerByGroup['name'] . ' (Group: ' . $partnerByGroup['group_id'] . ')'
+                'group_partner' => $partnerByGroup['name'] . ' (Group: ' . $partnerByGroup['group_id'] . ')',
+                'same_owner' => (int) $partnerByLogin['id'] === (int) $partnerByGroup['id'],
             ]
         ]);
         exit();

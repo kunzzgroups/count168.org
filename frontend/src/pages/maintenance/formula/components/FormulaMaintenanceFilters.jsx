@@ -8,6 +8,7 @@ export default function FormulaMaintenanceFilters({
   textSearch,
   onTextSearchChange,
   companyId,
+  highlightCompanyCode = "",
   snapGroupIds,
   visibleCompanies,
   selectedGroup,
@@ -133,6 +134,7 @@ export default function FormulaMaintenanceFilters({
             companyButtons={visibleCompanies}
             companyId={companyId}
             highlightCompanyId={companyId}
+            highlightCompanyCode={highlightCompanyCode}
             onSwitchCompany={onPickCompany}
             onClearCompany={onClearCompany}
             allowClearCompany={allowClearCompany}

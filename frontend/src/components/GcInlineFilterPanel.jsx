@@ -1,3 +1,7 @@
+import { useMemo } from "react";
+
+import { resolveGcPickerHighlightId } from "../utils/company/sharedCompanyFilter.js";
+
 /**
  * Shared Group / Company pill strip. Currency row is omitted — pages manage currency separately.
  * Set showAllOption only on Dashboard (Group/Company "All" aggregate).
@@ -12,6 +16,10 @@ export default function GcInlineFilterPanel({
   companiesForPicker = [],
   groupAllMode = false,
   pickerCompanyId = null,
+  /** Raw company ID before any resolution - for direct matching */
+  rawPickerCompanyId = null,
+  /** When pill row id differs from session company pk, match highlight by company code. */
+  pickerCompanyCode = null,
   onPickAllInGroup,
   onPickCompany,
   /** Optional hover/focus warm-up (Process List cache prefetch, etc.). */
@@ -28,6 +36,10 @@ export default function GcInlineFilterPanel({
   children = null,
 }) {
   const selectedGroupKey = selectedGroup ? String(selectedGroup).trim().toUpperCase() : "";
+  const effectivePickerCompanyId = useMemo(
+    () => resolveGcPickerHighlightId(companiesForPicker, pickerCompanyId, pickerCompanyCode),
+    [companiesForPicker, pickerCompanyId, pickerCompanyCode],
+  );
   const allLabelRaw = typeof t === "function" ? t(allLabelKey) : allLabelKey;
   const allLabel =
     allLabelRaw && allLabelRaw !== allLabelKey ? allLabelRaw : "ALL";
@@ -80,7 +92,24 @@ export default function GcInlineFilterPanel({
                 </button>
               ) : null}
               {companiesForPicker.map((c) => {
-                const active = !groupAllMode && Number(pickerCompanyId) === Number(c.id);
+                // 终极修复：同时匹配 id、原始 id 和 company code！确保 100% 高亮！
+                const activeByEffectiveId =
+                  !groupAllMode &&
+                  effectivePickerCompanyId != null &&
+                  Number(effectivePickerCompanyId) === Number(c.id);
+                
+                const activeByRawId =
+                  !groupAllMode &&
+                  rawPickerCompanyId != null &&
+                  Number(rawPickerCompanyId) === Number(c.id);
+                
+                const activeByCode =
+                  !groupAllMode &&
+                  pickerCompanyCode != null &&
+                  String(c.company_id || "").toUpperCase().trim() === 
+                  String(pickerCompanyCode).toUpperCase().trim();
+                
+                const active = activeByEffectiveId || activeByRawId || activeByCode;
                 const pending = switchingCompany && active;
                 const label = String(c.company_id || "").toUpperCase();
                 return (

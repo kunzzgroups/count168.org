@@ -196,7 +196,7 @@ export function resolveAutoRenewDisplayPrice(row, drafts, feeSettings) {
 
 export function canDeleteRow(row) {
   return (
-    row?.status === "approved" &&
+    (row?.status === "approved" || row?.status === "rejected") &&
     Boolean(row?.can_delete) &&
     Number(row?.request_id) > 0 &&
     !row?.is_payment_deleted

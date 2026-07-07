@@ -1,6 +1,7 @@
 /** Ported from js/datacapture.js — 2.Format preview helpers (Phase 4c). */
 
 import { setFormatPreviewHtml } from '../../format/dataCaptureFormat.js';
+import { sanitizePastedCellHtml } from './dataCaptureClipboard.js';
 
 export function escapeHtml(str) {
     return String(str)
@@ -242,6 +243,13 @@ export function sanitizePastedHTML(html) {
             else table.removeAttribute('style');
         }
     } catch (_) { }
+
+    table.querySelectorAll('td, th').forEach((cell) => {
+        const cleaned = sanitizePastedCellHtml(cell.innerHTML);
+        if (cleaned !== cell.innerHTML) {
+            cell.innerHTML = cleaned;
+        }
+    });
 
     return table.outerHTML;
 }

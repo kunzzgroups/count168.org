@@ -322,7 +322,7 @@ export default function UserModal({
 
   useEffect(() => {
     if (!permissionPickerOpen) return undefined;
-    const mq = window.matchMedia("(min-width: 1201px)");
+    const mq = window.matchMedia("(min-width: 1441px)");
     const closeIfDesktop = () => {
       if (mq.matches) setPermissionPickerOpen(false);
     };

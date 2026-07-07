@@ -324,7 +324,7 @@ export function useCompanyOwnership(shell) {
           return true;
         }
         if (isApiConflict(json)) {
-          setConflict({ companyId: cid, loginId, data: json.data });
+          setConflict({ scope: "company", companyId: cid, loginId, data: json.data });
           return false;
         }
         showToast(getApiMessage(json, "Link partner failed"), "error");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { getAnnouncementText } from "../../translateFile/pages/announcementTranslate.js";
@@ -64,7 +64,7 @@ export default function AnnouncementPage() {
     }, 3000);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.classList.remove("bg", "dashboard-page");
     document.body.classList.add("announcement-page");
     return () => {

@@ -24,6 +24,7 @@ export function useGroupEarnings(shell) {
     selectedMonth,
     isHistoricalView,
     setHistoryBanner,
+    setConflict,
     lang,
   } = shell;
 
@@ -301,7 +302,7 @@ export function useGroupEarnings(shell) {
           return true;
         }
         if (isApiConflict(json)) {
-          showToast("Multiple matches found. Please specify login or group ID more precisely.", "error");
+          setConflict({ scope: "group", groupId, loginId, data: json.data });
           return false;
         }
         showToast(getApiMessage(json, "Link partner failed"), "error");
@@ -311,7 +312,7 @@ export function useGroupEarnings(shell) {
         return false;
       }
     },
-    [loadGroupState, adminLocked, showToast],
+    [loadGroupState, adminLocked, setConflict, showToast],
   );
 
   return {

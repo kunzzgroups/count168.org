@@ -1,4 +1,4 @@
-﻿@import "./maintenance_empty_state.css";
+@import "./maintenance_empty_state.css";
 
 @import "./maintenance_empty_state.css";
 
@@ -314,7 +314,7 @@ body.dashboard-page.maintenance-page {
     cursor: pointer;
     padding: 0;
     border-radius: 50%;
-    transition: background-color 0.15s ease, transform 0.1s ease;
+    transition: background-color 0.15s ease;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
@@ -325,7 +325,6 @@ body.dashboard-page.maintenance-page {
 
 .formula-clear-icon-btn:active {
     background: rgba(239, 68, 68, 0.18);
-    transform: scale(0.94);
 }
 
 .formula-search-input-container {
@@ -631,9 +630,7 @@ body.dashboard-page.maintenance-page {
     padding-right: var(--formula-col-formula-padding-x);
 }
 
-.formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(6).maintenance-table-cell .product-display,
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text .source-display,
-.formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text .input-method-display,
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text .formula-display,
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text .description-display,
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(3).maintenance-table-cell .account-display {
@@ -650,9 +647,47 @@ body.dashboard-page.maintenance-page {
     line-height: var(--formula-list-cell-line-height);
 }
 
+.formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(6).maintenance-table-cell .product-display,
+.formula-maintenance-page-root .formula-virtual-cell--product .product-display {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+.formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(2).maintenance-table-cell .process-display,
+.formula-maintenance-page-root .formula-virtual-data-row .process-display {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(7).maintenance-table-cell .input-method-display {
-    word-break: break-all;
-    overflow-wrap: anywhere;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+.formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(7).maintenance-table-cell .input-method-display,
+.formula-maintenance-page-root .formula-virtual-cell--input-method .input-method-display {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: normal;
+    overflow-wrap: normal;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
 }
 
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text {
@@ -1444,8 +1479,8 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 .formula-maintenance-page-root .formula-virtual-cell--input-method .formula-cell-clamp-2 {
-    word-break: break-all;
-    overflow-wrap: anywhere;
+    word-break: normal;
+    overflow-wrap: normal;
 }
 
 .formula-maintenance-page-root .formula-virtual-cell--formula {
@@ -1544,7 +1579,9 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
     box-sizing: border-box !important;
 }
 
-.formula-process-control .formula-clear-icon-btn:active {
-    transform: translateY(-50%) scale(0.94) !important;
+body.ec-auth-shell .formula-process-control button.formula-clear-icon-btn:active {
+    transform: translateY(-50%) !important;
+    transition: none !important;
 }
+
 

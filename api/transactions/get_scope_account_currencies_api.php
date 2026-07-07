@@ -17,6 +17,50 @@ require_once __DIR__ . '/dashboard_api.php';
 
 header('Content-Type: application/json');
 
+/**
+ * Group-only currency pool = group-tenant/group-entity base currencies + visible subsidiaries.
+ *
+ * @return array<int, array{id:int, code:string}>
+ */
+function dashboardResolveGroupOnlyCurrencyRows(PDO $pdo, string $viewGroup): array
+{
+    $g = reportNormalizeGroupId($viewGroup);
+    if ($g === '') {
+        return [];
+    }
+
+    $seenCodes = [];
+    $rows = [];
+    $addMap = static function (array $map) use (&$seenCodes, &$rows): void {
+        foreach ($map as $id => $code) {
+            $up = strtoupper(trim((string) $code));
+            if ($up === '' || isset($seenCodes[$up])) {
+                continue;
+            }
+            $seenCodes[$up] = true;
+            $rows[] = ['id' => (int) $id, 'code' => $up];
+        }
+    };
+
+    // 1) Existing group-ledger account currencies.
+    $addMap(dashboardResolveGroupScopeCurrencyMap($pdo, $g));
+
+    // 2) Group own base currencies (group entity + group tenant setting).
+    $entityId = tx_resolve_group_entity_company_id($pdo, $g);
+    if ($entityId > 0) {
+        $addMap(dashboardLoadCurrencyMap($pdo, $entityId));
+    }
+
+    // 3) Subsidiary company currencies under this group.
+    $subsidiaryIds = dashboardListGroupSubsidiaryCompanyIds($pdo, $g);
+    foreach ($subsidiaryIds as $sid) {
+        $addMap(dashboardLoadCurrencyMap($pdo, (int) $sid, true));
+    }
+
+    usort($rows, static fn(array $a, array $b): int => strcmp($a['code'], $b['code']));
+    return $rows;
+}
+
 try {
     if (!isset($_SESSION['user_id'])) {
         api_error('用户未登录', 401);
@@ -57,12 +101,7 @@ try {
             api_error('无权访问该 Group Ledger', 403);
             exit;
         }
-        $map = dashboardResolveGroupScopeCurrencyMap($pdo, $viewGroup);
-        $rows = [];
-        foreach ($map as $id => $code) {
-            $rows[] = ['id' => (int) $id, 'code' => $code];
-        }
-        usort($rows, static fn(array $a, array $b): int => $a['id'] <=> $b['id']);
+        $rows = dashboardResolveGroupOnlyCurrencyRows($pdo, $viewGroup);
         api_success($rows);
         exit;
     }
@@ -104,12 +143,7 @@ try {
             api_error('无权访问该 Group Ledger', 403);
             exit;
         }
-        $map = dashboardResolveGroupScopeCurrencyMap($pdo, $groupCode);
-        $rows = [];
-        foreach ($map as $id => $code) {
-            $rows[] = ['id' => (int) $id, 'code' => $code];
-        }
-        usort($rows, static fn(array $a, array $b): int => $a['id'] <=> $b['id']);
+        $rows = dashboardResolveGroupOnlyCurrencyRows($pdo, $groupCode);
         api_success($rows);
         exit;
     } else {
@@ -130,8 +164,27 @@ try {
             }
             $accountIds = dashboardCollectGroupOnlyAccountIds($pdo, $viewGroup);
         } elseif ($subsidiaryAccountsOnly && $primaryCompanyId > 0) {
-            // Subsidiary drill-down: Currency Setting table only (exclude group SGD on shared anchor FK).
+            // Subsidiary drill-down: Currency Setting + active account_currency (matches IG+95 multi-currency panel).
             $map = dashboardLoadCurrencyMap($pdo, $primaryCompanyId, true);
+            $accountIds = dashboardCollectScopeAccountIds(
+                $pdo,
+                $primaryCompanyId,
+                $viewGroup !== '' ? $viewGroup : null,
+                0,
+                true
+            );
+            if ($accountIds !== []) {
+                $accountMap = dashboardLoadAccountCurrencyMap(
+                    $pdo,
+                    $accountIds,
+                    [$primaryCompanyId],
+                    false,
+                    true
+                );
+                foreach ($accountMap as $id => $code) {
+                    $map[(int) $id] = $code;
+                }
+            }
             $rows = [];
             foreach ($map as $id => $code) {
                 $rows[] = ['id' => (int) $id, 'code' => $code];

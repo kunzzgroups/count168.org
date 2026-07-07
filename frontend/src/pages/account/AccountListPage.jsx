@@ -319,7 +319,7 @@ export default function AccountListPage() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.classList.remove("bg");
     document.body.classList.add("account-page");
 
@@ -330,7 +330,7 @@ export default function AccountListPage() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (showAll) document.body.classList.add("account-page--show-all");
     else document.body.classList.remove("account-page--show-all");
     return () => document.body.classList.remove("account-page--show-all");

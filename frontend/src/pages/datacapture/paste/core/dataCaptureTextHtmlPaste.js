@@ -2,6 +2,7 @@ import { applyDataMatrixToGrid, notifyPasteSuccess } from "./dataCapturePasteApp
 import { recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 import {
   measureTopLevelTables,
+  plainTextFromSanitizedHtml,
   sanitizePastedCellHtml,
 } from "./dataCaptureClipboard.js";
 
@@ -29,8 +30,9 @@ function patchFromSourceCell(sourceCell) {
     cellContent = sourceCell.textContent || "";
   }
 
-  const cellText = getPlainPastedCellValue(sourceCell);
   const cleanContent = sanitizePastedCellHtml(cellContent);
+  const rawText = plainTextFromSanitizedHtml(cleanContent) || getPlainPastedCellValue(sourceCell);
+  const cellText = isBlankPastedCellText(rawText) ? "" : rawText;
 
   if (cleanContent.includes("<") && cleanContent.includes(">")) {
     return { value: cellText, html: cleanContent };

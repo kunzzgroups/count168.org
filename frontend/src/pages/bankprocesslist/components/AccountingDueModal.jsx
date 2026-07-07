@@ -7,6 +7,7 @@ import {
   formatAccountingDueProcessDayStart,
   accountingDueRowKey,
 } from "../lib/bankProcessHelpers.js";
+import MaintenanceEllipsisText from "../../maintenance/shared/MaintenanceEllipsisText.jsx";
 
 export default function AccountingDueModal({
   isOpen,
@@ -185,8 +186,11 @@ export default function AccountingDueModal({
                 <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--frequency" role="cell" title={formatAccountingDueFrequency(r, t)}>
                   {formatAccountingDueFrequency(r, t)}
                 </div>
-                <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--owner" role="cell" title={r.card_owner || r.name || r.supplier || "-"}>
-                  {r.card_owner || r.name || r.supplier || "-"}
+                <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--owner" role="cell">
+                  <MaintenanceEllipsisText
+                    value={r.card_owner || r.name || r.supplier || "-"}
+                    className="accounting-due-owner-text"
+                  />
                 </div>
                 <div className="accounting-due-inbox-grid-cell accounting-due-inbox-grid-cell--bank" role="cell">
                   {r.bank || "-"}

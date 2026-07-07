@@ -511,9 +511,7 @@ function formulaMaintenanceResolveRequestScope(PDO $pdo, array $params): array
             $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
             if ($userRole === 'owner') {
                 $owner_id = $_SESSION['owner_id'] ?? $_SESSION['user_id'];
-                $stmt = $pdo->prepare('SELECT id FROM company WHERE id = ? AND owner_id = ?');
-                $stmt->execute([$requested, $owner_id]);
-                if ($stmt->fetchColumn()) {
+                if (gc_owner_has_company_access($pdo, $requested, (int)$owner_id)) {
                     $companyId = $requested;
                 } else {
                     throw new Exception('无权访问该公司');
@@ -728,18 +726,9 @@ function formulaMaintenanceResolveRelatedProcessIds(
         return $scoped !== null && $scoped > 0 ? [$scoped] : [$processId];
     }
 
-    $stmt = $pdo->prepare(
-        'SELECT id FROM process
-         WHERE company_id = ? AND UPPER(TRIM(process_id)) = ?
-         ORDER BY id ASC'
-    );
-    $stmt->execute([$companyId, $code]);
-    $ids = array_values(array_filter(
-        array_map(static fn ($id): int => (int) $id, $stmt->fetchAll(PDO::FETCH_COLUMN)),
-        static fn (int $id): bool => $id > 0
-    ));
-
-    return $ids !== [] ? $ids : [$processId];
+    // For non-payroll processes, only return the selected process ID itself to prevent
+    // showing templates of other processes that share the same process code (e.g. BKP).
+    return [$processId];
 }
 
 /**

@@ -1164,9 +1164,10 @@ function dcAssertUserCanAccessCompany(PDO $pdo, int $companyId, ?string $viewGro
 
     if ($role === 'owner' || $userType === 'owner') {
         $ownerId = (int) ($_SESSION['owner_id'] ?? $userId);
-        $stmt = $pdo->prepare('SELECT COUNT(*) FROM company WHERE id = ? AND owner_id = ?');
-        $stmt->execute([$companyId, $ownerId]);
-        if ((int) $stmt->fetchColumn() > 0) {
+        if (gc_owner_has_company_access($pdo, $companyId, $ownerId)) {
+            return;
+        }
+        if ($vg !== '' && gc_session_can_access_group_ledger($pdo, $vg)) {
             return;
         }
         throw new Exception('无权限访问该公司');

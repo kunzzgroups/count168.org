@@ -65,41 +65,23 @@ export default function FormulaMaintenanceTable({
     }
   };
 
-  const showSkeleton = data.length === 0 && (bootPending || loading || listSyncing);
-  const showEmptyState = data.length === 0 && !showSkeleton;
-
-  if (showSkeleton) {
-    const statusLabel = m.loading;
-    return (
-      <div className="maintenance-list-container maintenance-virtual-table formula-virtual-table">
-        <div className="maintenance-virtual-table-inner formula-virtual-table-inner" role="table">
-          <div className="maintenance-virtual-stale-hint" role="status" aria-live="polite">
-            {statusLabel}
-          </div>
-          <FormulaVirtualTableHead
-            selectAllRef={selectAllRef}
-            selectAllChecked={false}
-            onToggleSelectAll={() => {}}
-            m={m}
-            disableSelectAll
-          />
-          <div className="maintenance-virtual-scroll maintenance-virtual-scroll--body" tabIndex={0}>
-            <div className="maintenance-virtual-empty-loading" aria-hidden />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (showEmptyState) {
+  if (data.length === 0) {
+    const isLoaderActive = bootPending || loading || listSyncing;
     return (
       <div className="empty-state-container" style={{ display: "block" }}>
         <div className="empty-state">
-          <p>{awaitingProcessSelection ? m.selectProcessPrompt : m.noDataAdjustSearch}</p>
+          <p>
+            {isLoaderActive
+              ? m.loading
+              : awaitingProcessSelection
+              ? m.selectProcessPrompt
+              : m.noDataAdjustSearch}
+          </p>
         </div>
       </div>
     );
   }
+
 
   /* 所有公司统一用虚拟 grid 表（与 95 等大列表一致）；勿按条数切回 HTML table */
   const useVirtualList = data.length > 0;

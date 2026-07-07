@@ -64,6 +64,8 @@ export const OWNERSHIP_I18N = {
     ungroupFailed: "Ungroup failed",
     multipleMatchesFound: "Multiple Matches Found",
     idUsedByTwoPartners: "This ID is used by two different partners. Which one do you want to link?",
+    idAmbiguousLoginOrGroup:
+      "This ID matches both a Login ID and a Group ID. Link as Login ID (share dashboard) or join as Group?",
     linkAsLoginId: "Link as Login ID:",
     joinAsGroup: "Join Group:",
     multipleMatchesHint: "Multiple matches found. Please specify login or group ID more precisely.",
@@ -139,6 +141,7 @@ export const OWNERSHIP_I18N = {
     ungroupFailed: "取消分组失败",
     multipleMatchesFound: "发现多个匹配",
     idUsedByTwoPartners: "该 ID 对应两个不同伙伴，你想关联哪一个？",
+    idAmbiguousLoginOrGroup: "该 ID 同时匹配登录 ID 与分组 ID。按登录 ID 共享看板，还是按分组加入？",
     linkAsLoginId: "按登录ID关联：",
     joinAsGroup: "加入分组：",
     multipleMatchesHint: "发现多个匹配，请更精确输入登录ID或分组ID。",

@@ -13,6 +13,7 @@ export const PRIVATE_BROWSER_QUERY_KEYS = new Set([
   "subsidiary_accounts_only",
   "search",
   "showInactive",
+  "showActive",
   "showAll",
   "showOfficial",
   "showEInvoice",

@@ -1061,7 +1061,6 @@ export default function TransactionMaintenancePage() {
           }
 
           followGroupRef.current();
-          notify(t("switchedTo", { company: c.company_id }), "success");
         },
       });
       if (redirected) return;

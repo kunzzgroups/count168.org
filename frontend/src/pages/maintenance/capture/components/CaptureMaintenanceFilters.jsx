@@ -18,6 +18,7 @@ export default function CaptureMaintenanceFilters({
   setDateTo,
   today,
   companyId,
+  highlightCompanyCode = "",
   snapGroupIds,
   visibleCompanies,
   selectedGroup,
@@ -110,6 +111,7 @@ export default function CaptureMaintenanceFilters({
             companyButtons={visibleCompanies}
             companyId={companyId}
             highlightCompanyId={companyId}
+            highlightCompanyCode={highlightCompanyCode}
             onSwitchCompany={onPickCompany}
             onClearCompany={onClearCompany}
             allowClearCompany={allowClearCompany}

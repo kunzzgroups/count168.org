@@ -657,10 +657,8 @@ export default function PaymentMaintenancePage() {
               currency: nextCurrency,
             });
           } catch (err) {
-            console.error("Company switch meta/search:", err);
             notify(err.message || t("failedLoadCompanyMetadata"), "error");
           }
-          notify(t("switchedTo", { company: nextCode }), "success");
         },
       });
       if (redirected) return;

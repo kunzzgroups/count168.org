@@ -59,6 +59,15 @@ function permissions_user_sees_all_accounts(?string $role = null, ?string $userT
 }
 
 /**
+ * Process visibility follows the same top-level read-only policy as accounts.
+ * Keep Partnership/Audit aligned with owner-level read visibility.
+ */
+function permissions_user_sees_all_processes(?string $role = null, ?string $userType = null): bool
+{
+    return permissions_user_sees_all_accounts($role, $userType);
+}
+
+/**
  * @param int|null $permissionCompanyId 查询「指定公司」账户时传入该公司主键，用于读取 user_company_permissions；
  *                                        为 null 时用 $_SESSION['company_id']（与旧行为一致）。
  */
@@ -191,9 +200,8 @@ function filterProcessesByPermissions($pdo, $baseQuery, $params = [], $permissio
         session_start();
     }
 
-    // owner 不受权限限制，自动显示全部
-    $currentUserRole = $_SESSION['role'] ?? '';
-    if ($currentUserRole === 'owner') {
+    // 与 Account 权限过滤保持一致：owner/member/partnership/audit 直接看全量
+    if (permissions_user_sees_all_processes()) {
         return [$baseQuery, $params];
     }
 

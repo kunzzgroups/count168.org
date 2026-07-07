@@ -30,9 +30,7 @@ function maintenanceResolveRequestedCompanyId(PDO $pdo, int $requestedCompanyId,
         if (!$ownerId) {
             throw new Exception('缺少 Owner 信息');
         }
-        $stmt = $pdo->prepare('SELECT id FROM company WHERE id = ? AND owner_id = ? LIMIT 1');
-        $stmt->execute([$requestedCompanyId, $ownerId]);
-        if (!$stmt->fetchColumn()) {
+        if (!gc_owner_has_company_access($pdo, $requestedCompanyId, (int)$ownerId)) {
             throw new Exception('无权访问该公司');
         }
         return $requestedCompanyId;
@@ -1025,9 +1023,7 @@ try {
                 if (!$ownerId) {
                     throw new Exception('缺少 Owner 信息');
                 }
-                $stmt = $pdo->prepare('SELECT id FROM company WHERE id = ? AND owner_id = ? LIMIT 1');
-                $stmt->execute([$requestedCompanyId, $ownerId]);
-                if (!$stmt->fetchColumn()) {
+                if (!gc_owner_has_company_access($pdo, $requestedCompanyId, (int)$ownerId)) {
                     throw new Exception('无权访问该公司');
                 }
                 $company_id = $requestedCompanyId;

@@ -547,6 +547,46 @@ export function ensureMaintenanceDateRangePicker() {
     });
   }
 
+  function inferCalendarNavDelta(btn) {
+    const declared = Number(btn?.dataset?.drpNavDelta);
+    if (declared === -1 || declared === 1) return declared;
+
+    const icon = btn?.querySelector?.("i");
+    if (icon?.classList?.contains("fa-chevron-left")) return -1;
+    if (icon?.classList?.contains("fa-chevron-right")) return 1;
+
+    const header = btn?.closest?.(".calendar-header");
+    const siblings = header ? [...header.querySelectorAll(".calendar-nav-btn")] : [];
+    const idx = siblings.indexOf(btn);
+    if (idx === 0) return -1;
+    if (idx === siblings.length - 1) return 1;
+    return 0;
+  }
+
+  /**
+   * React-rendered popup is moved to document.body at runtime (non-React portal).
+   * Native listeners keep nav arrows working after that move.
+   */
+  function bindCalendarNavButtons() {
+    const popup = document.getElementById(CALENDAR_POPUP_ID);
+    if (!popup) return;
+    popup.querySelectorAll(".calendar-nav-btn").forEach((btn) => {
+      if (btn.dataset.drpNavBound === "1") return;
+      btn.dataset.drpNavBound = "1";
+      btn.addEventListener(
+        "click",
+        (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const delta = inferCalendarNavDelta(btn);
+          if (!delta) return;
+          changeMonth(delta);
+        },
+        { capture: true },
+      );
+    });
+  }
+
   function detectMatchingQuickRange() {
     if (!calendarStartDate || !calendarEndDate) return "";
     const keys = ["today", "yesterday", "thisWeek", "lastWeek", "thisMonth", "lastMonth", "thisYear", "lastYear"];
@@ -968,6 +1008,7 @@ export function ensureMaintenanceDateRangePicker() {
       popup.style.display = "block";
       document.body.setAttribute("data-calendar-open", "true");
       bindTransactionCalendarPresetButtons();
+      bindCalendarNavButtons();
       initCalendar();
       renderCalendar();
       updateCalendarClearFooter();
@@ -1026,8 +1067,15 @@ export function ensureMaintenanceDateRangePicker() {
     if (!quickRange) {
       return;
     }
-    calendarStartDate = quickRange.startDate;
-    calendarEndDate = quickRange.endDate;
+    if (activeRangeBinding.collapseSingleDisplay) {
+      const singleDate = new Date(quickRange.endDate);
+      singleDate.setHours(0, 0, 0, 0);
+      calendarStartDate = singleDate;
+      calendarEndDate = new Date(singleDate);
+    } else {
+      calendarStartDate = quickRange.startDate;
+      calendarEndDate = quickRange.endDate;
+    }
     isSelectingRange = false;
     calendarCurrentDate = new Date(calendarStartDate.getFullYear(), calendarStartDate.getMonth(), 1);
     setMonthControlValue(calendarCurrentDate.getMonth());
@@ -1112,6 +1160,7 @@ export function ensureMaintenanceDateRangePicker() {
 
       bindDateRangePickers();
       bindTransactionCalendarPresetButtons();
+      bindCalendarNavButtons();
       bindBankToolbarDatePillResize();
       requestAnimationFrame(() => {
         syncBankToolbarDatePillWidth();

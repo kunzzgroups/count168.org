@@ -10,7 +10,8 @@ import {
 export function isMaintenanceSessionGroupEntityBoot(companyRow, me) {
   if (!companyRow) return false;
   const entityCode = String(companyRow.company_id ?? "").trim().toUpperCase();
-  if (!entityCode || !companyRowIsGroupEntity(companyRow, entityCode)) return false;
+  const gid = companyRow.group_id ?? companyRow.groupId;
+  if (!entityCode || !companyRowIsGroupEntity(companyRow, gid)) return false;
   return canUseGroupOnlyMode(me, entityCode);
 }
 

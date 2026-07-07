@@ -141,13 +141,54 @@ export function detectHtmlTableInClipboard(e) {
   return null;
 }
 
+/** UI chrome copied from external sites (action buttons, icons) — not cell data. */
+const PASTED_INTERACTIVE_UI_SELECTOR =
+  "button, input, select, textarea, svg, img, [role='button']";
+
+/**
+ * Remove interactive UI elements from pasted HTML while keeping text/formatting tags.
+ * External reports often include minus/action buttons in the last column.
+ */
+export function stripInteractiveUiFromHtml(html) {
+  if (!html || !html.includes("<")) return html || "";
+  try {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    div.querySelectorAll(PASTED_INTERACTIVE_UI_SELECTOR).forEach((el) => {
+      const text = (el.textContent || "").trim();
+      if (text) {
+        el.replaceWith(document.createTextNode(text));
+      } else {
+        el.remove();
+      }
+    });
+    return div.innerHTML;
+  } catch {
+    return html;
+  }
+}
+
+/** Plain text from sanitized HTML (after UI elements are stripped). */
+export function plainTextFromSanitizedHtml(html) {
+  if (!html) return "";
+  if (!html.includes("<")) return String(html).replace(/\u00a0/g, " ").trim();
+  try {
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    return (div.textContent ?? "").replace(/\u00a0/g, " ").trim();
+  } catch {
+    return "";
+  }
+}
+
 export function sanitizePastedCellHtml(cellContent) {
   if (!cellContent) return "";
-  return cellContent
+  const stripped = cellContent
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/javascript:/gi, "")
     .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
+  return stripInteractiveUiFromHtml(stripped);
 }
 
 /** Reorder columns when No./User appear at the end (common Excel copy quirk). */

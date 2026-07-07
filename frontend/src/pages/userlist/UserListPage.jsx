@@ -388,6 +388,9 @@ export default function UserListPage() {
     return filteredSorted.slice(start, start + pageSize);
   }, [filteredSorted, effectivePage, pageSize, showAll]);
 
+  /** 仅满页时 grid 均分高度；末页不足一页时用紧凑行高，避免 3 条数据撑满整屏 */
+  const usePagedFill = !showAll && pageRows.length > 0 && pageRows.length >= pageSize;
+
   const permDisabledMap = useMemo(() => {
     const allowed = new Set(getCurrentUserRolePermissions(currentUserRole));
     const m = {};
@@ -436,7 +439,7 @@ export default function UserListPage() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.classList.remove("bg");
     document.body.classList.add("user-page");
     return () => {
@@ -446,10 +449,17 @@ export default function UserListPage() {
     };
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (showAll) document.body.classList.add("user-page--show-all");
     else document.body.classList.remove("user-page--show-all");
     return () => document.body.classList.remove("user-page--show-all");
+  }, [showAll]);
+
+  useLayoutEffect(() => {
+    const html = document.documentElement;
+    if (showAll) html.classList.remove("ec-user-page-scroll-lock");
+    else html.classList.add("ec-user-page-scroll-lock");
+    return () => html.classList.remove("ec-user-page-scroll-lock");
   }, [showAll]);
 
   useEffect(() => {
@@ -2517,8 +2527,8 @@ export default function UserListPage() {
               )}
             </div>
             <div
-              className={`user-cards${!showAll && pageRows.length > 0 ? " user-cards--paged-fill" : ""}`}
-              style={!showAll && pageRows.length > 0 ? { "--user-list-page-size": Math.max(pageSize, pageRows.length) } : undefined}
+              className={`user-cards${usePagedFill ? " user-cards--paged-fill" : ""}`}
+              style={usePagedFill ? { "--user-list-page-size": pageSize } : undefined}
             >
               {pageRows.map((r, idx) => {
                 const caps = computeRowCapabilities(r, currentUserId, currentUserRole);
@@ -2530,7 +2540,7 @@ export default function UserListPage() {
                     <div className="card-item">{r.login_id}</div>
                     <div className="card-item">{r.name}</div>
                     <div className="card-item">{r.email || "-"}</div>
-                    <div className="card-item"><span className={`role-badge ${roleBadgeClass(r.role)}`}>{formatUserRoleDisplay(t, r.role)}</span></div>
+                    <div className="card-item"><span className={`role-badge ${roleBadgeClass(r.role)}`}>{String(formatUserRoleDisplay(t, r.role)).toUpperCase()}</span></div>
                     <div className="card-item"><span className={`role-badge ${normRole(r.status) === "active" ? "status-active" : "status-inactive"} ${caps.canToggleStatus && !userMutationsBlocked ? "status-clickable" : ""}`} onClick={() => !userMutationsBlocked && caps.canToggleStatus && toggleUserStatus(r)}>{formatUserStatusDisplay(t, r.status)}</span></div>
                     <div
                       className="card-item"

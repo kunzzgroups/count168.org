@@ -34,9 +34,7 @@ function resolveCompanyId(PDO $pdo) {
         $userRole = isset($_SESSION['role']) ? strtolower($_SESSION['role']) : '';
         if ($userRole === 'owner') {
             $owner_id = isset($_SESSION['owner_id']) ? (int) $_SESSION['owner_id'] : (int) $_SESSION['user_id'];
-            $stmt = $pdo->prepare("SELECT id FROM company WHERE id = ? AND owner_id = ?");
-            $stmt->execute([$requestedCompanyId, $owner_id]);
-            if ($stmt->fetchColumn()) {
+            if (gc_owner_has_company_access($pdo, $requestedCompanyId, $owner_id)) {
                 return $requestedCompanyId;
             }
             throw new Exception('无权访问该公司');

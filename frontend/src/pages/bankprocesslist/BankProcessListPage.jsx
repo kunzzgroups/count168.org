@@ -58,6 +58,8 @@ export default function BankProcessListPage() {
     setSearch,
     showAll,
     setShowAll,
+    showActive,
+    setShowActive,
     showInactive,
     setShowInactive,
     showOfficial,
@@ -248,7 +250,7 @@ export default function BankProcessListPage() {
   const filterToolbarRef = useRef(null);
   const searchBarRef = useRef(null);
   const searchInputRef = useRef(null);
-  const hasActiveFilters = showInactive || showAll || showOfficial || showEInvoice || showBlock;
+  const hasActiveFilters = showActive || showInactive || showAll || showOfficial || showEInvoice || showBlock;
   const isSearchCollapsed = isNarrowToolbar && !searchExpanded && !search.trim();
 
   const {
@@ -287,6 +289,8 @@ export default function BankProcessListPage() {
   const filterChipsProps = useMemo(
     () => ({
       t,
+      showActive,
+      setShowActive,
       showInactive,
       setShowInactive,
       showAll,
@@ -300,6 +304,8 @@ export default function BankProcessListPage() {
     }),
     [
       t,
+      showActive,
+      setShowActive,
       showInactive,
       setShowInactive,
       showAll,
@@ -649,13 +655,13 @@ export default function BankProcessListPage() {
           <BankProcessTable
             tableLoading={tableLoading}
             showAll={showAll}
-            showSelectColumn={showAll || showInactive || showOfficial || showEInvoice || showBlock || hasDeletableRows}
+            showSelectColumn={showAll || showActive || showInactive || showOfficial || showEInvoice || showBlock || hasDeletableRows}
             pageRows={pageRows}
             currentPage={currentPage}
             PAGE_SIZE={PAGE_SIZE}
             selectedIds={selectedIds}
             setSelectedIds={setSelectedIds}
-            showHeaderSelectAll={showAll || showInactive || showOfficial || showEInvoice || showBlock}
+            showHeaderSelectAll={showAll || showActive || showInactive || showOfficial || showEInvoice || showBlock}
             notify={notify}
             fetchRows={fetchRows}
             onBankStatusUpdated={handleBankStatusUpdated}

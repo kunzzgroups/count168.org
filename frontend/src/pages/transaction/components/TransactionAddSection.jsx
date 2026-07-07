@@ -120,7 +120,6 @@ export default function TransactionAddSection({
               data-drp-from="add_tx_date_from"
               data-drp-to="add_tx_date_to"
               data-drp-display="add-tx-date-range-display"
-              data-drp-hide-presets="true"
               data-drp-collapse-single="true"
             >
               <span id="add-tx-date-range-display" className="transaction-add-datepicker-sr-span" aria-hidden="true" />
@@ -227,7 +226,6 @@ export default function TransactionAddSection({
               data-drp-from="rate_tx_date_from"
               data-drp-to="rate_tx_date_to"
               data-drp-display="rate-tx-date-range-display"
-              data-drp-hide-presets="true"
               data-drp-collapse-single="true"
             >
               <span id="rate-tx-date-range-display" className="transaction-add-datepicker-sr-span" aria-hidden="true" />

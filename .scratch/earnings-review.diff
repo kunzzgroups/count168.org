@@ -1,0 +1,511 @@
+﻿diff --git a/api/transactions/dashboard_api.php b/api/transactions/dashboard_api.php
+index 07dcd5a45..4bf941527 100644
+--- a/api/transactions/dashboard_api.php
++++ b/api/transactions/dashboard_api.php
+@@ -1238,61 +1238,6 @@ function dashboardLoadViewerGroupAccountPercentage(
+     return $out;
+ }
+ 
+-/**
+- * Load viewer group_ownership % into dashboard ownership fields.
+- *
+- * @param array{group_account_percentage:float,has_group_ownership:bool,group_equity_percentage:float} $result
+- */
+-function dashboardApplyViewerGroupAccountShareToOwnership(
+-    PDO $pdo,
+-    array &$result,
+-    string $groupIdForShare,
+-    int $userId,
+-    string $ownerTypeStr,
+-    string $effectiveMonth,
+-    bool $useHistory,
+-    bool $zeroEquityWhenMissing = false
+-): void {
+-    if ($groupIdForShare === '' || $userId <= 0) {
+-        return;
+-    }
+-
+-    try {
+-        $groupTable = $useHistory ? 'group_ownership_history' : 'group_ownership';
+-        $hasGroupTable = $useHistory
+-            ? $pdo->query("SHOW TABLES LIKE 'group_ownership_history'")->rowCount() > 0
+-            : $pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() > 0;
+-        if (!$hasGroupTable) {
+-            return;
+-        }
+-
+-        $monthSql = $useHistory ? 'AND effective_month = ?' : '';
+-        $stmtAccShare = $pdo->prepare("
+-            SELECT percentage FROM {$groupTable}
+-            WHERE UPPER(TRIM(group_id)) = UPPER(TRIM(?))
+-              AND account_id = ?
+-              AND owner_type = ?
+-              {$monthSql}
+-            LIMIT 1
+-        ");
+-        $stmtAccShare->execute(
+-            $useHistory
+-                ? [$groupIdForShare, $userId, $ownerTypeStr, $effectiveMonth]
+-                : [$groupIdForShare, $userId, $ownerTypeStr]
+-        );
+-        $accSharePct = $stmtAccShare->fetchColumn();
+-        if ($accSharePct !== false) {
+-            $result['group_account_percentage'] = (float) $accSharePct;
+-            $result['has_group_ownership'] = true;
+-        } elseif ($zeroEquityWhenMissing) {
+-            $result['group_equity_percentage'] = 0.0;
+-            $result['group_account_percentage'] = 0.0;
+-        }
+-    } catch (Throwable $e) {
+-        error_log('dashboardApplyViewerGroupAccountShareToOwnership: ' . $e->getMessage());
+-    }
+-}
+-
+ /**
+  * Load dashboard ownership multipliers for a company viewer (direct + group chain).
+  *
+@@ -1402,54 +1347,44 @@ function dashboardLoadCompanyDashboardOwnership(
+             $multiGroupPathResolved = false;
+ 
+             if (!$skipGroupChain && $viewGroup !== '') {
+-                $stmtDirectGrpEquity = $pdo->prepare("
+-                    SELECT percentage
+-                    FROM {$companyTable}
+-                    WHERE company_id = ? AND owner_type = 'group'
+-                      AND UPPER(TRIM(partner_group_id)) = UPPER(TRIM(?))
+-                      {$monthSql}
+-                    LIMIT 1
+-                ");
+-                $stmtDirectGrpEquity->execute(
++                $pathDec = dashboardResolveEarningsPathProduct(
++                    $pdo,
++                    $companyId,
++                    $viewGroup,
++                    $effectiveMonth,
+                     $useHistory
+-                        ? [$companyId, $viewGroup, $effectiveMonth]
+-                        : [$companyId, $viewGroup]
+                 );
+-                $directEquityPct = $stmtDirectGrpEquity->fetchColumn();
+-
+-                if ($directEquityPct !== false) {
++                if ($pathDec !== null) {
+                     $multiGroupPathResolved = true;
+-                    $result['group_equity_percentage'] = (float) $directEquityPct;
+-                    dashboardApplyViewerGroupAccountShareToOwnership(
+-                        $pdo,
+-                        $result,
+-                        $viewGroup,
+-                        $userId,
+-                        $ownerTypeStr,
+-                        $effectiveMonth,
+-                        $useHistory
+-                    );
+-                } else {
+-                    $pathDec = dashboardResolveEarningsPathProduct(
+-                        $pdo,
+-                        $companyId,
+-                        $viewGroup,
+-                        $effectiveMonth,
+-                        $useHistory
+-                    );
+-                    if ($pathDec !== null) {
+-                        $multiGroupPathResolved = true;
+-                        $result['group_equity_percentage'] = $pathDec * 100.0;
+-                        dashboardApplyViewerGroupAccountShareToOwnership(
+-                            $pdo,
+-                            $result,
+-                            $viewGroup,
+-                            $userId,
+-                            $ownerTypeStr,
+-                            $effectiveMonth,
+-                            $useHistory,
+-                            true
+-                        );
++                    $result['group_equity_percentage'] = $pathDec * 100.0;
++                    try {
++                        $hasGroupTable = $useHistory
++                            ? $pdo->query("SHOW TABLES LIKE 'group_ownership_history'")->rowCount() > 0
++                            : $pdo->query("SHOW TABLES LIKE 'group_ownership'")->rowCount() > 0;
++                        if ($hasGroupTable) {
++                            $stmtAccShare = $pdo->prepare("
++                                SELECT percentage FROM {$groupTable}
++                                WHERE UPPER(TRIM(group_id)) = UPPER(TRIM(?))
++                                  AND account_id = ?
++                                  AND owner_type = ?
++                                  {$monthSql}
++                                LIMIT 1
++                            ");
++                            $stmtAccShare->execute(
++                                $useHistory
++                                    ? [$viewGroup, $userId, $ownerTypeStr, $effectiveMonth]
++                                    : [$viewGroup, $userId, $ownerTypeStr]
++                            );
++                            $accSharePct = $stmtAccShare->fetchColumn();
++                            if ($accSharePct !== false) {
++                                $result['group_account_percentage'] = (float) $accSharePct;
++                                $result['has_group_ownership'] = true;
++                            } else {
++                                $result['group_equity_percentage'] = 0.0;
++                                $result['group_account_percentage'] = 0.0;
++                            }
++                        }
++                    } catch (Throwable $e) {
+                     }
+                 }
+             }
+@@ -1631,7 +1566,6 @@ function dashboardComputeSubsidiaryEarningsTotal(
+             $captureParams = [
+                 'company_id' => (string) $companyId,
+                 'view_group' => $groupLedgerCode,
+-                'subsidiary_accounts_only' => '1',
+                 'date_from' => $dateFromDisplay,
+                 'date_to' => $dateToDisplay,
+             ];
+@@ -2295,87 +2229,6 @@ function dashboardRestrictCurrencyMapToGroupTenant(PDO $pdo, string $groupCode,
+     return $out;
+ }
+ 
+-/**
+- * Group-only dashboard pills: group ledger/account currencies + group Currency Setting
+- * + anchor company table + every subsidiary company's Currency Setting (e.g. C168 MYR under AP).
+- *
+- * @return array<int, string>
+- */
+-function dashboardResolveGroupOnlyUnionCurrencyMap(PDO $pdo, string $viewGroup): array
+-{
+-    $viewGroup = reportNormalizeGroupId($viewGroup);
+-    if ($viewGroup === '') {
+-        return [];
+-    }
+-
+-    $byCode = [];
+-    $merge = static function (array $map) use (&$byCode): void {
+-        foreach ($map as $id => $code) {
+-            $up = strtoupper(trim((string) $code));
+-            if ($up === '') {
+-                continue;
+-            }
+-            if (!isset($byCode[$up])) {
+-                $byCode[$up] = (int) $id;
+-            }
+-        }
+-    };
+-
+-    $merge(dashboardResolveGroupScopeCurrencyMap($pdo, $viewGroup));
+-
+-    $pk = gc_resolve_group_pk_by_code($pdo, $viewGroup);
+-    if ($pk > 0) {
+-        try {
+-            $stmt = $pdo->prepare("
+-                SELECT id, UPPER(TRIM(code)) AS code
+-                FROM currency
+-                WHERE scope_type = 'group' AND scope_id = ?
+-            ");
+-            $stmt->execute([$pk]);
+-            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+-                $id = (int) ($row['id'] ?? 0);
+-                $code = strtoupper(trim((string) ($row['code'] ?? '')));
+-                if ($id > 0 && $code !== '' && !isset($byCode[$code])) {
+-                    $byCode[$code] = $id;
+-                }
+-            }
+-        } catch (Throwable $e) {
+-            error_log('dashboardResolveGroupOnlyUnionCurrencyMap: ' . $e->getMessage());
+-        }
+-    }
+-
+-    $entityId = tx_resolve_group_entity_company_id($pdo, $viewGroup);
+-    if ($entityId > 0) {
+-        $merge(dashboardLoadCurrencyMap($pdo, $entityId, false));
+-    }
+-
+-    foreach (dashboardListGroupSubsidiaryCompanyIds($pdo, $viewGroup) as $companyId) {
+-        $merge(dashboardLoadCurrencyMap($pdo, (int) $companyId, true));
+-    }
+-
+-    $out = [];
+-    foreach ($byCode as $code => $id) {
+-        $out[$id] = $code;
+-    }
+-
+-    return $out;
+-}
+-
+-/**
+- * @param array<int, string> $map
+- * @return list<array{id:int,code:string}>
+- */
+-function dashboardCurrencyMapToApiRows(array $map): array
+-{
+-    $rows = [];
+-    foreach ($map as $id => $code) {
+-        $rows[] = ['id' => (int) $id, 'code' => (string) $code];
+-    }
+-    usort($rows, static fn (array $a, array $b): int => $a['id'] <=> $b['id']);
+-
+-    return $rows;
+-}
+-
+ /**
+  * Group tab / group login: currencies from group-ledger account_currency only.
+  * Does not list subsidiary-synced Currency Setting rows — a code appears only when
+@@ -3623,26 +3476,36 @@ try {
+     $groupScopeId = 0;
+ 
+     if ($useGroupLedger) {
+-        // Group-only dashboard (e.g. AP tab, no C168): always group ledger + subsidiary merge.
+-        $groupScopeId = dashboardResolveGroupScopeId($pdo, $groupLedgerCode);
+-        if ($groupScopeId <= 0) {
+-            $dbName = '';
+-            try {
+-                $dbName = (string) ($pdo->query('SELECT DATABASE()')->fetchColumn() ?: '');
+-            } catch (Throwable $ignored) {
+-                $dbName = '';
++        // Company login may still use legacy group-entity row; group login always uses group ledger.
++        if (!dashboard_should_force_pure_group_ledger($pdo)) {
++            $groupEntityCompanyId = tx_resolve_group_entity_company_id($pdo, $groupLedgerCode);
++            if ($groupEntityCompanyId > 0) {
++                assertGroupEntityAccess($pdo, $groupLedgerCode, $groupEntityCompanyId);
++                $company_id = $groupEntityCompanyId;
++                $useGroupLedger = false;
+             }
+-            throw new Exception(
+-                'Group scope is invalid or not initialized (group_code='
+-                . $groupLedgerCode
+-                . ($dbName !== '' ? ', database=' . $dbName : '')
+-                . '). Confirm migration 20260528_dual_tenant_company_group.sql on this database.'
+-            );
+         }
+-        if (!gc_session_can_access_group_ledger($pdo, $groupLedgerCode)) {
+-            throw new Exception('无权访问该 Group Ledger');
++        if ($useGroupLedger) {
++            $groupScopeId = dashboardResolveGroupScopeId($pdo, $groupLedgerCode);
++            if ($groupScopeId <= 0) {
++                $dbName = '';
++                try {
++                    $dbName = (string) ($pdo->query('SELECT DATABASE()')->fetchColumn() ?: '');
++                } catch (Throwable $ignored) {
++                    $dbName = '';
++                }
++                throw new Exception(
++                    'Group scope is invalid or not initialized (group_code='
++                    . $groupLedgerCode
++                    . ($dbName !== '' ? ', database=' . $dbName : '')
++                    . '). Confirm migration 20260528_dual_tenant_company_group.sql on this database.'
++                );
++            }
++            if (!gc_session_can_access_group_ledger($pdo, $groupLedgerCode)) {
++                throw new Exception('无权访问该 Group Ledger');
++            }
++            dashboardAssertGroupLedgerAccess($pdo, $groupLedgerCode, $groupScopeId);
+         }
+-        dashboardAssertGroupLedgerAccess($pdo, $groupLedgerCode, $groupScopeId);
+     }
+ 
+     // Pure group ledger (no group-entity company row such as company_id=AP).
+diff --git a/frontend/src/pages/dashboard/components/DashboardKpiGrid.jsx b/frontend/src/pages/dashboard/components/DashboardKpiGrid.jsx
+index bdb9484a5..a4fa06dff 100644
+--- a/frontend/src/pages/dashboard/components/DashboardKpiGrid.jsx
++++ b/frontend/src/pages/dashboard/components/DashboardKpiGrid.jsx
+@@ -3,7 +3,7 @@ import { DashboardKpiCard } from "./DashboardKpiCard.jsx";
+ export function DashboardKpiGrid({ i18n, kpi, kpiCompareLabel, kpiFooter, loading }) {
+   return (
+     <div
+-      className={`dashboard-kpi-grid${kpi.showEarningsKpi ? " dashboard-kpi-grid--with-earnings" : ""}`}
++      className={`dashboard-kpi-grid${kpi.showEarnings ? " dashboard-kpi-grid--with-earnings" : ""}`}
+     >
+       <DashboardKpiCard
+         variant="profit"
+@@ -32,7 +32,7 @@ export function DashboardKpiGrid({ i18n, kpi, kpiCompareLabel, kpiFooter, loadin
+         fallbackFoot={kpiFooter}
+         loading={loading}
+       />
+-      {kpi.showEarningsKpi && (
++      {kpi.showEarnings && (
+         <DashboardKpiCard
+           variant="earnings"
+           label={i18n.earnings}
+diff --git a/frontend/src/pages/dashboard/hooks/useDashboardPage.js b/frontend/src/pages/dashboard/hooks/useDashboardPage.js
+index 62ba3cf3a..71211ddd1 100644
+--- a/frontend/src/pages/dashboard/hooks/useDashboardPage.js
++++ b/frontend/src/pages/dashboard/hooks/useDashboardPage.js
+@@ -1162,8 +1162,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
+     }
+     return (
+       (subsidiaryDashboardScope && companyId != null
+-        ? currenciesByCompanyRef.current.get(parseInt(companyId, 10)) ??
+-          (currenciesRef.current.length > 0 ? currenciesRef.current : null)
++        ? currenciesByCompanyRef.current.get(parseInt(companyId, 10)) ?? currenciesRef.current
+         : selectedGroup && currenciesRef.current.length > 0 && !subsidiaryDashboardScope
+           ? currenciesRef.current
+           : companyId != null
+@@ -2641,18 +2640,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
+         }
+         if (!codes.length && singleCid) {
+           const cached = currenciesByCompanyRef.current.get(singleCid);
+-          if (cached?.length) {
+-            codes = [...cached];
+-          } else if (subsidiaryDashboardScope) {
+-            const row = companies.find((c) => parseInt(c.id, 10) === singleCid);
+-            const rowCodes = await fetchCompanyCurrencySettingCodes(
+-              singleCid,
+-              row,
+-              effectiveGroupKey,
+-              groupIds
+-            );
+-            if (rowCodes.length) codes = rowCodes;
+-          }
++          if (cached?.length) codes = [...cached];
+         } else if (!codes.length && groupKey && !subsidiaryDashboardScope) {
+           const cached =
+             (groupAllMode
+@@ -4664,7 +4652,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
+         resolveKpiOwnershipOpts(companyId, grp)
+       );
+       if (!metrics) return null;
+-      return metrics.showEarningsPanel ? metrics.earnings : metrics.netProfit;
++      return metrics.showEarnings ? metrics.earnings : metrics.netProfit;
+     },
+     [applyDashboardPayloadAdjustments, companyId, selectedGroup, resolveKpiOwnershipOpts]
+   );
+@@ -6498,8 +6486,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
+       netProfit: 0,
+       earnings: 0,
+       showEarnings: false,
+-      showEarningsKpi: false,
+-      showEarningsPanel: false,
+       comparisons: null,
+     };
+     const useAggregated = showAllCurrencies && canShowAllCurrencies && multiCurrencyKpi;
+@@ -6522,9 +6508,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
+         ...current,
+         earnings: ownershipCurrent.earnings,
+         kpiCardEarnings: ownershipCurrent.kpiCardEarnings,
+-        showEarnings: ownershipCurrent.showEarningsPanel,
+-        showEarningsKpi: ownershipCurrent.showEarningsKpi,
+-        showEarningsPanel: ownershipCurrent.showEarningsPanel,
++        showEarnings: ownershipCurrent.showEarnings,
+       };
+     }
+     let previous = useAggregated ? multiCurrencyKpiPrev : ownershipPrevious;
+diff --git a/frontend/src/pages/dashboard/lib/dashboardChart.jsx b/frontend/src/pages/dashboard/lib/dashboardChart.jsx
+index 1ef8a72f2..5e03225f6 100644
+--- a/frontend/src/pages/dashboard/lib/dashboardChart.jsx
++++ b/frontend/src/pages/dashboard/lib/dashboardChart.jsx
+@@ -5,7 +5,7 @@ import {
+   parseYmd,
+   shouldAggregateChartByMonth,
+ } from "./dashboardDateUtils.js";
+-import { resolvePanelEarningsPct, viewerHasEarningsPanelConfig } from "./dashboardKpi.js";
++import { resolvePanelEarningsPct, viewerHasEarningsConfig } from "./dashboardKpi.js";
+ 
+ /** 按天模式：1 个自然月每天；2 个月隔 2 天；≤14 天每天；更长区间按宽度跳日 */
+ export function resolveDailyChartXAxisTicks(dayCount, monthSpan) {
+@@ -113,7 +113,7 @@ export function buildChartRows(
+ ) {
+   if (!data?.daily_data) return [];
+   const dailyData = data.daily_data;
+-  const earningsMultiplier = viewerHasEarningsPanelConfig(data, options)
++  const earningsMultiplier = viewerHasEarningsConfig(data, options)
+     ? resolvePanelEarningsPct(data, selectedGroup, options)
+     : 0;
+   const rangeStart = parseYmd(startYmd);
+diff --git a/frontend/src/pages/dashboard/lib/dashboardKpi.js b/frontend/src/pages/dashboard/lib/dashboardKpi.js
+index c9be79580..9672ac099 100644
+--- a/frontend/src/pages/dashboard/lib/dashboardKpi.js
++++ b/frontend/src/pages/dashboard/lib/dashboardKpi.js
+@@ -34,46 +34,22 @@ export function netProfitFromDashboardPayload(dashboardData) {
+ }
+ 
+ /**
+- * Top KPI Earnings card: Account Ownership (direct account, group equity on company, or link).
+- * Subsidiary drill-down (AP + C168): group equity from Account Ownership is enough to show the card
+- * (amount may be 0 when Group Earnings user share is not configured).
++ * True when the logged-in viewer has earnings config (Account or Group Ownership).
++ * Subsidiary drill-down (e.g. AP + C168): group-level earnings do not apply — only direct
++ * company ownership or link multiplier counts (matches IG + 95 net-profit panel).
+  */
+-export function viewerHasEarningsKpiConfig(dashboardData, options = {}) {
++export function viewerHasEarningsConfig(dashboardData, options = {}) {
+   if (!dashboardData) return false;
+-  if (options.groupsAllCompaniesAggregate) return false;
+   const directPct = parseFloat(dashboardData.ownership_percentage) || 0;
+   if (directPct > 0) return true;
+   const linkMul = parseFloat(dashboardData._link_multiplier || 0) || 0;
+   if (linkMul > 0 && linkMul !== 1) return true;
+-  const groupEquityPct = parseFloat(dashboardData?.group_equity_percentage) || 0;
+-  if (groupEquityPct > 0) return true;
++  if (options.subsidiaryGroupDrillDown) return false;
++  if (options.groupsAllCompaniesAggregate) return false;
+   if (dashboardData.has_group_ownership) return true;
+   return false;
+ }
+ 
+-/**
+- * Trend chart + right earnings panel: requires Group Earnings user share (has_group_ownership)
+- * or direct / link ownership. Account-only group equity on a subsidiary is KPI-only.
+- */
+-export function viewerHasEarningsPanelConfig(dashboardData, options = {}) {
+-  if (!dashboardData) return false;
+-  if (options.groupsAllCompaniesAggregate) return false;
+-  const directPct = parseFloat(dashboardData.ownership_percentage) || 0;
+-  if (directPct > 0) return true;
+-  const linkMul = parseFloat(dashboardData._link_multiplier || 0) || 0;
+-  if (linkMul > 0 && linkMul !== 1) return true;
+-  if (!dashboardData.has_group_ownership) return false;
+-  if (options.subsidiaryGroupDrillDown) {
+-    return (parseFloat(dashboardData.group_account_percentage) || 0) > 0;
+-  }
+-  return true;
+-}
+-
+-/** @deprecated Use viewerHasEarningsPanelConfig — panel/chart/merge earnings fetch. */
+-export function viewerHasEarningsConfig(dashboardData, options = {}) {
+-  return viewerHasEarningsPanelConfig(dashboardData, options);
+-}
+-
+ /** Group earning = (subsidiary earnings + group ledger net profit) × viewer group %. */
+ export function computeGroupAggregateEarningsAmount(dashboardData, { requireViewerConfig = true } = {}) {
+   if (!dashboardData) return 0;
+@@ -120,7 +96,6 @@ function resolveEarningsMultiplier(dashboardData, selectedGroup, options = {}, {
+     return linkMul * viewerGroupShare;
+   }
+   if (directPct > 0) return directPct;
+-  // AP + C168 drill-down: earnings = net profit × Account Ownership group equity only (图二).
+   if (subsidiaryGroupDrillDown && groupEquityPercentage > 0) {
+     return groupEquityPercentage / 100;
+   }
+@@ -194,17 +169,18 @@ export function computeKpiMetrics(dashboardData, selectedGroup, options = {}) {
+   const displayProfitNum = rawProfit;
+   const displayExpensesNum = rawExpenses > 0 ? -rawExpenses : rawExpenses;
+   const netProfitDisplay = displayProfitNum + displayExpensesNum;
+-  const showEarningsKpi = viewerHasEarningsKpiConfig(dashboardData, options);
+-  const showEarningsPanel = viewerHasEarningsPanelConfig(dashboardData, options);
++  const showEarnings = options.groupsAllCompaniesAggregate
++    ? false
++    : viewerHasEarningsConfig(dashboardData, options);
+   const groupAggregate = isGroupAggregateEarningsPayload(dashboardData, options);
+   const panelMultiplier = resolvePanelEarningsPct(dashboardData, selectedGroup, options);
+   const kpiMultiplier = resolveEffectiveOwnershipPct(dashboardData, selectedGroup, options);
+-  const earningsDisplay = !showEarningsPanel
++  const earningsDisplay = !showEarnings
+     ? netProfitDisplay
+     : groupAggregate
+       ? computeGroupAggregateEarningsAmount(dashboardData, { requireViewerConfig: false })
+       : netProfitDisplay * panelMultiplier;
+-  const kpiCardEarnings = showEarningsKpi
++  const kpiCardEarnings = showEarnings
+     ? groupAggregate
+       ? computeGroupAggregateEarningsAmount(dashboardData, { requireViewerConfig: true })
+       : netProfitDisplay * kpiMultiplier
+@@ -215,8 +191,6 @@ export function computeKpiMetrics(dashboardData, selectedGroup, options = {}) {
+     netProfit: netProfitDisplay,
+     earnings: earningsDisplay,
+     kpiCardEarnings,
+-    showEarnings: showEarningsPanel,
+-    showEarningsKpi,
+-    showEarningsPanel,
++    showEarnings,
+   };
+ }

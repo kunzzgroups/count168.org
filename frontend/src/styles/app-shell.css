@@ -95,6 +95,12 @@
   height: 36px;
 }
 
+html.ec-route-switching,
+body.ec-route-switching {
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
 /* Data Capture Summary — same single-page scroll as Ownership (all viewport widths) */
 html:has(body.datacapture-summary-page) {
   height: auto !important;

@@ -85,14 +85,16 @@ function dashboard_bootstrap_base_params(): array
         ? (string) $_GET['company_id']
         : '';
     $viewGroup = isset($_GET['view_group']) ? trim((string) $_GET['view_group']) : '';
+    $groupOnly = isset($_GET['group_only']) && (string) $_GET['group_only'] === '1';
 
     $subsidiaryOnly = isset($_GET['subsidiary_accounts_only'])
         && (string) $_GET['subsidiary_accounts_only'] === '1';
 
     if ($companyId !== '') {
         $params['company_id'] = $companyId;
-        if ($viewGroup !== '' && !$subsidiaryOnly) {
+        if ($viewGroup !== '') {
             $params['view_group'] = $viewGroup;
+            $params['group_id'] = $viewGroup;
         }
         if ($subsidiaryOnly) {
             $params['subsidiary_accounts_only'] = '1';
@@ -100,6 +102,9 @@ function dashboard_bootstrap_base_params(): array
     } elseif ($viewGroup !== '') {
         $params['view_group'] = $viewGroup;
         $params['group_id'] = $viewGroup;
+    }
+    if ($groupOnly) {
+        $params['group_only'] = '1';
     }
 
     return $params;

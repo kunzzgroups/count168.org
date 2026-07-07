@@ -236,7 +236,7 @@ export default function CaptureMaintenancePage() {
 
   // -- Boot Logic --
   useEffect(() => {
-    if (!sessionReady || !me) return;
+    if (!sessionReady || !me || !bootLoading) return;
     let cancelled = false;
     (async () => {
       try {
@@ -571,7 +571,6 @@ export default function CaptureMaintenancePage() {
               groupAllMode,
             });
             await performSearch({ scope: switchedScope });
-            notify(t("switchedTo", { company: nextCode }), "success");
           } catch (stayErr) {
             console.error("Company switch search error:", stayErr);
             notify(stayErr?.message || t("switchFailed"), "error");
@@ -672,6 +671,7 @@ export default function CaptureMaintenancePage() {
           setDateTo={setDateTo}
           today={todayDmy}
           companyId={companyId}
+          highlightCompanyCode={companyCode}
           snapGroupIds={snapGroupIds}
           visibleCompanies={visibleCompanies}
           selectedGroup={selectedGroup}

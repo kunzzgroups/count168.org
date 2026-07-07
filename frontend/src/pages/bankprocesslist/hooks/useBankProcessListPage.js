@@ -184,12 +184,14 @@ export function useBankProcessListPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [search, setSearch] = useState("");
   const [showAll, setShowAll] = useState(false);
+  const [showActive, setShowActive] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [showOfficial, setShowOfficial] = useState(false);
   const [showEInvoice, setShowEInvoice] = useState(false);
   const [showBlock, setShowBlock] = useState(false);
   const clearBankProcessFilters = useCallback(() => {
     setShowAll(false);
+    setShowActive(false);
     setShowInactive(false);
     setShowOfficial(false);
     setShowEInvoice(false);
@@ -766,6 +768,7 @@ export function useBankProcessListPage() {
           setDateFrom(currentUrl.searchParams.get("date_from") || "");
           setDateTo(currentUrl.searchParams.get("date_to") || "");
           setShowAll(currentUrl.searchParams.get("showAll") === "1");
+          setShowActive(currentUrl.searchParams.get("showActive") === "1");
           setShowInactive(currentUrl.searchParams.get("showInactive") === "1");
           setShowOfficial(currentUrl.searchParams.get("showOfficial") === "1");
           setShowEInvoice(currentUrl.searchParams.get("showEInvoice") === "1");
@@ -865,6 +868,7 @@ export function useBankProcessListPage() {
         setDateFrom(url.searchParams.get("date_from") || "");
         setDateTo(url.searchParams.get("date_to") || "");
         setShowAll(url.searchParams.get("showAll") === "1");
+        setShowActive(url.searchParams.get("showActive") === "1");
         setShowInactive(url.searchParams.get("showInactive") === "1");
         setShowOfficial(url.searchParams.get("showOfficial") === "1");
         setShowEInvoice(url.searchParams.get("showEInvoice") === "1");
@@ -1291,6 +1295,7 @@ export function useBankProcessListPage() {
     companyId,
     loading,
     showAll,
+    showActive,
     showInactive,
     showOfficial,
     showEInvoice,
@@ -2355,7 +2360,7 @@ export function useBankProcessListPage() {
   }, [currencyFilterCode, currencyPillCodes]);
 
   const visibleRows = useMemo(() => {
-    const filterState = { showAll, showInactive, showOfficial, showEInvoice, showBlock };
+    const filterState = { showAll, showActive, showInactive, showOfficial, showEInvoice, showBlock };
     let filtered = filterBankProcessRowsBySearch(sortedRows, search).filter((r) =>
       matchesCurrentBankFilters(r, filterState),
     );
@@ -2381,6 +2386,7 @@ export function useBankProcessListPage() {
     dateFrom,
     dateTo,
     showAll,
+    showActive,
     showInactive,
     showOfficial,
     showEInvoice,
@@ -2402,6 +2408,7 @@ export function useBankProcessListPage() {
       currentPage,
       currencyFilterCode,
       showAll,
+      showActive,
       showInactive,
       showOfficial,
       showEInvoice,
@@ -2457,6 +2464,8 @@ export function useBankProcessListPage() {
     setSearch,
     showAll,
     setShowAll,
+    showActive,
+    setShowActive,
     showInactive,
     setShowInactive,
     showOfficial,

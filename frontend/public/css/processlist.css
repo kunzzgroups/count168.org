@@ -1,4 +1,4 @@
-﻿/* Input formatting - 统一管理输入框格式 */
+/* Input formatting - 统一管理输入框格式 */
 #add_process_id,
 #new_description_name,
 #add_replace_word_from,
@@ -1415,6 +1415,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.accounting-due-owner-text {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
 }
 
 .accounting-due-inbox-grid-cell input[type="checkbox"] {

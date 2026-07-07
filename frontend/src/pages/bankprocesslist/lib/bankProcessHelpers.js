@@ -204,7 +204,7 @@ export function filterBankProcessRowsBySearch(rows, searchTerm) {
 
 export function matchesCurrentBankFilters(row, filters) {
   if (!row) return false;
-  const { showAll, showInactive, showOfficial, showEInvoice, showBlock } = filters || {};
+  const { showAll, showActive, showInactive, showOfficial, showEInvoice, showBlock } = filters || {};
   const status = normalizeBankProcessStatus(row.status);
   const issueFlag = normalizeBankIssueFlag(row.issue_flag);
   const isPlainInactive =
@@ -212,15 +212,11 @@ export function matchesCurrentBankFilters(row, filters) {
   const isDefaultActive =
     status === "active" && issueFlag !== "official" && issueFlag !== "e_invoice" && issueFlag !== "block";
   const matches = [];
+  if (showActive) matches.push(isDefaultActive);
   if (showInactive) matches.push(isPlainInactive);
   if (showOfficial) matches.push(issueFlag === "official");
   if (showEInvoice) matches.push(issueFlag === "e_invoice");
   if (showBlock) matches.push(issueFlag === "block");
-
-  if (showAll) {
-    if (matches.length === 0) return isDefaultActive;
-    return matches.some(Boolean);
-  }
 
   if (matches.length === 0) return isDefaultActive;
   return matches.some(Boolean);

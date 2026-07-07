@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { canAccessC168AutoRenew } from "../../utils/company/loginScope.js";
@@ -179,7 +179,7 @@ export default function AutoRenewPage() {
     setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== id)), 2500);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.classList.remove("bg");
     document.body.classList.add("user-page", "auto-renew-page-body");
     return () => {
@@ -197,7 +197,7 @@ export default function AutoRenewPage() {
 
   const showAll = statusFilter === "all";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (showAll) {
       document.body.classList.add("user-page--show-all");
       requestAnimationFrame(() => {
@@ -523,8 +523,10 @@ export default function AutoRenewPage() {
         transactionId: row.transaction_id,
         entityType: row.entity_type,
       });
-      invalidateTransactionListCache("auto_renew_delete");
-      notify(t("deletedSuccess"), "success");
+      if (row.status === "approved") {
+        invalidateTransactionListCache("auto_renew_delete");
+      }
+      notify(row.status === "rejected" ? t("revertedSuccess") : t("deletedSuccess"), "success");
       await refreshListAfterMutation();
     } catch (err) {
       notify(t("deleteFailed", { message: err.message }), "error");
@@ -674,7 +676,7 @@ export default function AutoRenewPage() {
       );
     }
 
-    if (row.status === "approved" && canDeleteRow(row) && canEditGlobal) {
+    if ((row.status === "approved" || row.status === "rejected") && canDeleteRow(row) && canEditGlobal) {
       return (
         <div className="auto-renew-action-btns">
           <button
@@ -971,8 +973,8 @@ export default function AutoRenewPage() {
       {deleteConfirmRow ? (
         <ConfirmDeleteModal
           open
-          title={t("confirmDeleteTitle")}
-          message={t("confirmDelete", { company: deleteConfirmRow.company_code })}
+          title={t(deleteConfirmRow.status === "rejected" ? "confirmRevertTitle" : "confirmDeleteTitle")}
+          message={t(deleteConfirmRow.status === "rejected" ? "confirmRevert" : "confirmDelete", { company: deleteConfirmRow.company_code })}
           cancelLabel={t("cancel")}
           confirmLabel={t("delete")}
           confirmDisabled={Boolean(busyRequestId)}

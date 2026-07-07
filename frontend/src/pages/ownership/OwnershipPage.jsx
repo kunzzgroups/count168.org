@@ -109,7 +109,12 @@ export default function OwnershipPage() {
         onResolve={async (type) => {
           const c = conflict;
           setConflict(null);
-          if (c) await company.linkPartner(c.companyId, c.loginId, type);
+          if (!c) return;
+          if (c.scope === "group") {
+            await group.geLinkPartner(c.groupId, c.loginId, type);
+          } else {
+            await company.linkPartner(c.companyId, c.loginId, type);
+          }
         }}
         onCancel={() => setConflict(null)}
         t={t}

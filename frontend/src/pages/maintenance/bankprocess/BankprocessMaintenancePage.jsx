@@ -451,9 +451,7 @@ export default function BankprocessMaintenancePage() {
         currentPath: location.pathname,
         navigate,
         updateSessionCompany: (id) => updateSessionCompany(Number(id)),
-        onStay: async () => {
-          notify(t("switchedTo", { company: targetCompany.company_id }), "success");
-        },
+        onStay: async () => {},
       });
       if (redirected) return;
     } catch (err) {

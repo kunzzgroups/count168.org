@@ -13,6 +13,23 @@ export function getCurrencyColor(code, fallbackIndex = 0) {
   return DASHBOARD_CURRENCY_FALLBACK_PALETTE[fallbackIndex % DASHBOARD_CURRENCY_FALLBACK_PALETTE.length];
 }
 
+/** Dual-metric rows → pie/table shape for Currency (net profit) vs Earning tab. */
+export function mapPanelCurrencyRows(rows, view, { useConverted = false } = {}) {
+  const earningTab = view === "earning";
+  return (rows || []).map((row) => {
+    const native = earningTab ? row.earnings : row.netProfit;
+    const converted = earningTab ? row.earningsConverted : row.netProfitConverted;
+    const amount =
+      useConverted && converted != null ? converted : native;
+    return {
+      ...row,
+      earnings: amount,
+      originalEarnings: native,
+      earningsConverted: converted,
+    };
+  });
+}
+
 export function buildEarningsPieSlices(rows, { useConverted = false } = {}) {
   return rows
     .filter((row) => row.earnings != null)

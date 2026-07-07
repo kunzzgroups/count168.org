@@ -4,7 +4,7 @@ export function formatNegativeNumbersInFormula(formula) {
     return formula;
   }
 
-  const pattern = /(^|[+\-*/)(\s])(-(\d+\.?\d*))/g;
+  const pattern = /(^|[+\-*/(\s])(-(\d+\.?\d*))/g;
 
   let result = formula;
   let prev;
