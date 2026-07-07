@@ -16,25 +16,27 @@ body.user-page {
     background-blend-mode: screen, screen, multiply, screen, normal;
     color: #334155;
     overflow-x: hidden;
-    overflow-y: hidden;
-    /* 添加这行，禁止垂直滚动 */
+    overflow-y: auto;
+    /* 允许整页纵向滚动 */
 }
 
-/* 矮屏下 global-13inch 会对 body.user-page 放开滚动，此处强制列表页保持一屏（Show All 时由 body.user-page--show-all 覆盖） */
+/* 非 Show All：允许整页纵向滚动 */
 html:has(body.user-page:not(.user-page--show-all)) {
     height: 100%;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
-/* JS fallback for environments where :has timing/support is unstable */
+/* JS fallback（保留同样滚动策略） */
 html.ec-user-page-scroll-lock {
     height: 100%;
-    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
 }
 
 body.user-page:not(.user-page--show-all) {
     overflow-x: hidden !important;
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
     height: 100vh !important;
     max-height: 100vh !important;
 }
@@ -42,7 +44,8 @@ body.user-page:not(.user-page--show-all) {
 body.user-page:not(.user-page--show-all) .container {
     height: 100vh !important;
     max-height: 100vh !important;
-    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
@@ -53,7 +56,7 @@ body.user-page:not(.user-page--show-all) .content {
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
     display: flex !important;
     flex-direction: column !important;
 }

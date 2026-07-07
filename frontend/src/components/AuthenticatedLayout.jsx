@@ -301,48 +301,20 @@ export default function AuthenticatedLayout() {
    * keep overflow policy stable while lazy route chunks are still loading.
    */
   useLayoutEffect(() => {
-    const html = document.documentElement;
     const onAccountLike = pathnameIs("account-list", location.pathname) || pathnameIs("deleted-log", location.pathname);
     const onUserLike = pathnameIs("userlist", location.pathname);
     const onAutoRenew = pathnameIs("auto-renew", location.pathname);
     const onAnnouncement = pathnameIs("announcement", location.pathname);
-    const userShowAll = searchParams.get("showAll") === "1";
 
     document.body.classList.toggle("account-page", onAccountLike);
     document.body.classList.toggle("user-page", onUserLike || onAutoRenew);
     document.body.classList.toggle("auto-renew-page-body", onAutoRenew);
     document.body.classList.toggle("announcement-page", onAnnouncement);
-    html.classList.toggle("ec-user-page-scroll-lock", onUserLike && !userShowAll);
 
     if (onAccountLike || onUserLike || onAutoRenew || onAnnouncement) {
       document.body.classList.remove("bg");
     }
   }, [location.pathname, searchParams]);
-
-  /*
-   * Route switch scrollbar flicker guard:
-   * lock root scroll only for the first two frames of navigation,
-   * then release to the target page's own overflow policy.
-   */
-  useLayoutEffect(() => {
-    const html = document.documentElement;
-    const body = document.body;
-    html.classList.add("ec-route-switching");
-    body.classList.add("ec-route-switching");
-    let rafRelease = null;
-    const rafFirst = requestAnimationFrame(() => {
-      rafRelease = requestAnimationFrame(() => {
-        html.classList.remove("ec-route-switching");
-        body.classList.remove("ec-route-switching");
-      });
-    });
-    return () => {
-      cancelAnimationFrame(rafFirst);
-      if (rafRelease != null) cancelAnimationFrame(rafRelease);
-      html.classList.remove("ec-route-switching");
-      body.classList.remove("ec-route-switching");
-    };
-  }, [location.pathname]);
 
   /* Process 路由：父级 layout 阶段即挂上 body class，避免 SPA 切入时 Global Unlock 先撑出双 scrollbar */
   useLayoutEffect(() => {

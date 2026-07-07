@@ -410,6 +410,9 @@ export default function DomainReportPage() {
     try {
       const data = await fetchDomainReport(reportParams, { signal });
       if (!isReportFetchCurrent(seq)) return;
+      if (!quietRefresh && !data?.data?.length) {
+        notify(t("noDataAdjustSearch"), "info");
+      }
       startTransition(() => {
         setReportData(data);
       });

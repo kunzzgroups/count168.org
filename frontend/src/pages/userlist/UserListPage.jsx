@@ -455,13 +455,6 @@ export default function UserListPage() {
     return () => document.body.classList.remove("user-page--show-all");
   }, [showAll]);
 
-  useLayoutEffect(() => {
-    const html = document.documentElement;
-    if (showAll) html.classList.remove("ec-user-page-scroll-lock");
-    else html.classList.add("ec-user-page-scroll-lock");
-    return () => html.classList.remove("ec-user-page-scroll-lock");
-  }, [showAll]);
-
   useEffect(() => {
     if (!sessionReady || !me) return;
     if (bootInitializedRef.current) return;

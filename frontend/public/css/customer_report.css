@@ -524,6 +524,37 @@ body.dashboard-page.report-page .content > .report-header:empty {
 /* 报表区域：静默刷新时顶栏细条，无白屏叠层 */
 .customer-report-table-region {
     position: relative;
+    min-height: clamp(240px, calc(100dvh - 320px), 620px);
+}
+
+.report-page .empty-state-container {
+    position: relative;
+    top: 10px;
+    background: #ffffff;
+    border: 1px solid #d0d7de;
+    border-radius: 8px;
+    padding: clamp(40px, 3.33vw, 64px);
+    margin-top: 10px;
+    margin-bottom: clamp(20px, 1.67vw, 32px);
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.customer-report-table-region > .empty-state-container {
+    min-height: clamp(240px, calc(100dvh - 320px), 620px);
+}
+
+.report-page .empty-state {
+    color: #64748b;
+    font-size: clamp(14px, 1.04vw, 20px);
+}
+
+.report-page .empty-state p {
+    margin: 0;
+    font-family: var(--font-heading-page);
 }
 
 .customer-report-sync-track {

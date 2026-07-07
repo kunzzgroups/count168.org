@@ -463,6 +463,9 @@ export default function CustomerReportPage() {
     try {
       const data = await fetchCustomerReport(reportParams, { signal });
       if (!isReportFetchCurrent(seq)) return;
+      if (!quietRefresh && !data?.data?.length) {
+        notify(t("noDataAdjustSearch"), "info");
+      }
       startTransition(() => {
         setReportData(data);
       });

@@ -15,18 +15,6 @@ import "./styles/sidebar-scroll.css";
 import "../public/css/modal-close-unified.css";
 import "../public/css/confirm-delete-unified.css";
 import "../public/css/select-unified.css";
-import { pathnameToPageKey } from "./utils/routing/pageRoutes.js";
-
-function applyInitialScrollLockHints() {
-  if (typeof window === "undefined") return;
-  const pageKey = pathnameToPageKey(window.location.pathname);
-  if (pageKey !== "userlist") return;
-  const params = new URLSearchParams(window.location.search || "");
-  if (params.get("showAll") === "1") return;
-  document.documentElement.classList.add("ec-user-page-scroll-lock");
-}
-
-applyInitialScrollLockHints();
 
 const queryClient = new QueryClient({
   defaultOptions: {

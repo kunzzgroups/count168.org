@@ -16,19 +16,20 @@ body.process-page {
     background-blend-mode: screen, screen, multiply, screen, normal;
     color: #334155;
     overflow-x: hidden;
-    overflow-y: hidden;
+    overflow-y: auto;
     position: relative;
 }
 
-/* Games Process List（非 Bank / 非 Show All）：全视口一屏，禁止整页纵向滚动（含普通 desktop） */
+/* Games Process List（非 Bank / 非 Show All）：允许整页纵向滚动 */
 html:has(body.process-page:not(.process-page--bank):not(.process-page--show-all)) {
     height: 100%;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 body.process-page:not(.process-page--bank):not(.process-page--show-all) {
     overflow-x: hidden !important;
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
     height: 100vh !important;
     max-height: 100vh !important;
 }
@@ -36,7 +37,8 @@ body.process-page:not(.process-page--bank):not(.process-page--show-all) {
 body.process-page:not(.process-page--bank):not(.process-page--show-all) .container {
     height: 100vh !important;
     max-height: 100vh !important;
-    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
     display: flex !important;
     flex-direction: column !important;
     box-sizing: border-box !important;
@@ -47,7 +49,7 @@ body.process-page:not(.process-page--bank):not(.process-page--show-all) .content
     min-height: 0 !important;
     height: auto !important;
     max-height: none !important;
-    overflow: hidden !important;
+    overflow-y: auto !important;
     display: flex !important;
     flex-direction: column !important;
 }
@@ -925,17 +927,18 @@ body.ec-auth-shell.process-page.process-page--bank .search-container.userlist-se
     border: 0.0625rem solid #e0e0e0;
 }
 
-/* Bank Process（非 Show All）：桌面一屏，禁止整页纵向滚动 */
+/* Bank Process（非 Show All）：全页允许纵向滚动 */
 html:has(body.process-page.process-page--bank:not(.process-page--bank-show-all)) {
     height: 100%;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all),
 body.dashboard-page.process-page.process-page--bank:not(.process-page--bank-show-all),
 body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) {
     overflow-x: hidden !important;
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
     height: 100vh !important;
     min-height: 100vh !important;
     max-height: 100vh !important;
@@ -947,7 +950,8 @@ body.process-page.process-page--bank:not(.process-page--bank-show-all) .ec-page-
     height: 100% !important;
     min-height: 0 !important;
     max-height: 100% !important;
-    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
 }
 
 /* Bank Show All：整页可滚动 */
@@ -1012,7 +1016,8 @@ body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-
     height: 100vh !important;
     max-height: 100vh !important;
     min-height: 0 !important;
-    overflow: hidden !important;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
     padding-bottom: 0 !important;
 }
 
@@ -1041,7 +1046,7 @@ body.process-page.process-page--bank.process-page--bank-show-all .container {
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .content {
-    overflow: hidden !important;
+    overflow-y: hidden !important;
 }
 
 body.process-page.process-page--bank.process-page--bank-show-all .content {
@@ -1066,13 +1071,13 @@ body.process-page.process-page--bank.process-page--bank-show-all .content {
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body,
 body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body {
-    overflow: hidden !important;
+    overflow-y: hidden !important;
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region,
 body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region {
     overflow-x: auto !important;
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: var(--bank-list-scrollbar-thumb) var(--bank-list-scrollbar-track);
@@ -1139,7 +1144,7 @@ body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-
     max-height: 100%;
     width: 100%;
     align-self: stretch;
-    overflow: hidden !important;
+    overflow-y: hidden !important;
     display: flex;
     flex-direction: column;
     padding-bottom: 52px;
@@ -1310,7 +1315,7 @@ body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-vir
 body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden !important;
+    overflow-y: hidden !important;
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table-inner,
@@ -1318,7 +1323,7 @@ body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-
     flex: 1 1 auto;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr);
-    overflow: hidden !important;
+    overflow-y: hidden !important;
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip,
@@ -3693,7 +3698,7 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
     body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body {
         flex: 1 1 auto !important;
         min-height: 0 !important;
-        overflow: hidden !important;
+        overflow-y: hidden !important;
     }
 
     body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region,
@@ -3701,7 +3706,7 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
         flex: 1 1 auto !important;
         min-height: 0 !important;
         overflow-x: auto !important;
-        overflow-y: hidden !important;
+        overflow-y: auto !important;
         -webkit-overflow-scrolling: touch;
     }
 
@@ -3721,7 +3726,7 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
         min-height: 0 !important;
         height: auto !important;
         max-height: 100% !important;
-        overflow: hidden !important;
+        overflow-y: hidden !important;
     }
 
     body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table-inner,
@@ -3729,7 +3734,7 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
         flex: 1 1 auto !important;
         min-height: 0 !important;
         grid-template-rows: auto minmax(0, 1fr) !important;
-        overflow: hidden !important;
+        overflow-y: hidden !important;
     }
 
     body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip,
