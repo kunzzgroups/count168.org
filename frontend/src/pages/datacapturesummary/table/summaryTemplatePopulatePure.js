@@ -243,8 +243,19 @@ export async function populateSummaryRowsPure({
   }
 
   rows = rows
-    .filter((row) => row.productType !== "sub" || !isParentRowSuppressed(row, rows, suppressed))
-    .map((row) => (isRowSuppressed(row, suppressed) ? clearRowEditableFields(row) : row));
+    .filter((row) => {
+      if (row.productType === "sub") {
+        if (isParentRowSuppressed(row, rows, suppressed)) return false;
+        if (isRowSuppressed(row, suppressed)) return false;
+      }
+      return true;
+    })
+    .map((row) => {
+      if (row.productType === "main" && isRowSuppressed(row, suppressed)) {
+        return clearRowEditableFields(row);
+      }
+      return row;
+    });
 
   rows = sortRowsByRowIndex(rows);
   rows = restoreRateValuesOnRows(rows, captureScope);

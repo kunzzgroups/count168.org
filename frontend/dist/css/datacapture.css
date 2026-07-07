@@ -1940,17 +1940,22 @@ body.datacapture-page .excel-table-scroll-body .excel-table tbody td {
 .excel-table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: 1.4rem;
     font-family: Arial, sans-serif;
 }
 
 .excel-table th,
 .excel-table td {
     border: 1px solid #d0d7de;
-    font-size: clamp(10px, 0.63vw, 12px);
-    padding: clamp(2px, 0.31vw, 6px) clamp(8px, 0.83vw, 16px);
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.35;
+    padding: clamp(5px, 0.45vw, 9px) clamp(8px, 0.83vw, 16px);
     text-align: center;
     min-width: clamp(30px, 3.49vw, 67px);
+    min-height: calc(1.4rem * 1.35 + 10px);
+    height: auto !important;
+    vertical-align: middle;
     position: relative;
     white-space: nowrap;
 }
@@ -1999,9 +2004,9 @@ body.datacapture-page .excel-table-scroll-body .excel-table tbody td {
 
 .row-header {
     background-color: #f6f8fa !important;
-    font-weight: bold;
+    font-weight: 700;
     color: #24292f;
-    min-width: 30px;
+    min-width: 46px;
 }
 
 .excel-table td[contenteditable="true"]:hover {
@@ -2013,6 +2018,9 @@ body.datacapture-page .excel-table-scroll-body .excel-table tbody td {
     caret-color: #000000;
     /* 添加这行 - 光标黑色 */
     color: #000000;
+    font-size: inherit;
+    font-weight: inherit;
+    line-height: inherit;
     /* 确保文字也是黑色 */
     text-transform: uppercase;
 }

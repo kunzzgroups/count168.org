@@ -114,7 +114,13 @@ function SummaryTableRowInner({ row, onRowChange, onNewFormula, onEditFormula, o
         </button>
       </td>
       <td data-currency-id={row.currencyId || undefined}>{currencyDisplay}</td>
-      <td style={editingField === "formula" ? { overflow: "hidden", padding: 0 } : undefined}>
+      <td
+        style={
+          editingField === "formula"
+            ? { overflow: "hidden", padding: 0 }
+            : undefined
+        }
+      >
         <div
           className="formula-cell-content"
           style={
@@ -198,7 +204,11 @@ function SummaryTableRowInner({ row, onRowChange, onNewFormula, onEditFormula, o
       >
         {row.rateValue || ""}
       </td>
-      <td style={{ color: formatAmountColor(row.processedAmountDisplay || row.processedAmount) }}>
+      <td
+        style={{
+          color: formatAmountColor(row.processedAmountDisplay || row.processedAmount),
+        }}
+      >
         {row.processedAmountDisplay || row.processedAmount || ""}
       </td>
       <td style={{ textAlign: "center" }}>

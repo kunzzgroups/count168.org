@@ -230,6 +230,7 @@ function applyRowRateToPersistMaps(row, rateMap, rateByProduct, domSyncedKeys) {
 export function saveSummaryRefreshStatePure(rows, processMeta, captureScope = null) {
   try {
     const { rows: syncedRows, domSyncedKeys } = mergeRowsWithSummaryDomDraft(rows);
+    const hasPopulatedRows = summaryRowsLookPopulated(syncedRows);
     const keys = summaryRefreshStorageKeys(captureScope);
     const payload = {
       processId: processMeta?.processId ?? null,
@@ -250,7 +251,12 @@ export function saveSummaryRefreshStatePure(rows, processMeta, captureScope = nu
     localStorage.setItem(keys.rateValues, JSON.stringify(rateMap));
     localStorage.setItem(keys.rateByProduct, JSON.stringify(rateByProduct));
 
-    saveSummarySessionSnapshot(syncedRows, processMeta, captureScope);
+    if (hasPopulatedRows) {
+      saveSummarySessionSnapshot(syncedRows, processMeta, captureScope);
+    } else {
+      // Prevent stale pre-delete snapshot from being restored on in-page refresh.
+      clearSummarySessionSnapshot(captureScope, processMeta);
+    }
   } catch {
     /* ignore */
   }
