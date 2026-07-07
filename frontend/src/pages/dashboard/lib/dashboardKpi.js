@@ -1,5 +1,17 @@
 const KPI_PCT_CAP = 999.9;
 
+function viewerRoleAllowsEarnings(options = {}) {
+  if (options.viewerRoleAllowsEarnings === true) return true;
+  const role = String(options.viewerRole || "").trim().toLowerCase();
+  const userType = String(options.viewerUserType || "").trim().toLowerCase();
+  return (
+    role === "owner" ||
+    role === "partnership" ||
+    userType === "owner" ||
+    userType === "partnership"
+  );
+}
+
 /** Month-over-month % vs previous month's equivalent date range. */
 export function kpiPercentChange(current, previous) {
   const c = parseFloat(current) || 0;
@@ -41,7 +53,9 @@ export function netProfitFromDashboardPayload(dashboardData) {
 export function viewerHasEarningsConfig(dashboardData, options = {}) {
   if (!dashboardData) return false;
   const subsidiaryGroupDrillDown = !!options.subsidiaryGroupDrillDown;
-  if (subsidiaryGroupDrillDown && !dashboardData.has_ownership_setup) return false;
+  const roleAllowed = viewerRoleAllowsEarnings(options);
+  const hasOwnershipSetup = !!dashboardData.has_ownership_setup;
+  if (subsidiaryGroupDrillDown && !roleAllowed && !hasOwnershipSetup) return false;
   const directPct = parseFloat(dashboardData.ownership_percentage) || 0;
   if (subsidiaryGroupDrillDown) {
     if (directPct > 0) return true;
@@ -163,7 +177,9 @@ function resolveEarningsMultiplier(dashboardData, selectedGroup, options = {}, {
   // - In group drill-down, only explicit ownership should affect earnings.
   // - No ownership config means no earnings (0), no fallback to full net profit.
   if (subsidiaryGroupDrillDown) {
-    if (!dashboardData.has_ownership_setup) return 0;
+    const roleAllowed = viewerRoleAllowsEarnings(options);
+    const hasOwnershipSetup = !!dashboardData.has_ownership_setup;
+    if (!roleAllowed && !hasOwnershipSetup) return 0;
     if (directPct > 0) return directPct;
     if (hasLinkOwnership) {
       const viewerGroupShare = groupAccountPercentage > 0 ? groupAccountPercentage / 100 : 1;
