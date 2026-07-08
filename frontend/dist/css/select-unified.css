@@ -170,14 +170,19 @@ body.ec-auth-shell .custom-select-search {
 body.ec-auth-shell .custom-select-search input {
   width: 100% !important;
   box-sizing: border-box !important;
-  min-height: 32px !important;
-  padding: 6px 10px !important;
+  min-height: 30px !important;
+  padding: 2px 6px !important;
   border: 1px solid var(--select-border) !important;
   border-radius: 4px !important;
-  font-size: inherit !important;
+  font-size: 1.2rem !important;
   font-family: var(--font-ui) !important;
   color: var(--select-text) !important;
   background: #fff !important;
+  text-transform: uppercase !important;
+}
+
+body.ec-auth-shell .custom-select-search input::placeholder {
+  text-transform: uppercase !important;
 }
 
 body.ec-auth-shell .custom-select-search input:focus-visible {
