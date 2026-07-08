@@ -370,48 +370,48 @@
     body.ec-auth-shell.user-page .user-list-table {
         --user-list-grid-cols:
             38px
-            minmax(92px, 1fr)
-            minmax(80px, 1fr)
-            minmax(140px, 1.5fr)
-            minmax(88px, 0.9fr)
-            minmax(72px, 0.68fr)
-            minmax(128px, 1.3fr)
-            minmax(96px, 1fr)
-            minmax(72px, 0.5fr);
+            minmax(120px, 1.5fr)
+            minmax(120px, 1.5fr)
+            minmax(130px, 1.2fr)
+            minmax(84px, 0.7fr)
+            minmax(72px, 0.55fr)
+            minmax(131px, 1fr)
+            minmax(96px, 1.2fr)
+            minmax(64px, 0.25fr);
         --user-list-grid-cols-bulk:
             38px
-            minmax(92px, 1fr)
-            minmax(80px, 1fr)
-            minmax(140px, 1.5fr)
-            minmax(88px, 0.9fr)
-            minmax(72px, 0.68fr)
-            minmax(128px, 1.3fr)
-            minmax(96px, 1fr)
-            minmax(68px, 0.48fr)
+            minmax(120px, 1.5fr)
+            minmax(120px, 1.5fr)
+            minmax(130px, 1.2fr)
+            minmax(84px, 0.7fr)
+            minmax(72px, 0.55fr)
+            minmax(131px, 1fr)
+            minmax(96px, 1.2fr)
+            minmax(60px, 0.23fr)
             48px;
     }
 
     body.lang-zh.user-page .user-list-table {
         --user-list-grid-cols:
             54px
-            minmax(100px, 1.05fr)
-            minmax(80px, 1fr)
-            minmax(140px, 1.5fr)
-            minmax(72px, 0.85fr)
-            minmax(64px, 0.65fr)
-            minmax(108px, 1.25fr)
-            minmax(88px, 0.95fr)
-            minmax(64px, 0.48fr);
+            minmax(120px, 1.5fr)
+            minmax(120px, 1.5fr)
+            minmax(130px, 1.2fr)
+            minmax(84px, 0.7fr)
+            minmax(72px, 0.55fr)
+            minmax(131px, 1fr)
+            minmax(96px, 1.2fr)
+            minmax(64px, 0.25fr);
         --user-list-grid-cols-bulk:
             54px
-            minmax(100px, 1.05fr)
-            minmax(80px, 1fr)
-            minmax(140px, 1.5fr)
-            minmax(72px, 0.85fr)
-            minmax(64px, 0.65fr)
-            minmax(108px, 1.25fr)
-            minmax(88px, 0.95fr)
-            minmax(60px, 0.46fr)
+            minmax(120px, 1.5fr)
+            minmax(120px, 1.5fr)
+            minmax(130px, 1.2fr)
+            minmax(84px, 0.7fr)
+            minmax(72px, 0.55fr)
+            minmax(131px, 1fr)
+            minmax(96px, 1.2fr)
+            minmax(60px, 0.23fr)
             48px;
     }
 

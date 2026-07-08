@@ -87,10 +87,10 @@
   }
 
   body.user-page:not(.user-page--show-all) .user-list-table .user-list-row {
-    min-height: 0 !important;
+    min-height: var(--user-list-row-min-height, 30px) !important;
     align-items: center !important;
-    padding-left: 16px !important;
-    padding-right: 16px !important;
+    padding-left: 22px !important;
+    padding-right: 22px !important;
   }
 
   body.user-page:not(.user-page--show-all) .action-buttons-container {

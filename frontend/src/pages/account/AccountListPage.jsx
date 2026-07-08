@@ -1900,6 +1900,7 @@ export default function AccountListPage() {
     if (showAll) return filteredForMode;
     return filteredForMode.slice((effectivePage - 1) * pageSize, effectivePage * pageSize);
   }, [filteredForMode, showAll, effectivePage, pageSize]);
+  const usePagedFill = !showAll && pageRows.length > 0 && pageRows.length >= pageSize;
 
   /** React scope (instant on pill click) — do not wait for sessionStorage group-only flag. */
   const isGroupOnlyScope = useMemo(
@@ -2941,8 +2942,8 @@ export default function AccountListPage() {
               <div className="account-header-item account-header-item--action">{t("action")}</div>
             </div>
             <div
-              className={`account-cards${showAll ? " account-cards--show-all" : ""}${!showAll && pageRows.length > 0 ? " account-cards--paged-fill" : ""}`}
-              style={!showAll && pageRows.length > 0 ? { "--account-list-page-size": Math.max(pageSize, pageRows.length) } : undefined}
+              className={`account-cards${showAll ? " account-cards--show-all" : ""}${usePagedFill ? " account-cards--paged-fill" : ""}`}
+              style={usePagedFill ? { "--account-list-page-size": pageSize } : undefined}
             >
               {pageRows.map((a, idx) => {
                 const alertOn = String(a.payment_alert) === "1";

@@ -95,18 +95,6 @@
   height: 36px;
 }
 
-html:not(:has(body.datacapture-page)):not(:has(body.datacapture-summary-page)),
-body.user-page,
-body.transaction-page,
-body.dashboard-page:not(.datacapture-page):not(.datacapture-summary-page),
-body.ec-auth-shell:not(.datacapture-page):not(.datacapture-summary-page) {
-  height: auto !important;
-  min-height: 100vh !important;
-  max-height: none !important;
-  overflow-y: hidden !important;
-  overflow-x: hidden !important;
-}
-
 /* Data Capture Summary — same single-page scroll as Ownership (all viewport widths) */
 html:has(body.datacapture-summary-page) {
   height: auto !important;

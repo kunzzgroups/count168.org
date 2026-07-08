@@ -80,9 +80,27 @@ function extractCellLines(sourceCell) {
   } else if (hasNewline) {
     lines = cellText.split(/\r?\n|\r/).map((part) => part.trim()).filter((part) => part !== "");
   } else {
-    const directSpans = sourceCell.querySelectorAll(":scope > span");
-    if (directSpans.length >= 2) {
-      const parts = Array.from(directSpans)
+    const directChildren = Array.from(sourceCell.childNodes || []);
+    const directSpans = directChildren.filter(
+      (node) => node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN",
+    );
+    const hasOnlySpanChildren = directChildren.every((node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return !String(node.textContent || "").trim();
+      }
+      return node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN";
+    });
+
+    const spansAreBlockLike =
+      directSpans.length >= 2 &&
+      directSpans.every((span) => {
+        const styleAttr = String(span.getAttribute("style") || "").toLowerCase();
+        return /\bdisplay\s*:\s*(block|table|flex|grid|list-item)\b/.test(styleAttr);
+      });
+
+    // Avoid false positives: inline spans are often just styling wrappers, not vertical split rows.
+    if (hasOnlySpanChildren && spansAreBlockLike) {
+      const parts = directSpans
         .map((span) => (span.textContent || "").trim())
         .filter((part) => part !== "");
       if (parts.length >= 2) {
@@ -129,26 +147,6 @@ function detectRowVerticalSplit(sourceCells) {
       });
     }
   });
-
-  if (hasVerticalSplit && cellsWithSplit.length > 0) {
-    sourceCells.forEach((sourceCell, cellIndex) => {
-      if (cellsWithSplit.some((entry) => entry.index === cellIndex)) return;
-      const cellText = (sourceCell.textContent || sourceCell.innerText || "").trim();
-      if (cellText.length < 4) return;
-      const half = Math.floor(cellText.length / 2);
-      const first = cellText.substring(0, half).trim();
-      const second = cellText.substring(half).trim();
-      if (first !== "" && second !== "") {
-        cellsWithSplit.push({
-          index: cellIndex,
-          cell: sourceCell,
-          topData: first,
-          bottomData: second,
-          allLines: [first, second],
-        });
-      }
-    });
-  }
 
   const isFirstCellWithBrOrSpan = cellsWithSplit.some((entry) => entry.index === 0);
   return { hasVerticalSplit, cellsWithSplit, isFirstCellWithBrOrSpan };

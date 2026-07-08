@@ -1057,69 +1057,46 @@ export function calculateFormulaResultFromExpression(formula, sourcePercentValue
         // Stacking identical multipliers (e.g. *0.10*0.10) is intentional; Source column multiply
         // is skipped separately via alreadyHasSource when the formula tail already matches Source.
         const formulaBody = afterRefs.trim();
-        const formulaResult = evaluateFormulaExpression(
-            formulaBody,
+        let expressionForEvaluation = formulaBody;
+        if (enableSourcePercent) {
+            const sourcePercentExpr = String(sourcePercentValue || "").trim();
+            if (sourcePercentExpr !== "") {
+                const sanitizedSourcePercent = removeThousandsSeparators(sourcePercentExpr);
+                const decimalValue = MoneyDecimal.toDecimal(
+                    evaluateExpression(sanitizedSourcePercent),
+                    0
+                );
+
+                if (!decimalValue.minus(1).abs().lt("0.0001")) {
+                    // Keep source inside one arithmetic expression so precedence is consistent
+                    // (multiply/divide before add/subtract), instead of multiplying at the end.
+                    let alreadyHasSource = false;
+                    const trailingSourceExpr = parseTrailingSourceParenValue(formulaBody);
+                    if (trailingSourceExpr != null) {
+                        try {
+                            const trailDec = MoneyDecimal.toDecimal(
+                                evaluateExpression(removeThousandsSeparators(trailingSourceExpr)),
+                                0
+                            );
+                            alreadyHasSource = decimalValue.minus(trailDec).abs().lt("0.0001");
+                        } catch {
+                            alreadyHasSource = false;
+                        }
+                    }
+
+                    if (!alreadyHasSource) {
+                        expressionForEvaluation = `${formulaBody}*(${sanitizedSourcePercent})`;
+                    }
+                }
+            }
+        }
+
+        let result = evaluateFormulaExpression(
+            expressionForEvaluation,
             processValueForRefs,
             clickedCellRefsOverride,
             rowIndexOverride
         );
-
-        if (!enableSourcePercent) {
-            let result = formulaResult;
-            if (enableInputMethod && inputMethod) {
-                result = applyInputMethodTransformation(result, inputMethod);
-            }
-            return result;
-        }
-
-        // If enableSourcePercent is true but sourcePercentValue is empty, treat as 1 (100%)
-        // IMPORTANT: Empty sourcePercentValue should be treated as 1 (100%), not 0, to avoid incorrect 0 results
-        if (!sourcePercentValue || sourcePercentValue.trim() === '') {
-            // Treat empty source percent as 1 (100%), so result = formulaResult * 1 = formulaResult
-            let result = formulaResult;
-            // Apply input method transformation if enabled
-            if (enableInputMethod && inputMethod) {
-                result = applyInputMethodTransformation(result, inputMethod);
-            }
-            console.log('Formula result calculated from expression (source percent is empty, treated as 1):', result);
-            return result;
-        }
-
-        // Source percent is now in decimal format (e.g., 1 = 100%, 0.5 = 50%)
-        // Evaluate the source percent expression directly (no need to divide by 100)
-        const sourcePercentExpr = sourcePercentValue.trim();
-        const sanitizedSourcePercent = removeThousandsSeparators(sourcePercentExpr);
-        const decimalValue = MoneyDecimal.toDecimal(evaluateExpression(sanitizedSourcePercent), 0);
-
-        // Only skip external Source multiply when formula already ends with bracketed *(source),
-        // not when a formula-body multiplier happens to match Source numerically.
-        let alreadyHasSource = false;
-        const trailingSourceExpr = parseTrailingSourceParenValue(formulaBody);
-        if (trailingSourceExpr != null) {
-            try {
-                const srcDec = MoneyDecimal.toDecimal(
-                    evaluateExpression(removeThousandsSeparators(sanitizedSourcePercent)),
-                    0
-                );
-                const trailDec = MoneyDecimal.toDecimal(
-                    evaluateExpression(removeThousandsSeparators(trailingSourceExpr)),
-                    0
-                );
-                alreadyHasSource = srcDec.minus(trailDec).abs().lt("0.0001");
-            } catch {
-                alreadyHasSource = false;
-            }
-        }
-
-        let result;
-        if (decimalValue.minus(1).abs().lt('0.0001')) {
-            result = formulaResult; // Don't multiply by 1
-        } else if (alreadyHasSource) {
-            result = formulaResult; // Formula already contains *(source), don't multiply again
-        } else {
-            // Calculate: formula result * source percent (already in decimal format)
-            result = MoneyDecimal.mul(formulaResult, decimalValue).toString();
-        }
 
         // Apply input method transformation if enabled
         if (enableInputMethod && inputMethod) {

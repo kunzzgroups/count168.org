@@ -927,18 +927,18 @@ body.ec-auth-shell.process-page.process-page--bank .search-container.userlist-se
     border: 0.0625rem solid #e0e0e0;
 }
 
-/* Bank Process（非 Show All）：全页允许纵向滚动 */
+/* Bank Process（非 Show All）：锁整页，仅数据区纵向滚动 */
 html:has(body.process-page.process-page--bank:not(.process-page--bank-show-all)) {
     height: 100%;
     overflow-x: hidden;
-    overflow-y: auto;
+    overflow-y: hidden;
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all),
 body.dashboard-page.process-page.process-page--bank:not(.process-page--bank-show-all),
 body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) {
     overflow-x: hidden !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
     height: 100vh !important;
     min-height: 100vh !important;
     max-height: 100vh !important;
@@ -1077,7 +1077,7 @@ body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region,
 body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region {
     overflow-x: auto !important;
-    overflow-y: auto !important;
+    overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
     scrollbar-color: var(--bank-list-scrollbar-thumb) var(--bank-list-scrollbar-track);
@@ -1331,7 +1331,7 @@ body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-
     flex: 1 1 auto;
     max-height: 100%;
     overflow-x: visible !important;
-    overflow-y: hidden !important;
+    overflow-y: auto !important;
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .process-table-wrapper.bank-process-table-region {
@@ -2586,6 +2586,10 @@ body.process-page.process-page--bank .search-container.userlist-search-bar .user
     .process-page.process-page--bank .separator-line {
         margin-bottom: 0px;
     }
+
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip {
+        max-height: clamp(220px, calc(100vh - 300px), 100%);
+    }
 }
 
 @media (max-height: 720px) {
@@ -2603,6 +2607,10 @@ body.process-page.process-page--bank .search-container.userlist-search-bar .user
         max-height: 28px;
         padding: 0 12px;
         font-size: clamp(8px, 0.7vw, 10px);
+    }
+
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip {
+        max-height: clamp(170px, calc(100vh - 260px), 100%);
     }
 }
 
@@ -3381,6 +3389,33 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
         overscroll-behavior: auto;
     }
 
+    /* 小屏 + 非 Show All：改为数据区单层纵向滚动（避免 body 锁滚后无法上下查看数据） */
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body,
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region .process-table-wrapper.bank-process-table-region,
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table,
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table-inner {
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
+        max-height: 100%;
+        overflow: hidden;
+    }
+
+    body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: 100%;
+        overflow-x: visible;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
     .process-page.process-page--bank .bank-virtual-scroll.process-cards {
         grid-auto-rows: minmax(var(--bank-list-data-row-estimate), auto);
     }
@@ -3706,7 +3741,7 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
         flex: 1 1 auto !important;
         min-height: 0 !important;
         overflow-x: auto !important;
-        overflow-y: auto !important;
+        overflow-y: hidden !important;
         -webkit-overflow-scrolling: touch;
     }
 
@@ -3746,7 +3781,7 @@ body.process-page.process-page--bank .bank-process-table-region .bank-virtual-da
         grid-template-columns: subgrid !important;
         grid-template-rows: auto !important;
         overflow-x: visible !important;
-        overflow-y: hidden !important;
+        overflow-y: auto !important;
     }
 
     body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll.process-cards,
@@ -8726,5 +8761,60 @@ body.process-page > #editModal.modal > .modal-content.process-form-modal,
 #addModal .modal-content.process-form-modal .add-col > .process-form-section:first-child > .account-section-header,
 #editModal .modal-content.process-form-modal .add-col > .process-form-section:first-child > .account-section-header {
     margin-bottom: calc(var(--space-gap, 0.75rem) * 0.65) !important;
+}
+
+/* Bank 非 Show All：表格内保留纵向滚动，移除横向滚动 */
+html:has(body.process-page.process-page--bank:not(.process-page--bank-show-all)) {
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+}
+
+body.process-page.process-page--bank:not(.process-page--bank-show-all),
+body.dashboard-page.process-page.process-page--bank:not(.process-page--bank-show-all),
+body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) {
+    --bank-virtual-table-min-width: 100%;
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+}
+
+body.process-page.process-page--bank:not(.process-page--bank-show-all) #root,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .ec-page-shell,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .ec-page-shell__content,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .container,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .content,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region .process-table-wrapper.bank-process-table-region,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table-inner,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip {
+    min-height: 0 !important;
+    max-height: 100% !important;
+}
+
+body.process-page.process-page--bank:not(.process-page--bank-show-all) #root,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .ec-page-shell,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .ec-page-shell__content,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .container,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .content,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-body,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-process-list-scroll-region .process-table-wrapper.bank-process-table-region,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table,
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table-inner {
+    overflow-x: hidden !important;
+    overflow-y: hidden !important;
+}
+
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table {
+    min-width: 100% !important;
+}
+
+body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
 }
 
