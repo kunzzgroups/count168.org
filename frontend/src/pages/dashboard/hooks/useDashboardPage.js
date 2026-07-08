@@ -56,7 +56,13 @@ import {
   shouldAggregateChartByMonth,
 } from "../lib/dashboardDateUtils.js";
 import { formatI18nTemplate } from "../lib/dashboardFormat.js";
-import { buildKpiCompare, computeKpiMetrics, mergeDashboardOwnershipFields, viewerHasEarningsConfig } from "../lib/dashboardKpi.js";
+import {
+  buildKpiCompare,
+  canIncludeCompanyInMergedEarnings,
+  computeKpiMetrics,
+  mergeDashboardOwnershipFields,
+  viewerHasEarningsConfig,
+} from "../lib/dashboardKpi.js";
 import {
   mergeCompanyBreakdownRowLists,
   normalizeSubsidiaryEarningsByCompany,
@@ -857,6 +863,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const companySwitchGenRef = useRef(0);
   const currencyLoadGenRef = useRef(0);
   const loadCurrenciesRef = useRef(null);
+  const fetchDashboardPayloadRef = useRef(null);
   const loadCurrenciesCoalesceTimerRef = useRef(null);
   /** Skip redundant currency network reloads for the same filter scope. */
   const currencyScopeLoadedRef = useRef({ key: "", count: 0 });
@@ -2330,18 +2337,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       currencyScopeLoadedRef.current = { key: scopeKey, count: list.length };
     };
 
-    const deferGroupAllCurrencyNetworkRefresh = (refreshFn) => {
-      const wait = () => {
-        if (gen !== currencyLoadGenRef.current || scopeCurrencyKeyRef.current !== scopeKey) return;
-        if (dashboardFetchInFlightScopeRef.current) {
-          window.setTimeout(wait, 250);
-          return;
-        }
-        void refreshFn();
-      };
-      window.setTimeout(wait, CURRENCY_REFRESH_DEFER_MS);
-    };
-
     /** Group "All" aggregate: union group-ledger currencies from every visible group (AP + IG). */
     if (groupsAllLedgerCurrencyScope) {
       const gids = filterGroupIdsForLedgerAccess(me, groupIds, companies);
@@ -2428,6 +2423,42 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         .map((c) => parseInt(c.id, 10))
         .filter((id) => Number.isFinite(id) && id > 0);
 
+      const filterMergeCompanyIdsByOwnershipVisibility = async (rows) => {
+        const list = (rows || []).filter(Boolean);
+        if (!list.length) return [];
+        const effectiveCurrency =
+          currencyCodeRef.current ||
+          currenciesRef.current?.[0] ||
+          "";
+        const results = await runTasksInBatches(
+          list,
+          MERGE_DASHBOARD_PARALLEL_BATCH,
+          async (row) => {
+            const cid = parseInt(row?.id, 10);
+            if (!Number.isFinite(cid) || cid <= 0) return null;
+            const vg = resolveViewGroupForCompany(row, groupKey);
+            try {
+              const fetchPayload = fetchDashboardPayloadRef.current;
+              if (typeof fetchPayload !== "function") return null;
+              const payload = await fetchPayload(
+                cid,
+                dateFromRef.current,
+                dateToRef.current,
+                effectiveCurrency,
+                vg,
+                false,
+                { earningsOnly: true }
+              );
+              const ownershipOpts = resolveKpiOwnershipOpts(cid, vg || groupKey);
+              return canIncludeCompanyInMergedEarnings(payload, ownershipOpts) ? cid : null;
+            } catch {
+              return null;
+            }
+          }
+        );
+        return [...new Set(results.filter((id) => Number.isFinite(id) && id > 0))];
+      };
+
       if (!mergeCompanyIds.length) {
         if (!companies.length) return;
         const cachedFallback = groupsAllMode
@@ -2451,14 +2482,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         return;
       }
 
-      const readCachedGroupAllCurrencyCodes = () =>
-        groupsAllMode
-          ? currenciesByGroupRef.current.get("GROUPS:ALL") ??
-            readPersistedGroupsAllCurrencyCodes()
-          : groupKey
-            ? currenciesByGroupRef.current.get(`${groupKey}:ALL`) ??
-              readPersistedGroupAllCurrencyCodes(groupKey)
-            : null;
+      mergeCompanyIds = await filterMergeCompanyIdsByOwnershipVisibility(mergeRows);
+      if (gen !== currencyLoadGenRef.current || scopeCurrencyKeyRef.current !== scopeKey) return;
+      if (!mergeCompanyIds.length) {
+        commitCurrencyList([]);
+        return;
+      }
 
       const loadGroupAllCurrenciesFromNetwork = async () => {
         if (gen !== currencyLoadGenRef.current || scopeCurrencyKeyRef.current !== scopeKey) {
@@ -2543,13 +2572,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         }
       };
 
-      const cachedGroupAllCodes = readCachedGroupAllCurrencyCodes();
-      if (cachedGroupAllCodes?.length > 1) {
-        commitCurrencyList(cachedGroupAllCodes);
-        deferGroupAllCurrencyNetworkRefresh(loadGroupAllCurrenciesFromNetwork);
-      } else {
-        await loadGroupAllCurrenciesFromNetwork();
-      }
+      await loadGroupAllCurrenciesFromNetwork();
       return;
     }
 
@@ -2839,6 +2862,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     resolveMergeCompanyList,
     me,
     companiesForPicker,
+    resolveKpiOwnershipOpts,
   ]);
 
   loadCurrenciesRef.current = loadCurrencies;
@@ -3401,6 +3425,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     },
     [selectedGroup, companies, i18n]
   );
+  fetchDashboardPayloadRef.current = fetchDashboardPayload;
 
   const applyDashboardPayloadAdjustments = useCallback(
     (data, cid, viewGroupOverride, rangeTo = dateToRef.current) => {
@@ -3517,11 +3542,20 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         if (!snap?.current) return null;
         snapshots.push({ ...snap, company: row, viewGroup: vg });
       }
+      const visibleSnapshots = snapshots.filter((s) =>
+        canIncludeCompanyInMergedEarnings(
+          s.current,
+          resolveKpiOwnershipOpts(parseInt(s.company?.id, 10), s.viewGroup || null)
+        )
+      );
 
       const mergedCurrent = mergeGroupData(
         snapshots.map((s) => s.current),
         { startDate: from, endDate: to }
       );
+      mergedCurrent.can_view_earnings = visibleSnapshots.length > 0;
+      mergedCurrent.earnings_visibility_mode =
+        visibleSnapshots.length > 0 ? "mixed" : "hidden";
       const byCompanyCurrent = buildCompanyNetProfitRowsFromPairs(
         snapshots.map((s) => ({ company: s.company, data: s.current, viewGroup: s.viewGroup })),
         selGroup
@@ -3536,6 +3570,17 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             { startDate: from, endDate: to }
           )
         : null;
+      if (mergedPrevious) {
+        const previousVisibleSnapshots = snapshots.filter((s) =>
+          canIncludeCompanyInMergedEarnings(
+            s.previous,
+            resolveKpiOwnershipOpts(parseInt(s.company?.id, 10), s.viewGroup || null)
+          )
+        );
+        mergedPrevious.can_view_earnings = previousVisibleSnapshots.length > 0;
+        mergedPrevious.earnings_visibility_mode =
+          previousVisibleSnapshots.length > 0 ? "mixed" : "hidden";
+      }
 
       const earningsLists = snapshots.map((s) => s.earnings).filter((e) => Array.isArray(e) && e.length);
       const mergedEarnings =
@@ -3560,6 +3605,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       groupIds,
       resolveMemberDashboardSnapshot,
       buildCompanyNetProfitRowsFromPairs,
+      resolveKpiOwnershipOpts,
     ]
   );
 
@@ -4531,6 +4577,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         throw new Error(i18n.failedToLoadDashboard);
       }
       const merged = mergeGroupData(results, { startDate: rangeFrom, endDate: rangeTo });
+      const visiblePairs = pairs.filter((pair) =>
+        canIncludeCompanyInMergedEarnings(
+          pair.data,
+          resolveKpiOwnershipOpts(parseInt(pair.company?.id, 10), pair.viewGroup || null)
+        )
+      );
+      merged.can_view_earnings = visiblePairs.length > 0;
+      merged.earnings_visibility_mode = visiblePairs.length > 0 ? "mixed" : "hidden";
       const byCompany = buildCompanyNetProfitRowsFromPairs(
         pairs,
         viewGroupFallback ?? selectedGroup
@@ -4540,7 +4594,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       }
       return merged;
     },
-    [fetchDashboardPayload, selectedGroup, companies, i18n.failedToLoadDashboard]
+    [
+      fetchDashboardPayload,
+      selectedGroup,
+      companies,
+      i18n.failedToLoadDashboard,
+      resolveKpiOwnershipOpts,
+    ]
   );
 
   const fetchGroupAllMergedDashboard = useCallback(

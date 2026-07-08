@@ -1,4 +1,5 @@
 import {
+  canIncludeCompanyInMergedEarnings,
   computeGroupAggregateEarningsAmount,
   isGroupAggregateEarningsPayload,
   netProfitFromDashboardPayload,
@@ -98,8 +99,9 @@ export function buildCompanyNetProfitRowFromPayload(companyRow, data, viewGroup 
   if (!companyRow || !data) return null;
   const netProfit = netProfitFromDashboardPayload(data);
   const profit = parseFloat(data?.period_total?.profit ?? data?.profit) || 0;
+  const canViewEarnings = canIncludeCompanyInMergedEarnings(data);
   const earningMultiplier = resolveGroupAllCompanyEarningsMultiplier(data);
-  const companyEarnings = netProfit * earningMultiplier;
+  const companyEarnings = canViewEarnings ? netProfit * earningMultiplier : 0;
   const nativeG = companyRow?.group_id ? String(companyRow.group_id).trim().toUpperCase() : "";
   const linkG = companyRow?.link_source_group
     ? String(companyRow.link_source_group).trim().toUpperCase()
@@ -120,11 +122,23 @@ export function buildCompanyNetProfitRowFromPayload(companyRow, data, viewGroup 
     group_share: netProfit,
     // Group All KPI Earnings should sum per-company earnings by ownership.
     my_earning: companyEarnings,
+    can_view_earnings: canViewEarnings,
+    has_ownership_setup: !!data?.has_ownership_setup,
+    earnings_visibility_mode: String(data?.earnings_visibility_mode || "")
+      .trim()
+      .toLowerCase(),
   };
 }
 
 function resolveGroupAllCompanyEarningsMultiplier(data) {
-  if (!data?.has_ownership_setup) return 0;
+  if (!data || !canIncludeCompanyInMergedEarnings(data)) return 0;
+  const mode = String(data?.earnings_visibility_mode || "").trim().toLowerCase();
+  if (mode === "group_shared") {
+    const groupEquityPct = parseFloat(data.group_equity_percentage) || 0;
+    if (groupEquityPct > 0) return groupEquityPct / 100;
+    return 1;
+  }
+  if (!data?.has_ownership_setup && mode !== "account_owner") return 0;
   const directPct = parseFloat(data.ownership_percentage) || 0;
   if (directPct > 0) return directPct / 100;
   const linkMul = parseFloat(data._link_multiplier || 0) || 0;
@@ -136,6 +150,7 @@ function resolveGroupAllCompanyEarningsMultiplier(data) {
   }
   const groupEquityPct = parseFloat(data.group_equity_percentage) || 0;
   if (groupEquityPct > 0) return groupEquityPct / 100;
+  if (mode === "account_owner") return 1;
   return 0;
 }
 
