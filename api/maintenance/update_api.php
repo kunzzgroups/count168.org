@@ -10,6 +10,7 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
 require_once __DIR__ . '/maintenance_common.php';
+require_once __DIR__ . '/../includes/rich_text_sanitizer.php';
 
 function jsonResponse($success, $message, $data = null, $httpCode = null) {
     if ($httpCode !== null) {
@@ -62,7 +63,8 @@ try {
 
     $maintenanceId = isset($_POST['id']) ? (int)$_POST['id'] : 0;
     $prefix = trim($_POST['prefix'] ?? '');
-    $content = trim($_POST['content'] ?? '');
+    $content = sanitizeRichTextHtml((string)($_POST['content'] ?? ''));
+    $contentPlain = richTextHtmlToPlainText($content);
 
     if ($maintenanceId <= 0) {
         throw new Exception('Maintenance ID cannot be empty');
@@ -70,7 +72,7 @@ try {
     if ($prefix === '') {
         throw new Exception('Prefix cannot be empty');
     }
-    if ($content === '') {
+    if ($contentPlain === '') {
         throw new Exception('Content cannot be empty');
     }
 

@@ -142,6 +142,20 @@ function submitDecimalPlaces($value): int
     return strlen(rtrim(substr(strrchr($clean, '.'), 1), " \t\n\r\0\x0B"));
 }
 
+function submitEnsureNumericOrEmpty($value, string $fieldName): void
+{
+    if ($value === null) {
+        return;
+    }
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return;
+    }
+    if (!money_is_valid($raw)) {
+        throw new Exception($fieldName . ' 只能输入数字');
+    }
+}
+
 /**
  * 基于 session 的轻量幂等缓存（防止同一次点击重复提交）
  */
@@ -241,7 +255,9 @@ try {
     $transaction_type = trim($_POST['transaction_type'] ?? '');
     $account_id = (int)($_POST['account_id'] ?? 0);
     $from_account_id = !empty($_POST['from_account_id']) ? (int)$_POST['from_account_id'] : null;
-    $amount = submitStoreAmount($_POST['amount'] ?? '0', 8);
+    $rawAmount = $_POST['amount'] ?? '0';
+    submitEnsureNumericOrEmpty($rawAmount, 'Amount');
+    $amount = submitStoreAmount($rawAmount, 8);
     $transaction_date = trim($_POST['transaction_date'] ?? '');
     $description = trim($_POST['description'] ?? '');
     $sms = trim($_POST['sms'] ?? '');

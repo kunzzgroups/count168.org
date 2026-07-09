@@ -1,4 +1,4 @@
-﻿/* Single scrollbar on body (Ownership-page pattern; all viewport widths) */
+/* Single scrollbar on body (Ownership-page pattern; all viewport widths) */
 html:has(body.datacapture-summary-page) {
     height: auto !important;
     overflow: visible !important;
@@ -907,11 +907,11 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
 
         body.dashboard-page.datacapture-summary-page #summaryTable .add-account-btn {
             float: none !important;
-            margin-left: 2px;
-            width: 1.8rem;
-            height: 1.8rem;
-            font-size: 1.2rem;
-            line-height: 1;
+            margin: 0 !important;
+            width: 1.8rem !important;
+            height: 1.8rem !important;
+            font-size: 1.3rem !important;
+            line-height: 1 !important;
         }
 
 
@@ -1431,7 +1431,7 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
             background: none;
             border: none;
             cursor: pointer;
-            font-size: clamp(8px, 0.625vw, 12px);
+            font-size: 1.3rem;
             padding: 2px 4px;
             border-radius: 3px;
             transition: all 0.2s ease;
@@ -1874,6 +1874,7 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
         /* Ensure account dropdown in edit formula modal has highest priority and can overflow */
         #editFormulaModal .custom-select-dropdown {
             z-index: 10002;
+            max-height: none;
         }
 
         .custom-select-dropdown.show {
@@ -1959,11 +1960,18 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
             min-height: 28px;
             width: 28px;
             height: 28px;
+            font-size: 1.4rem !important;
+            line-height: 1 !important;
         }
 
         .account-add-btn:hover {
             background: var(--btn-add-gradient-hover);
             transform: scale(1.05);
+        }
+
+        /* Keep add-account plus size consistent in Edit Formula modal. */
+        #editFormulaModal .account-add-btn:hover {
+            transform: scale(1) !important;
         }
 
         .account-add-btn:active {
@@ -2116,17 +2124,17 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
         body.dashboard-page.datacapture-summary-page #summaryTable tbody tr,
         body.dashboard-page.datacapture-summary-page #summaryTable tfoot tr {
             grid-template-columns:
-                minmax(0, 2.7fr)
+                minmax(0, 2.0fr)
                 minmax(0, 1.5fr)
-                minmax(14px, 0.18fr)
-                minmax(0, 0.45fr)
+                minmax(14px, .18fr)
+                minmax(0, .5fr)
                 minmax(0, 3.2fr)
-                minmax(0, 0.35fr)
-                minmax(0, 0.27fr)
-                minmax(0, 0.47fr)
-                minmax(0, 0.85fr)
-                minmax(0, 0.3fr)
-                minmax(0, 0.3fr) !important;
+                minmax(0, .4fr)
+                minmax(0, .30fr)
+                minmax(0, .55fr)
+                minmax(0, 1.0fr)
+                minmax(0, .33fr)
+                minmax(0, .35fr) !important;
         }
 
         body.dashboard-page.datacapture-summary-page #summaryTable th,
@@ -2134,7 +2142,7 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
             font-size: 1.2rem !important;
             font-weight: 700 !important;
             line-height: 1.35 !important;
-            min-height: 36px !important;
+            min-height: 30px !important;
         }
 
         body.dashboard-page.datacapture-summary-page #summaryTable thead th:nth-child(2),
@@ -2164,12 +2172,26 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
             justify-content: flex-start !important;
         }
 
+        /* Allow long account-like values to wrap to a second line. */
+        body.dashboard-page.datacapture-summary-page #summaryTable tbody td:nth-child(1),
+        body.dashboard-page.datacapture-summary-page #summaryTable tbody td:nth-child(2) {
+            white-space: normal !important;
+            overflow: hidden !important;
+            text-overflow: initial !important;
+            display: -webkit-box !important;
+            -webkit-box-orient: vertical !important;
+            -webkit-line-clamp: 2 !important;
+            line-clamp: 2;
+            word-break: break-word !important;
+            overflow-wrap: anywhere !important;
+        }
+
         body.dashboard-page.datacapture-summary-page #summaryTable .add-account-btn {
             float: none !important;
             margin: 0 !important;
-            width: 2rem !important;
-            height: 2rem !important;
-            font-size: 1.8rem !important;
+            width: 1.8rem !important;
+            height: 1.8rem !important;
+            font-size: 1.3rem !important;
             line-height: 1 !important;
         }
 
@@ -2205,5 +2227,32 @@ body.dashboard-page.datacapture-summary-page .summary-table-x-scroll {
             font-size: 1.4rem !important;
             font-weight: 700 !important;
             line-height: 1.35 !important;
+        }
+
+        /* ── Edit Formula modal: lock ALL font-sizes to 1.3rem (title excluded) ── */
+        #editFormulaModal .edit-formula-form-container label,
+        #editFormulaModal .edit-formula-form-container input,
+        #editFormulaModal .edit-formula-form-container select,
+        #editFormulaModal .edit-formula-form-container option,
+        #editFormulaModal .edit-formula-form-container button:not(.account-close),
+        #editFormulaModal .edit-formula-form-container span,
+        #editFormulaModal .edit-formula-form-container p,
+        #editFormulaModal .edit-formula-form-container div,
+        #editFormulaModal .edit-formula-form-container .checkbox-label,
+        #editFormulaModal .edit-formula-form-container .calc-btn,
+        #editFormulaModal .edit-formula-form-container .btn-save,
+        #editFormulaModal .edit-formula-form-container .btn-cancel,
+        #editFormulaModal .edit-formula-form-container .custom-select-button,
+        #editFormulaModal .edit-formula-form-container .custom-select-option,
+        #editFormulaModal .edit-formula-form-container .custom-select-search input,
+        #editFormulaModal .edit-formula-form-container .custom-select-no-results,
+        #editFormulaModal .edit-formula-form-container .formula-data-grid-item,
+        #editFormulaModal .edit-formula-form-container .account-add-btn {
+            font-size: 1.4rem !important;
+        }
+
+        /* Keep the modal title at its original size */
+        #editFormulaModal .edit-formula-form-container .form-header h3 {
+            font-size: clamp(12px, 0.94vw, 18px) !important;
         }
 

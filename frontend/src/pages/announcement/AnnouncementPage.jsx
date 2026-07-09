@@ -13,6 +13,11 @@ import { AnnouncementPanel, MaintenancePanel } from "./components/AnnouncementPa
 import PagePillTabSwitch from "../../components/PagePillTabSwitch.jsx";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
+import {
+  isRichTextEffectivelyEmpty,
+  normalizeRichTextInput,
+  sanitizeRichTextHtml,
+} from "../../utils/content/richTextSanitizer.js";
 
 export default function AnnouncementPage() {
   const navigate = useNavigate();
@@ -68,10 +73,19 @@ export default function AnnouncementPage() {
     document.body.classList.remove("bg", "dashboard-page");
     document.body.classList.add("announcement-page");
     return () => {
+      document.body.classList.remove("announcement-modal-open");
       document.body.classList.remove("announcement-page", "bg");
       document.body.classList.add("dashboard-page");
     };
   }, []);
+
+  useEffect(() => {
+    const hasModalOpen = announcementModalOpen || maintenanceModalOpen;
+    document.body.classList.toggle("announcement-modal-open", hasModalOpen);
+    return () => {
+      document.body.classList.remove("announcement-modal-open");
+    };
+  }, [announcementModalOpen, maintenanceModalOpen]);
 
   const loadAnnouncements = useCallback(async () => {
     try {
@@ -122,7 +136,11 @@ export default function AnnouncementPage() {
   // Handlers
   function handleAnnouncementEdit(item) {
     if (!item) return;
-    setEditAnnouncement({ id: item.id, title: item.title || "", content: item.content || "" });
+    setEditAnnouncement({
+      id: item.id,
+      title: item.title || "",
+      content: normalizeRichTextInput(item.content || ""),
+    });
     setAnnouncementModalOpen(true);
   }
 
@@ -144,8 +162,20 @@ export default function AnnouncementPage() {
 
   async function saveEditedAnnouncement() {
     try {
+      const title = editAnnouncement.title.trim();
+      const content = sanitizeRichTextHtml(editAnnouncement.content);
+      if (!title) {
+        showNotice(t("titleCannotBeEmpty"), "error");
+        return;
+      }
+      if (isRichTextEffectivelyEmpty(content)) {
+        showNotice(t("contentCannotBeEmpty"), "error");
+        return;
+      }
       const fd = new FormData();
-      fd.append("id", editAnnouncement.id); fd.append("title", editAnnouncement.title.trim()); fd.append("content", editAnnouncement.content.trim());
+      fd.append("id", editAnnouncement.id);
+      fd.append("title", title);
+      fd.append("content", content);
       const res = await fetch(buildApiUrl("api/announcements/announcement_update_api.php"), { method: "POST", body: fd, credentials: "include" });
       const json = await res.json();
       if (json.success) { showNotice(t("announcementUpdatedSuccess")); setAnnouncementModalOpen(false); loadAnnouncements(); }
@@ -155,7 +185,11 @@ export default function AnnouncementPage() {
 
   function handleMaintenanceEdit(item) {
     if (!item) return;
-    setEditMaintenance({ id: item.id, prefix: item.prefix || "", content: item.content || "" });
+    setEditMaintenance({
+      id: item.id,
+      prefix: item.prefix || "",
+      content: normalizeRichTextInput(item.content || ""),
+    });
     setMaintenanceModalOpen(true);
   }
 
@@ -177,10 +211,20 @@ export default function AnnouncementPage() {
 
   async function saveEditedMaintenance() {
     try {
+      const prefix = editMaintenance.prefix.trim();
+      const content = sanitizeRichTextHtml(editMaintenance.content);
+      if (!prefix) {
+        showNotice(t("prefixCannotBeEmpty"), "error");
+        return;
+      }
+      if (isRichTextEffectivelyEmpty(content)) {
+        showNotice(t("contentCannotBeEmpty"), "error");
+        return;
+      }
       const fd = new FormData();
       fd.append("id", editMaintenance.id);
-      fd.append("prefix", editMaintenance.prefix.trim());
-      fd.append("content", editMaintenance.content.trim());
+      fd.append("prefix", prefix);
+      fd.append("content", content);
       const res = await fetch(buildApiUrl("api/maintenance/update_api.php"), { method: "POST", body: fd, credentials: "include" });
       const json = await res.json();
       if (json.success) { showNotice(t("maintenanceUpdatedSuccess")); setMaintenanceModalOpen(false); loadMaintenance(); }
@@ -191,36 +235,38 @@ export default function AnnouncementPage() {
   return (
     <>
       <div className="container announcement-page-container">
-        <div className="page-header">
-          <PagePillTabSwitch
-            value={activeTab}
-            onChange={setActiveTab}
-            options={[
-              { value: "announcement", label: t("announcementTab") },
-              { value: "maintenance", label: t("maintenanceTab") },
-            ]}
-          />
+        <div className="announcement-scroll-area">
+          <div className="page-header">
+            <PagePillTabSwitch
+              value={activeTab}
+              onChange={setActiveTab}
+              options={[
+                { value: "announcement", label: t("announcementTab") },
+                { value: "maintenance", label: t("maintenanceTab") },
+              ]}
+            />
+          </div>
+          {activeTab === "announcement" && (
+            <AnnouncementPanel
+              t={t}
+              announcements={announcements}
+              onEdit={handleAnnouncementEdit}
+              onDelete={handleAnnouncementDelete}
+              onPublished={() => { loadAnnouncements(); showNotice(t("announcementPublishedSuccess")); }}
+              onPublishFailed={(message) => showNotice(t("publishFailed", { message }), "error")}
+            />
+          )}
+          {activeTab === "maintenance" && (
+            <MaintenancePanel
+              t={t}
+              maintenanceList={maintenanceList}
+              onEdit={handleMaintenanceEdit}
+              onDelete={handleMaintenanceDelete}
+              onPublished={() => { loadMaintenance(); showNotice(t("maintenancePublishedSuccess")); }}
+              onPublishFailed={(message) => showNotice(t("publishFailed", { message }), "error")}
+            />
+          )}
         </div>
-        {activeTab === "announcement" && (
-          <AnnouncementPanel
-            t={t}
-            announcements={announcements}
-            onEdit={handleAnnouncementEdit}
-            onDelete={handleAnnouncementDelete}
-            onPublished={() => { loadAnnouncements(); showNotice(t("announcementPublishedSuccess")); }}
-            onPublishFailed={(message) => showNotice(t("publishFailed", { message }), "error")}
-          />
-        )}
-        {activeTab === "maintenance" && (
-          <MaintenancePanel
-            t={t}
-            maintenanceList={maintenanceList}
-            onEdit={handleMaintenanceEdit}
-            onDelete={handleMaintenanceDelete}
-            onPublished={() => { loadMaintenance(); showNotice(t("maintenancePublishedSuccess")); }}
-            onPublishFailed={(message) => showNotice(t("publishFailed", { message }), "error")}
-          />
-        )}
       </div>
       <AnnouncementToast notices={notices} />
       <EditAnnouncementModal t={t} open={announcementModalOpen} draft={editAnnouncement} setDraft={setEditAnnouncement} onClose={() => setAnnouncementModalOpen(false)} onSave={saveEditedAnnouncement} />

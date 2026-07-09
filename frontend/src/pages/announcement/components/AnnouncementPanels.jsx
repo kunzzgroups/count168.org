@@ -1,5 +1,11 @@
 import React, { useState } from "react";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import RichTextEditor from "./RichTextEditor.jsx";
+import {
+  isRichTextEffectivelyEmpty,
+  sanitizeRichTextHtml,
+  toSafeRenderHtml,
+} from "../../../utils/content/richTextSanitizer.js";
 
 export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublished, onPublishFailed }) {
   const [form, setForm] = useState({ title: "", content: "" });
@@ -8,8 +14,15 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublis
   async function handleSubmit(e) {
     e.preventDefault();
     const title = form.title.trim();
-    const content = form.content.trim();
-    if (!title || !content) return;
+    const content = sanitizeRichTextHtml(form.content);
+    if (!title) {
+      onPublishFailed?.(t("titleCannotBeEmpty"));
+      return;
+    }
+    if (isRichTextEffectivelyEmpty(content)) {
+      onPublishFailed?.(t("contentCannotBeEmpty"));
+      return;
+    }
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -54,12 +67,11 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublis
             </div>
             <div className="form-group">
               <label htmlFor="announcement-content">{t("contentRequired")}</label>
-              <textarea
+              <RichTextEditor
                 id="announcement-content"
-                required
                 placeholder={t("enterAnnouncementContent")}
                 value={form.content}
-                onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
+                onChange={(nextValue) => setForm((p) => ({ ...p, content: nextValue }))}
               />
             </div>
             <button type="submit" className="submit-btn" disabled={submitting}>
@@ -85,7 +97,10 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublis
                       <button type="button" className="btn btn-delete" onClick={() => onDelete(item)}>{t("delete")}</button>
                     </div>
                   </div>
-                  <div className="announcement-content">{item.content}</div>
+                  <div
+                    className="announcement-content rich-text-renderer"
+                    dangerouslySetInnerHTML={{ __html: toSafeRenderHtml(item.content) }}
+                  />
                   <div className="announcement-meta">
                     <span>{t("createdBy", { name: item.created_by })}</span>
                     <span>{t("createdAt", { time: item.created_at })}</span>
@@ -108,8 +123,15 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPubli
   async function handleSubmit(e) {
     e.preventDefault();
     const prefix = form.prefix.trim();
-    const content = form.content.trim();
-    if (!prefix || !content) return;
+    const content = sanitizeRichTextHtml(form.content);
+    if (!prefix) {
+      onPublishFailed?.(t("prefixCannotBeEmpty"));
+      return;
+    }
+    if (isRichTextEffectivelyEmpty(content)) {
+      onPublishFailed?.(t("contentCannotBeEmpty"));
+      return;
+    }
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -160,13 +182,12 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPubli
             </div>
             <div className="form-group">
               <label htmlFor="maintenanceContent">{t("contentRequired")}</label>
-              <textarea
+              <RichTextEditor
                 id="maintenanceContent"
-                required
                 placeholder={t("enterMaintenanceContent")}
                 disabled={!canCreate}
                 value={form.content}
-                onChange={(e) => setForm((p) => ({ ...p, content: e.target.value }))}
+                onChange={(nextValue) => setForm((p) => ({ ...p, content: nextValue }))}
               />
             </div>
             <button type="submit" className="submit-btn" disabled={!canCreate || submitting}>
@@ -192,9 +213,9 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPubli
                       <button type="button" className="btn btn-delete" onClick={() => onDelete(item)}>{t("delete")}</button>
                     </div>
                   </div>
-                  <div className="maintenance-content">
+                  <div className="maintenance-content rich-text-renderer">
                     {item.prefix ? <strong>{item.prefix} </strong> : null}
-                    {item.content}
+                    <span dangerouslySetInnerHTML={{ __html: toSafeRenderHtml(item.content) }} />
                   </div>
                   <div className="announcement-meta">
                     <span>{t("createdBy", { name: item.created_by })}</span>

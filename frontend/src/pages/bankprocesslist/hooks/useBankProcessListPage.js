@@ -2399,7 +2399,9 @@ export function useBankProcessListPage() {
     enabled: !showAll,
     minRows: PAGE_SIZE_MIN,
     maxRows: PAGE_SIZE_MAX,
-    stableRowHeight: true,
+    // Show inactive / select column can alter effective row height.
+    // Use real rendered rows to prevent clipped rows near page bottom.
+    stableRowHeight: false,
     remeasureDeps: [
       visibleRows.length,
       tableLoading,

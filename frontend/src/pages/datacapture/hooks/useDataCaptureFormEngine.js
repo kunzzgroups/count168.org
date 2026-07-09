@@ -46,6 +46,13 @@ function normalizeRemoveWordValue(value) {
 
 const PROCESS_PLACEHOLDER = "Select Process";
 const PROCESS_OPTIONS_RENDER_CAP = 80;
+
+const BANK_PROCESSES = [
+  { id: "profit", process_id: "PROFIT", process_display: "PROFIT", description_name: null },
+  { id: "salary", process_id: "SALARY", process_display: "SALARY", description_name: null },
+  { id: "commission", process_id: "COMMISSION", process_display: "COMMISSION", description_name: null },
+  { id: "bonus", process_id: "BONUS", process_display: "BONUS", description_name: null }
+];
 function readRestoredProcessData() {
   try {
     if (!shouldRestoreFromUrl()) return null;
@@ -143,6 +150,7 @@ export function useDataCaptureFormEngine(
     payrollDraftServerSync = true,
     selectedGroup = null,
     scriptsReady = false,
+    selectedPermission = null,
   } = {},
 ) {
   const { setSelectedDescriptions, clearSelectedDescriptions } = useDataCaptureContext();
@@ -215,6 +223,9 @@ export function useDataCaptureFormEngine(
   const companyPayrollUiRef = useRef(companyPayrollUi);
   companyPayrollUiRef.current = companyPayrollUi;
 
+  const selectedPermissionRef = useRef(selectedPermission);
+  selectedPermissionRef.current = selectedPermission;
+
   const usesCompanyCurrencies = () =>
     applyCompanyOnlyFieldsRef.current || companyPayrollUiRef.current;
 
@@ -230,6 +241,26 @@ export function useDataCaptureFormEngine(
   const reloadProcessesForDate = useCallback(async (dateStr, options = {}) => {
     const { preserveSelection = false } = options;
     if (!applyCompanyOnlyFieldsRef.current) return;
+
+    if (selectedPermissionRef.current === "Bank") {
+      setProcessRows(BANK_PROCESSES);
+      const restoring = getDataCaptureState().isRestoring === true;
+      if (!preserveSelection && !restoring) {
+        setSelectedProcess(null);
+        setCurrencyId("");
+        if (applyCompanyOnlyFieldsRef.current) {
+          setRemoveWord("");
+          setReplaceFrom("");
+          setReplaceTo("");
+          clearSelectedDescriptions();
+          setDescriptionDisplay("");
+        }
+        setRemark("");
+      }
+      scheduleRecomputeSubmitState();
+      return;
+    }
+
     const cid = companyIdRef.current;
     const scope = captureScopeRef.current;
     if (!cid || !scope) return;
@@ -313,7 +344,7 @@ export function useDataCaptureFormEngine(
     const session = loadActiveCaptureSession();
     const preserveSelection = Boolean(session?.processData?.process);
     void reloadProcessesForDate(captureDate, { preserveSelection });
-  }, [companyId, applyCompanyOnlyFields, captureDate, reloadProcessesForDate]);
+  }, [companyId, applyCompanyOnlyFields, captureDate, selectedPermission, reloadProcessesForDate]);
 
   const onDateChange = useCallback(
     (eOrValue) => {

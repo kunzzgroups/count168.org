@@ -3198,7 +3198,7 @@ body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-f
  */
 body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-mm {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 5px;
     align-items: stretch;
     flex: 1 1 auto;
@@ -3877,4 +3877,12 @@ body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compa
     text-align: center;
     font-size: var(--txn-history-text-error);
 }
+
+/* Unify font weight to 700 in the transaction/payment type add section */
+body.transaction-page .transaction-add-section,
+body.transaction-page .transaction-add-section *,
+body.transaction-page .transaction-add-section input::placeholder {
+    font-weight: 700 !important;
+}
+
 

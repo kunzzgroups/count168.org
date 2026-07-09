@@ -39,6 +39,7 @@ import { useMemberPageShell } from "./useMemberPageShell.js";
 import { useSidebarTabletCollapse } from "../../hooks/useSidebarTabletCollapse.js";
 import { DASHBOARD_I18N } from "../../translateFile/shell/dashboardTranslate.js";
 import { bindMediaQueryChange } from "../../utils/dom/bindMediaQueryChange.js";
+import { toSafeRenderHtml } from "../../utils/content/richTextSanitizer.js";
 
 export default function MemberPage() {
   const navigate = useNavigate();
@@ -852,7 +853,10 @@ export default function MemberPage() {
                 className={`notification-item unread${a.isExpirationReminder ? " expiration-reminder-item" : ""}`}
               >
                 <div className="notification-title">{a.title}</div>
-                <div className="notification-message">{a.content}</div>
+                <div
+                  className="notification-message rich-text-renderer"
+                  dangerouslySetInnerHTML={{ __html: toSafeRenderHtml(a.content) }}
+                />
                 <div className="notification-time">{a.created_at}</div>
               </div>
             ))

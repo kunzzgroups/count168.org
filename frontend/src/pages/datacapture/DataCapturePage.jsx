@@ -322,6 +322,9 @@ function DataCapturePageContent() {
     return "";
   }, [isCompanySelected, currentCompanyRow, groupOnlyTable, selectedGroup, anchorCompanyRow, scopeCompanyId]);
 
+  const { permissions, selectedPermission, selectPermission, showPermissionFilter } =
+    useDataCaptureCategoryPermissions(companyCode);
+
   const form = useDataCaptureFormEngine(captureScope, {
     applyCompanyOnlyFields: showCompanyProcessUi,
     companyPayrollUi: companyPayrollChannel,
@@ -330,6 +333,7 @@ function DataCapturePageContent() {
     payrollDraftServerSync: payrollDraft.serverSync,
     selectedGroup,
     scriptsReady,
+    selectedPermission,
   });
 
   const groupOnlyProcessOptions = useMemo(() => getGroupOnlyProcessOptions(t), [t]);
@@ -356,9 +360,6 @@ function DataCapturePageContent() {
 
   const topSectionRef = useRef(null);
   const formColumnRef = useRef(null);
-
-  const { permissions, selectedPermission, selectPermission, showPermissionFilter } =
-    useDataCaptureCategoryPermissions(companyCode);
 
   const {
     captureType,
@@ -391,6 +392,7 @@ function DataCapturePageContent() {
     payrollDraftBucket: payrollDraft.bucket,
     payrollDraftServerSync: payrollDraft.serverSync,
     selectedGroup,
+    selectedPermission,
   });
   useDataCaptureGrid(scriptsReady, groupOnlyTable);
   useGroupOnlyTableDraftFlush({

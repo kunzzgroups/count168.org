@@ -10,6 +10,7 @@ import {
 } from "../../utils/company/sharedCompanyFilter.js";
 import { useAuthBackground } from "./useAuthBackground.js";
 import { safeLocal, safeSession } from "../../utils/storage/safeStorage.js";
+import { extractPlainTextFromRichText } from "../../utils/content/richTextSanitizer.js";
 
 const LOGIN_ASSET_RETRY_KEY = "ec_login_asset_retry";
 
@@ -23,12 +24,6 @@ function tryLoginPageReloadOnce() {
   url.searchParams.set("_", String(Date.now()));
   window.location.replace(url.toString());
   return true;
-}
-
-function escapeHtml(text) {
-  const div = document.createElement("div");
-  div.textContent = text ?? "";
-  return div.innerHTML;
 }
 
 function AlertModal({ open, title, message, confirmText, onClose }) {
@@ -402,7 +397,7 @@ export default function LoginPage() {
                 <div className="sc-login-maintenance-item" key={`${item.id}-${index}`}>
                   <span className="sc-login-maintenance-dot" />
                   <span className="sc-login-maintenance-label">{item.prefix || i18n.maintenanceLabel}</span>
-                  <span dangerouslySetInnerHTML={{ __html: escapeHtml(item.content) }} />
+                  <span>{extractPlainTextFromRichText(item.content)}</span>
                 </div>
               ))}
             </div>

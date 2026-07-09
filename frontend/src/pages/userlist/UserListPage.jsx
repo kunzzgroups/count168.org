@@ -342,8 +342,8 @@ export default function UserListPage() {
     [me, currentUserId],
   );
 
-  /** 与顶部 chip 一致：仅「显示停用」或「显示全部」时展示批量删除勾选列（默认活跃分页不展示） */
-  const showBulkDeleteColumn = showInactive || showAll;
+  /** 仅「显示停用」模式展示批量删除勾选列；Show All 保持列结构稳定不跳变 */
+  const showBulkDeleteColumn = showInactive;
 
   const pageSize = useAutoListPageSize({
     listRegionRef,
@@ -417,11 +417,11 @@ export default function UserListPage() {
   useEffect(() => { if (!bootLoading) syncUrl(); }, [bootLoading, syncUrl]);
 
   useEffect(() => {
-    if (!showInactive && !showAll) {
+    if (!showInactive) {
       setSelectedDeleteIds(new Set());
       setSelectAllUsers(false);
     }
-  }, [showInactive, showAll]);
+  }, [showInactive]);
 
   useEffect(() => {
     const onStorage = (e) => {

@@ -6,6 +6,7 @@
 header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../c168/c168_domain_access.php';
+require_once __DIR__ . '/../includes/rich_text_sanitizer.php';
 session_start();
 session_write_close(); // 释放 session 锁，允许并发 AJAX 请求并行执行
 
@@ -60,14 +61,15 @@ try {
     }
 
     $title = trim($_POST['title'] ?? '');
-    $content = trim($_POST['content'] ?? '');
+    $content = sanitizeRichTextHtml((string)($_POST['content'] ?? ''));
+    $contentPlain = richTextHtmlToPlainText($content);
 
     if ($title === '') {
         http_response_code(400);
         jsonResponse(false, 'Title cannot be empty', null);
         return;
     }
-    if ($content === '') {
+    if ($contentPlain === '') {
         http_response_code(400);
         jsonResponse(false, 'Content cannot be empty', null);
         return;

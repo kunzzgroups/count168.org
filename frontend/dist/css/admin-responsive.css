@@ -116,18 +116,6 @@
     min-width: 0;
   }
 
-  body.user-page .informationmenu .informationmenu-section-title {
-    font-size: 1.15rem !important;
-    padding: 0.55rem 0.85rem !important;
-    line-height: 1.25;
-  }
-
-  body.user-page .informationmenu .informationmenu-section-title .section-icon {
-    width: 1.2rem !important;
-    height: 1.2rem !important;
-    margin-right: 0.45rem !important;
-  }
-
   body.user-page:not(.auto-renew-page-body) .search-container.userlist-search-bar .userlist-search-input,
   body.ec-auth-shell.user-page:not(.auto-renew-page-body) .search-container.userlist-search-bar .userlist-search-input {
     font-size: 1.2rem !important;

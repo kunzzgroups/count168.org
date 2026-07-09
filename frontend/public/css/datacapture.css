@@ -1950,10 +1950,10 @@ body.datacapture-page .excel-table-scroll-body .excel-table tbody td {
     font-size: 1.4rem;
     font-weight: 700;
     line-height: 1.35;
-    padding: clamp(5px, 0.45vw, 9px) clamp(8px, 0.83vw, 16px);
+    padding: clamp(4px, 0.15vw, 6px) clamp(4px, 0.15vw, 6px);
     text-align: center;
     min-width: clamp(30px, 3.49vw, 67px);
-    min-height: calc(1.4rem * 1.35 + 10px);
+    min-height: calc(1.4rem * 1.35 + 8px);
     height: auto !important;
     vertical-align: middle;
     position: relative;

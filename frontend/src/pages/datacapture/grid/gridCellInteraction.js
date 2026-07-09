@@ -347,6 +347,15 @@ export function moveCaretToClickPosition(cell, clickEvent) {
   }
 }
 
+function hasExpandedTextSelectionInsideCell(cell) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return false;
+  }
+  const range = selection.getRangeAt(0);
+  return cell.contains(range.startContainer) && cell.contains(range.endContainer);
+}
+
 export function handleCellClick(e, cellEl) {
   const cell = cellEl || e.currentTarget || e.target;
   if (!cell || cell.contentEditable !== "true") return;
@@ -357,6 +366,9 @@ export function handleCellClick(e, cellEl) {
   setActiveCellCore(cell);
   if (document.activeElement !== cell) {
     cell.focus();
+  }
+  if (hasExpandedTextSelectionInsideCell(cell)) {
+    return;
   }
   moveCaretToClickPosition(cell, e);
 }
@@ -425,6 +437,12 @@ export function handleCellKeydown(e) {
   if (e.key === "Backspace" || e.key === "Delete") {
     const hasFocusForDelete = document.activeElement === cell;
     const isSelected = cell.classList.contains("selected") || getSelectedCells().includes(cell);
+    const hasExpandedSelectionInCell = hasExpandedTextSelectionInsideCell(cell);
+
+    if (hasFocusForDelete && hasExpandedSelectionInCell) {
+      // Keep native contentEditable behavior for partial-text deletion.
+      return;
+    }
 
     if (e.key === "Delete" && (isSelected || hasFocusForDelete)) {
       e.preventDefault();

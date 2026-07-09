@@ -95,6 +95,7 @@ export function useDataCaptureSubmitReset({
   payrollDraftBucket = null,
   payrollDraftServerSync = true,
   selectedGroup = null,
+  selectedPermission = null,
 }) {
   const { selectedDescriptions, clearSelectedDescriptions, gridRef, gridVersion, replaceGrid } =
     useDataCaptureContext();
@@ -177,7 +178,8 @@ export function useDataCaptureSubmitReset({
     prefetchRouteModule("/datacapturesummary");
     try {
       const processData = buildProcessCapturePayload(form, activeCaptureType, form.currencies, selectedDescriptions);
-      if (groupPayrollUi && isGroupOnlyProcessId(processData.process)) {
+      const isBankCategoryMode = selectedPermission === "Bank";
+      if ((groupPayrollUi || isBankCategoryMode) && isGroupOnlyProcessId(processData.process)) {
         const code =
           form.selectedProcess?.process_id ||
           processData.processCode ||
@@ -261,7 +263,7 @@ export function useDataCaptureSubmitReset({
       submitInFlightRef.current = false;
       setIsSubmitting(false);
     }
-  }, [form, captureType, mutationsBlocked, navigate, t, requireDescriptions, groupPayrollUi, groupLedgerCapture, groupPayrollCapture, payrollDraftBucket, payrollDraftServerSync, selectedGroup, captureScope, selectedDescriptions, gridRef]);
+  }, [form, captureType, mutationsBlocked, navigate, t, requireDescriptions, groupPayrollUi, groupLedgerCapture, groupPayrollCapture, payrollDraftBucket, payrollDraftServerSync, selectedGroup, selectedPermission, captureScope, selectedDescriptions, gridRef]);
 
   const reset = useCallback(() => {
     const draftBucket = payrollDraftBucket || selectedGroup;

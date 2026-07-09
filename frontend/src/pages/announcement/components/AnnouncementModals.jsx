@@ -1,5 +1,6 @@
 import React from "react";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
+import RichTextEditor from "./RichTextEditor.jsx";
 
 export function EditAnnouncementModal({ t, open, draft, setDraft, onClose, onSave }) {
   const { submitting, guardSubmit } = useSubmitGuard(open);
@@ -31,13 +32,13 @@ export function EditAnnouncementModal({ t, open, draft, setDraft, onClose, onSav
               onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
             />
           </div>
-          <div className="form-group">
+          <div className="form-group form-group-rich-text form-group-rich-text--modal">
             <label htmlFor="editAnnouncementContent">{t("contentRequired")}</label>
-            <textarea
+            <RichTextEditor
               id="editAnnouncementContent"
-              required
+              placeholder={t("enterAnnouncementContent")}
               value={draft.content}
-              onChange={(e) => setDraft((p) => ({ ...p, content: e.target.value }))}
+              onChange={(nextValue) => setDraft((p) => ({ ...p, content: nextValue }))}
             />
           </div>
           <div className="edit-modal-actions">
@@ -85,13 +86,13 @@ export function EditMaintenanceModal({ t, open, draft, setDraft, onClose, onSave
               onChange={(e) => setDraft((p) => ({ ...p, prefix: e.target.value }))}
             />
           </div>
-          <div className="form-group">
+          <div className="form-group form-group-rich-text form-group-rich-text--modal">
             <label htmlFor="editMaintenanceContent">{t("contentRequired")}</label>
-            <textarea
+            <RichTextEditor
               id="editMaintenanceContent"
-              required
+              placeholder={t("enterMaintenanceContent")}
               value={draft.content}
-              onChange={(e) => setDraft((p) => ({ ...p, content: e.target.value }))}
+              onChange={(nextValue) => setDraft((p) => ({ ...p, content: nextValue }))}
             />
           </div>
           <div className="edit-modal-actions">

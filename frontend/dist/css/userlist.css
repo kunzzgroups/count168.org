@@ -1990,24 +1990,10 @@ label.user-modal-col-title.acc-proc-label {
     overflow-wrap: break-word;
 }
 
-@media (max-width: 1440px) {
-    #userModal .sidebar-permissions-section {
-        display: none;
-    }
-
-    #userModal .user-modal-permissions-compact {
-        display: block;
-        width: 100%;
-    }
+#userModal .sidebar-permissions-section {
+    display: none;
 }
 
-@media (min-width: 1441px) {
-    #userModal .user-modal-permissions-compact {
-        display: none !important;
-    }
-}
-
-/* ≥1441px: inline permission list; ≤1440px: Choose permissions + modal */
 .user-modal-permissions-inline {
     display: none;
     flex: 1 1 0;
@@ -2017,26 +2003,8 @@ label.user-modal-col-title.acc-proc-label {
 }
 
 .user-modal-permissions-compact {
-    display: none;
-}
-
-@media (min-width: 1441px) {
-    .user-modal-permissions-inline {
-        display: flex;
-    }
-
-    #userModal .sidebar-permissions-section .user-modal-permissions-inline .sidebar-permissions-title.user-modal-permissions-title {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin: 0;
-        padding: 0 19.968px 9.984px;
-        color: #1e293b;
-        border-bottom: 2px solid #cbd5e1;
-        font-size: 18px;
-        font-weight: 700;
-        flex-shrink: 0;
-    }
+    display: block;
+    width: 100%;
 }
 
 .user-modal-permission-picker-root {

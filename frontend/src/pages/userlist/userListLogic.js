@@ -304,13 +304,12 @@ export function formatLastLogin(raw) {
  * Status visibility after toggle — aligned with processlist / account list:
  * - default: active (paginated)
  * - showInactive: inactive (paginated)
- * - showAll: all active (no pagination)
- * - showAll + showInactive: all inactive
+ * - showAll: active + inactive (no pagination)
+ * - showAll + showInactive: active + inactive
  */
 export function userRowVisibleAfterStatusChange(newStatus, { showInactive, showAll }) {
+  if (showAll) return true;
   const status = normRole(newStatus);
-  if (showAll && showInactive) return status === "inactive";
-  if (showAll) return status === "active";
   if (showInactive) return status === "inactive";
   return status === "active";
 }
@@ -330,11 +329,10 @@ export function applyUserFilters(users, { search, showInactive, showAll, viewerR
   if (q) {
     rows = rows.filter((u) => `${u.login_id || ""} ${u.name || ""} ${u.email || ""}`.toLowerCase().includes(q));
   }
-  if (showAll && showInactive) {
-    rows = rows.filter((u) => normRole(u.status) === "inactive");
-  } else if (showAll) {
-    rows = rows.filter((u) => normRole(u.status) === "active");
-  } else if (showInactive) {
+  if (showAll) {
+    return rows;
+  }
+  if (showInactive) {
     rows = rows.filter((u) => normRole(u.status) === "inactive");
   } else {
     rows = rows.filter((u) => normRole(u.status) === "active");

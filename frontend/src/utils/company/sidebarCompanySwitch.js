@@ -80,7 +80,8 @@ export function isBankOnlyAllowedMaintenancePath(path) {
     pageKey === "bankprocess-maintenance" ||
     pageKey === "payment-maintenance" ||
     pageKey === "capture-maintenance" ||
-    pageKey === "transaction-maintenance"
+    pageKey === "transaction-maintenance" ||
+    pageKey === "formula-maintenance"
   );
 }
 
@@ -96,9 +97,6 @@ export function resolveMaintenanceRedirectForSession(sessionData, currentPath) {
 
   if (isBankOnlyCategoryFlags(flags)) {
     if (isBankOnlyAllowedMaintenancePath(currentPath)) return null;
-    if (pageKey === "formula-maintenance") {
-      return spaPath("payment-maintenance");
-    }
     if (pageKey === "dashboard") return null;
     return spaPath("dashboard");
   }

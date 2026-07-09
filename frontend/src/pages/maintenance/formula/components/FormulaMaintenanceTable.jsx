@@ -33,6 +33,7 @@ export default function FormulaMaintenanceTable({
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const selectAllRef = useRef(null);
+  const formulaTextareaRef = useRef(null);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -46,6 +47,15 @@ export default function FormulaMaintenanceTable({
       setEditForm({});
     }
   }, [listSyncing]);
+
+  useEffect(() => {
+    if (editingId == null) return;
+    const el = formulaTextareaRef.current;
+    if (!(el instanceof HTMLTextAreaElement)) return;
+    // Keep edit textarea fully visible while value changes.
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [editingId, editForm.formula]);
 
   const handleEdit = (row) => {
     setEditingId(row.id);
@@ -188,17 +198,19 @@ export default function FormulaMaintenanceTable({
         </td>
         <td className="maintenance-table-cell formula-cell-text">
           {isEditing ? (
-            <input
-              type="text"
-              className="formula-input"
+            <textarea
+              ref={isEditing ? formulaTextareaRef : null}
+              className="formula-input formula-input-textarea"
               value={editForm.formula}
               onChange={(e) => setEditForm({ ...editForm, formula: e.target.value })}
               style={{ display: "block", width: "100%" }}
+              rows={2}
             />
           ) : (
             <MaintenanceEllipsisText
               value={toUpperDisplay(row.formula)}
-              className="formula-cell-clamp-2 formula-display"
+              className="formula-display formula-display--full"
+              alwaysTooltip
             />
           )}
         </td>

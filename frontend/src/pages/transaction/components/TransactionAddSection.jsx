@@ -54,6 +54,8 @@ export default function TransactionAddSection({
   rateMiddlemanRate,
   setRateMiddlemanRate,
   rateMiddlemanAmount,
+  rateMiddlemanInputAmount,
+  setRateMiddlemanInputAmount,
   txRemark,
   setTxRemark,
   txConfirm,
@@ -188,8 +190,8 @@ export default function TransactionAddSection({
             {m.amount}
           </label>
           <input
-            type="number"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             id="action_amount"
             className="transaction-input"
             value={txAmount}
@@ -396,6 +398,17 @@ export default function TransactionAddSection({
               disabled={mutationsBlocked}
               onChange={(e) => setRateMiddlemanRate(e.target.value)}
               aria-label={m.rateMultiplier}
+            />
+            <input
+              type="number"
+              step="0.01"
+              id="rate_middleman_input_amount"
+              className="transaction-input"
+              placeholder={m.amount}
+              disabled={mutationsBlocked}
+              value={rateMiddlemanInputAmount}
+              onChange={(e) => setRateMiddlemanInputAmount(e.target.value)}
+              aria-label={m.amount}
             />
             <input
               type="number"

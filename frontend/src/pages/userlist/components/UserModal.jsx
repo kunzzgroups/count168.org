@@ -39,7 +39,7 @@ function getPermissionLabel(key, t) {
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-/** Large screens: inline checklist; laptop/tablet: same UI inside permission picker modal */
+/** Shared permission checklist used by the picker dialog. */
 function PermissionChecklist({ className, permissionsLocked, permDisabledMap, visiblePermissionKeys, permSelected, setPermSelected, t }) {
   return (
     <div className={className}>
@@ -318,17 +318,6 @@ export default function UserModal({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [permissionPickerOpen]);
-
-  useEffect(() => {
-    if (!permissionPickerOpen) return undefined;
-    const mq = window.matchMedia("(min-width: 1441px)");
-    const closeIfDesktop = () => {
-      if (mq.matches) setPermissionPickerOpen(false);
-    };
-    closeIfDesktop();
-    mq.addEventListener("change", closeIfDesktop);
-    return () => mq.removeEventListener("change", closeIfDesktop);
   }, [permissionPickerOpen]);
 
   const accountIdList = useMemo(() => modalAccounts.map((x) => Number(x.id)), [modalAccounts]);

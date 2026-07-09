@@ -17,6 +17,24 @@ import { submitTransaction, transactionQueryKeys } from "../lib/transactionApi.j
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveGridRowToAccountOption } from "../lib/transactionPaymentLogic.js";
 
+function sanitizeTransactionAmountInput(value) {
+  const raw = String(value ?? "").replace(/,/g, "");
+  if (raw === "") return "";
+
+  const filtered = raw.replace(/[^\d.-]/g, "");
+  if (filtered === "") return "";
+
+  const hasLeadingMinus = filtered.startsWith("-");
+  let unsigned = filtered.replace(/-/g, "");
+
+  const firstDotIdx = unsigned.indexOf(".");
+  if (firstDotIdx !== -1) {
+    unsigned = `${unsigned.slice(0, firstDotIdx + 1)}${unsigned.slice(firstDotIdx + 1).replace(/\./g, "")}`;
+  }
+
+  return hasLeadingMinus ? `-${unsigned}` : unsigned;
+}
+
 export function useTransactionForm({
   todayDmy,
   pushToast,
@@ -67,10 +85,11 @@ export function useTransactionForm({
   const [rateMiddlemanAccount, setRateMiddlemanAccount] = useState(null);
   const [rateMiddlemanRate, setRateMiddlemanRate] = useState("");
   const [rateMiddlemanAmount, setRateMiddlemanAmount] = useState("");
+  const [rateMiddlemanInputAmount, setRateMiddlemanInputAmount] = useState("");
   const queryClient = useQueryClient();
 
   const changeTxAmount = useCallback((val) => {
-    setTxAmount(val);
+    setTxAmount(sanitizeTransactionAmountInput(val));
     setTxFullAmount("");
   }, []);
 
@@ -204,21 +223,38 @@ export function useTransactionForm({
     setTxFromAccount(to);
   }, [filterSnapshot?.mutationsBlocked, txToAccount, txFromAccount]);
 
-  // RATE: legacy `initMiddleManAmountCalculation` — MoneyDecimal chain, middle-man then gross/net preview.
   useEffect(() => {
     if (txType !== "RATE") return;
 
     const clean = (v) => String(v ?? "").replace(/,/g, "").trim();
+    
+    let inputAmtDec = MoneyDecimal.toDecimal("0", 0);
+    try {
+      const inputStr = clean(rateMiddlemanInputAmount);
+      if (inputStr) {
+        inputAmtDec = MoneyDecimal.toDecimal(inputStr, 0);
+      }
+    } catch {
+      // ignore
+    }
 
-    let middleStr = "";
+    let baseFeeDec = MoneyDecimal.toDecimal("0", 0);
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
       const mmrDec = MoneyDecimal.toDecimal(clean(rateMiddlemanRate) || "0", 0);
       if (fromDec.gt(0) && mmrDec.gt(0)) {
-        middleStr = formatRateAmount(fromDec.times(mmrDec).toString());
+        baseFeeDec = fromDec.times(mmrDec);
       }
     } catch {
-      middleStr = "";
+      // ignore
+    }
+
+    const finalFeeDec = baseFeeDec.plus(inputAmtDec);
+    let middleStr = "";
+    if (!finalFeeDec.isZero()) {
+      middleStr = formatRateAmount(finalFeeDec.toString());
+    } else if (finalFeeDec.isZero() && (baseFeeDec.gt(0) || !inputAmtDec.isZero())) {
+      middleStr = "0.00";
     }
     setRateMiddlemanAmount(middleStr);
 
@@ -236,25 +272,28 @@ export function useTransactionForm({
         setRateToAmountGrossStr("");
         return;
       }
-      const gross = fromDec.times(rateDec);
-      const grossDisplayStr = formatRateAmount(gross.toString());
+      
+      const baseGross = fromDec.times(rateDec);
+      
+      let finalGrossForBackend = baseGross;
+      if (inputAmtDec.lt(0)) {
+        finalGrossForBackend = baseGross.plus(inputAmtDec);
+      }
+
+      const grossDisplayStr = formatRateAmount(finalGrossForBackend.toString());
       setRateToAmountGrossStr(grossDisplayStr);
 
-      let displayVal = gross;
-      if (middleStr) {
-        try {
-          const fee = MoneyDecimal.toDecimal(middleStr.replace(/,/g, ""), 0);
-          if (fee.gt(0)) displayVal = gross.minus(fee);
-        } catch {
-          /* ignore */
-        }
+      let displayVal = finalGrossForBackend;
+      if (!finalFeeDec.isZero()) {
+        displayVal = displayVal.minus(finalFeeDec);
       }
+      
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));
     } catch {
       setRateCurrencyToAmount("");
       setRateToAmountGrossStr("");
     }
-  }, [txType, rateCurrencyFromAmount, rateExchangeRateRaw, rateMiddlemanRate]);
+  }, [txType, rateCurrencyFromAmount, rateExchangeRateRaw, rateMiddlemanRate, rateMiddlemanInputAmount]);
 
   const onRateCurrencyRowReverse = useCallback(() => {
     const tmpAmt = rateCurrencyFromAmount;
@@ -382,6 +421,7 @@ export function useTransactionForm({
           setRateFromAmountGrossStr("");
           setRateMiddlemanRate("");
           setRateMiddlemanAmount("");
+          setRateMiddlemanInputAmount("");
           setRateToAccount(null);
           setRateFromAccount(null);
           setRateTransferToAccount(null);
@@ -558,6 +598,8 @@ export function useTransactionForm({
     setRateMiddlemanRate,
     rateMiddlemanAmount,
     setRateMiddlemanAmount,
+    rateMiddlemanInputAmount,
+    setRateMiddlemanInputAmount,
     onSubmitTx,
     handleBalanceCellClick,
   };

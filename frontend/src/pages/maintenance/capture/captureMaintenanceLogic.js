@@ -51,6 +51,14 @@ export async function fetchCompanyPermissions(companyCode) {
 
 export async function fetchProcesses(companyId, scope = null) {
   const payrollChannel = Boolean(scope?.c168Channel || scope?.companyPayrollChannel);
+  if (payrollChannel) {
+    return [
+      { id: "PROFIT", process_name: "PROFIT", description: null },
+      { id: "SALARY", process_name: "SALARY", description: null },
+      { id: "COMMISSION", process_name: "COMMISSION", description: null },
+      { id: "BONUS", process_name: "BONUS", description: null },
+    ];
+  }
   if (scope && captureMaintenanceUsesGroupProcesses(scope) && !payrollChannel) {
     const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
     return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList));

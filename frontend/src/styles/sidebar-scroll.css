@@ -6,6 +6,8 @@ body.ec-auth-shell .informationmenu {
   display: flex;
   flex-direction: column;
   overflow: visible !important;
+  /* Extra tail padding allows one more notch of scroll near footer/flyout rows. */
+  --sidebar-menu-scroll-end-pad: 9rem;
 }
 
 body.ec-auth-shell .informationmenu-header {
@@ -126,4 +128,10 @@ body.ec-auth-shell .sidebar-scroll:focus-within::-webkit-scrollbar-corner {
   border: none !important;
   box-shadow: none !important;
   opacity: 0 !important;
+}
+
+@media (max-height: 920px) {
+  body.ec-auth-shell .informationmenu {
+    --sidebar-menu-scroll-end-pad: 10.5rem;
+  }
 }

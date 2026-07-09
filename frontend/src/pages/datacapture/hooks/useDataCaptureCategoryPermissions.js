@@ -10,7 +10,7 @@ function normalizePermissions(result) {
     result?.success && result.data && Array.isArray(result.data.permissions)
       ? result.data.permissions
       : DEFAULT_PERMISSIONS;
-  return raw.filter((p) => p !== "Bank");
+  return raw;
 }
 
 /**

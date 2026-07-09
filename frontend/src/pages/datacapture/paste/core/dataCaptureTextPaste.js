@@ -1,7 +1,13 @@
 import { applyDataMatrixToGrid, notifyPasteSuccess } from "./dataCapturePasteApply.js";
-import { getClipboardHtml } from "./dataCaptureClipboard.js";
-import { detectHtmlTableInClipboard } from "./dataCaptureClipboard.js";
-import { parseAndFillHtmlTableForText } from "./dataCaptureTextHtmlPaste.js";
+import {
+  detectHtmlTableInClipboard,
+  getClipboardHtml,
+  isFormatRichHtmlTable,
+} from "./dataCaptureClipboard.js";
+import {
+  parseAndFillHtmlTableForText,
+  parseAndFillHtmlTableForTextWithFormat,
+} from "./dataCaptureTextHtmlPaste.js";
 
 /** 1.Text — Excel plain text paste, preserving the clipboard matrix as-is. */
 export function handleTextPlainPaste(e, pastedData, anchorCell) {
@@ -51,9 +57,26 @@ export function handleTextHtmlPaste(html, anchorCell) {
 
 export function handleTextModePaste(e, pastedData, anchorCell) {
   const html = getClipboardHtml(e);
-  if (handleTextHtmlPaste(html, anchorCell)) return true;
+  const htmlFromDetect = html ? "" : detectHtmlTableInClipboard(e);
+  const htmlCandidate = html || htmlFromDetect;
 
-  const htmlFromDetect = detectHtmlTableInClipboard(e);
+  if (htmlCandidate && isFormatRichHtmlTable(htmlCandidate)) {
+    if (parseAndFillHtmlTableForTextWithFormat(htmlCandidate, anchorCell)) return true;
+
+    // Keep user flow unblocked: fallback to legacy 1.Text parsing.
+    if (handleTextHtmlPaste(htmlCandidate, anchorCell)) {
+      notifyPasteSuccess("格式保留失败，已按纯文本粘贴。", "danger");
+      return true;
+    }
+
+    if (handleTextPlainPaste(e, pastedData, anchorCell)) {
+      notifyPasteSuccess("格式保留失败，已按纯文本粘贴。", "danger");
+      return true;
+    }
+    return false;
+  }
+
+  if (handleTextHtmlPaste(html, anchorCell)) return true;
   if (htmlFromDetect && handleTextHtmlPaste(htmlFromDetect, anchorCell)) return true;
 
   return handleTextPlainPaste(e, pastedData, anchorCell);

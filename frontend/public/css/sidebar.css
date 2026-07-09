@@ -1535,6 +1535,35 @@
     word-break: break-word;
 }
 
+.notification-message.rich-text-renderer {
+    white-space: normal;
+}
+
+.notification-message.rich-text-renderer p,
+.notification-message.rich-text-renderer ul,
+.notification-message.rich-text-renderer ol,
+.notification-message.rich-text-renderer blockquote,
+.notification-message.rich-text-renderer pre,
+.notification-message.rich-text-renderer h1,
+.notification-message.rich-text-renderer h2,
+.notification-message.rich-text-renderer h3,
+.notification-message.rich-text-renderer h4 {
+    margin: 0 0 6px 0;
+}
+
+.notification-message.rich-text-renderer ul,
+.notification-message.rich-text-renderer ol {
+    padding-left: 18px;
+}
+
+.notification-message.rich-text-renderer pre {
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 6px;
+    padding: 8px;
+    overflow-x: auto;
+}
+
 .notification-time {
     font-size: clamp(8px, 0.625vw, 12px);
     color: #9ca3af;

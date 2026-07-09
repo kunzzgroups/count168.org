@@ -21,6 +21,8 @@ function statusLabel(t, key) {
 }
 
 const MENU_GAP = 6;
+const MENU_MIN_WIDTH = 132;
+const MENU_VIEWPORT_GUTTER = 8;
 
 export default function BankProcessStatusControl({
   row,
@@ -42,7 +44,7 @@ export default function BankProcessStatusControl({
       t("statusUpdateFailed")
     );
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, bottom: null, left: 0, minWidth: 118 });
+  const [menuPos, setMenuPos] = useState({ top: 0, bottom: null, left: 0, minWidth: MENU_MIN_WIDTH });
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
@@ -53,19 +55,23 @@ export default function BankProcessStatusControl({
     const btn = buttonRef.current;
     if (!btn) return;
     const rect = btn.getBoundingClientRect();
+    const minWidth = Math.max(MENU_MIN_WIDTH, Math.round(rect.width));
+    const viewportW = window.innerWidth || document.documentElement?.clientWidth || 0;
+    const maxLeft = Math.max(MENU_VIEWPORT_GUTTER, viewportW - minWidth - MENU_VIEWPORT_GUTTER);
+    const left = Math.min(maxLeft, Math.max(MENU_VIEWPORT_GUTTER, Math.round(rect.left)));
     if (openMenuUp) {
       setMenuPos({
         top: null,
         bottom: Math.round(window.innerHeight - rect.top + MENU_GAP),
-        left: Math.round(rect.left),
-        minWidth: Math.max(118, Math.round(rect.width)),
+        left,
+        minWidth,
       });
     } else {
       setMenuPos({
         top: Math.round(rect.bottom + MENU_GAP),
         bottom: null,
-        left: Math.round(rect.left),
-        minWidth: Math.max(118, Math.round(rect.width)),
+        left,
+        minWidth,
       });
     }
   };
@@ -230,10 +236,13 @@ export default function BankProcessStatusControl({
                     type="button"
                     className={`bank-status-option${cur ? " selected" : ""}${highlightClass(idx)}`}
                     disabled={pending}
+                    role="option"
+                    aria-selected={cur}
                     onClick={() => void apply(opt)}
                     data-value={opt.toLowerCase()}
                     data-kb-idx={idx}
                     onMouseEnter={() => setHighlightIdx(idx)}
+                    title={optLabel}
                     style={{ display: "block", width: "100%" }}
                   >
                     {optLabel}

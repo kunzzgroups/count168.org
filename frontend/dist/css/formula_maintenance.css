@@ -388,7 +388,7 @@ body.dashboard-page.maintenance-page {
     --formula-list-cell-line-clamp: 2;
 }
 
-/* 长文本最多显示 2 行，超出省略（悬停 title 可看全文） */
+/* 长文本默认最多显示 2 行；formula 列会单独覆盖为完整展示 */
 .formula-maintenance-page-root .formula-cell-clamp-2 {
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -400,6 +400,21 @@ body.dashboard-page.maintenance-page {
     word-break: break-word;
     overflow-wrap: break-word;
     text-overflow: ellipsis;
+    line-height: var(--formula-list-cell-line-height);
+}
+
+/* Formula 列：与其他 table 一致，单行展示（不换行、不滚动条） */
+.formula-maintenance-page-root .formula-display--full {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
     line-height: var(--formula-list-cell-line-height);
 }
 
@@ -626,12 +641,12 @@ body.dashboard-page.maintenance-page {
 /* line-clamp 仅作用于 .formula-cell-clamp-2，勿设在 td 上（会破坏列布局） */
 
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(8).maintenance-table-cell {
+    white-space: nowrap;
     padding-left: var(--formula-col-formula-padding-x);
     padding-right: var(--formula-col-formula-padding-x);
 }
 
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text .source-display,
-.formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text .formula-display,
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td.maintenance-table-cell.formula-cell-text .description-display,
 .formula-maintenance-page-root .maintenance-list-container .maintenance-table td:nth-child(3).maintenance-table-cell .account-display {
     display: -webkit-box;
@@ -1108,18 +1123,24 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 
-.maintenance-edit-btn {
-    background-color: transparent;
+.maintenance-edit-btn,
+.edit-formula-btn {
+    background: none;
     color: black;
-    padding: clamp(2px, 0.31vw, 6px) 0;
-    margin: 0;
-    border: transparent;
+    border: none;
     cursor: pointer;
+    font-size: 1.3rem;
+    padding: 2px 4px;
+    margin: 0;
+    border-radius: 3px;
+    transition: all .2s ease;
     display: inline-block;
     vertical-align: middle;
+    flex-shrink: 0;
 }
 
-.maintenance-edit-btn:hover {
+.maintenance-edit-btn:hover,
+.edit-formula-btn:hover {
     background-color: transparent;
     box-shadow: none;
 }
@@ -1484,6 +1505,7 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 }
 
 .formula-maintenance-page-root .formula-virtual-cell--formula {
+    white-space: nowrap;
     padding-left: var(--formula-col-formula-padding-x);
     padding-right: var(--formula-col-formula-padding-x);
 }
@@ -1525,12 +1547,37 @@ body.maintenance-page .maintenance-modal .btn-delete:hover {
 .formula-maintenance-page-root .formula-virtual-data-row--editing .source-input,
 .formula-maintenance-page-root .formula-virtual-data-row--editing .input-method-select,
 .formula-maintenance-page-root .formula-virtual-data-row--editing .formula-input,
+.formula-maintenance-page-root .formula-virtual-data-row--editing .formula-input-textarea,
 .formula-maintenance-page-root .formula-virtual-data-row--editing .description-input {
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
     font-size: clamp(10px, 0.88vw, 14px);
     font-weight: bold;
+}
+
+.formula-maintenance-page-root .formula-input-textarea {
+    min-height: clamp(42px, 4.5vh, 64px);
+    resize: none;
+    padding: clamp(5px, 0.5vw, 8px) clamp(8px, 0.8vw, 12px);
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #f8fafc;
+    font-family: inherit;
+    font-weight: 500;
+    color: #1f2937;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    overflow: hidden;
+}
+
+.formula-maintenance-page-root .formula-input-textarea:focus {
+    outline: none;
+    border-color: #0d60ff;
+    background: #ffffff;
+    box-shadow: 0 0 0 2px rgba(13, 96, 255, 0.12);
 }
 
 .formula-maintenance-page-root .formula-virtual-th--left {

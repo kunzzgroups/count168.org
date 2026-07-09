@@ -4,9 +4,13 @@ import { isTextTruncated } from "../../../utils/dom/isTextTruncated.js";
 
 /**
  * Single-line ellipsis with portal tooltip for truncated maintenance table text.
- * @param {{ value?: string | null, className?: string }} props
+ * @param {{ value?: string | null, className?: string, alwaysTooltip?: boolean }} props
  */
-export default function MaintenanceEllipsisText({ value, className = "payment-cell-text" }) {
+export default function MaintenanceEllipsisText({
+  value,
+  className = "payment-cell-text",
+  alwaysTooltip = false,
+}) {
   const textRef = useRef(null);
   const [truncated, setTruncated] = useState(false);
   const display = value == null || String(value).trim() === "" ? "-" : String(value);
@@ -39,7 +43,7 @@ export default function MaintenanceEllipsisText({ value, className = "payment-ce
   return (
     <PortalTooltip
       content={display}
-      enabled={truncated && display !== "-"}
+      enabled={display !== "-" && (alwaysTooltip || truncated)}
       placement="below"
       tooltipClassName="app-portal-tooltip--multiline"
     >

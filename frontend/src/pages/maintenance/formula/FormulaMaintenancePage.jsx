@@ -8,7 +8,6 @@ import { usePartnershipAuditWriteGuard } from "../../../utils/audit/usePartnersh
 import { removeOtherMaintenanceStylesheets } from "../../../utils/maintenance/maintenanceStylesheets.js";
 import { useMaintenanceGroupCompanyFilter } from "../shared/useMaintenanceGroupCompanyFilter.js";
 import { runMaintenanceCompanySwitch } from "../shared/maintenanceCompanySwitch.js";
-import { useMaintenanceBankOnlyGuard } from "../shared/useMaintenanceBankOnlyGuard.js";
 import { useMaintenancePageScrollLock } from "../shared/useMaintenancePageScrollLock.js";
 import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import {
@@ -111,7 +110,6 @@ export default function FormulaMaintenancePage() {
 
   // -- Filter State --
   const [companyId, setCompanyId] = useState(null);
-  useMaintenanceBankOnlyGuard(companyId);
   const [companyCode, setCompanyCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState(null);
@@ -173,7 +171,7 @@ export default function FormulaMaintenancePage() {
     switchCompany: (c) => switchCompanyRef.current(c),
     onPrepareCompanySelect: (c) => onPrepareCompanySelectRef.current(c),
     onClearCompany: (...args) => onClearCompanyRef.current(...args),
-    pillCategory: "games",
+    pillCategory: "datacapture",
   });
 
   const formulaScope = useMemo(
@@ -453,7 +451,7 @@ export default function FormulaMaintenancePage() {
           if (cancelled) return;
           let procList = [];
           try {
-            procList = bootScope ? await fetchProcesses(null, bootScope) : [];
+            procList = bootScope ? await fetchProcesses(null, bootScope, meta.activePermission) : [];
           } catch (procErr) {
             console.error("Group process list load error:", procErr);
             notify(procErr.message || t("failedLoadProcesses"), "error");
@@ -496,11 +494,15 @@ export default function FormulaMaintenancePage() {
             companyId: initialCompanyId,
           });
 
-          const [rawPerms, procList] = await Promise.all([
-            fetchCompanyPermissionsRaw(code),
-            fetchProcesses(initialCompanyId, bootScope),
-          ]);
+          const rawPerms = await fetchCompanyPermissionsRaw(code);
+          if (cancelled) return;
 
+          const permList = rawPerms;
+          const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
+          const initialActive =
+            savedPerm && permList.includes(savedPerm) ? savedPerm : permList.length > 0 ? permList[0] : "";
+
+          const procList = await fetchProcesses(initialCompanyId, bootScope, initialActive);
           if (cancelled) return;
 
           const skipCategoryGuard = shouldSkipMaintenanceCategoryGuard({
@@ -513,24 +515,15 @@ export default function FormulaMaintenancePage() {
           });
           if (!skipCategoryGuard) {
             const hasGames = rawPerms.includes("Games") || rawPerms.includes("Gambling");
-            const bankOnly = rawPerms.includes("Bank") && !hasGames;
-            if (bankOnly) {
-              navigate(spaPath("dashboard"), { replace: true });
-              return;
-            }
-            if (!hasGames) {
+            const hasBank = rawPerms.includes("Bank");
+            if (!hasGames && !hasBank) {
               navigate(spaPath("dashboard"), { replace: true });
               return;
             }
           }
 
-          const permList = rawPerms.filter((p) => p !== "Bank");
           setPermissions(permList);
           setProcesses(procList);
-
-          const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
-          const initialActive =
-            savedPerm && permList.includes(savedPerm) ? savedPerm : permList.length > 0 ? permList[0] : "";
           setActivePermission(initialActive);
           switchPermsCacheRef.current = { companyCode: code, perms: permList };
           skipMetaAfterBootRef.current = true;
@@ -608,7 +601,7 @@ export default function FormulaMaintenancePage() {
         } else {
           permList = [];
         }
-        const procList = await fetchProcesses(companyId, scope);
+        const procList = await fetchProcesses(companyId, scope, activePermission);
         if (cancelled) return;
         setPermissions(permList);
         setProcesses(procList);
@@ -645,7 +638,7 @@ export default function FormulaMaintenancePage() {
     return () => {
       cancelled = true;
     };
-  }, [filtersReady, formulaScope, formulaScopeKey, companyId, companyCode, selectedGroup, companies, notify, t]);
+  }, [filtersReady, formulaScope, formulaScopeKey, companyId, companyCode, selectedGroup, companies, activePermission, notify, t]);
 
   // -- Search Logic --
   /** 首次整表 Loading；之后（切换公司等）listSyncing 保留旧表直至新数据返回 */

@@ -141,6 +141,15 @@ export function detectHtmlTableInClipboard(e) {
   return null;
 }
 
+/**
+ * Rich table HTML used by 1.Text format-merge mode.
+ * Only treat as rich when it's a table and carries format/span hints.
+ */
+export function isFormatRichHtmlTable(html) {
+  if (!html || !/<table\b/i.test(html)) return false;
+  return /rowspan\s*=|colspan\s*=|style\s*=|<font\b|<strong\b|<b\b|<span\b/i.test(html);
+}
+
 /** UI chrome copied from external sites (action buttons, icons) — not cell data. */
 const PASTED_INTERACTIVE_UI_SELECTOR =
   "button, input, select, textarea, svg, img, [role='button']";

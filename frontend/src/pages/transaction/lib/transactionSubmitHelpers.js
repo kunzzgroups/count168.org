@@ -48,7 +48,7 @@ export function buildRatePayload({
   } catch {
     middleDec = MoneyDecimal.toDecimal("0", 0);
   }
-  if (!middleDec.gt(0)) middleDec = MoneyDecimal.toDecimal("0", 0);
+  if (middleDec.isZero()) middleDec = MoneyDecimal.toDecimal("0", 0);
 
   const fromCode = rateFromAccount?.account_id || "";
   const toCode = rateToAccount?.account_id || "";
@@ -61,7 +61,7 @@ export function buildRatePayload({
   const transferToDesc = `Transaction from ${transferFromCode} (Rate: ${rateExchangeRateRaw})`;
 
   const middleDesc =
-    middleId && middleDec.gt(0)
+    middleId && !middleDec.isZero()
       ? `Rate charge (x${rateMiddlemanRate}) from ${rateCurrencyFrom} ${MoneyDecimal.formatFixed(fromDec.toString(), 2)}`
       : "";
 
@@ -104,7 +104,7 @@ export function buildRatePayload({
     const transferGross = grossDec;
     let transferToSide = transferGross;
     let transferFromSide = transferGross;
-    if (middleId && middleDec.gt(0)) {
+    if (middleId && !middleDec.isZero()) {
       transferFromSide = transferGross.minus(middleDec);
     }
 
@@ -121,7 +121,7 @@ export function buildRatePayload({
     payload.rate_transfer_from_account = transferToId;
     payload.rate_transfer_to_account = transferFromId;
 
-    if (middleId && middleDec.gt(0)) {
+    if (middleId && !middleDec.isZero()) {
       payload.rate_middleman_account_id = middleId;
       payload.rate_middleman_currency = rateCurrencyTo;
       payload.rate_middleman_amount = formatRateAmount(middleDec.toString());
