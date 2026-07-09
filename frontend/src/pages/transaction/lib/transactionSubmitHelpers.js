@@ -34,6 +34,7 @@ export function buildRatePayload({
   rateToAccount,
   rateTransferToAccount,
   rateTransferFromAccount,
+  rateMiddlemanInputAmount,
 }) {
   const transferToId = rateTransferToAccount?.id ? String(rateTransferToAccount.id) : "";
   const transferFromId = rateTransferFromAccount?.id ? String(rateTransferFromAccount.id) : "";
@@ -49,6 +50,25 @@ export function buildRatePayload({
     middleDec = MoneyDecimal.toDecimal("0", 0);
   }
   if (middleDec.isZero()) middleDec = MoneyDecimal.toDecimal("0", 0);
+
+  let inputAmtDec = MoneyDecimal.toDecimal("0", 0);
+  try {
+    const inputStr = cleanAmt(rateMiddlemanInputAmount);
+    if (inputStr) {
+      inputAmtDec = MoneyDecimal.toDecimal(inputStr, 0);
+    }
+  } catch {
+    // ignore
+  }
+
+  let rateDec = MoneyDecimal.toDecimal("0", 0);
+  try {
+    if (parsedRateNormalizedStr) {
+      rateDec = MoneyDecimal.toDecimal(parsedRateNormalizedStr, 0);
+    }
+  } catch {
+    // ignore
+  }
 
   const fromCode = rateFromAccount?.account_id || "";
   const toCode = rateToAccount?.account_id || "";
@@ -94,6 +114,7 @@ export function buildRatePayload({
     rate_middleman_rate: rateMiddlemanRate,
     rate_middleman_amount: rateMiddlemanAmount ? formatRateAmount(middleDec.toString()) : "",
     rate_middleman_account: middleId,
+    rate_middleman_input_amount: rateMiddlemanInputAmount ? cleanAmt(rateMiddlemanInputAmount) : "",
 
     rate_transfer_amount: "",
     rate_account_from_amount: "",
@@ -105,7 +126,12 @@ export function buildRatePayload({
     let transferToSide = transferGross;
     let transferFromSide = transferGross;
     if (middleId && !middleDec.isZero()) {
-      transferFromSide = transferGross.minus(middleDec);
+      let finalFeeForPayload = middleDec;
+      if (inputAmtDec.gt(0) && rateDec.gt(0)) {
+        const convertedInputAmtDec = inputAmtDec.times(rateDec);
+        finalFeeForPayload = middleDec.minus(convertedInputAmtDec);
+      }
+      transferFromSide = transferGross.minus(finalFeeForPayload);
     }
 
     payload.rate_transfer_from_account_id = transferToId;

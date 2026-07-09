@@ -1,6 +1,6 @@
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
-import { formatDmy, parseDdMmYyyyToYmd, parseYmd } from "../../../utils/date/dateUtils.js";
+import { formatDmyDash, parseDdMmYyyyToYmd, parseYmd } from "../../../utils/date/dateUtils.js";
 
 /** Auto page size bounds (actual count from useAutoListPageSize). */
 export const PAGE_SIZE_MIN = 4;
@@ -229,14 +229,13 @@ export function canShowBankResend(row) {
 
 export function isoToDmy(iso) {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(String(iso).trim())) return "";
-  const [y, m, d] = String(iso).trim().split("-");
-  return `${d}/${m}/${y}`;
+  return formatDmyDash(String(iso).trim());
 }
 
 export function dmyToIso(dmy) {
   const t = String(dmy || "").trim();
-  if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(t)) return "";
-  const p = t.split("/");
+  if (!/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(t)) return "";
+  const p = t.split(/[\/-]/);
   const dd = parseInt(p[0], 10);
   const mm = parseInt(p[1], 10);
   const yy = parseInt(p[2], 10);
@@ -252,8 +251,8 @@ export function parseRowDateMs(raw) {
     const t = new Date(`${head}T00:00:00`).getTime();
     return Number.isNaN(t) ? null : t;
   }
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-    const [dd, mm, yy] = s.split("/").map((x) => Number(x, 10));
+  if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(s)) {
+    const [dd, mm, yy] = s.split(/[\/-]/).map((x) => Number(x, 10));
     const t = new Date(yy, mm - 1, dd).getTime();
     return Number.isNaN(t) ? null : t;
   }
@@ -366,7 +365,7 @@ export function normalizeBankResendDayStartYmd(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  const dmy = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
   if (dmy) {
     const dd = String(parseInt(dmy[1], 10)).padStart(2, "0");
     const mm = String(parseInt(dmy[2], 10)).padStart(2, "0");
@@ -812,24 +811,27 @@ export function accountingDueRowKey(r) {
   return `${id}|${accountingDuePeriodType(r)}|${accountingDueBillingMonth(r)}`;
 }
 
-/** Accounting Due 表格日期：统一 DD/MM/YYYY（与 Start Date 列一致）。 */
+/** Accounting Due 表格日期：统一 DD-MM-YYYY（与 Start Date 列一致）。 */
 export function formatAccountingDueDisplayDate(raw) {
   const s = String(raw || "").trim();
   if (!s) return "";
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const d = parseYmd(s.substring(0, 10));
-    return d ? formatDmy(d) : s;
+    return d ? formatDmyDash(d) : s;
   }
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+  if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{4}$/.test(s)) {
+    const ymdFromDmy = parseDdMmYyyyToYmd(s);
+    return ymdFromDmy ? formatDmyDash(ymdFromDmy) : s;
+  }
   const ymd = parseDdMmYyyyToYmd(s);
   if (ymd) {
     const d = parseYmd(ymd);
-    return d ? formatDmy(d) : s;
+    return d ? formatDmyDash(d) : s;
   }
   return s;
 }
 
-/** Accounting Due：Start Date 固定为流程 day_start（DD/MM/YYYY）。 */
+/** Accounting Due：Start Date 固定为流程 day_start（DD-MM-YYYY）。 */
 export function formatAccountingDueProcessDayStart(row) {
   return formatAccountingDueDisplayDate(row?.day_start) || "-";
 }

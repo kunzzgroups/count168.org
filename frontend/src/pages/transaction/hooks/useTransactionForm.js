@@ -238,6 +238,16 @@ export function useTransactionForm({
       // ignore
     }
 
+    const parsed = parseRateExpression(rateExchangeRateRaw);
+    let rateDec = MoneyDecimal.toDecimal("0", 0);
+    if (parsed.valid) {
+      try {
+        rateDec = MoneyDecimal.toDecimal(parsed.value, 0);
+      } catch {
+        // ignore
+      }
+    }
+
     let baseFeeDec = MoneyDecimal.toDecimal("0", 0);
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
@@ -249,7 +259,12 @@ export function useTransactionForm({
       // ignore
     }
 
-    const finalFeeDec = baseFeeDec.plus(inputAmtDec);
+    let convertedInputAmtDec = inputAmtDec;
+    if (inputAmtDec.gt(0) && rateDec.gt(0)) {
+      convertedInputAmtDec = inputAmtDec.times(rateDec);
+    }
+
+    const finalFeeDec = baseFeeDec.plus(convertedInputAmtDec);
     let middleStr = "";
     if (!finalFeeDec.isZero()) {
       middleStr = formatRateAmount(finalFeeDec.toString());
@@ -258,7 +273,6 @@ export function useTransactionForm({
     }
     setRateMiddlemanAmount(middleStr);
 
-    const parsed = parseRateExpression(rateExchangeRateRaw);
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
       if (!parsed.valid || !fromDec.gt(0)) {
@@ -266,7 +280,6 @@ export function useTransactionForm({
         setRateToAmountGrossStr("");
         return;
       }
-      const rateDec = MoneyDecimal.toDecimal(parsed.value, 0);
       if (!rateDec.gt(0)) {
         setRateCurrencyToAmount("");
         setRateToAmountGrossStr("");
@@ -401,6 +414,7 @@ export function useTransactionForm({
           rateToAccount,
           rateTransferToAccount,
           rateTransferFromAccount,
+          rateMiddlemanInputAmount,
         });
 
         const res = await submitMutation.mutateAsync({ scopeApi, payload, clientRequestId });

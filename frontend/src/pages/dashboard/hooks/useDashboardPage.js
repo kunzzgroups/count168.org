@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useLocation } from "react-router-dom";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { pathnameIs } from "../../../utils/routing/pageRoutes.js";
+import { formatDmyDash } from "../../../utils/date/dateUtils.js";
 import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
 import { notifyCompanySessionUpdated } from "../../../utils/company/companySessionEvents.js";
 import { syncCompanySessionApi } from "../../../utils/company/companySessionSync.js";
@@ -6760,13 +6761,11 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         : currencyCode || "—";
     const from = parseYmd(dateFrom);
     const to = parseYmd(dateTo);
-    const loc = i18n.locale;
     if (from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth()) {
-      const monthYear = to.toLocaleDateString(loc, { month: "short", year: "numeric" });
-      return `${cur} · ${monthYear}`;
+      return `${cur} · ${formatDmyDash(to)}`;
     }
-    const left = from.toLocaleDateString(loc, { month: "short", day: "numeric" });
-    const right = to.toLocaleDateString(loc, { month: "short", day: "numeric", year: "numeric" });
+    const left = formatDmyDash(from);
+    const right = formatDmyDash(to);
     return `${cur} · ${left} – ${right}`;
   }, [
     currencyCode,
@@ -6776,7 +6775,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     i18n.all,
     dateFrom,
     dateTo,
-    i18n.locale,
   ]);
 
   const chartDateRangeText = useMemo(

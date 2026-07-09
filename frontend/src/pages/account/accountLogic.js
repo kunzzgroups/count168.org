@@ -1,6 +1,7 @@
 /** Account List Logic Helpers */
 
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
+import { formatDmyDash } from "../../utils/date/dateUtils.js";
 import {
   companiesForCompanyPicker,
   DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
@@ -41,17 +42,14 @@ function parseAccountLastLogin(raw) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Last Login 列：仅展示日期 YYYY-MM-DD */
+/** Last Login 列：仅展示日期 DD-MM-YYYY */
 export function formatAccountLastLoginDate(raw) {
   const d = parseAccountLastLogin(raw);
   if (!d) {
     const s = String(raw || "").trim();
     return s || "-";
   }
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return formatDmyDash(d);
 }
 
 /** Last Login 悬浮提示：仅时间 HH:MM:SS */

@@ -1,6 +1,6 @@
 // domainHelpers.js — Pure utility functions extracted from domain.js
 
-import { formatYmd, parseDdMmYyyyToYmd, parseYmd } from "../../utils/date/dateUtils.js";
+import { formatDmyDash, formatYmd, parseDdMmYyyyToYmd, parseYmd } from "../../utils/date/dateUtils.js";
 
 // ★★★ SINGLE_CATEGORY_MODE ★★★
 // true: Company Settings 弹窗中 Permissions 只能选择一个分类（互斥）
@@ -61,13 +61,7 @@ export function calculateExpirationDate(period, startDate = null) {
 
 /** 格式化日期显示 */
 export function formatDate(dateString) {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  return formatDmyDash(dateString);
 }
 
 /** Map days-until-expiration to sidebar urgency class (matches includes/expiration_status.php). */

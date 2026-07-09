@@ -9,6 +9,7 @@ import {
   independentCompaniesForPicker,
   normalizeCompanyGroupId,
 } from "../../utils/company/sharedCompanyFilter.js";
+import { formatDmyDash } from "../../utils/date/dateUtils.js";
 
 export const PAGE_SIZE = 25;
 
@@ -263,17 +264,14 @@ function parseUserLastLogin(raw) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** Last Login 列：仅展示日期 YYYY-MM-DD */
+/** Last Login 列：仅展示日期 DD-MM-YYYY */
 export function formatUserLastLoginDate(raw) {
   const d = parseUserLastLogin(raw);
   if (!d) {
     const s = String(raw || "").trim();
     return s || "-";
   }
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return formatDmyDash(d);
 }
 
 /** Last Login 悬浮提示：仅时间 HH:MM:SS */
@@ -292,12 +290,9 @@ export function formatLastLogin(raw) {
   if (!s) return "-";
   const d = new Date(s.replace(" ", "T"));
   if (Number.isNaN(d.getTime())) return s;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
   const h = String(d.getHours()).padStart(2, "0");
   const min = String(d.getMinutes()).padStart(2, "0");
-  return `${y}-${m}-${day} ${h}:${min}`;
+  return `${formatDmyDash(d)} ${h}:${min}`;
 }
 
 /**
