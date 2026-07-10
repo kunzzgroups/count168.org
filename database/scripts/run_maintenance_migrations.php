@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-$dsn = 'mysql:host=127.0.0.1;port=13306;dbname=c168_org;charset=utf8mb4';
+$dsn = 'mysql:host=127.0.0.1;port=13306;dbname=u857194726_c168site;charset=utf8mb4';
 $user = 'admin';
 $pass = 'C168_site';
 

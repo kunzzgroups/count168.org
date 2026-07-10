@@ -106,7 +106,7 @@ export async function fetchProcesses(companyId, scope = null, permission = "") {
   const effectiveId = scope?.scopeCompanyId ?? companyId;
   const rows = await fetchMaintenanceProcesses(effectiveId, { credentials: "include" });
   let mapped = mapProcessesForMaintenanceSelect(rows, { groupPayrollShort: false });
-  if (payrollChannel) {
+  if (scope?.c168Channel) {
     mapped = mapped.filter((p) =>
       FORMULA_PAYROLL_PROCESS_CODES.has(String(p.process_name ?? "").trim().toUpperCase()),
     );
