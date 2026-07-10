@@ -1,5 +1,5 @@
 -- Global maintenance mode + IT allowlist tables
-USE `u857194726_c168site`;
+USE `c168_org`;
 SET NAMES utf8mb4;
 START TRANSACTION;
 

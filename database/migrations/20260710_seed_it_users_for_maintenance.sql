@@ -1,5 +1,5 @@
 -- Seed / update IT users for maintenance bypass
-USE `u857194726_c168site`;
+USE `c168_org`;
 SET NAMES utf8mb4;
 START TRANSACTION;
 
