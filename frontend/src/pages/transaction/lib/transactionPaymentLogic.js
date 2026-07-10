@@ -63,6 +63,12 @@ export function dedupeRowsByAccountAndCurrency(rows) {
   const indexByKey = new Map();
   const norm = (v) => String(v || "").toUpperCase().trim();
   const keyOf = (row) => {
+    if (row?.type_search_row) {
+      const tid = Number(row?.transaction_id);
+      const accountDbId = norm(row?.account_db_id);
+      const currency = norm(row?.currency);
+      return `TX:${tid > 0 ? tid : "x"}_${accountDbId || "DB"}_${currency}`;
+    }
     const currency = norm(row?.currency);
     // Prefer stable UI identity (account_id). account_db_id is fallback only.
     const accountCode = norm(row?.account_id);
@@ -487,15 +493,33 @@ export function readTransactionCurrencyFilterState(companyId) {
   }
 }
 
+/** @param {Set<number>|null|undefined} typeSearchAccountIds */
+export function rowMatchesTypeSearchAccountSet(row, typeSearchAccountIds) {
+  if (!typeSearchAccountIds || typeSearchAccountIds.size === 0) return false;
+  const dbId = Number(row?.account_db_id);
+  if (!Number.isFinite(dbId) || dbId <= 0) return false;
+  return typeSearchAccountIds.has(dbId);
+}
+
+/** Keep only rows whose account_db_id appears in the all-time type search set. */
+export function applyTypeSearchAccountFilter(left, right, typeSearchAccountIds) {
+  if (!typeSearchAccountIds || typeSearchAccountIds.size === 0) {
+    return { left: [], right: [] };
+  }
+  const keep = (rows) =>
+    (Array.isArray(rows) ? rows : []).filter((row) => rowMatchesTypeSearchAccountSet(row, typeSearchAccountIds));
+  return { left: keep(left), right: keep(right) };
+}
+
 /** Row count after the same client filters as the main grid (for search-complete toasts). */
-export function countDisplayedRows(rawSearchData, searchState, txType) {
+export function countDisplayedRows(rawSearchData, searchState, txType, typeSearchActive = false) {
   if (!rawSearchData) return 0;
   const rawLeft = dedupeRowsByAccountAndCurrency(rawSearchData.left_table || []);
   const rawRight = dedupeRowsByAccountAndCurrency(rawSearchData.right_table || []);
   const z = filterTransactionTableRows(rawLeft, rawRight, {
-    showZeroBalance: searchState.showZeroBalance,
-    showPaymentOnly: searchState.showPaymentOnly,
-    showCaptureOnly: searchState.showCaptureOnly,
+    showZeroBalance: typeSearchActive ? true : searchState.showZeroBalance,
+    showPaymentOnly: typeSearchActive ? false : searchState.showPaymentOnly,
+    showCaptureOnly: typeSearchActive ? false : searchState.showCaptureOnly,
   });
   const norm = normalizeRateRowsByCrDr(z.left, z.right, txType === "RATE");
   return (norm.leftRows?.length || 0) + (norm.rightRows?.length || 0);

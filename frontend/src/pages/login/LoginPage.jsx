@@ -209,6 +209,13 @@ export default function LoginPage() {
   );
 
   useEffect(() => {
+    const msg = safeSession.getItem("ec_maintenance_notice");
+    if (!msg) return;
+    safeSession.removeItem("ec_maintenance_notice");
+    showNotice(msg, i18n.notice);
+  }, [showNotice, i18n.notice]);
+
+  useEffect(() => {
     document.body.classList.remove(
       "transaction-page",
       "member-winloss-page",

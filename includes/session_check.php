@@ -29,6 +29,7 @@ $isApiRequest = (
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_invalidation.php';
+require_once __DIR__ . '/maintenance_gate.php';
 
 // 统一的超时时间（秒）- 1小时
 define('SESSION_TIMEOUT', 3600);
@@ -96,6 +97,10 @@ if (!isset($_SESSION['user_id']) && isset($_COOKIE['remember_token'])) {
 if (isset($_SESSION['user_id'])) {
     if ($pdo instanceof PDO && auth_session_password_stale($pdo)) {
         auth_force_logout_session($pdo, $isApiRequest);
+    }
+    if ($pdo instanceof PDO) {
+        maintenance_gate_enforce_active_session($pdo, $isApiRequest);
+        maintenance_gate_force_it_c168_session($pdo);
     }
 
     // 检查session超时（如果没有remember me的话）

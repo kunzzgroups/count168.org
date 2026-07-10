@@ -15,6 +15,7 @@ try {
     require_once __DIR__ . '/../../includes/group_company_access.php';
     require_once __DIR__ . '/../../includes/session_user_payload_cache.php';
     require_once __DIR__ . '/../../includes/auth_invalidation.php';
+    require_once __DIR__ . '/../../includes/maintenance_gate.php';
 } catch (Throwable $e) {
     // Do not fail bootstrap because of DB wiring errors; session data is still enough for routing.
     error_log('current_user_api config load failed: ' . $e->getMessage());
@@ -74,6 +75,11 @@ if (!isset($_SESSION['user_id'])) {
 
 if ($pdo instanceof PDO && auth_session_password_stale($pdo)) {
     auth_force_logout_session($pdo, true);
+}
+
+if ($pdo instanceof PDO) {
+    maintenance_gate_enforce_active_session($pdo, true);
+    maintenance_gate_force_it_c168_session($pdo);
 }
 
 $cachedPayload = function_exists('session_user_payload_cache_get')

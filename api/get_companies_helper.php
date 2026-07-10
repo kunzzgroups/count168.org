@@ -5,6 +5,63 @@
  */
 
 require_once __DIR__ . '/../includes/group_scope_resolve.php';
+require_once __DIR__ . '/../includes/maintenance_gate.php';
+
+if (!function_exists('_getSystemItScopedCompanies')) {
+    function _getSystemItScopedCompanies(PDO $pdo, bool $fetchAll): ?array
+    {
+        $sessionLoginId = (string) ($_SESSION['login_id'] ?? '');
+        if (!maintenance_gate_is_allowlisted_login($sessionLoginId)) {
+            return null;
+        }
+
+        $itGroups = maintenance_gate_it_scope_groups();
+        $placeholders = implode(',', array_fill(0, count($itGroups), '?'));
+        $stmt = $pdo->prepare("
+            SELECT id, company_id, group_id, expiration_date, permissions
+            FROM company
+            WHERE UPPER(TRIM(company_id)) = 'C168'
+               OR UPPER(TRIM(group_id)) IN ($placeholders)
+            ORDER BY CASE WHEN UPPER(TRIM(company_id)) = 'C168' THEN 0 ELSE 1 END, company_id ASC
+        ");
+        $stmt->execute($itGroups);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if (!$rows) {
+            return [];
+        }
+        $mapped = array_map(static function (array $row): array {
+            return [
+                'id' => (int) ($row['id'] ?? 0),
+                'company_id' => (string) ($row['company_id'] ?? ''),
+                'group_id' => $row['group_id'] ?? null,
+                'expiration_date' => $row['expiration_date'] ?? null,
+                'permissions' => $row['permissions'] ?? null,
+            ];
+        }, $rows);
+        $mapped = array_values(array_filter($mapped, static fn(array $row): bool => (int) $row['id'] > 0));
+        if ($fetchAll) {
+            return array_map(static function (array $row): array {
+                return [
+                'id' => $row['id'],
+                'company_id' => $row['company_id'],
+                'native_group_id' => $row['group_id'],
+                'group_id' => $row['group_id'],
+                'expiration_date' => $row['expiration_date'],
+                'permissions' => $row['permissions'],
+                'is_external' => 0,
+                ];
+            }, $mapped);
+        }
+        return array_map(static function (array $row): array {
+            return [
+                'id' => $row['id'],
+                'company_id' => $row['company_id'],
+                'group_id' => $row['group_id'],
+                'expiration_date' => $row['expiration_date'],
+            ];
+        }, $mapped);
+    }
+}
 
 if (!function_exists('getCompaniesByUser')) {
     /**
@@ -16,6 +73,11 @@ if (!function_exists('getCompaniesByUser')) {
      *   must be preserved.
      */
     function getCompaniesByUser(PDO $pdo, int $userId, bool $fetchAll = false, bool $includeGroupLinkVirtualRows = false): array {
+        $scopedSystemItCompanies = _getSystemItScopedCompanies($pdo, $fetchAll);
+        if ($scopedSystemItCompanies !== null) {
+            return $scopedSystemItCompanies;
+        }
+
         if ($fetchAll) {
             $stmt = $pdo->prepare("
                 SELECT DISTINCT c.id, c.company_id, c.group_id AS native_group_id, c.group_id, c.expiration_date, c.permissions

@@ -217,11 +217,9 @@ function remarkCell(row) {
   return String(raw).toUpperCase();
 }
 
-/** PDF remark: break at word boundaries so labels like STARTING BALANCE do not split mid-word. */
+/** PDF remark text: preserve natural spacing/wrapping (no forced per-word line breaks). */
 function pdfRemarkText(row) {
-  const text = remarkCell(row);
-  if (!text || text === "-" || !/\s/.test(text)) return text;
-  return text.trim().split(/\s+/).join("\n");
+  return remarkCell(row);
 }
 
 /** Account currencies for export modal (member report scope). */
@@ -616,12 +614,42 @@ function applyPdfMoneyStyle(cell, rawValue) {
   }
 }
 
+function applyPdfCjkCellStyle(cell, { columnIndex, inHeader = false } = {}) {
+  // Keep CJK rows visually aligned with UI: slightly larger line-height and
+  // avoid synthetic bold that can look blurry in embedded variable fonts.
+  const isDescription = columnIndex === 6;
+  const isRemark = columnIndex === 7;
+  if (inHeader) {
+    cell.styles.fontSize = 9;
+    cell.styles.lineHeight = 1.08;
+    return;
+  }
+  if (!isDescription && !isRemark) return;
+  cell.styles.fontSize = 8.7;
+  cell.styles.lineHeight = 1.08;
+  if (isDescription) {
+    cell.styles.halign = "left";
+    cell.styles.overflow = "linebreak";
+  }
+  if (isRemark) {
+    cell.styles.halign = "left";
+    cell.styles.overflow = "linebreak";
+  }
+}
+
 const PDF_LOGO_PATH = "images/count_brandlogo.png";
 const PDF_LOGO_HEIGHT_MM = 8;
 const PDF_LOGO_TOP_TRIM_MM = 1.1;
 const PDF_TITLE_FONT_PT = 14;
 const PDF_META_FONT_PT = 9;
 const PDF_CURRENCY_FONT_PT = 11;
+const PDF_FALLBACK_FONT_FAMILY = "helvetica";
+const PDF_CJK_FONT_FAMILY = "NotoSansCJKsc";
+const PDF_CJK_FONT_FILE = "NotoSansCJKsc-VF.ttf";
+const PDF_CJK_FONT_URLS = [
+  "https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/Variable/TTF/NotoSansCJKsc-VF.ttf",
+  "https://cdn.jsdelivr.net/gh/notofonts/noto-cjk@main/Sans/Variable/TTF/NotoSansCJKsc-VF.ttf",
+];
 const PDF_HEADER_TOP_MM = 8;
 const PDF_FIRST_PAGE_TOP_MARGIN_MM = 24;
 const PDF_OTHER_PAGE_TOP_MARGIN_MM = 18;
@@ -630,6 +658,7 @@ const PDF_HEADER_TABLE_GAP_MM = 1.5;
 const PDF_HEADER_META_SEP_GAP_MM = 1.5;
 const PDF_BRAND_BAR_RGB = [0, 44, 73];
 const PDF_FOOTER_BOTTOM_MM = 10;
+let pdfCjkFontBase64Promise = null;
 
 function resolvePdfLogoUrls(relativePath) {
   const clean = String(relativePath || "").replace(/^\//, "");
@@ -674,6 +703,75 @@ async function loadPdfLogoAsset() {
   return null;
 }
 
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fetchPdfCjkFontBase64() {
+  for (const url of PDF_CJK_FONT_URLS) {
+    try {
+      const res = await fetch(url, {
+        credentials: "omit",
+        cache: "force-cache",
+      });
+      if (!res.ok) continue;
+      const dataUrl = await blobToDataUrl(await res.blob());
+      const payload = dataUrl.split(",")[1] || "";
+      if (payload) return payload;
+    } catch {
+      /* try next URL */
+    }
+  }
+  throw new Error("Unable to load CJK font for PDF export");
+}
+
+async function ensurePdfExportFont(doc) {
+  try {
+    if (!pdfCjkFontBase64Promise) {
+      pdfCjkFontBase64Promise = fetchPdfCjkFontBase64();
+    }
+    let base64 = "";
+    try {
+      base64 = await pdfCjkFontBase64Promise;
+    } catch {
+      pdfCjkFontBase64Promise = null;
+      throw new Error("CJK font fetch failed");
+    }
+    const hasFile =
+      typeof doc.existsFileInVFS === "function"
+        ? doc.existsFileInVFS(PDF_CJK_FONT_FILE)
+        : false;
+    if (!hasFile) {
+      doc.addFileToVFS(PDF_CJK_FONT_FILE, base64);
+    }
+    doc.addFont(PDF_CJK_FONT_FILE, PDF_CJK_FONT_FAMILY, "normal");
+    doc.addFont(PDF_CJK_FONT_FILE, PDF_CJK_FONT_FAMILY, "bold");
+    return PDF_CJK_FONT_FAMILY;
+  } catch {
+    return null;
+  }
+}
+
+function hasCjkText(value) {
+  const text = String(value || "");
+  if (!text) return false;
+  return /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]/.test(text);
+}
+
+function resolvePdfFontFamilyForText(text, cjkFontFamily) {
+  if (cjkFontFamily && hasCjkText(text)) return cjkFontFamily;
+  return PDF_FALLBACK_FONT_FAMILY;
+}
+
+function setPdfFontForText(doc, text, cjkFontFamily, style = "normal") {
+  doc.setFont(resolvePdfFontFamilyForText(text, cjkFontFamily), style);
+}
+
 function pdfCapHeightMm(fontSizePt) {
   return fontSizePt * 0.352778 * 0.72;
 }
@@ -682,7 +780,7 @@ function pdfLineHeightMm(fontSizePt) {
   return fontSizePt * 0.352778 * 1.15;
 }
 
-function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTitle, showTitle, showLogo }) {
+function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTitle, showTitle, showLogo, cjkFontFamily }) {
   const capTopY = PDF_HEADER_TOP_MM;
   let blockBottomY = capTopY;
   const leftX = marginX;
@@ -700,14 +798,14 @@ function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTit
   const titleMaxW = pageW - marginX * 2 - (logoImgW > 0 ? logoImgW + 4 : 0);
 
   if (showTitle && title) {
-    doc.setFont("helvetica", "bold");
+    setPdfFontForText(doc, title, cjkFontFamily, "bold");
     doc.setFontSize(PDF_TITLE_FONT_PT);
     doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
     const titleBaselineY = capTopY + pdfCapHeightMm(PDF_TITLE_FONT_PT);
     doc.text(title, leftX, titleBaselineY, { align: "left", maxWidth: titleMaxW });
     blockBottomY = Math.max(blockBottomY, titleBaselineY);
     if (meta) {
-      doc.setFont("helvetica", "normal");
+      setPdfFontForText(doc, meta, cjkFontFamily, "normal");
       doc.setFontSize(PDF_META_FONT_PT);
       doc.setTextColor(100, 116, 139);
       const metaBaselineY = titleBaselineY + pdfLineHeightMm(PDF_META_FONT_PT);
@@ -718,7 +816,7 @@ function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTit
 
   if (currencyTitle) {
     const currencyBaselineY = blockBottomY + 2 + pdfCapHeightMm(PDF_CURRENCY_FONT_PT);
-    doc.setFont("helvetica", "bold");
+    setPdfFontForText(doc, currencyTitle, cjkFontFamily, "bold");
     doc.setFontSize(PDF_CURRENCY_FONT_PT);
     doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
     doc.text(currencyTitle, leftX, currencyBaselineY, { align: "left", maxWidth: titleMaxW });
@@ -732,10 +830,10 @@ function drawPdfPageHeader(doc, { logo, pageW, marginX, title, meta, currencyTit
   return sepY + PDF_HEADER_TABLE_GAP_MM;
 }
 
-function drawPdfSectionCurrencyHeading(doc, { pageW, marginX, startY, currencyTitle }) {
+function drawPdfSectionCurrencyHeading(doc, { pageW, marginX, startY, currencyTitle, cjkFontFamily }) {
   const titleMaxW = pageW - marginX * 2;
   const currencyBaselineY = startY + pdfCapHeightMm(PDF_CURRENCY_FONT_PT);
-  doc.setFont("helvetica", "bold");
+  setPdfFontForText(doc, currencyTitle, cjkFontFamily, "bold");
   doc.setFontSize(PDF_CURRENCY_FONT_PT);
   doc.setTextColor(PDF_BRAND_BAR_RGB[0], PDF_BRAND_BAR_RGB[1], PDF_BRAND_BAR_RGB[2]);
   doc.text(currencyTitle, marginX, currencyBaselineY, { align: "left", maxWidth: titleMaxW });
@@ -746,27 +844,27 @@ function drawPdfSectionCurrencyHeading(doc, { pageW, marginX, startY, currencyTi
   return sepY + PDF_HEADER_TABLE_GAP_MM;
 }
 
-function drawPdfPageFooter(doc, { pageW, pageH, pageLabel }) {
-  doc.setFont("helvetica", "normal");
+function drawPdfPageFooter(doc, { pageW, pageH, pageLabel, cjkFontFamily }) {
+  setPdfFontForText(doc, pageLabel, cjkFontFamily, "normal");
   doc.setFontSize(9);
   doc.setTextColor(100, 116, 139);
   doc.text(pageLabel, pageW / 2, pageH - PDF_FOOTER_BOTTOM_MM, { align: "center" });
 }
 
-/** A4 portrait — column widths total 190mm; Date fits dd/mm/yyyy on one line. */
+/** A4 landscape — column widths total 277mm; tuned for readable remark/description columns. */
 const PDF_TABLE_COLUMN_STYLES = {
-  0: { cellWidth: 24, halign: "left", overflow: "hidden", fontStyle: "bold" },
-  1: { cellWidth: 22, overflow: "hidden", fontStyle: "bold" },
-  2: { cellWidth: 14, halign: "right", overflow: "hidden" },
-  3: { cellWidth: 20, halign: "right", overflow: "hidden" },
-  4: { cellWidth: 20, halign: "right", overflow: "hidden" },
-  5: { cellWidth: 24, halign: "right", overflow: "hidden" },
-  6: { cellWidth: 42, overflow: "linebreak" },
-  7: { cellWidth: 24, halign: "center", overflow: "linebreak" },
+  0: { cellWidth: 30, halign: "left", overflow: "hidden", fontStyle: "bold" },
+  1: { cellWidth: 30, overflow: "hidden", fontStyle: "bold" },
+  2: { cellWidth: 16, halign: "right", overflow: "hidden" },
+  3: { cellWidth: 28, halign: "right", overflow: "hidden" },
+  4: { cellWidth: 28, halign: "right", overflow: "hidden" },
+  5: { cellWidth: 30, halign: "right", overflow: "hidden" },
+  6: { cellWidth: 68, halign: "left", overflow: "linebreak" },
+  7: { cellWidth: 47, halign: "left", overflow: "linebreak" },
 };
 
 /**
- * Generate a proper A4 portrait PDF and trigger download (no browser print dialog).
+ * Generate a proper A4 landscape PDF and trigger download (no browser print dialog).
  */
 export async function downloadMemberReportPdf({
   sections,
@@ -782,10 +880,11 @@ export async function downloadMemberReportPdf({
     import("jspdf-autotable"),
   ]);
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const marginX = 10;
+  const cjkFontFamily = await ensurePdfExportFont(doc);
   const logo = await loadPdfLogoAsset();
 
   const headerSection = buildMemberReportSectionData({
@@ -818,6 +917,7 @@ export async function downloadMemberReportPdf({
       currencyTitle: multiCurrency ? headerSection.currencyTitle : null,
       showTitle: true,
       showLogo: true,
+      cjkFontFamily,
     });
     headerPagesDrawn.add(1);
   }
@@ -846,6 +946,7 @@ export async function downloadMemberReportPdf({
           marginX,
           startY: cursorY,
           currencyTitle: sectionData.currencyTitle,
+          cjkFontFamily,
         });
       }
     }
@@ -891,6 +992,7 @@ export async function downloadMemberReportPdf({
               marginX,
               startY: PDF_HEADER_TOP_MM,
               currencyTitle: pendingCurrencyHeading,
+              cjkFontFamily,
             });
             pendingCurrencyHeading = null;
           }
@@ -901,12 +1003,13 @@ export async function downloadMemberReportPdf({
           pageW,
           pageH,
           pageLabel: t("exportPdfPageLabel", { page: docPage }),
+          cjkFontFamily,
         });
       },
       styles: {
-        font: "helvetica",
+        font: PDF_FALLBACK_FONT_FAMILY,
         fontSize: 9,
-        cellPadding: 2.5,
+        cellPadding: { top: 0.8, right: 1.2, bottom: 0.8, left: 1.2 },
         lineColor: [232, 237, 243],
         lineWidth: 0.2,
         textColor: [15, 23, 42],
@@ -918,7 +1021,7 @@ export async function downloadMemberReportPdf({
         textColor: 255,
         fontStyle: "bold",
         fontSize: 9,
-        minCellHeight: 8,
+        minCellHeight: 5.8,
         valign: "middle",
       },
       footStyles: {
@@ -930,8 +1033,29 @@ export async function downloadMemberReportPdf({
       alternateRowStyles: { fillColor: [244, 247, 252] },
       columnStyles: PDF_TABLE_COLUMN_STYLES,
       didParseCell: (hookData) => {
+        const colIdx = hookData.column.index;
+        const cellText = Array.isArray(hookData.cell?.text) ? hookData.cell.text.join(" ") : String(hookData.cell?.raw || "");
+        const isDescOrRemarkBody = hookData.section === "body" && (colIdx === 6 || colIdx === 7);
+        if (isDescOrRemarkBody) {
+          // Enforce unified typography for Description + Remark columns.
+          hookData.cell.styles.font = resolvePdfFontFamilyForText(cellText, cjkFontFamily);
+          hookData.cell.styles.fontStyle = "bold";
+          hookData.cell.styles.fontSize = 9;
+          hookData.cell.styles.lineHeight = 1.0;
+          hookData.cell.styles.halign = "left";
+          hookData.cell.styles.overflow = "linebreak";
+          hookData.cell.styles.textColor = [15, 23, 42];
+        }
+        const isCjkCell = !!(cjkFontFamily && hasCjkText(cellText));
+        if (isCjkCell && !isDescOrRemarkBody) {
+          hookData.cell.styles.font = cjkFontFamily;
+          applyPdfCjkCellStyle(hookData.cell, {
+            columnIndex: colIdx,
+            inHeader: hookData.section === "head",
+          });
+        }
         if (hookData.section === "head") {
-          hookData.cell.styles.cellPadding = { top: 3, right: 2, bottom: 3, left: 2 };
+          hookData.cell.styles.cellPadding = { top: 1, right: 1.2, bottom: 1, left: 1.2 };
         }
         if (hookData.section === "body") {
           const row = sourceRows[hookData.row.index];
@@ -939,22 +1063,24 @@ export async function downloadMemberReportPdf({
             hookData.cell.styles.fillColor = [238, 244, 255];
             hookData.cell.styles.textColor = [30, 58, 95];
           }
-          if (hookData.column.index === 0) {
+          if (colIdx === 0) {
             hookData.cell.styles.overflow = "hidden";
             hookData.cell.styles.whiteSpace = "nowrap";
           }
-          if (hookData.column.index === 3) applyPdfMoneyStyle(hookData.cell, row?.win_loss);
-          if (hookData.column.index === 4) applyPdfMoneyStyle(hookData.cell, row?.cr_dr);
-          if (hookData.column.index === 5) applyPdfMoneyStyle(hookData.cell, row?.balance);
-          if (hookData.column.index === 6) {
-            hookData.cell.styles.fontStyle = "bold";
+          if (colIdx === 3) applyPdfMoneyStyle(hookData.cell, row?.win_loss);
+          if (colIdx === 4) applyPdfMoneyStyle(hookData.cell, row?.cr_dr);
+          if (colIdx === 5) applyPdfMoneyStyle(hookData.cell, row?.balance);
+          if (colIdx === 6 && !isDescOrRemarkBody) {
+            if (!isCjkCell) hookData.cell.styles.fontStyle = "bold";
             hookData.cell.styles.overflow = "linebreak";
           }
-          if (hookData.column.index === 2 || hookData.column.index === 7) {
+          if (colIdx === 7 && !isDescOrRemarkBody) {
+            if (!isCjkCell) hookData.cell.styles.fontStyle = "bold";
+            hookData.cell.styles.overflow = "linebreak";
+            hookData.cell.styles.halign = "left";
+          }
+          if (colIdx === 2) {
             hookData.cell.styles.textColor = [100, 116, 139];
-          }
-          if (hookData.column.index === 7) {
-            hookData.cell.styles.overflow = "linebreak";
           }
         }
         if (hookData.section === "foot") {

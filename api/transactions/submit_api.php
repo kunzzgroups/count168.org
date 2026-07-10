@@ -513,6 +513,13 @@ try {
                 if ($rate_transfer_to_amount !== null) {
                     $rate_transfer_to_amount = submitRateRound2(money_sub($rate_transfer_to_amount, $converted_input_amount, 8));
                 }
+                if ($rate_from_currency !== '') {
+                    $feeDisplay = $rate_middleman_input_amount;
+                    if (strpos($feeDisplay, '.') !== false) {
+                        $feeDisplay = rtrim(rtrim($feeDisplay, '0'), '.');
+                    }
+                    $sms = 'charge ' . strtoupper(trim($rate_from_currency)) . ' ' . $feeDisplay . ' Service Fees';
+                }
             }
 
             $rate_transfer_from_description = trim($_POST['rate_transfer_from_description'] ?? '');

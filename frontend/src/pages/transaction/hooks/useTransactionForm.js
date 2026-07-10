@@ -39,6 +39,7 @@ export function useTransactionForm({
   todayDmy,
   pushToast,
   onSearch,
+  onAfterSuccessfulSubmit,
   refreshContraInboxBadge,
   filterSnapshot,
   transactionScope,
@@ -441,7 +442,9 @@ export function useTransactionForm({
           setRateTransferToAccount(null);
           setRateTransferFromAccount(null);
           setRateMiddlemanAccount(null);
-          await onSearch({ forceRefresh: true });
+          if (approvalStatus !== "PENDING") {
+            await onAfterSuccessfulSubmit?.({ submitDateDmy: rateDate });
+          }
           return;
         }
         pushToast(res?.message || m.submitFailed, "error");
@@ -550,7 +553,9 @@ export function useTransactionForm({
         setTxAmount("");
         setTxFullAmount("");
         setTxConfirm(false);
-        await onSearch({ forceRefresh: true });
+        if (approvalStatus !== "PENDING") {
+          await onAfterSuccessfulSubmit?.({ submitDateDmy: txDate });
+        }
         return;
       }
       pushToast(res?.message || m.submitFailed, "error");

@@ -22,6 +22,7 @@ require_once __DIR__ . '/../includes/money_decimal.php';
 require_once __DIR__ . '/../includes/member_linked_closure.php';
 require_once __DIR__ . '/dcd_processed_quant.php';
 require_once __DIR__ . '/../includes/transaction_approval.php';
+require_once __DIR__ . '/type_period_search_lib.php';
 
 /**
  * WIN/LOSE/ADJUSTMENT 行对 Win/Loss 的贡献：与 data_capture processed_amount 相同，
@@ -1053,6 +1054,25 @@ try {
     $show_inactive = isset($_GET['show_inactive']) && $_GET['show_inactive'] === '1';
     $show_capture_only = isset($_GET['show_capture_only']) && $_GET['show_capture_only'] === '1';
     $hide_zero_balance = isset($_GET['hide_zero_balance']) && $_GET['hide_zero_balance'] === '1';
+    /** Right-side type search: restrict account list to ids from type_account_search_api (all-time type filter). */
+    $type_search_active = isset($_GET['type_search']) && (string) $_GET['type_search'] === '1';
+    $type_account_ids = [];
+    if ($type_search_active && isset($_GET['type_account_ids']) && trim((string) $_GET['type_account_ids']) !== '') {
+        foreach (explode(',', (string) $_GET['type_account_ids']) as $rawTypeAccId) {
+            $typeAccId = (int) trim($rawTypeAccId);
+            if ($typeAccId > 0 && !in_array($typeAccId, $type_account_ids, true)) {
+                $type_account_ids[] = $typeAccId;
+            }
+        }
+    }
+    if ($type_search_active) {
+        // Type search must list every matching account even when period balance is zero.
+        $hide_zero_balance = false;
+    }
+    $type_search_form_type = isset($_GET['type_search_form_type']) ? strtoupper(trim((string) $_GET['type_search_form_type'])) : '';
+    if ($type_search_form_type !== '' && !typePeriodSearchIsSupported($type_search_form_type)) {
+        $type_search_form_type = '';
+    }
     /** 诊断用：附带 Win/Loss 按来源桶汇总与非零明细（与列表Σ win_loss_full 对齐）；不传或!=1 则无此字段且不写入缓存键 */
     $debug_wl_total = isset($_GET['debug_wl_total']) && (string) $_GET['debug_wl_total'] === '1';
 
@@ -1180,10 +1200,14 @@ try {
             'categories' => array_values($category_filters),
             'currencies' => array_values($currency_filters),
             'target_account_ids' => array_values($target_account_ids),
+            'type_search' => (int) $type_search_active,
+            'type_account_ids' => array_values($type_account_ids),
+            'type_search_form_type' => $type_search_form_type,
         ];
         sort($cache_key_payload['categories']);
         sort($cache_key_payload['currencies']);
         sort($cache_key_payload['target_account_ids']);
+        sort($cache_key_payload['type_account_ids']);
         $cache_hash = sha1(json_encode($cache_key_payload, JSON_UNESCAPED_UNICODE));
         $cache_file = $cache_dir . DIRECTORY_SEPARATOR . $cache_hash . '.json';
 
@@ -1227,6 +1251,16 @@ try {
         $placeholders = implode(',', array_fill(0, count($target_account_ids), '?'));
         $where_conditions[] = "a.id IN ($placeholders)";
         $params = array_merge($params, $target_account_ids);
+    }
+
+    if ($type_search_active) {
+        if ($type_account_ids === []) {
+            $where_conditions[] = '1=0';
+        } else {
+            $typePlaceholders = implode(',', array_fill(0, count($type_account_ids), '?'));
+            $where_conditions[] = "a.id IN ($typePlaceholders)";
+            $params = array_merge($params, $type_account_ids);
+        }
     }
 
     if (!empty($category_filters)) {
@@ -1799,16 +1833,57 @@ try {
     }
     // ====== END BULK PRE-LOAD ======
 
+    $bulk_type_period = null;
+    if (
+        $type_search_active
+        && typePeriodSearchIsSupported($type_search_form_type)
+        && $type_account_ids !== []
+    ) {
+        $bulk_type_period = typePeriodSearchBulkTypeMetrics(
+            $pdo,
+            $search_list_scope,
+            $type_search_form_type,
+            $date_from_db,
+            $date_to_db,
+            $type_account_ids,
+            $currency_filters
+        );
+    }
+
     foreach ($accounts as $account) {
         $account_id = $account['id'];
         $account_currencies = [];
         $account_currency_ids = [];
         $acc_str = trim((string) $account_id);
+        $type_search_period_activity_only = $type_search_active
+            && typePeriodSearchFilterByPeriodActivityOnly($type_search_form_type)
+            && is_array($bulk_type_period);
 
-        // 账户 × 币别组合：只要存在 account_currency 表就始终走「现代路径」枚举 active + 交易币别。
-        // 切勿在 hide_zero_balance=1 时改走 Legacy（仅从 DCD 推币别）：会漏掉大量组合行，
-        // 前端再隐藏零余额后合计永远少半边账（典型 ±0.37 级尾差）。
-        if ($has_account_currency_table) {
+        if ($type_search_period_activity_only) {
+            foreach ($bulk_type_period['currencies'][$account_id] ?? [] as $cid => $code) {
+                if (typePeriodSearchPeriodTxnCountForCombo(
+                    $bulk_type_period,
+                    (int) $account_id,
+                    (int) $cid,
+                    (string) $code
+                ) <= 0) {
+                    continue;
+                }
+                addAccountCurrencyCombo($account_currencies, $account_currency_ids, (int) $cid, (string) $code);
+            }
+            if (!empty($filter_currency_codes)) {
+                $account_currencies = array_values(array_filter($account_currencies, function ($ac) use ($filter_currency_codes) {
+                    return in_array(strtoupper($ac['currency_code'] ?? ''), $filter_currency_codes);
+                }));
+                $account_currency_ids = [];
+                foreach ($account_currencies as $ac) {
+                    $account_currency_ids[(int) $ac['currency_id']] = true;
+                }
+            }
+            if (empty($account_currencies)) {
+                continue;
+            }
+        } elseif ($has_account_currency_table) {
             // === 现代路径：从 bulk_ac 批量数据读取，无需逐账户查询 ===
             foreach ($bulk_ac[$account_id] ?? [] as $cid => $code) {
                 addAccountCurrencyCombo($account_currencies, $account_currency_ids, $cid, $code);
@@ -1927,6 +2002,17 @@ try {
                         );
                     }
                 }
+            }
+        }
+
+        if (
+            !$type_search_period_activity_only
+            && $type_search_active
+            && typePeriodSearchIsPeriodTypeSearch($type_search_form_type)
+            && is_array($bulk_type_period)
+        ) {
+            foreach ($bulk_type_period['currencies'][$account_id] ?? [] as $cid => $code) {
+                addAccountCurrencyCombo($account_currencies, $account_currency_ids, (int) $cid, (string) $code);
             }
         }
 
@@ -2295,22 +2381,150 @@ try {
         $currency_id = $combo['currency_id'];
         $currency_code = $combo['currency_code'];
 
-        // 1. 计算 B/F (起始日期之前的所有累计余额，按 currency 过滤)
-        $bf = calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from_db, $company_id, $account['account_id'] ?? '', $bulk);
+        // 1–3. Metrics (Type Search × Capture Date; PAYMENT uses full account ledger = Payment History)
+        if (
+            $type_search_active
+            && typePeriodSearchIsSupported($type_search_form_type)
+            && is_array($bulk_type_period)
+        ) {
+            if (typePeriodSearchUsesAccountNativeBf($type_search_form_type)) {
+                $bf = calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from_db, $company_id, $account['account_id'] ?? '', $bulk);
+            } else {
+                $bf = typePeriodSearchMetricForCombo($bulk_type_period, 'bf', (int) $account_id, (int) $currency_id, (string) $currency_code);
+            }
+            $period_type_txn_count = typePeriodSearchPeriodTxnCountForCombo(
+                $bulk_type_period,
+                (int) $account_id,
+                (int) $currency_id,
+                (string) $currency_code
+            );
+            if (
+                typePeriodSearchFilterByPeriodActivityOnly($type_search_form_type)
+                && $period_type_txn_count <= 0
+            ) {
+                continue;
+            }
 
-        // 2. 计算 Win/Loss (日期范围内的 Data Capture + WIN/LOSE 交易，按 currency 过滤)
-        $wlPack = calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from_db, $date_to_db, $company_id, $account['account_id'] ?? '', $bulk);
-        $win_loss = $wlPack['win_loss'];
-        $has_win_loss_transactions = !empty($wlPack['has_win_loss_transactions'])
-            || !empty($wlPack['has_period_id_product_rows']);
-        $has_win_loss_history = !empty($wlPack['has_win_loss_history']);
-        $has_period_id_product_rows = !empty($wlPack['has_period_id_product_rows']);
+            if (typePeriodSearchUsesProfitWinLossColumn($type_search_form_type)) {
+                $wlPackLedger = calculateWinLossByCurrency(
+                    $pdo,
+                    $account_id,
+                    $currency_id,
+                    $date_from_db,
+                    $date_to_db,
+                    $company_id,
+                    $account['account_id'] ?? '',
+                    $bulk
+                );
+                $cr_dr_result = calculateCrDrByCurrency(
+                    $pdo,
+                    $account_id,
+                    $currency_id,
+                    $date_from_db,
+                    $date_to_db,
+                    $company_id,
+                    $bulk
+                );
+                $aligned = searchApiProfitTypeSearchAlignMetrics(
+                    (string) $bf,
+                    typePeriodSearchMetricForCombo(
+                        $bulk_type_period,
+                        'win_loss',
+                        (int) $account_id,
+                        (int) $currency_id,
+                        (string) $currency_code
+                    ),
+                    (string) ($wlPackLedger['win_loss_full'] ?? '0'),
+                    (string) ($cr_dr_result['value'] ?? '0')
+                );
+                $win_loss = $aligned['win_loss'];
+                $cr_dr = $aligned['cr_dr'];
+                $wlPack = [
+                    'win_loss' => $aligned['win_loss'],
+                    'win_loss_full' => $aligned['win_loss_full'],
+                    'has_win_loss_transactions' => $period_type_txn_count > 0
+                        || searchMoneyNonZero(trunc2($aligned['win_loss_full'])),
+                    'has_win_loss_history' => !empty($wlPackLedger['has_win_loss_history']),
+                    'has_period_id_product_rows' => !empty($wlPackLedger['has_period_id_product_rows']),
+                    'has_rate_middleman' => !empty($wlPackLedger['has_rate_middleman']),
+                ];
+                $has_win_loss_transactions = $period_type_txn_count > 0
+                    || searchMoneyNonZero(trunc2($aligned['win_loss_full']));
+                $has_win_loss_history = !empty($wlPackLedger['has_win_loss_history']);
+                $has_period_id_product_rows = !empty($wlPackLedger['has_period_id_product_rows']);
+                $has_crdr_transactions = $aligned['has_crdr_transactions']
+                    || !empty($cr_dr_result['has_transactions']);
+                $has_contra_clear_period = searchApiContraClearPeriodCount($bulk, (int) $account_id, (int) $currency_id) > 0;
+            } elseif (typePeriodSearchUsesAccountNativeBf($type_search_form_type)) {
+                $wlPack = calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from_db, $date_to_db, $company_id, $account['account_id'] ?? '', $bulk);
+                $cr_dr_result = calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from_db, $date_to_db, $company_id, $bulk);
 
-        // 3. 计算 Cr/Dr (日期范围内的 PAYMENT/RECEIVE/CONTRA 交易，按 Edit Formula 的 currency 过滤)
-        $cr_dr_result = calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from_db, $date_to_db, $company_id, $bulk);
-        $cr_dr = $cr_dr_result['value'];
-        $has_crdr_transactions = $cr_dr_result['has_transactions'];
-        $has_contra_clear_period = searchApiContraClearPeriodCount($bulk, (int) $account_id, (int) $currency_id) > 0;
+                if ($bulk !== null) {
+                    $wl_history_col = searchApiPaymentHistoryWinLossColumnSum(
+                        $bulk,
+                        (int) $account_id,
+                        (int) $currency_id,
+                        $account['account_id'] ?? ''
+                    );
+                    $aligned = searchApiPaymentHistoryAlignPeriodColumns(
+                        (string) $bf,
+                        (string) ($wlPack['win_loss_full'] ?? '0'),
+                        (string) ($cr_dr_result['value'] ?? '0'),
+                        $wl_history_col
+                    );
+                    $win_loss = $aligned['win_loss'];
+                    $cr_dr = $aligned['cr_dr'];
+                    $wlPack['win_loss'] = $aligned['win_loss'];
+                    $wlPack['win_loss_full'] = $aligned['win_loss_full'];
+                    $has_crdr_transactions = $aligned['has_crdr_transactions'];
+                } else {
+                    $win_loss = $wlPack['win_loss'];
+                    $cr_dr = $cr_dr_result['value'];
+                    if (!searchMoneyNonZero(trunc2((string) $cr_dr))) {
+                        $cr_dr = '0';
+                    }
+                    $has_crdr_transactions = !empty($cr_dr_result['has_transactions'])
+                        && searchMoneyNonZero(trunc2((string) $cr_dr));
+                }
+
+                $has_win_loss_transactions = !empty($wlPack['has_win_loss_transactions'])
+                    || !empty($wlPack['has_period_id_product_rows'])
+                    || searchMoneyNonZero(trunc2((string) ($wlPack['win_loss_full'] ?? '0')));
+                $has_win_loss_history = !empty($wlPack['has_win_loss_history']);
+                $has_period_id_product_rows = !empty($wlPack['has_period_id_product_rows']);
+                $has_contra_clear_period = searchApiContraClearPeriodCount($bulk, (int) $account_id, (int) $currency_id) > 0;
+            } else {
+                $cr_dr = typePeriodSearchMetricForCombo($bulk_type_period, 'cr_dr', (int) $account_id, (int) $currency_id, (string) $currency_code);
+                $win_loss = '0';
+                $wlPack = [
+                    'win_loss' => '0',
+                    'win_loss_full' => '0',
+                    'has_win_loss_transactions' => false,
+                    'has_win_loss_history' => false,
+                    'has_period_id_product_rows' => false,
+                    'has_rate_middleman' => false,
+                ];
+                $has_win_loss_transactions = false;
+                $has_win_loss_history = false;
+                $has_period_id_product_rows = false;
+                $has_crdr_transactions = $period_type_txn_count > 0;
+                $has_contra_clear_period = $has_crdr_transactions;
+            }
+        } else {
+            $bf = calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from_db, $company_id, $account['account_id'] ?? '', $bulk);
+
+            $wlPack = calculateWinLossByCurrency($pdo, $account_id, $currency_id, $date_from_db, $date_to_db, $company_id, $account['account_id'] ?? '', $bulk);
+            $win_loss = $wlPack['win_loss'];
+            $has_win_loss_transactions = !empty($wlPack['has_win_loss_transactions'])
+                || !empty($wlPack['has_period_id_product_rows']);
+            $has_win_loss_history = !empty($wlPack['has_win_loss_history']);
+            $has_period_id_product_rows = !empty($wlPack['has_period_id_product_rows']);
+
+            $cr_dr_result = calculateCrDrByCurrency($pdo, $account_id, $currency_id, $date_from_db, $date_to_db, $company_id, $bulk);
+            $cr_dr = $cr_dr_result['value'];
+            $has_crdr_transactions = $cr_dr_result['has_transactions'];
+            $has_contra_clear_period = searchApiContraClearPeriodCount($bulk, (int) $account_id, (int) $currency_id) > 0;
+        }
 
         // Layer 2：(账户+币种) 级筛选。
         // 勿仅因「本期无 Win/Loss 动账」就整行丢弃——否则仅剩 B/F 或 Cr/Dr 轧差的户被藏起来，
@@ -3288,6 +3502,86 @@ function calculateBFByCurrency($pdo, $account_id, $currency_id, $date_from, $com
     $bf = money_add($bf, $rateStmt->fetchColumn() ?: '0', 8);
 
     return trunc2($bf);
+}
+
+/**
+ * PROFIT Type Search: Win/Loss = pure PROFIT period total; Balance = History closing (full ledger);
+ * Cr/Dr = Balance − B/F − Win/Loss (zero → 0.00).
+ *
+ * @return array{win_loss: string, win_loss_full: string, cr_dr: string, has_crdr_transactions: bool}
+ */
+function searchApiProfitTypeSearchAlignMetrics(
+    string $bf,
+    string $profit_win_loss,
+    string $win_loss_ledger_full,
+    string $cr_dr_ledger
+): array {
+    $bf_stat = trunc2($bf);
+    $profit_wl_stat = trunc2($profit_win_loss);
+    if (!searchMoneyNonZero($profit_wl_stat)) {
+        $profit_wl_stat = '0';
+    }
+    $closing = trunc2(money_add(money_add($bf_stat, trunc2($win_loss_ledger_full), 8), trunc2($cr_dr_ledger), 8));
+    $cr_stat = trunc2(money_sub(money_sub($closing, $bf_stat, 8), $profit_wl_stat, 8));
+    if (!searchMoneyNonZero($cr_stat)) {
+        $cr_stat = '0';
+    }
+
+    return [
+        'win_loss' => searchMoneyHalfUp2($profit_wl_stat),
+        'win_loss_full' => money_normalize($profit_wl_stat, 8),
+        'cr_dr' => searchMoneyHalfUp2($cr_stat),
+        'has_crdr_transactions' => searchMoneyNonZero($cr_stat),
+    ];
+}
+
+/**
+ * Payment History Win/Loss column (period): Data Capture + RATE Middle-Man.
+ * Manual / bank WIN/LOSE are shown in History Cr/Dr, not Win/Loss.
+ */
+function searchApiPaymentHistoryWinLossColumnSum(?array $bulk, int $account_id, int $currency_id, string $account_code = ''): string
+{
+    if ($bulk === null) {
+        return '0';
+    }
+    $acc_str = trim((string) $account_id);
+    $code_str = trim((string) $account_code);
+    $wl = '0';
+    $wl = money_add($wl, $bulk['dcd'][$acc_str][$currency_id]['wl'] ?? '0', 8);
+    if ($code_str !== '' && $code_str !== $acc_str) {
+        $wl = money_add($wl, $bulk['dcd'][$code_str][$currency_id]['wl'] ?? '0', 8);
+    }
+    $wl = money_add($wl, $bulk['entry'][$account_id][$currency_id]['wl_mm'] ?? '0', 8);
+
+    return trunc2($wl);
+}
+
+/**
+ * PAYMENT Type Search: grid Win/Loss + Cr/Dr columns match Payment History display columns.
+ * Cr/Dr = period closing (full ledger) − B/F − History Win/Loss; zero → 0.00.
+ *
+ * @return array{win_loss: string, win_loss_full: string, cr_dr: string, has_crdr_transactions: bool}
+ */
+function searchApiPaymentHistoryAlignPeriodColumns(
+    string $bf,
+    string $win_loss_ledger_full,
+    string $cr_dr_ledger,
+    string $win_loss_history_column
+): array {
+    $bf_stat = trunc2($bf);
+    $closing = trunc2(money_add(money_add($bf_stat, trunc2($win_loss_ledger_full), 8), trunc2($cr_dr_ledger), 8));
+    $wl_hist = trunc2($win_loss_history_column);
+    $cr_hist = trunc2(money_sub(money_sub($closing, $bf_stat, 8), $wl_hist, 8));
+    if (!searchMoneyNonZero($cr_hist)) {
+        $cr_hist = '0';
+    }
+
+    return [
+        'win_loss' => searchMoneyHalfUp2($wl_hist),
+        'win_loss_full' => money_normalize($wl_hist, 8),
+        'cr_dr' => searchMoneyHalfUp2($cr_hist),
+        'has_crdr_transactions' => searchMoneyNonZero($cr_hist),
+    ];
 }
 
 /**

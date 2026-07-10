@@ -32,7 +32,11 @@ function readFilterCompanyId() {
 export function persistPaymentHistoryScope(scope) {
   if (!scope || typeof sessionStorage === "undefined") return;
   try {
-    sessionStorage.setItem(PAYMENT_HISTORY_SCOPE_KEY, JSON.stringify(scope));
+    const payload = JSON.stringify(scope);
+    sessionStorage.setItem(PAYMENT_HISTORY_SCOPE_KEY, payload);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(PAYMENT_HISTORY_SCOPE_KEY, payload);
+    }
   } catch {
     /* ignore */
   }
@@ -41,7 +45,10 @@ export function persistPaymentHistoryScope(scope) {
 export function readPersistedPaymentHistoryScope() {
   if (typeof sessionStorage === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(PAYMENT_HISTORY_SCOPE_KEY);
+    let raw = sessionStorage.getItem(PAYMENT_HISTORY_SCOPE_KEY);
+    if (!raw && typeof localStorage !== "undefined") {
+      raw = localStorage.getItem(PAYMENT_HISTORY_SCOPE_KEY);
+    }
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : null;
@@ -87,7 +94,12 @@ function buildPaymentHistoryScopePayload({ row, dateFrom, dateTo, scopeApi, opts
 
   if (!accountDbId && accountCode) params.set("virtual_company_code", accountCode.toUpperCase());
 
-  return parsePaymentHistoryParams(params);
+  const pureType = String(opts.pureTypeSearch || "").toUpperCase().trim();
+
+  return {
+    ...parsePaymentHistoryParams(params),
+    pureTypeSearch: pureType || null,
+  };
 }
 
 /** Merge session scope with legacy URL params (old bookmarks) and dashboard filter. */
@@ -111,6 +123,10 @@ export function resolvePaymentHistoryScope(searchParams, scopeApi = null) {
     dateTo: parsed.dateTo ?? stored?.dateTo,
     currency: parsed.currency ?? stored?.currency,
     virtualCompanyCode: parsed.virtualCompanyCode ?? stored?.virtualCompanyCode,
+    pureTypeSearch:
+      parsed.pureTypeSearch !== undefined
+        ? parsed.pureTypeSearch || null
+        : stored?.pureTypeSearch ?? null,
   };
 
   if ((!merged.companyId || merged.companyId <= 0) && (merged.subsidiaryAccountsOnly || merged.accountDbId)) {
@@ -167,6 +183,7 @@ export function parsePaymentHistoryParams(searchParams) {
     dateTo: get("date_to"),
     currency: get("currency"),
     virtualCompanyCode: get("virtual_company_code"),
+    pureTypeSearch: get("pure_type_search"),
   };
 }
 

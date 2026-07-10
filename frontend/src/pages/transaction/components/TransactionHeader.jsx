@@ -226,7 +226,11 @@ export default function TransactionHeader({
                               if (mutationsBlocked) return;
                               const tid = it.transaction_id || it.id;
                               if (!tid) return;
-                              await approveContra({ transactionId: tid, scopeApi });
+                              await approveContra({
+                                transactionId: tid,
+                                scopeApi,
+                                transactionDate: formatContraDate(it.transaction_date || it.date),
+                              });
                             }}
                           >
                             {m.approve}

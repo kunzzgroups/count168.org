@@ -12,6 +12,21 @@ function cleanAmt(raw) {
     .trim();
 }
 
+/** RATE Middle-Man 手续费 remark：charge {第一币种} {用户输入} Service Fees */
+export function buildRateServiceFeeRemark(currencyFrom, middlemanInputAmount) {
+  const inputStr = cleanAmt(middlemanInputAmount);
+  if (!inputStr) return "";
+  try {
+    const dec = MoneyDecimal.toDecimal(inputStr, 0);
+    if (dec.lte(0)) return "";
+  } catch {
+    return "";
+  }
+  const currency = String(currencyFrom ?? "").trim().toUpperCase();
+  if (!currency) return "";
+  return `charge ${currency} ${inputStr} Service Fees`;
+}
+
 /**
  * RATE submit payload aligned with `js/transaction.js` submitAction + `api/transactions/submit_api.php` expectations.
  * `toGrossStr` = gross converted amount (half-up 2dp string), same role as legacy `dataset.grossAmount` / getRateCurrencyToGrossAmount.
@@ -85,6 +100,9 @@ export function buildRatePayload({
       ? `Rate charge (x${rateMiddlemanRate}) from ${rateCurrencyFrom} ${MoneyDecimal.formatFixed(fromDec.toString(), 2)}`
       : "";
 
+  const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyFrom, rateMiddlemanInputAmount);
+  const sms = serviceFeeRemark || txRemark;
+
   const payload = {
     transaction_type: "RATE",
     account_id: toId,
@@ -92,7 +110,7 @@ export function buildRatePayload({
     amount: formatRateAmount(fromDec.toString()),
     transaction_date: rateDate,
     description: "",
-    sms: txRemark,
+    sms,
     currency: rateCurrencyFrom,
 
     rate_from_account_id: fromId,

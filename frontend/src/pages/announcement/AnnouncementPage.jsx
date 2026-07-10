@@ -18,6 +18,7 @@ import {
   normalizeRichTextInput,
   sanitizeRichTextHtml,
 } from "../../utils/content/richTextSanitizer.js";
+import { publishMaintenanceModeEvent } from "../../utils/maintenance/maintenanceRealtimeBus.js";
 
 export default function AnnouncementPage() {
   const navigate = useNavigate();
@@ -31,6 +32,15 @@ export default function AnnouncementPage() {
   // Data
   const [announcements, setAnnouncements] = useState([]);
   const [maintenanceList, setMaintenanceList] = useState([]);
+  const [maintenanceMode, setMaintenanceMode] = useState({
+    enabled: false,
+    maintenance_message_id: null,
+    message_preview: "",
+    updated_by: "",
+    updated_at: "",
+  });
+  const [canManageMaintenanceMode, setCanManageMaintenanceMode] = useState(false);
+  const [modeSubmitting, setModeSubmitting] = useState(false);
 
   // Modals
   const [editAnnouncement, setEditAnnouncement] = useState({ id: "", title: "", content: "" });
@@ -113,6 +123,78 @@ export default function AnnouncementPage() {
     } catch (err) { showNotice(t("loadMaintenanceFailed", { message: err.message }), "error"); }
   }, [showNotice, t]);
 
+  const loadMaintenanceMode = useCallback(async () => {
+    try {
+      const res = await fetch(buildApiUrl("api/maintenance/mode_api.php"), { credentials: "include" });
+      const json = await res.json();
+      if (res.status === 403) {
+        setCanManageMaintenanceMode(false);
+        return;
+      }
+      if (json.success && json.data) {
+        setCanManageMaintenanceMode(true);
+        setMaintenanceMode({
+          enabled: Boolean(json.data.enabled),
+          maintenance_message_id: json.data.maintenance_message_id ?? null,
+          message_preview: json.data.message_preview || "",
+          updated_by: json.data.updated_by || "",
+          updated_at: json.data.updated_at || "",
+        });
+      } else {
+        setCanManageMaintenanceMode(false);
+      }
+    } catch {
+      setCanManageMaintenanceMode(false);
+    }
+  }, []);
+
+  const toggleMaintenanceMode = useCallback(
+    async (nextEnabled) => {
+      if (modeSubmitting) return;
+      if (nextEnabled && maintenanceList.length === 0) {
+        showNotice(t("modeEnableNeedsMaintenance"), "error");
+        return;
+      }
+      setModeSubmitting(true);
+      try {
+        const fd = new FormData();
+        fd.append("action", nextEnabled ? "enable" : "disable");
+        if (nextEnabled) {
+          const messageId = maintenanceList[0]?.id;
+          if (messageId) fd.append("maintenance_id", String(messageId));
+        }
+        const res = await fetch(buildApiUrl("api/maintenance/mode_api.php"), {
+          method: "POST",
+          body: fd,
+          credentials: "include",
+        });
+        const json = await res.json();
+        if (json.success && json.data) {
+          setMaintenanceMode({
+            enabled: Boolean(json.data.enabled),
+            maintenance_message_id: json.data.maintenance_message_id ?? null,
+            message_preview: json.data.message_preview || "",
+            updated_by: json.data.updated_by || "",
+            updated_at: json.data.updated_at || "",
+          });
+          publishMaintenanceModeEvent({
+            enabled: Boolean(json.data.enabled),
+            message: json.data.message_preview || "",
+          });
+          showNotice(nextEnabled ? t("modeEnabledSuccess") : t("modeDisabledSuccess"));
+          await loadMaintenance();
+        } else {
+          showNotice(t("modeToggleFailed", { message: json.message || "Unknown error" }), "error");
+        }
+      } catch (err) {
+        showNotice(t("modeToggleFailed", { message: err.message }), "error");
+      } finally {
+        setModeSubmitting(false);
+      }
+    },
+    [maintenanceList, modeSubmitting, showNotice, t, loadMaintenance]
+  );
+
   useEffect(() => {
     if (!sessionReady || !me) return;
 
@@ -123,7 +205,7 @@ export default function AnnouncementPage() {
           navigate(spaPath("dashboard"), { replace: true });
           return;
         }
-        await Promise.all([loadAnnouncements(), loadMaintenance()]);
+        await Promise.all([loadAnnouncements(), loadMaintenance(), loadMaintenanceMode()]);
       } catch {
         if (!cancelled) navigate(spaPath("login"), { replace: true });
       }
@@ -131,7 +213,7 @@ export default function AnnouncementPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionReady, me, navigate, loadAnnouncements, loadMaintenance]);
+  }, [sessionReady, me, navigate, loadAnnouncements, loadMaintenance, loadMaintenanceMode]);
 
   // Handlers
   function handleAnnouncementEdit(item) {
@@ -260,6 +342,11 @@ export default function AnnouncementPage() {
             <MaintenancePanel
               t={t}
               maintenanceList={maintenanceList}
+              maintenanceMode={maintenanceMode}
+              canManageMaintenanceMode={canManageMaintenanceMode}
+              modeSubmitting={modeSubmitting}
+              onEnableMaintenanceMode={() => toggleMaintenanceMode(true)}
+              onDisableMaintenanceMode={() => toggleMaintenanceMode(false)}
               onEdit={handleMaintenanceEdit}
               onDelete={handleMaintenanceDelete}
               onPublished={() => { loadMaintenance(); showNotice(t("maintenancePublishedSuccess")); }}

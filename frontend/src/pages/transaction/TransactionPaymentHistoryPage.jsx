@@ -99,6 +99,7 @@ export default function TransactionPaymentHistoryPage() {
       currency: scope.currency,
       virtualCompanyCode: scope.virtualCompanyCode,
       subsidiaryAccountsOnly: scopeApi.subsidiaryAccountsOnly,
+      pureTypeSearch: scope.pureTypeSearch,
     }),
     queryFn: ({ signal }) =>
       getHistory({
@@ -108,6 +109,7 @@ export default function TransactionPaymentHistoryPage() {
         dateTo: scope.dateTo,
         currency: scope.currency,
         virtualCompanyCode: scope.virtualCompanyCode,
+        pureTypeSearch: scope.pureTypeSearch,
         signal,
       }),
     enabled: paymentHistoryParamsReady(scope),

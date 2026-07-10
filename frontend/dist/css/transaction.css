@@ -1126,6 +1126,32 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
     transform: translateY(-1px);
 }
 
+.transaction-page .transaction-refresh-btn {
+    background: transparent;
+    color: #4a90e2;
+    font-family: var(--font-heading-page);
+    width: clamp(40px, 3.125vw, 50px);
+    height: clamp(32px, 2.5vw, 40px);
+    padding: 0;
+    font-size: clamp(16px, 1.25vw, 20px);
+    border: none;
+    border-radius: 6px;
+    box-shadow: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.transaction-page .transaction-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.transaction-page .transaction-refresh-btn img {
+    display: block;
+}
+
 .transaction-page .transaction-submit-btn {
     background: linear-gradient(180deg, #63C4FF 0%, #0D60FF 100%);
     color: white;

@@ -35,6 +35,7 @@ FROM data_capture_templates
 WHERE scope_id IS NULL AND company_id IS NOT NULL
 GROUP BY company_id
 ORDER BY cnt DESC;
+
 ```
 
 - 若返回多行且 `cnt > 0`，说明需要回填。

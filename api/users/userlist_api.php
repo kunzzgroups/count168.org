@@ -131,6 +131,12 @@ function sendResponse($success, $message = '', $data = null) {
 /**
  * Map MySQL duplicate-key / PDO errors to short client messages (no SQLSTATE / "Database error").
  */
+function userlist_system_it_where_sql(string $alias = 'u'): string
+{
+    $safeAlias = preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $alias) ? $alias : 'u';
+    return " AND UPPER(TRIM({$safeAlias}.login_id)) NOT IN ('IT_JK', 'IT_JS', 'IT_MS') ";
+}
+
 function userlistDuplicateEntryClientMessage(string $msg): string
 {
     if (stripos($msg, 'Duplicate entry') === false) {
@@ -3040,6 +3046,7 @@ try {
                         SELECT DISTINCT u.id, u.login_id, u.name, u.email, u.role, u.permissions, u.status, u.created_by, u.created_at, u.last_login
                         FROM user u
                         WHERE u.id IN ($placeholders)
+                        " . userlist_system_it_where_sql('u') . "
                         ORDER BY
                         CASE
                             WHEN u.login_id REGEXP '^[0-9]' THEN 0
@@ -3067,6 +3074,7 @@ try {
                     SELECT DISTINCT u.id, u.login_id, u.name, u.email, u.role, u.permissions, u.status, u.created_by, u.created_at, u.last_login
                     FROM user u
                     WHERE u.id IN ($placeholders)
+                    " . userlist_system_it_where_sql('u') . "
                     ORDER BY
                         CASE 
                             WHEN u.login_id REGEXP '^[0-9]' THEN 0 

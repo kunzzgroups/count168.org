@@ -35,6 +35,9 @@ export function buildTransactionSearchRequestKey({
   showInactive = false,
   showCaptureOnly = false,
   hideZeroBalance = true,
+  typeSearch = false,
+  typeAccountIds = [],
+  typeSearchFormType = "",
 }) {
   const cur =
     !showAllCurrencies && selectedCurrencies?.length
@@ -55,6 +58,11 @@ export function buildTransactionSearchRequestKey({
     companyId: String(scopeCacheCompanyKey || ""),
     showAllCurrencies: !!showAllCurrencies,
     currencies: cur,
+    type_search: typeSearch ? "1" : "0",
+    type_account_ids: Array.isArray(typeAccountIds)
+      ? [...typeAccountIds].map((id) => Number(id)).filter((id) => id > 0).sort((a, b) => a - b).join(",")
+      : "",
+    type_search_form_type: String(typeSearchFormType || "").toUpperCase().trim(),
   });
 }
 

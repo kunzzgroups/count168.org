@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import SimpleSelect from "../../../components/SimpleSelect.jsx";
 import AccountSelect from "./AccountSelect.jsx";
+import { assetUrl } from "../../../utils/core/apiUrl.js";
 
 const TX_TYPE_OPTIONS = [
   "CONTRA",
@@ -62,7 +63,9 @@ export default function TransactionAddSection({
   setTxConfirm,
   submitting,
   onSubmitTx,
-  onSearch,
+  onTypeSearch,
+  onExitTypeSearch,
+  typeSearchActive = false,
   searchLoading,
   mutationsBlocked = false,
   m,
@@ -472,9 +475,28 @@ export default function TransactionAddSection({
           >
             {submitting ? m.submitting : m.submit}
           </button>
-          <button type="button" id="action_search_btn" className="transaction-search-btn" onClick={onSearch} disabled={searchLoading}>
+          <button type="button" id="action_search_btn" className="transaction-search-btn" onClick={onTypeSearch} disabled={searchLoading}>
             {m.search}
           </button>
+          {typeSearchActive ? (
+            <button
+              type="button"
+              id="action_refresh_btn"
+              className="transaction-refresh-btn"
+              onClick={onExitTypeSearch}
+              disabled={searchLoading}
+              title={m.exitTypeSearchAndRefreshTitle}
+              aria-label={m.exitTypeSearchAndRefreshTitle}
+              aria-busy={searchLoading || undefined}
+            >
+              <img
+                src={assetUrl("images/refresh.svg")}
+                alt=""
+                aria-hidden="true"
+                style={{ width: "clamp(23px, 1.8vw, 35px)", height: "clamp(23px, 1.8vw, 35px)" }}
+              />
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

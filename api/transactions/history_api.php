@@ -23,6 +23,7 @@ require_once __DIR__ . '/../includes/member_linked_closure.php';
 require_once __DIR__ . '/bank_process_bill_display.php';
 require_once __DIR__ . '/dcd_processed_quant.php';
 require_once __DIR__ . '/../includes/transaction_approval.php';
+require_once __DIR__ . '/type_pure_manual_filter_lib.php';
 
 /**
  * 审批过滤：过滤未批准的审批交易（向后兼容：若无字段则不过滤）
@@ -1324,6 +1325,12 @@ try {
     $date_from = $_GET['date_from'] ?? null;
     $date_to = $_GET['date_to'] ?? null;
     $currency = $_GET['currency'] ?? null; // 可选：按 data_capture 的 currency 筛选
+    $pure_type_search = isset($_GET['pure_type_search']) ? strtoupper(trim((string) $_GET['pure_type_search'])) : '';
+    if ($pure_type_search !== '' && !typeTxSearchSupportsPureManualFilter($pure_type_search)) {
+        $pure_type_search = '';
+    }
+    $apply_pure_history_filter = $pure_type_search !== ''
+        && !typeTxSearchHistoryUsesFullAccountLedger($pure_type_search);
 
     // 验证必填参数
     if ($account_id <= 0 && $virtual_company_code === '') {
@@ -1827,6 +1834,9 @@ try {
     $eventIndex = 0;
 
     foreach ($captureRows as $capture) {
+        if ($apply_pure_history_filter) {
+            continue;
+        }
         $captureTimestamp = historyDataCaptureOrderTimestamp($capture);
 
         // Product: 使用 id_product（id_product_sub 或 id_product_main），如果有 description 则附加在后面（括号内）
@@ -2299,7 +2309,7 @@ try {
                 }
             } else {
                 // 如果原始 description 是自动生成的格式，需要根据视角调整
-                if (preg_match('/^(CONTRA|CLEAR|PAYMENT|RECEIVE|CLAIM|RATE) (FROM|TO) (.+)$/', $t['description'], $matches)) {
+                if (preg_match('/^(CONTRA|CLEAR|PAYMENT|RECEIVE|CLAIM|RATE) (FROM|TO) (.+)$/i', (string) $t['description'], $matches)) {
                     $type = $matches[1];
                     $direction = $matches[2];
                     $other_account = $matches[3];
@@ -2477,11 +2487,16 @@ try {
             'rate' => '-',
             'description' => $description,
             'sms' => ($isDomainShareCommission || $isDomainListFee) ? '-' : ($t['sms'] ?: '-'),
+            'raw_transaction_description' => (string) ($t['description'] ?? ''),
+            'raw_transaction_sms' => (string) ($t['sms'] ?? ''),
+            'raw_from_account_code' => (string) ($t['from_account_code'] ?? ''),
+            'is_view_to_account' => $is_to_account ? 1 : 0,
             'created_by' => $transactionCreatedBy
         ];
     }
 
     // Share% Profit 池：List Fee 入账 + 同源 Sales/CS/IT 佣金划出 → 一条净 Profit（与主表余额一致）
+    if (!$apply_pure_history_filter) {
     foreach ($domainHubRollup['rollups'] as $rb) {
         $ft = $rb['fee_tx'];
         $netShow = $rb['net'];
@@ -2530,6 +2545,7 @@ try {
             'sms' => '-',
             'created_by' => $transactionCreatedByRb,
         ];
+    }
     }
 
     // ==================== 追加 RATE 分录（从 transaction_entry 读取） ====================
@@ -2653,6 +2669,14 @@ try {
             $transactionCreatedBy = $row['created_by_owner_name'];
         }
 
+        $rateFirstRowRemark = null;
+        if (in_array($entryType, ['RATE_FIRST_FROM', 'RATE_FIRST_TO'], true)) {
+            $headerSms = trim((string) ($row['sms'] ?? ''));
+            if ($headerSms !== '') {
+                $rateFirstRowRemark = $headerSms;
+            }
+        }
+
         $events[] = [
             'row_type' => 'transaction',
             'transaction_id' => $row['header_id'],
@@ -2671,8 +2695,9 @@ try {
             'percent' => '-',
             'rate' => '-',
             'description' => $description,
-            'sms' => $row['sms'] ?: '-',
-            'remark' => null,
+            'entry_description_raw' => (string) ($row['entry_description'] ?? ''),
+            'sms' => '-',
+            'remark' => $rateFirstRowRemark,
             'created_by' => $transactionCreatedBy,
             'from_currency_code' => $row['from_currency_code'] ?? null,
             'to_currency_code' => $row['to_currency_code'] ?? null,
@@ -2711,6 +2736,19 @@ try {
         return ($a['order_index'] ?? 0) <=> ($b['order_index'] ?? 0);
     });
 
+    if ($apply_pure_history_filter) {
+        $events = array_values(array_filter(
+            $events,
+            static fn(array $event): bool => typeTxSearchPassesPureHistoryEvent($pure_type_search, $event)
+        ));
+        foreach ($history as &$bfRow) {
+            if (($bfRow['row_type'] ?? '') === 'bf') {
+                $bfRow['balance'] = '0.00';
+            }
+        }
+        unset($bfRow);
+    }
+
     // 按货币分别累计余额，避免多币别时 Balance 列显示成「所有币别总和」（Member Win/Loss 每行应显示该币别 running balance）
     $balance_by_currency = [];
     // 未指定 currency 时：B/F 按 bf_per_currency 多行展示，running balance 必须为每个币别分别带入对应 opening，否则会只见第一币别 B/F（其余从 0 累加）
@@ -2725,6 +2763,12 @@ try {
     } elseif ($bfCurrency !== null && $bfCurrency !== '') {
         // 指定单一 currency 或 legacy 单笔 B/F：累加用更高精度（8dp）保存，展示时再统一 HALF_UP 到 2dp
         $balance_by_currency[$bfCurrency] = money_normalize($bf, 6);
+    }
+
+    if ($apply_pure_history_filter) {
+        foreach (array_keys($balance_by_currency) as $curKey) {
+            $balance_by_currency[$curKey] = money_normalize('0', 6);
+        }
     }
 
     foreach ($events as $event) {

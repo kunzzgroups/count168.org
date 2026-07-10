@@ -870,7 +870,7 @@ function fetchRateTransactionItems(PDO $pdo, array $listScope, $date_from_db, $d
             'currency' => $rateRow['currency_code'] ?? '-',
             'amount' => money_out($displayAmount),
             'description' => $description,
-            'remark' => $rateRow['remark'] ?? '',
+            'remark' => $entryType === 'RATE_FIRST_TO' ? ($rateRow['remark'] ?? '') : '',
             'dts_created' => $rateRow['dts_created'] ?? '',
             'created_by' => !empty($rateRow['created_by_login']) ? $rateRow['created_by_login'] : ($rateRow['created_by_owner'] ?? '-'),
             'transaction_type' => 'RATE',

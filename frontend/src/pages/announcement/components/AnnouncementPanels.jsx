@@ -115,10 +115,25 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublis
   );
 }
 
-export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPublished, onPublishFailed }) {
+export function MaintenancePanel({
+  t,
+  maintenanceList,
+  maintenanceMode,
+  canManageMaintenanceMode,
+  modeSubmitting,
+  onEnableMaintenanceMode,
+  onDisableMaintenanceMode,
+  onEdit,
+  onDelete,
+  onPublished,
+  onPublishFailed,
+}) {
   const [form, setForm] = useState({ prefix: "", content: "" });
   const [submitting, setSubmitting] = useState(false);
   const canCreate = maintenanceList.length === 0;
+  const modeEnabled = Boolean(maintenanceMode?.enabled);
+  const modeCanToggle = modeEnabled || maintenanceList.length > 0;
+  const modeToggleDisabled = modeSubmitting || !modeCanToggle;
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -161,11 +176,6 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPubli
           <h2 style={{ marginTop: 0, color: "#002C49", fontFamily: "var(--font-heading-page)", fontSize: "clamp(16px, 1.25vw, 24px)", marginBottom: "clamp(8px, 0.73vw, 14px)" }}>
             {t("createNewMaintenanceContent")}
           </h2>
-          {!canCreate && (
-            <div style={{ background: "#fef3c7", border: "1px solid #fbbf24", borderRadius: 8, padding: 12, marginBottom: 16, color: "#92400e", fontSize: "clamp(11px, 0.73vw, 14px)" }}>
-              <strong>⚠️ {t("noticeLabel")}:</strong> {t("maintenanceNotice")}
-            </div>
-          )}
           <form id="maintenanceForm" onSubmit={handleSubmit}>
             <div className="form-group">
               <label htmlFor="maintenancePrefix">{t("prefixRequired")}</label>
@@ -193,12 +203,35 @@ export function MaintenancePanel({ t, maintenanceList, onEdit, onDelete, onPubli
             <button type="submit" className="submit-btn" disabled={!canCreate || submitting}>
               {submitting ? t("publishing") : t("publishMaintenanceContent")}
             </button>
+            {!canCreate && (
+              <div className="maintenance-singleton-hint">
+                <strong>⚠️ {t("noticeLabel")}:</strong> {t("maintenanceNotice")}
+              </div>
+            )}
           </form>
         </div>
 
         <div className="maintenance-list-section">
           <div className="maintenance-list-header">
             <h2>{t("publishedMaintenanceContent")}</h2>
+            {canManageMaintenanceMode ? (
+              <div className="maintenance-mode-inline">
+                <span className="maintenance-mode-inline-label">Maintenance Mode</span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={modeEnabled}
+                  aria-label="Maintenance Mode"
+                  className={`maintenance-mode-toggle maintenance-mode-toggle--inline ${modeEnabled ? "is-on" : "is-off"}`}
+                  disabled={modeToggleDisabled}
+                  onClick={modeEnabled ? onDisableMaintenanceMode : onEnableMaintenanceMode}
+                >
+                  <span className="maintenance-mode-switch" aria-hidden="true">
+                    <span className="maintenance-mode-switch-thumb" />
+                  </span>
+                </button>
+              </div>
+            ) : null}
           </div>
           <div id="maintenanceList" style={{ flex: 1, overflowY: "auto" }}>
             {maintenanceList.length === 0 ? (

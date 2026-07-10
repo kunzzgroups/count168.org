@@ -42,6 +42,17 @@ const ROUTE_BODY_CLASSES_TO_CLEAR = [
   "member-winloss-page",
 ];
 
+/** Type Search opens Payment History with full account ledger (not pure-type filtered). */
+const TYPE_SEARCH_FULL_ACCOUNT_LEDGER_TYPES = new Set([
+  "PAYMENT",
+  "CONTRA",
+  "CLAIM",
+  "CLEAR",
+  "RATE",
+  "ADJUSTMENT",
+  "PROFIT",
+]);
+
 export default function TransactionPaymentPage() {
   const [searchParams] = useSearchParams();
   if (isPaymentHistoryView(searchParams)) {
@@ -70,6 +81,7 @@ function TransactionPaymentPageMain() {
 
   // 3. Form Logic
   const formSearchRef = useRef(null);
+  const afterSubmitRef = useRef(async () => {});
   const onFormSearch = useCallback((opts) => {
     if (formSearchRef.current) formSearchRef.current(opts);
   }, []);
@@ -78,6 +90,7 @@ function TransactionPaymentPageMain() {
     todayDmy,
     pushToast,
     onSearch: onFormSearch,
+    onAfterSuccessfulSubmit: (opts) => afterSubmitRef.current(opts),
     refreshContraInboxBadge: ui.refreshContraInboxBadge,
     filterSnapshot,
     transactionScope,
@@ -100,6 +113,7 @@ function TransactionPaymentPageMain() {
     t,
   });
   formSearchRef.current = search.runSearch;
+  afterSubmitRef.current = (opts) => search.jumpToSubmitDateAndRefresh(opts);
 
   // 5. Defaults (useLayoutEffect: must run before passive effects that call runSearch)
   useTransactionInitialization({
@@ -211,6 +225,16 @@ function TransactionPaymentPageMain() {
     [m],
   );
 
+  const onTypeSearch = useCallback(() => {
+    search.runTypeSearch(form.txType);
+  }, [search.runTypeSearch, form.txType]);
+
+  const onExitTypeSearch = useCallback(async () => {
+    await search.exitTypeSearchAndRefresh();
+    form.setTxDate(todayDmy);
+    form.setRateDate(todayDmy);
+  }, [search.exitTypeSearchAndRefresh, form.setTxDate, form.setRateDate, todayDmy]);
+
   const onSearch = useCallback(() => {
     search.runSearch({ silent: false });
   }, [search.runSearch]);
@@ -228,8 +252,14 @@ function TransactionPaymentPageMain() {
   }, [ui.refreshContraInboxBadge, scopeApi]);
 
   const onApproveContra = useCallback(
-    (opts) => ui.onApproveContra(opts.transactionId, scopeApi, search.runSearch),
-    [ui.onApproveContra, scopeApi, search.runSearch],
+    async (opts) => {
+      const res = await ui.onApproveContra(opts.transactionId, scopeApi);
+      const submitDate = String(opts.transactionDate || "").trim();
+      if (res?.success && submitDate && submitDate !== "-") {
+        await search.jumpToSubmitDateAndRefresh({ submitDateDmy: submitDate });
+      }
+    },
+    [ui.onApproveContra, scopeApi, search.jumpToSubmitDateAndRefresh],
   );
 
   const onRejectContra = useCallback(
@@ -346,7 +376,9 @@ function TransactionPaymentPageMain() {
             setTxConfirm={form.setTxConfirm}
             submitting={form.submitting}
             onSubmitTx={form.onSubmitTx}
-            onSearch={onSearch}
+            onTypeSearch={onTypeSearch}
+            onExitTypeSearch={onExitTypeSearch}
+            typeSearchActive={search.typeSearchActive}
             searchLoading={search.searchLoading}
             accountOptions={data.accountOptions}
             currencyOptions={data.currencyOptions}
@@ -391,10 +423,23 @@ function TransactionPaymentPageMain() {
           getRoleClass={getRoleClass}
           fallbackRoleClass={singleCategoryFallbackRoleClass}
           openHistory={(row) =>
-            ui.onViewHistory(row, search.effectiveDateFrom, search.effectiveDateTo, scopeApi, {
-              selectedCurrencies: search.selectedCurrencies,
-              showAllCurrencies: search.showAllCurrencies,
-            })
+            ui.onViewHistory(
+              row,
+              search.effectiveDateFrom,
+              search.effectiveDateTo,
+              scopeApi,
+              {
+                selectedCurrencies: search.selectedCurrencies,
+                showAllCurrencies: search.showAllCurrencies,
+                pureTypeSearch:
+                  search.typeSearchActive &&
+                  !TYPE_SEARCH_FULL_ACCOUNT_LEDGER_TYPES.has(
+                    String(search.typeSearchFormType || "").toUpperCase(),
+                  )
+                    ? search.typeSearchFormType
+                    : null,
+              },
+            )
           }
           handleBalanceCellClick={form.handleBalanceCellClick}
           m={m}

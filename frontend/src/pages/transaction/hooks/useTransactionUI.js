@@ -90,14 +90,13 @@ export function useTransactionUI() {
   });
 
   const onApproveContra = useCallback(
-    async (id, scopeApi, onSearch) => {
+    async (id, scopeApi) => {
       if (!id || !scopeApiReady(scopeApi)) return null;
       try {
         const res = await approveContraMutation.mutateAsync({ id, scopeApi });
         if (res?.success) {
           pushToast("Contra approved", "success");
           await refreshContraInboxBadge(scopeApi);
-          if (onSearch) await onSearch({ forceRefresh: true, silent: true });
         } else {
           pushToast(res?.message || "Failed to approve contra", "error");
         }
