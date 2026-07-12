@@ -564,6 +564,142 @@ def generate_merge_sql(src: DumpAnalysis, tgt: DumpAnalysis, compare: dict) -> s
     return "\n".join(lines) + "\n"
 
 
+def derive_target_only_select(table_name: str, col: str, src_columns: List[str]) -> str:
+    src_set = set(src_columns)
+    if col == "scope_type" and "company_id" in src_set:
+        return "'company'"
+    if col == "scope_id" and "company_id" in src_set:
+        return "s.`company_id`"
+    if table_name == "company_auto_renew_request":
+        if col == "entity_type":
+            return "'company'"
+        if col == "group_id":
+            return "NULL"
+    return "NULL"
+
+
+def generate_replace_sql(src: DumpAnalysis, tgt: DumpAnalysis, compare: dict) -> str:
+    src_db = compare.get("source_db") or "source_db"
+    tgt_db = compare.get("target_db") or "target_db"
+    src_tables = set(src.tables.keys())
+    target_tables = sorted(tgt.tables.keys())
+
+    lines: List[str] = []
+    lines.append("-- Full replace script: source (.com) overwrites target (.org)")
+    lines.append("-- Strategy: TRUNCATE target table, INSERT all rows from source.")
+    lines.append("-- Target-only columns get derived defaults (scope_type/scope_id from company_id).")
+    lines.append("--")
+    lines.append(f"-- Source DB: `{src_db}`")
+    lines.append(f"-- Target DB: `{tgt_db}`")
+    lines.append("-- WARNING: This destroys all existing target data in copied tables.")
+    lines.append("")
+    lines.append("SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0;")
+    lines.append("SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0;")
+    lines.append("SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO';")
+    lines.append("SET AUTOCOMMIT=0;")
+    lines.append("START TRANSACTION;")
+    lines.append("SAVEPOINT replace_begin;")
+    lines.append("")
+    lines.append(f"USE `{tgt_db}`;")
+    lines.append("")
+
+    replaced: List[str] = []
+    truncated_only: List[str] = []
+    skipped: List[str] = []
+
+    for table_name in target_tables:
+        if table_name.startswith(SYSTEM_DB_PREFIXES):
+            skipped.append(f"{table_name} (system schema)")
+            continue
+
+        tgt_schema = tgt.tables[table_name]
+        tgt_cols = tgt_schema.columns
+        if not tgt_cols:
+            skipped.append(f"{table_name} (cannot parse target columns)")
+            continue
+
+        if table_name not in src_tables:
+            lines.append(f"-- Table `{table_name}` (no source table — truncate target only)")
+            lines.append(f"TRUNCATE TABLE `{tgt_db}`.`{table_name}`;")
+            lines.append("")
+            truncated_only.append(table_name)
+            continue
+
+        src_schema = src.tables[table_name]
+        src_cols = src_schema.columns
+        src_col_set = set(src_cols)
+
+        select_parts = []
+        for col in tgt_cols:
+            if col in src_col_set:
+                select_parts.append(f"s.`{col}`")
+            else:
+                select_parts.append(
+                    f"{derive_target_only_select(table_name, col, src_cols)} AS `{col}`"
+                )
+
+        quoted_tgt_cols = ", ".join([f"`{c}`" for c in tgt_cols])
+        select_list = ", ".join(select_parts)
+
+        lines.append(f"-- Table `{table_name}`")
+        lines.append(f"TRUNCATE TABLE `{tgt_db}`.`{table_name}`;")
+        lines.append(
+            f"INSERT INTO `{tgt_db}`.`{table_name}` ({quoted_tgt_cols})"
+        )
+        lines.append(f"SELECT {select_list}")
+        lines.append(f"FROM `{src_db}`.`{table_name}` s;")
+        lines.append("")
+        replaced.append(table_name)
+
+    scope_backfill_tables = []
+    for table_name in replaced:
+        tgt_cols = set(tgt.tables[table_name].columns)
+        if {"scope_type", "scope_id", "company_id"}.issubset(tgt_cols):
+            scope_backfill_tables.append(table_name)
+
+    if scope_backfill_tables:
+        lines.append("-- Backfill scope_id where derived/NULL (ref: database/ops/SCOPE_ID_BACKFILL_DATA_CAPTURE_TEMPLATES.md)")
+        for table_name in scope_backfill_tables:
+            lines.append(f"UPDATE `{table_name}`")
+            lines.append("SET `scope_type` = 'company',")
+            lines.append("    `scope_id` = `company_id`")
+            lines.append("WHERE `scope_id` IS NULL")
+            lines.append("  AND `company_id` IS NOT NULL;")
+            lines.append("")
+
+    lines.append("-- Row-count sanity check (target should match source for replaced tables):")
+    for table_name in replaced[:30]:
+        lines.append(
+            f"SELECT '{table_name}' AS table_name,"
+            f" (SELECT COUNT(*) FROM `{tgt_db}`.`{table_name}`) AS target_rows,"
+            f" (SELECT COUNT(*) FROM `{src_db}`.`{table_name}`) AS source_rows;"
+        )
+    if len(replaced) > 30:
+        lines.append(f"-- ... and {len(replaced) - 30} more tables")
+    lines.append("")
+    lines.append("COMMIT;")
+    lines.append("-- If anything looks wrong:")
+    lines.append("-- ROLLBACK TO SAVEPOINT replace_begin;")
+    lines.append("-- ROLLBACK;")
+    lines.append("")
+    lines.append("SET SQL_MODE=@OLD_SQL_MODE;")
+    lines.append("SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS;")
+    lines.append("SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS;")
+    lines.append("")
+    lines.append("-- Metadata:")
+    lines.append(f"-- Replaced tables: {len(replaced)}")
+    lines.append(f"-- Truncated-only (no source): {len(truncated_only)}")
+    lines.append(f"-- Skipped: {len(skipped)}")
+    for item in truncated_only[:50]:
+        lines.append(f"--   truncated-only: {item}")
+    for item in compare.get("only_in_source", [])[:50]:
+        lines.append(f"--   source-only (not in target schema): {item}")
+    for item in skipped[:50]:
+        lines.append(f"--   skip: {item}")
+
+    return "\n".join(lines) + "\n"
+
+
 def write_report(compare: dict, out_md: Path) -> None:
     lines: List[str] = []
     lines.append("# SQL Merge Conflict Report")
@@ -629,6 +765,12 @@ def main() -> None:
     parser.add_argument("--source", required=True, help="Source dump (.sql)")
     parser.add_argument("--target", required=True, help="Target dump (.sql)")
     parser.add_argument("--out-dir", required=True, help="Output directory")
+    parser.add_argument(
+        "--strategy",
+        choices=("merge", "replace", "both"),
+        default="merge",
+        help="merge=keep target on conflict; replace=truncate+source overwrite; both=emit both SQL files",
+    )
     args = parser.parse_args()
 
     source_path = Path(args.source)
@@ -641,16 +783,23 @@ def main() -> None:
     compare = compare_dumps(src, tgt)
 
     report_md = out_dir / "merge_conflict_report.md"
-    merge_sql = out_dir / "merge_bidirectional_skip_same.sql"
     compare_json = out_dir / "merge_conflict_raw.json"
 
     write_report(compare, report_md)
-    merge_sql.write_text(generate_merge_sql(src, tgt, compare), encoding="utf-8")
     compare_json.write_text(json.dumps(compare, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"Report: {report_md}")
-    print(f"Merge SQL: {merge_sql}")
     print(f"Raw JSON: {compare_json}")
+
+    if args.strategy in ("merge", "both"):
+        merge_sql = out_dir / "merge_bidirectional_skip_same.sql"
+        merge_sql.write_text(generate_merge_sql(src, tgt, compare), encoding="utf-8")
+        print(f"Merge SQL: {merge_sql}")
+
+    if args.strategy in ("replace", "both"):
+        replace_sql = out_dir / "replace_source_overwrite.sql"
+        replace_sql.write_text(generate_replace_sql(src, tgt, compare), encoding="utf-8")
+        print(f"Replace SQL: {replace_sql}")
 
 
 if __name__ == "__main__":
