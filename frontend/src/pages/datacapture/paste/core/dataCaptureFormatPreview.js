@@ -245,7 +245,8 @@ export function sanitizePastedHTML(html) {
     } catch (_) { }
 
     table.querySelectorAll('td, th').forEach((cell) => {
-        const cleaned = sanitizePastedCellHtml(cell.innerHTML);
+        // Keep buttons/icons for format paste visual fidelity; Reset clears them later.
+        const cleaned = sanitizePastedCellHtml(cell.innerHTML, { stripInteractive: false });
         if (cleaned !== cell.innerHTML) {
             cell.innerHTML = cleaned;
         }

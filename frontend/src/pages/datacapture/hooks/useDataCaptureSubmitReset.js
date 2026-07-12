@@ -47,7 +47,6 @@ import { prefetchRouteModule } from "../../../utils/routing/routePrefetch.js";
 import { prefetchSummaryPopulateData } from "../../datacapturesummary/lib/summaryPrefetch.js";
 import { useDataCaptureContext } from "../context/DataCaptureContext.jsx";
 import {
-  applyBridgeCaptureType,
   getBridgeCaptureType,
   toggleBridgeFormatDisplay,
 } from "../lib/dataCaptureBridge.js";
@@ -307,7 +306,8 @@ export function useDataCaptureSubmitReset({
     clearFormatPreviewHtml();
     setFormatGridReady(false);
 
-    applyBridgeCaptureType("1.Text");
+    // Keep current capture type (e.g. stay on 2.Format after Reset).
+    toggleBridgeFormatDisplay();
 
     recomputeSubmitState();
   }, [

@@ -10,6 +10,9 @@ import {
   calculateTotals,
   countDisplayedRows,
   normalizeRateRowsByCrDr,
+  applyTypeSearchAccountFilter,
+  hasSubmitFocusByCurrency,
+  getSubmitFocusAccountIdsForCurrency,
   readTransactionCurrencyFilterState,
   pickTransactionDefaultCurrency,
   readTxListFromSessionStorage,
@@ -99,6 +102,11 @@ export function useTransactionSearch({
   const [typeSearchActive, setTypeSearchActive] = useState(false);
   const [typeSearchAccountIds, setTypeSearchAccountIds] = useState([]);
   const [typeSearchFormType, setTypeSearchFormType] = useState(null);
+  /** Post-submit focused rows per currency: { MYR: [ids], SGD: [ids] } on current capture range. */
+  const [submitFocusByCurrency, setSubmitFocusByCurrency] = useState({});
+  const [submitFocusRangeKey, setSubmitFocusRangeKey] = useState(null);
+  /** Capture ranges left while in submit-focus — returning runs full Type Search (scheme A). */
+  const submitFocusLeftRangeKeysRef = useRef(new Set());
 
   const queryClient = useQueryClient();
   const latestRunTokenRef = useRef(0);
@@ -124,6 +132,10 @@ export function useTransactionSearch({
   const effectiveDateFrom = dateFrom || todayDmy;
   const effectiveDateTo = dateTo || todayDmy;
   const effectiveDateRangeText = `${effectiveDateFrom} - ${effectiveDateTo}`;
+  const captureRangeKey = `${effectiveDateFrom}|${effectiveDateTo}`;
+  const submitFocusActive =
+    hasSubmitFocusByCurrency(submitFocusByCurrency) && submitFocusRangeKey === captureRangeKey;
+  const listPresentationModeActive = typeSearchActive || submitFocusActive;
   const selectedCurrenciesKey = selectedCurrencies.map((c) => String(c || "").toUpperCase()).join(",");
   const scopeViewGroup = transactionScope?.viewGroup ?? null;
   const scopeReady = transactionScopeIsReady(transactionScope);
@@ -810,9 +822,13 @@ export function useTransactionSearch({
         dateTo: dateToOverride,
         silent = false,
         preserveSearchState = false,
+        forceRefresh = false,
       } = opts;
       const normalizedType = String(formTxType || "").toUpperCase().trim();
       if (!normalizedType) return;
+
+      setSubmitFocusByCurrency({});
+      setSubmitFocusRangeKey(null);
 
       if (!preserveSearchState) {
         const clearedState = {
@@ -838,6 +854,11 @@ export function useTransactionSearch({
 
       setSearchLoading(true);
       try {
+        if (forceRefresh) {
+          clearTxSearchCache();
+          await queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
+        }
+
         const subsidiarySearch =
           scopeApi.subsidiaryAccountsOnly ||
           (scopeApi.companyId != null && Number(scopeApi.companyId) > 0);
@@ -938,58 +959,105 @@ export function useTransactionSearch({
       pushToast,
       m,
       t,
+      queryClient,
     ],
   );
 
-  /** After successful submit/approval: jump Capture Date to transaction date and refresh list. */
-  const jumpToSubmitDateAndRefresh = useCallback(
-    async ({ submitDateDmy } = {}) => {
-      const d = String(submitDateDmy || "").trim();
-      if (!d) return;
+  /** After successful submit/approval: keep capture date; show union of submitted account rows. */
+  const applySubmitFocusAndRefresh = useCallback(
+    async ({ accountIds, submitCurrency } = {}) => {
+      const ids = [...new Set((accountIds || []).map((id) => Number(id)).filter((id) => id > 0))];
+      if (ids.length === 0) return;
+      if (!scopeReady || !scopeCacheCompanyKey) return;
+      if (!effectiveDateFrom || !effectiveDateTo) return;
 
-      prevCaptureDateRangeKeyRef.current = `${d}|${d}`;
-      setDateFrom(d);
-      setDateTo(d);
-      syncCaptureDateDom(d);
+      const rangeKey = `${effectiveDateFrom}|${effectiveDateTo}`;
+      const currencyCode = String(submitCurrency || "").toUpperCase().trim();
 
-      const activeType = typeSearchActive;
-      const activeFormType = typeSearchFormType;
+      let currencyOverrides = {};
+      if (currencyCode && !showAllCurrencies) {
+        const current = selectedCurrencies
+          .map((c) => String(c || "").toUpperCase().trim())
+          .filter(Boolean);
+        const alreadySelected = current.includes(currencyCode);
 
-      if (activeType && activeFormType) {
-        const normalizedType = String(activeFormType).toUpperCase().trim();
-        if (PERIOD_TYPE_SEARCH_TYPES.has(normalizedType)) {
-          await runSearch({
-            forceRefresh: true,
-            silent: true,
-            dateFromOverride: d,
-            dateToOverride: d,
-            typeSearchOverride: true,
+        if (!alreadySelected) {
+          const merged = [...current, currencyCode];
+          const order = (currencyRowsOrdered || [])
+            .map((r) => String(r.code || "").toUpperCase().trim())
+            .filter(Boolean);
+          const nextSel = merged.sort((a, b) => {
+            const ia = order.indexOf(a);
+            const ib = order.indexOf(b);
+            if (ia === -1 && ib === -1) return a.localeCompare(b);
+            if (ia === -1) return 1;
+            if (ib === -1) return -1;
+            return ia - ib;
           });
-          return;
+
+          suppressCrossPageCurrencyRef.current = nextSel.length !== 1;
+          setShowAllCurrencies(false);
+          setSelectedCurrencies(nextSel);
+          persistCurrencyFilter(scopeCacheCompanyKey, false, nextSel, transactionScope?.selectedGroup);
+          if (nextSel.length === 1) {
+            notifySingleCurrencyIfNeeded(nextSel);
+          }
+          currencyOverrides = {
+            showAllCurrenciesOverride: false,
+            selectedCurrenciesOverride: nextSel,
+          };
         }
-        await runTypeSearch(activeFormType, {
-          dateFrom: d,
-          dateTo: d,
-          silent: true,
-          preserveSearchState: true,
-        });
-        return;
       }
 
-      await runSearch({
-        forceRefresh: true,
-        silent: true,
-        dateFromOverride: d,
-        dateToOverride: d,
-        typeSearchOverride: false,
-      });
+      setSearchLoading(true);
+      try {
+        setTypeSearchActive(false);
+        setTypeSearchFormType(null);
+        setTypeSearchAccountIds([]);
+
+        if (currencyCode) {
+          setSubmitFocusByCurrency((prev) => {
+            const base = submitFocusRangeKey === rangeKey ? { ...prev } : {};
+            const existing = Array.isArray(base[currencyCode]) ? base[currencyCode] : [];
+            base[currencyCode] = [...new Set([...existing, ...ids])];
+            return base;
+          });
+        }
+        setSubmitFocusRangeKey(rangeKey);
+        submitFocusLeftRangeKeysRef.current.delete(rangeKey);
+
+        clearTxSearchCache();
+        await queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
+        await runSearch({
+          forceRefresh: true,
+          silent: true,
+          typeSearchOverride: false,
+          ...currencyOverrides,
+        });
+      } finally {
+        setSearchLoading(false);
+      }
     },
-    [typeSearchActive, typeSearchFormType, runSearch, runTypeSearch],
+    [
+      scopeReady,
+      scopeCacheCompanyKey,
+      effectiveDateFrom,
+      effectiveDateTo,
+      submitFocusRangeKey,
+      showAllCurrencies,
+      selectedCurrencies,
+      currencyRowsOrdered,
+      persistCurrencyFilter,
+      transactionScope?.selectedGroup,
+      notifySingleCurrencyIfNeeded,
+      queryClient,
+      runSearch,
+    ],
   );
 
-  /** Exit Type Search and restore the default transaction page view (today + default filters). */
+  /** Exit Type Search / submit-focus and restore the default transaction page view (today + default filters). */
   const exitTypeSearchAndRefresh = useCallback(async () => {
-    if (!typeSearchActive) return;
+    if (!typeSearchActive && !submitFocusActive) return;
     if (!scopeReady || !scopeCacheCompanyKey) return;
 
     const today = String(todayDmy || "").trim();
@@ -1008,6 +1076,9 @@ export function useTransactionSearch({
       setTypeSearchActive(false);
       setTypeSearchFormType(null);
       setTypeSearchAccountIds([]);
+      setSubmitFocusByCurrency({});
+      setSubmitFocusRangeKey(null);
+      submitFocusLeftRangeKeysRef.current.clear();
       setSearchState({ ...INITIAL_TRANSACTION_SEARCH_STATE });
       setSelectedCategories([]);
       categoryChangedByUserRef.current = false;
@@ -1046,6 +1117,7 @@ export function useTransactionSearch({
     }
   }, [
     typeSearchActive,
+    submitFocusActive,
     scopeReady,
     scopeCacheCompanyKey,
     todayDmy,
@@ -1084,21 +1156,43 @@ export function useTransactionSearch({
     // rawSearchData is already sanitized on commit/replay; avoid duplicate dedupe pass.
     const rawLeft = Array.isArray(rawSearchData.left_table) ? rawSearchData.left_table : [];
     const rawRight = Array.isArray(rawSearchData.right_table) ? rawSearchData.right_table : [];
+    let viewLeft = rawLeft;
+    let viewRight = rawRight;
+    const multiCurrencyView = showAllCurrencies || selectedCurrencies.length > 1;
+    if (submitFocusActive && !multiCurrencyView) {
+      const singleCode = String(selectedCurrencies[0] || "").toUpperCase().trim();
+      const focusIds = getSubmitFocusAccountIdsForCurrency(submitFocusByCurrency, singleCode);
+      if (focusIds.length > 0) {
+        const focusSet = new Set(focusIds);
+        const focused = applyTypeSearchAccountFilter(rawLeft, rawRight, focusSet);
+        viewLeft = focused.left;
+        viewRight = focused.right;
+      }
+    }
     if (typeSearchActive) {
       return {
         hasData: true,
-        baseLeft: rawLeft,
-        baseRight: rawRight,
+        baseLeft: viewLeft,
+        baseRight: viewRight,
       };
     }
     const presentationTxType = typeSearchFormType || txType;
-    const norm = normalizeRateRowsByCrDr(rawLeft, rawRight, presentationTxType === "RATE");
+    const norm = normalizeRateRowsByCrDr(viewLeft, viewRight, presentationTxType === "RATE");
     return {
       hasData: true,
       baseLeft: sortByRole(norm.leftRows),
       baseRight: sortByRole(norm.rightRows),
     };
-  }, [rawSearchData, txType, typeSearchFormType, typeSearchActive]);
+  }, [
+    rawSearchData,
+    txType,
+    typeSearchFormType,
+    typeSearchActive,
+    submitFocusActive,
+    submitFocusByCurrency,
+    showAllCurrencies,
+    selectedCurrencies,
+  ]);
 
   const tablePresentation = useMemo(() => {
     if (!rawSearchData) {
@@ -1114,9 +1208,9 @@ export function useTransactionSearch({
       };
     }
     const filtered = filterTransactionTableRows(baseRowsPresentation.baseLeft, baseRowsPresentation.baseRight, {
-      showZeroBalance: typeSearchActive ? true : searchState.showZeroBalance,
-      showPaymentOnly: typeSearchActive ? false : searchState.showPaymentOnly,
-      showCaptureOnly: typeSearchActive ? false : searchState.showCaptureOnly,
+      showZeroBalance: listPresentationModeActive ? true : searchState.showZeroBalance,
+      showPaymentOnly: listPresentationModeActive ? false : searchState.showPaymentOnly,
+      showCaptureOnly: listPresentationModeActive ? false : searchState.showCaptureOnly,
     });
     const sortedLeft = filtered.left;
     const sortedRight = filtered.right;
@@ -1171,7 +1265,17 @@ export function useTransactionSearch({
     }
 
     const grouped = orderedCurrs.map((currency) => {
-      const { left: gl, right: gr } = groupedMap[currency];
+      let gl = groupedMap[currency]?.left || [];
+      let gr = groupedMap[currency]?.right || [];
+      if (submitFocusActive) {
+        const focusIds = getSubmitFocusAccountIdsForCurrency(submitFocusByCurrency, currency);
+        if (focusIds.length > 0) {
+          const focusSet = new Set(focusIds);
+          const focused = applyTypeSearchAccountFilter(gl, gr, focusSet);
+          gl = focused.left;
+          gr = focused.right;
+        }
+      }
       const l = sortByRole(gl);
       const r = sortByRole(gr);
       const tL = calculateTotals(l);
@@ -1205,7 +1309,17 @@ export function useTransactionSearch({
       grouped,
       singleCurrencyTitle: null,
     };
-  }, [rawSearchData, baseRowsPresentation, searchState, typeSearchActive, showAllCurrencies, selectedCurrencies, currencyRowsOrdered]);
+  }, [
+    rawSearchData,
+    baseRowsPresentation,
+    searchState,
+    listPresentationModeActive,
+    showAllCurrencies,
+    selectedCurrencies,
+    currencyRowsOrdered,
+    submitFocusActive,
+    submitFocusByCurrency,
+  ]);
 
   useEffect(() => {
     if (!typeSearchActive) return;
@@ -1272,6 +1386,9 @@ export function useTransactionSearch({
       suppressBlockingOverlayOnceRef.current = true;
       prevCaptureDateRangeKeyRef.current = null;
       prevServerSideFiltersRef.current = null;
+      setSubmitFocusByCurrency({});
+      setSubmitFocusRangeKey(null);
+      submitFocusLeftRangeKeysRef.current.clear();
       setSearchLoading(false);
       lastCompletedSearchKeyRef.current = "";
 
@@ -1426,13 +1543,35 @@ export function useTransactionSearch({
     if (!effectiveDateFrom || !effectiveDateTo) return;
     if (!showAllCurrencies && selectedCurrencies.length === 0) return;
 
-    const key = `${effectiveDateFrom}|${effectiveDateTo}`;
-    if (prevCaptureDateRangeKeyRef.current === null) {
+    const key = captureRangeKey;
+    const prevKey = prevCaptureDateRangeKeyRef.current;
+    if (prevKey === null) {
       prevCaptureDateRangeKeyRef.current = key;
       return;
     }
-    if (prevCaptureDateRangeKeyRef.current === key) return;
+    if (prevKey === key) return;
+
+    if (submitFocusRangeKey === prevKey && hasSubmitFocusByCurrency(submitFocusByCurrency)) {
+      submitFocusLeftRangeKeysRef.current.add(prevKey);
+      setSubmitFocusByCurrency({});
+      setSubmitFocusRangeKey(null);
+      setTypeSearchActive(false);
+      setTypeSearchFormType(null);
+      setTypeSearchAccountIds([]);
+    }
+
     prevCaptureDateRangeKeyRef.current = key;
+
+    if (submitFocusLeftRangeKeysRef.current.has(key)) {
+      void runTypeSearch(txType, { forceRefresh: true, silent: false });
+      return;
+    }
+
+    if (submitFocusRangeKey === key && hasSubmitFocusByCurrency(submitFocusByCurrency)) {
+      void runSearch({ forceRefresh: true, silent: true, typeSearchOverride: false });
+      return;
+    }
+
     if (typeSearchActive && typeSearchFormType) {
       void runTypeSearch(typeSearchFormType);
       return;
@@ -1442,6 +1581,7 @@ export function useTransactionSearch({
       forceRefresh: searchState.showZeroBalance,
     });
   }, [
+    captureRangeKey,
     effectiveDateFrom,
     effectiveDateTo,
     scopeReady,
@@ -1452,6 +1592,11 @@ export function useTransactionSearch({
     typeSearchActive,
     typeSearchFormType,
     runTypeSearch,
+    runSearch,
+    txType,
+    submitFocusRangeKey,
+    submitFocusByCurrency,
+    hasSubmitFocusByCurrency,
   ]);
 
   return {
@@ -1478,8 +1623,10 @@ export function useTransactionSearch({
     setTablesVisible,
     runSearch,
     runTypeSearch,
-    jumpToSubmitDateAndRefresh,
+    applySubmitFocusAndRefresh,
     exitTypeSearchAndRefresh,
+    submitFocusActive,
+    listPresentationModeActive,
     typeSearchActive,
     typeSearchFormType,
     persistCurrencyFilter,

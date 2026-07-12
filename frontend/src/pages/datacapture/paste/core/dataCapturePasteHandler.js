@@ -8,7 +8,11 @@ import { getDefaultPasteAnchorCell } from "./dataCapturePasteApply.js";
 import { parseCitibetPasteData } from "./dataCapturePasteDetect.js";
 import { handleCitibetPaste } from "../vendors/dataCaptureCitibetPaste.js";
 import { handleTextModePaste } from "./dataCaptureTextPaste.js";
-import { handleFormatCellPaste } from "./dataCaptureFormatPasteHandler.js";
+import { tryApplyBillingStatementPlainMatrix } from "./dataCaptureStatementMatrixPaste.js";
+import {
+  handleFormatCellPaste,
+  markFormatGridReadyAfterPlainMatrixPaste,
+} from "./dataCaptureFormatPasteHandler.js";
 import { handleGenericPaste } from "./dataCaptureGenericPaste.js";
 import { handle4ReturnPaste, handleApiReturnPaste } from "../vendors/dataCaptureReturnPaste.js";
 import { handleVPowerPaste } from "../vendors/dataCaptureVPowerPaste.js";
@@ -144,6 +148,16 @@ export function handleCellPasteEvent(e) {
   const captureType = getActiveCaptureType();
 
   if (captureType === "2.Format") {
+    // Prefer Citibet-style plain matrix for billing statements (SUBTOTAL / TOTAL AMOUNT).
+    if (
+      tryApplyBillingStatementPlainMatrix(pastedData, cell, {
+        startRowOverride: 0,
+        startColOverride: 0,
+      })
+    ) {
+      markFormatGridReadyAfterPlainMatrixPaste();
+      return;
+    }
     if (handleFormatCellPaste(e, pastedData)) return;
     invokeGenericPasteFallback(e, pastedData);
     return;
@@ -159,6 +173,9 @@ export function handleCellPasteEvent(e) {
   }
 
   if (captureType === "1.Text") {
+    // Same Citibet-style matrix path first (working reference: 3.CITIBET).
+    if (tryApplyBillingStatementPlainMatrix(pastedData, cell)) return;
+    if (handleFormatCellPaste(e, pastedData, { allowOutsideFormatMode: true })) return;
     if (handleTextModePaste(e, pastedData, cell)) return;
     invokeGenericPasteFallback(e, pastedData);
     return;

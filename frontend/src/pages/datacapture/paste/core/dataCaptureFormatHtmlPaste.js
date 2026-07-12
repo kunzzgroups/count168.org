@@ -4,7 +4,6 @@ import { applyDataMatrixToGrid, ensureGridFits } from "./dataCapturePasteApply.j
 import { notifyPasteUser, recomputeSubmitStateAfterPaste } from "../../lib/dataCaptureBridge.js";
 import {
   parseFormatHtmlTableStructure,
-  countFormatRequiredBodyRows,
   buildFormatBodyMatrix,
 } from "./dataCaptureFormatHtmlMatrix.js";
 
@@ -26,25 +25,46 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
 
     const { headerRows, dataRows, maxCols } = structure;
 
-    ensureGridFits(startRow, 0, countFormatRequiredBodyRows(dataRows), maxCols);
+    // Build/reshape first — source maxCols from colspan can lie; matrix width is truth.
+    let bodyMatrix;
+    try {
+      bodyMatrix = buildFormatBodyMatrix(dataRows, Math.max(maxCols, 1));
+    } catch (err) {
+      console.warn("Format: buildFormatBodyMatrix failed", err);
+      return false;
+    }
 
-    const bodyMatrix = buildFormatBodyMatrix(dataRows, maxCols);
+    const appliedCols = Math.max(
+      0,
+      ...bodyMatrix.map((row) => (Array.isArray(row) ? row.length : 0)),
+    );
+    if (appliedCols < 2) {
+      console.log(
+        `Format: rejecting collapsed matrix (sourceMaxCols=${maxCols}, appliedCols=${appliedCols}) — falling back`,
+      );
+      return false;
+    }
+
+    const sample = (bodyMatrix[0] || [])
+      .slice(0, 10)
+      .map((cell) => String(cell?.value ?? "").slice(0, 18));
     console.log(
-      `Format: Applying ${bodyMatrix.length} body row(s) at row ${startRow} (${dataRows.length} source data rows)`,
+      `Format: Applying ${bodyMatrix.length} body row(s) at row ${startRow} (${dataRows.length} source data rows x ${appliedCols} cols)`,
+      sample,
     );
 
-    const { successCount: bodySuccessCount } = applyDataMatrixToGrid(bodyMatrix, null, {
+    ensureGridFits(startRow, 0, bodyMatrix.length, appliedCols);
+
+    const { successCount } = applyDataMatrixToGrid(bodyMatrix, null, {
       startRowOverride: startRow,
       startColOverride: 0,
       trimValues: false,
       alignTotalRows: false,
     });
 
-    const successCount = bodySuccessCount;
-
     if (successCount > 0) {
       notifyPasteUser(
-        `成功粘贴表格 (${headerRows.length} 个表头行, ${dataRows.length} 个数据行 x ${maxCols} 列)，已保持完整表格结构!`,
+        `成功粘贴表格 (${headerRows.length} 个表头行, ${bodyMatrix.length} 个数据行 x ${appliedCols} 列)，已保持完整表格结构!`,
         "success",
       );
       recomputeSubmitStateAfterPaste();

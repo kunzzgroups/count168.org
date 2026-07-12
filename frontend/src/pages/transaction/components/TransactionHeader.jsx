@@ -229,7 +229,9 @@ export default function TransactionHeader({
                               await approveContra({
                                 transactionId: tid,
                                 scopeApi,
-                                transactionDate: formatContraDate(it.transaction_date || it.date),
+                                toAccountCode: it.to_account_code,
+                                fromAccountCode: it.from_account_code,
+                                currency: it.currency,
                               });
                             }}
                           >

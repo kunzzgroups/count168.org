@@ -511,6 +511,20 @@ export function applyTypeSearchAccountFilter(left, right, typeSearchAccountIds) 
   return { left: keep(left), right: keep(right) };
 }
 
+/** Whether any currency has post-submit focused account ids. */
+export function hasSubmitFocusByCurrency(byCurrency) {
+  if (!byCurrency || typeof byCurrency !== "object") return false;
+  return Object.values(byCurrency).some((ids) => Array.isArray(ids) && ids.length > 0);
+}
+
+/** Focused account ids for one currency code (uppercase key in map). */
+export function getSubmitFocusAccountIdsForCurrency(byCurrency, currencyCode) {
+  const code = String(currencyCode || "").toUpperCase().trim();
+  if (!code) return [];
+  const ids = byCurrency?.[code];
+  return Array.isArray(ids) ? ids : [];
+}
+
 /** Row count after the same client filters as the main grid (for search-complete toasts). */
 export function countDisplayedRows(rawSearchData, searchState, txType, typeSearchActive = false) {
   if (!rawSearchData) return 0;

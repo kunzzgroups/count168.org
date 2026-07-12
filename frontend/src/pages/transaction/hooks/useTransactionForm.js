@@ -12,7 +12,7 @@ import {
   countRateDecimalPlaces,
   formatRateAmount,
 } from "../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike } from "../lib/transactionSubmitHelpers.js";
+import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds } from "../lib/transactionSubmitHelpers.js";
 import { submitTransaction, transactionQueryKeys } from "../lib/transactionApi.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveGridRowToAccountOption } from "../lib/transactionPaymentLogic.js";
@@ -443,7 +443,17 @@ export function useTransactionForm({
           setRateTransferFromAccount(null);
           setRateMiddlemanAccount(null);
           if (approvalStatus !== "PENDING") {
-            await onAfterSuccessfulSubmit?.({ submitDateDmy: rateDate });
+            await onAfterSuccessfulSubmit?.({
+              accountIds: collectSubmitFocusAccountIds({
+                txType: "RATE",
+                rateToAccountId: rateToAccount?.id,
+                rateFromAccountId: rateFromAccount?.id,
+                rateTransferToAccountId: rateTransferToAccount?.id,
+                rateTransferFromAccountId: rateTransferFromAccount?.id,
+                rateMiddlemanAccountId: rateMiddlemanAccount?.id,
+              }),
+              submitCurrency: rateCurrencyFrom,
+            });
           }
           return;
         }
@@ -554,7 +564,15 @@ export function useTransactionForm({
         setTxFullAmount("");
         setTxConfirm(false);
         if (approvalStatus !== "PENDING") {
-          await onAfterSuccessfulSubmit?.({ submitDateDmy: txDate });
+          await onAfterSuccessfulSubmit?.({
+            accountIds: collectSubmitFocusAccountIds({
+              txType,
+              toAccountId: toId,
+              fromAccountId: fromId,
+              isAdjustment,
+            }),
+            submitCurrency: txCurrency,
+          });
         }
         return;
       }

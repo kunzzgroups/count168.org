@@ -151,8 +151,19 @@ export function isFormatRichHtmlTable(html) {
 }
 
 /** UI chrome copied from external sites (action buttons, icons) — not cell data. */
-const PASTED_INTERACTIVE_UI_SELECTOR =
-  "button, input, select, textarea, svg, img, [role='button']";
+const PASTED_INTERACTIVE_UI_SELECTOR = [
+  "button",
+  "input",
+  "select",
+  "textarea",
+  "svg",
+  "img",
+  "i",
+  "mat-icon",
+  "[role='button']",
+  "[aria-label]",
+  "a[href]",
+].join(", ");
 
 /**
  * Remove interactive UI elements from pasted HTML while keeping text/formatting tags.
@@ -165,7 +176,8 @@ export function stripInteractiveUiFromHtml(html) {
     div.innerHTML = html;
     div.querySelectorAll(PASTED_INTERACTIVE_UI_SELECTOR).forEach((el) => {
       const text = (el.textContent || "").trim();
-      if (text) {
+      // Keep meaningful link/button labels; drop icon-only chrome.
+      if (text && text.length > 1 && !/^[-−–—+×xX]$/.test(text)) {
         el.replaceWith(document.createTextNode(text));
       } else {
         el.remove();
@@ -190,14 +202,14 @@ export function plainTextFromSanitizedHtml(html) {
   }
 }
 
-export function sanitizePastedCellHtml(cellContent) {
+export function sanitizePastedCellHtml(cellContent, { stripInteractive = true } = {}) {
   if (!cellContent) return "";
   const stripped = cellContent
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/javascript:/gi, "")
     .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
-  return stripInteractiveUiFromHtml(stripped);
+  return stripInteractive ? stripInteractiveUiFromHtml(stripped) : stripped;
 }
 
 /** Reorder columns when No./User appear at the end (common Excel copy quirk). */
@@ -247,7 +259,16 @@ export function detectColumnReorder(allRows) {
 
 function countRowCols(row) {
   if (!row) return 0;
-  const cells = row.querySelectorAll("td, th");
+  // Prefer direct cells — nested td/th inside a crushed cell must not inflate width.
+  const direct = Array.from(row.children || []).filter((el) => {
+    const tag = (el.tagName || "").toUpperCase();
+    return tag === "TD" || tag === "TH";
+  });
+  const cells = direct.length ? direct : Array.from(row.querySelectorAll("td, th"));
+  if (cells.length <= 1) {
+    // A lone TD with colspan=N is still one crushed clipboard cell until expanded.
+    return cells.length;
+  }
   let c = 0;
   cells.forEach((cell) => {
     c += Number.parseInt(cell.getAttribute("colspan") || "1", 10);

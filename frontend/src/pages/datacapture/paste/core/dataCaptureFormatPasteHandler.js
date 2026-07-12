@@ -1,4 +1,7 @@
+import { handleTextPlainPaste } from "./dataCaptureTextPaste.js";
+import { tryApplyBillingStatementPlainMatrix } from "./dataCaptureStatementMatrixPaste.js";
 import { parseAndFillHtmlTableForFormat } from "./dataCaptureFormatHtmlPaste.js";
+import { parseAndFillHtmlTableForTextWithFormat } from "./dataCaptureTextHtmlPaste.js";
 import {
   buildFormatPreviewFragmentFromClipboardHtml,
   clipboardLooksLikeTable,
@@ -6,8 +9,14 @@ import {
   tsvToHtmlTable,
 } from "./dataCaptureFormatPreview.js";
 import {
+  clipboardHtmlLooksLikeGrid,
+  normalizeClipboardHtmlToTable,
+} from "./dataCaptureFormatClipboardNormalize.js";
+import {
+  getDefaultPasteAnchorCell,
   getFormatPasteAnchorCell,
   resolveFormatPasteStartRow,
+  resolvePasteAnchor,
 } from "./dataCapturePasteApply.js";
 import { domGridHasEditableData } from "../../lib/dataCaptureTableSnapshot.js";
 import { isGridPasteBlockedTarget } from "./dataCaptureClipboard.js";
@@ -30,29 +39,79 @@ function isEditableFormField(el) {
 
 function afterFormatPasteFilled(filled, area) {
   if (!filled) return false;
-  setFormatGridReady(true);
-  syncFormatPreviewFromDom();
-  if (area) area.innerHTML = "";
-  showFormatEditableGrid();
-  toggleFormatDisplay();
+  // Format chrome (preview / paste area) only belongs to 2.Format.
+  // 1.Text reuses the same Excel-like fill pipeline into the editable grid.
+  if (isFormatMode()) {
+    setFormatGridReady(true);
+    syncFormatPreviewFromDom();
+    if (area) area.innerHTML = "";
+    showFormatEditableGrid();
+    toggleFormatDisplay();
+  }
   recomputeSubmitStateAfterPaste();
   return true;
+}
+
+/** Call after a Citibet-style plain matrix paste in 2.Format mode. */
+export function markFormatGridReadyAfterPlainMatrixPaste() {
+  return afterFormatPasteFilled(true, null);
+}
+
+function resolveFormatFallbackAnchorCell(startRow = 0, anchorCell = null) {
+  if (anchorCell?.closest?.("#dataTable")) return anchorCell;
+  const tableBody = document.getElementById("tableBody");
+  const targetRow = Math.max(0, Number(startRow) || 0);
+  const rowEl = tableBody?.children?.[targetRow];
+  const cell = rowEl?.querySelector?.('td[contenteditable="true"]');
+  return cell || getDefaultPasteAnchorCell();
+}
+
+function processFormatPlainTextFallback(
+  text,
+  { area = null, startRow = null, anchorCell = null } = {},
+) {
+  if (!text || !String(text).trim()) return false;
+  const resolvedStartRow =
+    startRow != null ? startRow : resolveFormatPasteStartRow(anchorCell || getFormatPasteAnchorCell());
+  const resolvedAnchor = resolveFormatFallbackAnchorCell(resolvedStartRow, anchorCell);
+  if (!resolvedAnchor) return false;
+
+  const filled = handleTextPlainPaste(null, text, resolvedAnchor);
+  return afterFormatPasteFilled(filled, area);
 }
 
 /** Process HTML/TSV clipboard content into preview + editable grid. */
 export function processFormatTableHtml(html, { area = null, startRow = null, anchorCell = null } = {}) {
   if (!html) return false;
+  const normalizedHtml = normalizeClipboardHtmlToTable(html) || html;
   const resolvedStartRow =
     startRow != null ? startRow : resolveFormatPasteStartRow(anchorCell || getFormatPasteAnchorCell());
+  const resolvedAnchor = resolveFormatFallbackAnchorCell(resolvedStartRow, anchorCell);
 
-  const previewFragment = buildFormatPreviewFragmentFromClipboardHtml(html);
-  const sanitized = sanitizePastedHTML(html);
-  if (!previewFragment && !sanitized) return false;
+  const previewFragment = buildFormatPreviewFragmentFromClipboardHtml(normalizedHtml);
+  const sanitized = sanitizePastedHTML(normalizedHtml);
 
-  const filled = parseAndFillHtmlTableForFormat(sanitized || previewFragment, {
-    startRow: resolvedStartRow,
-  });
-  return afterFormatPasteFilled(filled, area);
+  // Prefer the normalized multi-column table first. Preview/sanitized fragments can
+  // still carry 1-TD-per-row Material wrappers and "succeed" with a collapsed grid.
+  const candidates = [normalizedHtml, sanitized, previewFragment].filter(Boolean);
+  if (!candidates.length) return false;
+
+  for (const candidate of candidates) {
+    const filled = parseAndFillHtmlTableForFormat(candidate, {
+      startRow: resolvedStartRow,
+    });
+    if (afterFormatPasteFilled(filled, area)) return true;
+  }
+
+  // Compatibility fallback: some sites copy table-like HTML wrappers that
+  // 2.Format structure parser cannot classify. Reuse 1.Text format-preserving
+  // parser to keep values/styles and still unlock 2.Format submit flow.
+  for (const candidate of candidates) {
+    const filledByTextParser = parseAndFillHtmlTableForTextWithFormat(candidate, resolvedAnchor);
+    if (afterFormatPasteFilled(filledByTextParser, area)) return true;
+  }
+
+  return false;
 }
 
 export function processFormatTsv(text, { area = null, startRow = null, anchorCell = null } = {}) {
@@ -82,29 +141,50 @@ export function handleFormatPasteAreaEvent(e) {
   const clipboard = e.clipboardData || window.clipboardData;
   const { html, text } = readClipboard(clipboard);
   const area = document.getElementById("pasteAreaFormat");
+  const anchorCell = getFormatPasteAnchorCell() || getDefaultPasteAnchorCell();
 
   const hasExistingData = domGridHasEditableData();
-  const startRow = hasExistingData ? resolveFormatPasteStartRow(getFormatPasteAnchorCell()) : 0;
+  const startRow = hasExistingData ? resolveFormatPasteStartRow(anchorCell) : 0;
 
-  if (html && /<table\b/i.test(html)) {
+  // Citibet-style plain matrix first (billing statements).
+  if (
+    text &&
+    tryApplyBillingStatementPlainMatrix(text, anchorCell, {
+      startRowOverride: startRow,
+      startColOverride: 0,
+    })
+  ) {
     e.preventDefault();
     e.stopPropagation();
-    processFormatTableHtml(html, { area, startRow });
+    afterFormatPasteFilled(true, area);
+    return;
+  }
+
+  if (html && (/<table\b/i.test(html) || clipboardHtmlLooksLikeGrid(html))) {
+    e.preventDefault();
+    e.stopPropagation();
+    processFormatTableHtml(html, { area, startRow, anchorCell });
     return;
   }
 
   if (text && /<table\b/i.test(text)) {
     e.preventDefault();
     e.stopPropagation();
-    processFormatTableHtml(text, { area, startRow });
+    processFormatTableHtml(text, { area, startRow, anchorCell });
     return;
   }
 
   if (text && text.includes("\t")) {
     e.preventDefault();
     e.stopPropagation();
-    processFormatTsv(text, { area, startRow });
+    processFormatTsv(text, { area, startRow, anchorCell });
     return;
+  }
+
+  if (text && text.trim()) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (processFormatPlainTextFallback(text, { area, startRow, anchorCell })) return;
   }
 
   setTimeout(() => {
@@ -135,11 +215,8 @@ export function handleGlobalFormatPaste(e) {
   const clipboard = e.clipboardData || window.clipboardData;
   if (!clipboard || !clipboardLooksLikeTable(clipboard)) return;
 
-  e.preventDefault();
-  e.stopPropagation();
-
   const hasExistingData = domGridHasEditableData();
-  const anchorCell = getFormatPasteAnchorCell();
+  const anchorCell = getFormatPasteAnchorCell() || getDefaultPasteAnchorCell();
   const appendMode = hasExistingData;
   const startRow = appendMode ? resolveFormatPasteStartRow(anchorCell) : 0;
 
@@ -147,46 +224,105 @@ export function handleGlobalFormatPaste(e) {
 
   const { html, text } = readClipboard(clipboard);
 
-  if (html && /<table\b/i.test(html)) {
+  if (
+    text &&
+    tryApplyBillingStatementPlainMatrix(text, anchorCell, {
+      startRowOverride: startRow,
+      startColOverride: 0,
+    })
+  ) {
+    e.preventDefault();
+    e.stopPropagation();
+    afterFormatPasteFilled(true, pasteAreaFormat);
+    return;
+  }
+
+  if (html && (/<table\b/i.test(html) || clipboardHtmlLooksLikeGrid(html))) {
+    e.preventDefault();
+    e.stopPropagation();
     processFormatTableHtml(html, { area: pasteAreaFormat, startRow, anchorCell });
     return;
   }
 
   if (text && text.includes("\t")) {
+    e.preventDefault();
+    e.stopPropagation();
     processFormatTsv(text, { area: pasteAreaFormat, startRow, anchorCell });
+    return;
+  }
+
+  if (text && text.trim()) {
+    e.preventDefault();
+    e.stopPropagation();
+    processFormatPlainTextFallback(text, { area: pasteAreaFormat, startRow, anchorCell });
+    return;
   }
 }
 
 /** Legacy-compatible entry used by handleFormatPasteFromClipboard. */
 export function handleFormatPasteFromClipboard(clipboard, fallbackHTML, options = {}) {
-  if (!isFormatMode() || !clipboard) return false;
+  if (!clipboard) return false;
+  if (!options.allowOutsideFormatMode && !isFormatMode()) return false;
 
   const { html, text } = readClipboard(clipboard);
-  const htmlToUse = html && /<table\b/i.test(html) ? html : fallbackHTML || "";
 
-  if (htmlToUse && /<table\b/i.test(htmlToUse)) {
-    setTimeout(() => processFormatTableHtml(htmlToUse, options), 10);
-    return true;
+  // Citibet-style plain matrix before HTML format fill (billing statements).
+  if (
+    text &&
+    tryApplyBillingStatementPlainMatrix(text, options.anchorCell || getDefaultPasteAnchorCell(), {
+      startRowOverride: options.startRow,
+      startColOverride: 0,
+    })
+  ) {
+    return afterFormatPasteFilled(true, options.area ?? null);
+  }
+
+  const htmlCandidate = html || fallbackHTML || "";
+  const htmlToUse =
+    htmlCandidate && (/<table\b/i.test(htmlCandidate) || clipboardHtmlLooksLikeGrid(htmlCandidate))
+      ? htmlCandidate
+      : "";
+
+  if (htmlToUse) {
+    return processFormatTableHtml(htmlToUse, options);
   }
 
   if (text && text.includes("\t")) {
-    setTimeout(() => processFormatTsv(text, options), 10);
-    return true;
+    return processFormatTsv(text, options);
+  }
+
+  if (text && text.trim()) {
+    return processFormatPlainTextFallback(text, options);
   }
 
   return false;
 }
 
 /**
- * Phase 4e: 2.Format grid cell paste — route table HTML/TSV through format pipeline
- * instead of the full legacy paste body.
+ * Excel-like format paste into the editable grid.
+ * Used by 2.Format and by 1.Text (allowOutsideFormatMode) so both share one pipeline.
  */
-export function handleFormatCellPaste(e, pastedData) {
-  const anchorCell = resolvePasteCell(e.target);
-  const startRow = resolveFormatPasteStartRow(anchorCell);
+export function handleFormatCellPaste(e, pastedData, options = {}) {
+  const allowOutsideFormatMode = Boolean(options.allowOutsideFormatMode);
+  const anchorCell =
+    resolvePasteCell(e?.target) ||
+    (allowOutsideFormatMode ? getDefaultPasteAnchorCell() : null) ||
+    getFormatPasteAnchorCell();
 
-  const clipboard = e.clipboardData || window.clipboardData;
-  if (clipboard && handleFormatPasteFromClipboard(clipboard, null, { startRow, anchorCell })) {
+  // 2.Format appends after existing rows; 1.Text pastes from the active cell like Excel.
+  const startRow = allowOutsideFormatMode
+    ? resolvePasteAnchor(anchorCell).startRow
+    : resolveFormatPasteStartRow(anchorCell);
+
+  const clipboard = e?.clipboardData || window.clipboardData;
+  if (
+    clipboard &&
+    handleFormatPasteFromClipboard(clipboard, null, {
+      startRow,
+      anchorCell,
+      allowOutsideFormatMode,
+    })
+  ) {
     return true;
   }
 
@@ -198,12 +334,16 @@ export function handleFormatCellPaste(e, pastedData) {
     }
   })();
 
-  if (html && /<table\b/i.test(html)) {
+  if (html && (/<table\b/i.test(html) || clipboardHtmlLooksLikeGrid(html))) {
     return processFormatTableHtml(html, { startRow, anchorCell });
   }
 
   if (pastedData && pastedData.includes("\t")) {
     return processFormatTsv(pastedData, { startRow, anchorCell });
+  }
+
+  if (pastedData && pastedData.trim()) {
+    return processFormatPlainTextFallback(pastedData, { startRow, anchorCell });
   }
 
   return false;

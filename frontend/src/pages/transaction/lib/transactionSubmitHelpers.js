@@ -175,3 +175,36 @@ export function buildRatePayload({
 
   return { payload, middleId };
 }
+
+/** Account DB ids involved in a submit — used for post-submit focused list (To + From, RATE legs, etc.). */
+export function collectSubmitFocusAccountIds({
+  txType,
+  toAccountId,
+  fromAccountId,
+  isAdjustment = false,
+  rateToAccountId,
+  rateFromAccountId,
+  rateTransferToAccountId,
+  rateTransferFromAccountId,
+  rateMiddlemanAccountId,
+} = {}) {
+  const ids = new Set();
+  const add = (id) => {
+    const n = Number(id);
+    if (Number.isFinite(n) && n > 0) ids.add(n);
+  };
+
+  const type = String(txType || "").toUpperCase().trim();
+  if (type === "RATE") {
+    add(rateToAccountId);
+    add(rateFromAccountId);
+    add(rateTransferToAccountId);
+    add(rateTransferFromAccountId);
+    add(rateMiddlemanAccountId);
+    return [...ids];
+  }
+
+  add(toAccountId);
+  if (!isAdjustment) add(fromAccountId);
+  return [...ids];
+}

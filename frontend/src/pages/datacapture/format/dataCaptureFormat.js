@@ -101,6 +101,10 @@ export function clearFormatStyles() {
   if (tableBody) {
     tableBody.querySelectorAll("td[contenteditable='true']").forEach((cell) => {
       cell.removeAttribute("style");
+      // Icon-only pasted chrome (empty text + child button/svg) should not survive clear.
+      if (cell.children.length > 0 && !(cell.textContent || "").trim()) {
+        cell.textContent = "";
+      }
       const essentialClasses = ["selected", "multi-selected"];
       Array.from(cell.classList).forEach((cls) => {
         if (!essentialClasses.includes(cls)) {

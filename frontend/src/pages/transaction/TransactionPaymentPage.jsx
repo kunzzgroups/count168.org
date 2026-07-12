@@ -113,7 +113,7 @@ function TransactionPaymentPageMain() {
     t,
   });
   formSearchRef.current = search.runSearch;
-  afterSubmitRef.current = (opts) => search.jumpToSubmitDateAndRefresh(opts);
+  afterSubmitRef.current = (opts) => search.applySubmitFocusAndRefresh(opts);
 
   // 5. Defaults (useLayoutEffect: must run before passive effects that call runSearch)
   useTransactionInitialization({
@@ -254,12 +254,26 @@ function TransactionPaymentPageMain() {
   const onApproveContra = useCallback(
     async (opts) => {
       const res = await ui.onApproveContra(opts.transactionId, scopeApi);
-      const submitDate = String(opts.transactionDate || "").trim();
-      if (res?.success && submitDate && submitDate !== "-") {
-        await search.jumpToSubmitDateAndRefresh({ submitDateDmy: submitDate });
+      if (!res?.success) return;
+      const codes = [opts.toAccountCode, opts.fromAccountCode]
+        .map((c) => String(c || "").trim().toUpperCase())
+        .filter(Boolean);
+      const accountIds = [];
+      for (const code of codes) {
+        const opt = (data.accountOptions || []).find((a) => {
+          const aid = String(a?.account_id || a?.code || "").toUpperCase().trim();
+          return aid === code;
+        });
+        if (opt?.id) accountIds.push(Number(opt.id));
+      }
+      if (accountIds.length > 0) {
+        await search.applySubmitFocusAndRefresh({
+          accountIds,
+          submitCurrency: opts.currency,
+        });
       }
     },
-    [ui.onApproveContra, scopeApi, search.jumpToSubmitDateAndRefresh],
+    [ui.onApproveContra, scopeApi, search.applySubmitFocusAndRefresh, data.accountOptions],
   );
 
   const onRejectContra = useCallback(
@@ -378,7 +392,7 @@ function TransactionPaymentPageMain() {
             onSubmitTx={form.onSubmitTx}
             onTypeSearch={onTypeSearch}
             onExitTypeSearch={onExitTypeSearch}
-            typeSearchActive={search.typeSearchActive}
+            typeSearchActive={search.listPresentationModeActive}
             searchLoading={search.searchLoading}
             accountOptions={data.accountOptions}
             currencyOptions={data.currencyOptions}

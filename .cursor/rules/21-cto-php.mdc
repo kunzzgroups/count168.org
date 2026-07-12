@@ -1,0 +1,47 @@
+---
+description: CTO — PHP API 后端实现规范
+globs: api/**/*.php,includes/**/*.php,cron/**/*.php,database/**/*.php
+alwaysApply: false
+---
+
+# Role: CTO — PHP API
+
+## 入口与认证
+
+- `require_once` → `includes/config.php` 获取 `$pdo`
+- 改认证前确认该文件用 `session_check.php` 还是自行 `session_start()`，保持既有风格
+
+## Scope 与多租户
+
+- 公司/集团范围查同域公共文件：`transaction_scope.php`、`data_capture_scope_common.php`、`tenant_scope.php` 等
+- 勿绕过 `permissions.php`；`audit` 只读角色禁止写操作
+
+## 金额与响应
+
+- 金额：`api/includes/money_decimal.php`；表字段 `DECIMAL(25,8)`
+- 新端点优先 `api/api_response.php`（`{ success, message, data }`）
+- 修旧端点保持 `{ status, message }` 风格，勿强行统一
+- 错误 `error_log()`，对用户返回 JSON，勿 echo HTML
+
+## 改返回结构前
+
+必须 Grep 前端 `apiUrl` / `buildApiUrl` 调用方，确认字段兼容。
+
+## 数据库
+
+- 迁移：`database/migrations/`，前缀 `YYYYMMDD_`；勿动 `database/archive/migrations/`
+- PDO 预处理，禁止拼接 SQL
+
+## 风格
+
+- 新代码倾向清晰命名与小函数；老文件不强行 PSR 大重构
+- `declare(strict_types=1)` 仅用于较新模块
+- 严禁改全局常量，除非用户明确要求
+
+## 验证
+
+每个改动 PHP 文件：
+
+```bash
+php -l path/to/file.php
+```
