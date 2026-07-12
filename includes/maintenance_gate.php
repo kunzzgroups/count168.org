@@ -105,8 +105,17 @@ if (!function_exists('maintenance_gate_fetch_message')) {
             $messageId = (int) ($stmt ? $stmt->fetchColumn() : 0);
 
             if ($messageId > 0) {
+                if (is_readable(__DIR__ . '/../api/maintenance/maintenance_common.php')) {
+                    require_once __DIR__ . '/../api/maintenance/maintenance_common.php';
+                    if (function_exists('ensureMaintenanceMarqueePrefixColumn')) {
+                        ensureMaintenanceMarqueePrefixColumn($pdo);
+                    }
+                }
+                $prefixSelect = (function_exists('maintenanceMarqueeHasPrefixColumn') && maintenanceMarqueeHasPrefixColumn($pdo))
+                    ? 'prefix'
+                    : "'' AS prefix";
                 $msgStmt = $pdo->prepare(
-                    "SELECT prefix, content
+                    "SELECT {$prefixSelect}, content
                      FROM maintenance_marquee
                      WHERE id = ?
                      LIMIT 1"
@@ -124,8 +133,11 @@ if (!function_exists('maintenance_gate_fetch_message')) {
                 }
             }
 
+            $prefixSelect = (function_exists('maintenanceMarqueeHasPrefixColumn') && maintenanceMarqueeHasPrefixColumn($pdo))
+                ? 'prefix'
+                : "'' AS prefix";
             $latestStmt = $pdo->query(
-                "SELECT prefix, content
+                "SELECT {$prefixSelect}, content
                  FROM maintenance_marquee
                  WHERE company_code = 'C168' AND status = 'active'
                  ORDER BY created_at DESC
