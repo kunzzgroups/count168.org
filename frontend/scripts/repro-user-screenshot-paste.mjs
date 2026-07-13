@@ -235,6 +235,83 @@ if (!multiOk) {
   console.log("  matrix:", multiMatrix);
 }
 
+// Mario Club WIN LOSE PT (DataTables): headers + data + Total + Grand Total
+const marioHeaders = [
+  "Downline Login Id",
+  "Total Turnover",
+  "Total Win Lose",
+  "Total Member Bonus",
+  "Total Agent Bonus",
+  "Downline Member Bonus",
+  "Member Bonus",
+  "Upline Member Bonus",
+  "Downline Agent Bonus",
+  "Agent Bonus",
+  "Upline Agent Bonus",
+  "Downline Win Lose",
+  "Win Lose",
+  "Upline Win Lose",
+  "Downline Total",
+  "Total",
+  "Upline Total",
+];
+const marioData = [
+  "MCKAP02",
+  "125.99",
+  "-12.12",
+  "0.00",
+  "0.00",
+  "0.00",
+  "0.00",
+  "0.00",
+  "0.00",
+  "0.00",
+  "0.00",
+  "10.61",
+  "0.06",
+  "1.45",
+  "10.61",
+  "0.06",
+  "1.45",
+];
+const marioTotal = ["Total:", ...marioData.slice(1)];
+const marioGrand = ["Grand Total", "125.99", "-12.12", "0.00", "0.00", "0.00", "0.00", "0.00", "0.00", "0.00", "0.00", "10.60", "0.06", "1.45", "10.60", "0.06", "1.45"];
+
+const marioWithHeaders = [...marioHeaders, ...marioHeaders, ...marioTotal, ...marioData, ...marioTotal, ...marioGrand].join(
+  "\n",
+);
+const marioMatrix = parsePlainTextMatrix(marioWithHeaders);
+const marioOk =
+  marioMatrix.length === 4 &&
+  marioMatrix[0]?.length === 17 &&
+  marioMatrix[0]?.[0] === "Total:" &&
+  marioMatrix[1]?.[0] === "MCKAP02" &&
+  marioMatrix[1]?.[2] === "-12.12" &&
+  marioMatrix[2]?.[0] === "Total:" &&
+  marioMatrix[3]?.[0] === "Grand Total";
+console.log(
+  `${marioOk ? "PASS" : "FAIL"} mario-datatables-headers-total-grand: ${marioMatrix.length}x${marioMatrix[0]?.length || 0}`,
+);
+if (!marioOk) {
+  failed += 1;
+  console.log(
+    "  labels:",
+    marioMatrix.map((r) => r[0]),
+    "row1col2:",
+    marioMatrix[1]?.[2],
+  );
+}
+
+const marioDataOnly = parsePlainTextMatrix(marioData.join("\n"));
+const marioDataOk =
+  marioDataOnly.length === 1 &&
+  marioDataOnly[0]?.length === 17 &&
+  marioDataOnly[0]?.[2] === "-12.12";
+console.log(
+  `${marioDataOk ? "PASS" : "FAIL"} mario-data-row-only: ${marioDataOnly.length}x${marioDataOnly[0]?.length || 0}`,
+);
+if (!marioDataOk) failed += 1;
+
 if (failed) {
   console.error(`\n${failed} case(s) failed`);
   process.exit(1);

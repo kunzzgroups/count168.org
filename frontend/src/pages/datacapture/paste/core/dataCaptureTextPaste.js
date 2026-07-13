@@ -25,8 +25,68 @@ function isSummaryLabelToken(text) {
   const normalized = String(text ?? "")
     .trim()
     .replace(/\s+/g, " ")
+    .replace(/:$/, "")
     .toUpperCase();
-  return normalized === "SUBTOTAL" || normalized === "SUB TOTAL" || normalized === "TOTAL AMOUNT";
+  return (
+    normalized === "SUBTOTAL" ||
+    normalized === "SUB TOTAL" ||
+    normalized === "TOTAL AMOUNT" ||
+    normalized === "TOTAL" ||
+    normalized === "GRAND TOTAL"
+  );
+}
+
+/** Row looks like report data/summary: non-numeric first cell + dense money/number fields. */
+function isDenseReportRow(row) {
+  if (!row || row.length < 3) return false;
+  if (isMoneyOrNumberLikeToken(row[0])) return false;
+  const nums = row.filter((cell) => isMoneyOrNumberLikeToken(cell)).length;
+  return nums >= 2 && nums >= Math.ceil(row.length * 0.5);
+}
+
+/**
+ * DataTables / Material copies often prepend column-title tokens. Find the first
+ * "label + consecutive numbers" row and treat that as matrix start (no fixed width).
+ */
+function tryParseAnchoredVerticalRows(tokens) {
+  if (tokens.length < 3) return null;
+
+  for (let start = 0; start < tokens.length - 2; start += 1) {
+    if (isMoneyOrNumberLikeToken(tokens[start])) continue;
+
+    let end = start + 1;
+    while (end < tokens.length && isMoneyOrNumberLikeToken(tokens[end])) end += 1;
+    const consecutiveNums = end - start - 1;
+    if (consecutiveNums < 2) continue;
+
+    const width = consecutiveNums + 1;
+    if (width < 3) continue;
+
+    const dataTokens = tokens.slice(start);
+    const completeRows = Math.floor(dataTokens.length / width);
+    if (completeRows < 1) continue;
+
+    const rows = [];
+    for (let r = 0; r < completeRows; r += 1) {
+      rows.push(dataTokens.slice(r * width, (r + 1) * width));
+    }
+    if (!rows.every((row) => isDenseReportRow(row))) continue;
+
+    // Trailing leftover should be empty or a short all-label stub (ignore), not extra numbers.
+    const rem = dataTokens.length % width;
+    if (rem > 0) {
+      const leftover = dataTokens.slice(completeRows * width);
+      const leftoverNums = leftover.filter((t) => isMoneyOrNumberLikeToken(t)).length;
+      if (leftoverNums > 0) continue;
+    }
+
+    rows.forEach((row) => {
+      while (row.length < width) row.push("");
+    });
+    return rows;
+  }
+
+  return null;
 }
 
 function detectFlattenedStatementColCount(tokens) {
@@ -118,6 +178,13 @@ function tryParseVerticalFieldDump(nonEmptyLines) {
 
   const numericLikeCount = tokens.filter((token) => isMoneyOrNumberLikeToken(token)).length;
   if (numericLikeCount < 2) return null;
+
+  // DataTables copies often include column titles first. Anchor on the first
+  // dense report row so leading headers do not force an N×1 fallback.
+  const anchoredRows = tryParseAnchoredVerticalRows(tokens);
+  if (anchoredRows) return anchoredRows;
+
+  // Without a header-stripped anchor, require overall numeric density.
   if (numericLikeCount < Math.ceil(tokens.length * 0.5)) return null;
 
   const labelIndices = [];
@@ -143,12 +210,7 @@ function tryParseVerticalFieldDump(nonEmptyLines) {
         rows.push(tokens.slice(i, i + stride));
       }
       const width = stride;
-      const rowsOk = rows.every((row) => {
-        if (row.length < 3) return false;
-        const nums = row.filter((cell) => isMoneyOrNumberLikeToken(cell)).length;
-        return nums >= 2 && nums >= Math.ceil(row.length * 0.5);
-      });
-      if (!rowsOk) return null;
+      if (!rows.every((row) => isDenseReportRow(row))) return null;
       rows.forEach((row) => {
         while (row.length < width) row.push("");
       });

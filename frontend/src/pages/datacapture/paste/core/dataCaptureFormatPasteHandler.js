@@ -175,6 +175,20 @@ export function handleFormatPasteAreaEvent(e) {
     return;
   }
 
+  if (text && text.includes("\t")) {
+    const tabRows = String(text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .filter((line) => line.trim() && line.includes("\t"));
+    if (tabRows.length >= 2) {
+      e.preventDefault();
+      e.stopPropagation();
+      processFormatTsv(text, { area, startRow, anchorCell });
+      return;
+    }
+  }
+
   if (html && (/<table\b/i.test(html) || clipboardHtmlLooksLikeGrid(html))) {
     e.preventDefault();
     e.stopPropagation();
@@ -252,6 +266,20 @@ export function handleGlobalFormatPaste(e) {
     return;
   }
 
+  if (text && text.includes("\t")) {
+    const tabRows = String(text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .filter((line) => line.trim() && line.includes("\t"));
+    if (tabRows.length >= 2) {
+      e.preventDefault();
+      e.stopPropagation();
+      processFormatTsv(text, { area: pasteAreaFormat, startRow, anchorCell });
+      return;
+    }
+  }
+
   if (html && (/<table\b/i.test(html) || clipboardHtmlLooksLikeGrid(html))) {
     e.preventDefault();
     e.stopPropagation();
@@ -297,6 +325,17 @@ export function handleFormatPasteFromClipboard(clipboard, fallbackHTML, options 
     htmlCandidate && (/<table\b/i.test(htmlCandidate) || clipboardHtmlLooksLikeGrid(htmlCandidate))
       ? htmlCandidate
       : "";
+
+  // Prefer multi-row TSV before HTML. DataTables often puts Total/Grand Total in
+  // scrollFoot; partial HTML selection then "succeeds" with only the body data row.
+  if (text && text.includes("\t")) {
+    const tabRows = String(text)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .filter((line) => line.trim() && line.includes("\t"));
+    if (tabRows.length >= 2 && processFormatTsv(text, options)) return true;
+  }
 
   if (htmlToUse) {
     return processFormatTableHtml(htmlToUse, options);
@@ -348,6 +387,17 @@ export function handleFormatCellPaste(e, pastedData, options = {}) {
       return "";
     }
   })();
+
+  if (pastedData && pastedData.includes("\t")) {
+    const tabRows = String(pastedData)
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .filter((line) => line.trim() && line.includes("\t"));
+    if (tabRows.length >= 2 && processFormatTsv(pastedData, { startRow, anchorCell })) {
+      return true;
+    }
+  }
 
   if (html && (/<table\b/i.test(html) || clipboardHtmlLooksLikeGrid(html))) {
     return processFormatTableHtml(html, { startRow, anchorCell });

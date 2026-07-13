@@ -10,6 +10,39 @@ import {
   tokenizeCollapsedReportRow,
 } from "./dataCaptureFormatClipboardNormalize.js";
 
+function cellTextIsMoneyOrNumberLike(text) {
+  const cleaned = String(text ?? "")
+    .trim()
+    .replace(/[,$]/g, "")
+    .replace(/^\((.*)\)$/, "-$1");
+  if (!cleaned) return false;
+  return /^-?\d+(?:\.\d+)?$/.test(cleaned);
+}
+
+/** DataTables footers often use <th> for Total / Grand Total data rows. */
+function allThRowLooksLikeDataOrSummary(tr) {
+  const cells = Array.from(tr.querySelectorAll("th,td"));
+  if (cells.length < 2) return false;
+  const texts = cells.map((cell) => String(cell.textContent || "").replace(/\s+/g, " ").trim());
+  const nonEmpty = texts.filter(Boolean);
+  if (nonEmpty.length < 2) return false;
+
+  const first = nonEmpty[0].replace(/:$/, "").toUpperCase();
+  if (
+    first === "TOTAL" ||
+    first === "GRAND TOTAL" ||
+    first === "SUBTOTAL" ||
+    first === "SUB TOTAL" ||
+    first === "TOTAL AMOUNT"
+  ) {
+    return true;
+  }
+
+  const nums = nonEmpty.filter((text) => cellTextIsMoneyOrNumberLike(text)).length;
+  // Column-title header rows are almost all non-numeric; footer/data th rows are dense.
+  return nums >= 2 && nums >= Math.ceil(nonEmpty.length * 0.5);
+}
+
 /** @returns {{ headerRows: Element[], dataRows: Element[], maxCols: number, allRows: Element[], table: Element } | null} */
 export function parseFormatHtmlTableStructure(htmlString) {
   const tempDiv = document.createElement("div");
@@ -31,10 +64,13 @@ export function parseFormatHtmlTableStructure(htmlString) {
   allRows.forEach((tr) => {
     // Match PHP: only <thead> rows, or rows that are entirely <th> (no <td>).
     // Rows that start with <th scope="row"> but include <td> are data rows (e.g. DEMOS).
+    // Exception: DataTables Total/Grand Total footers are all <th> but must stay as data.
     const inThead = !!tr.closest("thead");
     const thCount = tr.querySelectorAll("th").length;
     const tdCount = tr.querySelectorAll("td").length;
-    const isHeaderRow = inThead || (thCount > 0 && tdCount === 0);
+    const allTh = thCount > 0 && tdCount === 0;
+    const isHeaderRow =
+      inThead || (allTh && !allThRowLooksLikeDataOrSummary(tr));
     if (isHeaderRow) {
       headerRows.push(tr);
     } else {

@@ -258,11 +258,86 @@ function expandCollapsedRowTextToCells(rowEl, tr) {
   return true;
 }
 
-/** True when clipboard HTML is a table or table-like grid (Material / ARIA). */
+/** True when clipboard HTML is a table or table-like grid (Material / ARIA / DataTables). */
 export function clipboardHtmlLooksLikeGrid(html) {
   if (!html) return false;
   if (/<table\b/i.test(html)) return true;
+  if (/dataTables_scroll(?:Body|Foot|Head)?/i.test(html)) return true;
   return GRID_HINT_RE.test(html);
+}
+
+/**
+ * DataTables splits head/body/foot into separate tables. Merge into one <table>
+ * so Total / Grand Total in scrollFoot are not dropped when only the first
+ * <table> would otherwise be parsed.
+ */
+function tryMergeDataTablesScrollTables(root) {
+  const bodyTable =
+    root.querySelector(".dataTables_scrollBody table") ||
+    root.querySelector("table.dataTable");
+  const footTable = root.querySelector(".dataTables_scrollFoot table");
+  const headTable = root.querySelector(".dataTables_scrollHead table");
+  if (!bodyTable || (!footTable && !headTable)) return null;
+
+  const merged = document.createElement("table");
+  const tbody = document.createElement("tbody");
+
+  const rowSignature = (tr) =>
+    Array.from(tr.querySelectorAll("th,td"))
+      .map((cell) => String(cell.textContent || "").replace(/\s+/g, " ").trim())
+      .join("\t");
+
+  const seen = new Set();
+  const appendUniqueRows = (table, { onlyTdRows = false, includeSummaryTh = true } = {}) => {
+    if (!table) return;
+    Array.from(table.querySelectorAll("tr")).forEach((tr) => {
+      const sig = rowSignature(tr);
+      if (!sig.replace(/\t/g, "").trim()) return;
+      if (seen.has(sig)) return;
+
+      const tdCount = tr.querySelectorAll("td").length;
+      const thCount = tr.querySelectorAll("th").length;
+      const cells = Array.from(tr.querySelectorAll("th,td"));
+      const texts = cells.map((c) => String(c.textContent || "").trim()).filter(Boolean);
+      const first = (texts[0] || "").replace(/:$/, "").toUpperCase();
+      const isSummary =
+        first === "TOTAL" ||
+        first === "GRAND TOTAL" ||
+        first === "SUBTOTAL" ||
+        first === "SUB TOTAL";
+      const nums = texts.filter((t) =>
+        /^-?[\d,]+(?:\.\d+)?$/.test(t.replace(/[,$]/g, "").replace(/^\((.*)\)$/, "-$1")),
+      ).length;
+
+      if (onlyTdRows) {
+        if (tdCount === 0) return;
+      } else if (tdCount === 0 && thCount > 0) {
+        // Keep Total/Grand Total footers; drop column-title header clones.
+        if (!includeSummaryTh) return;
+        if (!isSummary && nums < 2) return;
+      }
+
+      seen.add(sig);
+      tbody.appendChild(tr.cloneNode(true));
+    });
+  };
+
+  // Prefer visual order: member/data rows, then footer Total / Grand Total.
+  appendUniqueRows(bodyTable, { onlyTdRows: true });
+  appendUniqueRows(footTable, { includeSummaryTh: true });
+  // Body-only clipboard (no foot): keep summary th rows after data.
+  if (!footTable) {
+    appendUniqueRows(bodyTable, { onlyTdRows: false, includeSummaryTh: true });
+  }
+  if (!tbody.children.length) {
+    appendUniqueRows(headTable, { includeSummaryTh: false });
+    appendUniqueRows(bodyTable, { onlyTdRows: false, includeSummaryTh: true });
+    appendUniqueRows(footTable, { includeSummaryTh: true });
+  }
+
+  if (!tbody.children.length) return null;
+  merged.appendChild(tbody);
+  return merged;
 }
 
 function replaceRowWithElements(tr, elements, asHeader) {
@@ -499,6 +574,13 @@ export function normalizeClipboardHtmlToTable(html) {
 
     const existingTable = root.querySelector("table");
     const gridRows = collectGridRows(root);
+    const mergedDataTables = tryMergeDataTablesScrollTables(root);
+    if (mergedDataTables) {
+      expandCollapsedTableRows(mergedDataTables);
+      if (tableColumnCount(mergedDataTables) >= 2) {
+        return `${styleHtml}\n${mergedDataTables.outerHTML}`;
+      }
+    }
 
     // Clipboard already has a <table>, but rows may be 1-TD wrappers around mat-cells.
     if (existingTable && !gridRows.length) {
