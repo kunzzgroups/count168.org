@@ -25,22 +25,24 @@ function deleted_log_display_page_label(string $page): string
 {
     $page = trim($page);
     $map = [
-        'account-list.php' => '账号列表 Account List',
-        '/api/accounts/delete_accounts_api.php' => '账号列表 Account List',
-        '/api/accounts/delete_currency_api.php' => '币种设置 Currency',
-        '/api/accounts/account_currency_api.php' => '账号币种 Account Currency',
-        '/api/accounts/bulk_account_currency_api.php' => '批量账号币种 Bulk Account Currency',
-        '/api/accounts/account_company_api.php' => '账号多公司 Account Company',
-        '/api/accounts/account_link_api.php' => '账号关联 Account Link',
-        '/api/transactions/maintenance_delete_api.php' => '交易维护 Transaction Maintenance',
-        '/api/payment_maintenance/delete_api.php' => '收付款维护 Payment Maintenance',
-        '/api/capture_maintenance/delete_api.php' => '抓数维护 Data Capture Maintenance',
-        '/api/formula_maintenance/delete_api.php' => '公式维护 Formula Maintenance',
-        '/api/processes/delete_processes_api.php' => '流程列表 Process List',
-        '/api/ownership/remove_owner_api.php' => '股权 Ownership',
-        '/api/maintenance/delete_api.php' => '系统维护跑马灯 Maintenance',
-        'processlist.php' => '流程列表 Process List',
-        'remove_owner_api.php' => '股权 Ownership',
+        'account-list.php' => 'Account · 账号',
+        '/api/accounts/delete_accounts_api.php' => 'Account · 账号',
+        '/api/accounts/delete_currency_api.php' => 'Account · 账号',
+        '/api/accounts/account_currency_api.php' => 'Account · 账号',
+        '/api/accounts/bulk_account_currency_api.php' => 'Account · 账号',
+        '/api/accounts/account_company_api.php' => 'Account · 账号',
+        '/api/accounts/account_link_api.php' => 'Account · 账号',
+        '/api/transactions/maintenance_delete_api.php' => 'Maintenance › Transaction · 交易',
+        '/api/payment_maintenance/delete_api.php' => 'Maintenance › Payment · 支付',
+        '/api/bankprocess_maintenance/delete_api.php' => 'Maintenance › Bank · 银行',
+        '/api/capture_maintenance/delete_api.php' => 'Maintenance › Data Capture · 数据采集',
+        '/api/formula_maintenance/delete_api.php' => 'Maintenance › Formula · 公式',
+        '/api/processes/delete_processes_api.php' => 'Process · 流程',
+        '/api/ownership/remove_owner_api.php' => 'Ownership · 股权',
+        '/api/subscription/auto_renew_api.php' => 'Auto Renew · 自动续费',
+        '/api/maintenance/delete_api.php' => 'Announcement · 公告',
+        'processlist.php' => 'Process · 流程',
+        'remove_owner_api.php' => 'Ownership · 股权',
     ];
     if (isset($map[$page])) {
         return $map[$page];
@@ -110,6 +112,47 @@ function deleted_log_display_summary(string $table, string $page, ?array $data, 
         default:
             return $where . '：删除数据（表 ' . $table . '）' . $accZh;
     }
+}
+
+/**
+ * 展示用公司列：优先 JOIN 的 company_code；否则从快照取 group_id / company 标识
+ *
+ * @param array<string,mixed>|null $data
+ */
+function deleted_log_display_company(string $joinedCode, string $logCompanyId, string $table, ?array $data): string
+{
+    $joined = trim($joinedCode);
+    if ($joined !== '') {
+        return $joined;
+    }
+    $cid = trim($logCompanyId);
+    if ($cid !== '' && !ctype_digit($cid)) {
+        return $cid;
+    }
+    if ($data !== null) {
+        foreach (['company_code', 'group_id', 'group_code', 'code'] as $k) {
+            if (!isset($data[$k])) {
+                continue;
+            }
+            $v = trim((string) $data[$k]);
+            if ($v !== '') {
+                if ($k === 'group_id' || $k === 'group_code') {
+                    return 'Group ' . $v;
+                }
+                return $v;
+            }
+        }
+        if (isset($data['company_id']) && trim((string) $data['company_id']) !== '') {
+            return 'CID ' . trim((string) $data['company_id']);
+        }
+    }
+    if ($cid !== '') {
+        return 'CID ' . $cid;
+    }
+    if (in_array($table, ['group_ownership', 'company_ownership', 'maintenance_marquee'], true)) {
+        return '—';
+    }
+    return '—';
 }
 
 /**

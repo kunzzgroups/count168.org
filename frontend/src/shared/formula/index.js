@@ -6,7 +6,7 @@ export {
 
 export { formatSourcePercent, formatSourcePercentForDisplay } from "./formatSourcePercent.js";
 
-export { isMisplacedCommission, isSourceOne } from "./isMisplacedCommission.js";
+export { isMisplacedCommission, isMisplacedCommissionRange, isDuplicateCoefficientAsSource, isSourceOne } from "./isMisplacedCommission.js";
 
 export {
   endsWithDollarColumnRef,

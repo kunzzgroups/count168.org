@@ -3,57 +3,16 @@
 import {
   sanitizeFormatHtmlFragment,
   sanitizeCopiedStyleString,
+  stripBackgroundFromStyle,
 } from "./dataCaptureFormatStyleUtils.js";
-import {
-  expandCollapsedTableRows,
-  tableLooksHorizontallyCollapsed,
-  tokenizeCollapsedReportRow,
-} from "./dataCaptureFormatClipboardNormalize.js";
 
-function cellTextIsMoneyOrNumberLike(text) {
-  const cleaned = String(text ?? "")
-    .trim()
-    .replace(/[,$]/g, "")
-    .replace(/^\((.*)\)$/, "-$1");
-  if (!cleaned) return false;
-  return /^-?\d+(?:\.\d+)?$/.test(cleaned);
-}
-
-/** DataTables footers often use <th> for Total / Grand Total data rows. */
-function allThRowLooksLikeDataOrSummary(tr) {
-  const cells = Array.from(tr.querySelectorAll("th,td"));
-  if (cells.length < 2) return false;
-  const texts = cells.map((cell) => String(cell.textContent || "").replace(/\s+/g, " ").trim());
-  const nonEmpty = texts.filter(Boolean);
-  if (nonEmpty.length < 2) return false;
-
-  const first = nonEmpty[0].replace(/:$/, "").toUpperCase();
-  if (
-    first === "TOTAL" ||
-    first === "GRAND TOTAL" ||
-    first === "SUBTOTAL" ||
-    first === "SUB TOTAL" ||
-    first === "TOTAL AMOUNT"
-  ) {
-    return true;
-  }
-
-  const nums = nonEmpty.filter((text) => cellTextIsMoneyOrNumberLike(text)).length;
-  // Column-title header rows are almost all non-numeric; footer/data th rows are dense.
-  return nums >= 2 && nums >= Math.ceil(nonEmpty.length * 0.5);
-}
-
-/** @returns {{ headerRows: Element[], dataRows: Element[], maxCols: number, allRows: Element[], table: Element } | null} */
+/** @returns {{ headerRows: Element[], dataRows: Element[], maxCols: number, allRows: Element[] } | null} */
 export function parseFormatHtmlTableStructure(htmlString) {
   const tempDiv = document.createElement("div");
   tempDiv.innerHTML = htmlString;
 
   const table = tempDiv.querySelector("table");
   if (!table) return null;
-
-  // Chrome / Material clipboards often wrap a whole flex row inside one <td>.
-  // Expand those into real columns before header/body classification.
-  expandCollapsedTableRows(table);
 
   const allRows = Array.from(table.querySelectorAll("tr"));
   if (allRows.length === 0) return null;
@@ -64,13 +23,10 @@ export function parseFormatHtmlTableStructure(htmlString) {
   allRows.forEach((tr) => {
     // Match PHP: only <thead> rows, or rows that are entirely <th> (no <td>).
     // Rows that start with <th scope="row"> but include <td> are data rows (e.g. DEMOS).
-    // Exception: DataTables Total/Grand Total footers are all <th> but must stay as data.
     const inThead = !!tr.closest("thead");
     const thCount = tr.querySelectorAll("th").length;
     const tdCount = tr.querySelectorAll("td").length;
-    const allTh = thCount > 0 && tdCount === 0;
-    const isHeaderRow =
-      inThead || (allTh && !allThRowLooksLikeDataOrSummary(tr));
+    const isHeaderRow = inThead || (thCount > 0 && tdCount === 0);
     if (isHeaderRow) {
       headerRows.push(tr);
     } else {
@@ -80,16 +36,7 @@ export function parseFormatHtmlTableStructure(htmlString) {
 
   let maxCols = 0;
   allRows.forEach((tr) => {
-    // Use direct cell count. Do NOT trust colspan alone — Material clipboards
-    // often set colspan=N on a single TD that still holds every column value.
-    const cells = Array.from(tr.children || []).filter((el) => {
-      const tag = (el.tagName || "").toUpperCase();
-      return tag === "TD" || tag === "TH";
-    });
-    if (cells.length <= 1) {
-      maxCols = Math.max(maxCols, cells.length);
-      return;
-    }
+    const cells = tr.querySelectorAll("td, th");
     let colCount = 0;
     cells.forEach((cell) => {
       colCount += parseInt(cell.getAttribute("colspan") || "1", 10);
@@ -99,7 +46,7 @@ export function parseFormatHtmlTableStructure(htmlString) {
 
   if (maxCols === 0) return null;
 
-  return { headerRows, dataRows, maxCols, allRows, table };
+  return { headerRows, dataRows, maxCols, allRows };
 }
 
 function extractCellLines(sourceCell) {
@@ -212,113 +159,26 @@ function extractPlainText(sourceCell) {
   return (tempDiv.textContent || tempDiv.innerText || "").trim();
 }
 
-function parseStyleDeclarations(styleString) {
-  const out = {};
-  String(styleString || "")
-    .split(";")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .forEach((decl) => {
-      const idx = decl.indexOf(":");
-      if (idx < 0) return;
-      const prop = decl.slice(0, idx).trim().toLowerCase();
-      const value = decl.slice(idx + 1).trim();
-      if (!prop || !value) return;
-      out[prop] = value;
-    });
-  return out;
-}
-
-function isDefaultColor(value) {
-  const v = String(value || "").trim().toLowerCase();
-  return !v || v === "rgb(0, 0, 0)" || v === "#000" || v === "#000000" || v === "black" || v === "inherit" || v === "initial";
-}
-
-function isTransparentBg(value) {
-  const v = String(value || "").trim().toLowerCase();
-  return !v || v === "transparent" || v === "rgba(0, 0, 0, 0)" || v === "initial" || v === "inherit";
-}
-
-/** Harvest visible text styles from cell + nested spans (common in report HTML). */
-function harvestVisualStyleMap(sourceCell) {
-  const merged = {};
-  const absorb = (styleMap) => {
-    if (!styleMap) return;
-    ["color", "background-color", "background", "font-weight", "font-style", "text-decoration", "text-align", "font-size"].forEach(
-      (key) => {
-        if (styleMap[key] == null || styleMap[key] === "") return;
-        if (key === "color" && isDefaultColor(styleMap[key]) && merged.color) return;
-        if ((key === "background-color" || key === "background") && isTransparentBg(styleMap[key])) return;
-        merged[key] = styleMap[key];
-      },
-    );
-  };
-
-  absorb(parseStyleDeclarations(sourceCell.getAttribute("style") || ""));
-  Array.from(sourceCell.querySelectorAll("*")).forEach((el) => {
-    absorb(parseStyleDeclarations(el.getAttribute("style") || ""));
-  });
-
-  try {
-    const computed = window.getComputedStyle(sourceCell);
-    absorb({
-      color: computed.color,
-      "background-color": computed.backgroundColor,
-      "font-weight": computed.fontWeight,
-      "font-style": computed.fontStyle,
-      "text-decoration": computed.textDecorationLine || computed.textDecoration,
-      "text-align": computed.textAlign,
-    });
-  } catch {
-    /* ignore detached/computed failures */
-  }
-
-  return merged;
-}
-
-function stripBorderDeclarations(styleString) {
-  if (!styleString || !String(styleString).trim()) return "";
-  return String(styleString)
-    .replace(/\s*border(?:-(?:top|right|bottom|left|color|style|width|radius))?\s*:[^;]*;?/gi, "")
-    .trim()
-    .replace(/;\s*$/, "");
-}
-
 export function buildFormatDataCellStyle(sourceCell) {
-  const visual = harvestVisualStyleMap(sourceCell);
-  // Grid CSS already draws cell borders; do not put border on td/span (looks like a box around text).
-  const sourceCellStyle = stripBorderDeclarations(
-    sanitizeCopiedStyleString(sourceCell.getAttribute("style") || ""),
-  );
-  let styleString = "";
+  const sourceCellStyle = sourceCell.getAttribute("style");
+  const sourceCellComputedStyle = window.getComputedStyle(sourceCell);
 
   if (sourceCellStyle) {
-    styleString += ` ${sourceCellStyle}`;
+    const sanitizedCellStyle = stripBackgroundFromStyle(sanitizeCopiedStyleString(sourceCellStyle));
+    return sanitizedCellStyle && !sanitizedCellStyle.includes("border")
+      ? `border: 1px solid #d0d7de !important; ${sanitizedCellStyle}`
+      : sanitizedCellStyle || "border: 1px solid #d0d7de !important;";
   }
 
-  if (visual.color && !isDefaultColor(visual.color) && !/\bcolor\s*:/i.test(styleString)) {
-    styleString += ` color: ${visual.color} !important;`;
+  const color = sourceCellComputedStyle.color;
+  const fontWeight = sourceCellComputedStyle.fontWeight;
+  const textAlign = sourceCellComputedStyle.textAlign;
+  let styleString = "border: 1px solid #d0d7de !important;";
+  if (color && color !== "rgb(0, 0, 0)") styleString += ` color: ${color} !important;`;
+  if (fontWeight && fontWeight !== "normal" && fontWeight !== "400") {
+    styleString += ` font-weight: ${fontWeight} !important;`;
   }
-  if (visual["background-color"] && !isTransparentBg(visual["background-color"]) && !/\bbackground(?:-color)?\s*:/i.test(styleString)) {
-    styleString += ` background-color: ${visual["background-color"]} !important;`;
-  }
-  if (visual["font-weight"] && visual["font-weight"] !== "normal" && visual["font-weight"] !== "400" && !/\bfont-weight\s*:/i.test(styleString)) {
-    styleString += ` font-weight: ${visual["font-weight"]} !important;`;
-  }
-  if (visual["font-style"] && visual["font-style"] !== "normal" && !/\bfont-style\s*:/i.test(styleString)) {
-    styleString += ` font-style: ${visual["font-style"]} !important;`;
-  }
-  if (
-    visual["text-decoration"] &&
-    visual["text-decoration"] !== "none" &&
-    !/\btext-decoration\s*:/i.test(styleString)
-  ) {
-    styleString += ` text-decoration: ${visual["text-decoration"]} !important;`;
-  }
-  if (visual["text-align"] && visual["text-align"] !== "left" && visual["text-align"] !== "start" && !/\btext-align\s*:/i.test(styleString)) {
-    styleString += ` text-align: ${visual["text-align"]} !important;`;
-  }
-
+  if (textAlign && textAlign !== "left") styleString += ` text-align: ${textAlign} !important;`;
   return styleString;
 }
 
@@ -327,15 +187,7 @@ export function buildFormatDataCellPatch(sourceCell, displayText) {
   const styleCssText = buildFormatDataCellStyle(sourceCell);
 
   if (displayText !== undefined) {
-    const escaped = String(displayText)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    return {
-      value: displayText,
-      html: `<span style="${styleCssText}">${escaped}</span>`,
-      styleCssText,
-    };
+    return { value: displayText, styleCssText };
   }
 
   let cellContent = sourceCell.innerHTML;
@@ -359,15 +211,18 @@ export function buildFormatDataCellPatch(sourceCell, displayText) {
   }
 
   if (cellText && cellText.trim() !== "") {
-    const escaped = String(cellText)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-    return {
-      value: cellText,
-      html: `<span style="${styleCssText}">${escaped}</span>`,
-      styleCssText,
-    };
+    const sourceCellStyle = sourceCell.getAttribute("style");
+    if (sourceCellStyle) {
+      const sanitizedSpanStyle = stripBackgroundFromStyle(sanitizeCopiedStyleString(sourceCellStyle));
+      if (sanitizedSpanStyle) {
+        return {
+          value: cellText,
+          html: `<span style="${sanitizedSpanStyle}">${cellText}</span>`,
+          styleCssText,
+        };
+      }
+    }
+    return { value: cellText, styleCssText };
   }
 
   return { value: "", styleCssText };
@@ -381,9 +236,7 @@ function fillSourceRowPatches(targetRow, sourceCells, maxCols, lineSelector) {
   let currentCol = 0;
 
   sourceCells.forEach((sourceCell, cellIndex) => {
-    // Material / Chrome clipboards often set colspan=N on a crushed cell.
-    // For paste matrix layout we must treat each TD as one column.
-    const colspan = 1;
+    const colspan = parseInt(sourceCell.getAttribute("colspan") || "1", 10);
     const splitInfo = lineSelector(cellIndex, sourceCell);
 
     if (currentCol < maxCols) {
@@ -407,149 +260,32 @@ function fillSourceRowPatches(targetRow, sourceCells, maxCols, lineSelector) {
 }
 
 function expandSourceRowToMatrixRows(sourceRow, maxCols) {
-  const sourceCells = Array.from(
-    sourceRow.querySelectorAll(":scope > td, :scope > th"),
-  );
-  const cells =
-    sourceCells.length > 0
-      ? sourceCells
-      : Array.from(sourceRow.querySelectorAll("td, th"));
-
-  // One crushed cell → tokenize into columns (never vertical-split into a 1-col dump).
-  if (cells.length === 1) {
-    const only = cells[0];
-    const fromLines = extractCellLines(only);
-    const tokenSource =
-      fromLines.length >= 2 && fromLines.every((line) => tokenizeCollapsedReportRow(line).length < 2)
-        ? fromLines
-        : tokenizeCollapsedReportRow(
-            fromLines.length >= 2 ? fromLines.join(" ") : only.textContent || "",
-          );
-    if (tokenSource.length >= 2) {
-      const width = Math.max(maxCols, tokenSource.length);
-      const row = emptyRowPatch(width);
-      tokenSource.forEach((token, index) => {
-        if (index < width) row[index] = { value: token };
-      });
-      return [row];
-    }
-  }
-
+  const sourceCells = sourceRow.querySelectorAll("td, th");
   const { hasVerticalSplit, cellsWithSplit, isFirstCellWithBrOrSpan } =
-    detectRowVerticalSplit(cells);
+    detectRowVerticalSplit(sourceCells);
 
-  // Excel-style column stacks: same number of lines in each cell → one output row per line.
   if (isFirstCellWithBrOrSpan && hasVerticalSplit && cellsWithSplit.length > 0) {
-    const lineCount = Math.max(...cellsWithSplit.map((entry) => entry.allLines.length));
-    if (lineCount >= 2 && cells.length >= 2) {
-      const rows = [];
-      for (let lineIndex = 0; lineIndex < lineCount; lineIndex += 1) {
-        const row = emptyRowPatch(maxCols);
-        fillSourceRowPatches(row, cells, maxCols, (cellIndex, sourceCell) => {
-          const splitInfo = cellsWithSplit.find((entry) => entry.index === cellIndex);
-          if (splitInfo?.allLines?.[lineIndex] != null) return splitInfo.allLines[lineIndex];
-          return lineIndex === 0 ? extractPlainText(sourceCell) : "";
-        });
-        rows.push(row);
-      }
-      return rows;
-    }
-
-    // Legacy 2-line SUBTOTAL stack in a multi-col row.
     const topRow = emptyRowPatch(maxCols);
     const bottomRow = emptyRowPatch(maxCols);
 
-    fillSourceRowPatches(topRow, cells, maxCols, (cellIndex) => {
+    fillSourceRowPatches(topRow, sourceCells, maxCols, (cellIndex) => {
       const splitInfo = cellsWithSplit.find((entry) => entry.index === cellIndex);
       if (splitInfo) return splitInfo.topData;
-      return extractPlainText(cells[cellIndex]);
+      return extractPlainText(sourceCells[cellIndex]);
     });
 
-    fillSourceRowPatches(bottomRow, cells, maxCols, (cellIndex) => {
+    fillSourceRowPatches(bottomRow, sourceCells, maxCols, (cellIndex) => {
       const splitInfo = cellsWithSplit.find((entry) => entry.index === cellIndex);
       if (splitInfo) return splitInfo.bottomData;
-      return extractPlainText(cells[cellIndex]);
+      return extractPlainText(sourceCells[cellIndex]);
     });
 
     return [topRow, bottomRow];
   }
 
   const row = emptyRowPatch(maxCols);
-  fillSourceRowPatches(row, cells, maxCols, () => null);
+  fillSourceRowPatches(row, sourceCells, maxCols, () => null);
   return [row];
-}
-
-/**
- * Last-chance reshape: rows that only filled column 0 with multi-token / multiline
- * content get expanded into real columns (matches the user-visible failure mode).
- */
-export function reshapeCollapsedFormatMatrix(bodyMatrix) {
-  if (!Array.isArray(bodyMatrix) || !bodyMatrix.length) return bodyMatrix;
-
-  const reshaped = [];
-  bodyMatrix.forEach((row) => {
-    if (!Array.isArray(row) || !row.length) {
-      reshaped.push(row);
-      return;
-    }
-
-    const filledIdx = [];
-    row.forEach((cell, index) => {
-      if (String(cell?.value ?? "").trim() || String(cell?.html ?? "").trim()) {
-        filledIdx.push(index);
-      }
-    });
-
-    const primary = row[0] || {};
-    const primaryText = String(primary.value ?? "")
-      .replace(/\u00a0/g, " ")
-      .trim();
-    const primaryLines = primaryText
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean);
-
-    // Case A: only col0 filled, and it holds one report row of space-separated fields.
-    if (filledIdx.length <= 1) {
-      if (
-        primaryLines.length >= 2 &&
-        primaryLines.every((line) => tokenizeCollapsedReportRow(line).length >= 2)
-      ) {
-        primaryLines.forEach((line) => {
-          const tokens = tokenizeCollapsedReportRow(line);
-          reshaped.push(tokens.map((token) => ({ value: token })));
-        });
-        return;
-      }
-
-      if (primaryLines.length >= 3) {
-        reshaped.push(primaryLines.map((line) => ({ value: line })));
-        return;
-      }
-
-      const tokens = tokenizeCollapsedReportRow(primaryText);
-      if (tokens.length >= 3) {
-        reshaped.push(tokens.map((token) => ({ value: token })));
-        return;
-      }
-    }
-
-    // Case B: several cells, but each cell still holds a full dense report row.
-    if (
-      filledIdx.length >= 2 &&
-      filledIdx.every((index) => tokenizeCollapsedReportRow(row[index]?.value || "").length >= 3)
-    ) {
-      filledIdx.forEach((index) => {
-        const tokens = tokenizeCollapsedReportRow(row[index]?.value || "");
-        reshaped.push(tokens.map((token) => ({ value: token })));
-      });
-      return;
-    }
-
-    reshaped.push(row);
-  });
-
-  return reshaped;
 }
 
 /** @returns {Array<Array<{ value: string, html?: string, styleCssText?: string }>>} */
@@ -558,5 +294,5 @@ export function buildFormatBodyMatrix(dataRows, maxCols) {
   dataRows.forEach((sourceRow) => {
     expandSourceRowToMatrixRows(sourceRow, maxCols).forEach((row) => matrix.push(row));
   });
-  return reshapeCollapsedFormatMatrix(matrix);
+  return matrix;
 }

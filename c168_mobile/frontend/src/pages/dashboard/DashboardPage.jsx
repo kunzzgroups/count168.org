@@ -10,7 +10,7 @@ import HeroSummaryCard from "./HeroSummaryCard.jsx";
 
 export default function DashboardPage() {
   const dash = useMobileDashboard();
-  const { i18n, kpi, loading, error, me, blocked } = dash;
+  const { i18n, kpi, loading, error, me, blocked, compareLabel } = dash;
   const [filterOpen, setFilterOpen] = useState(false);
 
   if (blocked) return null;
@@ -30,17 +30,17 @@ export default function DashboardPage() {
   }
 
   return (
-    <MobileShell i18n={i18n} me={me}>
-      <div className="w-full max-w-full overflow-x-hidden px-3 pb-2 pt-[58px]">
+    <MobileShell
+      i18n={i18n}
+      me={me}
+      overlay={<FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} dash={dash} />}
+    >
+      <div
+        className="w-full max-w-full overflow-x-hidden px-3 pb-2"
+        style={{ paddingTop: "max(12px, env(safe-area-inset-top, 0px))" }}
+      >
         <header className="flex items-center justify-between py-1.5">
           <h1 className="text-[22px] font-semibold tracking-tight text-slate-900">{i18n.dashboard}</h1>
-          <button
-            type="button"
-            className="grid size-9 place-items-center rounded-full bg-white text-slate-600 shadow-sm ring-1 ring-slate-100"
-            aria-label="Notifications"
-          >
-            <i className="far fa-bell text-[17px]" aria-hidden="true" />
-          </button>
         </header>
 
         <div className="mb-4 mt-1 flex items-center gap-2.5">
@@ -74,6 +74,7 @@ export default function DashboardPage() {
             currency={dash.currency}
             value={dash.summaryValue}
             compare={kpi?.comparisons?.netProfit}
+            compareLabel={compareLabel}
             multiCurrency={dash.useConvertedEarnings}
             loading={loading}
           />
@@ -93,7 +94,7 @@ export default function DashboardPage() {
                   label={card.label}
                   value={card.value}
                   compare={card.compare}
-                  compareLabel={i18n.vsLastMonth}
+                  compareLabel={compareLabel}
                   loading={loading}
                 />
               ))}
@@ -139,8 +140,6 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
-
-      <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} dash={dash} />
     </MobileShell>
   );
 }

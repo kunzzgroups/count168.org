@@ -58,7 +58,7 @@ function deleted_log_expand_company_scope_by_group(PDO $pdo, array $companyIds):
 
 function deleted_log_page_company_scope(PDO $pdo): array
 {
-    require_once __DIR__ . '/../api/get_companies_helper.php';
+    require_once __DIR__ . '/../get_companies_helper.php';
 
     $uid = (int) ($_SESSION['user_id'] ?? 0);
     $role = strtolower(trim((string) ($_SESSION['role'] ?? '')));

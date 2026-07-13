@@ -50,7 +50,7 @@ function parseTrailingSourceParenValuePhp($formulaText) {
     return null;
 }
 
-function isMisplacedCommissionPhp($value) {
+function isMisplacedCommissionRangePhp($value) {
     if ($value === null || $value === '') {
         return false;
     }
@@ -62,6 +62,26 @@ function isMisplacedCommissionPhp($value) {
     }
     $num = (float) $value;
     return $num > 0.85 && $num < 1 - 1e-9;
+}
+
+function isDuplicateCoefficientAsSourcePhp($value, $formulaText) {
+    if (!isMisplacedCommissionRangePhp($value)) {
+        return false;
+    }
+    if ($formulaText === null || trim((string) $formulaText) === '') {
+        return false;
+    }
+    $tail = extractRowCoefficientTailPhp($formulaText);
+    if ($tail === null) {
+        return false;
+    }
+    $tailNum = (float) substr($tail, 1);
+    $valNum = is_numeric($value) ? (float) $value : (float) str_replace([' ', '%'], '', (string) $value);
+    return abs($tailNum - $valNum) < 1e-9;
+}
+
+function isMisplacedCommissionPhp($value, $formulaBody = '') {
+    return isDuplicateCoefficientAsSourcePhp($value, $formulaBody);
 }
 
 function isSourceOnePhp($value) {
@@ -115,33 +135,36 @@ function shouldMergeRowTailFromResolvedSourcesPhp($effectiveSource) {
     if ($effectiveSource === null || trim((string) $effectiveSource) === '') {
         return true;
     }
-    if (isMisplacedCommissionPhp($effectiveSource)) {
-        return true;
-    }
     return isSourceOnePhp($effectiveSource);
 }
 
 function resolveEffectiveSourcePercentForRow(array $row) {
     $enableDb = isset($row['enable_source_percent']) ? (int) $row['enable_source_percent'] : 0;
 
-    $fromDisplay = parseTrailingSourceParenValuePhp($row['formula_display'] ?? '');
-    if ($fromDisplay !== null && !isSourceOnePhp($fromDisplay) && !isMisplacedCommissionPhp($fromDisplay)) {
+    $formulaDisplay = isset($row['formula_display']) ? (string) $row['formula_display'] : '';
+    $fromDisplay = parseTrailingSourceParenValuePhp($formulaDisplay);
+    if ($fromDisplay !== null && !isSourceOnePhp($fromDisplay) && !isDuplicateCoefficientAsSourcePhp($fromDisplay, $formulaDisplay)) {
         return [
             'source' => formatSourcePercentForMaintenanceList($fromDisplay),
             'enable' => $enableDb ? 1 : 1,
         ];
     }
 
-    $fromLsv = parseTrailingSourceParenValuePhp($row['last_source_value'] ?? '');
-    if ($fromLsv !== null && !isSourceOnePhp($fromLsv) && !isMisplacedCommissionPhp($fromLsv)) {
+    $lastSourceValue = isset($row['last_source_value']) ? (string) $row['last_source_value'] : '';
+    $fromLsv = parseTrailingSourceParenValuePhp($lastSourceValue);
+    if ($fromLsv !== null && !isSourceOnePhp($fromLsv) && !isDuplicateCoefficientAsSourcePhp($fromLsv, $lastSourceValue)) {
         return [
             'source' => formatSourcePercentForMaintenanceList($fromLsv),
             'enable' => $enableDb ? 1 : 1,
         ];
     }
 
+    $formulaBody = trim((string) ($row['formula_operators'] ?? ''));
+    if ($formulaBody === '') {
+        $formulaBody = trim($lastSourceValue);
+    }
     $dbPctRaw = isset($row['source_percent']) ? trim((string) $row['source_percent']) : '';
-    if ($dbPctRaw !== '' && isMisplacedCommissionPhp($dbPctRaw)) {
+    if ($dbPctRaw !== '' && isMisplacedCommissionPhp($dbPctRaw, $formulaBody)) {
         return ['source' => '1', 'enable' => $enableDb];
     }
 
@@ -216,15 +239,19 @@ function scoreTemplateRowForMaintenanceDedup(array $row) {
     if (hasRowCoefficientTailPhp($base)) {
         $score += 100;
     }
-    if ($source !== '' && $source !== '1' && !isMisplacedCommissionPhp($source)) {
+    $formulaBody = trim((string) ($row['formula_operators'] ?? ''));
+    if ($formulaBody === '') {
+        $formulaBody = trim((string) ($row['last_source_value'] ?? ''));
+    }
+    if ($source !== '' && $source !== '1' && !isMisplacedCommissionPhp($source, $formulaBody)) {
         $score += 200;
     }
     $displayMisplaced = parseTrailingSourceParenValuePhp($row['formula_display'] ?? '');
-    if ($displayMisplaced !== null && isMisplacedCommissionPhp($displayMisplaced)) {
+    if ($displayMisplaced !== null && isMisplacedCommissionPhp($displayMisplaced, $row['formula_display'] ?? '')) {
         $score -= 200;
     }
     $dbPct = isset($row['source_percent']) ? trim((string) $row['source_percent']) : '';
-    if ($dbPct !== '' && isMisplacedCommissionPhp($dbPct)) {
+    if ($dbPct !== '' && isMisplacedCommissionPhp($dbPct, $formulaBody)) {
         $score -= 150;
     }
     return $score;

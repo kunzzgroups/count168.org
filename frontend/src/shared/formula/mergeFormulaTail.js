@@ -1,5 +1,5 @@
 import { removeTrailingSourcePercentExpression } from "./removeTrailingSourcePercent.js";
-import { isMisplacedCommission } from "./isMisplacedCommission.js";
+import { isSourceOne } from "./isMisplacedCommission.js";
 
 const ROW_TAIL_PATTERN = /^(.*)\*([0-9.]+)\s*$/;
 const DOLLAR_COLUMN_TAIL_PATTERN = /\$(\d+)\s*$/;
@@ -51,5 +51,5 @@ export function mergeFormulaOperatorsWithResolvedTail(body, ...resolvedSources) 
 /** Whether we should merge row tail from lsv/display for this effective source. */
 export function shouldMergeRowTailFromResolvedSources(effectiveSource) {
   if (effectiveSource == null || String(effectiveSource).trim() === "") return true;
-  return isMisplacedCommission(effectiveSource) || Math.abs(Number(effectiveSource) - 1) < 1e-9;
+  return isSourceOne(effectiveSource);
 }

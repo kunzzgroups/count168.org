@@ -30,8 +30,8 @@ function resolveCurrencyId(row, parsedProcessData) {
 function resolveGlobalRateForSubmit(row, globalRateInput) {
   if (row.rateValue?.trim()) return null;
   if (!row.rateChecked || !globalRateInput?.trim()) return null;
-  const rv = globalRateInput.trim();
-  return rv.startsWith("*") || rv.startsWith("/") ? rv.substring(1) : rv;
+  // Preserve * / operator so backend can store rate_expression distinctly from plain "3"
+  return globalRateInput.trim();
 }
 
 /** Build API submit row objects from React row models. */

@@ -153,37 +153,22 @@ function dcSummaryApiHandleSubmit(): void
                 (bool) $capture_scope_group
             );
 
-            // 可选：前端要求“立即回成功”，后端继续处理
-            $immediateAckMode = !empty($data['immediateAck']);
-            if ($immediateAckMode) {
-                ensureSummarySubmitQueueTable($pdo);
-                $queueStmt = $pdo->prepare("
-                    INSERT INTO data_capture_submit_queue (company_id, user_id, status, request_json, rows_count)
-                    VALUES (:company_id, :user_id, 'processing', :request_json, :rows_count)
-                ");
-                $queueStmt->execute([
-                    ':company_id' => $companyId,
-                    ':user_id' => (isset($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : null),
-                    ':request_json' => $jsonData,
-                    ':rows_count' => count($data['summaryRows'])
-                ]);
-                $queueJobId = (int)$pdo->lastInsertId();
-
-                echo json_encode([
-                    'success' => true,
-                    'queued' => true,
-                    'jobId' => $queueJobId,
-                    'message' => 'Data received. Processing in background.'
-                ]);
-
-                if (function_exists('fastcgi_finish_request')) {
-                    fastcgi_finish_request();
-                } else {
-                    @ob_end_flush();
-                    @flush();
-                }
+            // 方案 A：忽略 immediateAck，始终同步写入成功后再响应（禁止“假成功”）
+            if (!empty($data['immediateAck'])) {
+                error_log('submit: immediateAck ignored; processing synchronously');
             }
-        
+            $immediateAckMode = false;
+            $queueJobId = null;
+
+            ensureSummarySubmitCorrectnessSchema($pdo);
+            $hasSubmitRequestIdCol = summaryApiHasSubmitRequestId($pdo);
+            $hasRateExpressionCol = summaryApiHasRateExpression($pdo);
+            $submitRequestId = isset($data['submitRequestId'])
+                ? trim((string) $data['submitRequestId'])
+                : '';
+            if (strlen($submitRequestId) > 64) {
+                $submitRequestId = substr($submitRequestId, 0, 64);
+            }
             $resolvedCurrencyId = dcResolveCaptureCurrencyId(
                 $pdo,
                 (bool) $capture_scope_group,
@@ -216,37 +201,187 @@ function dcSummaryApiHandleSubmit(): void
         
             try {
                 if (!$isBatchAppend) {
+                    // Idempotency: same submitRequestId within scope → return existing capture
+                    if ($hasSubmitRequestIdCol && $submitRequestId !== '') {
+                        if ($useCaptureScopeColumns) {
+                            $idempotentStmt = $pdo->prepare("
+                                SELECT id FROM data_captures
+                                WHERE scope_type = :scope_type
+                                  AND scope_id = :scope_id
+                                  AND capture_date = :capture_date
+                                  AND process_id = :process_id
+                                  AND currency_id = :currency_id
+                                  AND submit_request_id = :submit_request_id
+                                LIMIT 1
+                            ");
+                            $idempotentStmt->execute([
+                                ':scope_type' => $scopeInsert['scope_type'],
+                                ':scope_id' => $scopeInsert['scope_id'],
+                                ':capture_date' => $data['captureDate'],
+                                ':process_id' => $data['processId'],
+                                ':currency_id' => $data['currencyId'],
+                                ':submit_request_id' => $submitRequestId,
+                            ]);
+                        } else {
+                            $idempotentStmt = $pdo->prepare("
+                                SELECT id FROM data_captures
+                                WHERE company_id = :company_id
+                                  AND capture_date = :capture_date
+                                  AND process_id = :process_id
+                                  AND currency_id = :currency_id
+                                  AND submit_request_id = :submit_request_id
+                                LIMIT 1
+                            ");
+                            $idempotentStmt->execute([
+                                ':company_id' => $companyId,
+                                ':capture_date' => $data['captureDate'],
+                                ':process_id' => $data['processId'],
+                                ':currency_id' => $data['currencyId'],
+                                ':submit_request_id' => $submitRequestId,
+                            ]);
+                        }
+                        $existingCapture = $idempotentStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($existingCapture && !empty($existingCapture['id'])) {
+                            $pdo->commit();
+                            echo json_encode([
+                                'success' => true,
+                                'captureId' => (int) $existingCapture['id'],
+                                'idempotent' => true,
+                                'message' => 'Data already submitted for this request',
+                                'rowsInserted' => 0,
+                            ]);
+                            return;
+                        }
+                    }
+
                     // Insert main capture record (first batch)
-                    if ($useCaptureScopeColumns) {
-                        $stmt = $pdo->prepare("
-                            INSERT INTO data_captures (company_id, scope_type, scope_id, capture_date, process_id, currency_id, created_by, user_type, remark) 
-                            VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark)
-                        ");
-                        $stmt->execute([
-                            ':company_id' => (int) ($scopeInsert['company_id'] ?? $companyId),
-                            ':scope_type' => $scopeInsert['scope_type'],
-                            ':scope_id' => $scopeInsert['scope_id'],
-                            ':capture_date' => $data['captureDate'],
-                            ':process_id' => $data['processId'],
-                            ':currency_id' => $data['currencyId'],
-                            ':created_by' => $userId,
-                            ':user_type' => $user_type,
-                            ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
-                        ]);
-                    } else {
-                        $stmt = $pdo->prepare("
-                            INSERT INTO data_captures (company_id, capture_date, process_id, currency_id, created_by, user_type, remark) 
-                            VALUES (:company_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark)
-                        ");
-                        $stmt->execute([
-                            ':company_id' => $companyId,
-                            ':capture_date' => $data['captureDate'],
-                            ':process_id' => $data['processId'],
-                            ':currency_id' => $data['currencyId'],
-                            ':created_by' => $userId,
-                            ':user_type' => $user_type,
-                            ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
-                        ]);
+                    try {
+                        if ($useCaptureScopeColumns) {
+                            if ($hasSubmitRequestIdCol) {
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO data_captures (company_id, scope_type, scope_id, capture_date, process_id, currency_id, created_by, user_type, remark, submit_request_id) 
+                                    VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark, :submit_request_id)
+                                ");
+                                $stmt->execute([
+                                    ':company_id' => (int) ($scopeInsert['company_id'] ?? $companyId),
+                                    ':scope_type' => $scopeInsert['scope_type'],
+                                    ':scope_id' => $scopeInsert['scope_id'],
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $data['processId'],
+                                    ':currency_id' => $data['currencyId'],
+                                    ':created_by' => $userId,
+                                    ':user_type' => $user_type,
+                                    ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
+                                    ':submit_request_id' => $submitRequestId !== '' ? $submitRequestId : null,
+                                ]);
+                            } else {
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO data_captures (company_id, scope_type, scope_id, capture_date, process_id, currency_id, created_by, user_type, remark) 
+                                    VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark)
+                                ");
+                                $stmt->execute([
+                                    ':company_id' => (int) ($scopeInsert['company_id'] ?? $companyId),
+                                    ':scope_type' => $scopeInsert['scope_type'],
+                                    ':scope_id' => $scopeInsert['scope_id'],
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $data['processId'],
+                                    ':currency_id' => $data['currencyId'],
+                                    ':created_by' => $userId,
+                                    ':user_type' => $user_type,
+                                    ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
+                                ]);
+                            }
+                        } else {
+                            if ($hasSubmitRequestIdCol) {
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO data_captures (company_id, capture_date, process_id, currency_id, created_by, user_type, remark, submit_request_id) 
+                                    VALUES (:company_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark, :submit_request_id)
+                                ");
+                                $stmt->execute([
+                                    ':company_id' => $companyId,
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $data['processId'],
+                                    ':currency_id' => $data['currencyId'],
+                                    ':created_by' => $userId,
+                                    ':user_type' => $user_type,
+                                    ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
+                                    ':submit_request_id' => $submitRequestId !== '' ? $submitRequestId : null,
+                                ]);
+                            } else {
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO data_captures (company_id, capture_date, process_id, currency_id, created_by, user_type, remark) 
+                                    VALUES (:company_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark)
+                                ");
+                                $stmt->execute([
+                                    ':company_id' => $companyId,
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $data['processId'],
+                                    ':currency_id' => $data['currencyId'],
+                                    ':created_by' => $userId,
+                                    ':user_type' => $user_type,
+                                    ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
+                                ]);
+                            }
+                        }
+                    } catch (PDOException $insertEx) {
+                        // Concurrent retry hit unique key — return existing capture
+                        $sqlState = (string) ($insertEx->errorInfo[0] ?? '');
+                        if (
+                            $hasSubmitRequestIdCol
+                            && $submitRequestId !== ''
+                            && ($sqlState === '23000' || (int) $insertEx->getCode() === 23000)
+                        ) {
+                            if ($useCaptureScopeColumns) {
+                                $raceStmt = $pdo->prepare("
+                                    SELECT id FROM data_captures
+                                    WHERE scope_type = :scope_type
+                                      AND scope_id = :scope_id
+                                      AND capture_date = :capture_date
+                                      AND process_id = :process_id
+                                      AND currency_id = :currency_id
+                                      AND submit_request_id = :submit_request_id
+                                    LIMIT 1
+                                ");
+                                $raceStmt->execute([
+                                    ':scope_type' => $scopeInsert['scope_type'],
+                                    ':scope_id' => $scopeInsert['scope_id'],
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $data['processId'],
+                                    ':currency_id' => $data['currencyId'],
+                                    ':submit_request_id' => $submitRequestId,
+                                ]);
+                            } else {
+                                $raceStmt = $pdo->prepare("
+                                    SELECT id FROM data_captures
+                                    WHERE company_id = :company_id
+                                      AND capture_date = :capture_date
+                                      AND process_id = :process_id
+                                      AND currency_id = :currency_id
+                                      AND submit_request_id = :submit_request_id
+                                    LIMIT 1
+                                ");
+                                $raceStmt->execute([
+                                    ':company_id' => $companyId,
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $data['processId'],
+                                    ':currency_id' => $data['currencyId'],
+                                    ':submit_request_id' => $submitRequestId,
+                                ]);
+                            }
+                            $raceRow = $raceStmt->fetch(PDO::FETCH_ASSOC);
+                            if ($raceRow && !empty($raceRow['id'])) {
+                                $pdo->rollBack();
+                                echo json_encode([
+                                    'success' => true,
+                                    'captureId' => (int) $raceRow['id'],
+                                    'idempotent' => true,
+                                    'message' => 'Data already submitted for this request',
+                                    'rowsInserted' => 0,
+                                ]);
+                                return;
+                            }
+                        }
+                        throw $insertEx;
                     }
                 
                     // Get the inserted capture ID
@@ -358,19 +493,37 @@ function dcSummaryApiHandleSubmit(): void
                 $useDetailScopeColumns = $useCaptureScopeColumns
                     && tenant_table_has_scope_columns($pdo, 'data_capture_details');
                 if ($useDetailScopeColumns) {
-                    $stmt = $pdo->prepare("
-                        INSERT INTO data_capture_details 
-                        (company_id, scope_type, scope_id, capture_id, id_product_main, description_main, id_product_sub, description_sub, product_type, formula_variant, id_product, account_id, currency_id, columns_value, source_value, source_percent, enable_source_percent, formula, processed_amount, rate, display_order) 
-                        VALUES 
-                        (:company_id, :scope_type, :scope_id, :capture_id, :id_product_main, :description_main, :id_product_sub, :description_sub, :product_type, :formula_variant, :id_product, :account_id, :currency_id, :columns_value, :source_value, :source_percent, :enable_source_percent, :formula, :processed_amount, :rate, :display_order)
-                    ");
+                    if ($hasRateExpressionCol) {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO data_capture_details 
+                            (company_id, scope_type, scope_id, capture_id, id_product_main, description_main, id_product_sub, description_sub, product_type, formula_variant, id_product, account_id, currency_id, columns_value, source_value, source_percent, enable_source_percent, formula, processed_amount, rate, rate_expression, display_order) 
+                            VALUES 
+                            (:company_id, :scope_type, :scope_id, :capture_id, :id_product_main, :description_main, :id_product_sub, :description_sub, :product_type, :formula_variant, :id_product, :account_id, :currency_id, :columns_value, :source_value, :source_percent, :enable_source_percent, :formula, :processed_amount, :rate, :rate_expression, :display_order)
+                        ");
+                    } else {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO data_capture_details 
+                            (company_id, scope_type, scope_id, capture_id, id_product_main, description_main, id_product_sub, description_sub, product_type, formula_variant, id_product, account_id, currency_id, columns_value, source_value, source_percent, enable_source_percent, formula, processed_amount, rate, display_order) 
+                            VALUES 
+                            (:company_id, :scope_type, :scope_id, :capture_id, :id_product_main, :description_main, :id_product_sub, :description_sub, :product_type, :formula_variant, :id_product, :account_id, :currency_id, :columns_value, :source_value, :source_percent, :enable_source_percent, :formula, :processed_amount, :rate, :display_order)
+                        ");
+                    }
                 } else {
-                    $stmt = $pdo->prepare("
-                        INSERT INTO data_capture_details 
-                        (company_id, capture_id, id_product_main, description_main, id_product_sub, description_sub, product_type, formula_variant, id_product, account_id, currency_id, columns_value, source_value, source_percent, enable_source_percent, formula, processed_amount, rate, display_order) 
-                        VALUES 
-                        (:company_id, :capture_id, :id_product_main, :description_main, :id_product_sub, :description_sub, :product_type, :formula_variant, :id_product, :account_id, :currency_id, :columns_value, :source_value, :source_percent, :enable_source_percent, :formula, :processed_amount, :rate, :display_order)
-                    ");
+                    if ($hasRateExpressionCol) {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO data_capture_details 
+                            (company_id, capture_id, id_product_main, description_main, id_product_sub, description_sub, product_type, formula_variant, id_product, account_id, currency_id, columns_value, source_value, source_percent, enable_source_percent, formula, processed_amount, rate, rate_expression, display_order) 
+                            VALUES 
+                            (:company_id, :capture_id, :id_product_main, :description_main, :id_product_sub, :description_sub, :product_type, :formula_variant, :id_product, :account_id, :currency_id, :columns_value, :source_value, :source_percent, :enable_source_percent, :formula, :processed_amount, :rate, :rate_expression, :display_order)
+                        ");
+                    } else {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO data_capture_details 
+                            (company_id, capture_id, id_product_main, description_main, id_product_sub, description_sub, product_type, formula_variant, id_product, account_id, currency_id, columns_value, source_value, source_percent, enable_source_percent, formula, processed_amount, rate, display_order) 
+                            VALUES 
+                            (:company_id, :capture_id, :id_product_main, :description_main, :id_product_sub, :description_sub, :product_type, :formula_variant, :id_product, :account_id, :currency_id, :columns_value, :source_value, :source_percent, :enable_source_percent, :formula, :processed_amount, :rate, :display_order)
+                        ");
+                    }
                 }
             
                 // 同一 capture 下相同 id_product_main 按顺序：第一条为 main，后续均为 sub
@@ -381,7 +534,7 @@ function dcSummaryApiHandleSubmit(): void
                         FROM data_capture_details
                         WHERE capture_id = ? AND company_id = ? AND product_type = 'main' AND COALESCE(id_product_main, '') != ''
                     ");
-                    $existMainStmt->execute([$captureId, $companyId]);
+                    $existMainStmt->execute([$captureId, $detailCompanyId]);
                     while ($r = $existMainStmt->fetch(PDO::FETCH_ASSOC)) {
                         $mainSeenForIdProductMain[$r['id_product_main']] = true;
                     }
@@ -413,7 +566,7 @@ function dcSummaryApiHandleSubmit(): void
                         FROM data_capture_details
                         WHERE company_id = ? AND capture_id = ?
                     ");
-                    $variantSeedStmt->execute([$companyId, $captureId]);
+                    $variantSeedStmt->execute([$detailCompanyId, $captureId]);
                     while ($seed = $variantSeedStmt->fetch(PDO::FETCH_ASSOC)) {
                         $seedType = trim((string)($seed['product_type'] ?? 'main'));
                         $seedMain = trim((string)($seed['id_product_main'] ?? ''));
@@ -565,7 +718,7 @@ function dcSummaryApiHandleSubmit(): void
                         if ($productType === 'main') {
                             $idProductMain = $row['idProductMain'] ?? null;
                             $checkStmtMain->execute([
-                                ':company_id' => $companyId,
+                                ':company_id' => $detailCompanyId,
                                 ':capture_id' => $captureId,
                                 ':id_product_main' => $idProductMain,
                                 ':account_id' => $row['accountId'],
@@ -582,7 +735,7 @@ function dcSummaryApiHandleSubmit(): void
                             error_log("Checking duplicate sub: capture_id=$captureId, id_product_sub=" . ($idProductSub ?? 'NULL') . ", parent_id_product=" . ($parentIdProduct ?? 'NULL') . ", account_id=" . $row['accountId'] . ", formula_variant=$formulaVariant");
                         
                             $checkStmtSub->execute([
-                                ':company_id' => $companyId,
+                                ':company_id' => $detailCompanyId,
                                 ':capture_id' => $captureId,
                                 ':id_product_sub' => $idProductSub,
                                 ':id_product_main' => $parentIdProduct,
@@ -599,82 +752,94 @@ function dcSummaryApiHandleSubmit(): void
                         $existingId = $existingRecord['id'];
                         error_log("Found duplicate data_capture_details record (ID: $existingId): capture_id=$captureId, product_type=$productType, id_product_main=" . ($row['idProductMain'] ?? 'NULL') . ", id_product_sub=" . ($row['idProductSub'] ?? 'NULL') . ", account_id=" . $row['accountId'] . " - Updating existing record instead of inserting");
                     
-                        // Get rate value: use rateValue if it exists (from Rate Value column or global rateInput)
-                        // Priority: Rate Value column > Global rateInput (if checkbox checked)
-                        $rateValue = null;
+                        $parsedRate = ['rate' => null, 'expression' => null];
                         if (isset($row['rateValue']) && $row['rateValue'] !== '' && $row['rateValue'] !== null) {
-                            // Rate Value column has value, use it
-                            $rateValueStr = (string)$row['rateValue'];
-                            // Handle formats like "*3", "/2", or plain numbers
-                            if (strpos($rateValueStr, '*') === 0) {
-                                $rateValue = (float)substr($rateValueStr, 1);
-                            } else if (strpos($rateValueStr, '/') === 0) {
-                                $rateValue = (float)substr($rateValueStr, 1);
-                            } else {
-                                $rateValue = (float)$rateValueStr;
-                            }
-                        } else if (isset($row['rateChecked']) && $row['rateChecked']) {
-                            // Fallback: if checkbox checked but no Rate Value, use global rateInput (backward compatibility)
-                            $rateValue = isset($row['rateValue']) && $row['rateValue'] !== '' && $row['rateValue'] !== null ? (float)$row['rateValue'] : null;
+                            $parsedRate = parseSubmitRateValue($row['rateValue']);
+                        } elseif (isset($row['rateChecked']) && $row['rateChecked']) {
+                            $parsedRate = parseSubmitRateValue($row['rateValue'] ?? null);
                         }
+                        $rateValue = $parsedRate['rate'];
+                        $rateExpression = $parsedRate['expression'];
                     
                         // Get display_order for update
                         $rowDisplayOrderForUpdate = isset($row['displayOrder']) && $row['displayOrder'] !== null ? (int)$row['displayOrder'] : null;
                     
                         // Update existing record instead of skipping
-                        $updateStmt = $pdo->prepare("
-                            UPDATE data_capture_details SET
-                                description_main = :description_main,
-                                description_sub = :description_sub,
-                                id_product = :id_product,
-                                columns_value = :columns_value,
-                                source_value = :source_value,
-                                source_percent = :source_percent,
-                                enable_source_percent = :enable_source_percent,
-                                formula = :formula,
-                                processed_amount = :processed_amount,
-                                rate = :rate,
-                                display_order = :display_order
-                            WHERE id = :id
-                        ");
-                    
-                        $updateStmt->execute([
-                            ':id' => $existingId,
-                            ':description_main' => $row['descriptionMain'] ?? null,
-                            ':description_sub' => $row['descriptionSub'] ?? null,
-                            ':id_product' => $normalizedIdProduct,
-                            ':columns_value' => $row['columns'] ?? '',
-                            ':source_value' => $row['source'] ?? '',
-                            // source_percent: default to '1' (multiplier, 1 = multiply by 1), auto-enable if has value
-                            ':source_percent' => isset($row['sourcePercent']) && $row['sourcePercent'] !== '' ? (string)$row['sourcePercent'] : '1',
-                            ':enable_source_percent' => (isset($row['sourcePercent']) && $row['sourcePercent'] !== '' && $row['sourcePercent'] !== '0') ? 1 : 0,
-                            ':formula' => $row['formula'] ?? '',
-                            ':processed_amount' => $row['processedAmount'] ?? 0,
-                            ':rate' => $rateValue,
-                            ':display_order' => $rowDisplayOrderForUpdate
-                        ]);
+                        if ($hasRateExpressionCol) {
+                            $updateStmt = $pdo->prepare("
+                                UPDATE data_capture_details SET
+                                    description_main = :description_main,
+                                    description_sub = :description_sub,
+                                    id_product = :id_product,
+                                    columns_value = :columns_value,
+                                    source_value = :source_value,
+                                    source_percent = :source_percent,
+                                    enable_source_percent = :enable_source_percent,
+                                    formula = :formula,
+                                    processed_amount = :processed_amount,
+                                    rate = :rate,
+                                    rate_expression = :rate_expression,
+                                    display_order = :display_order
+                                WHERE id = :id
+                            ");
+                            $updateStmt->execute([
+                                ':id' => $existingId,
+                                ':description_main' => $row['descriptionMain'] ?? null,
+                                ':description_sub' => $row['descriptionSub'] ?? null,
+                                ':id_product' => $normalizedIdProduct,
+                                ':columns_value' => $row['columns'] ?? '',
+                                ':source_value' => $row['source'] ?? '',
+                                ':source_percent' => isset($row['sourcePercent']) && $row['sourcePercent'] !== '' ? (string)$row['sourcePercent'] : '1',
+                                ':enable_source_percent' => (isset($row['sourcePercent']) && $row['sourcePercent'] !== '' && $row['sourcePercent'] !== '0') ? 1 : 0,
+                                ':formula' => $row['formula'] ?? '',
+                                ':processed_amount' => $row['processedAmount'] ?? 0,
+                                ':rate' => $rateValue,
+                                ':rate_expression' => $rateExpression,
+                                ':display_order' => $rowDisplayOrderForUpdate
+                            ]);
+                        } else {
+                            $updateStmt = $pdo->prepare("
+                                UPDATE data_capture_details SET
+                                    description_main = :description_main,
+                                    description_sub = :description_sub,
+                                    id_product = :id_product,
+                                    columns_value = :columns_value,
+                                    source_value = :source_value,
+                                    source_percent = :source_percent,
+                                    enable_source_percent = :enable_source_percent,
+                                    formula = :formula,
+                                    processed_amount = :processed_amount,
+                                    rate = :rate,
+                                    display_order = :display_order
+                                WHERE id = :id
+                            ");
+                            $updateStmt->execute([
+                                ':id' => $existingId,
+                                ':description_main' => $row['descriptionMain'] ?? null,
+                                ':description_sub' => $row['descriptionSub'] ?? null,
+                                ':id_product' => $normalizedIdProduct,
+                                ':columns_value' => $row['columns'] ?? '',
+                                ':source_value' => $row['source'] ?? '',
+                                ':source_percent' => isset($row['sourcePercent']) && $row['sourcePercent'] !== '' ? (string)$row['sourcePercent'] : '1',
+                                ':enable_source_percent' => (isset($row['sourcePercent']) && $row['sourcePercent'] !== '' && $row['sourcePercent'] !== '0') ? 1 : 0,
+                                ':formula' => $row['formula'] ?? '',
+                                ':processed_amount' => $row['processedAmount'] ?? 0,
+                                ':rate' => $rateValue,
+                                ':display_order' => $rowDisplayOrderForUpdate
+                            ]);
+                        }
                     
                         continue; // Skip insert, already updated
                     }
                 
-                    // Get rate value: use rateValue if it exists (from Rate Value column or global rateInput)
-                    // Priority: Rate Value column > Global rateInput (if checkbox checked)
-                    $rateValue = null;
+                    $parsedRate = ['rate' => null, 'expression' => null];
                     if (isset($row['rateValue']) && $row['rateValue'] !== '' && $row['rateValue'] !== null) {
-                        // Rate Value column has value, use it
-                        $rateValueStr = (string)$row['rateValue'];
-                        // Handle formats like "*3", "/2", or plain numbers
-                        if (strpos($rateValueStr, '*') === 0) {
-                            $rateValue = (float)substr($rateValueStr, 1);
-                        } else if (strpos($rateValueStr, '/') === 0) {
-                            $rateValue = (float)substr($rateValueStr, 1);
-                        } else {
-                            $rateValue = (float)$rateValueStr;
-                        }
-                    } else if (isset($row['rateChecked']) && $row['rateChecked']) {
-                        // Fallback: if checkbox checked but no Rate Value, use global rateInput (backward compatibility)
-                        $rateValue = isset($row['rateValue']) && $row['rateValue'] !== '' && $row['rateValue'] !== null ? (float)$row['rateValue'] : null;
+                        $parsedRate = parseSubmitRateValue($row['rateValue']);
+                    } elseif (isset($row['rateChecked']) && $row['rateChecked']) {
+                        $parsedRate = parseSubmitRateValue($row['rateValue'] ?? null);
                     }
+                    $rateValue = $parsedRate['rate'];
+                    $rateExpression = $parsedRate['expression'];
                 
                     $detailParams = [
                         ':company_id' => $detailCompanyId,
@@ -697,6 +862,9 @@ function dcSummaryApiHandleSubmit(): void
                         ':rate' => $rateValue,
                         ':display_order' => $rowDisplayOrder,
                     ];
+                    if ($hasRateExpressionCol) {
+                        $detailParams[':rate_expression'] = $rateExpression;
+                    }
                     if ($useDetailScopeColumns) {
                         $detailParams[':scope_type'] = $scopeInsert['scope_type'];
                         $detailParams[':scope_id'] = $scopeInsert['scope_id'];

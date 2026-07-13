@@ -34,8 +34,7 @@ export function stripBackgroundFromStyle(styleString) {
         .trim().replace(/;\s*$/, '');
 }
 
-// 2.Format: sanitize cell HTML while keeping class-based inline presentation
-// and interactive chrome (buttons/icons). Only strip id and dangerous layout styles.
+// 2.Format：清洗HTML片段，移除class/id，并过滤style里的布局属性（保留颜色/下划线/背景等）
 export function sanitizeFormatHtmlFragment(html) {
     if (!html) return '';
     try {
@@ -44,6 +43,7 @@ export function sanitizeFormatHtmlFragment(html) {
 
         const all = wrapper.querySelectorAll('*');
         all.forEach(el => {
+            el.removeAttribute('class');
             el.removeAttribute('id');
             const styleAttr = el.getAttribute('style');
             if (styleAttr) {

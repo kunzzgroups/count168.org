@@ -1,4 +1,5 @@
 import { normalizeSummaryIdProductText } from "../lib/summaryIdProductUtils.js";
+import { getProcessValueFromSummaryRow } from "../lib/summaryIdProductDisplay.js";
 import { evaluateFormulaExpression, normalizeFormulaBeforeReferenceExpand } from "../formula/summaryFormulaReference.js";
 import { formatNegativeNumbersInFormula } from "../formula/summaryFormulaParseUtils.js";
 import { resolveTemplateFormulaDisplay } from "../formula/summaryTemplateFormulaDisplay.js";
@@ -132,7 +133,8 @@ function resolveFormulaDisplay(row, formulaOperators) {
   try {
     const evaluated = evaluateFormulaExpression(
       ops,
-      row.productType === "sub" ? row.subIdProduct || row.idProduct : row.idProduct,
+      getProcessValueFromSummaryRow(row) ||
+        (row.productType === "sub" ? row.subIdProduct || row.idProduct : row.idProduct),
       row.clickedColumns || "",
       row.rowIndex
     );

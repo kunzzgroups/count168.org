@@ -1,7 +1,8 @@
 import { formatCurrency, formatPercentMagnitude, formatSignedChange } from "../../lib/dashboardFormat.js";
 
-export default function HeroSummaryCard({ i18n, currency, value, compare, multiCurrency, loading }) {
+export default function HeroSummaryCard({ i18n, currency, value, compare, compareLabel, multiCurrency, loading }) {
   const showCompare = !loading && compare && Number.isFinite(compare?.pct);
+  const trendUp = showCompare ? compare.isUp : true;
 
   return (
     <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#2f6bff] via-[#3b82f6] to-[#42c0ff] p-5 text-white shadow-[0_18px_40px_-12px_rgba(47,107,255,0.6)]">
@@ -20,13 +21,23 @@ export default function HeroSummaryCard({ i18n, currency, value, compare, multiC
         aria-hidden="true"
       >
         <path
-          d="M2 50 L26 40 L46 44 L70 22 L92 28 L114 8"
+          d={
+            trendUp
+              ? "M2 50 L26 40 L46 44 L70 22 L92 28 L114 8"
+              : "M2 8 L26 18 L46 14 L70 36 L92 30 L114 50"
+          }
           stroke="currentColor"
           strokeWidth="3"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <path d="M104 8 L114 8 L114 18" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d={trendUp ? "M104 8 L114 8 L114 18" : "M104 50 L114 50 L114 40"}
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
 
       <div className="relative flex items-start justify-between">
@@ -50,7 +61,8 @@ export default function HeroSummaryCard({ i18n, currency, value, compare, multiC
 
       {showCompare && (
         <p className="relative mt-3 text-[13px] font-medium text-white/85">
-          {i18n.vsLastMonth} <span className="font-semibold">{formatSignedChange(compare.delta)}</span>
+          {compareLabel || i18n.vsLastMonth}{" "}
+          <span className="font-semibold">{formatSignedChange(compare.delta)}</span>
         </p>
       )}
 

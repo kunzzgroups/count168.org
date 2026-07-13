@@ -136,6 +136,7 @@ export default function RemoveWordChipInput({
           style={inputStyle}
           onChange={(event) => setDraft(normalizeDraft(event.target.value))}
           onKeyDown={handleKeyDown}
+          onBlur={addDraftWord}
           autoComplete="off"
         />
       ) : null}

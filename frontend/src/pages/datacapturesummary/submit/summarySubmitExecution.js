@@ -34,8 +34,61 @@ function buildSummarySubmitPayload(processData, summaryRows) {
 }
 
 const BATCH_DELAY_MS = 300;
-const QUICK_SUBMIT_REDIRECT_MS = 600;
 const BATCH_SUCCESS_REDIRECT_MS = 2000;
+const SUBMIT_REQUEST_ID_STORAGE_PREFIX = "dcSummarySubmitRequestId:";
+
+function createSubmitRequestId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `sr-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** Session key: same Summary identity reuses id on retry; success clears it. */
+function buildSubmitRequestStorageKey(baseData, captureScope) {
+  const scopeMode = baseData.captureScopeMode === "group" ? "group" : "company";
+  const scopeId =
+    scopeMode === "group"
+      ? String(baseData.captureSelectedGroup || captureScope?.groupId || "").trim().toUpperCase()
+      : String(
+          baseData.scopeCompanyId ||
+            captureScope?.scopeCompanyId ||
+            captureScope?.companyId ||
+            "",
+        );
+  return [
+    SUBMIT_REQUEST_ID_STORAGE_PREFIX,
+    scopeMode,
+    scopeId || "na",
+    String(baseData.captureDate || ""),
+    String(baseData.processId || ""),
+    String(baseData.currencyId || ""),
+  ].join("|");
+}
+
+function getOrCreateSessionSubmitRequestId(storageKey) {
+  try {
+    const existing = sessionStorage.getItem(storageKey);
+    if (existing && existing.trim()) return existing.trim();
+  } catch {
+    /* ignore */
+  }
+  const created = createSubmitRequestId();
+  try {
+    sessionStorage.setItem(storageKey, created);
+  } catch {
+    /* ignore */
+  }
+  return created;
+}
+
+function clearSessionSubmitRequestId(storageKey) {
+  try {
+    sessionStorage.removeItem(storageKey);
+  } catch {
+    /* ignore */
+  }
+}
 
 function notify(title, message, type = "success") {
   pushSummaryNotification(title, message, type);
@@ -76,7 +129,7 @@ async function postSubmitBatch(captureScope, batchData, options = {}) {
   const isGroup = isGroupLedgerCapture(captureScope, batchData);
   const payload = {
     ...batchData,
-    immediateAck: options.immediateAck ? 1 : 0,
+    submitRequestId: options.submitRequestId || undefined,
     company_id: isGroup ? null : (captureScope?.scopeCompanyId ?? null),
   };
   if (options.captureId != null) {
@@ -108,7 +161,9 @@ function verifySubmitPayload(submitData) {
 }
 
 /**
- * React-owned summary submit execution (batching + quick-ack fallback).
+ * React-owned summary submit execution (batching).
+ * Waits for real backend write success — no immediateAck false-success path.
+ * submitRequestId is session-scoped (retry-safe); cleared only after success.
  */
 export async function executeSummarySubmit({
   captureScope,
@@ -134,25 +189,16 @@ export async function executeSummarySubmit({
     return { ok: false, message: verify.message };
   }
 
-  const submitBatch = async (batchData, captureId, batchNumber, totalBatches, options = {}) => {
+  const submitRequestStorageKey = buildSubmitRequestStorageKey(baseData, effectiveScope);
+  const submitRequestId = getOrCreateSessionSubmitRequestId(submitRequestStorageKey);
+
+  const submitBatch = async (batchData, captureId, batchNumber, totalBatches) => {
     onProgress?.({ batchNumber, totalBatches });
     return postSubmitBatch(effectiveScope, batchData, {
       captureId,
-      immediateAck: options.immediateAck,
+      submitRequestId,
     });
   };
-
-  try {
-    const quickResult = await submitBatch(baseData, null, 1, 1, { immediateAck: true });
-    if (quickResult?.success && quickResult.queued) {
-      notify("Success", "Data received by server. Processing in background...", "success");
-      await new Promise((resolve) => window.setTimeout(resolve, QUICK_SUBMIT_REDIRECT_MS));
-      onSuccess?.({ mode: "quick" });
-      return { ok: true, mode: "quick" };
-    }
-  } catch (quickError) {
-    console.warn("Immediate-ack submit failed, fallback to batched submit:", quickError);
-  }
 
   let finalCaptureId = null;
   const failedProblemRows = [];
@@ -166,6 +212,9 @@ export async function executeSummarySubmit({
       if (subRows.length === 1) {
         try {
           const result = await submitBatch({ ...batchData, summaryRows: subRows }, finalCaptureId, batchNumber, total);
+          if (!result?.success) {
+            throw new Error(result?.message || "Submit failed");
+          }
           finalCaptureId = result.captureId ?? finalCaptureId;
         } catch (err) {
           failedProblemRows.push(subRows[0]);
@@ -176,6 +225,9 @@ export async function executeSummarySubmit({
 
       try {
         const result = await submitBatch({ ...batchData, summaryRows: subRows }, finalCaptureId, batchNumber, total);
+        if (!result?.success) {
+          throw new Error(result?.message || "Submit failed");
+        }
         finalCaptureId = result.captureId ?? finalCaptureId;
         return;
       } catch {
@@ -195,6 +247,12 @@ export async function executeSummarySubmit({
 
     try {
       const result = await submitBatch(batchData, finalCaptureId, batchNumber, totalBatches);
+      if (!result?.success) {
+        return {
+          ok: false,
+          message: result?.message || `Submission failed (batch ${batchNumber}/${totalBatches})`,
+        };
+      }
       finalCaptureId = result.captureId ?? finalCaptureId;
       if (batchNumber < totalBatches) {
         await new Promise((resolve) => window.setTimeout(resolve, BATCH_DELAY_MS));
@@ -210,6 +268,12 @@ export async function executeSummarySubmit({
             batchNumber,
             totalBatches
           );
+          if (!result?.success) {
+            return {
+              ok: false,
+              message: result?.message || `Submission failed (batch ${batchNumber}/${totalBatches})`,
+            };
+          }
           finalCaptureId = result.captureId ?? finalCaptureId;
           if (j + halfSize < batchRows.length) {
             await new Promise((resolve) => window.setTimeout(resolve, BATCH_DELAY_MS));
@@ -238,6 +302,19 @@ export async function executeSummarySubmit({
   if (!finalCaptureId) {
     return { ok: false, message: "Submission did not return a capture ID." };
   }
+
+  if (failedProblemRows.length > 0) {
+    return {
+      ok: false,
+      message:
+        `Submission incomplete: ${failedProblemRows.length} row(s) failed to save` +
+        (finalCaptureId ? ` (Capture ID: ${finalCaptureId}). Please retry.` : "."),
+      captureId: finalCaptureId,
+      failedProblemRows,
+    };
+  }
+
+  clearSessionSubmitRequestId(submitRequestStorageKey);
 
   try {
     localStorage.setItem("capturedCaptureId", String(finalCaptureId));

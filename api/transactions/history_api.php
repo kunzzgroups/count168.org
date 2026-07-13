@@ -374,6 +374,7 @@ function formatMarkupDescription(string $description, ?string $fromCurrencyCode 
 
 /**
  * 确保 data_capture_details.rate 至少支持 8 位小数，避免历史弹窗读取时已被截断到 4 位。
+ * rate_expression：优先 migration；缺失时 historyHasRateExpressionColumn 会做一次安全 ADD COLUMN。
  */
 function ensureHistoryRatePrecision(PDO $pdo): void
 {
@@ -406,6 +407,54 @@ function ensureHistoryRatePrecision(PDO $pdo): void
         // 不阻塞主流程，仅记录日志
         error_log('history_api rate precision ensure warning: ' . $e->getMessage());
     }
+}
+
+/**
+ * Whether data_capture_details.rate_expression exists.
+ * Prefer migration 20260713; runtime ADD is a safe fallback so History can show *3 / /3.
+ */
+function historyHasRateExpressionColumn(PDO $pdo): bool
+{
+    static $cached = null;
+    if ($cached === true) {
+        return true;
+    }
+    try {
+        $st = $pdo->query("SHOW COLUMNS FROM data_capture_details LIKE 'rate_expression'");
+        if ($st && $st->fetch(PDO::FETCH_ASSOC)) {
+            $cached = true;
+            return true;
+        }
+    } catch (Throwable $e) {
+        error_log('history_api rate_expression column check: ' . $e->getMessage());
+    }
+
+    if ($cached === false) {
+        return false;
+    }
+
+    try {
+        $pdo->exec(
+            "ALTER TABLE `data_capture_details`
+             ADD COLUMN `rate_expression` VARCHAR(64) NULL DEFAULT NULL
+             COMMENT 'Original rate text e.g. *3 /3 3' AFTER `rate`"
+        );
+        error_log('history_api added data_capture_details.rate_expression (runtime fallback)');
+        $cached = true;
+        return true;
+    } catch (Throwable $e) {
+        error_log('history_api rate_expression ensure warning: ' . $e->getMessage());
+        $cached = false;
+        return false;
+    }
+}
+
+/** SELECT fragment for rate_expression — NULL alias when column missing. */
+function historyRateExpressionSelectSql(PDO $pdo): string
+{
+    return historyHasRateExpressionColumn($pdo)
+        ? 'dcd.rate_expression'
+        : 'NULL AS rate_expression';
 }
 
 function historyResolveCompanyOwnerCode(PDO $pdo, int $companyId): string
@@ -1443,6 +1492,7 @@ try {
                         dcd.formula,
                         dcd.currency_id,
                         dcd.rate,
+                        " . historyRateExpressionSelectSql($pdo) . ",
                         c.code as currency_code,
                         COALESCE(u.login_id, o.owner_code) as capture_created_by,
                         a_cm.name as card_owner_name
@@ -1893,9 +1943,12 @@ try {
             $descriptionText = trim($fallbackName) . ' : ' . ($formula !== '' ? $formula : '0');
         }
 
-        // Rate: 从 data_capture_details 中获取 rate 值（最多显示 8 位小数，去掉尾随 0）
+        // Rate: prefer rate_expression (*3 / /3 / 3); fall back to numeric rate
         $rate = null;
-        if (isset($capture['rate']) && $capture['rate'] !== null && $capture['rate'] !== '') {
+        $rateExpression = isset($capture['rate_expression']) ? trim((string) $capture['rate_expression']) : '';
+        if ($rateExpression !== '') {
+            $rate = $rateExpression;
+        } elseif (isset($capture['rate']) && $capture['rate'] !== null && $capture['rate'] !== '') {
             // 与 Data Summary 保持一致：保留有效小数，不强制补 0；但小数位最多 8 位
             $rate = money_out($capture['rate'], 8);
             if ($rate === '') {

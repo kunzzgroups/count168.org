@@ -33,12 +33,12 @@ if ($scope['mode'] === 'none') {
 }
 
 $moduleMap = [
-    'accounts' => 'Accounts',
-    'transactions' => 'Transactions',
-    'ownership' => 'Ownership',
-    'data_capture' => 'Data Capture',
-    'bankprocess' => 'Bank Process',
-    'maintenance' => 'Maintenance',
+    'accounts' => 'Account · 账号',
+    'transactions' => 'Transaction · 交易',
+    'ownership' => 'Ownership · 股权',
+    'data_capture' => 'Data Capture · 数据采集',
+    'bankprocess' => 'Bank / Process · 银行/流程',
+    'maintenance' => 'Formula / Announcement · 公式/公告',
 ];
 
 $moduleToTables = [
@@ -199,7 +199,12 @@ foreach ($rows as $r) {
             ? json_encode($decodedPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
             : (string) $payload;
     }
-    $companyShow = $r['company_code'] ?? ($r['company_id'] ?? '');
+    $companyShow = deleted_log_display_company(
+        (string) ($r['company_code'] ?? ''),
+        (string) ($r['company_id'] ?? ''),
+        $tbl,
+        $decodedPayload
+    );
     $accShow = deleted_log_display_acc_id($tbl, $decodedPayload, $accountIdResolveMap);
     $summary = deleted_log_display_summary($tbl, (string) ($r['page'] ?? ''), $decodedPayload, $accShow);
     if ($act === 'RESTORE') {

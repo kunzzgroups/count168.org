@@ -374,7 +374,8 @@ CREATE TABLE `data_captures` (
   `created_at` timestamp NULL DEFAULT current_timestamp(),
   `created_by` int(11) DEFAULT NULL,
   `user_type` enum('user','owner') NOT NULL DEFAULT 'user',
-  `remark` text DEFAULT NULL
+  `remark` text DEFAULT NULL,
+  `submit_request_id` varchar(64) DEFAULT NULL COMMENT 'Client submit idempotency key (UUID)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- Table structure for table `data_captures_backup`
 --
@@ -435,6 +436,7 @@ CREATE TABLE `data_capture_details` (
   `formula` text DEFAULT NULL,
   `processed_amount` decimal(25,8) DEFAULT NULL,
   `rate` decimal(25,8) DEFAULT NULL,
+  `rate_expression` varchar(64) DEFAULT NULL COMMENT 'Original rate text e.g. *3 /3 3',
   `display_order` int(11) DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -1571,7 +1573,9 @@ ALTER TABLE `data_captures`
   ADD KEY `idx_currency` (`currency_id`),
   ADD KEY `idx_capture_date` (`capture_date`),
   ADD KEY `idx_user_type_created_by` (`user_type`,`created_by`),
-  ADD KEY `idx_company_id` (`company_id`);
+  ADD KEY `idx_company_id` (`company_id`),
+  ADD UNIQUE KEY `uk_dc_submit_request` (`scope_type`,`scope_id`,`process_id`,`capture_date`,`currency_id`,`submit_request_id`),
+  ADD UNIQUE KEY `uk_dc_submit_request_company` (`company_id`,`process_id`,`capture_date`,`currency_id`,`submit_request_id`);
 
 --
 -- Indexes for table `data_captures_backup`

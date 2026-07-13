@@ -26,6 +26,10 @@ export function mergeRemoveWordChips(...lists) {
   return parseRemoveWordChips(lists.flat().join(";"));
 }
 
+export function resolveSubmittedRemoveWordChips(value, draft) {
+  return serializeRemoveWordChips(mergeRemoveWordChips(value, draft));
+}
+
 function storageKey(scopeCompanyId, processId) {
   const company = scopeCompanyId != null && Number(scopeCompanyId) > 0 ? Number(scopeCompanyId) : 0;
   const process = processId != null ? String(processId).trim() : "";

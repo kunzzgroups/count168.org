@@ -74,6 +74,147 @@ function summaryApiHasDisplayOrder(PDO $pdo): bool
     return $v;
 }
 
+function summaryApiHasRateExpression(PDO $pdo): bool
+{
+    static $confirmed = false;
+    if ($confirmed) {
+        return true;
+    }
+    try {
+        $st = $pdo->query("SHOW COLUMNS FROM data_capture_details LIKE 'rate_expression'");
+        if ($st && $st->fetch(PDO::FETCH_ASSOC) !== false) {
+            $confirmed = true;
+            return true;
+        }
+    } catch (Throwable $e) {
+        /* keep false */
+    }
+    return false;
+}
+
+function summaryApiHasSubmitRequestId(PDO $pdo): bool
+{
+    static $confirmed = false;
+    if ($confirmed) {
+        return true;
+    }
+    try {
+        $st = $pdo->query("SHOW COLUMNS FROM data_captures LIKE 'submit_request_id'");
+        if ($st && $st->fetch(PDO::FETCH_ASSOC) !== false) {
+            $confirmed = true;
+            return true;
+        }
+    } catch (Throwable $e) {
+        /* keep false */
+    }
+    return false;
+}
+
+/**
+ * Ensure submit correctness columns exist.
+ * Prefer migration 20260713_... in ops; runtime ADD COLUMN is a safe fallback
+ * (same pattern as display_order) so live does not silently drop *3 / /3.
+ * Unique indexes stay migration-only (avoid runtime table locks).
+ */
+function ensureSummarySubmitCorrectnessSchema(PDO $pdo): void
+{
+    static $checked = false;
+    if ($checked) {
+        return;
+    }
+    $checked = true;
+
+    if (!summaryApiHasSubmitRequestId($pdo)) {
+        try {
+            $pdo->exec(
+                "ALTER TABLE `data_captures`
+                 ADD COLUMN `submit_request_id` VARCHAR(64) NULL DEFAULT NULL
+                 COMMENT 'Client submit idempotency key (UUID)' AFTER `remark`"
+            );
+            error_log('Added data_captures.submit_request_id (runtime fallback; prefer migration 20260713)');
+        } catch (Throwable $e) {
+            error_log(
+                'Submit schema warning: data_captures.submit_request_id missing — '
+                . 'run migration 20260713_data_capture_submit_idempotency_and_rate_expression.sql — '
+                . $e->getMessage()
+            );
+        }
+    }
+
+    if (!summaryApiHasRateExpression($pdo)) {
+        try {
+            $pdo->exec(
+                "ALTER TABLE `data_capture_details`
+                 ADD COLUMN `rate_expression` VARCHAR(64) NULL DEFAULT NULL
+                 COMMENT 'Original rate text e.g. *3 /3 3' AFTER `rate`"
+            );
+            error_log('Added data_capture_details.rate_expression (runtime fallback; prefer migration 20260713)');
+        } catch (Throwable $e) {
+            error_log(
+                'Submit schema warning: data_capture_details.rate_expression missing — '
+                . 'run migration 20260713_data_capture_submit_idempotency_and_rate_expression.sql — '
+                . $e->getMessage()
+            );
+        }
+    }
+}
+
+/**
+ * Parse frontend rateValue ("*3", "/3", "3") into numeric rate + preserved expression.
+ * processed_amount is NOT computed here — frontend already sent the final amount.
+ *
+ * @return array{rate: ?float, expression: ?string}
+ */
+function parseSubmitRateValue($raw): array
+{
+    if ($raw === null || $raw === '') {
+        return ['rate' => null, 'expression' => null];
+    }
+    $expression = trim((string) $raw);
+    if ($expression === '') {
+        return ['rate' => null, 'expression' => null];
+    }
+
+    if (strpos($expression, '*') === 0) {
+        $numStr = substr($expression, 1);
+    } elseif (strpos($expression, '/') === 0) {
+        $numStr = substr($expression, 1);
+    } else {
+        $numStr = $expression;
+    }
+
+    if ($numStr === '' || !is_numeric($numStr)) {
+        return ['rate' => null, 'expression' => $expression];
+    }
+
+    return [
+        'rate' => (float) $numStr,
+        'expression' => $expression,
+    ];
+}
+
+/**
+ * Prefer rate_expression for UI restore; fall back to numeric rate string.
+ */
+function resolveStoredRateForDisplay($rate, $rateExpression = null): ?string
+{
+    $expr = $rateExpression !== null ? trim((string) $rateExpression) : '';
+    if ($expr !== '') {
+        return $expr;
+    }
+    if ($rate === null || $rate === '') {
+        return null;
+    }
+    $rateStr = trim((string) $rate);
+    if ($rateStr === '') {
+        return null;
+    }
+    if (strpos($rateStr, '*') === 0 || strpos($rateStr, '/') === 0) {
+        return $rateStr;
+    }
+    return $rateStr;
+}
+
 function ensureTemplateSchema(PDO $pdo) {
     static $checked = false;
     if ($checked) {
@@ -1368,9 +1509,17 @@ function baseIdProductForKeyNormalized($text) {
  * 修复：data_capture_details 有该账目但 data_capture_templates 没有时，仍能在 Summary 中显示。
  */
 function mergeDetailOnlyTemplates(PDO $pdo, int $companyId, int $captureId, array $ids, array $templates) {
+    ensureSummarySubmitCorrectnessSchema($pdo);
     $hasDisplayOrder = summaryApiHasDisplayOrder($pdo); // static 缓存，不重复 SHOW
+    $hasRateExpression = summaryApiHasRateExpression($pdo);
     $orderBy = $hasDisplayOrder ? "ORDER BY COALESCE(display_order, 999), id" : "ORDER BY id";
-    $cols = $hasDisplayOrder ? "id_product_main, id_product_sub, product_type, account_id, display_order, rate" : "id_product_main, id_product_sub, product_type, account_id, rate";
+    $cols = "id_product_main, id_product_sub, product_type, account_id, rate";
+    if ($hasRateExpression) {
+        $cols .= ", rate_expression";
+    }
+    if ($hasDisplayOrder) {
+        $cols .= ", display_order";
+    }
     $detailStmt = $pdo->prepare("
         SELECT $cols
         FROM data_capture_details
@@ -1414,7 +1563,10 @@ function mergeDetailOnlyTemplates(PDO $pdo, int $companyId, int $captureId, arra
             'id_product' => $idForKey,
             'account_id' => $accountId,
             'display_order' => $displayOrder,
-            'rate' => isset($row['rate']) && $row['rate'] !== null && $row['rate'] !== '' ? (string)$row['rate'] : null,
+            'rate' => resolveStoredRateForDisplay(
+                $row['rate'] ?? null,
+                $hasRateExpression ? ($row['rate_expression'] ?? null) : null
+            ),
         ];
         $detailIndex++;
     }

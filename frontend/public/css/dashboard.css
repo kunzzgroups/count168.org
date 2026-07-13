@@ -3324,8 +3324,3 @@ body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-pan
     padding: 6px 12px;
     font-size: clamp(12px, 0.85vw, 14px);
 }
-
-body.dashboard-home-page .dashboard-panels-row--with-summary-tabs .dashboard-panel-chart-body {
-    flex: 1 1 0;
-    min-height: clamp(100px, 14vh, 180px);
-}

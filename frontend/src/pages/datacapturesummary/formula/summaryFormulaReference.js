@@ -642,6 +642,23 @@ export function normalizeFormulaAfterReferenceExpand(expr) {
     return String(expr || '').trim();
 }
 
+/**
+ * Resolve a `$N` reference against the current editing row by column number,
+ * independent of whether the captured row exposes an alphabetic row label.
+ * Primary path reads the data column directly; row-label lookup is a fallback.
+ */
+function resolveCurrentRowDollarValue(processValue, columnNumber, rowIndexOverride = null) {
+    if (!processValue || !(columnNumber > 0)) return null;
+    const dataColumnIndex = columnNumber - 1;
+    const direct = getCellValueByIdProductAndColumn(processValue, dataColumnIndex, null, rowIndexOverride);
+    if (direct !== null) return direct;
+    const rowLabel = getRowLabelFromProcessValue(processValue, rowIndexOverride);
+    if (rowLabel) {
+        return getColumnValueFromCellReference(rowLabel + columnNumber, processValue, rowIndexOverride);
+    }
+    return null;
+}
+
 export function parseReferenceFormula(formula, processValueOverride = null, clickedCellRefsOverride = undefined, rowIndexOverride = null) {
     try {
         if (!formula || formula.trim() === '') {
@@ -795,13 +812,9 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                         }
                     }
 
-                    // 如果从引用中找不到值，回退到使用当前编辑的 id_product
+                    // 如果从引用中找不到值，回退到按当前编辑行的列号直接取值（不依赖行标签）
                     if (columnValue === null) {
-                        const rowLabel = getRowLabelFromProcessValue(processValue, rowIndexOverride);
-                        if (rowLabel) {
-                            const columnReference = rowLabel + dollarMatch.columnNumber;
-                            columnValue = getColumnValueFromCellReference(columnReference, processValue, rowIndexOverride);
-                        }
+                        columnValue = resolveCurrentRowDollarValue(processValue, dollarMatch.columnNumber, rowIndexOverride);
                     }
 
                     if (columnValue !== null) {
@@ -830,39 +843,35 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
                     }
                 }
             } else {
-                // 如果没有 data-clicked-cell-refs，使用原来的逻辑
-                const rowLabel = getRowLabelFromProcessValue(processValue, rowIndexOverride);
-                if (rowLabel) {
-                    for (let i = 0; i < dollarMatches.length; i++) {
-                        const dollarMatch = dollarMatches[i];
-                        // Convert $数字 to cell reference (e.g., $2 -> A2)
-                        const columnReference = rowLabel + dollarMatch.columnNumber;
-                        const columnValue = getColumnValueFromCellReference(columnReference, processValue, rowIndexOverride);
+                // 无 data-clicked-cell-refs（例如用户手动输入 $6）：按当前编辑行的列号直接取值，
+                // 不再依赖行标签存在，否则捕获行没有 A/B/C 行标签时 $数字 无法解析。
+                for (let i = 0; i < dollarMatches.length; i++) {
+                    const dollarMatch = dollarMatches[i];
+                    const columnValue = resolveCurrentRowDollarValue(processValue, dollarMatch.columnNumber, rowIndexOverride);
 
-                        if (columnValue !== null) {
-                            // Replace $数字 with actual value
-                            // IMPORTANT: If value is negative, wrap it in parentheses to avoid syntax errors like -5861.14--1416.03
-                            // 重要：如果值是负数，用括号包裹，避免出现 -5861.14--1416.03 这样的语法错误
-                            let replacementValue = String(columnValue);
-                            const numericValue = parseFloat(columnValue);
-                            if (!isNaN(numericValue) && numericValue < 0) {
-                                // Check if the character before $数字 is an operator or at the start
-                                const charBefore = dollarMatch.index > 0 ? parsedFormula[dollarMatch.index - 1] : '';
-                                const needsParentheses = dollarMatch.index === 0 || /[+\-*/)(\s]/.test(charBefore);
-                                if (needsParentheses) {
-                                    replacementValue = `(${columnValue})`;
-                                }
+                    if (columnValue !== null) {
+                        // Replace $数字 with actual value
+                        // IMPORTANT: If value is negative, wrap it in parentheses to avoid syntax errors like -5861.14--1416.03
+                        // 重要：如果值是负数，用括号包裹，避免出现 -5861.14--1416.03 这样的语法错误
+                        let replacementValue = String(columnValue);
+                        const numericValue = parseFloat(columnValue);
+                        if (!isNaN(numericValue) && numericValue < 0) {
+                            // Check if the character before $数字 is an operator or at the start
+                            const charBefore = dollarMatch.index > 0 ? parsedFormula[dollarMatch.index - 1] : '';
+                            const needsParentheses = dollarMatch.index === 0 || /[+\-*/)(\s]/.test(charBefore);
+                            if (needsParentheses) {
+                                replacementValue = `(${columnValue})`;
                             }
-                            parsedFormula = parsedFormula.substring(0, dollarMatch.index) +
-                                replacementValue +
-                                parsedFormula.substring(dollarMatch.index + dollarMatch.fullMatch.length);
-                        } else {
-                            // If value not found, replace with 0
-                            console.warn(`Cell value not found for $${dollarMatch.columnNumber} (${columnReference})`);
-                            parsedFormula = parsedFormula.substring(0, dollarMatch.index) +
-                                '0' +
-                                parsedFormula.substring(dollarMatch.index + dollarMatch.fullMatch.length);
                         }
+                        parsedFormula = parsedFormula.substring(0, dollarMatch.index) +
+                            replacementValue +
+                            parsedFormula.substring(dollarMatch.index + dollarMatch.fullMatch.length);
+                    } else {
+                        // If value not found, replace with 0
+                        console.warn(`Cell value not found for $${dollarMatch.columnNumber}`);
+                        parsedFormula = parsedFormula.substring(0, dollarMatch.index) +
+                            '0' +
+                            parsedFormula.substring(dollarMatch.index + dollarMatch.fullMatch.length);
                     }
                 }
             }

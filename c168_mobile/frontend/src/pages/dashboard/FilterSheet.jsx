@@ -33,12 +33,12 @@ export default function FilterSheet({ open, onClose, dash }) {
   const { i18n } = dash;
 
   const handleReset = () => {
-    dash.applyPreset("thisMonth");
+    dash.resetFilters();
   };
 
   return (
     <div
-      className={`absolute inset-0 z-50 transition-opacity duration-300 ${
+      className={`absolute inset-0 z-[60] transition-opacity duration-300 ${
         open ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
       aria-hidden={!open}
@@ -76,10 +76,9 @@ export default function FilterSheet({ open, onClose, dash }) {
 
         <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-4">
           <Section title={i18n.dateRange}>
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
+            <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
               <i className="fas fa-calendar-alt text-slate-400" aria-hidden="true" />
               <span className="flex-1 text-[14px] font-semibold text-slate-700">{dash.dateRangeText}</span>
-              <i className="fas fa-chevron-down text-[11px] text-slate-400" aria-hidden="true" />
             </div>
           </Section>
 

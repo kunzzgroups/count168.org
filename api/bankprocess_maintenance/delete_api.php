@@ -11,6 +11,7 @@ header('Content-Type: application/json');
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/maintenance_accounting_resend_lib.php';
 require_once __DIR__ . '/../includes/payment_delete_shared.php';
+require_once __DIR__ . '/../deleted_log/deleted_log.php';
 
 /**
  * 标准 JSON 响应：success, message, data
@@ -286,6 +287,18 @@ try {
     }
 
     $pdo->beginTransaction();
+
+    $userTag = (string) ($_SESSION['login_id'] ?? $_SESSION['name'] ?? $_SESSION['username'] ?? '');
+    $pageTag = '/api/bankprocess_maintenance/delete_api.php';
+    $cidLog = (string) $company_id;
+    foreach ($allowedIds as $tid) {
+        $entryListStmt = $pdo->prepare('SELECT id FROM transaction_entry WHERE header_id = ?');
+        $entryListStmt->execute([(int) $tid]);
+        while ($eid = $entryListStmt->fetchColumn()) {
+            deletedLog($pdo, $userTag, $pageTag, 'transaction_entry', (string) $eid, 'DELETE', null, $cidLog);
+        }
+        deletedLog($pdo, $userTag, $pageTag, 'transactions', (string) $tid, 'DELETE', null, $cidLog);
+    }
 
     bmp_recordResendPendingForTransactionIds($pdo, $company_id, $allowedIds);
     $manualInactiveSync = clearManualInactiveMarkersAfterDelete($pdo, $allowedIds, $company_id);

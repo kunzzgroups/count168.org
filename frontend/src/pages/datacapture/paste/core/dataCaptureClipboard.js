@@ -1,7 +1,5 @@
 /** Read clipboard payloads from a paste event; HTML table detect/parse helpers. */
 
-import { clipboardHtmlLooksLikeGrid } from "./dataCaptureFormatClipboardNormalize.js";
-
 export function resolvePasteCell(target) {
   if (!target) return null;
   return target.nodeType === Node.TEXT_NODE ? target.parentElement : target;
@@ -33,7 +31,6 @@ export function clipboardLooksLikeGridPaste(clipboard) {
   try {
     const html = clipboard.getData?.("text/html") || "";
     if (html && /<table\b/i.test(html)) return true;
-    if (html && clipboardHtmlLooksLikeGrid(html)) return true;
   } catch {
     /* ignore */
   }
@@ -154,19 +151,8 @@ export function isFormatRichHtmlTable(html) {
 }
 
 /** UI chrome copied from external sites (action buttons, icons) — not cell data. */
-const PASTED_INTERACTIVE_UI_SELECTOR = [
-  "button",
-  "input",
-  "select",
-  "textarea",
-  "svg",
-  "img",
-  "i",
-  "mat-icon",
-  "[role='button']",
-  "[aria-label]",
-  "a[href]",
-].join(", ");
+const PASTED_INTERACTIVE_UI_SELECTOR =
+  "button, input, select, textarea, svg, img, [role='button']";
 
 /**
  * Remove interactive UI elements from pasted HTML while keeping text/formatting tags.
@@ -179,8 +165,7 @@ export function stripInteractiveUiFromHtml(html) {
     div.innerHTML = html;
     div.querySelectorAll(PASTED_INTERACTIVE_UI_SELECTOR).forEach((el) => {
       const text = (el.textContent || "").trim();
-      // Keep meaningful link/button labels; drop icon-only chrome.
-      if (text && text.length > 1 && !/^[-−–—+×xX]$/.test(text)) {
+      if (text) {
         el.replaceWith(document.createTextNode(text));
       } else {
         el.remove();
@@ -205,14 +190,14 @@ export function plainTextFromSanitizedHtml(html) {
   }
 }
 
-export function sanitizePastedCellHtml(cellContent, { stripInteractive = true } = {}) {
+export function sanitizePastedCellHtml(cellContent) {
   if (!cellContent) return "";
   const stripped = cellContent
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
     .replace(/javascript:/gi, "")
     .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
-  return stripInteractive ? stripInteractiveUiFromHtml(stripped) : stripped;
+  return stripInteractiveUiFromHtml(stripped);
 }
 
 /** Reorder columns when No./User appear at the end (common Excel copy quirk). */
@@ -262,16 +247,7 @@ export function detectColumnReorder(allRows) {
 
 function countRowCols(row) {
   if (!row) return 0;
-  // Prefer direct cells — nested td/th inside a crushed cell must not inflate width.
-  const direct = Array.from(row.children || []).filter((el) => {
-    const tag = (el.tagName || "").toUpperCase();
-    return tag === "TD" || tag === "TH";
-  });
-  const cells = direct.length ? direct : Array.from(row.querySelectorAll("td, th"));
-  if (cells.length <= 1) {
-    // A lone TD with colspan=N is still one crushed clipboard cell until expanded.
-    return cells.length;
-  }
+  const cells = row.querySelectorAll("td, th");
   let c = 0;
   cells.forEach((cell) => {
     c += Number.parseInt(cell.getAttribute("colspan") || "1", 10);

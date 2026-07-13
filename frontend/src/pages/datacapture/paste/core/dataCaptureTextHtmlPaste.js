@@ -6,12 +6,6 @@ import {
   sanitizePastedCellHtml,
 } from "./dataCaptureClipboard.js";
 import { buildFormatDataCellStyle } from "./dataCaptureFormatHtmlMatrix.js";
-import { expandCollapsedTableRows } from "./dataCaptureFormatClipboardNormalize.js";
-
-function expandAllTablesInRoot(root) {
-  if (!root) return;
-  root.querySelectorAll("table").forEach((table) => expandCollapsedTableRows(table));
-}
 
 function emptyPatch() {
   return { value: "" };
@@ -31,17 +25,13 @@ function getPlainPastedCellValue(sourceCell) {
   return text;
 }
 
-/** @param {{ includeFormatStyle?: boolean }} [options] */
 function patchFromSourceCell(sourceCell, { includeFormatStyle = false } = {}) {
   let cellContent = sourceCell.innerHTML;
   if (!cellContent || cellContent.trim() === "") {
     cellContent = sourceCell.textContent || "";
   }
 
-  const cleanContent = sanitizePastedCellHtml(cellContent, {
-    // Format-preserving paste keeps report UI chrome; Reset clears it from the grid.
-    stripInteractive: !includeFormatStyle,
-  });
+  const cleanContent = sanitizePastedCellHtml(cellContent);
   const rawText = plainTextFromSanitizedHtml(cleanContent) || getPlainPastedCellValue(sourceCell);
   const cellText = isBlankPastedCellText(rawText) ? "" : rawText;
   const styleCssText = includeFormatStyle ? buildFormatDataCellStyle(sourceCell) : "";
@@ -55,97 +45,6 @@ function patchFromSourceCell(sourceCell, { includeFormatStyle = false } = {}) {
   }
   return {
     value: cellText,
-    ...(styleCssText ? { styleCssText } : {}),
-  };
-}
-
-function extractCellLinesForTextMode(sourceCell) {
-  const cellHtml = sourceCell.innerHTML || "";
-  const cellText = (sourceCell.textContent || sourceCell.innerText || "").trim();
-
-  const hasBrTag = /<br\s*\/?>/i.test(cellHtml) || /<br\s+[^>]*>/i.test(cellHtml);
-  const hasNewline = cellText.includes("\n") || cellText.includes("\r\n") || cellText.includes("\r");
-
-  if (hasBrTag) {
-    const markerHtml = cellHtml
-      .replace(/<br\s+[^>]*>/gi, "|||TEXT_SPLIT|||")
-      .replace(/<br\s*\/?>/gi, "|||TEXT_SPLIT|||");
-    const markerDiv = document.createElement("div");
-    markerDiv.innerHTML = markerHtml;
-    const textWithMarker = markerDiv.textContent || markerDiv.innerText || "";
-    return textWithMarker
-      .split("|||TEXT_SPLIT|||")
-      .map((part) => part.trim())
-      .filter((part) => part !== "");
-  }
-
-  if (hasNewline) {
-    return cellText
-      .split(/\r?\n|\r/)
-      .map((part) => part.trim())
-      .filter((part) => part !== "");
-  }
-
-  const directChildren = Array.from(sourceCell.childNodes || []);
-  const directSpans = directChildren.filter(
-    (node) => node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN",
-  );
-  const hasOnlySpanChildren = directChildren.every((node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return !String(node.textContent || "").trim();
-    }
-    return node.nodeType === Node.ELEMENT_NODE && node.tagName === "SPAN";
-  });
-  const spansAreBlockLike =
-    directSpans.length >= 2 &&
-    directSpans.every((span) => {
-      const styleAttr = String(span.getAttribute("style") || "").toLowerCase();
-      return /\bdisplay\s*:\s*(block|table|flex|grid|list-item)\b/.test(styleAttr);
-    });
-
-  if (hasOnlySpanChildren && spansAreBlockLike) {
-    const parts = directSpans
-      .map((span) => (span.textContent || "").trim())
-      .filter((part) => part !== "");
-    if (parts.length >= 2) return [parts[0], parts[1]];
-  }
-
-  return [];
-}
-
-function detectVerticalSplitForTextMode(sourceCells) {
-  let hasVerticalSplit = false;
-  const cellsWithSplit = [];
-
-  sourceCells.forEach((sourceCell, cellIndex) => {
-    const lines = extractCellLinesForTextMode(sourceCell);
-    if (lines.length >= 2) {
-      hasVerticalSplit = true;
-      cellsWithSplit.push({
-        index: cellIndex,
-        topData: lines[0],
-        bottomData: lines[1],
-      });
-    }
-  });
-
-  const firstCellSplit = cellsWithSplit.some((entry) => entry.index === 0);
-  return {
-    shouldSplit: hasVerticalSplit && firstCellSplit && cellsWithSplit.length > 0,
-    cellsWithSplit,
-  };
-}
-
-function extractPlainTextValue(sourceCell) {
-  return (sourceCell.textContent || sourceCell.innerText || "").trim();
-}
-
-function buildDisplayTextPatch(sourceCell, displayText, { includeFormatStyle = false } = {}) {
-  const normalized = isBlankPastedCellText(displayText) ? "" : String(displayText ?? "").trim();
-  if (normalized === "") return emptyPatch();
-  const styleCssText = includeFormatStyle ? buildFormatDataCellStyle(sourceCell) : "";
-  return {
-    value: normalized,
     ...(styleCssText ? { styleCssText } : {}),
   };
 }
@@ -170,9 +69,8 @@ function buildRowPatches(sourceRow, maxCols, columnOrder) {
 
 function buildRowPatchesWithSpanOccupancy(sourceRows, maxCols) {
   const pendingRowspanCols = Array.from({ length: maxCols }, () => 0);
-  const matrix = [];
 
-  const buildOneOutputRow = (sourceCells, lineSelector = null) => {
+  return sourceRows.map((sourceRow) => {
     const row = Array.from({ length: maxCols }, () => emptyPatch());
     const occupiedFromPreviousRowspan = pendingRowspanCols.map((n) => n > 0);
     const occupiedCols = [...occupiedFromPreviousRowspan];
@@ -181,19 +79,16 @@ function buildRowPatchesWithSpanOccupancy(sourceRows, maxCols) {
       if (occupied) row[colIndex] = emptyPatch();
     });
 
+    const sourceCells = Array.from(sourceRow.querySelectorAll("td, th"));
     let nextCol = 0;
 
-    sourceCells.forEach((sourceCell, cellIndex) => {
+    sourceCells.forEach((sourceCell) => {
       while (nextCol < maxCols && occupiedCols[nextCol]) nextCol += 1;
       if (nextCol >= maxCols) return;
 
-      const colspan = 1;
+      const colspan = Math.max(1, parseInt(sourceCell.getAttribute("colspan") || "1", 10) || 1);
       const rowspan = Math.max(1, parseInt(sourceCell.getAttribute("rowspan") || "1", 10) || 1);
-      const displayText = typeof lineSelector === "function" ? lineSelector(cellIndex, sourceCell) : null;
-      const patch =
-        displayText != null
-          ? buildDisplayTextPatch(sourceCell, displayText, { includeFormatStyle: true })
-          : patchFromSourceCell(sourceCell, { includeFormatStyle: true });
+      const patch = patchFromSourceCell(sourceCell, { includeFormatStyle: true });
 
       for (let offset = 0; offset < colspan; offset += 1) {
         const targetCol = nextCol + offset;
@@ -215,33 +110,7 @@ function buildRowPatchesWithSpanOccupancy(sourceRows, maxCols) {
     });
 
     return row;
-  };
-
-  sourceRows.forEach((sourceRow) => {
-    const sourceCells = Array.from(sourceRow.querySelectorAll("td, th"));
-    const splitInfo = detectVerticalSplitForTextMode(sourceCells);
-
-    if (!splitInfo.shouldSplit) {
-      matrix.push(buildOneOutputRow(sourceCells));
-      return;
-    }
-
-    const topRow = buildOneOutputRow(sourceCells, (cellIndex, sourceCell) => {
-      const split = splitInfo.cellsWithSplit.find((entry) => entry.index === cellIndex);
-      if (split) return split.topData;
-      return extractPlainTextValue(sourceCell);
-    });
-    matrix.push(topRow);
-
-    const bottomRow = buildOneOutputRow(sourceCells, (cellIndex, sourceCell) => {
-      const split = splitInfo.cellsWithSplit.find((entry) => entry.index === cellIndex);
-      if (split) return split.bottomData;
-      return extractPlainTextValue(sourceCell);
-    });
-    matrix.push(bottomRow);
   });
-
-  return matrix;
 }
 
 /**
@@ -256,8 +125,6 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
     const table = tempDiv.querySelector("table");
     if (!table) return false;
 
-    expandAllTablesInRoot(tempDiv);
-
     // Collect rows across every top-level table: some reports split the data
     // rows and the TOTAL footer row into separate sibling tables, so reading
     // only the first table would drop the TOTAL row (matches the PHP site).
@@ -265,11 +132,6 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
     if (!measured) return false;
 
     const { allRows, maxCols } = measured;
-    if (maxCols < 2) {
-      console.log(`1.Text: rejecting collapsed HTML table (maxCols=${maxCols})`);
-      return false;
-    }
-
     const dataMatrix = allRows.map((sourceRow) => buildRowPatches(sourceRow, maxCols, null));
 
     const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
@@ -294,8 +156,7 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
 }
 
 /**
- * 1.Text format-merge mode: preserve text + style (like 2.Format) and expand rowspan occupancy.
- * Restored styleCssText path from commit 031fce3d0 (240), later dropped in fe4c5b564 (241).
+ * 1.Text format-merge mode: preserve text + style and expand rowspan occupancy.
  */
 export function parseAndFillHtmlTableForTextWithFormat(htmlString, anchorCell) {
   try {
@@ -305,17 +166,10 @@ export function parseAndFillHtmlTableForTextWithFormat(htmlString, anchorCell) {
     const table = tempDiv.querySelector("table");
     if (!table) return false;
 
-    expandAllTablesInRoot(tempDiv);
-
     const measured = measureTopLevelTables(tempDiv);
     if (!measured) return false;
 
     const { allRows, maxCols } = measured;
-    if (maxCols < 2) {
-      console.log(`1.Text format-merge: rejecting collapsed HTML table (maxCols=${maxCols})`);
-      return false;
-    }
-
     const dataMatrix = buildRowPatchesWithSpanOccupancy(allRows, maxCols);
 
     const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {

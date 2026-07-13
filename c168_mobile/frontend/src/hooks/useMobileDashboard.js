@@ -16,22 +16,13 @@ import {
   resolveViewGroupForCompany,
   sortedUniqueGroupIds,
 } from "../lib/dashboardScope.js";
+import { fetchMobileCurrencyCodes } from "../lib/dashboardCurrencies.js";
 import { computeDisplayConvertedAmount, fetchFrankfurterRates } from "../lib/frankfurterRates.js";
 import { DEMO_BOOTSTRAP, dashboardDataIsUsable } from "../lib/demoDashboard.js";
 import { DASHBOARD_I18N } from "../translateFile/dashboardTranslate.js";
 import { canAccessDashboard, resolveMobileLandingPath } from "../utils/mobilePermissions.js";
 
 const COMPANIES_API = "api/transactions/get_owner_companies_api.php";
-
-function extractCurrencyCodes(bootstrapData, fallback = "MYR") {
-  const rows = bootstrapData?.earnings?.current;
-  if (Array.isArray(rows) && rows.length) {
-    return rows.map((r) => String(r.code || "").trim().toUpperCase()).filter(Boolean);
-  }
-  const cur = bootstrapData?.current?.currency || bootstrapData?.current?.settlement_currency;
-  if (cur) return [String(cur).trim().toUpperCase()];
-  return [fallback];
-}
 
 function sameStringList(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
@@ -173,8 +164,35 @@ export function useMobileDashboard() {
     };
   }, [navigate, i18n.loadError]);
 
+  // Load currency pills from company Currency Setting (same source as desktop).
   useEffect(() => {
-    if (!companies.length) return undefined;
+    if (!companies.length || !companyId) return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        const codes = await fetchMobileCurrencyCodes({
+          companyId,
+          selectedGroup,
+          groupAllMode,
+          groupsAllMode,
+          companies,
+        });
+        if (cancelled) return;
+        setCurrencies((prev) => (sameStringList(prev, codes) ? prev : codes));
+        setCurrency((prev) => (codes.includes(prev) ? prev : codes[0] || "MYR"));
+      } catch {
+        if (!cancelled) {
+          setCurrencies((prev) => (prev.length ? prev : ["MYR"]));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [companies, companyId, selectedGroup, groupAllMode, groupsAllMode]);
+
+  useEffect(() => {
+    if (!companies.length || !companyId) return undefined;
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -195,11 +213,11 @@ export function useMobileDashboard() {
         const finalData =
           import.meta.env.DEV && !dashboardDataIsUsable(data) ? DEMO_BOOTSTRAP : data;
         setBootstrap(finalData);
-        const codes = extractCurrencyCodes(finalData, currency);
-        if (!sameStringList(currencies, codes)) setCurrencies(codes);
-        if (!codes.includes(currency)) setCurrency(codes[0] || "MYR");
       } catch (e) {
-        if (!cancelled) setError(e?.message || i18n.loadError);
+        if (!cancelled) {
+          setBootstrap(null);
+          setError(e?.message || i18n.loadError);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -254,6 +272,7 @@ export function useMobileDashboard() {
     const metrics = computeKpiMetrics(current);
     if (!metrics) return null;
     const prevMetrics = computeKpiMetrics(previous);
+    const canCompareEarnings = Boolean(metrics.showEarnings && prevMetrics?.showEarnings);
     return {
       ...metrics,
       comparisons: prevMetrics
@@ -261,11 +280,25 @@ export function useMobileDashboard() {
             profit: buildKpiCompare(metrics.profit, prevMetrics.profit),
             expenses: buildKpiCompare(metrics.expenses, prevMetrics.expenses),
             netProfit: buildKpiCompare(metrics.netProfit, prevMetrics.netProfit),
-            earnings: buildKpiCompare(metrics.kpiCardEarnings, prevMetrics.kpiCardEarnings),
+            earnings: canCompareEarnings
+              ? buildKpiCompare(metrics.kpiCardEarnings, prevMetrics.kpiCardEarnings)
+              : null,
           }
         : null,
     };
   }, [bootstrap]);
+
+  const compareLabel = useMemo(() => {
+    const map = {
+      today: i18n.vsYesterday,
+      yesterday: i18n.vsPreviousPeriod,
+      thisWeek: i18n.vsLastWeek,
+      thisMonth: i18n.vsLastMonth,
+      lastMonth: i18n.vsLastMonth,
+      thisYear: i18n.vsLastYear,
+    };
+    return map[activePreset] || i18n.vsPreviousPeriod;
+  }, [activePreset, i18n]);
 
   const chartRows = useMemo(
     () => buildChartRows(bootstrap?.current, dateFrom, dateTo),
@@ -324,25 +357,55 @@ export function useMobileDashboard() {
     setDateTo(range.dateTo);
   }, []);
 
+  const syncCompanySession = useCallback(
+    async (id) => {
+      const res = await fetch(buildApiUrl(`api/session/update_company_session_api.php?company_id=${id}`), {
+        credentials: "include",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.message || json?.error || i18n.loadError);
+      }
+    },
+    [i18n.loadError],
+  );
+
   const switchCompany = useCallback(
     async (nextId) => {
       const id = Number(nextId);
       if (!Number.isFinite(id) || id <= 0) return;
+      const sameCompany = Number(id) === Number(companyId);
+      // Allow re-selecting current company to exit Group "All" aggregate mode.
+      if (sameCompany && !groupAllMode && !groupsAllMode) return;
       const row = companies.find((c) => Number(c.id) === id);
-      setCompanyId(id);
-      setSelectedGroup(selectedGroup ? resolveViewGroupForCompany(row, selectedGroup) : null);
-      setGroupsAllMode(false);
-      setGroupAllMode(false);
+      setLoading(true);
+      setError("");
       try {
-        await fetch(buildApiUrl(`api/session/update_company_session_api.php?company_id=${id}`), {
-          credentials: "include",
-        });
-      } catch {
-        /* non-blocking */
+        if (!sameCompany) {
+          await syncCompanySession(id);
+        }
+        setCompanyId(id);
+        setSelectedGroup(selectedGroup ? resolveViewGroupForCompany(row, selectedGroup) : selectedGroup);
+        setGroupsAllMode(false);
+        setGroupAllMode(false);
+      } catch (e) {
+        setError(e?.message || i18n.loadError);
+        setLoading(false);
       }
     },
-    [companies, selectedGroup],
+    [companies, companyId, selectedGroup, groupAllMode, groupsAllMode, syncCompanySession, i18n.loadError],
   );
+
+  const resetFilters = useCallback(() => {
+    applyPreset("thisMonth");
+    setGroupsAllMode(false);
+    setGroupAllMode(false);
+    setSelectedGroup(null);
+    const fallback = pickCompany(companies, me?.company_id);
+    if (fallback?.id && Number(fallback.id) !== Number(companyId)) {
+      void switchCompany(Number(fallback.id));
+    }
+  }, [applyPreset, companies, me?.company_id, companyId, switchCompany]);
 
   const pickGroup = useCallback(
     (gid) => {
@@ -352,9 +415,18 @@ export function useMobileDashboard() {
       setGroupAllMode(true);
       setSelectedGroup(group);
       const first = resolveCompaniesForPicker(companies, { selectedGroup: group, groupsAllMode: false })[0];
-      if (first?.id) setCompanyId(Number(first.id));
+      const nextId = first?.id != null ? Number(first.id) : null;
+      if (!nextId || nextId === Number(companyId)) return;
+      setLoading(true);
+      setError("");
+      syncCompanySession(nextId)
+        .then(() => setCompanyId(nextId))
+        .catch((e) => {
+          setError(e?.message || i18n.loadError);
+          setLoading(false);
+        });
     },
-    [companies],
+    [companies, companyId, syncCompanySession, i18n.loadError],
   );
 
   const pickAllGroups = useCallback(() => {
@@ -411,7 +483,9 @@ export function useMobileDashboard() {
     dateRangeShort,
     activePreset,
     applyPreset,
+    resetFilters,
     kpi,
+    compareLabel,
     chartRows,
     chartSeries,
     chartVisible,

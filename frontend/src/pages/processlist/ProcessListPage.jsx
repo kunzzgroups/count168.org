@@ -56,7 +56,11 @@ import {
   warmProcessListRouteCache,
 } from "./processRoutePrefetch.js";
 import ProcessTable from "./components/ProcessTable.jsx";
-import { parseRemoveWordChips, serializeRemoveWordChips } from "../../lib/removeWordChips.js";
+import {
+  parseRemoveWordChips,
+  resolveSubmittedRemoveWordChips,
+  serializeRemoveWordChips,
+} from "../../lib/removeWordChips.js";
 import ProcessFormModal from "./components/ProcessFormModal.jsx";
 import DescriptionPickerModal from "./components/DescriptionPickerModal.jsx";
 import ProcessDeleteConfirmModal from "./components/ProcessDeleteConfirmModal.jsx";
@@ -1319,6 +1323,8 @@ export default function ProcessListPage() {
 
   const submitForm = async (event) => {
     event.preventDefault();
+    const removeWordDraft = event.currentTarget?.elements?.namedItem?.("remove_word")?.value || "";
+    const submittedRemoveWord = resolveSubmittedRemoveWordChips(form.remove_word, removeWordDraft);
     if (processMutationsBlocked) {
       notify(t("readOnlyActionBlocked"), "danger");
       return;
@@ -1352,7 +1358,7 @@ export default function ProcessListPage() {
       fd.append("selected_descriptions", JSON.stringify(names.length ? names : [form.selected_descriptions[0].name]));
       fd.append("description", form.selected_descriptions[0].name);
       fd.append("day_use", form.day_use.join(","));
-      fd.append("remove_word", form.remove_word || "");
+      fd.append("remove_word", submittedRemoveWord);
       fd.append("replace_word_from", form.replace_word_from || "");
       fd.append("replace_word_to", form.replace_word_to || "");
       fd.append("remark", form.remark || "");
@@ -1386,7 +1392,7 @@ export default function ProcessListPage() {
     fd.append("selected_descriptions", JSON.stringify(form.selected_descriptions.map((d) => d.name)));
     fd.append("currency_id", form.currency_id);
     fd.append("day_use", form.day_use.join(","));
-    fd.append("remove_word", form.remove_word || "");
+    fd.append("remove_word", submittedRemoveWord);
     fd.append("replace_word_from", form.replace_word_from || "");
     fd.append("replace_word_to", form.replace_word_to || "");
     fd.append("remark", form.remark || "");
