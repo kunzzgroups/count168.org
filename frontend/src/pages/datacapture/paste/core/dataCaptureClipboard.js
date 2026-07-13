@@ -1,5 +1,7 @@
 /** Read clipboard payloads from a paste event; HTML table detect/parse helpers. */
 
+import { clipboardHtmlLooksLikeGrid } from "./dataCaptureFormatClipboardNormalize.js";
+
 export function resolvePasteCell(target) {
   if (!target) return null;
   return target.nodeType === Node.TEXT_NODE ? target.parentElement : target;
@@ -31,6 +33,7 @@ export function clipboardLooksLikeGridPaste(clipboard) {
   try {
     const html = clipboard.getData?.("text/html") || "";
     if (html && /<table\b/i.test(html)) return true;
+    if (html && clipboardHtmlLooksLikeGrid(html)) return true;
   } catch {
     /* ignore */
   }

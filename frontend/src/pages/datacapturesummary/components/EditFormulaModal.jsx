@@ -468,7 +468,7 @@ export default function EditFormulaModal({
                       id="description"
                       placeholder=""
                       value={form.description || ""}
-                      onChange={(e) => setField({ description: e.target.value })}
+                      onChange={(e) => setField({ description: e.target.value.toUpperCase() })}
                     />
                   </div>
                 </div>

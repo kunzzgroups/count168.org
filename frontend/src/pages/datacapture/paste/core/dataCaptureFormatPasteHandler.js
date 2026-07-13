@@ -1,10 +1,12 @@
-import { handleTextPlainPaste } from "./dataCaptureTextPaste.js";
+import { handleTextPlainPaste, parsePlainTextMatrix } from "./dataCaptureTextPaste.js";
 import { tryApplyBillingStatementPlainMatrix } from "./dataCaptureStatementMatrixPaste.js";
 import { parseAndFillHtmlTableForFormat } from "./dataCaptureFormatHtmlPaste.js";
 import { parseAndFillHtmlTableForTextWithFormat } from "./dataCaptureTextHtmlPaste.js";
 import {
   buildFormatPreviewFragmentFromClipboardHtml,
   clipboardLooksLikeTable,
+  plainMatrixToHtmlTable,
+  renderFormatPreview,
   sanitizePastedHTML,
   tsvToHtmlTable,
 } from "./dataCaptureFormatPreview.js";
@@ -76,6 +78,13 @@ function processFormatPlainTextFallback(
   const resolvedAnchor = resolveFormatFallbackAnchorCell(resolvedStartRow, anchorCell);
   if (!resolvedAnchor) return false;
 
+  // Fusion 1.Text: Material plain-newline → matrix → Format table pipeline (preview + grid).
+  const matrix = parsePlainTextMatrix(String(text));
+  if (matrix.length > 0 && (matrix[0]?.length ?? 0) >= 2) {
+    const tableHtml = plainMatrixToHtmlTable(matrix);
+    if (processFormatTableHtml(tableHtml, { area, startRow, anchorCell })) return true;
+  }
+
   const filled = handleTextPlainPaste(null, text, resolvedAnchor);
   return afterFormatPasteFilled(filled, area);
 }
@@ -90,6 +99,12 @@ export function processFormatTableHtml(html, { area = null, startRow = null, anc
 
   const previewFragment = buildFormatPreviewFragmentFromClipboardHtml(normalizedHtml);
   const sanitized = sanitizePastedHTML(normalizedHtml);
+
+  if (previewFragment) {
+    renderFormatPreview(previewFragment);
+  } else if (sanitized && /<table\b/i.test(sanitized)) {
+    renderFormatPreview(sanitized);
+  }
 
   // Prefer the normalized multi-column table first. Preview/sanitized fragments can
   // still carry 1-TD-per-row Material wrappers and "succeed" with a collapsed grid.
@@ -190,7 +205,7 @@ export function handleFormatPasteAreaEvent(e) {
   setTimeout(() => {
     try {
       const pastedHTML = area?.innerHTML || "";
-      if (pastedHTML && /<table\b/i.test(pastedHTML)) {
+      if (pastedHTML && (/<table\b/i.test(pastedHTML) || clipboardHtmlLooksLikeGrid(pastedHTML))) {
         const appendStartRow = domGridHasEditableData()
           ? resolveFormatPasteStartRow(getFormatPasteAnchorCell())
           : 0;

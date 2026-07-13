@@ -102,6 +102,68 @@ function parseFlattenedStatementMatrix(nonEmptyLines) {
   return dataRows;
 }
 
+/**
+ * Material / report-center copies often put one logical row into the clipboard as
+ * one field per line (no tabs). Detect that vertical dump via numeric density —
+ * not vendor names, not a fixed column count — and reshape to 1..N horizontal rows.
+ *
+ * @returns {string[][] | null}
+ */
+function tryParseVerticalFieldDump(nonEmptyLines) {
+  const tokens = nonEmptyLines.map((line) => String(line ?? "").trim()).filter(Boolean);
+  if (tokens.length < 3) return null;
+
+  // Already multi-column lines → leave for spacing/tab paths.
+  if (tokens.some((token) => token.includes("\t") || /\s{2,}/.test(token))) return null;
+
+  const numericLikeCount = tokens.filter((token) => isMoneyOrNumberLikeToken(token)).length;
+  if (numericLikeCount < 2) return null;
+  if (numericLikeCount < Math.ceil(tokens.length * 0.5)) return null;
+
+  const labelIndices = [];
+  tokens.forEach((token, index) => {
+    if (!isMoneyOrNumberLikeToken(token)) labelIndices.push(index);
+  });
+
+  // Pure numeric column paste — keep as vertical 1-col (intentional list).
+  if (labelIndices.length === 0) return null;
+
+  // Multiple report rows: non-numeric labels at a steady stride → row width.
+  if (labelIndices.length >= 2) {
+    const diffs = [];
+    for (let i = 1; i < labelIndices.length; i += 1) {
+      diffs.push(labelIndices[i] - labelIndices[i - 1]);
+    }
+    const stride = diffs[0];
+    const steady =
+      stride >= 3 && diffs.every((diff) => diff === stride) && labelIndices[0] === 0;
+    if (steady) {
+      const rows = [];
+      for (let i = 0; i < tokens.length; i += stride) {
+        rows.push(tokens.slice(i, i + stride));
+      }
+      const width = stride;
+      const rowsOk = rows.every((row) => {
+        if (row.length < 3) return false;
+        const nums = row.filter((cell) => isMoneyOrNumberLikeToken(cell)).length;
+        return nums >= 2 && nums >= Math.ceil(row.length * 0.5);
+      });
+      if (!rowsOk) return null;
+      rows.forEach((row) => {
+        while (row.length < width) row.push("");
+      });
+      return rows;
+    }
+  }
+
+  // Single crushed report row: leading label + dense money/number fields.
+  if (labelIndices.length <= 2 && labelIndices[0] === 0) {
+    return [tokens];
+  }
+
+  return null;
+}
+
 /** Exported for Citibet-style statement matrix paste (1.Text / 2.Format). */
 export function parsePlainTextMatrix(pastedData) {
   const normalized = pastedData.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -150,6 +212,11 @@ export function parsePlainTextMatrix(pastedData) {
   }
 
   const nonEmptyLines = rawLines.filter((line) => line.trim() !== "");
+
+  // Material mat-row copy (any row count, no tabs) — run before statement/heuristics.
+  const verticalDumpRows = tryParseVerticalFieldDump(nonEmptyLines);
+  if (verticalDumpRows) return verticalDumpRows;
+
   const spacingSplitRows = nonEmptyLines.map((line) =>
     line
       .trim()
