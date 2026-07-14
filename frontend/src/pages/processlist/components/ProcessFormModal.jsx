@@ -564,7 +564,6 @@ export default function ProcessFormModal({
                     processId={editMode && form.id ? form.id : null}
                     scopeCompanyId={scopeCompanyId}
                     placeholder={t("enterWordsToRemove")}
-                    removeChipAriaLabel={t("removeWordChipRemove")}
                     disabled={ro}
                   />
                   <small className="field-help">{t("removeWordsHelp")}</small>

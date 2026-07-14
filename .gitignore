@@ -15,9 +15,13 @@ Thumbs.db
 !.cursor/rules/**
 !.cursor/agents/
 !.cursor/agents/**
+!.cursor/hooks.json
+!.cursor/hooks/
+!.cursor/hooks/**
 !.cursor/mcp.env.example
 .cursor/mcp.json
 .cursor/mcp.env
+.cursor/state/
 
 # database: regenerable import intermediates
 database/generated/*.sql

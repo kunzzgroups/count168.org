@@ -68,7 +68,7 @@ export function tryApplyBillingStatementPlainMatrix(pastedData, anchorCell, opti
     trimValues: false,
     alignTotalRows: false,
     startRowOverride: options.startRowOverride,
-    startColOverride: options.startColOverride ?? 0,
+    startColOverride: options.startColOverride,
   });
 
   if (successCount <= 0) return false;

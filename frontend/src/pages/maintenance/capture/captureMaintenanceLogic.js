@@ -98,7 +98,7 @@ export async function bootstrapCaptureMaintenanceMeta({ companies, groupId = nul
  * @param {AbortSignal} [options.signal] — 切换公司等场景取消过时请求，避免列表闪动与竞态
  */
 export async function searchCaptureData(
-  { dateFrom, dateTo, process, category, scope },
+  { dateFrom, dateTo, process, category, query, scope },
   options = {},
 ) {
   const { signal } = options;
@@ -110,6 +110,9 @@ export async function searchCaptureData(
   }
   if (category) {
     params.append("category", category);
+  }
+  if (query?.trim()) {
+    params.set("q", query.trim().toUpperCase());
   }
   appendScopeToParams(params, scope);
 

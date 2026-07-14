@@ -136,6 +136,15 @@ function rowLooksLikeFlattenedColumns(row) {
   return lines.length >= 2;
 }
 
+/** DataTables / Material paginator pulled in by drag-to-end over-select. */
+function gridRowLooksLikePaginator(row) {
+  const className = String(row.className || "").toLowerCase();
+  if (/datatables_info|mat-paginator|paginator|page-navigation/i.test(className)) return true;
+  const text = String(row.textContent || "").replace(/\s+/g, " ").trim();
+  if (!text) return false;
+  return /^Showing\s+\d+\s+to\s+\d+\s+of\s+\d+/i.test(text);
+}
+
 function collectGridRows(root) {
   const seen = new Set();
   const rows = [];
@@ -160,7 +169,9 @@ function collectGridRows(root) {
   });
 
   // Drop outer shells that only wrap other rows (keep leaf data rows).
-  return rows.filter((row) => !rows.some((other) => other !== row && row.contains(other)));
+  return rows
+    .filter((row) => !rows.some((other) => other !== row && row.contains(other)))
+    .filter((row) => !gridRowLooksLikePaginator(row));
 }
 
 function collectRowCells(row) {
@@ -346,6 +357,20 @@ function replaceRowWithElements(tr, elements, asHeader) {
     const td = document.createElement(asHeader || isHeaderLikeCell(el) ? "th" : "td");
     const cellStyle = el.getAttribute?.("style");
     if (cellStyle) td.setAttribute("style", sanitizeStyleKeepVisual(cellStyle));
+    // Bake Material status / link cues when clipboard CSS was not embedded.
+    const cls = String(el.className || "");
+    const baked = {};
+    if (/\bpositive\b/i.test(cls) && !/\bcolor\s*:/i.test(td.getAttribute("style") || "")) {
+      baked.color = "#82c751";
+    }
+    if (/\bnegative\b/i.test(cls) && !/\bcolor\s*:/i.test(td.getAttribute("style") || "")) {
+      baked.color = "#ff7575";
+    }
+    if (el.querySelector?.("a")) {
+      if (!/\bcolor\s*:/i.test(td.getAttribute("style") || "")) baked.color = "#82b8b9";
+      baked["text-decoration"] = "underline";
+    }
+    if (Object.keys(baked).length) mergeStyleAttr(td, baked);
     if (el.innerHTML != null) {
       td.innerHTML = el.innerHTML || escapeHtml(el.textContent || "");
     } else {
@@ -471,9 +496,28 @@ export function expandCollapsedTableRows(table) {
     const only = cells[0];
     const asHeader = (only.tagName || "").toUpperCase() === "TH" || isHeaderLikeCell(only);
 
-    let nested = collectRowCells(only);
+    // Unwrap single MsoNormal / layout wrappers so field children become visible.
+    let scanRoot = only;
+    for (let depth = 0; depth < 6; depth += 1) {
+      const kids = Array.from(scanRoot.children || []).filter(
+        (child) => String(child.textContent || "").trim() !== "",
+      );
+      if (kids.length !== 1) break;
+      const tag = (kids[0].tagName || "").toLowerCase();
+      if (!["p", "div", "span", "font", "section", "article", "center"].includes(tag)) break;
+      const grand = Array.from(kids[0].children || []).filter(
+        (child) => String(child.textContent || "").trim() !== "",
+      );
+      if (grand.length < 2) break;
+      scanRoot = kids[0];
+    }
+
+    let nested = collectRowCells(scanRoot);
     if (nested.length < 2) {
-      const kids = Array.from(only.children || []).filter(
+      nested = collectRowCells(only);
+    }
+    if (nested.length < 2) {
+      const kids = Array.from(scanRoot.children || []).filter(
         (child) => String(child.textContent || "").trim() !== "",
       );
       if (kids.length >= 2) nested = kids;
@@ -485,7 +529,7 @@ export function expandCollapsedTableRows(table) {
       return;
     }
 
-    const lines = splitCellTextToColumnLines(only);
+    const lines = splitCellTextToColumnLines(scanRoot);
     if (lines.length >= 2) {
       // Each line is itself a full report row (Agent + amounts…) → one <tr> per line.
       const denseLines = lines.filter((line) => tokenizeCollapsedReportRow(line).length >= 2);
@@ -625,6 +669,19 @@ export function normalizeClipboardHtmlToTable(html) {
         const td = document.createElement(isHeaderLikeCell(cell) ? "th" : "td");
         const cellStyle = cell.getAttribute("style");
         if (cellStyle) td.setAttribute("style", sanitizeStyleKeepVisual(cellStyle));
+        const cls = String(cell.className || "");
+        const baked = {};
+        if (/\bpositive\b/i.test(cls) && !/\bcolor\s*:/i.test(td.getAttribute("style") || "")) {
+          baked.color = "#82c751";
+        }
+        if (/\bnegative\b/i.test(cls) && !/\bcolor\s*:/i.test(td.getAttribute("style") || "")) {
+          baked.color = "#ff7575";
+        }
+        if (cell.querySelector?.("a")) {
+          if (!/\bcolor\s*:/i.test(td.getAttribute("style") || "")) baked.color = "#82b8b9";
+          baked["text-decoration"] = "underline";
+        }
+        if (Object.keys(baked).length) mergeStyleAttr(td, baked);
         td.innerHTML = cell.innerHTML || escapeHtml(cell.textContent || "");
         tr.appendChild(td);
       });

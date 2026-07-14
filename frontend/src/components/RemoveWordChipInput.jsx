@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   loadStoredRemoveWordChips,
   mergeRemoveWordChips,
@@ -7,10 +7,7 @@ import {
   serializeRemoveWordChips,
 } from "../lib/removeWordChips.js";
 
-function normalizeDraft(value) {
-  return String(value ?? "").toUpperCase();
-}
-
+/** Plain text Remove Word field (`sad,aa,aaa`). Normalize only on blur so commas can be typed. */
 export default function RemoveWordChipInput({
   value,
   onChange,
@@ -19,127 +16,60 @@ export default function RemoveWordChipInput({
   id = "capture_remove_word",
   name = "remove_word",
   placeholder = "",
-  removeChipAriaLabel = "Remove",
   disabled = false,
 }) {
-  const [draft, setDraft] = useState("");
-  const inputRef = useRef(null);
-  const chips = parseRemoveWordChips(value);
+  const hydratedProcessRef = useRef(null);
 
-  const commitChips = useCallback(
-    (nextChips) => {
+  const commitNormalized = useCallback(
+    (raw) => {
       if (disabled) return;
-      const serialized = serializeRemoveWordChips(nextChips);
-      onChange?.(serialized);
+      const next = serializeRemoveWordChips(parseRemoveWordChips(raw));
+      onChange?.(next);
       if (processId) {
-        saveStoredRemoveWordChips(scopeCompanyId, processId, nextChips);
+        const chips = parseRemoveWordChips(next);
+        if (chips.length) {
+          saveStoredRemoveWordChips(scopeCompanyId, processId, chips);
+        }
       }
     },
     [disabled, onChange, processId, scopeCompanyId],
   );
 
+  // Merge stored chips once per process; do not re-normalize while typing.
   useEffect(() => {
     if (!processId || disabled) return;
+    if (hydratedProcessRef.current === processId) return;
+    hydratedProcessRef.current = processId;
+
     const fromValue = parseRemoveWordChips(value);
     const stored = loadStoredRemoveWordChips(scopeCompanyId, processId);
     const merged = mergeRemoveWordChips(fromValue, stored);
-    const serialized = serializeRemoveWordChips(merged);
-    if (serialized !== serializeRemoveWordChips(fromValue)) {
-      onChange?.(serialized);
+    const next = serializeRemoveWordChips(merged);
+    if (next !== String(value ?? "")) {
+      onChange?.(next);
     }
     if (merged.length) {
       saveStoredRemoveWordChips(scopeCompanyId, processId, merged);
     }
   }, [processId, scopeCompanyId, value, onChange, disabled]);
 
-  const addDraftWord = useCallback(() => {
-    if (disabled) return;
-    const word = normalizeDraft(draft.trim());
-    if (!word) return;
-    const exists = chips.some((chip) => chip.toLowerCase() === word.toLowerCase());
-    if (exists) {
-      setDraft("");
-      return;
-    }
-    commitChips([...chips, word]);
-    setDraft("");
-  }, [chips, commitChips, disabled, draft]);
-
-  const removeChip = useCallback(
-    (index) => {
-      if (disabled) return;
-      commitChips(chips.filter((_, i) => i !== index));
-    },
-    [chips, commitChips, disabled],
-  );
-
-  const handleContainerClick = () => {
-    if (disabled) return;
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (event) => {
-    if (disabled) return;
-    if (event.key === "Enter") {
-      event.preventDefault();
-      addDraftWord();
-      return;
-    }
-    if (event.key === ";" || event.key === ",") {
-      event.preventDefault();
-      addDraftWord();
-      return;
-    }
-    if (event.key === "Backspace" && draft === "" && chips.length > 0) {
-      event.preventDefault();
-      commitChips(chips.slice(0, -1));
-    }
-  };
-
-  const inputStyle =
-    chips.length === 0
-      ? { flex: "1 1 0", minWidth: "4ch" }
-      : { flex: "0 1 auto", width: `${Math.max(draft.length + 1, 4)}ch` };
-
   return (
-    <div
-      className={`dc-remove-word-chip-input${disabled ? " is-disabled" : ""}`}
-      onClick={handleContainerClick}
-    >
-      {chips.map((chip, index) => (
-        <span key={`${chip}-${index}`} className="dc-remove-word-chip">
-          <span className="dc-remove-word-chip__label">{chip}</span>
-          {!disabled ? (
-            <button
-              type="button"
-              className="dc-remove-word-chip__remove"
-              aria-label={`${removeChipAriaLabel} ${chip}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                removeChip(index);
-              }}
-            >
-              ×
-            </button>
-          ) : null}
-        </span>
-      ))}
-      {!disabled ? (
-        <input
-          ref={inputRef}
-          type="text"
-          id={id}
-          name={name}
-          className="dc-remove-word-chip-input__field"
-          value={draft}
-          placeholder={chips.length ? "" : placeholder}
-          style={inputStyle}
-          onChange={(event) => setDraft(normalizeDraft(event.target.value))}
-          onKeyDown={handleKeyDown}
-          onBlur={addDraftWord}
-          autoComplete="off"
-        />
-      ) : null}
-    </div>
+    <input
+      type="text"
+      id={id}
+      name={name}
+      className="dc-remove-word-chip-input__field"
+      value={value ?? ""}
+      disabled={disabled}
+      placeholder={placeholder}
+      autoComplete="off"
+      spellCheck={false}
+      onChange={(event) => {
+        if (disabled) return;
+        onChange?.(event.target.value.toUpperCase());
+      }}
+      onBlur={(event) => commitNormalized(event.target.value)}
+      style={{ textTransform: "uppercase" }}
+    />
   );
 }

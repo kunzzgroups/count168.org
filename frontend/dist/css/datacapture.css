@@ -650,15 +650,6 @@ body.datacapture-page .process-form .dc-form-company-layout__remove-help {
     line-height: 1.25;
 }
 
-/* Cap the remove-word chip box to ~2 rows; extra chips scroll inside it
-   instead of growing the form. Keeps the top band height pinned to the
-   bottom of the description/remark fields (and the submitted card aligned). */
-body.datacapture-page .process-form .dc-remove-word-chip-input {
-    max-height: 64px;
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-}
-
 body.datacapture-page .process-form .dc-form-remove-remark-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

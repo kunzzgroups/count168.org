@@ -150,20 +150,24 @@ export function isFormatRichHtmlTable(html) {
   return /rowspan\s*=|colspan\s*=|style\s*=|<font\b|<strong\b|<b\b|<span\b/i.test(html);
 }
 
-/** UI chrome copied from external sites (action buttons, icons) — not cell data. */
-const PASTED_INTERACTIVE_UI_SELECTOR =
-  "button, input, select, textarea, svg, img, [role='button']";
+/**
+ * Form controls that must never land in the grid as live widgets.
+ * Intentionally does NOT strip button / svg / img / role=button — 1.TEXT and
+ * 2.FORMAT paste keep report action icons for visual 1:1 (handlers already
+ * stripped by sanitizePastedCellHtml).
+ */
+const PASTED_FORM_CONTROL_SELECTOR = "input, select, textarea";
 
 /**
- * Remove interactive UI elements from pasted HTML while keeping text/formatting tags.
- * External reports often include minus/action buttons in the last column.
+ * Remove live form controls from pasted HTML while keeping text, formatting,
+ * and decorative icons (button / svg / img).
  */
 export function stripInteractiveUiFromHtml(html) {
   if (!html || !html.includes("<")) return html || "";
   try {
     const div = document.createElement("div");
     div.innerHTML = html;
-    div.querySelectorAll(PASTED_INTERACTIVE_UI_SELECTOR).forEach((el) => {
+    div.querySelectorAll(PASTED_FORM_CONTROL_SELECTOR).forEach((el) => {
       const text = (el.textContent || "").trim();
       if (text) {
         el.replaceWith(document.createTextNode(text));

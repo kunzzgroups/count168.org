@@ -432,7 +432,10 @@ function dcSummaryApiHandleSubmit(): void
                 // Insert detail records
                 // Check for duplicates before inserting to prevent duplicate data
                 // For 'main' type: check id_product_main, account_id, currency_id, formula_variant (id_product_sub should be NULL or empty)
-                // For 'sub' type: check id_product_sub, id_product_main (as parent), account_id, currency_id, formula_variant
+                // For 'sub' type: also match description + formula.
+                // Same id_product/account/formula_variant often hosts both a COMM leg and a blank-desc
+                // amount leg (e.g. SB799WC011 MAXBET). Without description/formula, batch-append
+                // UPDATE would overwrite the first sub with the second and drop COMM from history.
                 // Use COALESCE to handle NULL values properly in comparison
                 $checkStmtMain = $pdo->prepare("
                     SELECT id FROM data_capture_details 
@@ -457,6 +460,9 @@ function dcSummaryApiHandleSubmit(): void
                       AND account_id = :account_id
                       AND currency_id = :currency_id
                       AND formula_variant = :formula_variant
+                      AND COALESCE(description_main, '') = COALESCE(:description_main, '')
+                      AND COALESCE(description_sub, '') = COALESCE(:description_sub, '')
+                      AND COALESCE(formula, '') = COALESCE(:formula, '')
                     LIMIT 1
                 ");
             
@@ -651,7 +657,8 @@ function dcSummaryApiHandleSubmit(): void
                     // - 首次提交（$isBatchAppend === false）时，同一个 capture 还没有明细记录，
                     //   此时不需要做「重复检查」，前端 Summary 中的每一行都应当各自插入一条记录。
                     // - 只有在追加批次（$isBatchAppend === true，带 captureId 再次提交）时，
-                    //   才根据 product/account/currency/formula_variant 判断是否更新已有记录，避免重复。
+                    //   才根据 product/account/currency/formula_variant（sub 另加 description+formula）
+                    //   判断是否更新已有记录，避免重复。
                     $existingRecord = false;
                     $rowCurrencyId = dcResolveCaptureCurrencyId(
                         $pdo,
@@ -732,7 +739,18 @@ function dcSummaryApiHandleSubmit(): void
                             $parentIdProduct = $row['parentIdProduct'] ?? $row['idProductMain'] ?? null;
                         
                             // Debug log for sub type duplicate check
-                            error_log("Checking duplicate sub: capture_id=$captureId, id_product_sub=" . ($idProductSub ?? 'NULL') . ", parent_id_product=" . ($parentIdProduct ?? 'NULL') . ", account_id=" . $row['accountId'] . ", formula_variant=$formulaVariant");
+                            $descriptionMainForCheck = isset($row['descriptionMain']) ? trim((string)$row['descriptionMain']) : '';
+                            $descriptionSubForCheck = isset($row['descriptionSub']) ? trim((string)$row['descriptionSub']) : '';
+                            $formulaForCheck = isset($row['formula']) ? trim((string)$row['formula']) : '';
+                            error_log(
+                                "Checking duplicate sub: capture_id=$captureId"
+                                . ", id_product_sub=" . ($idProductSub ?? 'NULL')
+                                . ", parent_id_product=" . ($parentIdProduct ?? 'NULL')
+                                . ", account_id=" . $row['accountId']
+                                . ", formula_variant=$formulaVariant"
+                                . ", description_main=" . ($descriptionMainForCheck !== '' ? $descriptionMainForCheck : 'NULL')
+                                . ", formula=" . ($formulaForCheck !== '' ? $formulaForCheck : 'NULL')
+                            );
                         
                             $checkStmtSub->execute([
                                 ':company_id' => $detailCompanyId,
@@ -742,6 +760,9 @@ function dcSummaryApiHandleSubmit(): void
                                 ':account_id' => $row['accountId'],
                                 ':currency_id' => $rowCurrencyId,
                                 ':formula_variant' => $formulaVariant,
+                                ':description_main' => $descriptionMainForCheck,
+                                ':description_sub' => $descriptionSubForCheck,
+                                ':formula' => $formulaForCheck,
                             ]);
                             $existingRecord = $checkStmtSub->fetch();
                         }

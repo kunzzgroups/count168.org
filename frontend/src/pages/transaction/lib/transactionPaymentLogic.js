@@ -146,6 +146,13 @@ export function sanitizeSearchApiData(data) {
 
 export const TX_FILTER_EPS = 0.00001;
 
+/** API 返回的 0/1、true/false、"0"/"1" 统一为布尔。 */
+function txRowFlag(v) {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number") return v !== 0;
+  return parseInt(String(v || "0"), 10) !== 0;
+}
+
 /** True when ending balance is non-zero (2dp display tolerance). */
 export function rowHasNonZeroBalance(row) {
   return !rowIsZeroBalance(row);
@@ -158,16 +165,24 @@ export function rowIsZeroBalance(row) {
   return Math.abs(num) <= TX_FILTER_EPS;
 }
 
-/** 当期 Cr/Dr 展示列是否非零（不用 has_crdr_transactions）。 */
+/**
+ * 本期是否有 Payment/CrDr 动账：展示净额非 0，或 API 标志有流水（含轧成 0.00 / CONTRA 清账）。
+ * 与 search_api has_crdr_transactions / has_contra_clear_period 对齐。
+ */
 export function rowHasPeriodCrdr(row) {
   const crdr = parseBalanceValue(row?.cr_dr);
-  return crdr !== null && Math.abs(crdr) > TX_FILTER_EPS;
+  if (crdr !== null && Math.abs(crdr) > TX_FILTER_EPS) return true;
+  return txRowFlag(row?.has_crdr_transactions) || txRowFlag(row?.has_contra_clear_period);
 }
 
-/** 当期 Win/Loss 展示列是否非零（不用 has_win_loss_transactions / win_loss_full）。 */
+/**
+ * 本期是否有 Win/Loss 动账：展示净额非 0，或 API 标志有流水（含当日正负轧成 0.00）。
+ * 与 search_api has_win_loss_transactions / has_period_id_product_rows 对齐。
+ */
 export function rowHasPeriodWinLoss(row) {
   const wl = parseBalanceValue(String(row?.win_loss ?? "").replace(/,/g, ""));
-  return wl !== null && Math.abs(wl) > TX_FILTER_EPS;
+  if (wl !== null && Math.abs(wl) > TX_FILTER_EPS) return true;
+  return txRowFlag(row?.has_win_loss_transactions) || txRowFlag(row?.has_period_id_product_rows);
 }
 
 /**
@@ -186,7 +201,7 @@ export function buildTransactionSearchQueryFilters({
   };
 }
 
-/** Layer B：零余额过滤（balance=0 但有当期 Cr/Dr 或 Win/Loss 展示非零时仍显示）。 */
+/** Layer B：零余额过滤（balance=0 但本期有 Cr/Dr 或 Win/Loss 动账时仍显示）。 */
 export function rowPassesHideZeroBalanceFilter(showZero, row, opts = {}) {
   if (showZero) return true;
   if (!rowIsZeroBalance(row)) return true;

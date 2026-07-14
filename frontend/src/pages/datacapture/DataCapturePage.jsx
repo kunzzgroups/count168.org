@@ -1177,7 +1177,6 @@ function DataCapturePageContent() {
                       processId={form.selectedProcess?.id}
                       scopeCompanyId={captureScope?.scopeCompanyId ?? companyId}
                       placeholder={t("enterWordsToRemove")}
-                      removeChipAriaLabel={t("removeWordChipRemove")}
                     />
                     <small className="field-help dc-form-company-layout__remove-help" style={{ display: "block", marginTop: 0, fontStyle: "italic", color: "#666" }}>
                       {t("removeWordHelp")}

@@ -159,33 +159,17 @@ export function rowHasEditableData(rowEl) {
 
 /**
  * 2.Format paste start row.
- * When grid already has data, append after the last filled row unless the anchor
- * sits on an empty row below all existing data.
+ * Prefer the selected/active grid cell when present; otherwise append after the
+ * last filled row (or row 0 on an empty grid).
  */
 export function resolveFormatPasteStartRow(anchorCell = null) {
-  const lastFilled = findLastFilledGridRow();
-  const appendRow = lastFilled >= 0 ? lastFilled + 1 : 0;
-
   const cell = anchorCell || getFormatPasteAnchorCell();
-  if (!cell?.closest?.("#tableBody")) {
-    return appendRow;
+  if (cell?.closest?.("#tableBody")) {
+    return resolvePasteAnchor(cell).startRow;
   }
 
-  const anchorRow = resolvePasteAnchor(cell).startRow;
-  if (lastFilled < 0) {
-    return anchorRow;
-  }
-
-  if (anchorRow > lastFilled) {
-    return anchorRow;
-  }
-
-  const anchorRowEl = cell.closest("tr");
-  if (anchorRowEl && !rowHasEditableData(anchorRowEl) && anchorRow >= appendRow) {
-    return anchorRow;
-  }
-
-  return appendRow;
+  const lastFilled = findLastFilledGridRow();
+  return lastFilled >= 0 ? lastFilled + 1 : 0;
 }
 
 export function ensureGridFits(startRow, startCol, matrixRows, matrixCols) {

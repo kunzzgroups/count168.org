@@ -100,6 +100,7 @@ export default function CaptureMaintenancePage() {
   const [companyCode, setCompanyCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState("");
+  const [query, setQuery] = useState("");
   
   const today = useMemo(() => new Date(), []);
   const todayDmy = useMemo(() => {
@@ -433,6 +434,7 @@ export default function CaptureMaintenancePage() {
             dateFrom,
             dateTo,
             process: selectedProcess,
+            query,
             scope: effectiveScope,
           },
           { signal: ac.signal },
@@ -464,7 +466,7 @@ export default function CaptureMaintenancePage() {
         }
       }
     },
-    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, dateFrom, dateTo, selectedProcess, notify, t],
+    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, dateFrom, dateTo, selectedProcess, query, notify, t],
   );
 
   // Auto-search when filters change（defer 0ms；切换公司已手动 performSearch 时跳过一轮避免重复）
@@ -484,6 +486,7 @@ export default function CaptureMaintenancePage() {
     listQueryEnabled,
     captureScopeKey,
     selectedProcess,
+    query,
     dateFrom,
     dateTo,
     performSearch,
@@ -665,6 +668,8 @@ export default function CaptureMaintenancePage() {
           processes={processes}
           selectedProcess={selectedProcess}
           setSelectedProcess={setSelectedProcess}
+          query={query}
+          setQuery={setQuery}
           dateFrom={dateFrom}
           dateTo={dateTo}
           setDateFrom={setDateFrom}

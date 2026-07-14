@@ -155,6 +155,35 @@ function fetchDeletedRecords(
 }
 
 /**
+ * Post-fetch text filter (aligned with payment_maintenance search `q`).
+ */
+function captureMaintenanceItemMatchesSearch(array $item, ?string $raw): bool
+{
+    if ($raw === null || trim($raw) === '') {
+        return true;
+    }
+    $q = strtoupper(trim($raw));
+    $fields = [
+        'process',
+        'product',
+        'currency',
+        'wl_group',
+        'submitted_by',
+        'deleted_by',
+        'capture_id',
+        'dts_created',
+        'dts_deleted',
+    ];
+    foreach ($fields as $field) {
+        $value = strtoupper(trim((string) ($item[$field] ?? '')));
+        if ($value !== '' && strpos($value, $q) !== false) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * 格式化并合并正常/已删除记录，排序并编号
  */
 function formatAndMergeResults(array $results, array $deletedResults, ?string $process_name) {
@@ -349,6 +378,21 @@ try {
     }
 
     $formattedResults = formatAndMergeResults($results, $deletedResults, $process_name);
+
+    $text_search = isset($_GET['q']) && $_GET['q'] !== ''
+        ? (string) $_GET['q']
+        : (isset($_GET['search']) ? (string) $_GET['search'] : '');
+    if (trim($text_search) !== '') {
+        $formattedResults = array_values(array_filter(
+            $formattedResults,
+            static fn(array $item): bool => captureMaintenanceItemMatchesSearch($item, $text_search)
+        ));
+        foreach ($formattedResults as $index => &$result) {
+            $result['no'] = $index + 1;
+        }
+        unset($result);
+    }
+
     if (empty($formattedResults)) {
         jsonResponse(true, 'No data found', []);
         return;

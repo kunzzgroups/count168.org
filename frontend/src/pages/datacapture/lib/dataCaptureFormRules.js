@@ -1,6 +1,6 @@
 import { tableSnapshotHasData } from "./dataCaptureTableSnapshot.js";
 
-/** Replace / remove / remark fields: all uppercase. */
+/** Replace / remark fields: all uppercase. */
 export function toDataCaptureWordFieldCase(value) {
   return String(value ?? "").toUpperCase();
 }

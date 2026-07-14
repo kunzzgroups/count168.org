@@ -6,6 +6,7 @@ import {
   sanitizePastedCellHtml,
 } from "./dataCaptureClipboard.js";
 import { buildFormatDataCellStyle } from "./dataCaptureFormatHtmlMatrix.js";
+import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
 
 function emptyPatch() {
   return { value: "" };
@@ -132,7 +133,9 @@ export function parseAndFillHtmlTableForText(htmlString, anchorCell) {
     if (!measured) return false;
 
     const { allRows, maxCols } = measured;
-    const dataMatrix = allRows.map((sourceRow) => buildRowPatches(sourceRow, maxCols, null));
+    const dataMatrix = splitStackedSubtotalGrandTotalRows(
+      allRows.map((sourceRow) => buildRowPatches(sourceRow, maxCols, null)),
+    );
 
     const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
       trimValues: false,
@@ -170,7 +173,9 @@ export function parseAndFillHtmlTableForTextWithFormat(htmlString, anchorCell) {
     if (!measured) return false;
 
     const { allRows, maxCols } = measured;
-    const dataMatrix = buildRowPatchesWithSpanOccupancy(allRows, maxCols);
+    const dataMatrix = splitStackedSubtotalGrandTotalRows(
+      buildRowPatchesWithSpanOccupancy(allRows, maxCols),
+    );
 
     const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
       trimValues: false,
