@@ -11,6 +11,12 @@ import { plainMatrixToFormatCellPatches } from "./dataCaptureFormatPreview.js";
 import { parsePlainTextMatrix } from "./dataCaptureTextPaste.js";
 import { tokenizeCollapsedReportRow } from "./dataCaptureFormatClipboardNormalize.js";
 import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
+import {
+  matrixAlignsWithPlainSource,
+  plainMatrixLooksReliable,
+  sanitizePasteMatrix,
+} from "./dataCapturePasteMatrixSanitize.js";
+import { expandLabelColonMoneyCells } from "./dataCaptureTextPaste.js";
 
 function flattenFormatBodyMatrixToPlain(bodyMatrix) {
   const lines = [];
@@ -248,20 +254,37 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
       }
     }
 
+    // Over-select: trim trailing empty cols / junk rows (same as 1.TEXT plain path).
+    bodyMatrix = sanitizePasteMatrix(expandLabelColonMoneyCells(bodyMatrix));
+
     // Same as 1.TEXT: stacked SUBTOTAL + GRAND TOTAL in one row → two full rows.
     const beforeSplit = bodyMatrix.length;
     bodyMatrix = splitStackedSubtotalGrandTotalRows(bodyMatrix);
     if (bodyMatrix.length !== beforeSplit) {
       console.log(
-        `Format: Split stacked SUBTOTAL/GRAND TOTAL → ${beforeSplit} row(s) became ${bodyMatrix.length}`,
-      );
-      ensureGridFits(
-        startRow,
-        startCol,
-        bodyMatrix.length,
-        Math.max(...bodyMatrix.map((row) => row.length), 0),
+        `Format: Split stacked SUBTOTAL/GRANDTOTAL → ${beforeSplit} row(s) became ${bodyMatrix.length}`,
       );
     }
+    bodyMatrix = sanitizePasteMatrix(expandLabelColonMoneyCells(bodyMatrix));
+
+    // Grill: when plain TSV is reliable, HTML body must match its shape (reject → dual-source).
+    const plainMatrix = options.plainMatrix;
+    if (
+      plainMatrixLooksReliable(plainMatrix) &&
+      !matrixAlignsWithPlainSource(bodyMatrix, plainMatrix)
+    ) {
+      console.log(
+        "Format: HTML body misaligned with plain TSV after over-select sanitize — reject for dual-source",
+      );
+      return false;
+    }
+
+    ensureGridFits(
+      startRow,
+      startCol,
+      bodyMatrix.length,
+      Math.max(...bodyMatrix.map((row) => row.length), 0),
+    );
 
     const { successCount: bodySuccessCount } = applyDataMatrixToGrid(bodyMatrix, null, {
       startRowOverride: startRow,

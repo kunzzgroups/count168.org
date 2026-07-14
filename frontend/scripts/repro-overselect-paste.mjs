@@ -269,6 +269,149 @@ if (!(alignReject && alignAccept)) {
   console.log("  rejectMisaligned=", alignReject, "acceptSanitized=", alignAccept);
 }
 
+// Statement footer: SUBTOTAL/GRANDTOTAL have fewer filled cols than body — must keep.
+const bodyAmt = Array.from({ length: 13 }, (_, i) => String(100 + i));
+const statementRows = [
+  ["1", "OB", "RS", ...bodyAmt],
+  ["2", "OC", "NIXON", ...bodyAmt.map((n) => String(Number(n) + 1))],
+  ["3", "OD", "KX", ...bodyAmt.map((n) => String(Number(n) + 2))],
+  // Summary rows skip serial/code columns → fewer non-empty cells
+  ["SUBTOTAL", "", "", ...bodyAmt.map((n) => `${n}.00`)],
+  ["GRAND TOTAL", "", "", ...bodyAmt.map((n) => `${Number(n) * 2}.00`)],
+];
+const statementKept = sanitizePasteMatrix(statementRows);
+const statementOk =
+  statementKept.length === 5 &&
+  statementKept[3][0] === "SUBTOTAL" &&
+  statementKept[4][0] === "GRAND TOTAL";
+console.log(
+  `${statementOk ? "PASS" : "FAIL"} statement-summary-footers-kept: rows=${statementKept.length}`,
+);
+if (!statementOk) {
+  failed += 1;
+  console.log(
+    "  last rows:",
+    statementKept.slice(-2).map((r) => r.slice(0, 4)),
+  );
+}
+
+// Truncated HTML missing footers must not align with full plain → Format dual-source.
+const plainFull = statementKept;
+const htmlMissingFooters = sanitizePasteMatrix(statementRows.slice(0, 3));
+const rejectMissingFooters =
+  plainMatrixLooksReliable(plainFull) &&
+  !matrixAlignsWithPlainSource(htmlMissingFooters, plainFull) &&
+  matrixAlignsWithPlainSource(plainFull, plainFull);
+console.log(
+  `${rejectMissingFooters ? "PASS" : "FAIL"} format-reject-missing-summary-rows`,
+);
+if (!rejectMissingFooters) {
+  failed += 1;
+}
+
+const { parseHTML } = await import("linkedom");
+const { window, document } = parseHTML("<!doctype html><html><body></body></html>");
+Object.assign(globalThis, {
+  window,
+  document,
+  Node: window.Node,
+  HTMLElement: window.HTMLElement,
+  DOMParser: window.DOMParser,
+});
+
+const { buildFormatBodyMatrix, parseFormatHtmlTableStructure } = await import(
+  pathToFileURL(path.join(base, "dataCaptureFormatHtmlMatrix.js")).href,
+);
+
+// User symptom: over-select HTML can yield Total row + phantom lone TOTAL row, while
+// plain TSV (1.TEXT) stays one full row with double empty gap + all numbers.
+const totalNums = [
+  "135,873.00",
+  "114,191.00",
+  "11",
+  "950",
+  "479.93",
+  "-30,681.48",
+  "59.93",
+  "-30,621.55",
+  "0.00",
+  "0.00",
+  "353.45",
+  "353.45",
+  "105,626.68",
+  "28,380.36",
+  "-377.39",
+  "28,002.97",
+  "8,564.33",
+  "2,301.11",
+  "-35.99",
+  "2,265.12",
+];
+const plainTotalTsv = ["Total", "", "", ...totalNums, "", "", ""].join("\t");
+const plainTruthFull = parsePlainTextMatrix(plainTotalTsv);
+
+const overselectHtml = `<table><tbody>
+<tr>
+  <td>Total</td><td></td><td></td>
+  ${totalNums.map((n) => `<td>${n}</td>`).join("")}
+  <td></td><td></td><td></td>
+</tr>
+<tr><td colspan="3">TOTAL</td>${Array(totalNums.length + 3)
+  .fill("<td></td>")
+  .join("")}</tr>
+</tbody></table>`;
+
+const structure = parseFormatHtmlTableStructure(overselectHtml);
+let formatBody = buildFormatBodyMatrix(structure.dataRows, structure.maxCols);
+const beforeSanitizeRows = formatBody.length;
+formatBody = sanitizePasteMatrix(formatBody);
+
+const sanitizeDroppedPhantom =
+  beforeSanitizeRows >= 2 &&
+  formatBody.length === 1 &&
+  formatBody[0][0]?.value === "Total" &&
+  formatBody[0][3]?.value === "135,873.00" &&
+  formatBody[0][formatBody[0].length - 1]?.value === "2,265.12";
+console.log(
+  `${sanitizeDroppedPhantom ? "PASS" : "FAIL"} format-html-overselect-sanitize: rows ${beforeSanitizeRows}→${formatBody.length} cols=${formatBody[0]?.length}`,
+);
+if (!sanitizeDroppedPhantom) {
+  failed += 1;
+  console.log(
+    "  row0:",
+    formatBody[0]?.map((c) => c.value),
+  );
+}
+
+// Truncated HTML (missing last 2 numbers) must not align with full plain → dual-source.
+const truncatedHtmlBody = sanitizePasteMatrix([
+  [
+    { value: "Total" },
+    { value: "" },
+    { value: "" },
+    ...totalNums.slice(0, -2).map((value) => ({ value })),
+  ],
+  [{ value: "TOTAL" }],
+]);
+const rejectTruncated =
+  plainMatrixLooksReliable(plainTruthFull) &&
+  !matrixAlignsWithPlainSource(truncatedHtmlBody, plainTruthFull) &&
+  matrixAlignsWithPlainSource(formatBody, plainTruthFull);
+console.log(
+  `${rejectTruncated ? "PASS" : "FAIL"} format-html-overselect-plain-cross-check`,
+);
+if (!rejectTruncated) {
+  failed += 1;
+  console.log(
+    "  plainCols=",
+    plainTruthFull[0]?.length,
+    "sanitizedCols=",
+    formatBody[0]?.length,
+    "truncatedAligned=",
+    matrixAlignsWithPlainSource(truncatedHtmlBody, plainTruthFull),
+  );
+}
+
 if (failed) {
   console.error(`\n${failed} over-select fixture(s) failed`);
   process.exit(1);

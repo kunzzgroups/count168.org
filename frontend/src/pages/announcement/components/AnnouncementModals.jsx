@@ -32,6 +32,20 @@ export function EditAnnouncementModal({ t, open, draft, setDraft, onClose, onSav
               onChange={(e) => setDraft((p) => ({ ...p, title: e.target.value }))}
             />
           </div>
+          <div className="form-group">
+            <label htmlFor="editAnnouncementSectionLabel">{t("sectionLabelOptional")}</label>
+            <input
+              id="editAnnouncementSectionLabel"
+              type="text"
+              maxLength={80}
+              placeholder={t("enterSectionLabel")}
+              value={draft.sectionLabel || ""}
+              onChange={(e) => setDraft((p) => ({ ...p, sectionLabel: e.target.value }))}
+            />
+            <p className="form-hint" style={{ margin: "6px 0 0", fontSize: "12px", color: "#64748b", lineHeight: 1.4 }}>
+              {t("sectionLabelHint")}
+            </p>
+          </div>
           <div className="form-group form-group-rich-text form-group-rich-text--modal">
             <label htmlFor="editAnnouncementContent">{t("contentRequired")}</label>
             <RichTextEditor

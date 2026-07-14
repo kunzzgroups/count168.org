@@ -10,18 +10,21 @@ c168_mobile/frontend/node_modules/
 *.log
 .DS_Store
 Thumbs.db
-.cursor/*
-!.cursor/rules/
-!.cursor/rules/**
-!.cursor/agents/
-!.cursor/agents/**
-!.cursor/hooks.json
-!.cursor/hooks/
-!.cursor/hooks/**
-!.cursor/mcp.env.example
-.cursor/mcp.json
-.cursor/mcp.env
-.cursor/state/
+
+# AI / Agent tooling (local; not project core)
+.cursor/
+.agents/
+.playwright-mcp/
+.scratch/
+AGENTS.md
+skills-lock.json
+
+# IDE
+.idea/
+.vscode/
+
+# local scratch
+_php_subtotal_snip.txt
 
 # database: regenerable import intermediates
 database/generated/*.sql

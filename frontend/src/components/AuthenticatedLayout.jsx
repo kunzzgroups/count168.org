@@ -81,7 +81,7 @@ import { pathnameIs, pathnameToPageKey, spaPath } from "../utils/routing/pageRou
 import { stripPrivateQueryFromBrowserUrl } from "../utils/routing/privateBrowserUrl.js";
 import { resetDashboardSessionCaches } from "../utils/dashboard/dashboardCache.js";
 import { resetMaintenanceCalendarPopupOnNavigation } from "../utils/date/dateRangePicker.js";
-import { toSafeRenderHtml } from "../utils/content/richTextSanitizer.js";
+import AnnouncementUpdateCard from "./announcements/AnnouncementUpdateCard.jsx";
 import {
   publishMaintenanceModeEvent,
   subscribeMaintenanceModeEvent,
@@ -1626,18 +1626,17 @@ export default function AuthenticatedLayout() {
             <div className="notification-empty"><p>{i18n.loadingAnnouncements}</p></div>
           ) : displayAnnouncements.length > 0 ? (
             displayAnnouncements.map((announcement, index) => (
-              <div
+              <AnnouncementUpdateCard
                 key={announcement.id ?? index}
+                announcement={announcement}
+                labels={{
+                  updateIncludes: i18n.updateIncludes,
+                  versionUpdated: i18n.versionUpdated,
+                  teamName: i18n.announcementTeam,
+                }}
                 className={`notification-item ${announcement.isExpirationReminder || !readAnnouncements.has(index) ? "unread" : ""}${announcement.isExpirationReminder ? " expiration-reminder-item" : ""}`}
                 onClick={() => markAnnouncementRead(index)}
-              >
-                <div className="notification-title">{announcement.title}</div>
-                <div
-                  className="notification-message rich-text-renderer"
-                  dangerouslySetInnerHTML={{ __html: toSafeRenderHtml(announcement.content) }}
-                />
-                <div className="notification-time">{announcement.created_at}</div>
-              </div>
+              />
             ))
           ) : (
             <div className="notification-empty">

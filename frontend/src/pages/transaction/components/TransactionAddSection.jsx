@@ -407,11 +407,11 @@ export default function TransactionAddSection({
               step="0.01"
               id="rate_middleman_input_amount"
               className="transaction-input"
-              placeholder={m.amount}
+              placeholder={m.fee}
               disabled={mutationsBlocked}
               value={rateMiddlemanInputAmount}
               onChange={(e) => setRateMiddlemanInputAmount(e.target.value)}
-              aria-label={m.amount}
+              aria-label={m.fee}
             />
             <input
               type="number"

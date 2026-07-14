@@ -6,15 +6,16 @@ import {
   sanitizeRichTextHtml,
   toSafeRenderHtml,
 } from "../../../utils/content/richTextSanitizer.js";
+import { composeAnnouncementSection } from "../../../components/announcements/announcementSectionLabel.js";
 
 export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublished, onPublishFailed }) {
-  const [form, setForm] = useState({ title: "", content: "" });
+  const [form, setForm] = useState({ title: "", sectionLabel: "", content: "" });
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     const title = form.title.trim();
-    const content = sanitizeRichTextHtml(form.content);
+    const content = composeAnnouncementSection(form.sectionLabel, form.content);
     if (!title) {
       onPublishFailed?.(t("titleCannotBeEmpty"));
       return;
@@ -33,7 +34,7 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublis
       });
       const json = await res.json();
       if (json.success) {
-        setForm({ title: "", content: "" });
+        setForm({ title: "", sectionLabel: "", content: "" });
         onPublished?.();
       } else {
         onPublishFailed?.(json.message || "Unknown error");
@@ -64,6 +65,20 @@ export function AnnouncementPanel({ t, announcements, onEdit, onDelete, onPublis
                 value={form.title}
                 onChange={(e) => setForm((p) => ({ ...p, title: e.target.value }))}
               />
+            </div>
+            <div className="form-group">
+              <label htmlFor="announcement-section-label">{t("sectionLabelOptional")}</label>
+              <input
+                id="announcement-section-label"
+                type="text"
+                maxLength={80}
+                placeholder={t("enterSectionLabel")}
+                value={form.sectionLabel}
+                onChange={(e) => setForm((p) => ({ ...p, sectionLabel: e.target.value }))}
+              />
+              <p className="form-hint" style={{ margin: "6px 0 0", fontSize: "12px", color: "#64748b", lineHeight: 1.4 }}>
+                {t("sectionLabelHint")}
+              </p>
             </div>
             <div className="form-group">
               <label htmlFor="announcement-content">{t("contentRequired")}</label>

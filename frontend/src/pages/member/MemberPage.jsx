@@ -39,7 +39,7 @@ import { useMemberPageShell } from "./useMemberPageShell.js";
 import { useSidebarTabletCollapse } from "../../hooks/useSidebarTabletCollapse.js";
 import { DASHBOARD_I18N } from "../../translateFile/shell/dashboardTranslate.js";
 import { bindMediaQueryChange } from "../../utils/dom/bindMediaQueryChange.js";
-import { toSafeRenderHtml } from "../../utils/content/richTextSanitizer.js";
+import AnnouncementUpdateCard from "../../components/announcements/AnnouncementUpdateCard.jsx";
 
 export default function MemberPage() {
   const navigate = useNavigate();
@@ -848,17 +848,16 @@ export default function MemberPage() {
             <div className="notification-empty"><p>{t("loadingAnnouncements")}</p></div>
           ) : announcements.length > 0 ? (
             announcements.map((a, idx) => (
-              <div
+              <AnnouncementUpdateCard
                 key={a.id ?? `${a.title || "announcement"}-${idx}`}
+                announcement={a}
+                labels={{
+                  updateIncludes: t("updateIncludes"),
+                  versionUpdated: t("versionUpdated"),
+                  teamName: t("announcementTeam"),
+                }}
                 className={`notification-item unread${a.isExpirationReminder ? " expiration-reminder-item" : ""}`}
-              >
-                <div className="notification-title">{a.title}</div>
-                <div
-                  className="notification-message rich-text-renderer"
-                  dangerouslySetInnerHTML={{ __html: toSafeRenderHtml(a.content) }}
-                />
-                <div className="notification-time">{a.created_at}</div>
-              </div>
+              />
             ))
           ) : (
             <div className="notification-empty">

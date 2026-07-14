@@ -20,6 +20,71 @@ import { sanitizePasteMatrix } from "./dataCapturePasteMatrixSanitize.js";
 import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
 
 /**
+ * Badge / summary chips like "Total win: 2,753.79" copy as one span —
+ * split label + money into two columns (1.TEXT and 2.FORMAT share this parser).
+ * @returns {[string, string] | null}
+ */
+export function trySplitLabelColonMoneyCell(cell) {
+  const text = String(cell ?? "")
+    .replace(/\u00a0/g, " ")
+    .trim();
+  if (!text || !text.includes(":")) return null;
+
+  const match = text.match(
+    /^(.+?)\s*:\s*(\(?-?\$?\d{1,3}(?:,\d{3})*(?:\.\d+)?\)?|-?\$?\d+(?:\.\d+)?)\s*$/,
+  );
+  if (!match) return null;
+
+  const label = `${match[1].trim()}:`;
+  const value = match[2].trim();
+  if (!match[1].trim() || !value) return null;
+  // Need a word-like label (not bare punctuation / numeric ratio left side).
+  if (!/[A-Za-z\u4e00-\u9fff]/.test(label)) return null;
+  return [label, value];
+}
+
+function cellPlainForColonSplit(cell) {
+  if (cell != null && typeof cell === "object" && "value" in cell) {
+    return String(cell.value ?? "");
+  }
+  return String(cell ?? "");
+}
+
+/** Expand single-cell "Label: money" rows into two columns. */
+export function expandLabelColonMoneyCells(matrix) {
+  if (!Array.isArray(matrix) || !matrix.length) return matrix;
+
+  let changed = false;
+  const rows = matrix.map((row) => {
+    if (!Array.isArray(row) || row.length !== 1) return row;
+    const split = trySplitLabelColonMoneyCell(cellPlainForColonSplit(row[0]));
+    if (!split) return row;
+    changed = true;
+    const sample = row[0];
+    if (sample != null && typeof sample === "object" && "value" in sample) {
+      return [
+        { ...sample, value: split[0], html: undefined },
+        { value: split[1] },
+      ];
+    }
+    return split;
+  });
+  if (!changed) return matrix;
+
+  const maxCols = Math.max(...rows.map((row) => row.length), 0);
+  rows.forEach((row) => {
+    while (row.length < maxCols) {
+      row.push(typeof row[0] === "object" ? { value: "" } : "");
+    }
+  });
+  return rows;
+}
+
+function finalizePlainMatrix(matrix) {
+  return sanitizePasteMatrix(expandLabelColonMoneyCells(matrix));
+}
+
+/**
  * Normalize clipboard plain text into a row/col matrix.
  * Material / Report-Center copies often land as one field per line — reshape via
  * detectVerticalFieldDump before falling back to N×1.
@@ -41,7 +106,7 @@ export function parsePlainTextMatrix(pastedData) {
     tabRows.forEach((row) => {
       while (row.length < maxCols) row.push("");
     });
-    return sanitizePasteMatrix(tabRows);
+    return finalizePlainMatrix(tabRows);
   }
 
   const rawLines = normalized.split("\n");
@@ -50,7 +115,7 @@ export function parsePlainTextMatrix(pastedData) {
   // Prefer vertical-dump reshape before blank-line block splitting so mat-row
   // dumps with blank separators / trailing paginator still become multi-col rows.
   const verticalDump = detectVerticalFieldDump(nonEmptyLines);
-  if (verticalDump?.rows?.length) return sanitizePasteMatrix(verticalDump.rows);
+  if (verticalDump?.rows?.length) return finalizePlainMatrix(verticalDump.rows);
 
   const hasBlankLine = rawLines.some((line) => line.trim() === "");
   if (hasBlankLine) {
@@ -75,7 +140,7 @@ export function parsePlainTextMatrix(pastedData) {
       rowBlocks.forEach((row) => {
         while (row.length < maxCols) row.push("");
       });
-      return sanitizePasteMatrix(rowBlocks);
+      return finalizePlainMatrix(rowBlocks);
     }
   }
 
@@ -95,14 +160,14 @@ export function parsePlainTextMatrix(pastedData) {
       spacingSplitRows.forEach((row) => {
         while (row.length < maxCols) row.push("");
       });
-      return sanitizePasteMatrix(spacingSplitRows);
+      return finalizePlainMatrix(spacingSplitRows);
     }
   }
 
   const flattenedStatementRows = detectFlattenedStatementMatrix(nonEmptyLines);
-  if (flattenedStatementRows) return sanitizePasteMatrix(flattenedStatementRows);
+  if (flattenedStatementRows) return finalizePlainMatrix(flattenedStatementRows);
 
-  return nonEmptyLines.map((line) => [line]);
+  return finalizePlainMatrix(nonEmptyLines.map((line) => [line]));
 }
 
 /** 1.Text — Excel plain text paste, preserving the clipboard matrix as-is. */

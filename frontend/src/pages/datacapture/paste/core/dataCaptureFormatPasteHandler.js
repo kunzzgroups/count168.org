@@ -14,8 +14,9 @@ import {
 } from "./dataCaptureFormatClipboardNormalize.js";
 import { parseFormatHtmlTableStructure } from "./dataCaptureFormatHtmlMatrix.js";
 import { formatBodyMatrixLooksCollapsed } from "./dataCaptureFormatHtmlPaste.js";
-import { parsePlainTextMatrix } from "./dataCaptureTextPaste.js";
+import { parsePlainTextMatrix, expandLabelColonMoneyCells } from "./dataCaptureTextPaste.js";
 import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
+import { sanitizePasteMatrix } from "./dataCapturePasteMatrixSanitize.js";
 import {
   applyDataMatrixToGrid,
   ensureGridFits,
@@ -197,7 +198,10 @@ export function formatHtmlLooksLikeVerticalNx1(html) {
 }
 
 /** Process HTML/TSV clipboard content into preview + editable grid. */
-export function processFormatTableHtml(html, { area = null, startRow = null, startCol = null, anchorCell = null } = {}) {
+export function processFormatTableHtml(
+  html,
+  { area = null, startRow = null, startCol = null, anchorCell = null, plainMatrix = null } = {},
+) {
   if (!html) return false;
   const normalizedHtml = resolveNormalizedHtml(html) || html;
   if (!/<table\b/i.test(normalizedHtml)) return false;
@@ -215,14 +219,16 @@ export function processFormatTableHtml(html, { area = null, startRow = null, sta
   const filled = parseAndFillHtmlTableForFormat(sanitized || previewFragment, {
     startRow: resolvedStartRow,
     startCol: resolvedStartCol,
+    plainMatrix,
   });
   return afterFormatPasteFilled(filled, area);
 }
 
 export function processFormatTsv(text, { area = null, startRow = null, startCol = null, anchorCell = null } = {}) {
   if (!text || !text.includes("\t")) return false;
+  const plainMatrix = parsePlainTextMatrix(text);
   const tableHtml = tsvToHtmlTable(text);
-  return processFormatTableHtml(tableHtml, { area, startRow, startCol, anchorCell });
+  return processFormatTableHtml(tableHtml, { area, startRow, startCol, anchorCell, plainMatrix });
 }
 
 /**
@@ -240,18 +246,21 @@ export function processFormatDualSource(html, text, { area = null, startRow = nu
   const resolvedStartRow =
     startRow != null ? startRow : resolveFormatPasteStartRow(anchor);
   const resolvedStartCol = startCol != null ? startCol : anchorCol;
-  const maxCols = Math.max(...matrix.map((row) => (row || []).length), 0);
-  ensureGridFits(resolvedStartRow, resolvedStartCol, matrix.length, maxCols);
+  ensureGridFits(resolvedStartRow, resolvedStartCol, matrix.length, matrix[0]?.length || 0);
 
   let patches =
     plainMatrixToFormatCellPatches(matrix, html || "") ||
     matrix.map((row) => (row || []).map((value) => ({ value: String(value ?? "") })));
   patches = splitStackedSubtotalGrandTotalRows(patches);
+  patches = sanitizePasteMatrix(expandLabelColonMoneyCells(patches));
 
   if (formatBodyMatrixLooksCollapsed(patches, null)) {
     console.log("Format: Dual-source reshape still looks collapsed — abort");
     return false;
   }
+
+  const patchedCols = Math.max(...patches.map((row) => (row || []).length), 0);
+  ensureGridFits(resolvedStartRow, resolvedStartCol, patches.length, patchedCols);
 
   const { successCount } = applyDataMatrixToGrid(patches, null, {
     startRowOverride: resolvedStartRow,
@@ -262,10 +271,10 @@ export function processFormatDualSource(html, text, { area = null, startRow = nu
   if (successCount <= 0) return false;
 
   notifyPasteUser(
-    `成功粘贴表格 (${matrix.length} 个数据行 x ${maxCols} 列)，已按字段重排!`,
+    `成功粘贴表格 (${patches.length} 个数据行 x ${patchedCols} 列)，已按字段重排!`,
     "success",
   );
-  console.log(`Format: Dual-source applied ${matrix.length}x${maxCols} directly (no HTML reparse)`);
+  console.log(`Format: Dual-source applied ${patches.length}x${patchedCols} directly (no HTML reparse)`);
   return afterFormatPasteFilled(true, area);
 }
 
@@ -276,7 +285,7 @@ export function processFormatPlainMatrix(text, { area = null, startRow = null, s
   const matrix = parsePlainTextMatrix(text);
   if (!matrixLooksMultiColumn(matrix)) return false;
   const tableHtml = plainMatrixToHtmlTable(matrix);
-  return processFormatTableHtml(tableHtml, { area, startRow, startCol, anchorCell });
+  return processFormatTableHtml(tableHtml, { area, startRow, startCol, anchorCell, plainMatrix: matrix });
 }
 
 function readClipboard(clipboard) {
@@ -298,59 +307,60 @@ function tryProcessFormatClipboard(html, text, options) {
   const plainMatrix = plainText?.trim() ? parsePlainTextMatrix(plainText) : null;
   const plainMulti = matrixLooksMultiColumn(plainMatrix);
   const normalizedHtml = resolveNormalizedHtml(html);
+  const opts = { ...options, plainMatrix };
 
   // agent_period / N×1 dumps: plain reshape FIRST (avoids Fig1 col1 stack).
   // Wide statement HTML (OB / 16-col) stays on HTML path below.
   if (shouldPreferFormatPlainDual(plainMulti, plainMatrix, normalizedHtml)) {
-    if (processFormatDualSource(html, plainText, options)) return true;
+    if (processFormatDualSource(html, plainText, opts)) return true;
   }
 
   // Multi-col report HTML (e.g. OB/SUBTOTAL sheets) — keep styles + icon column.
   // Fall through to dual when HTML fill rejects collapsed bodies.
   if (normalizedHtml && /<table\b/i.test(normalizedHtml)) {
     if (!formatHtmlLooksLikeVerticalNx1(normalizedHtml)) {
-      if (processFormatTableHtml(normalizedHtml, options)) return true;
-      if (plainMulti) return processFormatDualSource(html || normalizedHtml, plainText, options);
+      if (processFormatTableHtml(normalizedHtml, opts)) return true;
+      if (plainMulti) return processFormatDualSource(html || normalizedHtml, plainText, opts);
     } else if (plainMulti) {
-      return processFormatDualSource(html || normalizedHtml, plainText, options);
+      return processFormatDualSource(html || normalizedHtml, plainText, opts);
     }
   } else if (plainMulti) {
-    if (processFormatDualSource(html, plainText, options)) return true;
+    if (processFormatDualSource(html, plainText, opts)) return true;
   }
 
   if (html && clipboardHtmlLooksLikeGrid(html)) {
     const forced = normalizeClipboardHtmlToTable(html);
     if (forced && /<table\b/i.test(forced)) {
       if (!formatHtmlLooksLikeVerticalNx1(forced)) {
-        if (processFormatTableHtml(forced, options)) return true;
-        if (plainMulti) return processFormatDualSource(html, plainText, options);
+        if (processFormatTableHtml(forced, opts)) return true;
+        if (plainMulti) return processFormatDualSource(html, plainText, opts);
       } else if (plainMulti) {
-        return processFormatDualSource(html, plainText, options);
+        return processFormatDualSource(html, plainText, opts);
       }
     }
   }
 
   // Grid-like HTML + reshapable plain, but normalize failed → still dual-source.
   if (html && clipboardHtmlLooksLikeGrid(html) && plainMulti) {
-    return processFormatDualSource(html, plainText, options);
+    return processFormatDualSource(html, plainText, opts);
   }
 
   if (plainText && /<table\b/i.test(plainText)) {
     if (!formatHtmlLooksLikeVerticalNx1(plainText)) {
-      if (processFormatTableHtml(plainText, options)) return true;
-      if (plainMulti) return processFormatDualSource(html, plainText, options);
+      if (processFormatTableHtml(plainText, opts)) return true;
+      if (plainMulti) return processFormatDualSource(html, plainText, opts);
     } else if (plainMulti) {
-      return processFormatDualSource(html, plainText, options);
+      return processFormatDualSource(html, plainText, opts);
     }
   }
   if (plainText && plainText.includes("\t")) {
-    return processFormatTsv(plainText, options);
+    return processFormatTsv(plainText, opts);
   }
   if (plainMulti) {
-    return processFormatDualSource(html, plainText, options);
+    return processFormatDualSource(html, plainText, opts);
   }
   if (plainText?.trim()) {
-    return processFormatPlainMatrix(plainText, { ...options, html: html || "" });
+    return processFormatPlainMatrix(plainText, { ...opts, html: html || "" });
   }
   return false;
 }

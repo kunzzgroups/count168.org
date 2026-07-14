@@ -18,6 +18,10 @@ import {
   normalizeRichTextInput,
   sanitizeRichTextHtml,
 } from "../../utils/content/richTextSanitizer.js";
+import {
+  composeAnnouncementSection,
+  splitAnnouncementSection,
+} from "../../components/announcements/announcementSectionLabel.js";
 import { publishMaintenanceModeEvent } from "../../utils/maintenance/maintenanceRealtimeBus.js";
 
 export default function AnnouncementPage() {
@@ -43,7 +47,7 @@ export default function AnnouncementPage() {
   const [modeSubmitting, setModeSubmitting] = useState(false);
 
   // Modals
-  const [editAnnouncement, setEditAnnouncement] = useState({ id: "", title: "", content: "" });
+  const [editAnnouncement, setEditAnnouncement] = useState({ id: "", title: "", sectionLabel: "", content: "" });
   const [announcementModalOpen, setAnnouncementModalOpen] = useState(false);
   const [editMaintenance, setEditMaintenance] = useState({ id: "", prefix: "", content: "" });
   const [maintenanceModalOpen, setMaintenanceModalOpen] = useState(false);
@@ -221,7 +225,13 @@ export default function AnnouncementPage() {
     setEditAnnouncement({
       id: item.id,
       title: item.title || "",
-      content: normalizeRichTextInput(item.content || ""),
+      ...(() => {
+        const split = splitAnnouncementSection(item.content || "");
+        return {
+          sectionLabel: split.sectionLabel,
+          content: normalizeRichTextInput(split.bodyHtml || ""),
+        };
+      })(),
     });
     setAnnouncementModalOpen(true);
   }
@@ -245,7 +255,7 @@ export default function AnnouncementPage() {
   async function saveEditedAnnouncement() {
     try {
       const title = editAnnouncement.title.trim();
-      const content = sanitizeRichTextHtml(editAnnouncement.content);
+      const content = composeAnnouncementSection(editAnnouncement.sectionLabel, editAnnouncement.content);
       if (!title) {
         showNotice(t("titleCannotBeEmpty"), "error");
         return;

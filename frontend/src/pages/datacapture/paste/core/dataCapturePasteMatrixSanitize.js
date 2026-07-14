@@ -76,6 +76,39 @@ export function trimTrailingEmptyColumns(matrix) {
   });
 }
 
+function isSummaryLabelToken(text) {
+  const normalized = String(text ?? "")
+    .trim()
+    .replace(/:$/, "")
+    .replace(/\s+/g, " ")
+    .toUpperCase();
+  return (
+    normalized === "SUBTOTAL" ||
+    normalized === "SUB TOTAL" ||
+    normalized === "TOTAL AMOUNT" ||
+    normalized === "TOTAL" ||
+    normalized === "GRAND TOTAL" ||
+    normalized === "GRANDTOTAL"
+  );
+}
+
+/**
+ * Real footer total rows often have fewer filled cells than body (no serial / code),
+ * but still carry many amount columns — must not be treated as over-select stubs.
+ */
+function rowLooksLikeKeptSummaryTotalRow(row, bodyWidth) {
+  if (!Array.isArray(row)) return false;
+  const tokens = row.map((cell) => cellValue(cell)).filter(Boolean);
+  if (!tokens.length || !isSummaryLabelToken(tokens[0])) return false;
+
+  const moneyCount = tokens.filter((token) => isMoneyOrNumberLikeToken(token)).length;
+  if (moneyCount < 2) return false;
+
+  const minKeepWidth = Math.max(3, Math.ceil(bodyWidth * 0.5));
+  const minKeepMoney = Math.max(2, Math.ceil(bodyWidth * 0.35));
+  return tokens.length >= minKeepWidth || moneyCount >= minKeepMoney;
+}
+
 /** Drop trailing empty / paginator / truncated stub rows (loop for multi-line chrome). */
 export function dropTrailingJunkRows(matrix) {
   if (!Array.isArray(matrix) || matrix.length < 2) return matrix;
@@ -96,6 +129,11 @@ export function dropTrailingJunkRows(matrix) {
     if (!lastTokens.length) {
       next = next.slice(0, -1);
       continue;
+    }
+
+    // Keep SUBTOTAL / GRANDTOTAL footers even when narrower than body rows.
+    if (rowLooksLikeKeptSummaryTotalRow(last, bodyWidth)) {
+      break;
     }
 
     const lastWidth = lastTokens.length;
@@ -157,7 +195,7 @@ export function plainMatrixLooksReliable(matrix) {
 
 /**
  * Grill rule: with plain TSV present, HTML/format matrix must match plain shape
- * (or have fewer rows after over-select trim — never more).
+ * (same row count + width). Fewer rows means lost footers (SUBTOTAL/GRANDTOTAL).
  */
 export function matrixAlignsWithPlainSource(bodyMatrix, plainMatrix) {
   if (!plainMatrixLooksReliable(plainMatrix)) return false;
@@ -169,8 +207,7 @@ export function matrixAlignsWithPlainSource(bodyMatrix, plainMatrix) {
   const bodyCols = Math.max(0, ...bodyMatrix.map((row) => (Array.isArray(row) ? row.length : 0)));
 
   if (bodyCols < 2) return false;
-  if (bodyRows > plainRows) return false;
-  if (bodyRows < 1) return false;
+  if (bodyRows !== plainRows) return false;
   // Plain TSV is source of truth — widths must match (Total empties kept 1:1).
   if (Math.abs(bodyCols - plainCols) > 0) return false;
   return true;
