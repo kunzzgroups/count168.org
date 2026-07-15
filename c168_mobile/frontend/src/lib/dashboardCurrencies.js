@@ -87,22 +87,37 @@ export async function fetchMobileCurrencyCodes({
   const groupOnly = Boolean(group && !groupAllMode && !groupsAllMode && !hasCompany);
 
   if (groupOnly) {
+    // Prefer company Currency Setting union for the group (stable, no 403 spam).
+    // Scope-account currencies with group_aggregate often 403 for partnership users.
+    try {
+      const rows = companiesForPicker(companies, { selectedGroup: group, groupsAllMode: false });
+      const ids = rows
+        .map((c) => Number(c.id))
+        .filter((id) => Number.isFinite(id) && id > 0)
+        .slice(0, 20);
+      if (ids.length) {
+        const parts = await mapPool(ids, 5, async (id) => {
+          if (signal?.aborted) return [];
+          return fetchCompanyCurrencySettingCodes(id, group, signal);
+        });
+        const merged = [...new Set(parts.flat())];
+        if (merged.length) return merged;
+      }
+    } catch (e) {
+      if (e?.name === "AbortError") throw e;
+    }
+
     try {
       const q = new URLSearchParams({
         view_group: group,
         group_id: group,
         group_only: "1",
       });
-      const anchor = (companies || []).find((c) => normalizeGroupId(c?.group_id) === group);
-      if (anchor?.id) {
-        q.set("company_id", String(anchor.id));
-        q.set("group_aggregate", "1");
-        q.delete("group_only");
-      }
       const { res, json } = await fetchJson(
         buildApiUrl(`api/transactions/get_scope_account_currencies_api.php?${q}`),
         { signal },
       );
+      // Soft-fail 403/5xx — browser may still log the network line; avoid retry storms.
       if (res.ok && json?.success && Array.isArray(json.data) && json.data.length) {
         const codes = normalizeCodes(json.data);
         if (codes.length) return codes;

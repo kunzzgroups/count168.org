@@ -6,7 +6,7 @@ import {
   getCurrencyColor,
 } from "../../lib/dashboardEarnings.js";
 
-export default function CurrencyDistributionCard({ i18n, currencyCode, rows, useConverted, loading }) {
+export default function CurrencyDistributionCard({ i18n, currencyCode, rows, useConverted, loading, note = "" }) {
   const slices = buildEarningsPieSlices(rows, { useConverted });
   const shareByCode = buildEarningsShareByCode(rows, currencyCode, { useConverted });
   const center = computePieCenterMetrics(rows, currencyCode, { useConverted });
@@ -109,6 +109,9 @@ export default function CurrencyDistributionCard({ i18n, currencyCode, rows, use
           </ul>
         </div>
       )}
+      {note && !empty ? (
+        <p className="mt-3 text-[11px] font-semibold text-slate-400">{note}</p>
+      ) : null}
     </section>
   );
 }

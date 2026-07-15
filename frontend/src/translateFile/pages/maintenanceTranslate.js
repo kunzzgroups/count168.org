@@ -117,6 +117,7 @@ export const MAINTENANCE_I18N = {
     bankSearchPlaceholder: "e.g. TEST M16(CIMB) / CIMB",
     paymentSearchPlaceholder: "e.g. ACCOUNT / DESCRIPTION",
     captureSearchPlaceholder: "e.g. PROCESS / PRODUCT / CURRENCY",
+    transactionSearchPlaceholder: "e.g. PROCESS / ACCOUNT / DESCRIPTION",
 
     edit: "Edit",
     save: "Save",
@@ -235,6 +236,7 @@ export const MAINTENANCE_I18N = {
     bankSearchPlaceholder: "例如 TEST M16(CIMB) / CIMB",
     paymentSearchPlaceholder: "例如 账号 / 描述",
     captureSearchPlaceholder: "例如 流程 / 产品 / 币种",
+    transactionSearchPlaceholder: "例如 流程 / 账号 / 说明",
 
     edit: "编辑",
     save: "保存",

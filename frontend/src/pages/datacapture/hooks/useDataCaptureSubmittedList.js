@@ -18,6 +18,7 @@ export function useDataCaptureSubmittedList(captureScope, captureDate) {
     },
     enabled,
     retry: 1,
+    placeholderData: (previousData) => previousData,
   });
 
   const refreshSubmitted = useCallback(async () => {

@@ -702,7 +702,26 @@ body.transaction-page .transaction-date-range-group .date-range-picker:focus-vis
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
 }
 
-body.transaction-page .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
+body.transaction-page .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
+    width: clamp(34px, 2.45vw, 42px);
+    height: auto;
+    margin: 0;
+    border-radius: 11px 0 0 11px;
+    color: #ffffff;
+    background: #3b82f6;
+    background-clip: padding-box;
+    box-shadow: none;
+    font-size: var(--drp-trigger-icon, var(--text-medium));
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+/* Maintenance / report outlined Date Range: radius matches shell inner corner (not standalone 11px pill) */
 body.maintenance-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
 body.dashboard-page.report-page .customer-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt,
 body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
@@ -713,7 +732,7 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .t
     width: clamp(34px, 2.45vw, 42px);
     height: auto;
     margin: 0;
-    border-radius: 11px 0 0 11px;
+    border-radius: calc(clamp(6px, 0.52vw, 8px) - 1px) 0 0 calc(clamp(6px, 0.52vw, 8px) - 1px);
     color: #ffffff;
     background: #3b82f6;
     background-clip: padding-box;
@@ -3517,9 +3536,9 @@ body.transaction-page .transaction-search-section .transaction-category-date-row
     left: clamp(46px, 3.35vw, 58px);
 }
 
-/* Outlined shell: icon pill clips to shell left corner (same as dashboard / maintenance) */
+/* Outlined shell: icon pill clips to shell *inner* left corner */
 body.transaction-page .transaction-search-section .transaction-outlined-field-col--date .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
-    border-radius: clamp(6px, 0.52vw, 8px) 0 0 clamp(6px, 0.52vw, 8px);
+    border-radius: calc(clamp(6px, 0.52vw, 8px) - 1px) 0 0 calc(clamp(6px, 0.52vw, 8px) - 1px);
     z-index: 5;
 }
 

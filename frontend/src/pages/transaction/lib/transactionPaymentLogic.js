@@ -1,11 +1,26 @@
 import { parseBalanceValue } from "./transactionFormat.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveSavedCurrencyOrder } from "../../../utils/company/currencyDisplayOrder.js";
+import { clearTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
 
 export const TRANSACTION_CURRENCY_FILTER_KEY_PREFIX = "transaction_currency_filter_v1_";
 export const TX_LIST_SESSION_PREFIX = "count168_txlist_v1_";
 export const TX_LIST_INVALIDATE_LS_KEY = "count168_tx_invalidate_ts";
+export const TX_LIST_INVALIDATE_HANDLED_KEY = "count168_tx_invalidate_handled";
 export const TX_DATA_CHANGED_EVENT = "tx-data-changed";
+
+/** Broadcast that transaction balances changed elsewhere (maintenance delete, process post, etc.). */
+export function notifyTransactionListInvalidated(source = "unknown") {
+  const ts = Date.now();
+  try {
+    localStorage.setItem(TX_LIST_INVALIDATE_LS_KEY, String(ts));
+  } catch {
+    /* ignore */
+  }
+  clearTxSearchCache();
+  window.dispatchEvent(new CustomEvent(TX_DATA_CHANGED_EVENT, { detail: { ts, source } }));
+  return ts;
+}
 
 /** @param {string|null|undefined} role */
 export function getRoleClass(role) {
@@ -142,6 +157,93 @@ export function sanitizeSearchApiData(data) {
       summary: applySummaryWinLossDisplayTolerance(calculateTotals([...left, ...right])),
     },
   };
+}
+
+/**
+ * Instantly patch period Cr/Dr (or Win/Loss) + Balance in search payload after submit.
+ * Missing accounts are skipped (forceRefresh will insert them). Re-splits left/right by balance sign.
+ */
+export function applyOptimisticSubmitBalancePatch(rawSearchData, { currency, deltas } = {}) {
+  if (!rawSearchData || typeof rawSearchData !== "object") return rawSearchData;
+  const currencyCode = String(currency || "").toUpperCase().trim();
+  if (!currencyCode || !Array.isArray(deltas) || deltas.length === 0) return rawSearchData;
+
+  const deltaById = new Map();
+  for (const d of deltas) {
+    const id = Number(d?.accountDbId);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const prev = deltaById.get(id) || { crDrDelta: "0", winLossDelta: "0" };
+    try {
+      if (d.crDrDelta != null && String(d.crDrDelta).trim() !== "") {
+        prev.crDrDelta = MoneyDecimal.add(prev.crDrDelta, d.crDrDelta).toString();
+      }
+      if (d.winLossDelta != null && String(d.winLossDelta).trim() !== "") {
+        prev.winLossDelta = MoneyDecimal.add(prev.winLossDelta, d.winLossDelta).toString();
+      }
+    } catch {
+      /* skip bad delta */
+    }
+    deltaById.set(id, prev);
+  }
+  if (deltaById.size === 0) return rawSearchData;
+
+  const patchRow = (row) => {
+    const id = Number(row?.account_db_id);
+    const rowCur = String(row?.currency || "").toUpperCase().trim();
+    if (!deltaById.has(id) || rowCur !== currencyCode) return row;
+    const delta = deltaById.get(id);
+    try {
+      const bf = cleanMoneyCell(row?.bf);
+      const wlFull = cleanMoneyCell(row?.win_loss_full != null ? row.win_loss_full : row?.win_loss);
+      const crDr = cleanMoneyCell(row?.cr_dr);
+
+      const nextWlFull =
+        delta.winLossDelta && !MoneyDecimal.toDecimal(delta.winLossDelta, 0).isZero()
+          ? MoneyDecimal.add(wlFull, delta.winLossDelta).toString()
+          : wlFull;
+      const nextCrDr =
+        delta.crDrDelta && !MoneyDecimal.toDecimal(delta.crDrDelta, 0).isZero()
+          ? MoneyDecimal.add(crDr, delta.crDrDelta).toString()
+          : crDr;
+
+      const balanceFull = MoneyDecimal.add(MoneyDecimal.add(bf, nextWlFull), nextCrDr).toString();
+      const next = {
+        ...row,
+        win_loss: MoneyDecimal.formatFixedHalfUp(nextWlFull, 2),
+        win_loss_full: nextWlFull,
+        cr_dr: MoneyDecimal.formatFixedHalfUp(nextCrDr, 2),
+        balance_full: balanceFull,
+        balance: MoneyDecimal.formatFixedHalfUp(balanceFull, 2),
+      };
+      if (delta.crDrDelta && !MoneyDecimal.toDecimal(delta.crDrDelta, 0).isZero()) {
+        next.has_crdr_transactions = 1;
+      }
+      if (delta.winLossDelta && !MoneyDecimal.toDecimal(delta.winLossDelta, 0).isZero()) {
+        next.has_win_loss_transactions = 1;
+      }
+      return next;
+    } catch {
+      return row;
+    }
+  };
+
+  const combined = [...(rawSearchData.left_table || []), ...(rawSearchData.right_table || [])].map(patchRow);
+  const left = [];
+  const right = [];
+  for (const row of combined) {
+    try {
+      if (MoneyDecimal.cmp(cleanMoneyCell(row?.balance), "0") < 0) right.push(row);
+      else left.push(row);
+    } catch {
+      left.push(row);
+    }
+  }
+
+  return sanitizeSearchApiData({
+    ...rawSearchData,
+    left_table: left,
+    right_table: right,
+  });
 }
 
 export const TX_FILTER_EPS = 0.00001;

@@ -1,6 +1,7 @@
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { formatDmyDash, parseDdMmYyyyToYmd, parseYmd } from "../../../utils/date/dateUtils.js";
+import { notifyTransactionListInvalidated } from "../../transaction/lib/transactionPaymentLogic.js";
 
 /** Auto page size bounds (actual count from useAutoListPageSize). */
 export const PAGE_SIZE_MIN = 4;
@@ -440,17 +441,7 @@ export async function checkBankResendLockFromBackend(processId, dayStartRaw) {
 }
 
 export function notifyTransactionDataChanged(sourceTag) {
-  const ts = String(Date.now());
-  try {
-    localStorage.setItem("count168_tx_invalidate_ts", ts);
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(new CustomEvent("tx-data-changed", { detail: { ts, source: sourceTag || "bank-process-list-react" } }));
-  } catch {
-    /* ignore */
-  }
+  notifyTransactionListInvalidated(sourceTag || "bank-process-list-react");
 }
 
 const bankCategoryCompanyCache = new Map();

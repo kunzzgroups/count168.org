@@ -208,3 +208,60 @@ export function collectSubmitFocusAccountIds({
   if (!isAdjustment) add(fromAccountId);
   return [...ids];
 }
+
+/**
+ * Cr/Dr (or Win/Loss) deltas for optimistic list update after approved submit.
+ * CONTRA/PAYMENT/CLAIM/CLEAR/RECEIVE: To −amount, From +amount.
+ * ADJUSTMENT: To += signed amount.
+ * WIN/LOSE: amounts go to win_loss (To/From signs per period search).
+ */
+export function buildOptimisticSubmitDeltas({
+  txType,
+  amount,
+  toAccountId,
+  fromAccountId,
+} = {}) {
+  const type = String(txType || "").toUpperCase().trim();
+  if (!type || type === "RATE") return [];
+
+  let amtStr;
+  try {
+    const cleaned = MoneyDecimal.cleanMoneyInput(amount);
+    if (!cleaned) return [];
+    amtStr = MoneyDecimal.toDecimal(cleaned).toString();
+  } catch {
+    return [];
+  }
+
+  const toId = Number(toAccountId);
+  const fromId = Number(fromAccountId);
+  const deltas = [];
+  const push = (id, patch) => {
+    if (Number.isFinite(id) && id > 0) deltas.push({ accountDbId: id, ...patch });
+  };
+
+  if (type === "ADJUSTMENT") {
+    push(toId, { crDrDelta: amtStr });
+    return deltas;
+  }
+
+  if (type === "WIN" || type === "LOSE") {
+    const absAmt = MoneyDecimal.abs(amtStr).toString();
+    // Period search: To WIN −amount / LOSE +amount; From WIN +amount / LOSE −amount.
+    if (type === "WIN") {
+      push(toId, { winLossDelta: MoneyDecimal.sub("0", absAmt).toString() });
+      push(fromId, { winLossDelta: absAmt });
+    } else {
+      push(toId, { winLossDelta: absAmt });
+      push(fromId, { winLossDelta: MoneyDecimal.sub("0", absAmt).toString() });
+    }
+    return deltas;
+  }
+
+  if (["CONTRA", "PAYMENT", "CLAIM", "CLEAR", "RECEIVE"].includes(type)) {
+    push(toId, { crDrDelta: MoneyDecimal.sub("0", amtStr).toString() });
+    push(fromId, { crDrDelta: amtStr });
+  }
+
+  return deltas;
+}

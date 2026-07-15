@@ -44,11 +44,11 @@ import { getAccountText } from "../../../translateFile/pages/accountTranslate.js
 import { getBankProcessLocale, getBankProcessText, translateBankProcessApiMessage } from "../../../translateFile/pages/bankProcessTranslate.js";
 // Helper imports
 import { useAutoListPageSize } from "../../../hooks/useAutoListPageSize.js";
+import { formatDmy, parseYmd } from "../../../utils/date/dateUtils.js";
 import {
   PAGE_SIZE_MAX,
   PAGE_SIZE_MIN,
   normalizeRows,
-  isoToDmy,
   dmyToIso,
   parseRowDateMs,
   isBankResendDayStartBackendErrorMessage,
@@ -103,6 +103,12 @@ function resolveBankProcessBootCurrency() {
   return "";
 }
 
+/** Picker hidden inputs + toolbar label use DD/MM/YYYY (same as MaintenanceDateRangePicker). */
+function ymdToPickerDmy(ymd) {
+  const d = parseYmd(String(ymd || "").trim());
+  return d ? formatDmy(d) : "";
+}
+
 function resolveBankProcessListCurrencyAfterFetch(prev, ordered, userSelectedAllRef) {
   if (userSelectedAllRef.current && !prev) return "";
   if (prev && ordered.includes(prev)) return prev;
@@ -144,33 +150,41 @@ export function useBankProcessListPage() {
   const handleDatePickerChange = useCallback(() => {
     const b = window.MaintenanceDateRangePicker?.getActiveRangeBinding?.() || {};
     const fromId = b.dateFromId || "";
-    const fromDmy = document.getElementById(fromId)?.value?.trim() || "";
-    const iso = dmyToIso(fromDmy);
 
-    if (fromId === "bank_day_start_drp_from") {
-      setForm((prev) => ({ ...prev, day_start: iso }));
+    if (fromId === "bank_day_start_drp_from" && document.getElementById("bank_day_start_drp_from")) {
+      const fromDmy = document.getElementById(fromId)?.value?.trim() || "";
+      setForm((prev) => ({ ...prev, day_start: dmyToIso(fromDmy) }));
       return;
     }
-    if (fromId === "bank_day_end_drp_from") {
+    if (fromId === "bank_day_end_drp_from" && document.getElementById("bank_day_end_drp_from")) {
+      const fromDmy = document.getElementById(fromId)?.value?.trim() || "";
+      const iso = dmyToIso(fromDmy);
       const minYmd = document.getElementById("bank_day_end_drp_from")?.dataset?.minYmd || "";
       if (minYmd && iso && iso < minYmd) return;
       setForm((prev) => ({ ...prev, day_end: iso }));
       return;
     }
-    if (fromId === "bank_resend_day_start_drp_from") {
+    if (fromId === "bank_resend_day_start_drp_from" && document.getElementById("bank_resend_day_start_drp_from")) {
+      const fromDmy = document.getElementById(fromId)?.value?.trim() || "";
       setResendInlineError("");
-      setResendDayStart(iso);
+      setResendDayStart(dmyToIso(fromDmy));
       return;
     }
-    if (fromId === "bank_resend_day_end_drp_from") {
+    if (fromId === "bank_resend_day_end_drp_from" && document.getElementById("bank_resend_day_end_drp_from")) {
+      const fromDmy = document.getElementById(fromId)?.value?.trim() || "";
+      const iso = dmyToIso(fromDmy);
       const minYmd = document.getElementById("bank_resend_day_end_drp_from")?.dataset?.minYmd || "";
       if (minYmd && iso && iso < minYmd) return;
       setResendDayEnd(iso);
       return;
     }
-    const toDmy = document.getElementById(b.dateToId)?.value?.trim() || "";
-    setDateFrom(dmyToIso(fromDmy));
-    setDateTo(dmyToIso(toDmy));
+
+    const listFromDmy = document.getElementById("date_from")?.value?.trim() || "";
+    const listToDmy = document.getElementById("date_to")?.value?.trim() || "";
+    flushSync(() => {
+      setDateFrom(dmyToIso(listFromDmy));
+      setDateTo(dmyToIso(listToDmy));
+    });
   }, []);
   const [cssReady, setCssReady] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -207,6 +221,13 @@ export function useBankProcessListPage() {
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+
+  const toolbarDateRangeText = useMemo(() => {
+    const fromD = parseYmd(dateFrom);
+    const toD = parseYmd(dateTo);
+    if (!fromD || !toD) return t("selectDateRange");
+    return `${formatDmy(fromD)} - ${formatDmy(toD)}`;
+  }, [dateFrom, dateTo, t]);
   const [toast, setToast] = useState(null);
   const [accounts, setAccounts] = useState([]);
 
@@ -675,8 +696,8 @@ export function useBankProcessListPage() {
       const dtIso = u.searchParams.get("date_to") || "";
       const fromH = document.getElementById("date_from");
       const toH = document.getElementById("date_to");
-      if (fromH) fromH.value = dfIso && /^\d{4}-\d{2}-\d{2}$/.test(dfIso) ? isoToDmy(dfIso) : "";
-      if (toH) toH.value = dtIso && /^\d{4}-\d{2}-\d{2}$/.test(dtIso) ? isoToDmy(dtIso) : "";
+      if (fromH) fromH.value = dfIso && /^\d{4}-\d{2}-\d{2}$/.test(dfIso) ? ymdToPickerDmy(dfIso) : "";
+      if (toH) toH.value = dtIso && /^\d{4}-\d{2}-\d{2}$/.test(dtIso) ? ymdToPickerDmy(dtIso) : "";
       window.MaintenanceDateRangePicker.init({
         allowEmpty: true,
         preserveDisplayUntilCommit: true,
@@ -711,6 +732,8 @@ export function useBankProcessListPage() {
   useEffect(() => {
     if (modalOpen || resendModalOpen) return;
     closeMaintenanceCalendarPopup();
+    ensureMaintenanceDateRangePicker();
+    window.MaintenanceDateRangePicker?.bindPickers?.();
   }, [modalOpen, resendModalOpen]);
 
   /* Keep date-range chip wording in sync when login/UI language changes (picker caches placeholder internally). */
@@ -724,11 +747,21 @@ export function useBankProcessListPage() {
     });
   }, [lang, loading, cssReady, t, bpLocale.monthsShort]);
 
-  /* React state 为 date range 唯一来源；hidden input 受控同步，避免再次打开日历时丢失已选范围 */
-  useEffect(() => {
+  /* React state 为 date range 唯一来源；hidden input 由 layout effect 写入 DOM（同 Dashboard） */
+  useLayoutEffect(() => {
     if (loading || !cssReady || !bankDatePickerInitRef.current) return;
-    window.MaintenanceDateRangePicker?.refreshInputsDisplay?.();
-  }, [dateFrom, dateTo, loading, cssReady, lang]);
+    const df = document.getElementById("date_from");
+    const dt = document.getElementById("date_to");
+    if (!df || !dt) return;
+    const fromDmy = dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom) ? ymdToPickerDmy(dateFrom) : "";
+    const toDmy = dateTo && /^\d{4}-\d{2}-\d{2}$/.test(dateTo) ? ymdToPickerDmy(dateTo) : "";
+    if (df.value !== fromDmy) df.value = fromDmy;
+    if (dt.value !== toDmy) dt.value = toDmy;
+    const picker = document.getElementById("date-range-picker");
+    if (picker) {
+      picker.classList.toggle("has-selected-range", !!(fromDmy && toDmy));
+    }
+  }, [dateFrom, dateTo, loading, cssReady]);
 
 
   useEffect(() => {
@@ -2485,6 +2518,7 @@ export function useBankProcessListPage() {
     setDateFrom,
     dateTo,
     setDateTo,
+    toolbarDateRangeText,
     toast,
     setToast,
     accounts,

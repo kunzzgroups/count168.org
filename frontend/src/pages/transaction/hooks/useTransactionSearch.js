@@ -1,8 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from "react";
+import { flushSync } from "react-dom";
 import { isCancelledError, useQueryClient } from "@tanstack/react-query";
 import {
   TRANSACTION_CURRENCY_FILTER_KEY_PREFIX,
   TX_LIST_INVALIDATE_LS_KEY,
+  TX_LIST_INVALIDATE_HANDLED_KEY,
   buildTransactionSearchQueryFilters,
   filterTransactionTableRows,
   applySummaryWinLossDisplayTolerance,
@@ -17,6 +19,7 @@ import {
   pickTransactionDefaultCurrency,
   readTxListFromSessionStorage,
   sortByRole,
+  applyOptimisticSubmitBalancePatch,
   sanitizeSearchApiData,
   mergeSearchApiDataList,
 } from "../lib/transactionPaymentLogic.js";
@@ -27,6 +30,7 @@ import {
   saveUserCurrencyOrder,
   transactionQueryKeys,
 } from "../lib/transactionApi.js";
+import { buildOptimisticSubmitDeltas } from "../lib/transactionSubmitHelpers.js";
 import { getTxSearchCache, setTxSearchCache, clearTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
 import {
   buildDefaultSearchApiParams,
@@ -124,6 +128,8 @@ export function useTransactionSearch({
   const prevScopeKeyForSearchRef = useRef(null);
   /** Capture Date 变更后触发搜索；与「仅首次拉数」的 initial effect 分离，避免 initialSearchDoneRef 为 true 时改日期不请求 */
   const prevCaptureDateRangeKeyRef = useRef(null);
+  /** First approved submit may jump Capture Date to the tx date; later submits keep the current range. */
+  const hasAutoJumpedCaptureDateOnSubmitRef = useRef(false);
   const lastInitialSearchKeyRef = useRef("");
   const earlyCurrencyScopeRef = useRef(null);
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -967,15 +973,41 @@ export function useTransactionSearch({
     ],
   );
 
-  /** After successful submit/approval: keep capture date; show union of submitted account rows. */
+  /** After successful submit/approval: focus submitted accounts; first submit may jump Capture Date to tx date. */
   const applySubmitFocusAndRefresh = useCallback(
-    async ({ accountIds, submitCurrency } = {}) => {
+    async ({
+      accountIds,
+      submitCurrency,
+      amount,
+      txType: submitTxType,
+      toAccountId,
+      fromAccountId,
+      transactionDate,
+    } = {}) => {
       const ids = [...new Set((accountIds || []).map((id) => Number(id)).filter((id) => id > 0))];
       if (ids.length === 0) return;
       if (!scopeReady || !scopeCacheCompanyKey) return;
       if (!effectiveDateFrom || !effectiveDateTo) return;
 
-      const rangeKey = `${effectiveDateFrom}|${effectiveDateTo}`;
+      const txDate = String(transactionDate || "").trim();
+      let searchDateFrom = effectiveDateFrom;
+      let searchDateTo = effectiveDateTo;
+      let rangeKey = `${effectiveDateFrom}|${effectiveDateTo}`;
+      let didJumpCaptureDate = false;
+
+      // Only the first successful submit on this page visit may jump Capture Date to the tx date.
+      if (!hasAutoJumpedCaptureDateOnSubmitRef.current) {
+        hasAutoJumpedCaptureDateOnSubmitRef.current = true;
+        if (txDate && (txDate !== effectiveDateFrom || txDate !== effectiveDateTo)) {
+          didJumpCaptureDate = true;
+          searchDateFrom = txDate;
+          searchDateTo = txDate;
+          rangeKey = `${txDate}|${txDate}`;
+          // Prevent the Capture Date effect from clearing submit-focus / double-searching.
+          prevCaptureDateRangeKeyRef.current = rangeKey;
+        }
+      }
+
       const currencyCode = String(submitCurrency || "").toUpperCase().trim();
 
       let currencyOverrides = {};
@@ -1013,16 +1045,36 @@ export function useTransactionSearch({
         }
       }
 
-      setSearchLoading(true);
-      try {
+      // Paint focused rows (+ optimistic balances when staying on the same capture range) before refresh.
+      flushSync(() => {
+        if (didJumpCaptureDate) {
+          setDateFrom(txDate);
+          setDateTo(txDate);
+          syncCaptureDateDom(txDate);
+        }
+
         setTypeSearchActive(false);
         setTypeSearchFormType(null);
         setTypeSearchAccountIds([]);
 
+        // Submit-focus shows Cr/Dr rows; clear Win/Loss / Payment Only so the fetch and UI match.
+        setSearchState((prev) => {
+          if (!prev.showPaymentOnly && !prev.showCaptureOnly) return prev;
+          return { ...prev, showPaymentOnly: false, showCaptureOnly: false };
+        });
+        if (prevServerSideFiltersRef.current) {
+          prevServerSideFiltersRef.current = {
+            ...prevServerSideFiltersRef.current,
+            showPaymentOnly: false,
+            showCaptureOnly: false,
+          };
+        }
+
         if (currencyCode) {
           setSubmitFocusByCurrency((prev) => {
-            const base = submitFocusRangeKey === rangeKey ? { ...prev } : {};
-            const existing = Array.isArray(base[currencyCode]) ? base[currencyCode] : [];
+            const base = !didJumpCaptureDate && submitFocusRangeKey === rangeKey ? { ...prev } : {};
+            const existing =
+              !didJumpCaptureDate && Array.isArray(base[currencyCode]) ? base[currencyCode] : [];
             base[currencyCode] = [...new Set([...existing, ...ids])];
             return base;
           });
@@ -1030,12 +1082,48 @@ export function useTransactionSearch({
         setSubmitFocusRangeKey(rangeKey);
         submitFocusLeftRangeKeysRef.current.delete(rangeKey);
 
-        clearTxSearchCache();
-        await queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
+        // Skip optimistic patch when jumping months — old-range rows are the wrong base.
+        if (!didJumpCaptureDate) {
+          const deltas = buildOptimisticSubmitDeltas({
+            txType: submitTxType,
+            amount,
+            toAccountId,
+            fromAccountId,
+          });
+          if (deltas.length > 0 && currencyCode) {
+            let didPatch = false;
+            setRawSearchData((prev) => {
+              const patched = applyOptimisticSubmitBalancePatch(prev, {
+                currency: currencyCode,
+                deltas,
+              });
+              if (patched && patched !== prev) {
+                didPatch = true;
+                return patched;
+              }
+              return prev;
+            });
+            if (didPatch) setTablesVisible(true);
+          }
+        }
+      });
+
+      setSearchLoading(true);
+      try {
         await runSearch({
           forceRefresh: true,
           silent: true,
           typeSearchOverride: false,
+          // Submit-focus must fetch Cr/Dr accounts too (ignore Win/Loss Only / Payment Only).
+          searchStateOverride: {
+            ...searchState,
+            showPaymentOnly: false,
+            showCaptureOnly: false,
+            showZeroBalance: true,
+          },
+          ...(didJumpCaptureDate
+            ? { dateFromOverride: searchDateFrom, dateToOverride: searchDateTo }
+            : {}),
           ...currencyOverrides,
         });
       } finally {
@@ -1054,8 +1142,8 @@ export function useTransactionSearch({
       persistCurrencyFilter,
       transactionScope?.selectedGroup,
       notifySingleCurrencyIfNeeded,
-      queryClient,
       runSearch,
+      searchState,
     ],
   );
 
@@ -1491,7 +1579,12 @@ export function useTransactionSearch({
     if (lastInitialSearchKeyRef.current === initSearchKey) return;
 
     let hadReplay = false;
+    let pendingInvalidate = false;
     try {
+      const invalidateTs = parseInt(localStorage.getItem(TX_LIST_INVALIDATE_LS_KEY) || "0", 10) || 0;
+      const handledTs = parseInt(sessionStorage.getItem(TX_LIST_INVALIDATE_HANDLED_KEY) || "0", 10) || 0;
+      pendingInvalidate = Boolean(invalidateTs && invalidateTs > handledTs);
+
       const queryFilters = buildTransactionSearchQueryFilters(searchState);
       const key = buildTxListSessionKey({
         companyId: scopeCacheCompanyKey,
@@ -1504,7 +1597,8 @@ export function useTransactionSearch({
         showAllCurrencies,
         selectedCurrencies,
       });
-      const replay = key ? readTxListFromSessionStorage(key) : null;
+      // Skip painting stale session rows when another page invalidated the list.
+      const replay = !pendingInvalidate && key ? readTxListFromSessionStorage(key) : null;
       if (replay) {
         setRawSearchData(replay);
         const replayRows = (replay.left_table?.length || 0) + (replay.right_table?.length || 0);
@@ -1523,12 +1617,23 @@ export function useTransactionSearch({
       showZeroBalance: searchState.showZeroBalance,
     };
     initialSearchDoneRef.current = true;
-    void runSearchRef.current?.({
-      isInitialLoad: true,
-      silent: hadReplay,
-      notifyErrors: !hadReplay,
-      // Never show blocking Loading overlay — keep prior/cached rows until replace.
-      showBlockingOverlay: false,
+    void Promise.resolve(
+      runSearchRef.current?.({
+        isInitialLoad: true,
+        silent: hadReplay && !pendingInvalidate,
+        notifyErrors: !(hadReplay && !pendingInvalidate),
+        // Never show blocking Loading overlay — keep prior/cached rows until replace.
+        showBlockingOverlay: false,
+        forceRefresh: pendingInvalidate,
+      }),
+    ).then(() => {
+      if (!pendingInvalidate) return;
+      try {
+        const invalidateTs = parseInt(localStorage.getItem(TX_LIST_INVALIDATE_LS_KEY) || "0", 10) || 0;
+        if (invalidateTs) sessionStorage.setItem(TX_LIST_INVALIDATE_HANDLED_KEY, String(invalidateTs));
+      } catch {
+        /* ignore */
+      }
     });
   }, [
     scopeKey,

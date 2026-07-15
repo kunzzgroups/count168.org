@@ -27,6 +27,7 @@ export function useDataCaptureCategoryPermissions(companyCode) {
       return normalizePermissions(result);
     },
     enabled: Boolean(companyCode),
+    placeholderData: (previousData) => previousData,
   });
 
   const permissions = query.data;

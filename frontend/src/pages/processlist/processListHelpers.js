@@ -1,5 +1,6 @@
 import { excludeGroupLabelsFromCompanyPicker } from "../../utils/company/sharedCompanyFilter.js";
 import { parseRemoveWordChips, serializeRemoveWordChips } from "../../lib/removeWordChips.js";
+import { notifyTransactionListInvalidated } from "../transaction/lib/transactionPaymentLogic.js";
 
 export const PAGE_SIZE = 25;
 
@@ -357,17 +358,5 @@ export function buildEditDescriptionSelection(p, descriptionsList) {
 }
 
 export function notifyTransactionDataChanged(sourceTag) {
-  const ts = String(Date.now());
-  try {
-    localStorage.setItem("count168_tx_invalidate_ts", ts);
-  } catch {
-    /* ignore */
-  }
-  try {
-    window.dispatchEvent(
-      new CustomEvent("tx-data-changed", { detail: { ts, source: sourceTag || "processlist" } })
-    );
-  } catch {
-    /* ignore */
-  }
+  notifyTransactionListInvalidated(sourceTag || "processlist");
 }

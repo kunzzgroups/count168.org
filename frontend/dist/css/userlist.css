@@ -663,7 +663,10 @@ body.process-page .user-gc-segment:not(:disabled):active {
 }
 
 body.user-page .user-gc-segment.is-on.is-pending,
-body.account-page .user-gc-segment.is-on.is-pending {
+body.account-page .user-gc-segment.is-on.is-pending,
+body.datacapture-page .user-gc-segment.is-on.is-pending,
+body.maintenance-page .user-gc-segment.is-on.is-pending,
+body.dashboard-page .user-gc-segment.is-on.is-pending {
     opacity: 0.88;
 }
 

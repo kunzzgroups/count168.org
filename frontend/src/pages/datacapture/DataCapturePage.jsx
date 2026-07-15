@@ -164,6 +164,7 @@ function DataCapturePageContent() {
   }, []);
 
   const [bootLoading, setBootLoading] = useState(true);
+  const [companySwitchInFlight, setCompanySwitchInFlight] = useState(false);
   const [engineError, setEngineError] = useState("");
   const [scriptsReady, setScriptsReady] = useState(false);
   const [companies, setCompanies] = useState([]);
@@ -780,7 +781,10 @@ function DataCapturePageContent() {
 
   const switchCompanySessionAndNavigate = useCallback(async (nextCompanyId) => {
     const id = Number(nextCompanyId);
-    if (!id) return;
+    if (!id) {
+      setCompanySwitchInFlight(false);
+      return;
+    }
 
     try {
       const syncJson = await syncDataCaptureCompanySession(id);
@@ -795,6 +799,8 @@ function DataCapturePageContent() {
     } catch {
       navigate(DATA_CAPTURE_HOME_PATH, { replace: true });
       return;
+    } finally {
+      setCompanySwitchInFlight(false);
     }
 
     persistDashboardGroupOnlyMode(false);
@@ -804,10 +810,13 @@ function DataCapturePageContent() {
       companyId: id,
     };
     setCompanyId(id);
-    navigate(spaPath("datacapture"), { replace: true });
-  }, [navigate, selectedGroup]);
+    if (searchParams.toString()) {
+      navigate(spaPath("datacapture"), { replace: true });
+    }
+  }, [navigate, selectedGroup, searchParams]);
 
   const handleClearCompany = useCallback(() => {
+    setCompanySwitchInFlight(false);
     setCompanyId(null);
     groupAnchorSessionRef.current = { group: null, companyId: null };
     navigate(spaPath("datacapture"), { replace: true });
@@ -821,6 +830,7 @@ function DataCapturePageContent() {
       if (!id) return;
       const gid = comp.group_id ? String(comp.group_id).toUpperCase().trim() : null;
       form.clearProcessSelection?.();
+      setCompanySwitchInFlight(true);
       flushSync(() => {
         setCompanyId(id);
         if (gid) setSelectedGroup(gid);
@@ -976,11 +986,10 @@ function DataCapturePageContent() {
   }, [scriptsReady]);
 
   const list = filterCompaniesWithDisplayId(companiesForPicker);
-  const pageShellKey = dataCaptureScopeCacheKey(captureScope) || "pending";
 
   return (
-    <DataCaptureErrorBoundary key={pageShellKey}>
-      <div className="container" key={pageShellKey}>
+    <DataCaptureErrorBoundary>
+      <div className="container">
       <div className="dc-page-toolbar">
 
         <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap" }}>
@@ -1040,6 +1049,7 @@ function DataCapturePageContent() {
                     pickerCompanyId={companyId}
                     onPickAllInGroup={handlePickAllInGroup}
                     onPickCompany={handlePickCompany}
+                    switchingCompany={companySwitchInFlight}
                   />
                 </div>
               )}

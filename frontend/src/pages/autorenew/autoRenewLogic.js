@@ -1,8 +1,5 @@
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
-import {
-  TX_DATA_CHANGED_EVENT,
-  TX_LIST_INVALIDATE_LS_KEY,
-} from "../transaction/lib/transactionPaymentLogic.js";
+import { notifyTransactionListInvalidated } from "../transaction/lib/transactionPaymentLogic.js";
 
 export const AUTO_RENEW_PERIODS = [
   { value: "7days", labelKey: "period7days" },
@@ -80,11 +77,5 @@ export async function deleteAutoRenew({ requestId, transactionId, entityType }) 
 }
 
 export function invalidateTransactionListCache(source = "auto_renew") {
-  const ts = Date.now();
-  try {
-    localStorage.setItem(TX_LIST_INVALIDATE_LS_KEY, String(ts));
-  } catch {
-    // ignore
-  }
-  window.dispatchEvent(new CustomEvent(TX_DATA_CHANGED_EVENT, { detail: { ts, source } }));
+  return notifyTransactionListInvalidated(source);
 }

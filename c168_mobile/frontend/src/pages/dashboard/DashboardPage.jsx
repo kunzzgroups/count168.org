@@ -7,6 +7,7 @@ import DashboardKpiCard from "./DashboardKpiCard.jsx";
 import DashboardTrendChart from "./DashboardTrendChart.jsx";
 import FilterSheet from "./FilterSheet.jsx";
 import HeroSummaryCard from "./HeroSummaryCard.jsx";
+import ScopeBreadcrumb from "./ScopeBreadcrumb.jsx";
 
 export default function DashboardPage() {
   const dash = useMobileDashboard();
@@ -49,52 +50,60 @@ export default function DashboardPage() {
     .trim()
     .toUpperCase();
 
-  // Prefer explicit All / group-only scope over the session company's code.
-  const scopeChip = dash.groupsAllMode
-    ? i18n.all
-    : dash.groupAllMode
-      ? groupId
-        ? `${i18n.all}·${groupId}`
-        : i18n.all
-      : dash.groupOnlyMode
-        ? groupId || i18n.all
-        : companyCode;
-  const scopeGroupBadge = dash.groupsAllMode ? "" : dash.groupOnlyMode ? "" : groupId;
-
   const viewingCompanyCode = dash.groupsAllMode || dash.groupAllMode
     ? i18n.all
     : dash.groupOnlyMode
       ? groupId
       : companyCode;
+  const sidebarGroupId = dash.groupOnlyMode ? "" : groupId;
+
+  const scopeTitle = [
+    dash.groupsAllMode ? i18n.all : groupId,
+    dash.groupOnlyMode ? i18n.groupIdShort || "Group" : dash.groupAllMode ? i18n.all : companyCode,
+  ]
+    .filter(Boolean)
+    .join(" › ");
 
   const stickyBar = (
     <button
       type="button"
       onClick={() => setFilterOpen(true)}
-      className="tap-scale flex w-full items-center gap-2 rounded-2xl bg-white px-3 py-2.5 shadow-[0_8px_20px_-12px_rgba(15,23,42,0.2)] ring-1 ring-slate-100"
+      className="tap-scale w-full rounded-2xl bg-white px-3 py-2 text-left shadow-[0_8px_20px_-12px_rgba(15,23,42,0.2)] ring-1 ring-slate-100"
       aria-label={i18n.filter}
     >
-      <i className="far fa-calendar shrink-0 text-[#2f6bf6]" aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate text-left text-[13px] font-bold text-slate-700">
-        {dash.dateRangeText}
-      </span>
-      {scopeChip ? (
-        <span
-          className={`max-w-[5.5rem] shrink-0 truncate rounded-lg px-1.5 py-1 text-[11px] font-bold tracking-wide ${
-            dash.groupsAllMode || dash.groupAllMode || dash.groupOnlyMode
-              ? "bg-violet-50 text-violet-700"
-              : "bg-[#2f6bf6]/10 text-[#2f6bf6]"
-          }`}
-        >
-          {scopeChip}
+      {/* Row 1: date + currency + filter */}
+      <div className="flex items-center gap-2">
+        <i className="far fa-calendar shrink-0 text-[#2f6bf6]" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-700">
+          {dash.dateRangeText}
         </span>
-      ) : null}
-      <span className="shrink-0 rounded-lg bg-slate-100 px-1.5 py-1 text-[11px] font-bold tracking-wide text-slate-600">
-        {dash.currency}
-      </span>
-      <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-xl bg-[#2f6bf6] text-white">
-        <i className="fas fa-filter text-[12px]" aria-hidden="true" />
-      </span>
+        <span className="shrink-0 rounded-lg bg-slate-100 px-1.5 py-1 text-[11px] font-bold tracking-wide text-slate-600">
+          {dash.currency}
+        </span>
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#2f6bf6] text-white">
+          <i className="fas fa-filter text-[11px]" aria-hidden="true" />
+        </span>
+      </div>
+
+      {/* Row 2: Group › Company path — full width, hierarchy clear */}
+      <div
+        className="mt-1.5 flex items-center gap-2 border-t border-slate-100/90 pt-1.5"
+        title={scopeTitle}
+      >
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <ScopeBreadcrumb
+            i18n={i18n}
+            groupId={groupId}
+            companyCode={companyCode}
+            groupsAllMode={dash.groupsAllMode}
+            groupAllMode={dash.groupAllMode}
+            groupOnlyMode={dash.groupOnlyMode}
+          />
+        </div>
+        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+          {i18n.switchCompany || "Switch"}
+        </span>
+      </div>
     </button>
   );
 
@@ -103,8 +112,10 @@ export default function DashboardPage() {
       i18n={i18n}
       me={me}
       companyCode={viewingCompanyCode}
-      groupId={dash.groupOnlyMode ? "" : scopeGroupBadge}
+      groupId={sidebarGroupId}
       onLogout={dash.logout}
+      onRefresh={dash.retry}
+      refreshing={Boolean(refreshing)}
       stickyBar={stickyBar}
       lang={dash.lang}
       onLangChange={dash.setLang}
@@ -122,18 +133,22 @@ export default function DashboardPage() {
           aria-hidden="true"
         />
 
-        {error && (
+        {error && dash.hasData ? (
           <div className="relative mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-            <div className="min-w-0 flex-1 text-[13px] font-semibold text-rose-700">{error}</div>
+            <i className="fas fa-circle-exclamation mt-0.5 text-[14px] text-rose-500" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-bold text-rose-800">{i18n.loadError}</p>
+              <p className="mt-0.5 text-[12px] font-semibold leading-snug text-rose-700/90">{error}</p>
+            </div>
             <button
               type="button"
               onClick={dash.retry}
               className="shrink-0 rounded-xl bg-white px-3 py-1.5 text-[12px] font-bold text-rose-600 ring-1 ring-rose-200"
             >
-              Retry
+              {i18n.retry || "Retry"}
             </button>
           </div>
-        )}
+        ) : null}
 
         {ratesHint && (
           <div
@@ -173,23 +188,40 @@ export default function DashboardPage() {
             multiCurrency={dash.showMultiCurrencyNote}
             loading={loading}
             empty={!loading && !dash.hasData}
+            emptyLabel={false}
             sparklineValues={sparklineValues}
           />
 
           {!loading && !dash.hasData && (
-            <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/80 px-4 py-4 text-center">
-              <p className="text-[13px] font-semibold text-slate-500">{i18n.noData}</p>
-              {dash.activePreset !== "thisYear" ? (
+            <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/80 px-5 py-6 text-center">
+              <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-400">
+                <i className={`fas ${error ? "fa-lock" : "fa-chart-line"} text-[18px]`} aria-hidden="true" />
+              </div>
+              <p className="text-[14px] font-bold text-slate-700">
+                {error ? i18n.emptyErrorTitle || i18n.loadError : i18n.emptyTitle || i18n.noData}
+              </p>
+              <p className="mt-1 text-[12px] font-medium leading-snug text-slate-500">
+                {error ? error : i18n.emptyHint || i18n.noData}
+              </p>
+              {error ? (
                 <button
                   type="button"
-                  className="mt-3 tap-scale rounded-xl bg-[#2f6bf6] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-60"
+                  className="mt-4 tap-scale rounded-xl bg-[#2f6bf6] px-4 py-2 text-[13px] font-bold text-white"
+                  onClick={dash.retry}
+                >
+                  {i18n.retry || "Retry"}
+                </button>
+              ) : dash.activePreset !== "thisYear" ? (
+                <button
+                  type="button"
+                  className="mt-4 tap-scale rounded-xl bg-[#2f6bf6] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-60"
                   disabled={Boolean(refreshing)}
                   onClick={() => dash.applyPreset("thisYear")}
                 >
                   {refreshing ? i18n.loading : i18n.viewThisYear || i18n.thisYear}
                 </button>
               ) : refreshing ? (
-                <p className="mt-3 inline-flex items-center justify-center gap-2 text-[12px] font-bold text-slate-500">
+                <p className="mt-4 inline-flex items-center justify-center gap-2 text-[12px] font-bold text-slate-500">
                   <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-[#2f6bf6]" />
                   {i18n.loading}
                 </p>
@@ -218,14 +250,6 @@ export default function DashboardPage() {
             </div>
           </section>
 
-          <CurrencyDistributionCard
-            i18n={i18n}
-            currencyCode={dash.currency}
-            rows={dash.earningsCurrencyRows}
-            useConverted={dash.useConvertedEarnings}
-            loading={loading}
-          />
-
           <DashboardTrendChart
             rows={dash.chartRows}
             series={dash.chartSeries}
@@ -234,7 +258,16 @@ export default function DashboardPage() {
             label={i18n.trendChart}
             dateRangeText={dash.dateRangeShort}
             xAxisLayout={dash.chartXAxisLayout}
-            emptyText={loading ? i18n.loading : i18n.noData}
+            emptyText={loading ? i18n.loading : i18n.chartSelectSeries || i18n.noData}
+          />
+
+          <CurrencyDistributionCard
+            i18n={i18n}
+            currencyCode={dash.currency}
+            rows={dash.earningsCurrencyRows}
+            useConverted={dash.useConvertedEarnings}
+            loading={loading}
+            note={dash.useConvertedEarnings ? i18n.multiCurrencyNote : ""}
           />
 
           <CurrencyListCard

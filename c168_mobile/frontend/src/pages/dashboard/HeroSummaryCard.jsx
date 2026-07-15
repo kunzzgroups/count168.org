@@ -9,6 +9,7 @@ export default function HeroSummaryCard({
   multiCurrency,
   loading,
   empty = false,
+  emptyLabel,
   sparklineValues = [],
 }) {
   const showCompare = !loading && !empty && compare && Number.isFinite(compare?.pct);
@@ -90,9 +91,11 @@ export default function HeroSummaryCard({
         </p>
       )}
 
-      {empty && !loading && (
-        <p className="relative mt-3 text-[12px] font-semibold text-white/75">{i18n.noData}</p>
-      )}
+      {empty && !loading && emptyLabel !== false ? (
+        <p className="relative mt-3 text-[12px] font-semibold text-white/75">
+          {typeof emptyLabel === "string" ? emptyLabel : i18n.noData}
+        </p>
+      ) : null}
 
       {multiCurrency && !empty && (
         <p className="relative mt-2 text-[11px] font-semibold text-white/70">{i18n.multiCurrencyNote}</p>

@@ -35,6 +35,17 @@ function sanitizeTransactionAmountInput(value) {
   return hasLeadingMinus ? `-${unsigned}` : unsigned;
 }
 
+/** Badge + list refresh must not block the Submit button after the POST succeeds. */
+function kickOffPostSubmitRefresh({ refreshContraInboxBadge, scopeApi, onAfterSuccessfulSubmit, focusOpts }) {
+  const tasks = [Promise.resolve(refreshContraInboxBadge?.(scopeApi))];
+  if (focusOpts) {
+    tasks.push(Promise.resolve(onAfterSuccessfulSubmit?.(focusOpts)));
+  }
+  void Promise.all(tasks).catch((err) => {
+    console.error(err);
+  });
+}
+
 export function useTransactionForm({
   todayDmy,
   pushToast,
@@ -119,8 +130,9 @@ export function useTransactionForm({
     mutationFn: ({ scopeApi, payload, clientRequestId }) =>
       submitTransaction({ ...scopeApi, payload, clientRequestId }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
-      queryClient.invalidateQueries({ queryKey: transactionQueryKeys.contraInboxRoot() });
+      // Mark stale only — explicit post-submit refresh owns the refetch.
+      queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot(), refetchType: "none" });
+      queryClient.invalidateQueries({ queryKey: transactionQueryKeys.contraInboxRoot(), refetchType: "none" });
     },
   });
 
@@ -426,7 +438,6 @@ export function useTransactionForm({
           } else {
             pushToast(res?.message || m.rateTransactionSubmitted, "success");
           }
-          await refreshContraInboxBadge(scopeApi);
           setTxConfirm(false);
           setRateCurrencyFromAmount("");
           setRateFullAmount("");
@@ -442,19 +453,26 @@ export function useTransactionForm({
           setRateTransferToAccount(null);
           setRateTransferFromAccount(null);
           setRateMiddlemanAccount(null);
-          if (approvalStatus !== "PENDING") {
-            await onAfterSuccessfulSubmit?.({
-              accountIds: collectSubmitFocusAccountIds({
-                txType: "RATE",
-                rateToAccountId: rateToAccount?.id,
-                rateFromAccountId: rateFromAccount?.id,
-                rateTransferToAccountId: rateTransferToAccount?.id,
-                rateTransferFromAccountId: rateTransferFromAccount?.id,
-                rateMiddlemanAccountId: rateMiddlemanAccount?.id,
-              }),
-              submitCurrency: rateCurrencyFrom,
-            });
-          }
+          kickOffPostSubmitRefresh({
+            refreshContraInboxBadge,
+            scopeApi,
+            onAfterSuccessfulSubmit,
+            focusOpts:
+              approvalStatus === "PENDING"
+                ? null
+                : {
+                    accountIds: collectSubmitFocusAccountIds({
+                      txType: "RATE",
+                      rateToAccountId: rateToAccount?.id,
+                      rateFromAccountId: rateFromAccount?.id,
+                      rateTransferToAccountId: rateTransferToAccount?.id,
+                      rateTransferFromAccountId: rateTransferFromAccount?.id,
+                      rateMiddlemanAccountId: rateMiddlemanAccount?.id,
+                    }),
+                    submitCurrency: rateCurrencyFrom,
+                    transactionDate: rateDate,
+                  },
+          });
           return;
         }
         pushToast(res?.message || m.submitFailed, "error");
@@ -559,21 +577,31 @@ export function useTransactionForm({
         } else {
           pushToast(res?.message || m.transactionSubmitted, "success");
         }
-        await refreshContraInboxBadge(scopeApi);
         setTxAmount("");
         setTxFullAmount("");
         setTxConfirm(false);
-        if (approvalStatus !== "PENDING") {
-          await onAfterSuccessfulSubmit?.({
-            accountIds: collectSubmitFocusAccountIds({
-              txType,
-              toAccountId: toId,
-              fromAccountId: fromId,
-              isAdjustment,
-            }),
-            submitCurrency: txCurrency,
-          });
-        }
+        kickOffPostSubmitRefresh({
+          refreshContraInboxBadge,
+          scopeApi,
+          onAfterSuccessfulSubmit,
+          focusOpts:
+            approvalStatus === "PENDING"
+              ? null
+              : {
+                  accountIds: collectSubmitFocusAccountIds({
+                    txType,
+                    toAccountId: toId,
+                    fromAccountId: fromId,
+                    isAdjustment,
+                  }),
+                  submitCurrency: txCurrency,
+                  amount: payload.amount,
+                  txType: payload.transaction_type,
+                  toAccountId: toId,
+                  fromAccountId: isAdjustment ? "" : fromId,
+                  transactionDate: txDate,
+                },
+        });
         return;
       }
       pushToast(res?.message || m.submitFailed, "error");

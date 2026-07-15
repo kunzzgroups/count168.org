@@ -41,6 +41,7 @@ import {
   updateSessionCompany,
   isPaymentMaintenanceRowSelectable,
 } from "./paymentMaintenanceLogic.js";
+import { notifyTransactionListInvalidated } from "../../transaction/lib/transactionPaymentLogic.js";
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
 import { getMaintenanceText, MAINTENANCE_I18N } from "../../../translateFile/pages/maintenanceTranslate.js";
 
@@ -722,6 +723,7 @@ export default function PaymentMaintenancePage() {
     setIsDeleteModalOpen(false);
     try {
       await deletePaymentRecords(selectedIds, paymentScope);
+      notifyTransactionListInvalidated("payment_maintenance_delete");
       notify(t("successfullyDeletedN", { n: selectedIds.length }), "success");
       performSearch({ scope: paymentScope });
     } catch (err) {

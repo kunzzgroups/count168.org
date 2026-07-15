@@ -2,8 +2,11 @@ import { eachDateInRange, parseYmd } from "./dashboardDateUtils.js";
 import { resolveEarningsMultiplier, viewerHasEarningsConfig } from "./dashboardKpi.js";
 
 export function resolveDailyChartXAxisTicks(dayCount) {
-  if (dayCount <= 14) return { interval: 0, minTickGap: 0 };
-  return { interval: "preserveStartEnd", minTickGap: 28 };
+  if (dayCount <= 10) return { interval: 0, minTickGap: 6, height: 22, marginBottom: 8 };
+  if (dayCount <= 31) return { interval: "preserveStartEnd", minTickGap: 20, height: 24, marginBottom: 10 };
+  if (dayCount <= 100) return { interval: "preserveStartEnd", minTickGap: 36, height: 28, marginBottom: 12 };
+  // YTD / long ranges — keep ends + sparse mid ticks readable on ~360px width.
+  return { interval: "preserveStartEnd", minTickGap: 52, height: 30, marginBottom: 14 };
 }
 
 export function computeTrendYDomain(rows, dataKeys) {

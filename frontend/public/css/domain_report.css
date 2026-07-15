@@ -108,9 +108,9 @@ body.dashboard-page.report-page .domain-report-filters .report-outlined-label--t
     left: clamp(46px, 3.35vw, 58px);
 }
 
-/* Calendar icon pill — shared with dashboard via transaction.css; outlined shell clips left corner */
+/* Calendar icon pill — match shell inner corner (outer radius − 1px border) */
 body.dashboard-page.report-page .domain-report-filters .report-outlined-inner .transaction-date-range-group .date-range-picker i.fa-calendar-alt {
-    border-radius: clamp(6px, 0.52vw, 8px) 0 0 clamp(6px, 0.52vw, 8px);
+    border-radius: calc(clamp(6px, 0.52vw, 8px) - 1px) 0 0 calc(clamp(6px, 0.52vw, 8px) - 1px);
     z-index: 5;
 }
 

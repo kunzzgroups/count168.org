@@ -257,6 +257,39 @@ function renumberMaintenanceRows(rows) {
   return rows;
 }
 
+/** Client-side text filter across visible columns (API is paginated — avoid post-filter in PHP). */
+export function filterTransactionMaintenanceRowsBySearch(rows, searchTerm) {
+  const q = String(searchTerm || "").trim().toUpperCase();
+  const list = Array.isArray(rows) ? rows : [];
+  if (!q) return list;
+  const fields = [
+    "process",
+    "id_product",
+    "account",
+    "from_account",
+    "description",
+    "remark",
+    "currency",
+    "rate",
+    "cr",
+    "dr",
+    "percent",
+    "created_by",
+    "deleted_by",
+    "dts_created",
+    "dts_deleted",
+  ];
+  const filtered = list
+    .filter((row) =>
+      fields.some((field) => {
+        const value = String(row?.[field] ?? "").toUpperCase();
+        return value !== "" && value.includes(q);
+      }),
+    )
+    .map((row) => ({ ...row }));
+  return renumberMaintenanceRows(filtered);
+}
+
 function finalizeMaintenanceRows(rows) {
   const merged = [...rows];
   merged.sort(compareMaintenanceRows);
