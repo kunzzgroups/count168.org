@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:php": "php -S localhost:8000 -t ..",
+    "dev:php": "php -S 127.0.0.1:8000 -t ../..",
     "dev:all": "concurrently -k -n php,vite -c blue,green \"npm run dev:php\" \"npm run dev\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "smoke:live": "node scripts/live-dashboard-smoke.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

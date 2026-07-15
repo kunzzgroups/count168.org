@@ -76,7 +76,7 @@ export const LOGIN_I18N = {
     loginFailed: "Login failed",
     loginError: "An error occurred during login",
     loginBackendOffline:
-      "Cannot reach PHP backend. From project root run: php -S localhost:8000",
+      "Cannot reach PHP backend. From project root run: php -S 127.0.0.1:8000",
     loginServerError: "Server error (HTTP {status}). Check PHP backend and database.",
     loginInvalidResponse: "Server returned an invalid response. Check local PHP and MySQL.",
     confirm: "Confirm",
@@ -97,7 +97,7 @@ export const LOGIN_I18N = {
     notice: "提示",
     loginFailed: "登录失败",
     loginError: "登录时发生错误",
-    loginBackendOffline: "无法连接 PHP 后端。请在项目根目录运行：php -S localhost:8000",
+    loginBackendOffline: "无法连接 PHP 后端。请在项目根目录运行：php -S 127.0.0.1:8000",
     loginServerError: "服务器错误 (HTTP {status})。请检查本地 PHP 与数据库。",
     loginInvalidResponse: "服务器返回异常。请检查 includes/config.php 与 MySQL。",
     confirm: "确认",

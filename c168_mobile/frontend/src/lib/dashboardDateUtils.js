@@ -15,8 +15,10 @@ export function parseYmd(s) {
 export function defaultDashboardDateRange() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  // Live ops: YTD gives a useful first paint; This Month is often empty mid-month
+  // for companies that post later in the cycle.
   return {
-    dateFrom: formatYmd(new Date(today.getFullYear(), today.getMonth(), 1)),
+    dateFrom: formatYmd(new Date(today.getFullYear(), 0, 1)),
     dateTo: formatYmd(today),
   };
 }
@@ -103,6 +105,18 @@ export function eachDateInRange(startYmd, endYmd) {
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
+}
+
+/** Inclusive day count for a YMD range. */
+export function daysInclusive(fromYmd, toYmd) {
+  const start = parseYmd(fromYmd);
+  const end = parseYmd(toYmd);
+  if (!start || !end || start > end) return 0;
+  return Math.round((end - start) / 86400000) + 1;
+}
+
+export function todayYmd() {
+  return formatYmd(new Date());
 }
 
 export const PERIOD_PRESET_KEYS = [

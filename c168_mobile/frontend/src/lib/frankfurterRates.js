@@ -11,15 +11,48 @@ function normalizeQuotes(baseCode, quoteCodes) {
   ];
 }
 
-export async function fetchFrankfurterRates(baseCode, quoteCodes) {
+export async function fetchFrankfurterRates(baseCode, quoteCodes, { signal, date = null } = {}) {
   const base = String(baseCode || "").trim().toUpperCase();
   const quotes = normalizeQuotes(base, quoteCodes);
   if (!base) return { rates: {}, date: null };
   if (!quotes.length) return { rates: { [base]: 1 }, date: null };
 
   const params = new URLSearchParams({ base, quotes: quotes.join(",") });
+  if (date) params.set("date", String(date));
   const url = `${FRANKFURTER_API}?${params}`;
-  const res = await fetch(url);
+
+  // Always enforce timeout even when AbortSignal.any is unavailable.
+  const timeoutMs = 8000;
+  const res = await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new DOMException("Exchange rate request timed out", "TimeoutError"));
+    }, timeoutMs);
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    if (signal) {
+      if (signal.aborted) {
+        onAbort();
+        return;
+      }
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
+
+    fetch(url, { signal, cache: "no-store" })
+      .then((response) => {
+        clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", onAbort);
+        resolve(response);
+      })
+      .catch((err) => {
+        clearTimeout(timer);
+        if (signal) signal.removeEventListener("abort", onAbort);
+        reject(err);
+      });
+  });
+
   if (!res.ok) throw new Error("Failed to load exchange rates");
   const json = await res.json();
   const rows = Array.isArray(json) ? json : Array.isArray(json.data) ? json.data : [];
@@ -31,8 +64,18 @@ export async function fetchFrankfurterRates(baseCode, quoteCodes) {
   }
   return {
     rates,
-    date: rows[0]?.date || null,
+    date: rows[0]?.date || date || null,
   };
+}
+
+/** Pick rate date: use range end if not in the future, else latest. */
+export function resolveFrankfurterDate(endYmd) {
+  if (!endYmd) return null;
+  const end = new Date(`${endYmd}T12:00:00`);
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  if (Number.isNaN(end.getTime()) || end > today) return null;
+  return endYmd;
 }
 
 export function convertToBaseAmount(amount, fromCode, baseCode, rates) {

@@ -16,12 +16,39 @@ export default function CurrencyListCard({
   useConverted,
   loading,
 }) {
+  const sorted = [...rows].sort((a, b) => {
+    const av = Math.abs(Number(a.earningsConverted ?? a.earnings) || 0);
+    const bv = Math.abs(Number(b.earningsConverted ?? b.earnings) || 0);
+    return bv - av;
+  });
+  const activeRows = sorted.filter((row) => {
+    const amount = Number(row.earningsConverted ?? row.earnings);
+    return Number.isFinite(amount) && Math.abs(amount) >= 0.005;
+  });
+  const displayRows = activeRows.length ? activeRows : sorted.slice(0, 1);
+
+  if (!rows?.length && !loading) {
+    return (
+      <section className="animate-fade-in rounded-[24px] bg-white p-5 shadow-[0_8px_28px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-100/80">
+        <h2 className="text-[15px] font-bold text-slate-900">{i18n.currencies}</h2>
+        <p className="mt-6 mb-2 grid place-items-center text-[13px] font-semibold text-slate-400">{i18n.noData}</p>
+      </section>
+    );
+  }
+
   return (
-    <section className="animate-fade-in overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-slate-100">
-      <h2 className="px-5 pb-1 pt-5 text-[15px] font-semibold text-slate-900">{i18n.currencies}</h2>
+    <section className="animate-fade-in overflow-hidden rounded-[24px] bg-white shadow-[0_8px_28px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-100/80">
+      <div className="flex items-center justify-between gap-2 px-5 pb-1 pt-5">
+        <h2 className="text-[15px] font-bold text-slate-900">{i18n.currencies}</h2>
+        {!loading && activeRows.length > 0 && activeRows.length < rows.length ? (
+          <span className="text-[11px] font-semibold text-slate-400">
+            {activeRows.length}/{rows.length}
+          </span>
+        ) : null}
+      </div>
 
       <ul className="divide-y divide-slate-100">
-        {rows.map((row, index) => {
+        {displayRows.map((row, index) => {
           const code = String(row.code).toUpperCase();
           const meta = getCurrencyMeta(code, lang);
           const color = getCurrencyColor(code, index);

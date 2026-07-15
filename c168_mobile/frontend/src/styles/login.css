@@ -20,12 +20,20 @@ body.bg {
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
   position: relative;
   overflow-x: hidden;
+  overflow-y: auto;
 }
 
-/* #root: relax flex min-size; column width lock lives in src/styles/login-surface-lock.css (imported last in main.jsx) */
+/* #root fills the flex host so the login column can use full mobile width */
 body.bg #root {
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100dvh;
 }
 
 html:has(body.bg) {
@@ -52,7 +60,7 @@ body.bg::before {
   animation: sc-login-fade-in 0.6s ease-out;
 }
 
-/* Wrap + ios26 language switch (git e0f450c8 — glass track, blue gradient thumb, glow/shimmer) */
+/* Language switch */
 .sc-login-lang-switch-wrap,
 .sc-login-lang-ios-wrap {
   display: flex;
@@ -248,6 +256,7 @@ button.sc-login-lang-seg.active {
   overflow: hidden;
   backdrop-filter: blur(10px);
   min-width: 0;
+  width: 100%;
   max-width: 100%;
   min-height: var(--login-card-min-height);
 }
@@ -257,6 +266,11 @@ button.sc-login-lang-seg.active {
   background: linear-gradient(135deg, var(--login-bg-start), var(--login-bg-end));
   border-radius: var(--login-radius-xl) var(--login-radius-xl) 0 0 !important;
   overflow: hidden;
+}
+
+.sc-login-card > .sc-login-role-tabs:first-child {
+  border-top-left-radius: var(--login-radius-xl) !important;
+  border-top-right-radius: var(--login-radius-xl) !important;
 }
 
 .sc-login-role-tab {
@@ -698,6 +712,14 @@ button.sc-login-lang-seg.active {
   min-width: 0;
   margin: 0 auto;
   box-sizing: border-box;
+  padding-inline: 4px;
+}
+
+@media (max-width: 480px) {
+  .sc-login-column {
+    max-width: 100%;
+    padding-inline: 0;
+  }
 }
 
 body.bg .sc-login-input-row {
@@ -709,19 +731,26 @@ body.bg .sc-login-input {
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  min-height: 44px;
-  padding: 12px 22px 12px 42px;
+  min-height: 48px;
+  padding: 12px 22px 12px 44px;
   border-width: 2px;
   border-style: solid;
   border-color: var(--login-bg-end);
   border-radius: var(--login-radius-pill);
-  font-size: var(--text-base);
+  font-size: 16px; /* keep ≥16px to avoid iOS focus zoom */
+  line-height: 1.35;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
   color: var(--login-text, #333333);
   color-scheme: light;
   caret-color: var(--login-text, #333333);
   cursor: var(--login-input-cursor);
   background: rgba(255, 255, 255, 0.9);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+body.bg .sc-login-input:focus {
+  scroll-margin-block: 120px;
 }
 
 body.bg .sc-login-input:focus {

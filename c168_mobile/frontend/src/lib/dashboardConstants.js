@@ -1,4 +1,5 @@
 export const DASHBOARD_BOOTSTRAP_API = "api/transactions/dashboard_bootstrap_api.php";
+export const DASHBOARD_API = "api/transactions/dashboard_api.php";
 export const DASHBOARD_PROFIT_COLOR = "#3b82f6";
 
 export const DASHBOARD_CURRENCY_COLORS = {

@@ -3,10 +3,19 @@ import "./DevPhoneFrame.css";
 
 const DEV_FRAME_KEY = "c168_mobile_dev_phone_frame";
 
+/** Common handset viewports for responsive QA. */
 const DEVICES = [
-  { id: "iphone-14", label: "iPhone 14", width: 390, height: 844 },
   { id: "iphone-se", label: "iPhone SE", width: 375, height: 667 },
+  { id: "iphone-14", label: "iPhone 14", width: 390, height: 844 },
+  { id: "iphone-14-pro-max", label: "iPhone 14 Pro Max", width: 430, height: 932 },
+  { id: "iphone-15-pro", label: "iPhone 15 Pro", width: 393, height: 852 },
   { id: "pixel-7", label: "Pixel 7", width: 412, height: 915 },
+  { id: "pixel-8", label: "Pixel 8", width: 412, height: 915 },
+  { id: "galaxy-s21", label: "Galaxy S21", width: 360, height: 800 },
+  { id: "galaxy-s24", label: "Galaxy S24", width: 384, height: 832 },
+  { id: "galaxy-fold-cover", label: "Fold Cover", width: 280, height: 653 },
+  { id: "galaxy-fold-main", label: "Fold Main", width: 690, height: 829 },
+  { id: "ipad-mini", label: "iPad mini", width: 768, height: 1024 },
 ];
 
 function readFrameEnabled() {

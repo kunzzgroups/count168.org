@@ -240,12 +240,12 @@ body.ec-payment-history-chromeless .transaction-history-table--with-desc col.tra
 
 body.transaction-payment-history-page .transaction-history-table--with-desc col.transaction-history-col-winloss,
 body.ec-payment-history-chromeless .transaction-history-table--with-desc col.transaction-history-col-winloss {
-  width: 3%;
+  width: 2%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--with-desc col.transaction-history-col-crdr,
 body.ec-payment-history-chromeless .transaction-history-table--with-desc col.transaction-history-col-crdr {
-  width: 3%;
+  width: 2%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--with-desc col.transaction-history-col-balance,
@@ -290,12 +290,12 @@ body.ec-payment-history-chromeless .transaction-history-table--no-desc col.trans
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-winloss,
 body.ec-payment-history-chromeless .transaction-history-table--no-desc col.transaction-history-col-winloss {
-  width: 8%;
+  width: 7%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-crdr,
 body.ec-payment-history-chromeless .transaction-history-table--no-desc col.transaction-history-col-crdr {
-  width: 8%;
+  width: 7%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-balance,
@@ -704,12 +704,12 @@ body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compa
 
 body.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-winloss,
 body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-winloss {
-  width: 9%;
+  width: 8%;
 }
 
 body.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-crdr,
 body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-crdr {
-  width: 9%;
+  width: 8%;
 }
 
 body.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-balance,

@@ -1220,35 +1220,13 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
     transition: opacity 0.2s ease;
 }
 
+/* Boot indicator only — keep filters/company pills interactive under slow networks. */
 .transaction-page .transaction-main--booting .transaction-main-content {
-    opacity: 0.72;
-    pointer-events: none;
-    user-select: none;
+    opacity: 1;
 }
 
 .transaction-page .transaction-tables-section {
     transition: opacity 0.2s ease;
-}
-
-.transaction-page .transaction-boot-loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 48px;
-    margin: 0 0 12px 0;
-    color: #6b7280;
-    font-size: clamp(9px, 0.73vw, 14px);
-}
-
-.transaction-page .transaction-boot-loading::before {
-    content: '';
-    width: 20px;
-    height: 20px;
-    margin-right: 10px;
-    border: 2px solid #e5e7eb;
-    border-top-color: #002C49;
-    border-radius: 50%;
-    animation: transaction-loading-spin 0.7s linear infinite;
 }
 
 .transaction-page .transaction-tables-section {
@@ -1257,31 +1235,14 @@ body.transaction-page .transaction-checkboxes.userlist-filter-chips .user-filter
     margin-bottom: 0;
 }
 
+/* User-facing Loading / empty chrome disabled — keep SWR tables, no spinner banners. */
+.transaction-page .transaction-boot-loading,
+.transaction-page .transaction-boot-loading::before,
 .transaction-page .transaction-tables-loading,
-.transaction-page .transaction-tables-refreshing {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 120px;
-    width: 100%;
-    color: #6b7280;
-    font-size: clamp(9px, 0.73vw, 14px);
-}
-
-.transaction-page .transaction-tables-refreshing {
-    min-height: 36px;
-    margin-bottom: 8px;
-}
-
-.transaction-page .transaction-tables-loading::before {
-    content: '';
-    width: 24px;
-    height: 24px;
-    margin-right: 10px;
-    border: 2px solid #e5e7eb;
-    border-top-color: #002C49;
-    border-radius: 50%;
-    animation: transaction-loading-spin 0.7s linear infinite;
+.transaction-page .transaction-tables-loading::before,
+.transaction-page .transaction-tables-refreshing,
+.transaction-page .transaction-tables-empty {
+    display: none !important;
 }
 
 @keyframes transaction-loading-spin {

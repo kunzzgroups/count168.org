@@ -25,9 +25,9 @@ export default function DashboardTrendChart({
   const yDomain = computeTrendYDomain(rows, activeKeys);
 
   return (
-    <section className="animate-fade-in rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-100">
+    <section className="animate-fade-in rounded-[24px] bg-white p-5 shadow-[0_8px_28px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-100/80">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-[15px] font-semibold text-slate-900">{label}</h2>
+        <h2 className="text-[15px] font-bold text-slate-900">{label}</h2>
         <span className="shrink-0 rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
           {dateRangeText}
         </span>

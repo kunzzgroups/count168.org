@@ -7,6 +7,57 @@ import { useAuthBackground } from "./useAuthBackground.js";
 
 const LOGIN_ASSET_RETRY_KEY = "ec_mobile_login_asset_retry";
 
+/** Uppercase without breaking mobile IME composition. */
+function useUppercaseField(initial = "") {
+  const [value, setValue] = useState(initial);
+  const composingRef = useRef(false);
+
+  const onChange = useCallback((e) => {
+    const next = e.target.value;
+    if (composingRef.current) {
+      setValue(next);
+      return;
+    }
+    setValue(next.toUpperCase());
+  }, []);
+
+  const onCompositionStart = useCallback(() => {
+    composingRef.current = true;
+  }, []);
+
+  const onCompositionEnd = useCallback((e) => {
+    composingRef.current = false;
+    setValue(e.target.value.toUpperCase());
+  }, []);
+
+  const onBlur = useCallback((e) => {
+    setValue(e.target.value.toUpperCase());
+  }, []);
+
+  const onFocus = useCallback((e) => {
+    // Keep focused field above soft keyboard on mobile.
+    requestAnimationFrame(() => {
+      e.target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    });
+  }, []);
+
+  return {
+    value,
+    setValue,
+    fieldProps: {
+      value,
+      onChange,
+      onCompositionStart,
+      onCompositionEnd,
+      onBlur,
+      onFocus,
+      autoCapitalize: "characters",
+      autoCorrect: "off",
+      spellCheck: false,
+    },
+  };
+}
+
 function tryLoginPageReloadOnce() {
   if (sessionStorage.getItem(LOGIN_ASSET_RETRY_KEY)) {
     sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
@@ -93,8 +144,10 @@ export default function LoginPage() {
   const roleFromUrl = searchParams.get("role") === "member" ? "member" : "admin";
 
   const [role, setRole] = useState(roleFromUrl);
-  const [companyId, setCompanyId] = useState("");
-  const [userField, setUserField] = useState("");
+  const companyField = useUppercaseField("");
+  const userIdField = useUppercaseField("");
+  const companyId = companyField.value;
+  const userField = userIdField.value;
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [maintenanceList, setMaintenanceList] = useState([]);
@@ -399,8 +452,9 @@ export default function LoginPage() {
                     placeholder={i18n.companyPlaceholder}
                     required
                     autoComplete="organization"
-                    value={companyId}
-                    onChange={(e) => setCompanyId(e.target.value.toUpperCase())}
+                    inputMode="text"
+                    enterKeyHint="next"
+                    {...companyField.fieldProps}
                   />
                 </div>
 
@@ -413,8 +467,9 @@ export default function LoginPage() {
                     placeholder={userPlaceholder}
                     required
                     autoComplete="username"
-                    value={userField}
-                    onChange={(e) => setUserField(e.target.value.toUpperCase())}
+                    inputMode="text"
+                    enterKeyHint="next"
+                    {...userIdField.fieldProps}
                   />
                 </div>
 
@@ -427,8 +482,14 @@ export default function LoginPage() {
                     placeholder={i18n.passwordPlaceholder}
                     required
                     autoComplete="current-password"
+                    enterKeyHint="go"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onFocus={(e) => {
+                      requestAnimationFrame(() => {
+                        e.target.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+                      });
+                    }}
                   />
                 </div>
 

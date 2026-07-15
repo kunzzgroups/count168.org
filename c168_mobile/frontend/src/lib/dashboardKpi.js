@@ -23,18 +23,48 @@ export function buildKpiCompare(current, previous) {
   };
 }
 
-export function viewerHasEarningsConfig(dashboardData) {
+export function viewerHasEarningsConfig(dashboardData, options = {}) {
   if (!dashboardData) return false;
+  const subsidiaryGroupDrillDown = !!options.subsidiaryGroupDrillDown;
+  if (subsidiaryGroupDrillDown && !dashboardData.has_ownership_setup) return false;
   const directPct = parseFloat(dashboardData.ownership_percentage) || 0;
-  if (directPct > 0) return true;
+  if (subsidiaryGroupDrillDown) {
+    if (directPct > 0) return true;
+    const linkMul = parseFloat(dashboardData._link_multiplier || 0) || 0;
+    if (linkMul > 0 && linkMul !== 1) return true;
+    const groupEquityPct = parseFloat(dashboardData.group_equity_percentage) || 0;
+    const groupAccPct = parseFloat(dashboardData.group_account_percentage) || 0;
+    return groupEquityPct > 0 && groupAccPct > 0;
+  }
   const linkMul = parseFloat(dashboardData._link_multiplier || 0) || 0;
   if (linkMul > 0 && linkMul !== 1) return true;
+  if (directPct > 0) return true;
+  if (options.groupsAllCompaniesAggregate) return false;
+  if (dashboardData._group_aggregate_earnings || options.groupAggregateEarnings) {
+    if (dashboardData.has_group_ownership) return true;
+    const groupAccPct = parseFloat(dashboardData.group_account_percentage) || 0;
+    return groupAccPct > 0;
+  }
   if (dashboardData.has_group_ownership) return true;
   return false;
 }
 
-export function resolveEarningsMultiplier(dashboardData, requireViewerConfig) {
+function resolveGroupAccountMultiplier(dashboardData) {
+  const accPct = parseFloat(dashboardData?.group_account_percentage) || 0;
+  return accPct > 0 ? accPct / 100 : 1;
+}
+
+function isGroupAggregateEarningsPayload(dashboardData, options = {}) {
+  if (!dashboardData) return false;
+  if (options.groupAggregateEarnings) return true;
+  return dashboardData._group_aggregate_earnings === true;
+}
+
+export function resolveEarningsMultiplier(dashboardData, requireViewerConfig, options = {}) {
   if (!dashboardData) return 0;
+  if (isGroupAggregateEarningsPayload(dashboardData, options)) {
+    return resolveGroupAccountMultiplier(dashboardData);
+  }
   const ownershipPercentage = parseFloat(dashboardData?.ownership_percentage) || 0;
   const groupEquityPercentage = parseFloat(dashboardData?.group_equity_percentage) || 0;
   const groupAccountPercentage = parseFloat(dashboardData?.group_account_percentage) || 0;
@@ -42,7 +72,21 @@ export function resolveEarningsMultiplier(dashboardData, requireViewerConfig) {
   const linkMul = parseFloat(dashboardData?._link_multiplier || 0) || 0;
   const hasLinkOwnership = linkMul > 0 && linkMul !== 1;
   const directPct = ownershipPercentage / 100;
+  const subsidiaryGroupDrillDown = !!options.subsidiaryGroupDrillDown;
 
+  if (subsidiaryGroupDrillDown) {
+    if (!dashboardData.has_ownership_setup && requireViewerConfig) return 0;
+    if (directPct > 0) return directPct;
+    if (hasLinkOwnership) {
+      const viewerGroupShare = groupAccountPercentage > 0 ? groupAccountPercentage / 100 : 1;
+      return linkMul * viewerGroupShare;
+    }
+    if (groupEquityPercentage > 0) {
+      const viewerGroupShare = groupAccountPercentage > 0 ? groupAccountPercentage / 100 : 0;
+      return (groupEquityPercentage / 100) * viewerGroupShare;
+    }
+    return 0;
+  }
   if (hasLinkOwnership) {
     const viewerGroupShare = groupAccountPercentage > 0 ? groupAccountPercentage / 100 : 1;
     return linkMul * viewerGroupShare;
@@ -55,21 +99,93 @@ export function resolveEarningsMultiplier(dashboardData, requireViewerConfig) {
   return 0;
 }
 
-export function computeKpiMetrics(dashboardData) {
+function sumSubsidiaryCompanyEarnings(dashboardData) {
+  if (!dashboardData) return 0;
+  const rows = dashboardData.subsidiary_earnings_by_company;
+  if (Array.isArray(rows) && rows.length) {
+    return rows.reduce((sum, row) => {
+      const companyEarning = parseFloat(row.company_earning);
+      if (Number.isFinite(companyEarning)) return sum + companyEarning;
+      const fallbackProfit = parseFloat(row.profit);
+      if (Number.isFinite(fallbackProfit)) return sum + fallbackProfit;
+      return sum + (parseFloat(row.net_profit) || 0);
+    }, 0);
+  }
+  const explicit = parseFloat(dashboardData.subsidiary_company_earnings_total);
+  return Number.isFinite(explicit) ? explicit : 0;
+}
+
+function computeGroupAggregateProfit(dashboardData) {
+  return sumSubsidiaryCompanyEarnings(dashboardData);
+}
+
+function computeGroupAggregateNetProfit(dashboardData) {
+  const profitSum = computeGroupAggregateProfit(dashboardData);
+  const rawExpenses = parseFloat(dashboardData?.period_total?.expenses) || 0;
+  const displayExpenses = rawExpenses > 0 ? -rawExpenses : rawExpenses;
+  return profitSum + displayExpenses;
+}
+
+function computeGroupAggregateEarningsAmount(dashboardData, { requireViewerConfig = true } = {}) {
+  if (!dashboardData) return 0;
+  const groupAccPct = parseFloat(dashboardData.group_account_percentage) || 0;
+  if (requireViewerConfig && !dashboardData.has_group_ownership && groupAccPct <= 0) return 0;
+  return computeGroupAggregateNetProfit(dashboardData) * resolveGroupAccountMultiplier(dashboardData);
+}
+
+function computeGroupAllCompanyEarningsSum(dashboardData) {
+  if (!dashboardData) return 0;
+  const rows = dashboardData.subsidiary_earnings_by_company;
+  if (Array.isArray(rows) && rows.length) {
+    return rows.reduce((sum, row) => sum + (parseFloat(row.my_earning) || 0), 0);
+  }
+  const explicit = parseFloat(
+    dashboardData?._subsidiary_earnings_total ?? dashboardData?.subsidiary_earnings_total,
+  );
+  return Number.isFinite(explicit) ? explicit : 0;
+}
+
+export function computeKpiMetrics(dashboardData, options = {}) {
   if (!dashboardData) return null;
   const rawProfit = parseFloat(dashboardData?.period_total?.profit ?? dashboardData.profit) || 0;
   const rawExpenses = parseFloat(dashboardData?.period_total?.expenses) || 0;
   const displayProfitNum = rawProfit;
   const displayExpensesNum = rawExpenses > 0 ? -rawExpenses : rawExpenses;
-  const netProfitDisplay = displayProfitNum + displayExpensesNum;
-  const showEarnings = viewerHasEarningsConfig(dashboardData);
-  const panelMultiplier = resolveEarningsMultiplier(dashboardData, false);
-  const kpiMultiplier = resolveEarningsMultiplier(dashboardData, true);
-  const earningsDisplay = !showEarnings ? netProfitDisplay : netProfitDisplay * panelMultiplier;
-  const kpiCardEarnings = showEarnings ? netProfitDisplay * kpiMultiplier : 0;
+  const groupAggregate = isGroupAggregateEarningsPayload(dashboardData, options);
+  const groupAllCompanyEarningsSum = !!options.groupAllCompaniesEarningsSum;
+  const groupProfitSum =
+    groupAggregate && !groupAllCompanyEarningsSum
+      ? computeGroupAggregateProfit(dashboardData)
+      : null;
+  const netProfitDisplay =
+    groupAggregate && !groupAllCompanyEarningsSum
+      ? computeGroupAggregateNetProfit(dashboardData)
+      : displayProfitNum + displayExpensesNum;
+  const showEarnings = options.groupsAllCompaniesAggregate
+    ? false
+    : viewerHasEarningsConfig(dashboardData, options);
+  const panelMultiplier = resolveEarningsMultiplier(dashboardData, false, options);
+  const kpiMultiplier = resolveEarningsMultiplier(dashboardData, true, options);
+  const mergedGroupAllEarnings = groupAllCompanyEarningsSum
+    ? computeGroupAllCompanyEarningsSum(dashboardData)
+    : null;
+  const earningsDisplay = !showEarnings
+    ? netProfitDisplay
+    : groupAllCompanyEarningsSum
+      ? mergedGroupAllEarnings
+      : groupAggregate
+        ? computeGroupAggregateEarningsAmount(dashboardData, { requireViewerConfig: false })
+        : netProfitDisplay * panelMultiplier;
+  const kpiCardEarnings = showEarnings
+    ? groupAllCompanyEarningsSum
+      ? mergedGroupAllEarnings
+      : groupAggregate
+        ? computeGroupAggregateEarningsAmount(dashboardData, { requireViewerConfig: true })
+        : netProfitDisplay * kpiMultiplier
+    : 0;
 
   return {
-    profit: displayProfitNum,
+    profit: groupAggregate && !groupAllCompanyEarningsSum ? groupProfitSum : displayProfitNum,
     expenses: displayExpensesNum,
     netProfit: netProfitDisplay,
     earnings: earningsDisplay,
@@ -78,13 +194,13 @@ export function computeKpiMetrics(dashboardData) {
   };
 }
 
-export function buildTrendRows(dashboardData, maxPoints = 14) {
+export function buildTrendRows(dashboardData, maxPoints = 14, options = {}) {
   const daily = dashboardData?.daily_data;
   if (!daily?.profit || typeof daily.profit !== "object") return [];
 
   const dates = Object.keys(daily.profit).sort();
   const slice = dates.length > maxPoints ? dates.slice(-maxPoints) : dates;
-  const multiplier = resolveEarningsMultiplier(dashboardData, false);
+  const multiplier = resolveEarningsMultiplier(dashboardData, false, options);
 
   return slice.map((date) => {
     const profitDelta = parseFloat(daily.profit?.[date] || 0) || 0;
