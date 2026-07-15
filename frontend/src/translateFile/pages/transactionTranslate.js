@@ -88,7 +88,7 @@ export const TRANSACTION_I18N = {
     paymentHistoryShowingEntries: "Showing {count} entries",
     idProduct: "Id Product",
     rate: "Rate",
-    createdBy: "Created by",
+    createdBy: "CREATER",
     idProductCompact: "Product",
     currencyCompact: "CCY",
     winLossTableCompact: "W/L",

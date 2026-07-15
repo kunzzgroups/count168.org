@@ -464,9 +464,9 @@ body.account-page:not(.account-page--show-all) .account-pagination-container {
     max-width: calc(100vw - 80px);
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 0;
     background: rgba(255, 255, 255, 0.95);
-    padding: 2px 6px;
+    padding: 0;
     border-radius: 20px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     backdrop-filter: blur(8px);
@@ -2983,7 +2983,7 @@ body.account-page #forceDeleteCurrencyModal .confirm-delete {
     pointer-events: none;
 }
 
-/* Pagination 默认（Show All 等）：固定右下角；分页模式由上方 body.account-page 规则覆盖为 flex 流内 */
+/* Pagination 默认（Show All 等）：固定右下角；尺寸与 User List（Admin）一致 */
 .account-pagination-container {
     position: fixed;
     right: max(40px, env(safe-area-inset-right, 0px));
@@ -2993,9 +2993,9 @@ body.account-page #forceDeleteCurrencyModal .confirm-delete {
     max-width: calc(100vw - 80px);
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 0;
     background: rgba(255, 255, 255, 0.95);
-    padding: 2px 6px;
+    padding: 0;
     border-radius: 20px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     backdrop-filter: blur(8px);
@@ -3005,15 +3005,15 @@ body.account-page #forceDeleteCurrencyModal .confirm-delete {
     flex-shrink: 0;
 }
 
-/* 分页按钮：与 process-page .pagination-btn / .pagination-info 一致 */
+/* 分页按钮 / 文字：与 User List .pagination-btn / .pagination-info 一致 */
 body.account-page .account-pagination-btn {
     background: transparent;
     border: none;
     color: #007aff;
-    font-size: clamp(12px, 0.83vw, 16px);
+    font-size: clamp(8px, 0.83vw, 16px);
     font-weight: 500;
-    width: clamp(24px, 1.46vw, 28px);
-    height: clamp(24px, 1.46vw, 28px);
+    width: clamp(20px, 1.46vw, 28px);
+    height: clamp(20px, 1.46vw, 28px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3037,16 +3037,10 @@ body.account-page .account-pagination-info {
     font-size: clamp(10px, 0.78vw, 15px);
     font-weight: 500;
     color: #000000;
-    margin: 0 clamp(4px, 0.63vw, 12px);
+    margin: 0 clamp(0px, 0.63vw, 12px);
     white-space: nowrap;
-    /* 大 total（如 1 / 332 (6625)）不能锁死在 60px，否则被左右箭头压住 */
-    width: auto;
-    min-width: clamp(30px, 3.13vw, 60px);
-    max-width: none;
-    padding: 0 6px;
-    box-sizing: border-box;
+    width: clamp(30px, 3.13vw, 60px);
     text-align: center;
-    flex: 0 1 auto;
 }
 
 .account-pagination-btn {
@@ -3080,15 +3074,10 @@ body.account-page .account-pagination-info {
     font-size: clamp(10px, 0.78vw, 15px);
     font-weight: 500;
     color: #000000;
-    margin: 0 clamp(4px, 0.63vw, 12px);
+    margin: 0 clamp(0px, 0.63vw, 12px);
     white-space: nowrap;
-    width: auto;
-    min-width: clamp(30px, 3.13vw, 60px);
-    max-width: none;
-    padding: 0 6px;
-    box-sizing: border-box;
+    width: clamp(30px, 3.13vw, 60px);
     text-align: center;
-    flex: 0 1 auto;
 }
 
 /* Animation */

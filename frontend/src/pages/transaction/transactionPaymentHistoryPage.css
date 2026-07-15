@@ -1,4 +1,4 @@
-﻿/* Payment History — card layout on Transaction page shell background */
+/* Payment History — card layout on Transaction page shell background */
 
 :root {
   --transaction-history-report-max-width: 1320px;
@@ -240,12 +240,12 @@ body.ec-payment-history-chromeless .transaction-history-table--with-desc col.tra
 
 body.transaction-payment-history-page .transaction-history-table--with-desc col.transaction-history-col-winloss,
 body.ec-payment-history-chromeless .transaction-history-table--with-desc col.transaction-history-col-winloss {
-  width: 4%;
+  width: 3%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--with-desc col.transaction-history-col-crdr,
 body.ec-payment-history-chromeless .transaction-history-table--with-desc col.transaction-history-col-crdr {
-  width: 4%;
+  width: 3%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--with-desc col.transaction-history-col-balance,
@@ -265,7 +265,7 @@ body.ec-payment-history-chromeless .transaction-history-table--with-desc col.tra
 
 body.transaction-payment-history-page .transaction-history-table--with-desc col.transaction-history-col-created,
 body.ec-payment-history-chromeless .transaction-history-table--with-desc col.transaction-history-col-created {
-  width: 11%;
+  width: 8%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-date,
@@ -290,12 +290,12 @@ body.ec-payment-history-chromeless .transaction-history-table--no-desc col.trans
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-winloss,
 body.ec-payment-history-chromeless .transaction-history-table--no-desc col.transaction-history-col-winloss {
-  width: 10%;
+  width: 8%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-crdr,
 body.ec-payment-history-chromeless .transaction-history-table--no-desc col.transaction-history-col-crdr {
-  width: 10%;
+  width: 8%;
 }
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-balance,
@@ -310,7 +310,7 @@ body.ec-payment-history-chromeless .transaction-history-table--no-desc col.trans
 
 body.transaction-payment-history-page .transaction-history-table--no-desc col.transaction-history-col-created,
 body.ec-payment-history-chromeless .transaction-history-table--no-desc col.transaction-history-col-created {
-  width: 10%;
+  width: 8%;
 }
 
 body.transaction-payment-history-page .transaction-payment-history-page-root .transaction-history-report-table th,
@@ -704,12 +704,12 @@ body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compa
 
 body.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-winloss,
 body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-winloss {
-  width: 11%;
+  width: 9%;
 }
 
 body.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-crdr,
 body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-crdr {
-  width: 11%;
+  width: 9%;
 }
 
 body.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-balance,
@@ -729,7 +729,7 @@ body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compa
 
 body.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-created,
 body.ec-payment-history-chromeless.transaction-payment-history-page--popup-compact .transaction-history-table--with-desc col.transaction-history-col-created {
-  width: 13%;
+  width: 10%;
 }
 
 body.transaction-payment-history-page--popup-compact .transaction-payment-history-page-root .transaction-history-report-table tbody td,

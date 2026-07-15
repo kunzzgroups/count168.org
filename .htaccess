@@ -44,6 +44,9 @@ php_value memory_limit 256M
 </IfModule>
 
 <IfModule mod_headers.c>
+    # Tell crawlers not to index this site (HTML + all responses)
+    Header set X-Robots-Tag "noindex, nofollow"
+
     <FilesMatch "\.(js|css|woff2?)$">
         Header set Cache-Control "public, max-age=31536000, immutable"
     </FilesMatch>
