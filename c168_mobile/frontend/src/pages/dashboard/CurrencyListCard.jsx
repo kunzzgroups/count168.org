@@ -21,11 +21,7 @@ export default function CurrencyListCard({
     const bv = Math.abs(Number(b.earningsConverted ?? b.earnings) || 0);
     return bv - av;
   });
-  const activeRows = sorted.filter((row) => {
-    const amount = Number(row.earningsConverted ?? row.earnings);
-    return Number.isFinite(amount) && Math.abs(amount) >= 0.005;
-  });
-  const displayRows = activeRows.length ? activeRows : sorted.slice(0, 1);
+  const displayRows = sorted.length ? sorted : [];
 
   if (!rows?.length && !loading) {
     return (
@@ -42,10 +38,8 @@ export default function CurrencyListCard({
     <section className="m-dash-card m-dash-currency-list">
       <div className="m-dash-currency-list-head">
         <h2 className="m-dash-card-title">{i18n.currencies}</h2>
-        {!loading && activeRows.length > 0 && activeRows.length < rows.length ? (
-          <span className="m-dash-currency-list-count">
-            {activeRows.length}/{rows.length}
-          </span>
+        {!loading && displayRows.length > 0 ? (
+          <span className="m-dash-currency-list-count">{displayRows.length}</span>
         ) : null}
       </div>
 
@@ -61,7 +55,7 @@ export default function CurrencyListCard({
             useConverted,
           );
           const rateLabel = formatFrankfurterUnitRate(code, currencyCode, exchangeRates.rates);
-          const amount = loading ? "…" : primary != null ? formatCurrency(primary) : "—";
+          const amount = loading ? "…" : primary != null ? formatCurrency(primary) : formatCurrency(0);
           const negative = Number(primary) < 0;
 
           return (

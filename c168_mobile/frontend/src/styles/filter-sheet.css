@@ -87,10 +87,8 @@
 
 .m-filter-pill-scroll {
   display: flex;
-  max-height: 9rem;
   flex-wrap: wrap;
   gap: 0.5rem;
-  overflow-y: auto;
 }
 
 .m-filter-hint {

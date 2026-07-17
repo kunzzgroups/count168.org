@@ -82,6 +82,16 @@
   button:disabled {
     cursor: not-allowed;
   }
+
+  /* Preflight disabled — reset link defaults so NavLink / Link labels stay clean. */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  a:visited {
+    color: inherit;
+  }
 }
 
 /* Hide scrollbars on horizontal scrollers while keeping touch scrolling */

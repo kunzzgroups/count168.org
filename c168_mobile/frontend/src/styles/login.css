@@ -431,7 +431,6 @@ button.sc-login-lang-seg.active {
 
 .sc-login-forgot-link:hover {
   color: var(--login-bg-start);
-  text-decoration: underline;
 }
 
 .sc-login-btn {

@@ -2,8 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchJson } from "../lib/fetchJson.js";
 import { fetchOwnerCompanies, updateSessionCompany } from "../lib/maintenanceApi.js";
-import { pickCompany, sortedUniqueGroupIds } from "../lib/dashboardScope.js";
-import { canUseGroupOnlyMode } from "../lib/loginScope.js";
+import {
+  pickCompany,
+  resolveCompanyPickForGroup,
+  resolveInitialMobileGcScope,
+  resolveMobileGroupIds,
+  resolveViewGroupForCompany,
+} from "../lib/dashboardScope.js";
+import { canUseGroupOnlyMode, filterCompaniesForUserScope } from "../lib/loginScope.js";
 import { resolveMaintenanceScope } from "../lib/mobileMaintenanceScope.js";
 import { maintenanceText } from "../translateFile/maintenanceTranslate.js";
 import { buildApiUrl } from "../utils/apiUrl.js";
@@ -70,9 +76,13 @@ export function useMaintenanceSession({ canAccess }) {
         }
         setMe(user);
         const list = await fetchOwnerCompanies(ac.signal);
-        const picked = pickCompany(list, user.company_id);
-        setCompanies(list);
-        setCompanyId(picked?.id ? Number(picked.id) : null);
+        const scoped = filterCompaniesForUserScope(list, user);
+        const picked = pickCompany(scoped, user.company_id);
+        const initial = resolveInitialMobileGcScope(user, scoped, picked);
+        setCompanies(scoped);
+        setCompanyId(initial.companyId);
+        setSelectedGroup(initial.selectedGroup);
+        setGroupMode(!initial.companyId && Boolean(initial.selectedGroup));
       } catch (e) {
         if (e?.name !== "AbortError") setError(e?.message || "Failed to load");
       } finally {
@@ -88,7 +98,7 @@ export function useMaintenanceSession({ canAccess }) {
     [companyId, selectedGroup, groupMode],
   );
 
-  const groupIds = useMemo(() => sortedUniqueGroupIds(companies), [companies]);
+  const groupIds = useMemo(() => resolveMobileGroupIds(companies, me), [companies, me]);
   /** Group ledger scope only for users the backend will accept (same gate as dashboard/transaction). */
   const allowedGroupIds = useMemo(
     () => groupIds.filter((g) => canUseGroupOnlyMode(me, g, companies)),
@@ -101,13 +111,23 @@ export function useMaintenanceSession({ canAccess }) {
 
   const applyScope = useCallback(
     async (draft) => {
-      if (draft?.mode === "group" && draft.groupId) {
-        setGroupMode(true);
-        setSelectedGroup(String(draft.groupId).trim().toUpperCase());
-        setCompanyId(null);
-        return true;
+      let next = draft;
+      const gid = next?.groupId ? String(next.groupId).trim().toUpperCase() : null;
+
+      if (next?.mode === "group" && gid) {
+        if (!canUseGroupOnlyMode(me, gid, companies)) {
+          const pick = resolveCompanyPickForGroup(companies, gid, companyId);
+          if (!pick?.id) return false;
+          next = { mode: "company", companyId: Number(pick.id), groupId: gid };
+        } else {
+          setGroupMode(true);
+          setSelectedGroup(gid);
+          setCompanyId(null);
+          return true;
+        }
       }
-      const nextId = Number(draft?.companyId);
+
+      const nextId = Number(next?.companyId);
       if (!Number.isFinite(nextId) || nextId <= 0) return false;
       if (nextId !== Number(companyId)) {
         try {
@@ -118,12 +138,13 @@ export function useMaintenanceSession({ canAccess }) {
         }
       }
       const row = companies.find((c) => Number(c.id) === nextId) || null;
+      const group = gid || (row ? resolveViewGroupForCompany(row, null) : null);
       setGroupMode(false);
-      setSelectedGroup(row?.group_id ? String(row.group_id).trim().toUpperCase() : null);
+      setSelectedGroup(group);
       setCompanyId(nextId);
       return true;
     },
-    [companies, companyId, notify],
+    [companies, companyId, me, notify],
   );
 
   const logout = useCallback(async () => {

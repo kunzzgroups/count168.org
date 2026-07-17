@@ -165,6 +165,7 @@ export function MaintenanceFilterSheet({
   const pickable = companiesForPicker(companies, {
     selectedGroup: draft.groupId,
     groupsAllMode: false,
+    preferredCompanyId: draft.companyId,
   });
 
   /**
@@ -268,7 +269,7 @@ export function MaintenanceFilterSheet({
           </Section>
 
           <Section title={i18n.quickSelect}>
-            <div className="m-filter-pill-grid">
+            <div className="m-filter-pill-wrap">
               {PERIOD_PRESET_KEYS.map((key) => (
                 <Pill
                   key={key}
@@ -283,7 +284,6 @@ export function MaintenanceFilterSheet({
                       dateTo: range.dateTo,
                     }));
                   }}
-                  block
                 >
                   {dashboardLabel(i18n, key)}
                 </Pill>
@@ -317,10 +317,14 @@ export function MaintenanceFilterSheet({
             <div className="m-filter-pill-wrap">
               {pickable.map((c) => {
                 const label = String(c.company_id).toUpperCase();
-                const active = !draft.groupMode && Number(draft.companyId) === Number(c.id);
+                const draftRow = companies.find((row) => Number(row.id) === Number(draft.companyId));
+                const draftCode = String(draftRow?.company_id || "").trim().toUpperCase();
+                const active =
+                  !draft.groupMode &&
+                  (Number(draft.companyId) === Number(c.id) || (draftCode && draftCode === label));
                 return (
                   <Pill
-                    key={String(c.id)}
+                    key={label}
                     active={active}
                     onClick={() =>
                       setDraft((prev) => ({

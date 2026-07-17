@@ -1968,7 +1968,7 @@ export default function UserListPage() {
     });
   };
 
-  const applyPermTemplate = (role, force) => {
+  const applyPermTemplate = useCallback((role, force) => {
     if (isEditMode && !force) return;
     const next = new Set();
     getRoleTemplateSidebarList(role).forEach((k) => {
@@ -1978,7 +1978,7 @@ export default function UserListPage() {
     if (roleHasReadOnlyToggle(role)) {
       setForm((f) => ({ ...f, read_only: true }));
     }
-  };
+  }, [isEditMode]);
 
   const openEdit = async (row) => {
     if (isUserEditBlockedByReadOnly(row)) {
@@ -2006,7 +2006,7 @@ export default function UserListPage() {
     });
   };
 
-  const closeModal = () => { modalLoadSeqRef.current += 1; setModalOpen(false); setEditingRow(null); };
+  const closeModal = useCallback(() => { modalLoadSeqRef.current += 1; setModalOpen(false); setEditingRow(null); }, []);
 
   const toggleUserStatus = async (row) => {
     if (userMutationsBlocked) {
@@ -2257,6 +2257,11 @@ export default function UserListPage() {
       void fetchUsers();
     } catch { notify(t("saveFailed"), "danger"); }
   };
+
+  // 稳定引用包裹：始终调用最新 saveUser，但引用不变，使 memo 化的 UserModal 不因此重渲染。
+  const saveUserRef = useRef(saveUser);
+  saveUserRef.current = saveUser;
+  const stableSaveUser = useCallback((e) => saveUserRef.current(e), []);
 
   return (
     <>
@@ -2607,7 +2612,7 @@ export default function UserListPage() {
             document.body
           )
         : null}
-      <UserModal open={modalOpen} onClose={closeModal} isEditMode={isEditMode} editingRow={editingRow} form={form} setForm={setForm} isC168Company={isC168Company} currentUserRole={currentUserRole} currentUserId={currentUserId} roleSelectDisabled={roleSelectDisabled} loginDisabled={loginDisabled} fieldLocks={fieldLocks} permDisabledMap={permDisabledMap} visiblePermissionKeys={visiblePermissionKeys} permSelected={permSelected} setPermSelected={setPermSelected} modalCompanies={modalCompanies} selectedCompanyIds={selectedCompanyIds} setSelectedCompanyIds={setSelectedCompanyIds} groupPickerMode={!useDualTenantUserPicker && groupOnlyUserList} dualTenantPicker={useDualTenantUserPicker} modalGroupCompanies={modalGroupCompanies} modalSubsidiaryCompanies={modalSubsidiaryCompanies} selectedGroupIds={selectedGroupIds} setSelectedGroupIds={setSelectedGroupIds} modalAccounts={modalAccounts} selectedAccountIds={selectedAccountIds} setSelectedAccountIds={setSelectedAccountIds} modalProcesses={modalProcesses} selectedProcessIds={selectedProcessIds} setSelectedProcessIds={setSelectedProcessIds} applyPermTemplate={applyPermTemplate} onSave={saveUser} sessionMutationsBlocked={isUserEditBlockedByReadOnly(editingRow)} t={t} />
+      <UserModal open={modalOpen} onClose={closeModal} isEditMode={isEditMode} editingRow={editingRow} form={form} setForm={setForm} isC168Company={isC168Company} currentUserRole={currentUserRole} currentUserId={currentUserId} roleSelectDisabled={roleSelectDisabled} loginDisabled={loginDisabled} fieldLocks={fieldLocks} permDisabledMap={permDisabledMap} visiblePermissionKeys={visiblePermissionKeys} permSelected={permSelected} setPermSelected={setPermSelected} modalCompanies={modalCompanies} selectedCompanyIds={selectedCompanyIds} setSelectedCompanyIds={setSelectedCompanyIds} groupPickerMode={!useDualTenantUserPicker && groupOnlyUserList} dualTenantPicker={useDualTenantUserPicker} modalGroupCompanies={modalGroupCompanies} modalSubsidiaryCompanies={modalSubsidiaryCompanies} selectedGroupIds={selectedGroupIds} setSelectedGroupIds={setSelectedGroupIds} modalAccounts={modalAccounts} selectedAccountIds={selectedAccountIds} setSelectedAccountIds={setSelectedAccountIds} modalProcesses={modalProcesses} selectedProcessIds={selectedProcessIds} setSelectedProcessIds={setSelectedProcessIds} applyPermTemplate={applyPermTemplate} onSave={stableSaveUser} sessionMutationsBlocked={isUserEditBlockedByReadOnly(editingRow)} t={t} />
       <UserConfirmModal open={confirmOpen} message={confirmMessage} onConfirm={confirmDelete} onClose={() => setConfirmOpen(false)} confirmDisabled={userMutationsBlocked} t={t} />
     </>
   );

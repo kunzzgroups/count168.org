@@ -14,10 +14,12 @@ import {
   pickCompany,
   pickGroupAnchorCompany,
   resolveCompanyPickForGroup,
+  resolveInitialMobileGcScope,
+  resolveMobileGroupIds,
   resolveViewGroupForCompany,
   sortedUniqueGroupIds,
 } from "../lib/dashboardScope.js";
-import { canUseGroupOnlyMode } from "../lib/loginScope.js";
+import { canUseGroupOnlyMode, filterCompaniesForUserScope } from "../lib/loginScope.js";
 import { fetchMobileCurrencyCodes } from "../lib/dashboardCurrencies.js";
 import { loadMobileDashboardData, resolveMobileKpiOwnershipOpts } from "../lib/dashboardLoad.js";
 import {
@@ -126,11 +128,16 @@ export function useMobileDashboard() {
   const scopeSeq = useRef(0);
   const scopeAbortRef = useRef(null);
 
-  const groupIds = useMemo(() => sortedUniqueGroupIds(companies), [companies]);
+  const groupIds = useMemo(() => resolveMobileGroupIds(companies, me), [companies, me]);
 
   const companiesForPicker = useMemo(
-    () => resolveCompaniesForPicker(companies, { selectedGroup, groupsAllMode }),
-    [companies, selectedGroup, groupsAllMode],
+    () =>
+      resolveCompaniesForPicker(companies, {
+        selectedGroup,
+        groupsAllMode,
+        preferredCompanyId: companyId,
+      }),
+    [companies, selectedGroup, groupsAllMode, companyId],
   );
 
   const selectedCompany = useMemo(
@@ -186,14 +193,16 @@ export function useMobileDashboard() {
         if (ac.signal.aborted) return;
         assertApiOk(coRes, coJson, i18n.loadError);
         const list = Array.isArray(coJson?.data) ? coJson.data : [];
-        const picked = pickCompany(list, user.company_id);
+        const scoped = filterCompaniesForUserScope(list, user);
+        const picked = pickCompany(scoped, user.company_id);
         if (!picked) throw new Error(i18n.loadError);
 
-        setCompanies(list);
-        setCompanyId(Number(picked.id));
-        setSelectedGroup(null);
-        setGroupsAllMode(false);
-        setGroupAllMode(false);
+        const initial = resolveInitialMobileGcScope(user, scoped, picked);
+        setCompanies(scoped);
+        setCompanyId(initial.companyId);
+        setSelectedGroup(initial.selectedGroup);
+        setGroupsAllMode(initial.groupsAllMode);
+        setGroupAllMode(initial.groupAllMode);
       } catch (e) {
         if (ac.signal.aborted || e?.name === "AbortError") return;
         setError(e?.message || i18n.loadError);
@@ -579,14 +588,17 @@ export function useMobileDashboard() {
 
   const resetFilters = useCallback(() => {
     applyPreset("thisYear");
-    setGroupsAllMode(false);
-    setGroupAllMode(false);
-    setSelectedGroup(null);
     const fallback = pickCompany(companies, me?.company_id);
-    if (fallback?.id && Number(fallback.id) !== Number(companyId)) {
-      void switchCompany(Number(fallback.id));
+    const initial = resolveInitialMobileGcScope(me, companies, fallback);
+    setGroupsAllMode(initial.groupsAllMode);
+    setGroupAllMode(initial.groupAllMode);
+    setSelectedGroup(initial.selectedGroup);
+    if (initial.companyId && Number(initial.companyId) !== Number(companyId)) {
+      void switchCompany(Number(initial.companyId));
+    } else if (!initial.companyId) {
+      setCompanyId(null);
     }
-  }, [applyPreset, companies, me?.company_id, companyId, switchCompany]);
+  }, [applyPreset, companies, me, companyId, switchCompany]);
 
   const pickGroup = useCallback(
     async (gid) => {

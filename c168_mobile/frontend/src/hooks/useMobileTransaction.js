@@ -11,9 +11,10 @@ import {
   pickCompany,
   pickGroupAnchorCompany,
   resolveCompanyPickForGroup,
-  sortedUniqueGroupIds,
+  resolveInitialMobileGcScope,
+  resolveMobileGroupIds,
 } from "../lib/dashboardScope.js";
-import { canUseGroupOnlyMode } from "../lib/loginScope.js";
+import { canUseGroupOnlyMode, filterCompaniesForUserScope } from "../lib/loginScope.js";
 import { assertApiOk, fetchJson } from "../lib/fetchJson.js";
 import {
   resolveMobileTransactionScope,
@@ -129,10 +130,15 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   const rawSearchDataRef = useRef(rawSearchData);
   rawSearchDataRef.current = rawSearchData;
 
-  const groupIds = useMemo(() => sortedUniqueGroupIds(companies), [companies]);
+  const groupIds = useMemo(() => resolveMobileGroupIds(companies, me), [companies, me]);
   const companiesForPicker = useMemo(
-    () => resolveCompaniesForPicker(companies, { selectedGroup, groupsAllMode }),
-    [companies, selectedGroup, groupsAllMode],
+    () =>
+      resolveCompaniesForPicker(companies, {
+        selectedGroup,
+        groupsAllMode,
+        preferredCompanyId: companyId,
+      }),
+    [companies, selectedGroup, groupsAllMode, companyId],
   );
   const selectedCompany = useMemo(
     () => companies.find((c) => Number(c.id) === Number(companyId)) || null,
@@ -359,7 +365,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
         const list = Array.isArray(coJson?.data) ? coJson.data : [];
         const snap = readMobileTxListSnapshot();
         if (snap) {
-          setCompanies(list);
+          setCompanies(filterCompaniesForUserScope(list, user));
           const snapCid = snap.companyId != null ? Number(snap.companyId) : null;
           setCompanyId(Number.isFinite(snapCid) && snapCid > 0 ? snapCid : null);
           setSelectedGroup(snap.selectedGroup ? String(snap.selectedGroup) : null);
@@ -381,14 +387,16 @@ export function useMobileTransaction({ listPaused = false } = {}) {
             skipNextSearchRef.current = true;
           }
         } else {
-          const picked = pickCompany(list, user.company_id);
+          const scoped = filterCompaniesForUserScope(list, user);
+          const picked = pickCompany(scoped, user.company_id);
           if (!picked) throw new Error(i18n.loadError);
 
-          setCompanies(list);
-          setCompanyId(Number(picked.id));
-          setSelectedGroup(null);
-          setGroupsAllMode(false);
-          setGroupAllMode(false);
+          const initial = resolveInitialMobileGcScope(user, scoped, picked);
+          setCompanies(scoped);
+          setCompanyId(initial.companyId);
+          setSelectedGroup(initial.selectedGroup);
+          setGroupsAllMode(initial.groupsAllMode);
+          setGroupAllMode(initial.groupAllMode);
         }
 
         const catRes = await getCategories();

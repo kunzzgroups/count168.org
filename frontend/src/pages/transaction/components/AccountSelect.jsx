@@ -8,7 +8,6 @@ export function AccountSelect({
   onChange,
   disabled,
   profitType,
-  selectedCategories,
   ariaLabelledBy,
   ariaLabel,
   searchPlaceholder = "Search account...",
@@ -20,14 +19,10 @@ export function AccountSelect({
 
   const filtered = useMemo(() => {
     const q = filter.trim().toUpperCase();
-    let rows = Array.isArray(options) ? options : [];
-    if (Array.isArray(selectedCategories) && selectedCategories.length > 0) {
-      const set = new Set(selectedCategories.map((c) => String(c).toUpperCase()));
-      rows = rows.filter((r) => set.has(String(r.role || "").toUpperCase()));
-    }
+    const rows = Array.isArray(options) ? options : [];
     if (!q) return rows;
     return rows.filter((r) => String(r.display_text || "").toUpperCase().includes(q));
-  }, [options, filter, selectedCategories]);
+  }, [options, filter]);
 
   const { highlightIdx, setHighlightIdx, listRef, handleListKeyDown, highlightClass } = useListboxKeyboard({
     open,

@@ -39,6 +39,12 @@ export function canAccessAccount(me) {
   return canAccessPermission(me, "account");
 }
 
+/** Admin (user management) — mirrors the desktop "admin" sidebar permission. */
+export function canAccessAdmin(me) {
+  if (String(me?.user_type || "").toLowerCase() === "member") return false;
+  return canAccessPermission(me, "admin");
+}
+
 /** Full Maintenance: owner / unrestricted, or explicit "maintenance" permission. */
 export function canAccessFullMaintenance(me) {
   if (hasFullPermissions(me)) return true;

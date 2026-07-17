@@ -50,7 +50,6 @@
 
 .m-ann-rich-text a {
   color: var(--m-color-primary);
-  text-decoration: underline;
 }
 
 .m-ann-rich-text p + p {

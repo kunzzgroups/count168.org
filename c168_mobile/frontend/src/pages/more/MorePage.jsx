@@ -4,7 +4,7 @@ import MobileShell from "../../components/layout/MobileShell.jsx";
 import { fetchJson } from "../../lib/fetchJson.js";
 import { MORE_I18N } from "../../translateFile/moreTranslate.js";
 import { buildApiUrl } from "../../utils/apiUrl.js";
-import { canAccessMaintenance, canAccessReport } from "../../utils/mobilePermissions.js";
+import { canAccessAdmin, canAccessMaintenance, canAccessReport } from "../../utils/mobilePermissions.js";
 import { maintenanceText } from "../../translateFile/maintenanceTranslate.js";
 import "./more.css";
 
@@ -54,6 +54,14 @@ export default function MorePage() {
   const groupId = String(me?.login_group_id || me?.login_identifier || "").toUpperCase();
   const mt = maintenanceText(lang);
   const tools = [];
+  if (canAccessAdmin(me)) {
+    tools.push({
+      to: "/more/users",
+      icon: "fa-user-gear",
+      title: i18n.userManagement,
+      description: i18n.userManagementDescription,
+    });
+  }
   if (canAccessMaintenance(me)) {
     tools.push({
       to: "/maintenance",

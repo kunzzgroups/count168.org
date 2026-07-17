@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { accountCompanyPickerZIndex, accountModalOverlayZIndex } from "../../../components/ProcessModalPortal.jsx";
 import SimpleSelect from "../../../components/SimpleSelect.jsx";
@@ -145,7 +145,86 @@ import {
 import { formatUserRoleDisplay } from "../../../translateFile/pages/userListTranslate.js";
 import { sanitizeEmailInput } from "../../../utils/input/emailValidation.js";
 
-export default function UserModal({
+/**
+ * Account / Process 勾选列。memo 隔离：选 Role 只改 form/permSelected，
+ * 本列 props（items/selectedIds/locked 等）不变即跳过重渲染，
+ * 避免上百个 checkbox 卡片在每次角色切换时全量重建。
+ */
+const SelectionColumn = React.memo(function SelectionColumn({
+  variant,
+  title,
+  items,
+  gridRef,
+  selectedIds,
+  setSelectedIds,
+  idList,
+  locked,
+  bulkSelectionSettling,
+  runBulkSelection,
+  t,
+}) {
+  const idPrefix = variant === "account" ? "acc" : "proc";
+  const colClass =
+    variant === "account"
+      ? "user-modal-col user-modal-col--account account-process-col"
+      : "user-modal-col user-modal-col--process account-process-col";
+  return (
+    <div className={colClass} style={userModalColStyle}>
+      <label className="acc-proc-label user-modal-col-title">{title}</label>
+      <div
+        ref={gridRef}
+        className={`account-grid account-grid--four account-grid--process${bulkSelectionSettling ? " account-grid--bulk-settling" : ""}`}
+      >
+        {items.map((it) => {
+          const primary = variant === "account" ? it.account_id : it.process_id;
+          const secondary = variant === "account" ? it.name : it.description;
+          return (
+            <label key={it.id} className="account-item-compact account-item-compact--process user-modal-select-card">
+              <input
+                type="checkbox"
+                id={`${idPrefix}-${it.id}`}
+                checked={selectedIds.has(Number(it.id))}
+                disabled={locked}
+                onChange={(e) => {
+                  setSelectedIds((prev) => {
+                    const n = new Set(prev);
+                    if (e.target.checked) n.add(Number(it.id));
+                    else n.delete(Number(it.id));
+                    return n;
+                  });
+                }}
+              />
+              <span className="account-label account-label--process">
+                {primary}
+                {secondary ? <span className="account-label-desc">{secondary}</span> : null}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      <div className="account-control-buttons user-modal-col-actions">
+        <button
+          type="button"
+          className="btn-account-control"
+          disabled={locked}
+          onClick={() => runBulkSelection(() => setSelectedIds(new Set(idList)))}
+        >
+          {t("selectAll")}
+        </button>
+        <button
+          type="button"
+          className="btn-clearall"
+          disabled={locked}
+          onClick={() => runBulkSelection(() => setSelectedIds(new Set()))}
+        >
+          {t("clearAll")}
+        </button>
+      </div>
+    </div>
+  );
+});
+
+function UserModal({
   open,
   onClose,
   isEditMode,
@@ -223,10 +302,17 @@ export default function UserModal({
       });
     };
 
+    // 记录每个 grid 上次同步时的宽度与卡片数；宽度/数量未变时跳过 clear+measure，
+    // 避免选 Role 等不影响布局的重渲染触发两次强制 reflow。
+    const syncState = new WeakMap();
+
     const syncGridCardHeights = (gridEl) => {
       if (!gridEl) return;
       const cards = gridEl.querySelectorAll(".user-modal-select-card");
       if (!cards.length) return;
+      const width = gridEl.getBoundingClientRect().width;
+      const prev = syncState.get(gridEl);
+      if (prev && prev.width === width && prev.count === cards.length) return;
       cards.forEach((c) => {
         c.style.minHeight = "";
       });
@@ -239,6 +325,7 @@ export default function UserModal({
       cards.forEach((c) => {
         c.style.minHeight = px;
       });
+      syncState.set(gridEl, { width, count: cards.length });
     };
 
     const syncAll = () => {
@@ -323,12 +410,12 @@ export default function UserModal({
   const accountIdList = useMemo(() => modalAccounts.map((x) => Number(x.id)), [modalAccounts]);
   const processIdList = useMemo(() => modalProcesses.map((x) => Number(x.id)), [modalProcesses]);
 
-  const runBulkSelection = (update) => {
+  const runBulkSelection = useCallback((update) => {
     if (bulkSelectionTimerRef.current) clearTimeout(bulkSelectionTimerRef.current);
     setBulkSelectionSettling(true);
     update();
     bulkSelectionTimerRef.current = setTimeout(() => setBulkSelectionSettling(false), 120);
-  };
+  }, []);
 
   const getCompanyPickerLabel = (companyRow) => {
     if (groupPickerMode) return String(companyRow?.group_id || "").trim().toUpperCase();
@@ -612,67 +699,34 @@ export default function UserModal({
               </form>
             </div>
 
-            <div className="user-modal-col user-modal-col--account account-process-col" style={userModalColStyle}>
-                <label className="acc-proc-label user-modal-col-title">{t("account")}</label>
-                <div ref={accountGridRef} className={`account-grid account-grid--four account-grid--process${bulkSelectionSettling ? " account-grid--bulk-settling" : ""}`}>
-                  {modalAccounts.map((a) => (
-                    <label key={a.id} className="account-item-compact account-item-compact--process user-modal-select-card">
-                      <input
-                        type="checkbox"
-                        id={`acc-${a.id}`}
-                        checked={selectedAccountIds.has(Number(a.id))}
-                        disabled={accountProcessLocked}
-                        onChange={(e) => {
-                          setSelectedAccountIds((prev) => {
-                            const n = new Set(prev);
-                            if (e.target.checked) n.add(Number(a.id)); else n.delete(Number(a.id));
-                            return n;
-                          });
-                        }}
-                      />
-                      <span className="account-label account-label--process">
-                        {a.account_id}
-                        {a.name ? <span className="account-label-desc">{a.name}</span> : null}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <div className="account-control-buttons user-modal-col-actions">
-                  <button type="button" className="btn-account-control" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedAccountIds(new Set(accountIdList)))}>{t("selectAll")}</button>
-                  <button type="button" className="btn-clearall" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedAccountIds(new Set()))}>{t("clearAll")}</button>
-                </div>
-              </div>
+            <SelectionColumn
+              variant="account"
+              title={t("account")}
+              items={modalAccounts}
+              gridRef={accountGridRef}
+              selectedIds={selectedAccountIds}
+              setSelectedIds={setSelectedAccountIds}
+              idList={accountIdList}
+              locked={accountProcessLocked}
+              bulkSelectionSettling={bulkSelectionSettling}
+              runBulkSelection={runBulkSelection}
+              t={t}
+            />
 
             {showProcessColumn ? (
-              <div className="user-modal-col user-modal-col--process account-process-col" style={userModalColStyle}>
-                  <label className="acc-proc-label user-modal-col-title">{t("process")}</label>
-                  <div ref={processGridRef} className={`account-grid account-grid--four account-grid--process${bulkSelectionSettling ? " account-grid--bulk-settling" : ""}`}>
-                    {modalProcesses.map((p) => (
-                      <label key={p.id} className="account-item-compact account-item-compact--process user-modal-select-card">
-                        <input
-                          type="checkbox"
-                          id={`proc-${p.id}`}
-                          checked={selectedProcessIds.has(Number(p.id))}
-                          disabled={accountProcessLocked}
-                          onChange={(e) => {
-                            setSelectedProcessIds((prev) => {
-                              const n = new Set(prev);
-                              if (e.target.checked) n.add(Number(p.id)); else n.delete(Number(p.id));
-                              return n;
-                            });
-                          }}
-                        />
-                        <span className="account-label account-label--process">
-                          {p.process_id}{p.description ? <span className="account-label-desc">{p.description}</span> : null}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="account-control-buttons user-modal-col-actions">
-                    <button type="button" className="btn-account-control" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set(processIdList)))}>{t("selectAll")}</button>
-                    <button type="button" className="btn-clearall" disabled={accountProcessLocked} onClick={() => runBulkSelection(() => setSelectedProcessIds(new Set()))}>{t("clearAll")}</button>
-                  </div>
-                </div>
+              <SelectionColumn
+                variant="process"
+                title={t("process")}
+                items={modalProcesses}
+                gridRef={processGridRef}
+                selectedIds={selectedProcessIds}
+                setSelectedIds={setSelectedProcessIds}
+                idList={processIdList}
+                locked={accountProcessLocked}
+                bulkSelectionSettling={bulkSelectionSettling}
+                runBulkSelection={runBulkSelection}
+                t={t}
+              />
             ) : null}
           </div>
         </div>
@@ -958,3 +1012,5 @@ export default function UserModal({
     </>
   );
 }
+
+export default React.memo(UserModal);

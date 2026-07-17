@@ -10,6 +10,7 @@ import TransactionPage from "./pages/transaction/TransactionPage.jsx";
 import TransactionHistoryPage from "./pages/transaction/TransactionHistoryPage.jsx";
 import AccountPage from "./pages/account/AccountPage.jsx";
 import MorePage from "./pages/more/MorePage.jsx";
+import AdminUsersPage from "./pages/admin/AdminUsersPage.jsx";
 import MaintenanceHubPage from "./pages/maintenance/MaintenanceHubPage.jsx";
 import MaintenanceTransactionPage from "./pages/maintenance/MaintenanceTransactionPage.jsx";
 import MaintenancePaymentPage from "./pages/maintenance/MaintenancePaymentPage.jsx";
@@ -44,6 +45,7 @@ export default function App() {
         <Route path="/maintenance/transaction" element={<MaintenanceTransactionPage />} />
         <Route path="/maintenance/payment" element={<MaintenancePaymentPage />} />
         <Route path="/more" element={<MorePage />} />
+        <Route path="/more/users" element={<AdminUsersPage />} />
         <Route path="/reset-password" element={<StubPage title="重置密码" />} />
         <Route
           path="/owner-secondary-password"

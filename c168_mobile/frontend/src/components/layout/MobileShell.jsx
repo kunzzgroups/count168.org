@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh.js";
-import { useScrollChromeOffset } from "../../hooks/useScrollChromeOffset.js";
+import { useDirectScrollChrome } from "../../hooks/useDirectScrollChrome.js";
 import { useScrollIdleVisible } from "../../hooks/useScrollIdleVisible.js";
 import { mobileNavItems } from "../../utils/mobilePermissions.js";
 import MobileAppBar from "./MobileAppBar.jsx";
+import MobileBottomNav from "./MobileBottomNav.jsx";
 import MobileNotifications, { fetchMobileAnnouncements } from "./MobileNotifications.jsx";
 import MobileSidebar from "./MobileSidebar.jsx";
 import PullRefreshIndicator from "./PullRefreshIndicator.jsx";
@@ -29,12 +29,13 @@ export default function MobileShell({
   onChromeOpen,
   overlayOpen = false,
 }) {
-  const labels = i18n || {
+  const labels = {
     navHome: "Home",
     navReport: "Report",
     navTransaction: "Transaction",
     navAccount: "Account",
     navMore: "More",
+    ...(i18n || {}),
   };
   const navItems = mobileNavItems(me);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -43,6 +44,7 @@ export default function MobileShell({
   const [notifyLoading, setNotifyLoading] = useState(false);
   const mainRef = useRef(null);
   const topChromeRef = useRef(null);
+  const navRef = useRef(null);
   const [topChromeH, setTopChromeH] = useState(118);
 
   const refreshPage = useCallback(async () => {
@@ -87,9 +89,16 @@ export default function MobileShell({
     };
   }, [stickyBar, refreshing]);
 
-  const chromeOffsetRaw = useScrollChromeOffset(mainRef, {
+  const forceChrome =
+    active || isAnimating || overlayOpen || sidebarOpen || notifyOpen || refreshing;
+
+  useDirectScrollChrome({
+    scrollRef: mainRef,
+    topChromeRef,
+    navRef,
     maxOffset: Math.max(topChromeH, 1),
     topReveal: 12,
+    paused: forceChrome,
   });
 
   const openSidebar = () => {
@@ -140,23 +149,13 @@ export default function MobileShell({
     return () => ac.abort();
   }, [notifyOpen]);
 
-  const forceChrome =
-    active || isAnimating || overlayOpen || sidebarOpen || notifyOpen || refreshing;
-  const chromeOffset = forceChrome ? 0 : chromeOffsetRaw;
-  const chromeProgress = topChromeH > 0 ? Math.min(1, chromeOffset / topChromeH) : 0;
-  const navHidden = showBottomNav && chromeProgress > 0.88;
   const contentShift = pullPx > 0.5 ? pullPx : 0;
   const contentTransition = isAnimating && phase !== "pulling" && phase !== "armed";
   const mainPadTop = topChromeH;
 
   return (
     <div className="m-shell">
-      <div
-        ref={topChromeRef}
-        className="m-shell-chrome"
-        style={{ transform: `translate3d(0, ${-chromeOffset}px, 0)` }}
-        aria-hidden={chromeProgress > 0.95}
-      >
+      <div ref={topChromeRef} className="m-shell-chrome">
         <MobileAppBar
           i18n={labels}
           notificationCount={announcements.length}
@@ -195,31 +194,8 @@ export default function MobileShell({
       </main>
 
       {showBottomNav ? (
-        <nav
-          className={`m-shell-nav${navHidden ? " m-shell-nav--hidden" : ""}`}
-          style={{
-            transform: `translate3d(0, ${chromeProgress * 120}%, 0)`,
-            opacity: Math.max(0, 1 - chromeProgress * 1.15),
-          }}
-          aria-label="Main"
-          aria-hidden={navHidden}
-        >
-          <div className="m-shell-nav-pill">
-            {navItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === "/dashboard"}
-                tabIndex={navHidden ? -1 : undefined}
-                className={({ isActive }) =>
-                  `m-shell-nav-link tap-scale${isActive ? " m-shell-nav-link--active" : ""}`
-                }
-              >
-                <i className={`fas ${item.icon}`} aria-hidden="true" />
-                <span>{labels[item.key]}</span>
-              </NavLink>
-            ))}
-          </div>
+        <nav ref={navRef} className="m-shell-nav" aria-label="Main">
+          <MobileBottomNav items={navItems} labels={labels} />
         </nav>
       ) : null}
 

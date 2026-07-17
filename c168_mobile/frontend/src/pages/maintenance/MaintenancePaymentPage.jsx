@@ -43,6 +43,13 @@ function canDelete(row) {
   return isPaymentRowSelectable(row) && Number(row?.is_deleted) !== 1;
 }
 
+/** Desktop parity: bank-process rows prefix descriptions with "Process: ". */
+function stripBankProcessDescriptionPrefix(text) {
+  const s = String(text || "");
+  const m = s.match(/^\s*process:\s*(.*)$/i);
+  return m ? m[1].trim() : s;
+}
+
 const TYPE_TONE = {
   PAYMENT: "is-blue",
   RECEIVE: "is-green",
@@ -334,7 +341,7 @@ function PaymentCard({ row, i18n, selectable, selected, onToggle }) {
           </span>
         </div>
         {row.description && row.description !== "-" ? (
-          <p className="m-mt-desc">{row.description}</p>
+          <p className="m-mt-desc">{stripBankProcessDescriptionPrefix(row.description)}</p>
         ) : null}
         {row.remark && row.remark !== "-" ? (
           <p className="m-mt-remark">{String(row.remark).toUpperCase()}</p>

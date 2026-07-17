@@ -4,10 +4,11 @@ import {
   companiesForPicker,
   pickCompany,
   resolveCompanyPickForGroup,
-  sortedUniqueGroupIds,
+  resolveInitialMobileGcScope,
+  resolveMobileGroupIds,
 } from "../lib/dashboardScope.js";
 import { fetchJson, assertApiOk } from "../lib/fetchJson.js";
-import { canUseGroupOnlyMode } from "../lib/loginScope.js";
+import { canUseGroupOnlyMode, filterCompaniesForUserScope } from "../lib/loginScope.js";
 import {
   accountScopeIsGroupOnly,
   accountScopePayload,
@@ -101,7 +102,7 @@ export function useMobileAccount() {
     () => ({ companyId, selectedGroup, groupsAllMode, groupAllMode }),
     [companyId, selectedGroup, groupsAllMode, groupAllMode],
   );
-  const groupIds = useMemo(() => sortedUniqueGroupIds(companies), [companies]);
+  const groupIds = useMemo(() => resolveMobileGroupIds(companies, me), [companies, me]);
   const selectedCompany = useMemo(
     () => companies.find((row) => Number(row.id) === Number(companyId)) || null,
     [companies, companyId],
@@ -163,9 +164,12 @@ export function useMobileAccount() {
           signal: ac.signal,
         });
         const list = Array.isArray(companiesJson.data) ? companiesJson.data : [];
-        const picked = pickCompany(list, user.company_id);
-        setCompanies(list);
-        setCompanyId(picked?.id ? Number(picked.id) : null);
+        const scoped = filterCompaniesForUserScope(list, user);
+        const picked = pickCompany(scoped, user.company_id);
+        const initial = resolveInitialMobileGcScope(user, scoped, picked);
+        setCompanies(scoped);
+        setCompanyId(initial.companyId);
+        setSelectedGroup(initial.selectedGroup);
       } catch (e) {
         if (e?.name !== "AbortError") setError(e?.message || i18n.loadError);
       } finally {
@@ -774,7 +778,11 @@ export function useMobileAccount() {
     groupAllMode,
     selectedCompany,
     groupIds,
-    companiesForPicker: companiesForPicker(companies, { selectedGroup, groupsAllMode }),
+    companiesForPicker: companiesForPicker(companies, {
+      selectedGroup,
+      groupsAllMode,
+      preferredCompanyId: companyId,
+    }),
     canUseGroupOnlyForGroup: (group) => canUseGroupOnlyMode(me, group, companies),
     resolveCompanyForGroup: (group, current) =>
       resolveCompanyPickForGroup(companies, group, current),

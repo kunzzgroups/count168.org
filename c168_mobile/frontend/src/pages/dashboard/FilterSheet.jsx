@@ -318,8 +318,9 @@ export default function FilterSheet({ open, onClose, dash }) {
       resolveCompaniesForPicker(dash.companies, {
         selectedGroup: draft.selectedGroup,
         groupsAllMode: draft.groupsAllMode,
+        preferredCompanyId: draft.companyId,
       }),
-    [dash.companies, draft.selectedGroup, draft.groupsAllMode],
+    [dash.companies, draft.selectedGroup, draft.groupsAllMode, draft.companyId],
   );
 
   const pickDraftGroup = useCallback(
@@ -407,7 +408,7 @@ export default function FilterSheet({ open, onClose, dash }) {
           </Section>
 
           <Section title={i18n.quickSelect}>
-            <div className="m-filter-pill-grid">
+            <div className="m-filter-pill-wrap">
               {PERIOD_PRESET_KEYS.map((key) => (
                 <Pill
                   key={key}
@@ -422,7 +423,6 @@ export default function FilterSheet({ open, onClose, dash }) {
                       dateTo: range.dateTo,
                     }));
                   }}
-                  block
                 >
                   {dashboardLabel(i18n, key)}
                 </Pill>
@@ -491,11 +491,15 @@ export default function FilterSheet({ open, onClose, dash }) {
               )}
               {companiesForPicker.map((c) => {
                 const label = String(c.company_id || c.name || c.id).toUpperCase();
+                const draftRow = dash.companies.find((row) => Number(row.id) === Number(draft.companyId));
+                const draftCode = String(draftRow?.company_id || "").trim().toUpperCase();
                 const active =
-                  !draft.groupAllMode && !groupOnlyDraft && Number(draft.companyId) === Number(c.id);
+                  !draft.groupAllMode &&
+                  !groupOnlyDraft &&
+                  (Number(draft.companyId) === Number(c.id) || (draftCode && draftCode === label));
                 return (
                   <Pill
-                    key={String(c.id)}
+                    key={label}
                     active={active}
                     onClick={() =>
                       setDraft((prev) => ({

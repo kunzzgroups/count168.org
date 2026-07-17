@@ -22,7 +22,6 @@ export default function TransactionAddSection({
   accountOptions,
   txToAccount,
   setTxToAccount,
-  selectedCategories,
   showStandardFromAndReverse,
   txFromAccount,
   setTxFromAccount,
@@ -142,7 +141,6 @@ export default function TransactionAddSection({
               value={txToAccount}
               onChange={setTxToAccount}
               disabled={mutationsBlocked}
-              selectedCategories={selectedCategories.length === 0 ? [] : selectedCategories}
               searchPlaceholder={m.searchAccount}
             />
             {showStandardFromAndReverse ? (
@@ -154,7 +152,6 @@ export default function TransactionAddSection({
                   value={txFromAccount}
                   onChange={setTxFromAccount}
                   disabled={mutationsBlocked}
-                  selectedCategories={selectedCategories.length === 0 ? [] : selectedCategories}
                   searchPlaceholder={m.searchAccount}
                 />
                 <button
@@ -248,7 +245,6 @@ export default function TransactionAddSection({
               value={rateToAccount}
               onChange={setRateToAccount}
               disabled={mutationsBlocked}
-              selectedCategories={selectedCategories.length === 0 ? [] : selectedCategories}
               searchPlaceholder={m.searchAccount}
             />
             <AccountSelect
@@ -258,7 +254,6 @@ export default function TransactionAddSection({
               value={rateFromAccount}
               onChange={setRateFromAccount}
               disabled={mutationsBlocked}
-              selectedCategories={selectedCategories.length === 0 ? [] : selectedCategories}
               searchPlaceholder={m.searchAccount}
             />
             <button
@@ -346,7 +341,6 @@ export default function TransactionAddSection({
               value={rateTransferToAccount}
               onChange={setRateTransferToAccount}
               disabled={mutationsBlocked}
-              selectedCategories={selectedCategories.length === 0 ? [] : selectedCategories}
               searchPlaceholder={m.searchAccount}
             />
             <AccountSelect
@@ -356,7 +350,6 @@ export default function TransactionAddSection({
               value={rateTransferFromAccount}
               onChange={setRateTransferFromAccount}
               disabled={mutationsBlocked}
-              selectedCategories={selectedCategories.length === 0 ? [] : selectedCategories}
               searchPlaceholder={m.searchAccount}
             />
             <button
@@ -387,8 +380,7 @@ export default function TransactionAddSection({
                 value={rateMiddlemanAccount}
                 onChange={setRateMiddlemanAccount}
                 disabled={mutationsBlocked}
-                selectedCategories={selectedCategories.length === 0 ? [] : selectedCategories}
-              searchPlaceholder={m.searchAccount}
+                searchPlaceholder={m.searchAccount}
               />
             </div>
             <input

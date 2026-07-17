@@ -63,6 +63,130 @@ export function getAssignedGroupCodes(me) {
   return out.sort();
 }
 
+export function getAssignedCompanyIds(me) {
+  const raw = me?.assigned_company_ids;
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const id of raw) {
+    const n = Number(id);
+    if (!Number.isFinite(n) || n <= 0 || seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out.sort((a, b) => a - b);
+}
+
+export function userHasExplicitAssignedScope(me) {
+  const role = String(me?.role || "").trim().toLowerCase();
+  if (role === "owner") return false;
+  return getAssignedCompanyIds(me).length > 0 || getAssignedGroupCodes(me).length > 0;
+}
+
+function normalizeNativeCompanyGroupId(comp) {
+  if (!comp) return "";
+  const native = comp.native_group_id ?? comp.nativeGroupId;
+  if (native != null && String(native).trim() !== "") {
+    return String(native).trim().toUpperCase();
+  }
+  return String(comp?.group_id || "").trim().toUpperCase();
+}
+
+export function resolveAssignedScopeGroupIds(me, companies = []) {
+  const assignedGroups = getAssignedGroupCodes(me);
+  const assignedCompanyIds = getAssignedCompanyIds(me);
+  const out = new Set();
+  for (const g of assignedGroups) {
+    const norm = String(g || "").trim().toUpperCase();
+    if (norm) out.add(norm);
+  }
+  if (assignedCompanyIds.length > 0) {
+    const idSet = new Set(assignedCompanyIds);
+    for (const c of companies || []) {
+      const id = Number(c?.id);
+      if (!Number.isFinite(id) || id <= 0 || !idSet.has(id)) continue;
+      const gid = normalizeNativeCompanyGroupId(c);
+      if (gid) out.add(gid);
+    }
+  }
+  return [...out].sort();
+}
+
+export function companyMatchesLoginScope(company, me, companies = []) {
+  const scope = getLoginScope(me);
+  const ident = getLoginIdentifier(me);
+  if (!scope || !company) return true;
+  if (!ident && scope !== LOGIN_SCOPE_COMPANY) return true;
+  if (scope === LOGIN_SCOPE_COMPANY) return true;
+  const linkSrc = company.link_source_group
+    ? String(company.link_source_group).trim().toUpperCase()
+    : "";
+  const gid = String(company.group_id || "").trim().toUpperCase();
+  const accessible = resolveAccessibleGroupIds(me, companies);
+  if (accessible.length) {
+    return accessible.some((g) => g === gid || g === linkSrc);
+  }
+  return ident != null && (gid === ident || linkSrc === ident);
+}
+
+export function filterCompaniesForLoginScope(companies, me) {
+  if (!Array.isArray(companies) || !getLoginScope(me)) return companies || [];
+  if (isCompanyLogin(me)) return companies;
+  return companies.filter((c) => companyMatchesLoginScope(c, me, companies));
+}
+
+export function filterCompaniesForAssignedScope(companies, me) {
+  if (!Array.isArray(companies) || companies.length === 0 || !me) return companies || [];
+  const role = String(me.role || "").trim().toLowerCase();
+  if (role === "owner") return companies;
+  const assignedIds = getAssignedCompanyIds(me);
+  if (assignedIds.length === 0) return companies;
+  const idSet = new Set(assignedIds);
+  const groupSet = new Set(getAssignedGroupCodes(me));
+  return companies.filter((c) => {
+    if (idSet.has(Number(c?.id))) return true;
+    const gid = String(c?.group_id || "").trim().toUpperCase();
+    if (gid && groupSet.has(gid)) return true;
+    const link = c?.link_source_group ? String(c.link_source_group).trim().toUpperCase() : "";
+    if (link && groupSet.has(link)) return true;
+    return false;
+  });
+}
+
+export function filterCompaniesForUserScope(companies, me) {
+  return filterCompaniesForAssignedScope(filterCompaniesForLoginScope(companies, me), me);
+}
+
+export function companyLoginRequiresSubsidiaryWithGroup(me) {
+  return (
+    isCompanyLogin(me) &&
+    !companyLoginHasGroupLedgerPrivilege(me) &&
+    !userHasAssignedGroupLedger(me)
+  );
+}
+
+export function resolveVisibleGroupIds(groupIds, me, companies = []) {
+  const ids = Array.isArray(groupIds) ? groupIds : [];
+  if (!me) return ids;
+  if (userHasExplicitAssignedScope(me)) {
+    const scoped = resolveAssignedScopeGroupIds(me, companies);
+    if (scoped.length) return scoped;
+    return ids;
+  }
+  const scope = getLoginScope(me);
+  if (!scope) return ids;
+  const accessible = resolveAccessibleGroupIds(me, companies);
+  if (accessible.length) {
+    const set = new Set([...ids, ...accessible]);
+    return [...set].sort();
+  }
+  const ident = getLoginIdentifier(me);
+  if (scope === LOGIN_SCOPE_GROUP && ident) {
+    return ids.includes(ident) ? [ident] : [ident];
+  }
+  return ids;
+}
+
 export function userHasAssignedGroupLedger(me) {
   return getAssignedGroupCodes(me).length > 0;
 }
