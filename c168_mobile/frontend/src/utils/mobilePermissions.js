@@ -35,6 +35,38 @@ export function canAccessTransaction(me) {
   return canAccessPermission(me, "payment");
 }
 
+export function canAccessAccount(me) {
+  return canAccessPermission(me, "account");
+}
+
+/** Full Maintenance: owner / unrestricted, or explicit "maintenance" permission. */
+export function canAccessFullMaintenance(me) {
+  if (hasFullPermissions(me)) return true;
+  return canAccessPermission(me, "maintenance");
+}
+
+/** Non-owner without Maintenance permission but whose company has gambling/bank. */
+export function canAccessLimitedMaintenance(me) {
+  if (hasFullPermissions(me)) return false;
+  if (canAccessFullMaintenance(me)) return false;
+  return Boolean(me?.company_has_gambling || me?.company_has_bank);
+}
+
+/** Transaction Maintenance page (mirrors desktop canAccessTransactionFormulaMaintenance). */
+export function canAccessTransactionMaintenance(me) {
+  return canAccessFullMaintenance(me) || canAccessLimitedMaintenance(me);
+}
+
+/** Payment Maintenance page — full Maintenance permission only (desktop-aligned). */
+export function canAccessPaymentMaintenance(me) {
+  return canAccessFullMaintenance(me);
+}
+
+/** Maintenance hub / More entry visibility. */
+export function canAccessMaintenance(me) {
+  return canAccessTransactionMaintenance(me);
+}
+
 /** First mobile route after login — aligned with desktop sidebar order where possible. */
 export function resolveMobileLandingPath(me) {
   if (!me) return "/login";
@@ -45,8 +77,9 @@ export function resolveMobileLandingPath(me) {
   if (me.needs_user_secondary) return "/user-secondary-password";
 
   if (canAccessDashboard(me)) return "/dashboard";
-  if (canAccessReport(me)) return "/report";
   if (canAccessTransaction(me)) return "/transaction";
+  if (canAccessAccount(me)) return "/account";
+  if (canAccessReport(me)) return "/report";
   return "/more";
 }
 
@@ -55,11 +88,11 @@ export function mobileNavItems(me) {
   if (canAccessDashboard(me)) {
     items.push({ to: "/dashboard", icon: "fa-house", key: "navHome" });
   }
-  if (canAccessReport(me)) {
-    items.push({ to: "/report", icon: "fa-file-lines", key: "navReport" });
-  }
   if (canAccessTransaction(me)) {
     items.push({ to: "/transaction", icon: "fa-money-bill-transfer", key: "navTransaction" });
+  }
+  if (canAccessAccount(me)) {
+    items.push({ to: "/account", icon: "fa-address-book", key: "navAccount" });
   }
   items.push({ to: "/more", icon: "fa-ellipsis", key: "navMore" });
   return items;

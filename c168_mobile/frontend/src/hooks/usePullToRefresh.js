@@ -1,31 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const THRESHOLD = 68;
-const MAX_PULL = 112;
-const ARM_RATIO = 0.9;
+const THRESHOLD = 64;
+const MAX_PULL = 100;
+const ARM_RATIO = 0.88;
+const REFRESH_HOLD = 46;
 const AXIS_LOCK_PX = 8;
+const MIN_SPIN_MS = 320;
 
 function damp(delta) {
   if (delta <= 0) return 0;
-  const eased = THRESHOLD * (1 - Math.exp(-delta / (THRESHOLD * 1.15)));
+  const eased = THRESHOLD * (1 - Math.exp(-delta / (THRESHOLD * 1.1)));
   return Math.min(MAX_PULL, eased);
+}
+
+function easeOutCubic(t) {
+  return 1 - (1 - t) ** 3;
 }
 
 /**
  * Touch pull-to-refresh for a vertical scroll container (scrollTop≈0 to arm).
- * Ignores horizontal swipes (KPI carousels) and settles with parent `refreshing`.
  */
 export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refreshing = false } = {}) {
   const [pullPx, setPullPx] = useState(0);
-  const [phase, setPhase] = useState("idle"); // idle | pulling | armed | refreshing
+  const [phase, setPhase] = useState("idle"); // idle | pulling | armed | refreshing | settling
   const startY = useRef(0);
   const startX = useRef(0);
   const tracking = useRef(false);
-  const axisLocked = useRef(null); // null | "v" | "h"
+  const axisLocked = useRef(null);
   const locked = useRef(false);
   const sawRefreshing = useRef(false);
   const pullPxRef = useRef(0);
-  const rafRef = useRef(0);
+  const animRef = useRef(0);
   const fallbackTimer = useRef(0);
   const minHoldTimer = useRef(0);
   const refreshStartedAt = useRef(0);
@@ -34,20 +39,50 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
   const refreshingRef = useRef(refreshing);
   refreshingRef.current = refreshing;
 
-  const setPull = useCallback((px) => {
+  const setPullImmediate = useCallback((px) => {
     pullPxRef.current = px;
-    cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(() => setPullPx(px));
+    setPullPx(px);
   }, []);
+
+  const cancelAnim = useCallback(() => {
+    if (animRef.current) cancelAnimationFrame(animRef.current);
+    animRef.current = 0;
+  }, []);
+
+  const animatePull = useCallback(
+    (target, { duration = 240, onDone } = {}) => {
+      cancelAnim();
+      const from = pullPxRef.current;
+      if (Math.abs(from - target) < 0.5) {
+        setPullImmediate(target);
+        onDone?.();
+        return;
+      }
+      const t0 = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / duration);
+        const v = from + (target - from) * easeOutCubic(t);
+        setPullImmediate(v);
+        if (t < 1) {
+          animRef.current = requestAnimationFrame(step);
+        } else {
+          animRef.current = 0;
+          onDone?.();
+        }
+      };
+      animRef.current = requestAnimationFrame(step);
+    },
+    [cancelAnim, setPullImmediate],
+  );
 
   const settleIdle = useCallback(() => {
     locked.current = false;
     tracking.current = false;
     axisLocked.current = null;
     sawRefreshing.current = false;
-    setPull(0);
     setPhase("idle");
-  }, [setPull]);
+    animatePull(0, { duration: 260 });
+  }, [animatePull]);
 
   useEffect(() => {
     if (refreshing) {
@@ -56,16 +91,29 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
       refreshStartedAt.current = Date.now();
       window.clearTimeout(fallbackTimer.current);
       window.clearTimeout(minHoldTimer.current);
+      cancelAnim();
       setPhase("refreshing");
-      setPull(Math.max(pullPxRef.current, 48));
+      animatePull(Math.max(pullPxRef.current, REFRESH_HOLD), { duration: 180 });
       return;
     }
     if (!sawRefreshing.current) return;
     const held = Date.now() - (refreshStartedAt.current || Date.now());
-    const wait = Math.max(0, 420 - held);
+    const wait = Math.max(0, MIN_SPIN_MS - held);
     window.clearTimeout(minHoldTimer.current);
-    minHoldTimer.current = window.setTimeout(() => settleIdle(), wait);
-  }, [refreshing, setPull, settleIdle]);
+    setPhase("settling");
+    minHoldTimer.current = window.setTimeout(() => {
+      animatePull(0, {
+        duration: 280,
+        onDone: () => {
+          locked.current = false;
+          tracking.current = false;
+          axisLocked.current = null;
+          sawRefreshing.current = false;
+          setPhase("idle");
+        },
+      });
+    }, wait);
+  }, [refreshing, animatePull, cancelAnim]);
 
   useEffect(() => {
     const el = scrollRef?.current;
@@ -74,6 +122,7 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
     const onTouchStart = (e) => {
       if (locked.current || refreshingRef.current) return;
       if (el.scrollTop > 1) return;
+      cancelAnim();
       const t = e.touches[0];
       if (!t) return;
       startY.current = t.clientY;
@@ -95,7 +144,7 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
         axisLocked.current = Math.abs(dx) > Math.abs(dy) ? "h" : "v";
         if (axisLocked.current === "h") {
           tracking.current = false;
-          setPull(0);
+          setPullImmediate(0);
           setPhase("idle");
           return;
         }
@@ -104,19 +153,20 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
 
       if (el.scrollTop > 1) {
         tracking.current = false;
-        setPull(0);
+        setPullImmediate(0);
         setPhase("idle");
         return;
       }
 
       if (dy <= 0) {
-        setPull(0);
+        setPullImmediate(0);
         setPhase("idle");
         return;
       }
 
+      cancelAnim();
       const damped = damp(dy);
-      setPull(damped);
+      setPullImmediate(damped);
       setPhase(damped >= THRESHOLD * ARM_RATIO ? "armed" : "pulling");
       if (damped > 2) e.preventDefault();
     };
@@ -137,19 +187,19 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
         typeof onRefreshRef.current === "function";
 
       if (!shouldRefresh) {
-        setPull(0);
-        setPhase("idle");
+        setPhase("settling");
+        animatePull(0, { duration: 220, onDone: () => setPhase("idle") });
         return;
       }
 
       locked.current = true;
       setPhase("refreshing");
-      setPull(48);
+      animatePull(REFRESH_HOLD, { duration: 160 });
       Promise.resolve(onRefreshRef.current()).catch(() => {});
       window.clearTimeout(fallbackTimer.current);
       fallbackTimer.current = window.setTimeout(() => {
         if (!sawRefreshing.current && locked.current) settleIdle();
-      }, 1600);
+      }, 1800);
     };
 
     el.addEventListener("touchstart", onTouchStart, { passive: true });
@@ -158,7 +208,7 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
     el.addEventListener("touchcancel", onTouchEnd, { passive: true });
 
     return () => {
-      cancelAnimationFrame(rafRef.current);
+      cancelAnim();
       window.clearTimeout(fallbackTimer.current);
       window.clearTimeout(minHoldTimer.current);
       el.removeEventListener("touchstart", onTouchStart);
@@ -166,12 +216,16 @@ export function usePullToRefresh(scrollRef, { onRefresh, enabled = true, refresh
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [scrollRef, enabled, setPull, settleIdle]);
+  }, [scrollRef, enabled, setPullImmediate, animatePull, cancelAnim, settleIdle]);
+
+  const progress = Math.min(1, pullPx / THRESHOLD);
+  const isAnimating = phase === "refreshing" || phase === "settling";
 
   return {
     pullPx,
-    progress: Math.min(1.15, pullPx / THRESHOLD),
+    progress,
     phase,
-    active: phase !== "idle" || pullPx > 0.5,
+    active: pullPx > 0.5 || isAnimating,
+    isAnimating,
   };
 }

@@ -1,0 +1,314 @@
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useOutletContext } from "react-router-dom";
+import MobileShell from "../../components/layout/MobileShell.jsx";
+import { buildPaymentHistoryScope, persistPaymentHistoryScope } from "../../lib/transactionHistoryScope.js";
+import { persistMobileTxListSnapshot } from "../../lib/mobileTxListSnapshot.js";
+import { formatTransactionGridMoneyHalfUp, parseBalanceValue } from "../../lib/transactionFormat.js";
+import MoneyDecimal from "../../lib/money/moneyDecimal.js";
+import { moneyToneClass } from "../../lib/money/moneyToneClass.js";
+import { resolveGridRowToAccountOption } from "../../lib/transactionPaymentLogic.js";
+import FilterSheet from "../dashboard/FilterSheet.jsx";
+import ScopeBreadcrumb from "../dashboard/ScopeBreadcrumb.jsx";
+import AccountBalanceTables from "./AccountBalanceTables.jsx";
+import AddTransactionSheet from "./AddTransactionSheet.jsx";
+import ContraInboxSheet from "./ContraInboxSheet.jsx";
+
+function ToggleChip({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`m-tx-chip tap-scale${active ? " m-tx-chip--active" : ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function TransactionPage() {
+  const { tx } = useOutletContext();
+  const navigate = useNavigate();
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addPrefill, setAddPrefill] = useState(null);
+  /** Only drive pull-to-refresh chrome for user-initiated refresh (not Back remount). */
+  const [pullRefreshActive, setPullRefreshActive] = useState(false);
+
+  useEffect(() => {
+    if (pullRefreshActive && !tx.searchLoading) {
+      setPullRefreshActive(false);
+    }
+  }, [pullRefreshActive, tx.searchLoading]);
+
+  const onPullRefresh = useCallback(() => {
+    setPullRefreshActive(true);
+    tx.retry();
+  }, [tx]);
+
+  const openHistory = useCallback(
+    (row) => {
+      const scope = buildPaymentHistoryScope({
+        row,
+        dateFrom: tx.dateFrom,
+        dateTo: tx.dateTo,
+        scopeApi: tx.scopeApi,
+        currency: tx.currency,
+      });
+      persistPaymentHistoryScope(scope);
+      persistMobileTxListSnapshot(tx.captureListSnapshot());
+      navigate("/transaction/history");
+    },
+    [navigate, tx],
+  );
+
+  const pickBalanceForForm = useCallback(
+    (row, side) => {
+      if (tx.mutationsBlocked) {
+        tx.pushToast(tx.m.readOnlyModeCannotSubmit, "error");
+        return;
+      }
+      const account = resolveGridRowToAccountOption(row, tx.accountOptions);
+      if (!account) {
+        tx.pushToast(tx.m.couldNotResolveAccount, "error");
+        return;
+      }
+
+      const rowCurrency = String(row?.currency || "").trim().toUpperCase();
+      const accountCurrency = account.currency ? String(account.currency).trim().toUpperCase() : "";
+      const currency = rowCurrency || accountCurrency || "";
+
+      let amount = "";
+      const balRaw = row?.balance;
+      const parsed = parseBalanceValue(String(balRaw ?? "").replace(/,/g, ""));
+      if (parsed !== null) {
+        try {
+          amount = MoneyDecimal.formatFixedHalfUp(MoneyDecimal.abs(String(balRaw)).toString(), 2);
+        } catch {
+          amount = MoneyDecimal.formatFixedHalfUp(String(Math.abs(parsed)), 2);
+        }
+      }
+
+      setAddPrefill({
+        id: Date.now(),
+        side: side === "right" ? "right" : "left",
+        account,
+        amount,
+        currency,
+      });
+      setAddOpen(true);
+    },
+    [tx],
+  );
+
+  const openAddSheet = useCallback(() => {
+    setAddPrefill(null);
+    setAddOpen(true);
+  }, []);
+
+  if (tx.blocked) return null;
+
+  const companyCode = String(tx.selectedCompany?.company_id || "").toUpperCase();
+  const groupId = String(
+    tx.selectedGroup || tx.selectedCompany?.group_id || tx.selectedCompany?.link_source_group || "",
+  )
+    .trim()
+    .toUpperCase();
+
+  const viewingCompanyCode = tx.groupsAllMode || tx.groupAllMode
+    ? tx.i18n.all
+    : tx.groupOnlyMode
+      ? groupId
+      : companyCode;
+  const sidebarGroupId = tx.groupOnlyMode ? "" : groupId;
+  const inboxCount = tx.contraInbox?.items?.length || 0;
+  const overlayOpen = filterOpen || addOpen || Boolean(tx.contraInbox?.open);
+
+  const stickyBar = (
+    <div className="m-tx-sticky">
+      <div className="m-tx-sticky-row">
+        <button type="button" onClick={() => setFilterOpen(true)} className="m-filter-bar tap-scale">
+          <div className="m-filter-bar-row">
+            <i className="far fa-calendar m-filter-bar-icon" aria-hidden="true" />
+            <span className="m-filter-bar-dates">{tx.dateRangeText}</span>
+            <span className="m-filter-bar-currency">{tx.currency}</span>
+            <span className="m-filter-bar-action">
+              <i className="fas fa-filter" aria-hidden="true" />
+            </span>
+          </div>
+          <div className="m-filter-bar-scope">
+            <ScopeBreadcrumb
+              i18n={tx.i18n}
+              groupId={groupId}
+              companyCode={companyCode}
+              groupsAllMode={tx.groupsAllMode}
+              groupAllMode={tx.groupAllMode}
+              groupOnlyMode={tx.groupOnlyMode}
+            />
+          </div>
+        </button>
+        {tx.canUseContraInbox ? (
+          <button
+            type="button"
+            onClick={() => tx.setContraInbox((s) => ({ ...s, open: true }))}
+            className="m-tx-inbox-btn tap-scale"
+            aria-label={tx.m.contraInbox}
+          >
+            <i className="fas fa-inbox" aria-hidden="true" />
+            {inboxCount > 0 ? <span className="m-tx-inbox-badge">{inboxCount}</span> : null}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="m-tx-chips">
+        <ToggleChip active={tx.showName} onClick={() => tx.setShowName(!tx.showName)}>
+          {tx.m.showName}
+        </ToggleChip>
+        <ToggleChip active={tx.showCaptureOnly} onClick={() => tx.setShowCaptureOnly(!tx.showCaptureOnly)}>
+          {tx.m.showCaptureOnly}
+        </ToggleChip>
+        <ToggleChip active={tx.showPaymentOnly} onClick={() => tx.setShowPaymentOnly(!tx.showPaymentOnly)}>
+          {tx.m.showPaymentOnly}
+        </ToggleChip>
+        <ToggleChip active={tx.showZeroBalance} onClick={() => tx.setShowZeroBalance(!tx.showZeroBalance)}>
+          {tx.m.showZeroBalance}
+        </ToggleChip>
+        {tx.typeSearchActive ? (
+          <ToggleChip active onClick={() => tx.exitTypeSearch()}>
+            {tx.typeSearchFormType || tx.m.search}
+          </ToggleChip>
+        ) : null}
+      </div>
+      {tx.typeSearchActive ? <p className="m-tx-type-hint">{tx.m.pullToExitTypeSearch}</p> : null}
+    </div>
+  );
+
+  const showLoading = tx.loading || (tx.searchLoading && !tx.displayRows.length);
+
+  return (
+    <MobileShell
+      i18n={tx.i18n}
+      me={tx.me}
+      companyCode={viewingCompanyCode}
+      groupId={sidebarGroupId}
+      onLogout={tx.logout}
+      onRefresh={onPullRefresh}
+      refreshing={pullRefreshActive && tx.searchLoading}
+      stickyBar={stickyBar}
+      lang={tx.lang}
+      onLangChange={tx.setLang}
+      overlayOpen={overlayOpen}
+      floatingAction={
+        <div className="m-tx-fab-wrap">
+          <button
+            type="button"
+            onClick={openAddSheet}
+            disabled={tx.mutationsBlocked}
+            className="m-tx-fab tap-scale"
+            aria-label={tx.m.fabAddPayment || tx.m.addTransaction}
+          >
+            <i className="fas fa-plus" aria-hidden="true" />
+          </button>
+        </div>
+      }
+      overlay={
+        <>
+          <FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} dash={tx} />
+          <AddTransactionSheet
+            open={addOpen}
+            onClose={() => {
+              setAddOpen(false);
+              setAddPrefill(null);
+            }}
+            m={tx.m}
+            accountOptions={tx.accountOptions}
+            currencyOptions={tx.formCurrencies}
+            mutationsBlocked={tx.mutationsBlocked}
+            onSubmit={tx.submitTx}
+            pushToast={tx.pushToast}
+            onTypeSearch={(t) => {
+              tx.runTypeSearch(t);
+              setAddOpen(false);
+            }}
+            typeSearchActive={tx.typeSearchActive}
+            onExitTypeSearch={tx.exitTypeSearch}
+            prefill={addPrefill}
+            onPrefillConsumed={() => setAddPrefill(null)}
+            entryIntent="add"
+          />
+          <ContraInboxSheet
+            open={Boolean(tx.contraInbox?.open)}
+            onClose={() => tx.setContraInbox((s) => ({ ...s, open: false }))}
+            m={tx.m}
+            items={tx.contraInbox?.items || []}
+            loading={tx.contraInbox?.loading}
+            mutationsBlocked={tx.mutationsBlocked}
+            onApprove={tx.onApproveContra}
+            onReject={tx.onRejectContra}
+          />
+        </>
+      }
+    >
+      <div className="m-tx-page">
+      {tx.toast ? (
+        <div
+          className={`m-tx-toast ${
+            tx.toast.tone === "error"
+              ? "m-tx-toast--error"
+              : tx.toast.tone === "success"
+                ? "m-tx-toast--success"
+                : "m-tx-toast--info"
+          }`}
+        >
+          {tx.toast.message}
+        </div>
+      ) : null}
+
+      {tx.error ? <div className="m-tx-error-banner">{tx.error}</div> : null}
+
+      {showLoading ? (
+        <div className="m-tx-loading">
+          <i className="fas fa-spinner fa-spin" aria-hidden="true" />
+          <p>{tx.m.loadingData}</p>
+        </div>
+      ) : (
+        <>
+          {tx.totals ? (
+            <div className="m-tx-totals">
+              <TotalCell label={tx.m.bfTable} value={tx.totals.bf} />
+              <TotalCell label={tx.m.winLossTableCompact} value={tx.totals.win_loss} />
+              <TotalCell label={tx.m.crDrTable} value={tx.totals.cr_dr} />
+              <TotalCell label={tx.m.balanceTableCompact} value={tx.totals.balance} />
+            </div>
+          ) : null}
+
+          {tx.searchError ? <p className="m-tx-search-error">{tx.searchError}</p> : null}
+
+          {tx.displayRows.length === 0 ? (
+            <p className="m-tx-empty">{tx.m.noAccountsFound}</p>
+          ) : (
+            <AccountBalanceTables
+              rows={tx.displayRows}
+              showName={tx.showName}
+              m={tx.m}
+              currency={tx.currency}
+              onOpenHistory={openHistory}
+              onPickBalance={pickBalanceForForm}
+            />
+          )}
+        </>
+      )}
+      </div>
+    </MobileShell>
+  );
+}
+
+function TotalCell({ label, value }) {
+  return (
+    <div className="m-tx-total-cell">
+      <p className="m-tx-total-label">{label}</p>
+      <p className={`m-tx-total-value ${moneyToneClass(value)}`}>
+        {formatTransactionGridMoneyHalfUp(value)}
+      </p>
+    </div>
+  );
+}

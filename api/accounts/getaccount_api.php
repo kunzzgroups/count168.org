@@ -100,7 +100,6 @@ try {
                 a.id,
                 a.account_id,
                 a.name,
-                a.password,
                 a.role,
                 a.payment_alert,
                 a.alert_day,

@@ -1,0 +1,170 @@
+/* Contra inbox bottom sheet */
+
+.m-contra-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.m-contra-sheet-spacer {
+  min-height: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+}
+
+.m-contra-sheet-panel {
+  display: flex;
+  max-height: 85dvh;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1.5rem 1.5rem 0 0;
+  background: var(--m-color-surface);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.m-contra-sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--m-color-ring-soft);
+  padding: 0.75rem 1rem;
+}
+
+.m-contra-sheet-title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--m-color-text);
+}
+
+.m-contra-sheet-sub {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--m-color-muted);
+}
+
+.m-contra-sheet-close {
+  display: grid;
+  width: 2.25rem;
+  height: 2.25rem;
+  place-items: center;
+  border-radius: 0.75rem;
+  background: var(--m-color-surface-muted);
+  color: var(--m-color-muted);
+}
+
+.m-contra-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.m-contra-sheet-body > * + * {
+  margin-top: 0.75rem;
+}
+
+.m-contra-sheet-loading {
+  padding: 2.5rem 0;
+  text-align: center;
+  font-size: var(--m-text-body);
+  font-weight: 600;
+  color: var(--m-color-muted);
+}
+
+.m-contra-sheet-empty {
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.m-contra-sheet-empty > * + * {
+  margin-top: 0.5rem;
+}
+
+.m-contra-sheet-empty-title {
+  font-size: var(--m-text-body);
+  font-weight: 600;
+  color: var(--m-color-text-secondary);
+}
+
+.m-contra-sheet-empty-hint {
+  font-size: 0.75rem;
+  line-height: 1.625;
+  color: var(--m-color-muted);
+}
+
+.m-contra-item {
+  border-radius: var(--m-radius-card-lg);
+  border: 1px solid var(--m-color-ring-soft);
+  background: #f8fafc;
+  padding: 0.75rem;
+}
+
+.m-contra-item-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--m-text-body);
+  font-weight: 700;
+  color: var(--m-color-text);
+}
+
+.m-contra-item-meta {
+  font-size: 0.6875rem;
+  color: var(--m-color-muted);
+}
+
+.m-contra-item-route {
+  margin-top: 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--m-color-text-secondary);
+}
+
+.m-contra-item-amount {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--m-color-text);
+}
+
+.m-contra-item-by {
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--m-color-label);
+}
+
+.m-contra-item-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.m-contra-btn {
+  flex: 1;
+  border-radius: 0.75rem;
+  padding: 0.625rem 0;
+  font-size: var(--m-text-body);
+  font-weight: 700;
+  color: #fff;
+}
+
+.m-contra-btn:disabled {
+  opacity: 0.4;
+}
+
+.m-contra-btn--approve {
+  background: #059669;
+}
+
+.m-contra-btn--reject {
+  background: #dc2626;
+}

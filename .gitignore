@@ -19,12 +19,29 @@ Thumbs.db
 AGENTS.md
 skills-lock.json
 
+# skills CLI sprawl — only .agents/ is needed for Cursor; never use `npx skills add ... --all`
+.claude/
+.continue/
+.devin/
+.windsurf/
+.goose/
+.roo/
+.crush/
+.codex/
+skills/
+data/skills/
+agent/skills/
+
 # IDE
 .idea/
 .vscode/
 
 # local scratch
 _php_subtotal_snip.txt
+
+# Playwright / agent verification artifacts
+verify-*/
+verify-*.png
 
 # database: regenerable import intermediates
 database/generated/*.sql

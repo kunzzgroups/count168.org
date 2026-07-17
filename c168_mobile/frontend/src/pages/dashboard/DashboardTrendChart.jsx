@@ -14,16 +14,16 @@ import { formatCompactAxis, formatCurrency } from "../../lib/dashboardFormat.js"
 function TrendTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/95 px-3 py-2 shadow-lg backdrop-blur-sm">
-      <p className="mb-1.5 text-[11px] font-bold text-slate-500">{label}</p>
-      <ul className="space-y-1">
+    <div className="m-dash-trend-tooltip">
+      <p className="m-dash-trend-tooltip-title">{label}</p>
+      <ul>
         {payload.map((entry) => (
-          <li key={entry.dataKey} className="flex items-center justify-between gap-4 text-[12px]">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-600">
+          <li key={entry.dataKey} className="m-dash-trend-tooltip-row">
+            <span className="m-dash-trend-tooltip-label">
               <span className="size-2 rounded-full" style={{ backgroundColor: entry.color }} aria-hidden="true" />
               {entry.name}
             </span>
-            <span className="font-bold tabular-nums text-slate-900">{formatCurrency(entry.value)}</span>
+            <span className="m-dash-trend-tooltip-value">{formatCurrency(entry.value)}</span>
           </li>
         ))}
       </ul>
@@ -46,15 +46,13 @@ export default function DashboardTrendChart({
   const hasSeriesOn = activeKeys.length > 0;
 
   return (
-    <section className="animate-fade-in rounded-[24px] bg-white p-4 shadow-[0_8px_28px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-100/80 sm:p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-[15px] font-bold text-slate-900">{label}</h2>
-        <span className="shrink-0 rounded-lg bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
-          {dateRangeText}
-        </span>
+    <section className="m-dash-card m-dash-trend">
+      <div className="m-dash-card-head m-dash-card-head--spaced">
+        <h2 className="m-dash-card-title">{label}</h2>
+        <span className="m-dash-card-badge">{dateRangeText}</span>
       </div>
 
-      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label={label}>
+      <div className="m-dash-trend-toggles" role="group" aria-label={label}>
         {series.map((s) => {
           const on = Boolean(visible[s.idx]);
           return (
@@ -62,16 +60,12 @@ export default function DashboardTrendChart({
               key={s.dataKey}
               type="button"
               aria-pressed={on}
-              className={`tap-scale inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold transition-colors ${
-                on
-                  ? "border-transparent text-white shadow-sm"
-                  : "border-slate-200 bg-white text-slate-400"
-              }`}
+              className={`m-dash-trend-toggle tap-scale${on ? " m-dash-trend-toggle--on" : ""}`}
               style={on ? { backgroundColor: s.color } : undefined}
               onClick={() => onToggleSeries(s.idx)}
             >
               <span
-                className={`size-1.5 rounded-full ${on ? "bg-white/90" : ""}`}
+                className={`m-dash-trend-toggle-dot${on ? " m-dash-trend-toggle-dot--on" : ""}`}
                 style={!on ? { backgroundColor: s.color } : undefined}
                 aria-hidden="true"
               />
@@ -81,7 +75,7 @@ export default function DashboardTrendChart({
         })}
       </div>
 
-      <div className="h-[248px] min-w-0">
+      <div className="m-dash-trend-chart">
         {rows?.length && hasSeriesOn ? (
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
@@ -150,9 +144,7 @@ export default function DashboardTrendChart({
             </AreaChart>
           </ResponsiveContainer>
         ) : (
-          <p className="grid h-full place-items-center text-[13px] font-semibold text-slate-400">
-            {rows?.length && !hasSeriesOn ? emptyText || "—" : emptyText}
-          </p>
+          <p className="m-dash-card-empty">{rows?.length && !hasSeriesOn ? emptyText || "—" : emptyText}</p>
         )}
       </div>
     </section>

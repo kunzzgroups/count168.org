@@ -1,4 +1,4 @@
-/** Maps English API `message` strings to localized text (login). */
+/** Maps English API `message` strings to localized text (login + secondary password). */
 const AUTH_API_MESSAGES = {
   "Account ID, Company ID or password is incorrect": {
     en: "Account ID, Company ID or password is incorrect",
@@ -7,6 +7,18 @@ const AUTH_API_MESSAGES = {
   "Username or password is incorrect": {
     en: "Username or password is incorrect",
     zh: "用户名或密码不正确",
+  },
+  "Please enter secondary password": {
+    en: "Please enter secondary password",
+    zh: "请输入二级密码",
+  },
+  "Secondary password must be exactly 6 digits": {
+    en: "Secondary password must be exactly 6 digits",
+    zh: "二级密码必须为 6 位数字",
+  },
+  "Secondary password is incorrect": {
+    en: "Secondary password is incorrect",
+    zh: "二级密码不正确",
   },
   "Company or Group has expired.": {
     en: "Company or Group has expired.",
@@ -103,5 +115,30 @@ export const LOGIN_I18N = {
     confirm: "确认",
     maintenanceLabel: "系统维护中:",
     unknownError: "未知错误",
+  },
+};
+
+export const SECONDARY_VERIFY_I18N = {
+  en: {
+    title: "Secondary Password Verification",
+    lead: "Please enter your 6-digit secondary password to continue",
+    placeholder: "Enter 6-digit password",
+    verify: "Verify",
+    verifying: "Verifying...",
+    digitsSix: "Please enter exactly 6 digits",
+    genericError: "An error occurred. Please try again.",
+    switchLang: "Switch language",
+    backToLogin: "Back to login",
+  },
+  zh: {
+    title: "二级密码验证",
+    lead: "请输入 6 位数字二级密码",
+    placeholder: "请输入 6 位数字密码",
+    verify: "验证",
+    verifying: "验证中...",
+    digitsSix: "请输入完整的 6 位数字",
+    genericError: "发生错误，请稍后重试。",
+    switchLang: "切换语言",
+    backToLogin: "返回登录",
   },
 };

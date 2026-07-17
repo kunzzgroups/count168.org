@@ -33,73 +33,55 @@ export default function HeroSummaryCard({
   })();
 
   return (
-    <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-[#1e4fd8] via-[#2f6bff] to-[#3ecfff] p-5 text-white shadow-[0_20px_44px_-16px_rgba(30,79,216,0.55)]">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 60% at 100% 0%, rgba(255,255,255,0.35), transparent 55%), radial-gradient(ellipse 50% 40% at 0% 100%, rgba(56,189,248,0.35), transparent 50%)",
-        }}
-        aria-hidden="true"
-      />
+    <section className="m-dash-hero">
+      <div className="m-dash-hero-glow" aria-hidden="true" />
 
       {sparkPath ? (
-        <svg
-          className="pointer-events-none absolute bottom-2 right-2 h-14 w-32 text-white/45"
-          viewBox="0 0 120 40"
-          fill="none"
-          aria-hidden="true"
-        >
+        <svg className="m-dash-hero-spark" viewBox="0 0 120 40" fill="none" aria-hidden="true">
           <path d={sparkPath} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       ) : null}
 
-      <div className={`relative flex items-start justify-between gap-3 ${sparkPath ? "pr-24" : ""}`}>
+      <div className={`m-dash-hero-top${sparkPath ? " m-dash-hero-top--spark" : ""}`}>
         <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-white/75">{i18n.netProfit}</p>
-          <p className="mt-0.5 text-[13px] font-semibold text-white/90">{currency}</p>
+          <p className="m-dash-hero-label">{i18n.netProfit}</p>
+          <p className="m-dash-hero-currency">{currency}</p>
         </div>
         {showCompare && (
           <span
-            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-bold backdrop-blur ${
-              compare.isUp ? "bg-emerald-400/25 text-white" : "bg-rose-400/30 text-white"
+            className={`m-dash-hero-compare-badge ${
+              compare.isUp ? "m-dash-hero-compare-badge--up" : "m-dash-hero-compare-badge--down"
             }`}
           >
-            <i className={`fas fa-arrow-${compare.isUp ? "up" : "down"} text-[10px]`} aria-hidden="true" />
+            <i className={`fas fa-arrow-${compare.isUp ? "up" : "down"}`} aria-hidden="true" />
             {formatPercentMagnitude(compare.pct)}
           </span>
         )}
       </div>
 
-      <p
-        className={`relative mt-4 truncate text-[clamp(28px,9vw,40px)] font-bold leading-none tracking-tight tabular-nums ${
-          sparkPath ? "pr-24" : ""
-        }`}
-      >
+      <p className={`m-dash-hero-value${sparkPath ? " m-dash-hero-value--spark" : ""}`}>
         {loading ? (
-          <span className="inline-block h-10 w-40 animate-pulse rounded-xl bg-white/25" />
+          <span className="m-dash-hero-skeleton" />
         ) : empty ? (
-          <span className="text-[22px] font-semibold tracking-normal text-white/80">—</span>
+          <span className="m-dash-hero-empty-value">—</span>
         ) : (
           formatCurrencyHero(value)
         )}
       </p>
 
       {showCompare && (
-        <p className="relative mt-3 max-w-[85%] text-[12px] font-medium leading-snug text-white/85">
+        <p className="m-dash-hero-delta">
           {compareLabel} <span className="font-bold">{formatSignedChange(compare.delta)}</span>
         </p>
       )}
 
       {empty && !loading && emptyLabel !== false ? (
-        <p className="relative mt-3 text-[12px] font-semibold text-white/75">
-          {typeof emptyLabel === "string" ? emptyLabel : i18n.noData}
-        </p>
+        <p className="m-dash-hero-note">{typeof emptyLabel === "string" ? emptyLabel : i18n.noData}</p>
       ) : null}
 
-      {multiCurrency && !empty && (
-        <p className="relative mt-2 text-[11px] font-semibold text-white/70">{i18n.multiCurrencyNote}</p>
-      )}
+      {multiCurrency && !empty ? (
+        <p className="m-dash-hero-multi">{i18n.multiCurrencyNote}</p>
+      ) : null}
     </section>
   );
 }

@@ -8,6 +8,7 @@ import DashboardTrendChart from "./DashboardTrendChart.jsx";
 import FilterSheet from "./FilterSheet.jsx";
 import HeroSummaryCard from "./HeroSummaryCard.jsx";
 import ScopeBreadcrumb from "./ScopeBreadcrumb.jsx";
+import "./dashboard.css";
 
 export default function DashboardPage() {
   const dash = useMobileDashboard();
@@ -68,29 +69,20 @@ export default function DashboardPage() {
     <button
       type="button"
       onClick={() => setFilterOpen(true)}
-      className="tap-scale w-full rounded-2xl bg-white px-3 py-2 text-left shadow-[0_8px_20px_-12px_rgba(15,23,42,0.2)] ring-1 ring-slate-100"
+      className="m-filter-bar tap-scale"
       aria-label={i18n.filter}
     >
-      {/* Row 1: date + currency + filter */}
-      <div className="flex items-center gap-2">
-        <i className="far fa-calendar shrink-0 text-[#2f6bf6]" aria-hidden="true" />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-slate-700">
-          {dash.dateRangeText}
-        </span>
-        <span className="shrink-0 rounded-lg bg-slate-100 px-1.5 py-1 text-[11px] font-bold tracking-wide text-slate-600">
-          {dash.currency}
-        </span>
-        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl bg-[#2f6bf6] text-white">
-          <i className="fas fa-filter text-[11px]" aria-hidden="true" />
+      <div className="m-filter-bar-row">
+        <i className="far fa-calendar m-filter-bar-icon" aria-hidden="true" />
+        <span className="m-filter-bar-dates">{dash.dateRangeText}</span>
+        <span className="m-filter-bar-currency">{dash.currency}</span>
+        <span className="m-filter-bar-action">
+          <i className="fas fa-filter" aria-hidden="true" />
         </span>
       </div>
 
-      {/* Row 2: Group › Company path — full width, hierarchy clear */}
-      <div
-        className="mt-1.5 flex items-center gap-2 border-t border-slate-100/90 pt-1.5"
-        title={scopeTitle}
-      >
-        <div className="min-w-0 flex-1 overflow-hidden">
+      <div className="m-filter-bar-scope m-filter-bar-scope-row" title={scopeTitle}>
+        <div className="m-filter-bar-scope-main">
           <ScopeBreadcrumb
             i18n={i18n}
             groupId={groupId}
@@ -100,9 +92,7 @@ export default function DashboardPage() {
             groupOnlyMode={dash.groupOnlyMode}
           />
         </div>
-        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">
-          {i18n.switchCompany || "Switch"}
-        </span>
+        <span className="m-filter-bar-switch">{i18n.switchCompany || "Switch"}</span>
       </div>
     </button>
   );
@@ -123,62 +113,38 @@ export default function DashboardPage() {
       overlayOpen={filterOpen}
       overlay={<FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} dash={dash} />}
     >
-      <div className="relative w-full max-w-full overflow-x-hidden px-3.5 pb-3 pt-3">
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-40 opacity-90"
-          style={{
-            background:
-              "radial-gradient(ellipse 90% 70% at 10% -10%, rgba(47,107,255,0.12), transparent 55%), radial-gradient(ellipse 60% 50% at 90% 10%, rgba(56,189,248,0.1), transparent 50%)",
-          }}
-          aria-hidden="true"
-        />
+      <div className="m-dash-page">
+        <div className="m-dash-glow" aria-hidden="true" />
 
         {error && dash.hasData ? (
-          <div className="relative mb-4 flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
-            <i className="fas fa-circle-exclamation mt-0.5 text-[14px] text-rose-500" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-[13px] font-bold text-rose-800">{i18n.loadError}</p>
-              <p className="mt-0.5 text-[12px] font-semibold leading-snug text-rose-700/90">{error}</p>
+          <div className="m-dash-error-banner">
+            <i className="fas fa-circle-exclamation" aria-hidden="true" />
+            <div className="m-dash-error-main">
+              <p className="m-dash-error-title">{i18n.loadError}</p>
+              <p className="m-dash-error-body">{error}</p>
             </div>
-            <button
-              type="button"
-              onClick={dash.retry}
-              className="shrink-0 rounded-xl bg-white px-3 py-1.5 text-[12px] font-bold text-rose-600 ring-1 ring-rose-200"
-            >
+            <button type="button" onClick={dash.retry} className="m-dash-error-retry">
               {i18n.retry || "Retry"}
             </button>
           </div>
         ) : null}
 
         {ratesHint && (
-          <div
-            className="relative mb-3 flex items-start gap-2.5 rounded-2xl border border-amber-200 bg-amber-50 px-3.5 py-2.5"
-            role="status"
-          >
-            <i className="fas fa-exclamation-triangle mt-0.5 text-[12px] text-amber-600" aria-hidden="true" />
-            <p className="min-w-0 flex-1 text-[12px] font-semibold leading-snug text-amber-800">{ratesHint}</p>
+          <div className="m-dash-rates-hint" role="status">
+            <i className="fas fa-exclamation-triangle" aria-hidden="true" />
+            <p>{ratesHint}</p>
             <button
               type="button"
               onClick={() => setRatesHintDismissed(true)}
-              className="shrink-0 grid size-7 place-items-center rounded-full text-amber-700/70"
+              className="m-dash-rates-dismiss"
               aria-label={i18n.closeMenu || "Close"}
             >
-              <i className="fas fa-xmark text-[12px]" aria-hidden="true" />
+              <i className="fas fa-xmark" aria-hidden="true" />
             </button>
           </div>
         )}
 
-        {refreshing && (
-          <div
-            className="relative mb-3 h-0.5 overflow-hidden rounded-full bg-slate-100"
-            aria-live="polite"
-            aria-label={i18n.loading}
-          >
-            <div className="h-full w-1/3 animate-[mDashRefresh_1.1s_ease-in-out_infinite] rounded-full bg-[#2f6bf6]" />
-          </div>
-        )}
-
-        <div className={`relative space-y-4 transition-opacity duration-200 ${refreshing ? "opacity-90" : ""}`}>
+        <div className="m-dash-content">
           <HeroSummaryCard
             i18n={i18n}
             currency={dash.currency}
@@ -193,38 +159,29 @@ export default function DashboardPage() {
           />
 
           {!loading && !dash.hasData && (
-            <div className="rounded-[22px] border border-dashed border-slate-200 bg-white/80 px-5 py-6 text-center">
-              <div className="mx-auto mb-3 grid size-12 place-items-center rounded-2xl bg-slate-100 text-slate-400">
-                <i className={`fas ${error ? "fa-lock" : "fa-chart-line"} text-[18px]`} aria-hidden="true" />
+            <div className="m-dash-empty">
+              <div className="m-dash-empty-icon">
+                <i className={`fas ${error ? "fa-lock" : "fa-chart-line"}`} aria-hidden="true" />
               </div>
-              <p className="text-[14px] font-bold text-slate-700">
+              <p className="m-dash-empty-title">
                 {error ? i18n.emptyErrorTitle || i18n.loadError : i18n.emptyTitle || i18n.noData}
               </p>
-              <p className="mt-1 text-[12px] font-medium leading-snug text-slate-500">
-                {error ? error : i18n.emptyHint || i18n.noData}
-              </p>
+              <p className="m-dash-empty-hint">{error ? error : i18n.emptyHint || i18n.noData}</p>
               {error ? (
-                <button
-                  type="button"
-                  className="mt-4 tap-scale rounded-xl bg-[#2f6bf6] px-4 py-2 text-[13px] font-bold text-white"
-                  onClick={dash.retry}
-                >
+                <button type="button" className="m-dash-empty-action tap-scale" onClick={dash.retry}>
                   {i18n.retry || "Retry"}
                 </button>
               ) : dash.activePreset !== "thisYear" ? (
                 <button
                   type="button"
-                  className="mt-4 tap-scale rounded-xl bg-[#2f6bf6] px-4 py-2 text-[13px] font-bold text-white disabled:opacity-60"
+                  className="m-dash-empty-action tap-scale"
                   disabled={Boolean(refreshing)}
                   onClick={() => dash.applyPreset("thisYear")}
                 >
                   {refreshing ? i18n.loading : i18n.viewThisYear || i18n.thisYear}
                 </button>
               ) : refreshing ? (
-                <p className="mt-4 inline-flex items-center justify-center gap-2 text-[12px] font-bold text-slate-500">
-                  <span className="size-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-[#2f6bf6]" />
-                  {i18n.loading}
-                </p>
+                <p className="m-dash-empty-loading">{i18n.loading}</p>
               ) : null}
             </div>
           )}
@@ -232,10 +189,8 @@ export default function DashboardPage() {
           {(loading || dash.hasData) && (
             <>
           <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[15px] font-bold text-slate-900">{i18n.overview}</h2>
-            </div>
-            <div className="no-scrollbar -mx-3.5 flex snap-x snap-mandatory gap-3 overflow-x-auto px-3.5 pb-1">
+            <h2 className="m-dash-section-title">{i18n.overview}</h2>
+            <div className="m-dash-kpi-scroller no-scrollbar">
               {kpiCards.map((card) => (
                 <DashboardKpiCard
                   key={card.variant}
@@ -285,11 +240,8 @@ export default function DashboardPage() {
         </div>
 
         {loading && !dash.hasData && (
-          <div className="pointer-events-none sticky bottom-4 z-30 flex justify-center pb-[calc(env(safe-area-inset-bottom,0px)+8px)]" aria-live="polite">
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-900/90 px-4 py-2 text-[12px] font-bold text-white shadow-lg">
-              <span className="size-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              {i18n.loading}
-            </span>
+          <div className="m-dash-loading-pill" aria-live="polite">
+            <span>{i18n.loading}</span>
           </div>
         )}
       </div>

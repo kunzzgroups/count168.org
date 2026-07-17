@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
  */
 export function useScrollHideChrome(scrollRef, { threshold = 10, topReveal = 28 } = {}) {
   const [hidden, setHidden] = useState(false);
+  const hiddenRef = useRef(false);
   const lastY = useRef(0);
   const ticking = useRef(false);
 
@@ -23,11 +24,23 @@ export function useScrollHideChrome(scrollRef, { threshold = 10, topReveal = 28 
         const dy = y - lastY.current;
         lastY.current = y;
         if (y <= topReveal) {
-          setHidden(false);
+          if (hiddenRef.current) {
+            hiddenRef.current = false;
+            setHidden(false);
+          }
           return;
         }
-        if (dy > threshold) setHidden(true);
-        else if (dy < -threshold) setHidden(false);
+        if (dy > threshold) {
+          if (!hiddenRef.current) {
+            hiddenRef.current = true;
+            setHidden(true);
+          }
+        } else if (dy < -threshold) {
+          if (hiddenRef.current) {
+            hiddenRef.current = false;
+            setHidden(false);
+          }
+        }
       });
     };
 

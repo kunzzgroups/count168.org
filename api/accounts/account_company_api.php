@@ -12,6 +12,7 @@ require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/tenant_scope.php';
 require_once __DIR__ . '/../get_companies_helper.php';
 require_once __DIR__ . '/../deleted_log/deleted_log.php';
+require_once __DIR__ . '/../includes/partnership_audit_readonly.php';
 
 /**
  * 标准 JSON 响应
@@ -240,6 +241,10 @@ try {
     }
 
     if ($method === 'POST') {
+        if (is_partnership_audit_read_only_active($pdo)) {
+            jsonResponse(false, '只读账号无法修改账户公司关联', null, 403);
+            exit;
+        }
         $data = json_decode(file_get_contents('php://input'), true) ?: [];
 
         if ($action === 'add_company') {

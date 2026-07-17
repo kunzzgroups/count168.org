@@ -774,3 +774,72 @@ body.bg .sc-login-input::placeholder {
   }
 }
 
+/* Secondary password verify (owner / user) */
+.sc-login-card--secondary {
+  min-height: auto;
+}
+
+.sc-secondary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, var(--login-bg-start), var(--login-bg-end));
+  color: #fff;
+  border-radius: var(--login-radius-xl) var(--login-radius-xl) 0 0 !important;
+}
+
+.sc-secondary-back {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.sc-secondary-back:active {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.sc-secondary-title {
+  margin: 0;
+  font-family: Arial, "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  font-size: var(--text-h2);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.sc-secondary-lead {
+  margin: 0 0 11px;
+  font-size: var(--text-small);
+  line-height: 1.45;
+  font-weight: 500;
+  color: var(--login-muted);
+}
+
+.sc-secondary-error {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 11px;
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+
+.sc-secondary-checking {
+  margin: 16px 0;
+  text-align: center;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--login-muted);
+}
+

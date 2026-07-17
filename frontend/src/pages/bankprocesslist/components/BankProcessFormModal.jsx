@@ -2,7 +2,7 @@ import React from "react";
 import ProcessModalPortal, { processModalBackdropStyle } from "../../../components/ProcessModalPortal.jsx";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 import {
-  BankFormDateField,
+  BankFormCalendarDateField,
   BankSearchableAccountPick,
   BankSimpleSelect,
 } from "./bankProcessFormFields.jsx";
@@ -33,9 +33,9 @@ export default function BankProcessFormModal({
   onOpenAddAccountForField,
   lang,
   t,
+  calendarI18n,
 }) {
   const { submitting, guardSubmit } = useSubmitGuard(true);
-  const dayStart = String(form.day_start || "").trim();
   const contract = String(form.contract || "").trim();
   const frequency = bankProcessFrequencyNormalized(form.day_start_frequency);
   const isOnce = frequency === "once";
@@ -67,9 +67,6 @@ export default function BankProcessFormModal({
     const next = profitSharingRows.filter((_, i) => i !== idx);
     setForm((prev) => ({ ...prev, profit_sharing: serializeProfitSharingRows(next, accounts) }));
   };
-
-  // 允许 1st_of_every_month / monthly 手动填写 Day end，仅保持不得早于 Day start。
-  let dayEndMin = dayStart || undefined;
 
   return (
     <ProcessModalPortal>
@@ -237,64 +234,74 @@ export default function BankProcessFormModal({
               </div>
               <div className="bank-form-row">
                 <div className="bank-form-cell bank-form-cell-left">
-                  <div className="form-row bank-day-start-row">
-                    <BankFormDateField
-                      fieldKey="bank_day_start"
-                      htmlFor="bank_day_start"
+                  <div className="form-row bank-day-start-row bank-form-date-range-fields">
+                    <BankFormCalendarDateField
+                      id="bank_day_start"
                       label={t("dayStart")}
                       value={form.day_start}
                       placeholder={t("pickDate")}
                       clearLabel={t("clearDate")}
+                      monthLabels={calendarI18n?.monthLabels}
+                      weekdaysShort={calendarI18n?.weekdaysShort}
                       wrapClassName="bank-day-start-input-wrap"
-                    />
-                    <BankFormDateField
-                      fieldKey="bank_day_end"
-                      htmlFor="bank_day_end"
-                      label={t("dayEnd")}
-                      labelRowClassName="bank-day-end-label-row"
-                      labelExtra={
-                        showCapSwitch ? (
-                          <div
-                            id="bank_day_end_monthly_cap_wrap"
-                            className="bank-day-end-monthly-cap-wrap"
-                            title={t("dayEndMonthlyCapTooltip")}
-                          >
-                            <span
-                              id="bank_day_end_monthly_cap_label_text"
-                              className={`bank-day-end-cap-label${capOn ? " is-on" : ""}`}
-                            >
-                              {capOn ? t("toggleOn") : t("toggleOff")}
-                            </span>
-                            <label className="bank-day-end-cap-switch" htmlFor="bank_day_end_monthly_cap_switch">
-                              <input
-                                type="checkbox"
-                                id="bank_day_end_monthly_cap_switch"
-                                checked={capOn}
-                                onChange={(ev) =>
-                                  setForm((prev) => ({
-                                    ...prev,
-                                    day_end_monthly_cap_enabled: ev.target.checked,
-                                  }))
-                                }
-                              />
-                              <span className="bank-day-end-cap-switch__track" aria-hidden="true" />
-                            </label>
-                            <input
-                              type="hidden"
-                              id="bank_day_end_monthly_cap_enabled"
-                              name="day_end_monthly_cap_enabled"
-                              value={capOn ? "1" : "0"}
-                            />
-                          </div>
-                        ) : null
+                      onValueChange={(iso) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          day_start: iso,
+                          // Keep end valid: a start after the current end invalidates the end.
+                          day_end: iso && prev.day_end && prev.day_end < iso ? "" : prev.day_end,
+                        }))
                       }
+                    />
+                    <BankFormCalendarDateField
+                      id="bank_day_end"
+                      label={t("dayEnd")}
                       value={form.day_end}
                       disabled={dayEndDisabled}
-                      minYmd={isOnce || isWeek || isDay ? undefined : dayEndMin}
+                      minYmd={form.day_start || ""}
                       placeholder={t("pickDate")}
                       clearLabel={t("clearDate")}
+                      monthLabels={calendarI18n?.monthLabels}
+                      weekdaysShort={calendarI18n?.weekdaysShort}
                       wrapClassName="bank-day-end-input-wrap"
                       className={`bank-day-end-field-group${dayEndDisabled ? " bank-day-end-input-wrap--muted" : ""}`}
+                      onValueChange={(iso) => setForm((prev) => ({ ...prev, day_end: iso }))}
+                      labelExtra={
+                      showCapSwitch ? (
+                        <div
+                          id="bank_day_end_monthly_cap_wrap"
+                          className="bank-day-end-monthly-cap-wrap"
+                          title={t("dayEndMonthlyCapTooltip")}
+                        >
+                          <span
+                            id="bank_day_end_monthly_cap_label_text"
+                            className={`bank-day-end-cap-label${capOn ? " is-on" : ""}`}
+                          >
+                            {capOn ? t("toggleOn") : t("toggleOff")}
+                          </span>
+                          <label className="bank-day-end-cap-switch" htmlFor="bank_day_end_monthly_cap_switch">
+                            <input
+                              type="checkbox"
+                              id="bank_day_end_monthly_cap_switch"
+                              checked={capOn}
+                              onChange={(ev) =>
+                                setForm((prev) => ({
+                                  ...prev,
+                                  day_end_monthly_cap_enabled: ev.target.checked,
+                                }))
+                              }
+                            />
+                            <span className="bank-day-end-cap-switch__track" aria-hidden="true" />
+                          </label>
+                          <input
+                            type="hidden"
+                            id="bank_day_end_monthly_cap_enabled"
+                            name="day_end_monthly_cap_enabled"
+                            value={capOn ? "1" : "0"}
+                          />
+                        </div>
+                      ) : null
+                    }
                     />
                   </div>
                 </div>

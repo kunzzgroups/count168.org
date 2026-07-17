@@ -1,0 +1,76 @@
+/**
+ * Account role tints — shared by Transaction list, History, etc.
+ * Parity: frontend/public/css/transaction.css (.transaction-account-cell.*)
+ */
+.m-account-role {
+  background-color: var(--m-color-surface);
+  color: var(--m-color-text);
+}
+
+.m-account-role.transaction-role-capital {
+  background-color: #ffe0e0;
+  color: #a30b0b;
+}
+
+.m-account-role.transaction-role-bank {
+  background-color: #dfe3ff;
+  color: #14228a;
+}
+
+.m-account-role.transaction-role-cash {
+  background-color: #dff4e7;
+  color: #0f6d38;
+}
+
+.m-account-role.transaction-role-profit {
+  background-color: #fff2c7;
+  color: #7a5b00;
+}
+
+.m-account-role.transaction-role-expenses {
+  background-color: #f0e1ff;
+  color: #4f148f;
+}
+
+.m-account-role.transaction-role-company {
+  background-color: #ecfccb;
+  color: #3f6212;
+  border-bottom: 1px solid #bef264;
+}
+
+.m-account-role.transaction-role-partner {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border-bottom: 1px solid #bae6fd;
+}
+
+.m-account-role.transaction-role-staff {
+  background-color: #ffe5cc;
+  color: #a24700;
+}
+
+.m-account-role.transaction-role-upline {
+  background-color: #d6f9ff;
+  color: #0a6b78;
+}
+
+.m-account-role.transaction-role-agent {
+  background-color: #ffe0f3;
+  color: #a02578;
+}
+
+.m-account-role.transaction-role-member {
+  background-color: #f2dfd2;
+  color: #5f2e0f;
+}
+
+.m-account-role.transaction-role-debtor {
+  background-color: #f1f5f9;
+  color: #475569;
+  border-bottom: 1px solid #cbd5e1;
+}
+
+.m-account-role.transaction-role-none {
+  background-color: #eceef2;
+  color: #3e434f;
+}

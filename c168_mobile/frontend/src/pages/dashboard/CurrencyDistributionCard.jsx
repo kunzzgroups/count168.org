@@ -23,25 +23,25 @@ export default function CurrencyDistributionCard({ i18n, currencyCode, rows, use
   const empty = !loading && slices.length === 0;
 
   return (
-    <section className="animate-fade-in rounded-[24px] bg-white p-5 shadow-[0_8px_28px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-100/80">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[15px] font-bold tracking-tight text-slate-900">{i18n.currencyDistribution}</h2>
+    <section className="m-dash-card m-dash-card--padded">
+      <div className="m-dash-card-head m-dash-card-head--spaced">
+        <h2 className="m-dash-card-title">{i18n.currencyDistribution}</h2>
         {legend.length > 0 && (
-          <span className="rounded-full bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-500">
+          <span className="m-dash-card-badge">
             {legend.length} {i18n.currency}
           </span>
         )}
       </div>
 
       {empty ? (
-        <p className="grid h-[140px] place-items-center text-[13px] font-semibold text-slate-400">
+        <p className="m-dash-card-empty" style={{ height: "8.75rem" }}>
           {i18n.noData}
         </p>
       ) : (
-        <div className="flex items-center gap-4">
-          <div className="relative size-[148px] shrink-0">
+        <div className="m-dash-pie-wrap">
+          <div className="m-dash-pie-chart">
             {loading ? (
-              <div className="size-full animate-pulse rounded-full bg-slate-100" />
+              <div className="m-dash-pie-skeleton" />
             ) : (
               <>
                 <ResponsiveContainer width="100%" height="100%">
@@ -67,39 +67,28 @@ export default function CurrencyDistributionCard({ i18n, currencyCode, rows, use
                   </PieChart>
                 </ResponsiveContainer>
                 {slices.length > 0 && (
-                  <div
-                    className="pointer-events-none absolute inset-0 grid place-content-center text-center"
-                    aria-hidden="true"
-                  >
-                    <span className="text-[22px] font-bold leading-none text-slate-900">
-                      {Number(center.pct).toFixed(1)}%
-                    </span>
-                    <span className="mt-1 text-[11px] font-bold text-slate-500">{center.code}</span>
+                  <div className="m-dash-pie-center" aria-hidden="true">
+                    <span className="m-dash-pie-center-pct">{Number(center.pct).toFixed(1)}%</span>
+                    <span className="m-dash-pie-center-code">{center.code}</span>
                   </div>
                 )}
               </>
             )}
           </div>
 
-          <ul className="flex min-w-0 flex-1 flex-col gap-2">
+          <ul className="m-dash-pie-legend">
             {(loading ? Array.from({ length: 4 }, (_, i) => ({ code: `s${i}`, pct: 0, color: "#e2e8f0" })) : legend).map(
               (item) => (
-                <li key={item.code} className="flex items-center gap-2.5 text-[13px]">
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: item.color }}
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0 truncate font-bold text-slate-700">
+                <li key={item.code} className="m-dash-pie-legend-item">
+                  <span className="m-dash-pie-legend-dot" style={{ backgroundColor: item.color }} aria-hidden="true" />
+                  <span className="m-dash-pie-legend-code">
                     {loading ? (
                       <span className="inline-block h-3 w-8 animate-pulse rounded bg-slate-100" />
                     ) : (
                       item.code
                     )}
                   </span>
-                  <span className="ml-auto font-bold tabular-nums text-slate-500">
-                    {loading ? "—" : `${item.pct.toFixed(1)}%`}
-                  </span>
+                  <span className="m-dash-pie-legend-pct">{loading ? "—" : `${item.pct.toFixed(1)}%`}</span>
                 </li>
               ),
             )}
@@ -109,9 +98,7 @@ export default function CurrencyDistributionCard({ i18n, currencyCode, rows, use
           </ul>
         </div>
       )}
-      {note && !empty ? (
-        <p className="mt-3 text-[11px] font-semibold text-slate-400">{note}</p>
-      ) : null}
+      {note && !empty ? <p className="m-dash-pie-note">{note}</p> : null}
     </section>
   );
 }

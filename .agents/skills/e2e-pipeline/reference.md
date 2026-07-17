@@ -35,6 +35,7 @@
 | `pages/datacapture` | `datacapture`, `datacapturesummary` |
 | `pages/transaction` | `transaction`, `transaction-payment-history` |
 | `pages/account` | `account-list`, `add-account` |
+| `c168_mobile/frontend/src` | mobile dashboard / transaction 等（基址同上，路径以 mobile 路由为准） |
 | `public/css/{name}.css` | 同名业务页 |
 
 不确定就 Grep `spaPath(` / 路由表，不要猜。

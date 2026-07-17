@@ -48,6 +48,22 @@ export function companiesForPicker(companies, { selectedGroup, groupsAllMode }) 
   return companiesInGroup(rows, selectedGroup);
 }
 
+/** Pick subsidiary when switching group without group-only permission (desktop-aligned). */
+export function resolveCompanyPickForGroup(companies, groupId, currentCompanyId = null) {
+  const g = normalizeGroupId(groupId);
+  if (!g) return null;
+  const cid = Number(currentCompanyId);
+  if (Number.isFinite(cid) && cid > 0) {
+    const row = (companies || []).find((c) => Number(c.id) === cid);
+    if (row) {
+      const native = normalizeGroupId(row.group_id);
+      const link = row.link_source_group ? normalizeGroupId(row.link_source_group) : "";
+      if (native === g || link === g) return row;
+    }
+  }
+  return pickGroupAnchorCompany(companies, g) || companiesInGroup(companies, g)[0] || null;
+}
+
 export function pickCompany(companies, sessionCompanyId) {
   if (!companies?.length) return null;
   const cid = Number(sessionCompanyId);

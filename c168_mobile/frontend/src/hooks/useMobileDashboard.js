@@ -12,9 +12,12 @@ import { buildKpiCompare, computeKpiMetrics } from "../lib/dashboardKpi.js";
 import {
   companiesForPicker as resolveCompaniesForPicker,
   pickCompany,
+  pickGroupAnchorCompany,
+  resolveCompanyPickForGroup,
   resolveViewGroupForCompany,
   sortedUniqueGroupIds,
 } from "../lib/dashboardScope.js";
+import { canUseGroupOnlyMode } from "../lib/loginScope.js";
 import { fetchMobileCurrencyCodes } from "../lib/dashboardCurrencies.js";
 import { loadMobileDashboardData, resolveMobileKpiOwnershipOpts } from "../lib/dashboardLoad.js";
 import {
@@ -523,6 +526,26 @@ export function useMobileDashboard() {
     [i18n.loadError],
   );
 
+  // Reconcile illegal group-only scope (no ledger permission) — align with desktop.
+  useEffect(() => {
+    if (!me || !companies.length || loading) return;
+    const hasCompany = Number.isFinite(Number(companyId)) && Number(companyId) > 0;
+    const isGroupOnly = Boolean(selectedGroup && !groupAllMode && !groupsAllMode && !hasCompany);
+    if (!isGroupOnly) return;
+    if (canUseGroupOnlyMode(me, selectedGroup, companies)) return;
+    const pick = resolveCompanyPickForGroup(companies, selectedGroup, companyId);
+    if (!pick?.id) return;
+    void (async () => {
+      try {
+        await syncCompanySession(Number(pick.id));
+        setCompanyId(Number(pick.id));
+        setError("");
+      } catch {
+        /* keep error; user can retry via filter */
+      }
+    })();
+  }, [me, companies, loading, selectedGroup, groupAllMode, groupsAllMode, companyId, syncCompanySession]);
+
   const switchCompany = useCallback(
     async (nextId) => {
       const id = Number(nextId);
@@ -566,18 +589,43 @@ export function useMobileDashboard() {
   }, [applyPreset, companies, me?.company_id, companyId, switchCompany]);
 
   const pickGroup = useCallback(
-    (gid) => {
+    async (gid) => {
       const group = String(gid || "").trim().toUpperCase();
       if (!group) return;
-      // Enter group-only (ledger) mode — not Company All. Use Company → All to merge subsidiaries.
       setGroupsAllMode(false);
       setGroupAllMode(false);
       setSelectedGroup(group);
-      setCompanyId(null);
       setBootstrapping(true);
       setError("");
+
+      if (canUseGroupOnlyMode(me, group, companies)) {
+        setCompanyId(null);
+        return;
+      }
+
+      const pick = resolveCompanyPickForGroup(companies, group, companyId);
+      if (!pick?.id) {
+        setBootstrapping(false);
+        return;
+      }
+      const id = Number(pick.id);
+      if (id === Number(companyId)) return;
+
+      const seq = ++scopeSeq.current;
+      scopeAbortRef.current?.abort();
+      const ac = new AbortController();
+      scopeAbortRef.current = ac;
+      try {
+        await syncCompanySession(id, ac.signal);
+        if (seq !== scopeSeq.current) return;
+        setCompanyId(id);
+      } catch (e) {
+        if (e?.name === "AbortError" || seq !== scopeSeq.current) return;
+        setError(e?.message || i18n.loadError);
+        setBootstrapping(false);
+      }
     },
-    [],
+    [me, companies, companyId, syncCompanySession, i18n.loadError],
   );
 
   const pickAllGroups = useCallback(() => {
@@ -591,7 +639,6 @@ export function useMobileDashboard() {
     if (!selectedGroup) return;
     setGroupsAllMode(false);
     setGroupAllMode(true);
-    // Keep / assign an anchor company id for session + picker, but load uses merge path.
     if (!(Number.isFinite(Number(companyId)) && Number(companyId) > 0)) {
       const first = resolveCompaniesForPicker(companies, {
         selectedGroup,
@@ -600,6 +647,120 @@ export function useMobileDashboard() {
       if (first?.id != null) setCompanyId(Number(first.id));
     }
   }, [selectedGroup, companyId, companies]);
+
+  const applyFilters = useCallback(
+    async (draft) => {
+      if (!draft) return;
+      setBootstrapping(true);
+      setError("");
+
+      if (draft.activePreset) {
+        const range = periodPresetRange(draft.activePreset);
+        if (range) {
+          setActivePreset(draft.activePreset);
+          setDateFrom(range.dateFrom);
+          setDateTo(range.dateTo);
+        }
+      } else if (draft.dateFrom && draft.dateTo) {
+        setCustomDateRange(draft.dateFrom, draft.dateTo);
+      }
+
+      if (draft.currency) setCurrency(draft.currency);
+
+      if (draft.groupsAllMode) {
+        setGroupsAllMode(true);
+        setGroupAllMode(false);
+        setSelectedGroup(null);
+        setCompanyId(null);
+        return;
+      }
+
+      const group = draft.selectedGroup ? String(draft.selectedGroup).trim().toUpperCase() : null;
+
+      if (group && draft.groupAllMode) {
+        setGroupsAllMode(false);
+        setGroupAllMode(true);
+        setSelectedGroup(group);
+        let cid = Number(draft.companyId);
+        if (!Number.isFinite(cid) || cid <= 0) {
+          const anchor = pickGroupAnchorCompany(companies, group);
+          cid = anchor?.id != null ? Number(anchor.id) : null;
+        }
+        if (cid && Number(cid) !== Number(companyId)) {
+          try {
+            await syncCompanySession(cid);
+          } catch (e) {
+            setError(e?.message || i18n.loadError);
+            setBootstrapping(false);
+            return;
+          }
+        }
+        if (cid) setCompanyId(cid);
+        return;
+      }
+
+      if (group) {
+        const allowGroupOnly = canUseGroupOnlyMode(me, group, companies);
+        const draftCid = Number(draft.companyId);
+        const hasCompany = Number.isFinite(draftCid) && draftCid > 0;
+
+        if (!hasCompany && allowGroupOnly) {
+          setGroupsAllMode(false);
+          setGroupAllMode(false);
+          setSelectedGroup(group);
+          setCompanyId(null);
+          return;
+        }
+
+        const pick = hasCompany
+          ? companies.find((c) => Number(c.id) === draftCid)
+          : resolveCompanyPickForGroup(companies, group, companyId);
+        if (!pick?.id) {
+          setBootstrapping(false);
+          return;
+        }
+
+        setGroupsAllMode(false);
+        setGroupAllMode(false);
+        setSelectedGroup(group);
+        if (Number(pick.id) !== Number(companyId)) {
+          try {
+            await syncCompanySession(Number(pick.id));
+          } catch (e) {
+            setError(e?.message || i18n.loadError);
+            setBootstrapping(false);
+            return;
+          }
+        }
+        setCompanyId(Number(pick.id));
+        return;
+      }
+
+      const cid = Number(draft.companyId);
+      if (Number.isFinite(cid) && cid > 0) {
+        setGroupsAllMode(false);
+        setGroupAllMode(false);
+        setSelectedGroup(null);
+        if (Number(cid) !== Number(companyId)) {
+          await switchCompany(cid);
+        }
+      }
+    },
+    [
+      companies,
+      companyId,
+      me,
+      setCustomDateRange,
+      syncCompanySession,
+      switchCompany,
+      i18n.loadError,
+    ],
+  );
+
+  const canUseGroupOnlyForGroup = useCallback(
+    (gid) => canUseGroupOnlyMode(me, gid, companies),
+    [me, companies],
+  );
 
   const toggleChartSeries = useCallback((idx) => {
     setChartVisible((prev) => ({ ...prev, [idx]: !prev[idx] }));
@@ -648,6 +809,8 @@ export function useMobileDashboard() {
     pickGroup,
     pickAllGroups,
     pickAllInGroup,
+    applyFilters,
+    canUseGroupOnlyForGroup,
     currency,
     setCurrency,
     currencies,

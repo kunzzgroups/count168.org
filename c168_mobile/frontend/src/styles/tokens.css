@@ -1,4 +1,5 @@
 :root {
+  /* Login (legacy desktop parity) */
   --login-bg-start: #004ff9;
   --login-bg-end: #56ccf2;
   --login-surface: rgba(255, 255, 255, 0.95);
@@ -16,4 +17,44 @@
   --text-h2: 1.125rem;
   --text-base: 1rem;
   --text-small: 0.875rem;
+
+  /* Mobile app shell — shared across pages */
+  --m-color-primary: #2f6bf6;
+  --m-color-primary-border: #6b9bff;
+  --m-color-danger: #e11d48;
+  --m-color-danger-soft: #fff1f2;
+  --m-color-danger-text: #be123c;
+  --m-color-success: #059669;
+  --m-color-muted: #64748b;
+  --m-color-label: #94a3b8;
+  --m-color-text: #1e293b;
+  --m-color-text-secondary: #475569;
+  --m-color-surface: #ffffff;
+  --m-color-surface-muted: #f1f5f9;
+  --m-color-ring: rgba(226, 232, 240, 0.9);
+  --m-color-ring-soft: rgba(241, 245, 249, 1);
+
+  --m-text-compact: 0.8125rem;
+  --m-text-body: 0.8125rem;
+  --m-text-label-ratio: 0.78em;
+  --m-text-sub-ratio: 0.9em;
+  --m-text-tab-minus-ratio: 1.15em;
+  --m-text-badge-ratio: 0.72em;
+
+  --m-radius-card: 0.75rem;
+  --m-radius-card-lg: 1rem;
+  --m-radius-pill: 999px;
+
+  --m-shadow-card: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --m-shadow-float: 0 8px 20px -12px rgba(15, 23, 42, 0.2);
+  --m-shadow-fab: 0 10px 28px -10px rgba(47, 107, 246, 0.55);
+
+  --m-shell-bg: #f2f5fb;
+  --m-appbar-bg: #002d49;
+  --m-sidebar-accent: #0e93f3;
+  --m-sidebar-highlight: #63c4ff;
+
+  /* Align main scroll content with sticky bar / bottom nav (32rem column) */
+  --m-page-gutter: 0.875rem;
+  --m-page-max-width: 32rem;
 }

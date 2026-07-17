@@ -1,4 +1,7 @@
-/* Tailwind v4 — utilities only (preflight disabled to avoid affecting login/other pages) */
+/* Tailwind v4 — utilities only (preflight disabled to avoid affecting login/other pages).
+ * Page styles: dedicated CSS per domain (e.g. pages/transaction/transaction.css).
+ * Shared tokens / roles / money: src/styles/*.css via main.jsx.
+ */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
@@ -110,6 +113,39 @@
   }
   100% {
     transform: translateX(320%);
+  }
+}
+
+@keyframes mPullSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mAppBarRefresh {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(320%);
+    opacity: 0.4;
+  }
+}
+
+/** FAB speed-dial labels: fade only (no fly-up). */
+@keyframes ecFabFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
   }
 }
 

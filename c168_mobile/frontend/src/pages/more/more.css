@@ -1,0 +1,95 @@
+.m-more-page {
+  width: min(100%, var(--m-page-max-width));
+  margin-inline: auto;
+  padding: 1rem var(--m-page-gutter);
+  font-size: var(--m-text-compact);
+}
+
+.m-more-heading {
+  margin-bottom: 1rem;
+}
+
+.m-more-heading p {
+  color: var(--m-color-muted);
+  font-size: var(--m-text-label-ratio);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.m-more-heading h1 {
+  margin-top: 0.2rem;
+  color: var(--m-color-text);
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  line-height: 1.15;
+}
+
+.m-more-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.m-more-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  border: 1px solid var(--m-color-ring);
+  border-radius: var(--m-radius-card-lg);
+  background: var(--m-color-surface);
+  padding: 0.9rem;
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--m-shadow-card);
+}
+
+.m-more-icon {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border-radius: 0.85rem;
+  background: #e8efff;
+  color: var(--m-color-primary);
+}
+
+.m-more-copy {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.m-more-copy strong {
+  color: var(--m-color-text);
+  font-size: 0.85rem;
+}
+
+.m-more-copy small {
+  color: var(--m-color-muted);
+  font-size: 0.65rem;
+  line-height: 1.35;
+}
+
+.m-more-open {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--m-color-primary);
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.m-more-state {
+  display: grid;
+  min-height: 14rem;
+  place-items: center;
+  align-content: center;
+  gap: 0.65rem;
+  color: var(--m-color-muted);
+  text-align: center;
+}
+
+.m-more-state > i {
+  font-size: 1.7rem;
+  color: #cbd5e1;
+}

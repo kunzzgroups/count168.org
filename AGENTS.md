@@ -1,13 +1,15 @@
+# Agent instructions
+
 ## Agent skills
 
 ### Issue tracker
 
-Issues live in GitHub Issues (`kunzzgroups/count168test`); external PRs are not a triage surface. See `docs/agents/issue-tracker.md`.
+Issues and PRDs live in GitHub Issues for this repo. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Default label vocabulary (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix). See `docs/agents/triage-labels.md`.
+Five canonical triage roles map to GitHub label strings. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context layout — one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context layout: `CONTEXT.md` at repo root (when present) and ADRs under `docs/adr/`. See `docs/agents/domain.md`.
