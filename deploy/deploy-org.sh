@@ -58,8 +58,10 @@ fix_web_permissions
 NGINX_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux.conf"
 NGINX_HTTP_REDIRECT_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux-http-redirect.conf"
 NGINX_SSL_SRC="$APP_ROOT/deploy/nginx/count168.org.amazon-linux-ssl.conf"
+NGINX_MOBILE_INC_SRC="$APP_ROOT/deploy/nginx/c168-mobile-locations.inc"
 NGINX_DST="/etc/nginx/conf.d/count168.org.conf"
 NGINX_SSL_DST="/etc/nginx/conf.d/count168.org-le-ssl.conf"
+NGINX_MOBILE_INC_DST="/etc/nginx/snippets/c168-mobile-locations.inc"
 LE_CERT="/etc/letsencrypt/live/count168.org/fullchain.pem"
 
 install_nginx_file() {
@@ -74,6 +76,7 @@ install_nginx_file() {
   local bak
   bak="$(mktemp)"
   sudo cp "$dst" "$bak" 2>/dev/null || true
+  sudo mkdir -p "$(dirname "$dst")"
   sudo cp "$src" "$dst"
   if ! sudo nginx -t; then
     echo "ERROR: nginx -t failed after syncing $label — restoring previous config"
@@ -86,6 +89,9 @@ install_nginx_file() {
   fi
   rm -f "$bak"
 }
+
+# Mobile SPA locations must exist before org confs that include them
+install_nginx_file "$NGINX_MOBILE_INC_SRC" "$NGINX_MOBILE_INC_DST" "mobile SPA locations"
 
 if [[ -f "$LE_CERT" ]]; then
   install_nginx_file "$NGINX_SSL_SRC" "$NGINX_SSL_DST" "org HTTPS"

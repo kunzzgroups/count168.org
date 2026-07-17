@@ -11,4 +11,4 @@ RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
 # Mobile SPA routes -> React build
-RewriteRule ^(login|dashboard|home|member|report|transaction|more|reset-password|owner-secondary-password|user-secondary-password)(/.*)?$ /c168_mobile/frontend/dist/index.html [L,NC,QSA]
+RewriteRule ^(login|dashboard|home|member|report|transaction|account|maintenance|more|reset-password|owner-secondary-password|user-secondary-password)(/.*)?$ /c168_mobile/frontend/dist/index.html [L,NC,QSA]
