@@ -672,8 +672,9 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
             rowIndexOverride
         );
 
-        // Get process value from form
-        const processInput = document.getElementById('process');
+        // Get process value from form (DOM optional — pure React / Node tests pass override)
+        const processInput =
+            typeof document !== "undefined" ? document.getElementById("process") : null;
         const processValue = processValueOverride != null && String(processValueOverride).trim() !== ''
             ? String(processValueOverride).trim()
             : (processInput ? processInput.value.trim() : null);
@@ -742,7 +743,8 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
         // This must be done after parsing [id_product,数字] to avoid conflicts
         // IMPORTANT: 优先从 data-clicked-cell-refs 读取引用，因为它包含了正确的 id_product
         // 重要：优先从 data-clicked-cell-refs 读取引用，因为它包含了正确的 id_product
-        const formulaInput = document.getElementById('formula');
+        const formulaInput =
+            typeof document !== "undefined" ? document.getElementById("formula") : null;
         // undefined：沿用 #formula（编辑弹窗/预览）；传入字符串（含 ''）则只用该值，避免 Summary 重算吃到弹窗里其他行的 refs
         let clickedCellRefs = '';
         if (clickedCellRefsOverride === undefined) {
@@ -754,6 +756,9 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
         if (processValue) {
             // Match $ followed by digits (e.g., $2, $10, $123)
             // Use negative lookahead to ensure we match complete numbers (e.g., $10 not $1 and $0)
+            // IMPORTANT: scan parsedFormula (after [id,col] expansion), not the original formula.
+            // Bracket replacements change string length; stale indices leave a stray "$"
+            // (e.g. "$14-[AW9966,3]/$3" → "(-15.60)-(-718.39)/$-227.95").
             const dollarPattern = /\$(\d+)(?!\d)/g;
             const dollarMatches = [];
             let match;
@@ -761,8 +766,8 @@ export function parseReferenceFormula(formula, processValueOverride = null, clic
             // Reset regex lastIndex
             dollarPattern.lastIndex = 0;
 
-            // Collect all matches
-            while ((match = dollarPattern.exec(formula)) !== null) {
+            // Collect all matches from the post-bracket string so indices stay valid
+            while ((match = dollarPattern.exec(parsedFormula)) !== null) {
                 const fullMatch = match[0]; // e.g., "$2"
                 const columnNumber = parseInt(match[1]); // e.g., 2
                 const matchIndex = match.index;
