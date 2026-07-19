@@ -12,7 +12,6 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/../../includes/config.php';
 require_once __DIR__ . '/../../includes/maintenance_gate.php';
-require_once __DIR__ . '/maintenance_common.php';
 
 function maintenance_mode_json_response(bool $success, string $message, $data = null, ?int $httpCode = null): void
 {
@@ -65,10 +64,8 @@ function maintenance_mode_load_state(PDO $pdo): array
     $messageId = isset($row['maintenance_message_id']) ? (int) $row['maintenance_message_id'] : 0;
     $preview = '';
     if ($messageId > 0) {
-        ensureMaintenanceMarqueePrefixColumn($pdo);
-        $prefixSelect = maintenanceMarqueeHasPrefixColumn($pdo) ? 'prefix' : "'' AS prefix";
         $msgStmt = $pdo->prepare(
-            "SELECT {$prefixSelect}, content
+            "SELECT prefix, content
              FROM maintenance_marquee
              WHERE id = ?
              LIMIT 1"
