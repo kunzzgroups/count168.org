@@ -51,7 +51,7 @@ import {
 import { useGcFilterWithAllModes } from "../../utils/company/useGcFilterWithAllModes.js";
 import GcInlineFilterPanel from "../../components/GcInlineFilterPanel.jsx";
 import { isPartnershipAuditReadOnlyLocked, isPartnershipAuditReadOnlyBlockingUserEdit } from "../../utils/audit/partnershipAuditReadOnly.js";
-import { assetUrl, buildApiUrl } from "../../utils/core/apiUrl.js";
+import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
@@ -65,8 +65,6 @@ import {
   PERMISSION_KEYS,
   applyUserFilters,
   computeRowCapabilities,
-  formatUserLastLoginDate,
-  formatUserLastLoginTimeTitle,
   getAvailableRolesForCreation,
   getAvailableRolesForEdit,
   getCurrentUserRolePermissions,
@@ -93,14 +91,11 @@ import {
 
 // Components
 import UserModal from "./components/UserModal.jsx";
+import UserCardsList from "./components/UserCardsList.jsx";
 import UserConfirmModal from "./components/UserConfirmModal.jsx";
 import { processNotificationAboveAccountZIndex, processNotificationZIndex } from "../../components/ProcessModalPortal.jsx";
-import { formatUserRoleDisplay, formatUserStatusDisplay, getUserListText, translateUserListApiMessage } from "../../translateFile/pages/userListTranslate.js";
+import { getUserListText, translateUserListApiMessage } from "../../translateFile/pages/userListTranslate.js";
 import { validateEmail } from "../../utils/input/emailValidation.js";
-
-function roleBadgeClass(role) {
-  return `role-${String(role || "").toLowerCase().replace(/\s+/g, "-")}`;
-}
 
 function normalizeCompanyRow(row) {
   if (!row || typeof row !== "object") return row;
@@ -1975,9 +1970,7 @@ export default function UserListPage() {
       if (getVisiblePermissionKeys(role).includes(k)) next.add(k);
     });
     setPermSelected(next);
-    if (roleHasReadOnlyToggle(role)) {
-      setForm((f) => ({ ...f, read_only: true }));
-    }
+    // read_only 由 Role onChange 一并写入，避免额外 setForm
   }, [isEditMode]);
 
   const openEdit = async (row) => {
@@ -2263,6 +2256,28 @@ export default function UserListPage() {
   saveUserRef.current = saveUser;
   const stableSaveUser = useCallback((e) => saveUserRef.current(e), []);
 
+  // 弹窗打开期间冻结背后用户表 props，避免选 Role / 改权限时整表重渲（主卡顿源）。
+  const userCardsPropsLive = {
+    pageRows,
+    effectivePage,
+    pageSize,
+    showAll,
+    usePagedFill,
+    showBulkDeleteColumn,
+    selectedDeleteIds,
+    setSelectedDeleteIds,
+    currentUserId,
+    currentUserRole,
+    userMutationsBlocked,
+    isUserEditBlockedByReadOnly,
+    onEdit: openEdit,
+    onToggleStatus: toggleUserStatus,
+    t,
+  };
+  const userCardsPropsFrozenRef = useRef(userCardsPropsLive);
+  if (!modalOpen) userCardsPropsFrozenRef.current = userCardsPropsLive;
+  const userCardsProps = modalOpen ? userCardsPropsFrozenRef.current : userCardsPropsLive;
+
   return (
     <>
       <div className="container">
@@ -2524,70 +2539,7 @@ export default function UserListPage() {
                 </div>
               )}
             </div>
-            <div
-              className={`user-cards${usePagedFill ? " user-cards--paged-fill" : ""}`}
-              style={usePagedFill ? { "--user-list-page-size": pageSize } : undefined}
-            >
-              {pageRows.map((r, idx) => {
-                const caps = computeRowCapabilities(r, currentUserId, currentUserRole);
-                const del = getDeleteCheckboxState(r, caps);
-                const editReady = caps.canEditDelete;
-                return (
-                  <div key={`${r.id}-${r.is_owner_shadow ? "o" : "u"}`} className={`user-card user-list-row show-card ${idx % 2 === 0 ? "row-even" : "row-odd"}`}>
-                    <div className="card-item">{showAll ? idx + 1 : (effectivePage - 1) * pageSize + idx + 1}</div>
-                    <div className="card-item">{r.login_id}</div>
-                    <div className="card-item">{r.name}</div>
-                    <div className="card-item">{r.email || "-"}</div>
-                    <div className="card-item"><span className={`role-badge ${roleBadgeClass(r.role)}`}>{String(formatUserRoleDisplay(t, r.role)).toUpperCase()}</span></div>
-                    <div className="card-item"><span className={`role-badge ${normRole(r.status) === "active" ? "status-active" : "status-inactive"} ${caps.canToggleStatus && !userMutationsBlocked ? "status-clickable" : ""}`} onClick={() => !userMutationsBlocked && caps.canToggleStatus && toggleUserStatus(r)}>{formatUserStatusDisplay(t, r.status)}</span></div>
-                    <div
-                      className="card-item"
-                      title={formatUserLastLoginTimeTitle(r.last_login) || undefined}
-                    >
-                      {formatUserLastLoginDate(r.last_login)}
-                    </div>
-                    <div className="card-item">{String(r.created_by || "-").toUpperCase()}</div>
-                    <div className="card-item card-item--action">
-                      <div className="user-action-tools">
-                        <div className="user-action-tools-bar">
-                          <button
-                            type="button"
-                            className="btn btn-edit user-edit-btn"
-                            onClick={() => openEdit(r)}
-                            disabled={!editReady || isUserEditBlockedByReadOnly(r)}
-                            aria-label={t("edit")}
-                            title={t("edit")}
-                          >
-                            <img src={assetUrl("images/edit.svg")} alt={t("edit")} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                    {showBulkDeleteColumn && (
-                      <div className="card-item card-item--select">
-                        {del.show ? (
-                          <input
-                            type="checkbox"
-                            aria-label={t("rowDeleteCheckboxAria")}
-                            disabled={del.disabled || userMutationsBlocked}
-                            checked={selectedDeleteIds.has(Number(r.id))}
-                            onChange={(e) =>
-                              setSelectedDeleteIds((prev) => {
-                                const n = new Set(prev);
-                                if (e.target.checked) n.add(Number(r.id));
-                                else n.delete(Number(r.id));
-                                return n;
-                              })}
-                          />
-                        ) : (
-                          <span className="user-row-select-placeholder" aria-hidden="true" />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <UserCardsList {...userCardsProps} />
           </div>
           {!showAll && (
             <div className="pagination-container">

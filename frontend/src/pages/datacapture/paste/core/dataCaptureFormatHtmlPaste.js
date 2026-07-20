@@ -167,6 +167,13 @@ export function formatBodyMatrixLooksCollapsed(bodyMatrix, dataRows) {
   // N×1 dump: many rows, only first column filled, looks like field-per-row.
   if (matrixRows >= 6 && maxFilledCols <= 1 && totalFilled >= 6) return true;
 
+  // Near-vertical dump with occasional 2-col noise (fig3: id | AGENT on one row,
+  // everything else stacked in col1). Reject so Format can dual-source reshape.
+  if (matrixRows >= 6 && maxFilledCols <= 2 && totalFilled >= 6) {
+    const singleColRows = bodyMatrix.filter((row) => nonEmptyCols(row) <= 1).length;
+    if (singleColRows >= Math.ceil(matrixRows * 0.75)) return true;
+  }
+
   // Few tall cells (agent/subtotal/total) each still holding a multi-field stack (Fig1).
   if (matrixRows >= 2 && matrixRows <= 5 && maxFilledCols <= 1 && totalFilled >= 2) {
     const stackedRows = bodyMatrix.filter((row) => {
