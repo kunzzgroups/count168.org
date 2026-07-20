@@ -359,12 +359,13 @@ export default function AccountModal({
               )}
 
               <div className="account-form-group">
-                <label>{text("passwordRequired")}</label>
+                <label>{isEditMode ? text("password") : text("passwordRequired")}</label>
                 <input
                   type="password"
                   value={form.password}
                   onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
-                  required
+                  required={!isEditMode}
+                  placeholder={isEditMode ? text("passwordEditHint") : undefined}
                 />
               </div>
               {paymentAlertOn ? (
