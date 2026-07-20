@@ -73,28 +73,6 @@ function swapRowDataCells(a, b) {
   b.col = tempCol;
 }
 
-function cellLooksLikeAmountToken(value) {
-  const raw = String(value || "")
-    .replace(/\u00a0/g, " ")
-    .trim();
-  if (!raw) return false;
-  if (/^\$/.test(raw)) return true;
-  const normalized = raw.replace(/[,$]/g, "").replace(/^\((.*)\)$/, "-$1");
-  return /^-?\d+(?:\.\d+)?$/.test(normalized);
-}
-
-/** Currency / decimal / thousands — not bare integers (those can be product ids). */
-function cellLooksLikeRichMoneyToken(value) {
-  const raw = String(value || "")
-    .replace(/\u00a0/g, " ")
-    .trim();
-  if (!raw) return false;
-  if (/^\$/.test(raw)) return true;
-  if (/,\d{3}/.test(raw)) return true;
-  if (/\d\.\d{1,4}\b/.test(raw)) return true;
-  return false;
-}
-
 function normalizeIdProductColumnForRow(rowData, captureType, rowIndex) {
   if (!["1.Text", "2.Format", "4.RETURN"].includes(captureType) || rowData.length <= 1) {
     return;
@@ -109,21 +87,6 @@ function normalizeIdProductColumnForRow(rowData, captureType, rowIndex) {
       if (cell?.type !== "data") continue;
       const candidate = String(cell.value || "").trim();
       if (!candidate || FORMAT_LABEL_FIRST_COLUMNS.has(candidate.toUpperCase())) continue;
-      // Kendo / Win Loss Subtotal: leading empties then money — do not pull amount into col1.
-      // Bare integers (e.g. product id 12345) are not treated as footer money.
-      if (cellLooksLikeAmountToken(candidate)) {
-        let leadingEmpty = 0;
-        for (let j = 1; j < i; j += 1) {
-          if (String(rowData[j]?.value || "").trim()) break;
-          leadingEmpty += 1;
-        }
-        if (leadingEmpty >= 2) {
-          const amountCount = rowData.filter(
-            (c, idx) => idx > 1 && c?.type === "data" && cellLooksLikeAmountToken(c.value),
-          ).length;
-          if (cellLooksLikeRichMoneyToken(candidate) || amountCount >= 2) continue;
-        }
-      }
       swapRowDataCells(firstDataCell, cell);
       console.log(
         `${captureType}: Row ${rowIndex} - adjusted id product from column ${cell.col + 1} (value: "${candidate}") to first column`,

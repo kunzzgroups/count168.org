@@ -127,8 +127,9 @@ function rowHasTemplate(rows, mainId, templates) {
 export function buildInitialSummaryRows(tableData) {
   if (!tableData) return [];
   const { entries } = buildColumnAEntries(tableData);
-  // Keep empty-Id money footers from buildColumnAEntries (do not filter them out).
-  const rows = entries.map((entry, index) => createMainRowFromEntry(entry, index));
+  const rows = entries
+    .filter((e) => e.idProduct?.trim())
+    .map((entry, index) => createMainRowFromEntry(entry, index));
   return reconcileRowIndexes(rows, tableData);
 }
 

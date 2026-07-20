@@ -94,10 +94,8 @@ export function createEmptyRowFields() {
 export function createMainRowFromEntry(entry, index) {
   const idProduct = String(entry.idProduct || "").trim();
   const norm = normalizeSummaryIdProductText(idProduct);
-  // Empty-Id money footers need a stable unique key (norm is "").
-  const keySuffix = norm || `empty-${entry.rowIndex}`;
   return {
-    key: entry.key || `main-${entry.rowIndex}-${index}-${keySuffix}`,
+    key: entry.key || `main-${entry.rowIndex}-${index}-${norm}`,
     idProduct,
     rowIndex: entry.rowIndex,
     productType: "main",

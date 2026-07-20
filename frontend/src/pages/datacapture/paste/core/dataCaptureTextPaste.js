@@ -16,11 +16,7 @@ import {
   detectFlattenedStatementMatrix,
   detectVerticalFieldDump,
 } from "./dataCaptureVerticalDumpDetect.js";
-import {
-  plainTextLooksLikeAlignedTsv,
-  sanitizePasteMatrix,
-} from "./dataCapturePasteMatrixSanitize.js";
-import { selectPreferredReportPasteMatrix } from "./dataCapturePasteMatrixPrefer.js";
+import { sanitizePasteMatrix } from "./dataCapturePasteMatrixSanitize.js";
 import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
 
 /**
@@ -99,10 +95,7 @@ export function parsePlainTextMatrix(pastedData) {
     .replace(/\r/g, "\n");
   if (!normalized.trim()) return [];
 
-  // Only real spreadsheet TSV uses the tab-row path. Sparse tabs mixed into a
-  // one-field-per-line dump (C8Play / agent_period) must fall through to
-  // vertical-dump reshape — otherwise paste lands as N×1 in column 1.
-  if (plainTextLooksLikeAlignedTsv(normalized)) {
+  if (normalized.includes("\t")) {
     const tabRows = normalized
       .split("\n")
       .filter((line) => line.trim() !== "")
@@ -121,7 +114,6 @@ export function parsePlainTextMatrix(pastedData) {
 
   // Prefer vertical-dump reshape before blank-line block splitting so mat-row
   // dumps with blank separators / trailing paginator still become multi-col rows.
-  // detectVerticalFieldDump expands sparse tabs into tokens.
   const verticalDump = detectVerticalFieldDump(nonEmptyLines);
   if (verticalDump?.rows?.length) return finalizePlainMatrix(verticalDump.rows);
 
@@ -219,65 +211,26 @@ export function handleTextHtmlPaste(html, anchorCell) {
  */
 function plainLooksLikeReshapableVerticalDump(pastedData) {
   const text = String(pastedData ?? "");
-  if (!text.trim()) return false;
+  if (!text.trim() || text.includes("\t")) return false;
   const nonEmptyLines = text
     .replace(/\r\n/g, "\n")
     .replace(/\r/g, "\n")
     .split("\n")
     .filter((line) => line.trim() !== "");
-  if (!nonEmptyLines.length) return false;
-
-  // Sparse tabs (C8Play: "87\tAgent\t" amid one-field-per-line) still count as
-  // vertical dumps. Dense TSV (most lines have tabs) stays on the tab/HTML path.
-  const tabLines = nonEmptyLines.filter((line) => line.includes("\t")).length;
-  if (tabLines > 0 && tabLines >= Math.ceil(nonEmptyLines.length * 0.35)) return false;
-
-  const tokens = [];
-  nonEmptyLines.forEach((line) => {
-    if (line.includes("\t")) {
-      line.split("\t").forEach((part) => {
-        const t = part.replace(/\u00a0/g, " ").trim();
-        if (t) tokens.push(t);
-      });
-    } else {
-      tokens.push(line.trim());
-    }
-  });
-  return Boolean(detectVerticalFieldDump(tokens)?.rows?.length);
-}
-
-/** Apply a pre-built matrix (shared with 2.FORMAT prefer helper). */
-function applyPreferredTextMatrix(matrix, source, anchorCell) {
-  if (!Array.isArray(matrix) || !matrix.length) return false;
-  const dataMatrix = splitStackedSubtotalGrandTotalRows(matrix);
-  const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
-    uppercaseValues: false,
-    trimValues: false,
-    alignTotalRows: false,
-  });
-  if (successCount <= 0) return false;
-  notifyPasteSuccess(
-    `成功粘贴 ${successCount} 个单元格 (${maxRows} 行 x ${cols} 列)，已与2.FORMAT对齐 (${source})!`,
-  );
-  return true;
+  return Boolean(detectVerticalFieldDump(nonEmptyLines)?.rows?.length);
 }
 
 export function handleTextModePaste(e, pastedData, anchorCell) {
+  // Plan B first: agent_period / mat-row copies often ship HTML that parses as
+  // N×1 while plain is the reliable vertical field dump.
+  if (plainLooksLikeReshapableVerticalDump(pastedData)) {
+    if (handleTextPlainPaste(e, pastedData, anchorCell)) return true;
+  }
+
   const html = getClipboardHtml(e);
   const htmlFromDetect = html ? "" : detectHtmlTableInClipboard(e);
   const rawHtmlCandidate = html || htmlFromDetect;
   const htmlCandidate = resolveTextPasteHtml(rawHtmlCandidate) || rawHtmlCandidate;
-
-  // Shared helper with 2.FORMAT: pick HTML vs plain by score so C8 keeps
-  // Name/AGENT columns + footer pads, while agent_period still uses plain reshape.
-  const preferred = selectPreferredReportPasteMatrix(rawHtmlCandidate || htmlCandidate, pastedData);
-  if (preferred?.matrix?.length) {
-    if (applyPreferredTextMatrix(preferred.matrix, preferred.source, anchorCell)) return true;
-  }
-
-  if (plainLooksLikeReshapableVerticalDump(pastedData)) {
-    if (handleTextPlainPaste(e, pastedData, anchorCell)) return true;
-  }
 
   if (htmlCandidate && (isFormatRichHtmlTable(htmlCandidate) || clipboardHtmlLooksLikeGrid(rawHtmlCandidate))) {
     const formatHtml = resolveTextPasteHtml(htmlCandidate) || htmlCandidate;

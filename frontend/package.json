@@ -15,10 +15,7 @@
     "prebuild:watch": "node ./scripts/warn-dist-css-edits.mjs",
     "build:watch": "vite build --watch",
     "preview": "vite preview",
-    "build:sync-git": "node ./scripts/git-sync-after-build.mjs",
-    "test:formula-ref": "node --test src/pages/datacapturesummary/formula/summaryFormulaReference.test.js",
-    "test:formula-ref:playwright": "node ./scripts/playwright-edit-formula-ref-smoke.mjs",
-    "test:formula-ref:live": "node ./scripts/playwright-live-edit-formula-smoke.mjs"
+    "build:sync-git": "node ./scripts/git-sync-after-build.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.6",
@@ -42,7 +39,6 @@
     "@tailwindcss/postcss": "^4.2.4",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.5.0",
-    "playwright": "^1.61.1",
     "postcss": "^8.5.12",
     "tailwindcss": "^4.2.4",
     "vite": "^5.4.11"

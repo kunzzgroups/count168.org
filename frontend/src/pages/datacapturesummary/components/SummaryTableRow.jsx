@@ -114,9 +114,7 @@ function SummaryTableRowInner({ row, onRowChange, onNewFormula, onEditFormula, o
     [saveRateValue]
   );
 
-  // Allow empty Id Product when the row came from a money-only capture footer
-  // (C8 Win Loss Subtotal). Still skip completely missing row objects.
-  if (!row) return null;
+  if (!row?.idProduct?.trim()) return null;
 
   const isSub = row.productType === "sub";
   const idCellClass = isSub ? "id-product sub-id-product" : "id-product";

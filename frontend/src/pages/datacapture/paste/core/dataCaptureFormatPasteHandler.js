@@ -16,10 +16,7 @@ import { parseFormatHtmlTableStructure } from "./dataCaptureFormatHtmlMatrix.js"
 import { formatBodyMatrixLooksCollapsed } from "./dataCaptureFormatHtmlPaste.js";
 import { parsePlainTextMatrix, expandLabelColonMoneyCells } from "./dataCaptureTextPaste.js";
 import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
-import {
-  plainTextLooksLikeAlignedTsv,
-  sanitizePasteMatrix,
-} from "./dataCapturePasteMatrixSanitize.js";
+import { sanitizePasteMatrix } from "./dataCapturePasteMatrixSanitize.js";
 import {
   applyDataMatrixToGrid,
   ensureGridFits,
@@ -196,8 +193,7 @@ export function formatHtmlLooksLikeVerticalNx1(html) {
     if (maxCols >= 2) return false;
     return (dataRows?.length || 0) >= 3 || maxCols <= 1;
   } catch {
-    // Fail closed: prefer plain dual-source reshape over applying a bad HTML body.
-    return true;
+    return false;
   }
 }
 
@@ -306,82 +302,65 @@ function readClipboard(clipboard) {
   };
 }
 
-function tryFormatHtmlFill(html, _options, htmlFillOpts) {
-  if (!html || !/<table\b/i.test(html)) return false;
-  if (formatHtmlLooksLikeVerticalNx1(html)) return false;
-  // Do not retry with plainMatrix cleared — that bypasses TSV row/col grill and can
-  // accept HTML missing footers. C8 messy plain is already excluded from htmlFillOpts
-  // via plainTextLooksLikeAlignedTsv (only aligned TSV may grill).
-  return processFormatTableHtml(html, htmlFillOpts);
-}
-
 function tryProcessFormatClipboard(html, text, options) {
   const plainText = resolveFormatPlainText(html, text);
   const plainMatrix = plainText?.trim() ? parsePlainTextMatrix(plainText) : null;
   const plainMulti = matrixLooksMultiColumn(plainMatrix);
   const normalizedHtml = resolveNormalizedHtml(html);
-  // Only real spreadsheet TSV may grill-reject HTML. C8Play Win Loss plain is a
-  // vertical dump with sparse tabs (`87\\tAgent\\t`) — never treat as aligned TSV.
-  const directIsAlignedTsv = plainTextLooksLikeAlignedTsv(text);
-  const directMatrix = directIsAlignedTsv && text?.trim() ? parsePlainTextMatrix(text) : null;
-  const htmlFillOpts = {
-    ...options,
-    plainMatrix: matrixLooksMultiColumn(directMatrix) ? directMatrix : null,
-  };
-  const dualOpts = { ...options, plainMatrix };
+  const opts = { ...options, plainMatrix };
 
   // agent_period / N×1 dumps: plain reshape FIRST (avoids Fig1 col1 stack).
   // Wide statement HTML (OB / 16-col) stays on HTML path below.
   if (shouldPreferFormatPlainDual(plainMulti, plainMatrix, normalizedHtml)) {
-    if (processFormatDualSource(html, plainText, dualOpts)) return true;
+    if (processFormatDualSource(html, plainText, opts)) return true;
   }
 
   // Multi-col report HTML (e.g. OB/SUBTOTAL sheets) — keep styles + icon column.
   // Fall through to dual when HTML fill rejects collapsed bodies.
   if (normalizedHtml && /<table\b/i.test(normalizedHtml)) {
     if (!formatHtmlLooksLikeVerticalNx1(normalizedHtml)) {
-      if (tryFormatHtmlFill(normalizedHtml, options, htmlFillOpts)) return true;
-      if (plainMulti) return processFormatDualSource(html || normalizedHtml, plainText, dualOpts);
+      if (processFormatTableHtml(normalizedHtml, opts)) return true;
+      if (plainMulti) return processFormatDualSource(html || normalizedHtml, plainText, opts);
     } else if (plainMulti) {
-      return processFormatDualSource(html || normalizedHtml, plainText, dualOpts);
+      return processFormatDualSource(html || normalizedHtml, plainText, opts);
     }
   } else if (plainMulti) {
-    if (processFormatDualSource(html, plainText, dualOpts)) return true;
+    if (processFormatDualSource(html, plainText, opts)) return true;
   }
 
   if (html && clipboardHtmlLooksLikeGrid(html)) {
     const forced = normalizeClipboardHtmlToTable(html);
     if (forced && /<table\b/i.test(forced)) {
       if (!formatHtmlLooksLikeVerticalNx1(forced)) {
-        if (tryFormatHtmlFill(forced, options, htmlFillOpts)) return true;
-        if (plainMulti) return processFormatDualSource(html, plainText, dualOpts);
+        if (processFormatTableHtml(forced, opts)) return true;
+        if (plainMulti) return processFormatDualSource(html, plainText, opts);
       } else if (plainMulti) {
-        return processFormatDualSource(html, plainText, dualOpts);
+        return processFormatDualSource(html, plainText, opts);
       }
     }
   }
 
   // Grid-like HTML + reshapable plain, but normalize failed → still dual-source.
   if (html && clipboardHtmlLooksLikeGrid(html) && plainMulti) {
-    return processFormatDualSource(html, plainText, dualOpts);
+    return processFormatDualSource(html, plainText, opts);
   }
 
   if (plainText && /<table\b/i.test(plainText)) {
     if (!formatHtmlLooksLikeVerticalNx1(plainText)) {
-      if (tryFormatHtmlFill(plainText, options, htmlFillOpts)) return true;
-      if (plainMulti) return processFormatDualSource(html, plainText, dualOpts);
+      if (processFormatTableHtml(plainText, opts)) return true;
+      if (plainMulti) return processFormatDualSource(html, plainText, opts);
     } else if (plainMulti) {
-      return processFormatDualSource(html, plainText, dualOpts);
+      return processFormatDualSource(html, plainText, opts);
     }
   }
   if (plainText && plainText.includes("\t")) {
-    return processFormatTsv(plainText, dualOpts);
+    return processFormatTsv(plainText, opts);
   }
   if (plainMulti) {
-    return processFormatDualSource(html, plainText, dualOpts);
+    return processFormatDualSource(html, plainText, opts);
   }
   if (plainText?.trim()) {
-    return processFormatPlainMatrix(plainText, { ...dualOpts, html: html || "" });
+    return processFormatPlainMatrix(plainText, { ...opts, html: html || "" });
   }
   return false;
 }
@@ -404,16 +383,12 @@ export function handleFormatPasteAreaEvent(e) {
     return;
   }
 
-  // Only block the browser dump when dual-source actually fills the grid.
-  // Previously we preventDefault'd on any grid-like HTML, then dual-source failed
-  // (C8Play messy plain) — paste area stayed empty and Ctrl+V looked broken.
+  // Still intercept Material / report pastes so the browser does not dump N×1 into the area.
   if ((html && clipboardHtmlLooksLikeGrid(html)) || resolveFormatPlainText(html, text).includes("\n")) {
+    e.preventDefault();
+    e.stopPropagation();
     const recovered = resolveFormatPlainText(html, text);
-    if (recovered?.trim() && processFormatDualSource(html, recovered, options)) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
+    if (recovered?.trim() && processFormatDualSource(html, recovered, options)) return;
   }
 
   setTimeout(() => {

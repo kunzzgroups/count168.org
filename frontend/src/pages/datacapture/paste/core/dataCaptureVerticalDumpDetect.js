@@ -61,39 +61,10 @@ function looksLikeReportRowLabel(token) {
 
 function isDroppableTrailingLeftover(leftover, width) {
   if (!leftover.length) return true;
-  // Narrow Subtotal / TOTAL AMOUNT footers are shorter than agent rows — keep them.
-  if (leftoverLooksLikeSummaryFooter(leftover)) return false;
-  // C8Play k-group-footer: blank label cells stripped → money-only leftover.
-  if (leftoverLooksLikeNumericFooter(leftover, width)) return false;
   const leftoverNums = leftover.filter((t) => isVerticalDumpMoneyToken(t)).length;
   if (leftoverNums === 0) return true;
   if (!isVerticalDumpMoneyToken(leftover[0]) && leftover.length < width) return true;
   return false;
-}
-
-/** SUBTOTAL / TOTAL AMOUNT (+ amounts) trailing chunk after equal-width agent rows. */
-function leftoverLooksLikeSummaryFooter(leftover) {
-  if (!Array.isArray(leftover) || !leftover.length) return false;
-  if (!isVerticalDumpSummaryLabel(leftover[0])) return false;
-  return leftover.some((token, index) => index > 0 && isVerticalDumpMoneyToken(token));
-}
-
-/**
- * Money-only footer after agent rows (Kendo group footer with empty Player/Name/Type).
- */
-function leftoverLooksLikeNumericFooter(leftover, width) {
-  if (!Array.isArray(leftover) || leftover.length < 3) return false;
-  if (!isVerticalDumpMoneyToken(leftover[0])) return false;
-  const moneyCount = leftover.filter((t) => isVerticalDumpMoneyToken(t)).length;
-  if (moneyCount < Math.max(3, Math.ceil(leftover.length * 0.75))) return false;
-  if (width && leftover.length > width) return false;
-  return true;
-}
-
-function padRowToWidth(row, width) {
-  const next = [...row];
-  while (next.length < width) next.push("");
-  return next;
 }
 
 /** DataTables / Material paginator chrome often appended by drag-to-end. */
@@ -179,23 +150,6 @@ function detectSummaryStride(tokens) {
   }
 
   const firstIdx = summaryIndices[0];
-  // N equal dense agent rows before SUBTOTAL (e.g. Win Loss Detail: 2 agents + Subtotal).
-  // Must run before the "header strip" half-width check — agent rows contain money tokens.
-  if (firstIdx >= 6 && firstIdx <= 80) {
-    for (const n of [2, 3, 4, 5]) {
-      if (firstIdx % n !== 0) continue;
-      const w = firstIdx / n;
-      if (w < 3 || w > 24) continue;
-      let allDense = true;
-      for (let i = 0; i < n; i += 1) {
-        if (!isDenseReportRow(tokens.slice(i * w, (i + 1) * w))) {
-          allDense = false;
-          break;
-        }
-      }
-      if (allDense) return w;
-    }
-  }
   // Header row + data row before SUBTOTAL → index ≈ 2× width.
   // Check before treating firstIdx as width (headers alone can push SUBTOTAL to 16–20).
   if (firstIdx >= 6 && firstIdx <= 40 && firstIdx % 2 === 0) {
@@ -219,26 +173,13 @@ function chunkTokensToRows(tokens, width, { requireDense = true } = {}) {
   for (let i = 0; i < tokens.length; i += width) {
     const chunk = tokens.slice(i, i + width);
     if (chunk.length < width) {
-      if (leftoverLooksLikeSummaryFooter(chunk) || leftoverLooksLikeNumericFooter(chunk, width)) {
-        rows.push(padRowToWidth(chunk, width));
-        break;
-      }
       if (!isDroppableTrailingLeftover(chunk, width)) return null;
       break;
     }
     rows.push(chunk);
   }
   if (!rows.length) return null;
-  if (requireDense) {
-    // Trailing SUBTOTAL / money-only Kendo footers are allowed to be non-dense.
-    const bodyRows = rows.filter((row) => {
-      if (isVerticalDumpSummaryLabel(row[0])) return false;
-      const compact = row.map((t) => normalizeVerticalDumpToken(t)).filter(Boolean);
-      if (leftoverLooksLikeNumericFooter(compact, width)) return false;
-      return true;
-    });
-    if (!bodyRows.length || !bodyRows.every((row) => isDenseReportRow(row))) return null;
-  }
+  if (requireDense && !rows.every((row) => isDenseReportRow(row))) return null;
   return rows;
 }
 
@@ -277,11 +218,7 @@ function tryParseAnchoredVerticalRows(tokens) {
     const rem = dataTokens.length % width;
     if (rem > 0) {
       const leftover = dataTokens.slice(completeRows * width);
-      if (leftoverLooksLikeSummaryFooter(leftover) || leftoverLooksLikeNumericFooter(leftover, width)) {
-        rows.push(padRowToWidth(leftover, width));
-      } else if (!isDroppableTrailingLeftover(leftover, width)) {
-        continue;
-      }
+      if (!isDroppableTrailingLeftover(leftover, width)) continue;
     }
 
     if (
@@ -298,35 +235,6 @@ function tryParseAnchoredVerticalRows(tokens) {
     while (row.length < best.width) row.push("");
   });
   return best.rows;
-}
-
-/**
- * Win Loss style: CKZ03 / CXZ15 agent codes at a fixed stride, then a shorter
- * money-only Subtotal footer (no SUBTOTAL label in the clipboard).
- */
-function tryParseAgentIdStrideRows(tokens) {
-  const agentIdx = [];
-  tokens.forEach((token, index) => {
-    const t = normalizeVerticalDumpToken(token);
-    // Player codes: letters+digits (CKZ03, CK203, 225C8) — not AGENT/MEMBER/money.
-    if (!t || isVerticalDumpMoneyToken(t) || isVerticalDumpSummaryLabel(t)) return;
-    if (/^(AGENT|MEMBER)$/i.test(t)) return;
-    if (!/^[A-Z0-9][A-Z0-9_-]{2,}$/i.test(t) || !/[A-Za-z]/.test(t) || !/\d/.test(t)) return;
-    agentIdx.push(index);
-  });
-  if (agentIdx.length < 2) return null;
-
-  const width = agentIdx[1] - agentIdx[0];
-  if (width < 3 || width > 24) return null;
-  for (let i = 1; i < agentIdx.length; i += 1) {
-    if (agentIdx[i] - agentIdx[i - 1] !== width) return null;
-  }
-  if (agentIdx[0] !== 0 && agentIdx[0] > 2) return null;
-
-  const start = agentIdx[0];
-  const dataTokens = tokens.slice(start);
-  const rows = chunkTokensToRows(dataTokens, width, { requireDense: true });
-  return rows?.length >= 2 ? rows : null;
 }
 
 /**
@@ -395,31 +303,12 @@ function asVerticalDumpResult(rows) {
  * @param {string[]} nonEmptyLines
  * @returns {{ width: number, rows: string[][] } | null}
  */
-/** Split "87 AGENT" / "8 MEMBER" crushed onto one line by some clipboards. */
-function expandCompoundFieldTokens(token) {
-  const text = normalizeVerticalDumpToken(token);
-  if (!text) return [];
-  const merged = text.match(/^(\d+)\s+(AGENT|MEMBER)$/i);
-  if (merged) return [merged[1], merged[2].toUpperCase()];
-  return [text];
-}
-
 export function detectVerticalFieldDump(nonEmptyLines) {
   if (!Array.isArray(nonEmptyLines) || nonEmptyLines.length < 3) return null;
 
-  // Expand sparse tab cells ("87\tAgent\t") so C8Play plain matches field-per-line.
-  const rawTokens = [];
-  nonEmptyLines.forEach((line) => {
-    const normalized = normalizeVerticalDumpToken(line);
-    if (!normalized) return;
-    if (normalized.includes("\t")) {
-      normalized.split("\t").forEach((part) => {
-        expandCompoundFieldTokens(part).forEach((token) => rawTokens.push(token));
-      });
-      return;
-    }
-    expandCompoundFieldTokens(normalized).forEach((token) => rawTokens.push(token));
-  });
+  const rawTokens = nonEmptyLines
+    .map((line) => normalizeVerticalDumpToken(line))
+    .filter(Boolean);
   if (rawTokens.length < 3) return null;
 
   // Already mostly multi-column lines → leave for spacing/tab paths.
@@ -438,11 +327,7 @@ export function detectVerticalFieldDump(nonEmptyLines) {
   const summaryRows = tryParseSummaryStrideRows(tokens);
   if (summaryRows) return asVerticalDumpResult(summaryRows);
 
-  // 2) Repeated agent-id stride + optional money-only footer (Kendo group footer).
-  const agentStrideRows = tryParseAgentIdStrideRows(tokens);
-  if (agentStrideRows) return asVerticalDumpResult(agentStrideRows);
-
-  // 3) Anchor on first dense label+numbers block (skips column-title headers).
+  // 2) Anchor on first dense label+numbers block (skips column-title headers).
   const anchoredRows = tryParseAnchoredVerticalRows(tokens);
   if (anchoredRows) return asVerticalDumpResult(anchoredRows);
 
