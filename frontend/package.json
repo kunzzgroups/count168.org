@@ -17,7 +17,8 @@
     "preview": "vite preview",
     "build:sync-git": "node ./scripts/git-sync-after-build.mjs",
     "test:formula-ref": "node --test src/pages/datacapturesummary/formula/summaryFormulaReference.test.js",
-    "test:formula-ref:playwright": "node ./scripts/playwright-edit-formula-ref-smoke.mjs"
+    "test:formula-ref:playwright": "node ./scripts/playwright-edit-formula-ref-smoke.mjs",
+    "test:formula-ref:live": "node ./scripts/playwright-live-edit-formula-smoke.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.6",
