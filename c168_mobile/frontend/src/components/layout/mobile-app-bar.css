@@ -97,3 +97,23 @@
 .m-appbar-progress-bar--idle {
   opacity: 0;
 }
+
+/* Phone landscape: shorter app bar to reclaim vertical space */
+@media (orientation: landscape) and (max-height: 500px) {
+  .m-appbar {
+    padding-top: max(4px, env(safe-area-inset-top, 0px));
+  }
+
+  .m-appbar-grid {
+    height: 2.5rem;
+  }
+
+  .m-appbar-btn {
+    width: 2.375rem;
+    height: 2.375rem;
+  }
+
+  .m-appbar-logo {
+    height: 1.5rem;
+  }
+}

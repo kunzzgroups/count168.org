@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useOutletContext, useSearchParams } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
 import {
@@ -6,7 +6,6 @@ import {
   formatHistoryMoney,
   formatRateForHistoryDisplay,
   getHistoryRemark,
-  parseBalanceValue,
   toUpperDisplay,
 } from "../../lib/transactionFormat.js";
 import { getHistory } from "../../lib/transactionApi.js";
@@ -17,7 +16,7 @@ import {
   resolveHistoryAccountName,
   resolvePaymentHistoryScope,
 } from "../../lib/transactionHistoryScope.js";
-import { historyTypeCardClass, historyTypeLabel } from "../../lib/transactionTypeStyles.js";
+import { historyTypeCardClass } from "../../lib/transactionTypeStyles.js";
 import { moneyToneClass } from "../../lib/money/moneyToneClass.js";
 import ExportPdfSheet from "./ExportPdfSheet.jsx";
 import "./transaction-history.css";
@@ -56,15 +55,9 @@ function MoneyTone({ value, children }) {
   return <span className={moneyToneClass(value)}>{children}</span>;
 }
 
-function HistMetric({ label, rawValue, display }) {
-  return (
-    <div className="m-tx-metric">
-      <p className="m-tx-metric-label">{label}</p>
-      <p className="m-tx-metric-value">
-        <MoneyTone value={rawValue}>{display}</MoneyTone>
-      </p>
-    </div>
-  );
+function rowKey(row, idx) {
+  const id = historyRowId(row);
+  return id || `${idx}-${row.date || ""}-${row.balance || ""}`;
 }
 
 export default function TransactionHistoryPage() {
@@ -79,6 +72,7 @@ export default function TransactionHistoryPage() {
   const [error, setError] = useState("");
   const [accountMeta, setAccountMeta] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [expandedKey, setExpandedKey] = useState(null);
 
   const m = tx.m;
   const i18n = tx.i18n;
@@ -96,6 +90,7 @@ export default function TransactionHistoryPage() {
     const ac = new AbortController();
     setLoading(true);
     setError("");
+    setExpandedKey(null);
     (async () => {
       try {
         const data = await getHistory({
@@ -203,81 +198,182 @@ export default function TransactionHistoryPage() {
       }
     >
       <div className="m-tx-hist-page">
-      <p className="m-tx-hist-count">{m.paymentHistoryShowingEntries.replace("{count}", String(displayRows.length))}</p>
-      <p className="m-tx-hist-hint">{m.paymentHistoryBalanceHint}</p>
+        <p className="m-tx-hist-count">
+          {m.paymentHistoryShowingEntries.replace("{count}", String(displayRows.length))}
+        </p>
+        <p className="m-tx-hist-hint">{m.paymentHistoryBalanceHint}</p>
+        <p className="m-tx-hist-expand-hint">{m.paymentHistoryTapRowHint}</p>
 
-      {loading ? (
-        <div className="m-tx-hist-loading">{m.loadingHistory}</div>
-      ) : error ? (
-        <div className="m-tx-hist-error">{error}</div>
-      ) : displayRows.length === 0 ? (
-        <p className="m-tx-hist-empty">{m.searchCompletedNoData}</p>
-      ) : (
-        <ul className="m-tx-hist-list">
-          {displayRows.map((row, idx) => {
-            const typeLabel = historyTypeLabel(row);
-            const cardCls = historyTypeCardClass(row);
-            const createdRaw = row.created_by;
-            const createdBy =
-              createdRaw == null ||
-              String(createdRaw).trim() === "" ||
-              String(createdRaw).toLowerCase() === "null"
-                ? "-"
-                : String(createdRaw);
-            const remark = getHistoryRemark(row);
-            const description = toUpperDisplay(row.description);
-            const cur = toUpperDisplay(row.currency);
+        {loading ? (
+          <div className="m-tx-hist-loading">{m.loadingHistory}</div>
+        ) : error ? (
+          <div className="m-tx-hist-error">{error}</div>
+        ) : displayRows.length === 0 ? (
+          <p className="m-tx-hist-empty">{m.searchCompletedNoData}</p>
+        ) : (
+          <div className="m-tx-hist-dense-wrap">
+            <table className="m-tx-hist-dense-table">
+              <thead>
+                <tr>
+                  <th scope="col" className="m-tx-hist-dense-th m-tx-hist-dense-th--date">
+                    {m.dateCompact || m.date || "Date"}
+                  </th>
+                  <th scope="col" className="m-tx-hist-dense-th m-tx-hist-dense-th--product">
+                    {m.idProduct || m.idProductCompact || "Id Product"}
+                  </th>
+                  <th scope="col" className="m-tx-hist-dense-th m-tx-hist-dense-th--num">
+                    {m.winLossTableCompact}
+                  </th>
+                  <th scope="col" className="m-tx-hist-dense-th m-tx-hist-dense-th--num">
+                    {m.crDrTable}
+                  </th>
+                  <th scope="col" className="m-tx-hist-dense-th m-tx-hist-dense-th--num">
+                    {m.balanceTableCompact}
+                  </th>
+                  <th scope="col" className="m-tx-hist-dense-th m-tx-hist-dense-th--chev">
+                    <span className="sr-only">{m.paymentHistoryDetails}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {displayRows.map((row, idx) => {
+                  const key = rowKey(row, idx);
+                  const expanded = expandedKey === key;
+                  const typeCls = historyTypeCardClass(row);
+                  const idProductDisplay = toUpperDisplay(
+                    row.is_bank_process_transaction ? row.card_owner || "-" : row.product || "-",
+                  );
+                  const createdRaw = row.created_by;
+                  const createdBy =
+                    createdRaw == null ||
+                    String(createdRaw).trim() === "" ||
+                    String(createdRaw).toLowerCase() === "null"
+                      ? "-"
+                      : String(createdRaw);
+                  const remark = getHistoryRemark(row);
+                  const description = toUpperDisplay(row.description);
+                  const cur = toUpperDisplay(row.currency);
+                  const detailId = `hist-detail-${key}`;
+                  const toggle = () => setExpandedKey(expanded ? null : key);
 
-            return (
-              <li
-                key={historyRowId(row) || `${idx}-${row.date || ""}-${row.balance || ""}`}
-                className={`m-tx-hist-card ${cardCls}`}
-              >
-                <div className="m-tx-hist-card-head">
-                  <span className="m-tx-hist-type-badge">{typeLabel}</span>
-                  <span className="m-tx-hist-date">{row.date || "—"}</span>
-                  <span className="m-tx-hist-currency">{cur || "—"}</span>
-                </div>
+                  return (
+                    <Fragment key={key}>
+                      <tr
+                        className={`m-tx-hist-row ${typeCls}${idx % 2 === 1 ? " m-tx-hist-row--alt" : ""}${expanded ? " m-tx-hist-row--expanded" : ""}`}
+                        tabIndex={0}
+                        role="button"
+                        aria-expanded={expanded}
+                        aria-controls={detailId}
+                        onClick={toggle}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggle();
+                          }
+                        }}
+                      >
+                        <td className="m-tx-hist-dense-td m-tx-hist-dense-td--date">
+                          {row.date || "—"}
+                        </td>
+                        <td className="m-tx-hist-dense-td m-tx-hist-dense-td--product">
+                          {idProductDisplay || "—"}
+                        </td>
+                        <td className="m-tx-hist-dense-td m-tx-hist-dense-td--num">
+                          <MoneyTone value={row.win_loss}>{formatHistoryMoney(row.win_loss)}</MoneyTone>
+                        </td>
+                        <td className="m-tx-hist-dense-td m-tx-hist-dense-td--num">
+                          <MoneyTone value={row.cr_dr}>{formatHistoryMoney(row.cr_dr)}</MoneyTone>
+                        </td>
+                        <td className="m-tx-hist-dense-td m-tx-hist-dense-td--num">
+                          <MoneyTone value={row.balance}>
+                            {formatHistoryBalanceMoney(row.balance)}
+                          </MoneyTone>
+                        </td>
+                        <td className="m-tx-hist-dense-td m-tx-hist-dense-td--chev">
+                          <i
+                            className={`fas fa-chevron-${expanded ? "up" : "down"} m-tx-hist-chev`}
+                            aria-hidden="true"
+                          />
+                        </td>
+                      </tr>
+                      {expanded ? (
+                        <tr className="m-tx-hist-detail-row" id={detailId}>
+                          <td className="m-tx-hist-detail" colSpan={6}>
+                            <div className="m-tx-hist-detail-panel">
+                              <div className="m-tx-hist-detail-block">
+                                <span className="m-tx-hist-detail-label">
+                                  {m.description || m.descriptionCompact}
+                                </span>
+                                <p
+                                  className={
+                                    description && description !== "-"
+                                      ? "m-tx-hist-detail-desc"
+                                      : "m-tx-hist-detail-desc m-tx-hist-detail-desc--muted"
+                                  }
+                                >
+                                  {description && description !== "-" ? description : "—"}
+                                </p>
+                              </div>
 
-                <div className="m-tx-card-metrics">
-                  <HistMetric
-                    label={m.winLossTableCompact}
-                    rawValue={row.win_loss}
-                    display={formatHistoryMoney(row.win_loss)}
-                  />
-                  <HistMetric
-                    label={m.crDrTable}
-                    rawValue={row.cr_dr}
-                    display={formatHistoryMoney(row.cr_dr)}
-                  />
-                  <HistMetric
-                    label={m.balanceTableCompact}
-                    rawValue={row.balance}
-                    display={formatHistoryBalanceMoney(row.balance)}
-                  />
-                </div>
+                              <div className="m-tx-hist-detail-meta">
+                                <div className="m-tx-hist-detail-meta-item">
+                                  <span className="m-tx-hist-detail-label">
+                                    {m.currencyCompact || m.currency}
+                                  </span>
+                                  <span
+                                    className={
+                                      cur && cur !== "-"
+                                        ? "m-tx-hist-detail-value"
+                                        : "m-tx-hist-detail-value m-tx-hist-detail-value--muted"
+                                    }
+                                  >
+                                    {cur && cur !== "-" ? cur : "—"}
+                                  </span>
+                                </div>
+                                <div className="m-tx-hist-detail-meta-item">
+                                  <span className="m-tx-hist-detail-label">
+                                    {m.createdByCompact || m.createdBy}
+                                  </span>
+                                  <span
+                                    className={
+                                      createdBy && createdBy !== "-"
+                                        ? "m-tx-hist-detail-value"
+                                        : "m-tx-hist-detail-value m-tx-hist-detail-value--muted"
+                                    }
+                                  >
+                                    {createdBy && createdBy !== "-" ? createdBy : "—"}
+                                  </span>
+                                </div>
+                              </div>
 
-                <div className="m-tx-hist-footer">
-                  <p className="m-tx-hist-desc">
-                    <span className="m-tx-hist-desc-label">{m.descriptionCompact}: </span>
-                    {description}
-                  </p>
-                  {row.rate && row.rate !== "-" ? (
-                    <p className="m-tx-hist-meta">
-                      {m.rate}: {formatRateForHistoryDisplay(row.rate)}
-                    </p>
-                  ) : null}
-                  {remark && remark !== "-" ? <p className="m-tx-hist-remark">{remark}</p> : null}
-                  <p className="m-tx-hist-created">
-                    <span className="m-tx-hist-created-label">{m.createdByCompact}: </span>
-                    {createdBy}
-                  </p>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                              {row.rate && row.rate !== "-" ? (
+                                <div className="m-tx-hist-detail-block m-tx-hist-detail-block--inline">
+                                  <span className="m-tx-hist-detail-label">{m.rate}</span>
+                                  <span className="m-tx-hist-detail-value">
+                                    {formatRateForHistoryDisplay(row.rate)}
+                                  </span>
+                                </div>
+                              ) : null}
+
+                              {remark && remark !== "-" ? (
+                                <div className="m-tx-hist-detail-block">
+                                  <span className="m-tx-hist-detail-label">
+                                    {m.remark || m.remarkCompact}
+                                  </span>
+                                  <p className="m-tx-hist-detail-desc">{remark}</p>
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </MobileShell>
   );

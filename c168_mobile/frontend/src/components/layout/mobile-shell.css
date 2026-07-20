@@ -251,3 +251,44 @@
     transition: none !important;
   }
 }
+
+/* Phone landscape: compact sticky + bottom nav so main content keeps height */
+@media (orientation: landscape) and (max-height: 500px) {
+  .m-shell-sticky-wrap {
+    padding-block: 0.25rem;
+  }
+
+  .m-shell-nav {
+    padding-inline: 0.5rem;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px);
+  }
+
+  .m-shell-nav-dock {
+    padding-top: 0.625rem;
+  }
+
+  .m-shell-nav-pill {
+    padding: 0.1875rem;
+  }
+
+  .m-shell-nav-link {
+    min-height: 2.625rem;
+    padding: 0.25rem 0.1875rem;
+  }
+
+  .m-shell-nav-glyph {
+    height: 1.125rem;
+  }
+
+  .m-shell-nav-glyph i {
+    font-size: 1.125rem;
+  }
+
+  .m-shell-nav-label {
+    font-size: 0.5625rem;
+  }
+
+  .m-shell-fab-slot {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 4.25rem);
+  }
+}
