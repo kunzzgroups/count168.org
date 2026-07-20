@@ -90,10 +90,10 @@
   color: var(--m-color-muted);
 }
 
-/* --- FAB --- */
+/* --- FAB (positioned by .m-shell-fab-slot) --- */
 .m-tx-fab-wrap {
-  margin-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
-  margin-left: 1rem;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .m-tx-fab {

@@ -14,6 +14,7 @@ import AdminUsersPage from "./pages/admin/AdminUsersPage.jsx";
 import MaintenanceHubPage from "./pages/maintenance/MaintenanceHubPage.jsx";
 import MaintenanceTransactionPage from "./pages/maintenance/MaintenanceTransactionPage.jsx";
 import MaintenancePaymentPage from "./pages/maintenance/MaintenancePaymentPage.jsx";
+import MobileBottomNavHost from "./components/layout/MobileBottomNavHost.jsx";
 
 /** Drop list snapshot when leaving Transaction so bottom-nav re-entry stays default. */
 function ClearTxListSnapshotOutsideTransaction() {
@@ -30,6 +31,7 @@ export default function App() {
   return (
     <>
       <ClearTxListSnapshotOutsideTransaction />
+      <MobileBottomNavHost />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />

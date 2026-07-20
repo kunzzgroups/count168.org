@@ -453,6 +453,32 @@ export function applyCalculatorToForm(form, { action, value }, rowContext = {}) 
   return computeFormulaDisplayPreview({ ...form, formula: `${formula}${insert}` }, rowContext);
 }
 
+/**
+ * True when the captured cell belongs to the row currently being edited
+ * (same id_product + same capture rowIndex when both are known).
+ * Other products / other capture rows must use [id_product,N], not $N.
+ */
+function isCurrentRowCapturedCell(form, cellMeta, rowContext = {}) {
+  const currentId = resolveReferenceProcessValue(form, rowContext);
+  const clickedId = String(cellMeta?.idProduct || "").trim();
+  if (!currentId || !clickedId) return false;
+
+  const idMatches =
+    clickedId === currentId ||
+    normalizeSpaces(clickedId) === normalizeSpaces(currentId) ||
+    normalizeSummaryIdProductText(clickedId) === normalizeSummaryIdProductText(currentId);
+  if (!idMatches) return false;
+
+  const anchorRowIndex =
+    rowContext?.rowIndex != null && !Number.isNaN(Number(rowContext.rowIndex))
+      ? Number(rowContext.rowIndex)
+      : null;
+  if (cellMeta.rowIndex != null && cellMeta.rowIndex >= 0 && anchorRowIndex != null) {
+    return Number(cellMeta.rowIndex) === anchorRowIndex;
+  }
+  return true;
+}
+
 export function insertCapturedCellIntoForm(form, cellMeta, rowContext = {}) {
   const extractedValue = String(cellMeta.value || "")
     .trim()
@@ -463,7 +489,7 @@ export function insertCapturedCellIntoForm(form, cellMeta, rowContext = {}) {
     return { ok: false, form, reason: "no_numbers" };
   }
 
-  const idProduct = cellMeta.idProduct;
+  const idProduct = String(cellMeta.idProduct || "").trim();
   const dataColumnIndex = cellMeta.dataColumnIndex;
   const displayColumnIndex = cellMeta.displayColumnIndex;
   if (dataColumnIndex == null || displayColumnIndex == null) {
@@ -484,8 +510,13 @@ export function insertCapturedCellIntoForm(form, cellMeta, rowContext = {}) {
   const refsArray = form.clickedColumns ? form.clickedColumns.split(/\s+/).filter(Boolean) : [];
   if (cellReference) refsArray.push(cellReference);
 
-  const dollarNum = displayColumnIndex;
-  const nextFormula = `${form.formula || ""}$${dollarNum}`;
+  // Current editing row → $N; other product/row → [id_product,N] (legacy parity).
+  const insertToken = isCurrentRowCapturedCell(form, cellMeta, rowContext)
+    ? `$${displayColumnIndex}`
+    : idProduct
+      ? `[${idProduct},${displayColumnIndex}]`
+      : `$${displayColumnIndex}`;
+  const nextFormula = `${form.formula || ""}${insertToken}`;
   const next = computeFormulaDisplayPreview(
     { ...form, formula: nextFormula, clickedColumns: refsArray.join(" ") },
     rowContext

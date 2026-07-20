@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { accountCompanyPickerZIndex, accountModalOverlayZIndex } from "../../../components/ProcessModalPortal.jsx";
 import SimpleSelect from "../../../components/SimpleSelect.jsx";
@@ -302,17 +302,13 @@ function UserModal({
       });
     };
 
-    // 记录每个 grid 上次同步时的宽度与卡片数；宽度/数量未变时跳过 clear+measure，
-    // 避免选 Role 等不影响布局的重渲染触发两次强制 reflow。
-    const syncState = new WeakMap();
-
+    // 仅在 open / accounts / processes 变化时同步一次等高。
+    // 不再挂 ResizeObserver：选 Role 导致 Read Only 显隐时列宽微变会触发
+    // 对上百张卡片 clear+getBoundingClientRect+write，是选 Role 卡顿主因之一。
     const syncGridCardHeights = (gridEl) => {
       if (!gridEl) return;
       const cards = gridEl.querySelectorAll(".user-modal-select-card");
       if (!cards.length) return;
-      const width = gridEl.getBoundingClientRect().width;
-      const prev = syncState.get(gridEl);
-      if (prev && prev.width === width && prev.count === cards.length) return;
       cards.forEach((c) => {
         c.style.minHeight = "";
       });
@@ -325,7 +321,6 @@ function UserModal({
       cards.forEach((c) => {
         c.style.minHeight = px;
       });
-      syncState.set(gridEl, { width, count: cards.length });
     };
 
     const syncAll = () => {
@@ -333,22 +328,12 @@ function UserModal({
       syncGridCardHeights(processGridRef.current);
     };
 
-    syncAll();
     const r1 = requestAnimationFrame(() => {
       syncAll();
     });
 
-    const ro = new ResizeObserver(() => {
-      syncAll();
-    });
-    if (accountGridRef.current) ro.observe(accountGridRef.current);
-    if (processGridRef.current) ro.observe(processGridRef.current);
-    window.addEventListener("resize", syncAll);
-
     return () => {
       cancelAnimationFrame(r1);
-      ro.disconnect();
-      window.removeEventListener("resize", syncAll);
       clearMinHeights(accountGridRef.current);
       clearMinHeights(processGridRef.current);
     };
@@ -563,8 +548,15 @@ function UserModal({
                       id="role"
                       value={form.role}
                       onChange={(v) => {
-                        setForm((f) => ({ ...f, role: v }));
-                        applyPermTemplate(v, true);
+                        // 先关掉下拉（SimpleSelect 已 close），权限模板用 transition 降低输入延迟
+                        startTransition(() => {
+                          setForm((f) => ({
+                            ...f,
+                            role: v,
+                            ...(roleHasReadOnlyToggle(v) ? { read_only: true } : {}),
+                          }));
+                          applyPermTemplate(v, true);
+                        });
                       }}
                       options={roleOptions}
                       placeholder={t("selectRole")}

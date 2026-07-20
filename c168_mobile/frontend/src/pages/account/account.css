@@ -245,7 +245,6 @@
   display: grid;
   width: 3.5rem;
   height: 3.5rem;
-  margin: 0 0 calc(5.5rem + env(safe-area-inset-bottom, 0px)) 1rem;
   place-items: center;
   border-radius: 50%;
   background: var(--m-color-primary);

@@ -2,9 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { usePullToRefresh } from "../../hooks/usePullToRefresh.js";
 import { useDirectScrollChrome } from "../../hooks/useDirectScrollChrome.js";
 import { useScrollIdleVisible } from "../../hooks/useScrollIdleVisible.js";
-import { mobileNavItems } from "../../utils/mobilePermissions.js";
 import MobileAppBar from "./MobileAppBar.jsx";
-import MobileBottomNav from "./MobileBottomNav.jsx";
 import MobileNotifications, { fetchMobileAnnouncements } from "./MobileNotifications.jsx";
 import MobileSidebar from "./MobileSidebar.jsx";
 import PullRefreshIndicator from "./PullRefreshIndicator.jsx";
@@ -37,14 +35,12 @@ export default function MobileShell({
     navMore: "More",
     ...(i18n || {}),
   };
-  const navItems = mobileNavItems(me);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
   const mainRef = useRef(null);
   const topChromeRef = useRef(null);
-  const navRef = useRef(null);
   const [topChromeH, setTopChromeH] = useState(118);
 
   const refreshPage = useCallback(async () => {
@@ -95,7 +91,6 @@ export default function MobileShell({
   useDirectScrollChrome({
     scrollRef: mainRef,
     topChromeRef,
-    navRef,
     maxOffset: Math.max(topChromeH, 1),
     topReveal: 12,
     paused: forceChrome,
@@ -192,12 +187,6 @@ export default function MobileShell({
           <div className={refreshing ? "m-shell-main--refreshing" : ""}>{children}</div>
         </div>
       </main>
-
-      {showBottomNav ? (
-        <nav ref={navRef} className="m-shell-nav" aria-label="Main">
-          <MobileBottomNav items={navItems} labels={labels} />
-        </nav>
-      ) : null}
 
       {floatingAction ? (
         <div

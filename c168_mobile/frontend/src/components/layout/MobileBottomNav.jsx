@@ -1,19 +1,18 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { NavLink, matchPath, useLocation } from "react-router-dom";
+import { memo } from "react";
+import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
+import { NavLink } from "react-router-dom";
 
-/** Instagram-inspired easing — no bounce, 60fps-friendly. */
-const NAV_EASE = [0.22, 1, 0.36, 1];
-const NAV_DURATION = 0.25;
+/** On-screen movement — ease-in-out feel via low-bounce spring (Emil / Apple style). */
+const INDICATOR_SPRING = { type: "spring", duration: 0.42, bounce: 0.1 };
+const STATE_EASE = [0.23, 1, 0.32, 1];
+const STATE_MS = 0.18;
+const TAP_MS = 0.12;
 
-function isNavItemActive(pathname, item) {
-  if (item.to === "/dashboard") {
-    return pathname === "/dashboard" || pathname === "/";
-  }
-  return Boolean(matchPath({ path: `${item.to}/*`, end: false }, pathname));
-}
+function NavTab({ item, label, reduceMotion }) {
+  const indicatorTransition = reduceMotion ? { duration: 0 } : INDICATOR_SPRING;
+  const stateTransition = reduceMotion ? { duration: 0 } : { duration: STATE_MS, ease: STATE_EASE };
+  const tapTransition = reduceMotion ? { duration: 0 } : { duration: TAP_MS, ease: STATE_EASE };
 
-function NavTab({ item, label }) {
   return (
     <NavLink
       to={item.to}
@@ -24,23 +23,40 @@ function NavTab({ item, label }) {
     >
       {({ isActive }) => (
         <>
+          {isActive ? (
+            <motion.span
+              layoutId="m-shell-nav-indicator"
+              className="m-shell-nav-indicator"
+              transition={indicatorTransition}
+            />
+          ) : null}
           <motion.span
-            className="m-shell-nav-glyph"
-            aria-hidden="true"
-            animate={{
-              scale: isActive ? 1.08 : 1,
-              opacity: isActive ? 1 : 0.52,
-            }}
-            transition={{ duration: NAV_DURATION, ease: NAV_EASE }}
+            className="m-shell-nav-link-inner"
+            whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+            transition={tapTransition}
           >
-            <i className={`fas ${item.icon}`} />
-          </motion.span>
-          <motion.span
-            className="m-shell-nav-label"
-            animate={{ opacity: isActive ? 1 : 0.72 }}
-            transition={{ duration: NAV_DURATION, ease: NAV_EASE }}
-          >
-            {label}
+            <motion.span
+              className="m-shell-nav-glyph"
+              aria-hidden="true"
+              animate={{
+                scale: isActive ? 1.05 : 1,
+                y: isActive ? -1 : 0,
+                opacity: isActive ? 1 : 0.48,
+              }}
+              transition={stateTransition}
+            >
+              <i className={`fas ${item.icon}`} />
+            </motion.span>
+            <motion.span
+              className="m-shell-nav-label"
+              animate={{
+                opacity: isActive ? 1 : 0.62,
+                y: isActive ? 0 : 0.5,
+              }}
+              transition={stateTransition}
+            >
+              {label}
+            </motion.span>
           </motion.span>
         </>
       )}
@@ -49,66 +65,25 @@ function NavTab({ item, label }) {
 }
 
 /**
- * Liquid-glass floating bottom nav with Framer Motion indicator + icon micro-interactions.
+ * Liquid-glass floating bottom nav — shared layout indicator + press feedback.
  */
 function MobileBottomNav({ items, labels }) {
-  const { pathname } = useLocation();
-  const rowRef = useRef(null);
-  const [slotWidth, setSlotWidth] = useState(0);
-  const [motionReady, setMotionReady] = useState(false);
-
-  const activeIdx = Math.max(
-    0,
-    items.findIndex((item) => isNavItemActive(pathname, item)),
-  );
-  const count = Math.max(items.length, 1);
-  const inset = 8;
-
-  useLayoutEffect(() => {
-    const row = rowRef.current;
-    if (!row || count === 0) return undefined;
-
-    const measure = () => {
-      const w = row.clientWidth;
-      if (w > 0) setSlotWidth(w / count);
-    };
-
-    measure();
-    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
-    ro?.observe(row);
-    window.addEventListener("resize", measure);
-    const id = requestAnimationFrame(() => setMotionReady(true));
-
-    return () => {
-      ro?.disconnect();
-      window.removeEventListener("resize", measure);
-      cancelAnimationFrame(id);
-    };
-  }, [count]);
-
-  const indicatorX = useMemo(
-    () => (slotWidth > 0 ? activeIdx * slotWidth + inset / 2 : 0),
-    [activeIdx, slotWidth],
-  );
+  const reduceMotion = useReducedMotion();
 
   return (
     <div className="m-shell-nav-dock">
-      <div ref={rowRef} className="m-shell-nav-pill">
-        {motionReady && slotWidth > 0 ? (
-          <motion.span
-            className="m-shell-nav-indicator"
-            aria-hidden="true"
-            initial={false}
-            style={{ width: Math.max(0, slotWidth - inset) }}
-            animate={{ x: indicatorX }}
-            transition={{ duration: NAV_DURATION, ease: NAV_EASE }}
-          />
-        ) : null}
-
-        {items.map((item) => (
-          <NavTab key={item.to} item={item} label={labels[item.key] || item.key} />
-        ))}
-      </div>
+      <LayoutGroup id="m-shell-bottom-nav">
+        <div className="m-shell-nav-pill">
+          {items.map((item) => (
+            <NavTab
+              key={item.to}
+              item={item}
+              label={labels[item.key] || item.key}
+              reduceMotion={reduceMotion}
+            />
+          ))}
+        </div>
+      </LayoutGroup>
     </div>
   );
 }

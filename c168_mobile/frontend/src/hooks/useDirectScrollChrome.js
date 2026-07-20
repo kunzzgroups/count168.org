@@ -13,11 +13,14 @@ export function useDirectScrollChrome({
 }) {
   const offsetRef = useRef(0);
 
+  const resolveNav = () =>
+    navRef?.current || document.querySelector("[data-persistent-nav]");
+
   useEffect(() => {
     if (paused) {
       offsetRef.current = 0;
       const chrome = topChromeRef.current;
-      const nav = navRef.current;
+      const nav = resolveNav();
       if (chrome) {
         chrome.style.transform = "translate3d(0, 0, 0)";
         chrome.setAttribute("aria-hidden", "false");
@@ -42,7 +45,7 @@ export function useDirectScrollChrome({
       const max = Math.max(1, maxOffset || 120);
       const progress = Math.min(1, offset / max);
       const chrome = topChromeRef.current;
-      const nav = navRef.current;
+      const nav = resolveNav();
 
       if (chrome) {
         chrome.style.transform = `translate3d(0, ${-offset}px, 0)`;
