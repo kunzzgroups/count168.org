@@ -101,7 +101,7 @@ export function buildRatePayload({
       : "";
 
   const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyFrom, rateMiddlemanInputAmount);
-  const sms = serviceFeeRemark || txRemark;
+  const sms = serviceFeeRemark || String(txRemark || "").toUpperCase();
 
   const payload = {
     transaction_type: "RATE",

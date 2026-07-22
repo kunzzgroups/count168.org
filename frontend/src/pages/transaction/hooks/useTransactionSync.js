@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import {
   TX_LIST_INVALIDATE_LS_KEY,
   TX_LIST_INVALIDATE_HANDLED_KEY,
@@ -6,6 +6,7 @@ import {
   buildTxListSessionKey,
 } from "../lib/transactionPaymentLogic.js";
 import { clearTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
+import { subscribeTransactionLedgerRealtime } from "../lib/transactionRealtime.js";
 import {
   transactionScopeApiParams,
   transactionScopeCacheCompanyKey,
@@ -39,12 +40,29 @@ export function useTransactionSync({
   selectedCurrencies,
   lastSearchCommitMsRef,
   runSearch,
+  runTypeSearch,
+  typeSearchActive,
+  typeSearchFormType,
+  submitFocusActive,
   loading,
   forbidden,
   canApproveContra,
   refreshContraInboxBadge,
   initialSearchDoneRef,
 }) {
+  const runSearchRef = useRef(runSearch);
+  const runTypeSearchRef = useRef(runTypeSearch);
+  const typeSearchActiveRef = useRef(typeSearchActive);
+  const typeSearchFormTypeRef = useRef(typeSearchFormType);
+  const submitFocusActiveRef = useRef(submitFocusActive);
+  const searchStateRef = useRef(searchState);
+  runSearchRef.current = runSearch;
+  runTypeSearchRef.current = runTypeSearch;
+  typeSearchActiveRef.current = typeSearchActive;
+  typeSearchFormTypeRef.current = typeSearchFormType;
+  submitFocusActiveRef.current = submitFocusActive;
+  searchStateRef.current = searchState;
+
   useEffect(() => {
     let retryTimer = null;
     let refreshInFlight = false;
@@ -135,6 +153,100 @@ export function useTransactionSync({
     selectedCurrencies,
     lastSearchCommitMsRef,
     runSearch,
+  ]);
+
+  // Cross-device live sync: SSE ledger_changed → silent refresh (keeps submit-focus filter).
+  useEffect(() => {
+    // Do not gate on `loading` — tearing SSE down on every data reload drops the live channel.
+    if (forbidden) return;
+    if (!transactionScopeIsReady(transactionScope)) return;
+
+    let unsubscribe = () => {};
+    let waitId = null;
+    let refreshInFlight = false;
+
+    const refreshFromRealtime = () => {
+      if (document.visibilityState !== "visible") return;
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      clearTxSearchCache();
+      // Invalidate sibling tabs (storage event) without same-tab TX_DATA_CHANGED double-fetch.
+      try {
+        localStorage.setItem(TX_LIST_INVALIDATE_LS_KEY, String(Date.now()));
+      } catch {
+        /* ignore */
+      }
+
+      const doRefresh = async () => {
+        try {
+          if (typeSearchActiveRef.current && typeSearchFormTypeRef.current) {
+            await runTypeSearchRef.current?.(typeSearchFormTypeRef.current, {
+              forceRefresh: true,
+              silent: true,
+            });
+            return;
+          }
+          // submit-focus: do not clear focus ids — presentation layer keeps the narrow list.
+          await runSearchRef.current?.({
+            silent: true,
+            forceRefresh: true,
+            typeSearchOverride: false,
+            searchStateOverride: submitFocusActiveRef.current
+              ? {
+                  ...searchStateRef.current,
+                  showPaymentOnly: false,
+                  showCaptureOnly: false,
+                  showZeroBalance: true,
+                }
+              : undefined,
+          });
+        } finally {
+          refreshInFlight = false;
+          if (lastSearchCommitMsRef) {
+            lastSearchCommitMsRef.current = Date.now();
+          }
+        }
+      };
+      void doRefresh();
+    };
+
+    const start = () => {
+      const scopeApi = transactionScopeApiParams(transactionScope);
+      unsubscribe = subscribeTransactionLedgerRealtime({
+        scopeApi,
+        onLedgerChanged: refreshFromRealtime,
+      });
+    };
+
+    if (initialSearchDoneRef?.current) {
+      start();
+    } else {
+      waitId = setInterval(() => {
+        if (!initialSearchDoneRef?.current) return;
+        clearInterval(waitId);
+        waitId = null;
+        start();
+      }, 200);
+    }
+
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      // Ticket may have expired while backgrounded — reconnect by tearing down & remounting effect deps.
+      refreshFromRealtime();
+    };
+    document.addEventListener("visibilitychange", onVis);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      if (waitId) clearInterval(waitId);
+      unsubscribe();
+    };
+  }, [
+    forbidden,
+    transactionScope,
+    transactionScopeCacheCompanyKey(transactionScope),
+    initialSearchDoneRef,
+    lastSearchCommitMsRef,
   ]);
 
   useEffect(() => {

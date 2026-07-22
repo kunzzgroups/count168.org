@@ -173,8 +173,8 @@ export default function MobileShell({
         style={{
           paddingTop: mainPadTop,
           paddingBottom: showBottomNav
-            ? "calc(env(safe-area-inset-bottom, 0px) + 88px)"
-            : "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+            ? "var(--m-shell-main-pad-bottom-nav)"
+            : "var(--m-shell-main-pad-bottom)",
         }}
       >
         <div

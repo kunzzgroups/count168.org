@@ -57,4 +57,21 @@
   /* Align main scroll content with sticky bar / bottom nav (32rem column) */
   --m-page-gutter: 0.875rem;
   --m-page-max-width: 32rem;
+  --m-shell-main-pad-bottom-nav: calc(env(safe-area-inset-bottom, 0px) + 88px);
+  --m-shell-main-pad-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+}
+
+/* Landscape: wider content column; phone-side (short height) also frees vertical chrome */
+@media (orientation: landscape) {
+  :root {
+    --m-page-max-width: min(48rem, 100%);
+    --m-page-gutter: 1rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  :root {
+    --m-shell-main-pad-bottom-nav: calc(env(safe-area-inset-bottom, 0px) + 68px);
+    --login-card-min-height: 280px;
+  }
 }

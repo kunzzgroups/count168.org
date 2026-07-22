@@ -380,7 +380,7 @@ export default function AddTransactionSheet({
         amount: isProfitTx ? MoneyDecimal.formatFixedHalfUp(amtDec.abs().toString(), 2) : txAmount,
         transaction_date: txDate,
         description: "",
-        sms: txRemark,
+        sms: String(txRemark || "").toUpperCase(),
         currency: txCurrency,
       };
       const res = await onSubmit(payload, buildClientRequestId());
@@ -723,7 +723,7 @@ export default function AddTransactionSheet({
               <textarea
                 value={txRemark}
                 disabled={mutationsBlocked}
-                onChange={(e) => setTxRemark(e.target.value.toUpperCase())}
+                onChange={(e) => setTxRemark(e.target.value)}
                 rows={2}
                 className="m-tx-form-textarea"
               />

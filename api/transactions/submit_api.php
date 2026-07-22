@@ -929,6 +929,12 @@ try {
 
             // 提交成功后，清理 Transaction List 搜索缓存，保证前端立刻能搜到最新余额
             clearTransactionSearchCache();
+            // RATE writes are always APPROVED — notify other open Transaction Payment clients.
+            require_once __DIR__ . '/../includes/ledger_realtime.php';
+            tx_ledger_realtime_publish_scope($listScope, 'submit_rate', [
+                'transaction_type' => $transaction_type,
+                'transaction_date' => $transaction_date_db ?? null,
+            ]);
 
             // 返回成功响应
             $responsePayload = [
@@ -989,6 +995,15 @@ try {
 
         // 提交成功后，清理 Transaction List 搜索缓存，保证前端立刻能搜到最新余额
         clearTransactionSearchCache();
+        // Only broadcast when the row is effective (not PENDING approval).
+        if (!$is_pending_approval) {
+            require_once __DIR__ . '/../includes/ledger_realtime.php';
+            tx_ledger_realtime_publish_scope($listScope, 'submit', [
+                'transaction_type' => $transaction_type,
+                'transaction_date' => $transaction_date_db ?? null,
+                'transaction_id' => $transaction_id,
+            ]);
+        }
 
         // 返回成功响应
         $responsePayload = [

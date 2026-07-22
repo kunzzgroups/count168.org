@@ -3,9 +3,8 @@ import { useNavigate, useOutletContext } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
 import { buildPaymentHistoryScope, persistPaymentHistoryScope } from "../../lib/transactionHistoryScope.js";
 import { persistMobileTxListSnapshot } from "../../lib/mobileTxListSnapshot.js";
-import { formatTransactionGridMoneyHalfUp, parseBalanceValue } from "../../lib/transactionFormat.js";
+import { parseBalanceValue } from "../../lib/transactionFormat.js";
 import MoneyDecimal from "../../lib/money/moneyDecimal.js";
-import { moneyToneClass } from "../../lib/money/moneyToneClass.js";
 import { resolveGridRowToAccountOption } from "../../lib/transactionPaymentLogic.js";
 import FilterSheet from "../dashboard/FilterSheet.jsx";
 import ScopeBreadcrumb from "../dashboard/ScopeBreadcrumb.jsx";
@@ -272,15 +271,6 @@ export default function TransactionPage() {
         </div>
       ) : (
         <>
-          {tx.totals ? (
-            <div className="m-tx-totals">
-              <TotalCell label={tx.m.bfTable} value={tx.totals.bf} />
-              <TotalCell label={tx.m.winLossTableCompact} value={tx.totals.win_loss} />
-              <TotalCell label={tx.m.crDrTable} value={tx.totals.cr_dr} />
-              <TotalCell label={tx.m.balanceTableCompact} value={tx.totals.balance} />
-            </div>
-          ) : null}
-
           {tx.searchError ? <p className="m-tx-search-error">{tx.searchError}</p> : null}
 
           {tx.displayRows.length === 0 ? (
@@ -299,16 +289,5 @@ export default function TransactionPage() {
       )}
       </div>
     </MobileShell>
-  );
-}
-
-function TotalCell({ label, value }) {
-  return (
-    <div className="m-tx-total-cell">
-      <p className="m-tx-total-label">{label}</p>
-      <p className={`m-tx-total-value ${moneyToneClass(value)}`}>
-        {formatTransactionGridMoneyHalfUp(value)}
-      </p>
-    </div>
   );
 }

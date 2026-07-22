@@ -68,6 +68,10 @@ try {
     try {
         approveContraTransaction($pdo, $transactionId, $scope, $userType);
         $pdo->commit();
+        require_once __DIR__ . '/../includes/ledger_realtime.php';
+        tx_ledger_realtime_publish_scope($scope, 'approve', [
+            'transaction_id' => $transactionId,
+        ]);
         api_success(null, 'Approved');
     } catch (Exception $e) {
         $pdo->rollBack();

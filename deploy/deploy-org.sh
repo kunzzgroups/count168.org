@@ -122,3 +122,12 @@ if ! sudo -u nginx test -r "$FRONTEND_INDEX" 2>/dev/null; then
   exit 1
 fi
 grep -o 'index-[A-Za-z0-9_-]*\.js' "$FRONTEND_INDEX" | head -1 || true
+
+RT_DEPLOY="${APP_ROOT}/deploy/deploy-realtime-org.sh"
+if [[ -f "$RT_DEPLOY" ]]; then
+  sed -i 's/\r$//' "$RT_DEPLOY" 2>/dev/null || true
+  echo "==> tx-realtime-org (count168.org only, port 3912)"
+  bash "$RT_DEPLOY" || {
+    echo "WARN: deploy-realtime-org.sh failed (exit $?) — org Transaction SSE may be offline"
+  }
+fi

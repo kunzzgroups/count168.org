@@ -565,7 +565,7 @@ export function useTransactionForm({
         amount: isProfitTx ? MoneyDecimal.formatFixedHalfUp(amtDec.abs().toString(), 2) : finalAmount,
         transaction_date: txDate,
         description: "",
-        sms: txRemark,
+        sms: String(txRemark || "").toUpperCase(),
         currency: txCurrency,
       };
 

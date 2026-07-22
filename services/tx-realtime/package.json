@@ -1,0 +1,17 @@
+{
+  "name": "tx-realtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SSE hub for Transaction Payment ledger_changed events",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "redis": "^4.7.0"
+  }
+}

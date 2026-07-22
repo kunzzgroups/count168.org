@@ -441,7 +441,7 @@ export default function TransactionAddSection({
           className="transaction-input text-uppercase"
           value={txRemark}
           disabled={mutationsBlocked}
-          onChange={(e) => setTxRemark(e.target.value.toUpperCase())}
+          onChange={(e) => setTxRemark(e.target.value)}
         />
       </div>
 

@@ -5,6 +5,7 @@ frontend/node_modules/
 c168_mobile/frontend/node_modules/
 .env
 .env.*
+!services/tx-realtime/.env.example
 .env.local
 
 *.log
@@ -35,6 +36,9 @@ agent/skills/
 # IDE
 .idea/
 .vscode/
+
+# local deploy overrides (WinSCP host/key)
+deploy/local/
 
 # local scratch
 _php_subtotal_snip.txt

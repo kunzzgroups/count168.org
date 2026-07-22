@@ -21,6 +21,7 @@ Route: `/transaction` (see `App.jsx`). Entry: `TransactionPaymentPage.jsx`.
 | Date range picker init | `hooks/useTransactionDateRange.js` |
 | First-load defaults (dates, currency selection) | `hooks/useTransactionInitialization.js` |
 | Cross-tab / localStorage list refresh | `hooks/useTransactionSync.js` |
+| Cross-device live sync (SSE) | `lib/transactionRealtime.js` + `deploy/TX_REALTIME.md` |
 | PHP API calls + React Query keys | `lib/transactionApi.js` |
 | Money/rate/date formatting (legacy-aligned) | `lib/transactionFormat.js` |
 | Grid filters, totals, session keys, W/L logic | `lib/transactionPaymentLogic.js` |
