@@ -836,7 +836,6 @@ export function useTransactionSearch({
         preserveSearchState = false,
         forceRefresh = false,
       } = opts;
-
       const normalizedType = String(formTxType || "").toUpperCase().trim();
 
       setSubmitFocusByCurrency({});
@@ -857,11 +856,6 @@ export function useTransactionSearch({
         setSearchState((prev) => ({ ...prev, ...clearedState }));
         prevServerSideFiltersRef.current = clearedState;
       }
-
-      // Enable all-currencies mode upfront so UI & table grouping are active from start of search
-      suppressCrossPageCurrencyRef.current = true;
-      setShowAllCurrencies(true);
-      setSelectedCurrencies([]);
 
       if (!scopeReady || !scopeCacheCompanyKey) return;
       const queryDateFrom = String(dateFromOverride ?? effectiveDateFrom ?? "").trim();
@@ -894,74 +888,43 @@ export function useTransactionSearch({
             ? [...selectedCategories].sort().join(",")
             : undefined;
 
-        let payload = null;
-        let typeAccountIds = [];
+        // Query all transaction types for the selected Capture Date range across all currencies (no type filtering)
+        const result = await searchTransactionsApi({
+          ...scopeParams,
+          dateFrom: queryDateFrom,
+          dateTo: queryDateTo,
+          showInactive: false,
+          showCaptureOnly: false,
+          hideZeroBalance: false,
+          categories: categoryParam ? categoryParam.split(",") : undefined,
+          currencyCodes: undefined,
+        });
 
-        if (normalizedType && PERIOD_TYPE_SEARCH_TYPES.has(normalizedType)) {
-          typeAccountIds = await fetchTypeAccountSearch({
-            ...scopeParams,
-            transactionType: normalizedType,
-          });
-          if (typeAccountIds.length === 0) {
-            flushSync(() => {
-              setTypeSearchActive(true);
-              setTypeSearchFormType(normalizedType);
-              setTypeSearchAccountIds([]);
-              setRawSearchData({ left_table: [], right_table: [], totals: null });
-              setTablesVisible(false);
-            });
-            return;
-          }
-
-          const result = await searchTransactionsApi({
-            ...scopeParams,
-            dateFrom: queryDateFrom,
-            dateTo: queryDateTo,
-            showInactive: false,
-            showCaptureOnly: false,
-            hideZeroBalance: false,
-            categories: categoryParam ? categoryParam.split(",") : undefined,
-            currencyCodes: undefined,
-            typeSearch: true,
-            typeAccountIds,
-            typeSearchFormType: normalizedType,
-          });
-          if (!result?.success || !result?.data) {
-            pushToast(result?.message || result?.error || m.searchFailed, "error");
-            return;
-          }
-          payload = result.data;
-        } else if (normalizedType) {
-          payload = await fetchTypeTransactionSearch({
-            ...scopeParams,
-            transactionType: normalizedType,
-            currencyCodes: undefined,
-          });
-          if (!payload) {
-            pushToast(m.searchFailed, "error");
-            return;
-          }
-        } else {
-          const result = await searchTransactionsApi({
-            ...scopeParams,
-            dateFrom: queryDateFrom,
-            dateTo: queryDateTo,
-            showInactive: false,
-            showCaptureOnly: false,
-            hideZeroBalance: false,
-            categories: categoryParam ? categoryParam.split(",") : undefined,
-            currencyCodes: undefined,
-          });
-          if (!result?.success || !result?.data) {
-            pushToast(result?.message || result?.error || m.searchFailed, "error");
-            return;
-          }
-          payload = result.data;
+        if (!result?.success || !result?.data) {
+          pushToast(result?.message || result?.error || m.searchFailed, "error");
+          return;
         }
 
-        const cleaned = sanitizeSearchApiData(payload);
+        const rawCleaned = sanitizeSearchApiData(result.data);
 
-        // Auto-detect currencies present in the returned data.
+        // Filter to only include rows with actual transaction movement (Cr/Dr != 0 or Win/Loss != 0) on this date.
+        const hasRowMovement = (row) => {
+          if (!row) return false;
+          const crDr = parseFloat(String(row?.cr_dr ?? "").replace(/,/g, "")) || 0;
+          const wl = parseFloat(String(row?.win_loss ?? row?.win_loss_full ?? "").replace(/,/g, "")) || 0;
+          return Math.abs(crDr) > 0.0001 || Math.abs(wl) > 0.0001;
+        };
+
+        const activeLeft = (rawCleaned.left_table || []).filter(hasRowMovement);
+        const activeRight = (rawCleaned.right_table || []).filter(hasRowMovement);
+
+        const cleaned = sanitizeSearchApiData({
+          ...rawCleaned,
+          left_table: activeLeft,
+          right_table: activeRight,
+        });
+
+        // Auto-detect currencies present in the returned data that have ACTUAL transaction movement on this date.
         const foundCurrencySet = new Set();
         (cleaned.left_table || []).forEach((row) => {
           const cur = String(row?.currency || "").toUpperCase().trim();
@@ -971,27 +934,45 @@ export function useTransactionSearch({
           const cur = String(row?.currency || "").toUpperCase().trim();
           if (cur) foundCurrencySet.add(cur);
         });
-        const foundCurrencies = [...foundCurrencySet];
+
+        let foundCurrencies = [...foundCurrencySet];
+
+        // Fallback: If no currency has active movement (e.g., initial 0-balance view), fall back to default currency.
+        if (foundCurrencies.length === 0) {
+          const allCurrencies = new Set();
+          (rawCleaned.left_table || []).forEach((row) => {
+            const cur = String(row?.currency || "").toUpperCase().trim();
+            if (cur) allCurrencies.add(cur);
+          });
+          (rawCleaned.right_table || []).forEach((row) => {
+            const cur = String(row?.currency || "").toUpperCase().trim();
+            if (cur) allCurrencies.add(cur);
+          });
+          const allList = [...allCurrencies];
+          const defaultCode = pickTransactionDefaultCurrency(allList.length > 0 ? allList : txCurrencyCodes);
+          foundCurrencies = defaultCode ? [defaultCode] : allList.length > 0 ? [allList[0]] : ["MYR"];
+        }
 
         const displayed =
           (cleaned.left_table?.length || 0) + (cleaned.right_table?.length || 0);
 
-        // Commit type search data, activate typeSearchActive mode, and finalize currency selection synchronously.
+        // Commit search data and set typeSearchActive to true so the Refresh button is displayed.
         flushSync(() => {
-          if (normalizedType) {
-            setTypeSearchActive(true);
-            setTypeSearchFormType(normalizedType);
-            setTypeSearchAccountIds(typeAccountIds);
-          }
+          setTypeSearchActive(true);
+          setTypeSearchFormType(normalizedType || "ALL");
+          setTypeSearchAccountIds([]);
           setRawSearchData(cleaned);
 
-          if (foundCurrencies.length < 2) {
-            if (foundCurrencies.length === 1) {
-              // If only one currency has transactions, lock view to that single currency.
-              suppressCrossPageCurrencyRef.current = false;
-              setShowAllCurrencies(false);
-              setSelectedCurrencies(foundCurrencies);
-            }
+          if (foundCurrencies.length >= 2) {
+            // 2+ currencies have actual transactions today -> show all currencies.
+            suppressCrossPageCurrencyRef.current = true;
+            setShowAllCurrencies(true);
+            setSelectedCurrencies([]);
+          } else {
+            // Only 1 currency has actual transactions today -> show only that currency.
+            suppressCrossPageCurrencyRef.current = false;
+            setShowAllCurrencies(false);
+            setSelectedCurrencies(foundCurrencies);
           }
 
           setTablesVisible(displayed > 0);
@@ -1371,15 +1352,31 @@ export function useTransactionSearch({
     const codesOrdered = currencyRowsOrdered.map((c) => String(c.code || "").toUpperCase().trim()).filter(Boolean);
 
     if (!multi) {
-      const title =
-        selectedCurrencies.length === 1 ? `Currency: ${selectedCurrencies[0]}` : null;
+      const singleCode =
+        selectedCurrencies.length === 1 ? String(selectedCurrencies[0] || "").toUpperCase().trim() : null;
+      const title = singleCode ? `Currency: ${singleCode}` : null;
+
+      // Filter rows to only include rows matching the selected single currency.
+      const singleLeft = singleCode
+        ? sortedLeft.filter((row) => String(row?.currency || "").toUpperCase().trim() === singleCode)
+        : sortedLeft;
+      const singleRight = singleCode
+        ? sortedRight.filter((row) => String(row?.currency || "").toUpperCase().trim() === singleCode)
+        : sortedRight;
+
+      const singleTotalsLeft = calculateTotals(singleLeft);
+      const singleTotalsRight = calculateTotals(singleRight);
+      const singleTotalsSummary = applySummaryWinLossDisplayTolerance(
+        calculateTotals([...singleLeft, ...singleRight]),
+      );
+
       return {
         mode: "default",
-        defaultLeft: sortedLeft,
-        defaultRight: sortedRight,
-        totalsLeft,
-        totalsRight,
-        totalsSummary,
+        defaultLeft: singleLeft,
+        defaultRight: singleRight,
+        totalsLeft: singleTotalsLeft,
+        totalsRight: singleTotalsRight,
+        totalsSummary: singleTotalsSummary,
         grouped: [],
         singleCurrencyTitle: title,
       };
