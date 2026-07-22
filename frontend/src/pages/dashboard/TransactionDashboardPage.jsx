@@ -84,9 +84,6 @@ export default function TransactionDashboardPage() {
               chartDateRangeText={page.chartDateRangeText}
               chartXAxisLayout={page.chartXAxisLayout}
               chartScopeKey={page.dashboardScopeKey}
-              panelAnimActive={page.panelsAnimReady}
-              panelAnimEpoch={page.panelAnimEpoch}
-              panelAnimDuration={page.panelAnimDuration}
             />
             <DashboardEarningsSummary
               i18n={i18n}
@@ -109,9 +106,6 @@ export default function TransactionDashboardPage() {
               showNetProfitForTab={page.showNetProfitForTab}
               earningsPanelView={page.earningsPanelView}
               onEarningsPanelViewChange={page.setEarningsPanelView}
-              panelAnimActive={page.panelsAnimReady}
-              panelAnimEpoch={page.panelAnimEpoch}
-              panelAnimDuration={page.panelAnimDuration}
             />
           </div>
         </div>

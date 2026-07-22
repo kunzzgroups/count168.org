@@ -488,7 +488,14 @@ export default function AuthenticatedLayout() {
     if (loading || !me) return undefined;
 
     let stopped = false;
+    let inFlight = false;
+    /** Maintenance probe — keep light; cross-tab bus already broadcasts enable events. */
+    const POLL_MS = 30000;
+
     const tick = async () => {
+      if (stopped || inFlight) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      inFlight = true;
       try {
         const res = await fetch(buildApiUrl("api/session/current_user_api.php"), {
           credentials: "include",
@@ -516,14 +523,22 @@ export default function AuthenticatedLayout() {
         }
       } catch {
         // silent: next tick retries
+      } finally {
+        inFlight = false;
       }
     };
 
-    tick();
-    const timer = window.setInterval(tick, 2000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void tick();
+    };
+
+    // Session was just loaded — do not fire an immediate duplicate request.
+    const timer = window.setInterval(tick, POLL_MS);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       stopped = true;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [loading, me]);
 

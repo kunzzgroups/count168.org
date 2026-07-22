@@ -992,12 +992,13 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     font-variant-numeric: tabular-nums;
 }
 
-.dashboard-animated-value.is-rising {
-    animation: dashboard-value-rise 0.9s var(--ease-out-soft, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
-}
-
-.dashboard-animated-value.is-falling {
-    animation: dashboard-value-fall 0.9s var(--ease-out-soft, cubic-bezier(0.2, 0.8, 0.2, 1)) both;
+.dashboard-animated-value.is-rising,
+.dashboard-animated-value.is-falling,
+.dashboard-summary-pie-chart-shell.is-enter,
+.dashboard-summary-pie-chart-shell.is-enter::after,
+.dashboard-summary-pie-center.is-enter,
+.dashboard-summary-pie-wrap.is-flow-idle .dashboard-summary-pie-chart-shell {
+    animation: none !important;
 }
 
 @keyframes dashboard-value-rise {

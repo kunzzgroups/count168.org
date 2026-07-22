@@ -42,7 +42,7 @@ import {
   sumConvertedKpiMetrics,
   warmFrankfurterRatesForCurrencies,
 } from "../../../utils/dashboard/frankfurterRates.js";
-import { DASHBOARD_API, DASHBOARD_BOOTSTRAP_API, DASHBOARD_PANEL_ANIM_DURATION_MS, DASHBOARD_PROFIT_COLOR, isDashboardHistoricalOwnershipMonth } from "../lib/dashboardConstants.js";
+import { DASHBOARD_API, DASHBOARD_BOOTSTRAP_API, DASHBOARD_PROFIT_COLOR, isDashboardHistoricalOwnershipMonth } from "../lib/dashboardConstants.js";
 import {
   buildChartRows,
   buildSkeletonChartRows,
@@ -675,15 +675,20 @@ const MERGE_DASHBOARD_PARALLEL_BATCH = 12;
 const SESSION_DASHBOARD_WARM_DELAY_MS = 6000;
 /** Parallel kpi bootstrap requests when filling multi-currency earnings sidebar. */
 const EARNINGS_KPI_PARALLEL_BATCH = 3;
-/** Defer trend-chart daily fetch so MoM previous can use DB first. */
+/** Defer trend-chart daily fetch so MoM previous can use DB first (skip for month-bucket ranges). */
 const CHART_DAILY_DEFER_MS = 250;
+/** Sibling currency KPI warm — shorter when This Year (chart/FX feel laggy otherwise). */
+const CURRENCY_PREFETCH_DELAY_MS = 3500;
+const CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS = 800;
 
-function scheduleChartDailyLoad(cacheKey, resolveScopeKey, loadChartDaily) {
+function scheduleChartDailyLoad(cacheKey, resolveScopeKey, loadChartDaily, dateFrom, dateTo) {
+  const deferMs =
+    dateFrom && dateTo && shouldAggregateChartByMonth(dateFrom, dateTo) ? 0 : CHART_DAILY_DEFER_MS;
   window.setTimeout(() => {
     if (resolveScopeKey() === cacheKey) {
       void loadChartDaily(cacheKey);
     }
-  }, CHART_DAILY_DEFER_MS);
+  }, deferMs);
 }
 
 async function runTasksInBatches(items, batchSize, runTask) {
@@ -4235,6 +4240,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       if (Array.isArray(codesForBootstrap) && codesForBootstrap.length > 1) {
         q.set("currencies", codesForBootstrap.join(","));
       }
+      if (scope === "chart" && shouldAggregateChartByMonth(dateFrom, dateTo)) {
+        q.set("chart_monthly", "1");
+      }
 
       const requestKey = q.toString();
 
@@ -5670,7 +5678,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         void loadDashboardPreviousPeriod(cacheKey);
       }
       if (dashboardPayloadNeedsChartDaily(cached.current)) {
-        scheduleChartDailyLoad(cacheKey, resolveDashboardScopeKey, loadDashboardChartDaily);
+        scheduleChartDailyLoad(
+          cacheKey,
+          resolveDashboardScopeKey,
+          loadDashboardChartDaily,
+          dateFromRef.current,
+          dateToRef.current
+        );
       }
 
       const needsMultiCurrencyEarnings =
@@ -6011,7 +6025,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             void loadDashboardPreviousPeriod(cacheKey);
           }
           if (dashboardPayloadNeedsChartDaily(boot.current)) {
-            scheduleChartDailyLoad(cacheKey, resolveDashboardScopeKey, loadDashboardChartDaily);
+            scheduleChartDailyLoad(
+              cacheKey,
+              resolveDashboardScopeKey,
+              loadDashboardChartDaily,
+              dateFrom,
+              dateTo
+            );
           }
           return;
         } catch {
@@ -6583,7 +6603,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     if (currencies.length <= 1 || !dateTo) return undefined;
     const base = currencyCode || currencies[0];
     warmFrankfurterRatesForCurrencies(currencies, resolveFrankfurterDate(dateTo), base);
-  }, [currencies, dateTo, currencyCode]);
+    if (conversionBaseCurrency && conversionBaseCurrency !== base) {
+      warmFrankfurterRatesForCurrencies(
+        currencies,
+        resolveFrankfurterDate(dateTo),
+        conversionBaseCurrency
+      );
+    }
+  }, [currencies, dateTo, currencyCode, conversionBaseCurrency]);
 
   useEffect(() => {
     if (!gcBootstrapReady || currencies.length <= 1 || !dashboardScopeKey) return undefined;
@@ -6626,7 +6653,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       drain();
     };
 
-    const timer = window.setTimeout(run, 3500);
+    const timer = window.setTimeout(
+      run,
+      shouldAggregateChartByMonth(dateFrom, dateTo)
+        ? CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS
+        : CURRENCY_PREFETCH_DELAY_MS
+    );
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -7075,36 +7107,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const earningsPanelStable =
     currencies.length <= 1 ||
     (allCurrencyEarningsReady && !earningsByCurrencyLoading && !exchangeRatesLoading);
-  const panelsAnimReady = useMemo(() => {
-    if (!chartDataStable) return false;
-    if (currencies.length <= 1) return true;
-    return earningsPanelStable;
-  }, [chartDataStable, currencies.length, earningsPanelStable]);
-  const panelsAnimSessionRef = useRef("");
-  const [panelAnimEpoch, setPanelAnimEpoch] = useState(0);
-  useEffect(() => {
-    const sessionKey = [
-      dashboardScopeKey,
-      dateFrom,
-      dateTo,
-      earningsPanelView,
-      currencies.length > 1 ? [...currencies].sort().join(",") : "",
-    ].join("|");
-    if (!panelsAnimReady) {
-      panelsAnimSessionRef.current = "";
-      return;
-    }
-    if (panelsAnimSessionRef.current === sessionKey) return;
-    panelsAnimSessionRef.current = sessionKey;
-    setPanelAnimEpoch((n) => n + 1);
-  }, [
-    panelsAnimReady,
-    dashboardScopeKey,
-    dateFrom,
-    dateTo,
-    earningsPanelView,
-    currencies,
-  ]);
   const kpiLoading = loading && !dashboardData;
 
   useLayoutEffect(() => {
@@ -7911,9 +7913,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     chartDateRangeText,
     chartXAxisLayout,
     chartDataStable,
-    panelsAnimReady,
-    panelAnimEpoch,
-    panelAnimDuration: DASHBOARD_PANEL_ANIM_DURATION_MS,
     dashboardScopeKey,
     earningsCurrencyRows,
     panelCurrencyRows,

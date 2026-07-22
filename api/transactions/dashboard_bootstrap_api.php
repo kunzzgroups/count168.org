@@ -66,6 +66,21 @@ function dashboard_bootstrap_previous_period(string $fromYmd, string $toYmd): ar
     ];
 }
 
+/** Mirror frontend shouldAggregateChartByMonth (>= 3 calendar months). */
+function dashboard_bootstrap_should_chart_monthly(string $fromYmd, string $toYmd): bool
+{
+    $start = DateTimeImmutable::createFromFormat('Y-m-d', $fromYmd);
+    $end = DateTimeImmutable::createFromFormat('Y-m-d', $toYmd);
+    if (!$start || !$end) {
+        return false;
+    }
+    $months = ((int) $end->format('Y') - (int) $start->format('Y')) * 12
+        + ((int) $end->format('n') - (int) $start->format('n'))
+        + 1;
+
+    return $months >= 3;
+}
+
 /**
  * @return array<string, string>
  */
@@ -199,6 +214,16 @@ try {
         $currentParams = $baseParams;
         if ($primaryCurrency !== '') {
             $currentParams['currency'] = $primaryCurrency;
+        }
+        // Long ranges: month buckets cut This Year chart SQL from ~365 groups to ~12.
+        if (
+            ($bootstrapScope === 'chart' || $bootstrapScope === 'full')
+            && (
+                dashboard_bootstrap_should_chart_monthly($dateFrom, $dateTo)
+                || (isset($_GET['chart_monthly']) && (string) $_GET['chart_monthly'] === '1')
+            )
+        ) {
+            $currentParams['chart_monthly'] = '1';
         }
         $currentJson = $bootstrapScope === 'chart'
             ? dashboard_bootstrap_capture($currentParams)

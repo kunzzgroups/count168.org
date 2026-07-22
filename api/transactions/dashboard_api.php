@@ -67,6 +67,13 @@ function dashboard_bootstrap_cache_remember(string $key, callable $fn)
     return $value;
 }
 
+
+/** When set, trend series GROUP BY month (YYYY-MM) instead of day — matches FE shouldAggregateChartByMonth. */
+function dashboard_api_chart_monthly(): bool
+{
+    return isset($_GET['chart_monthly']) && (string) $_GET['chart_monthly'] === '1';
+}
+
 /** Skip daily GROUP BY aggregation; KPI cards only need period_total / balances. */
 function dashboard_api_kpi_only(): bool
 {
@@ -638,7 +645,7 @@ function dashboardGroupSalaryBonusCaptureBundle(
         ];
     }
 
-    $sql = "SELECT DATE(dc.capture_date) AS d, COALESCE(SUM({$dcdQ}), 0) AS wl
+    $sql = "SELECT IF(@c168_dash_month=1,LEFT(dc.capture_date,7),DATE(dc.capture_date)) AS d, COALESCE(SUM({$dcdQ}), 0) AS wl
             FROM data_capture_details dcd
             JOIN data_captures dc ON dcd.capture_id = dc.id
             INNER JOIN process p ON dc.process_id = p.id
@@ -648,7 +655,7 @@ function dashboardGroupSalaryBonusCaptureBundle(
               {$processFilter}
               {$acctFilter}
               {$currencyFilter}
-            GROUP BY DATE(dc.capture_date)";
+            GROUP BY IF(@c168_dash_month=1,LEFT(dc.capture_date,7),DATE(dc.capture_date))";
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array_merge($ledger['params'], [$dateFrom, $dateTo], $acctParams, $currencyParams));
     $daily = [];
@@ -850,7 +857,7 @@ function dashboardBuildGroupProfitBucket(
             ];
         }
 
-        $sql = "SELECT DATE(t.transaction_date) AS date,
+        $sql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                        COALESCE(SUM(CASE
                            WHEN transaction_type IN ('RECEIVE', 'CLAIM', 'RATE') THEN -t.amount
                            WHEN transaction_type = 'CONTRA' THEN -t.amount
@@ -868,14 +875,14 @@ function dashboardBuildGroupProfitBucket(
                   AND t.account_id IN ($idsPlaceholder)
                   AND t.transaction_date BETWEEN ? AND ?
                   AND t.transaction_type IN $dailyTxnTypes" . $currencyFilterT . $clearFilter . $contraApproval . $excludeDomainSql . "
-                GROUP BY DATE(t.transaction_date)";
+                GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
         $stmt = $pdo->prepare($sql);
         $stmt->execute(array_merge([$groupScopeId], $accountIds, [$dateFrom, $dateTo], $currencyParamsT));
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             dashboardAddDailyAmount($dailyData, (string) ($row['date'] ?? ''), $row['delta'] ?? '0');
         }
 
-        $sql = "SELECT DATE(t.transaction_date) AS date,
+        $sql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                        COALESCE(SUM(CASE
                            WHEN transaction_type = 'CONTRA' THEN t.amount
                            WHEN transaction_type = 'CLEAR' THEN t.amount
@@ -889,7 +896,7 @@ function dashboardBuildGroupProfitBucket(
                   AND t.from_account_id IN ($idsPlaceholder)
                   AND t.transaction_date BETWEEN ? AND ?
                   AND t.transaction_type IN $dailyFromTxnTypes" . $currencyFilterT . $clearFilter . $contraApproval . $excludeDomainSql . "
-                GROUP BY DATE(t.transaction_date)";
+                GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
         $stmt = $pdo->prepare($sql);
         $stmt->execute(array_merge([$groupScopeId], $accountIds, [$dateFrom, $dateTo], $currencyParamsT));
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -898,7 +905,7 @@ function dashboardBuildGroupProfitBucket(
 
         try {
             if (dashboardHasTransactionEntry($pdo)) {
-                $sql = "SELECT DATE(h.transaction_date) AS date,
+                $sql = "SELECT IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date)) AS date,
                                COALESCE(SUM(CASE
                                    WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
                                    WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
@@ -910,7 +917,7 @@ function dashboardBuildGroupProfitBucket(
                         WHERE {$groupHeaderWhere}
                           AND e.account_id IN ($idsPlaceholder)
                           AND h.transaction_date BETWEEN ? AND ?" . $currencyFilterE . "
-                        GROUP BY DATE(h.transaction_date)";
+                        GROUP BY IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date))";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute(array_merge([$groupScopeId], $accountIds, [$dateFrom, $dateTo], $currencyParamsE));
                 foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -985,14 +992,14 @@ function dashboardMergeGroupRateMiddlemanIntoProfit(
         }
 
         $rateMMSql = "
-            SELECT DATE(h.transaction_date) AS date, COALESCE(SUM(e.amount), 0) AS total
+            SELECT IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date)) AS date, COALESCE(SUM(e.amount), 0) AS total
             FROM transaction_entry e
             JOIN transactions h ON e.header_id = h.id
             WHERE h.scope_type = 'group' AND h.scope_id = ?
               AND e.entry_type = 'RATE_MIDDLEMAN'
               AND h.transaction_date BETWEEN ? AND ?" . $currencyFilterE;
         $rateMMParams = array_merge([$groupScopeId, $dateFrom, $dateTo], $currencyParamsE);
-        $rateMMSql .= ' GROUP BY DATE(h.transaction_date)';
+        $rateMMSql .= ' GROUP BY IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date))';
 
         $rateMMDaily = [];
         $rateMMPeriodTotal = dashboardMoneyZero();
@@ -1999,7 +2006,7 @@ function dashboardBuildGroupScopedSummary(
         }
 
         $dailySql = "
-            SELECT DATE(t.transaction_date) AS d, COALESCE(SUM(CASE
+            SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS d, COALESCE(SUM(CASE
                 WHEN t.account_id IN ($in) THEN
                     CASE
                         WHEN t.transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
@@ -2024,8 +2031,8 @@ function dashboardBuildGroupScopedSummary(
               AND t.scope_id = ?
               AND t.transaction_date BETWEEN ? AND ?
               AND (t.account_id IN ($in) OR t.from_account_id IN ($in))" . $currencyFilterSql . $clearFilter . $contraApproval . "
-            GROUP BY DATE(t.transaction_date)
-            ORDER BY DATE(t.transaction_date)
+            GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
+            ORDER BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
         ";
         $dailyStmt = $pdo->prepare($dailySql);
         $dailyParams = array_merge(
@@ -3131,11 +3138,11 @@ function dashboardExpensesBuildWinLossBundle(
         ];
     }
 
-    $sql = "SELECT DATE(dc.capture_date) AS date, COALESCE(SUM({$dcdQ}), 0) AS wl
+    $sql = "SELECT IF(@c168_dash_month=1,LEFT(dc.capture_date,7),DATE(dc.capture_date)) AS date, COALESCE(SUM({$dcdQ}), 0) AS wl
             FROM data_capture_details dcd
             JOIN data_captures dc ON dcd.capture_id = dc.id
             WHERE {$dcdBaseWhere} AND dc.capture_date BETWEEN ? AND ?
-            GROUP BY DATE(dc.capture_date)";
+            GROUP BY IF(@c168_dash_month=1,LEFT(dc.capture_date,7),DATE(dc.capture_date))";
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array_merge($dcdBindBase, [$dateFromDb, $dateToDb]));
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3159,7 +3166,7 @@ function dashboardExpensesBuildWinLossBundle(
 
     $bankWin = dashboardWlTxnAmountSqlQuant2('t.amount');
     $bankLose = dashboardWlTxnAmountSqlQuant2('-t.amount');
-    $sql = "SELECT DATE(t.transaction_date) AS date,
+    $sql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                    COALESCE(SUM(CASE
                        WHEN t.transaction_type = 'WIN' AND {$processDesc} THEN {$bankWin}
                        WHEN t.transaction_type = 'LOSE' AND {$processDesc} THEN {$bankLose}
@@ -3172,7 +3179,7 @@ function dashboardExpensesBuildWinLossBundle(
               AND t.transaction_type IN ('WIN', 'LOSE')
               AND {$processDesc}
               {$contra}{$txnSubSql}
-            GROUP BY DATE(t.transaction_date)";
+            GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array_merge([$companyId], $accountIds, [$currencyId, $dateFromDb, $dateToDb]));
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3182,7 +3189,7 @@ function dashboardExpensesBuildWinLossBundle(
     $manualWinTo = dashboardWlTxnAmountSqlQuant2('-t.amount');
     $manualLoseTo = dashboardWlTxnAmountSqlQuant2('t.amount');
     $manualAdj = dashboardWlTxnAmountSqlQuant2('t.amount');
-    $sql = "SELECT DATE(t.transaction_date) AS date,
+    $sql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                    COALESCE(SUM(CASE WHEN t.transaction_type = 'WIN' THEN {$manualWinTo}
                        WHEN t.transaction_type = 'LOSE' THEN {$manualLoseTo}
                        WHEN t.transaction_type = 'ADJUSTMENT' THEN {$manualAdj}
@@ -3195,7 +3202,7 @@ function dashboardExpensesBuildWinLossBundle(
               AND t.transaction_type IN ('WIN', 'LOSE', 'ADJUSTMENT')
               AND {$manualDesc}
               {$contra}{$txnSubSql}
-            GROUP BY DATE(t.transaction_date)";
+            GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array_merge([$companyId], $accountIds, [$currencyId, $dateFromDb, $dateToDb]));
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3204,7 +3211,7 @@ function dashboardExpensesBuildWinLossBundle(
 
     $manualWinFrom = dashboardWlTxnAmountSqlQuant2('t.amount');
     $manualLoseFrom = dashboardWlTxnAmountSqlQuant2('-t.amount');
-    $sql = "SELECT DATE(t.transaction_date) AS date,
+    $sql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                    COALESCE(SUM(CASE WHEN t.transaction_type = 'WIN' THEN {$manualWinFrom}
                        WHEN t.transaction_type = 'LOSE' THEN {$manualLoseFrom}
                        ELSE 0 END), 0) AS wl
@@ -3216,7 +3223,7 @@ function dashboardExpensesBuildWinLossBundle(
               AND t.transaction_type IN ('WIN', 'LOSE')
               AND {$manualDesc}
               {$contra}{$txnSubSql}
-            GROUP BY DATE(t.transaction_date)";
+            GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
     $stmt = $pdo->prepare($sql);
     $stmt->execute(array_merge([$companyId], $accountIds, [$currencyId, $dateFromDb, $dateToDb]));
     foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3225,7 +3232,7 @@ function dashboardExpensesBuildWinLossBundle(
 
     if (dashboardHasTransactionEntry($pdo)) {
         $mmQ = dashboardWlTxnAmountSqlQuant2('e.amount');
-        $sql = "SELECT DATE(h.transaction_date) AS date, COALESCE(SUM({$mmQ}), 0) AS wl
+        $sql = "SELECT IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date)) AS date, COALESCE(SUM({$mmQ}), 0) AS wl
                 FROM transaction_entry e
                 JOIN transactions h ON e.header_id = h.id
                 WHERE h.company_id = ?
@@ -3234,7 +3241,7 @@ function dashboardExpensesBuildWinLossBundle(
                   AND e.currency_id = ?
                   AND e.entry_type = 'RATE_MIDDLEMAN'
                   AND h.transaction_date BETWEEN ? AND ?{$txnSubSqlH}
-                GROUP BY DATE(h.transaction_date)";
+                GROUP BY IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date))";
         $stmt = $pdo->prepare($sql);
         $stmt->execute(array_merge([$companyId, $companyId], $accountIds, [$currencyId, $dateFromDb, $dateToDb]));
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3364,7 +3371,7 @@ function dashboardExpensesBuildCrDrBundle(
     $contra = dashboardContraApprovedWhere($pdo, 't');
     $crDrTypes = "('PAYMENT', 'RECEIVE', 'CONTRA', 'CLAIM')";
 
-    $toSql = "SELECT DATE(t.transaction_date) AS date,
+    $toSql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                      COALESCE(SUM(CASE
                          WHEN t.transaction_type IN ('RECEIVE', 'CLAIM') THEN -t.amount
                          WHEN t.transaction_type = 'CONTRA' THEN -t.amount
@@ -3382,14 +3389,14 @@ function dashboardExpensesBuildCrDrBundle(
                 AND t.transaction_type IN $crDrTypes
                 AND t.currency_id = ?"
         . $clearFilter . $contra . dashboard_sql_txn_subsidiary_only($pdo, 't') . '
-              GROUP BY DATE(t.transaction_date)';
+              GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))';
     $toStmt = $pdo->prepare($toSql);
     $toStmt->execute(array_merge([$companyId], $accountIds, [$dateFromDb, $dateToDb, $currencyId]));
     foreach ($toStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
         dashboardAddDailyAmount($daily, (string) $row['date'], $row['cr_dr'] ?? '0');
     }
 
-    $fromSql = "SELECT DATE(t.transaction_date) AS date,
+    $fromSql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                        COALESCE(SUM(CASE
                            WHEN t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%' THEN 0
                            WHEN t.transaction_type = 'PAYMENT' AND t.sms LIKE '[DOMAIN_NET_PROFIT|%' THEN 0
@@ -3406,7 +3413,7 @@ function dashboardExpensesBuildCrDrBundle(
                   AND t.transaction_type IN $crDrTypes
                   AND t.currency_id = ?"
         . $clearFilter . $contra . dashboard_sql_txn_subsidiary_only($pdo, 't') . '
-                GROUP BY DATE(t.transaction_date)';
+                GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))';
     $fromStmt = $pdo->prepare($fromSql);
     $fromStmt->execute(array_merge([$companyId], $accountIds, [$dateFromDb, $dateToDb, $currencyId]));
     foreach ($fromStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -3415,7 +3422,7 @@ function dashboardExpensesBuildCrDrBundle(
 
     if (dashboardHasTransactionEntry($pdo)) {
         try {
-            $rateSql = "SELECT DATE(h.transaction_date) AS date,
+            $rateSql = "SELECT IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date)) AS date,
                                COALESCE(SUM(CASE
                                    WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
                                    WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
@@ -3430,7 +3437,7 @@ function dashboardExpensesBuildCrDrBundle(
                           AND h.transaction_type = 'RATE'
                           AND h.transaction_date BETWEEN ? AND ?
                           AND e.entry_type <> 'RATE_MIDDLEMAN'" . dashboard_sql_txn_subsidiary_only($pdo, 'h') . "
-                        GROUP BY DATE(h.transaction_date)";
+                        GROUP BY IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date))";
             $rateStmt = $pdo->prepare($rateSql);
             $rateStmt->execute(array_merge(
                 [$companyId, $companyId],
@@ -3563,8 +3570,16 @@ try {
     }
     $kpiOnly = dashboard_api_kpi_only();
     $earningsOnly = dashboard_api_earnings_only();
+    $chartMonthly = !$kpiOnly && dashboard_api_chart_monthly();
     $GLOBALS['DASHBOARD_KPI_ONLY'] = $kpiOnly;
     $GLOBALS['DASHBOARD_EARNINGS_ONLY'] = $earningsOnly;
+    $GLOBALS['DASHBOARD_CHART_MONTHLY'] = $chartMonthly;
+    // Connection-local flag consumed by daily_data SQL date buckets (see DATE(...) replacements).
+    try {
+        $pdo->exec('SET @c168_dash_month = ' . ($chartMonthly ? '1' : '0'));
+    } catch (Throwable $ignored) {
+        // Best-effort; default @var is NULL → IF treats as day buckets.
+    }
 
     // No company_id: group ledger only (scope_type=group). Distinct from company_id-scoped rows.
     $groupLedgerCode = reportNormalizeGroupId($_GET['view_group'] ?? '');
@@ -3973,7 +3988,7 @@ try {
             ));
             $rolePeriodDelta = dashboardMoneyAdd($rolePeriodDelta, $period_stmt->fetchColumn());
         } else {
-        $sql = "SELECT DATE(dc.capture_date) as date, 
+        $sql = "SELECT IF(@c168_dash_month=1,LEFT(dc.capture_date,7),DATE(dc.capture_date)) as date, 
                        COALESCE(SUM({$dcdAmountSql}), 0) as win_loss
                 FROM data_capture_details dcd
                 JOIN data_captures dc ON dcd.capture_id = dc.id
@@ -3981,8 +3996,8 @@ try {
                   AND dcd.company_id IN ($capture_company_placeholder)
                   AND dcd.currency_id IS NOT NULL
                   AND dc.capture_date BETWEEN ? AND ?" . $acct_filter_dcd . $currency_filter_dcd . "
-                GROUP BY DATE(dc.capture_date)
-                ORDER BY DATE(dc.capture_date)";
+                GROUP BY IF(@c168_dash_month=1,LEFT(dc.capture_date,7),DATE(dc.capture_date))
+                ORDER BY IF(@c168_dash_month=1,LEFT(dc.capture_date,7),DATE(dc.capture_date))";
         $daily_stmt = $pdo->prepare($sql);
         $daily_stmt->execute(array_merge(
             $captureCompanyIds,
@@ -4075,7 +4090,7 @@ try {
                 }
             } else {
             // To Account
-            $sql = "SELECT DATE(t.transaction_date) as date,
+            $sql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) as date,
                            COALESCE(SUM(CASE 
                                WHEN transaction_type IN ('RECEIVE', 'CLAIM', 'RATE') THEN -t.amount
                                WHEN transaction_type = 'CONTRA' THEN -t.amount
@@ -4097,8 +4112,8 @@ try {
                       AND t.transaction_date BETWEEN ? AND ?
                       AND t.transaction_type IN $dailyTxnTypes"
                 . $currency_filter_t_to . $clearFilter . $contraApproval . $dashTxnSubSql . "
-                    GROUP BY DATE(t.transaction_date)
-                    ORDER BY DATE(t.transaction_date)";
+                    GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
+                    ORDER BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
             $daily_stmt = $pdo->prepare($sql);
             $daily_stmt->execute(array_merge([$ledgerCompanyId], $account_ids, [$date_from_db, $date_to_db], $currency_params_t_to));
             foreach ($daily_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -4106,7 +4121,7 @@ try {
             }
 
             // From Account（含手动 PROFIT WIN/LOSE）
-            $sql = "SELECT DATE(t.transaction_date) as date,
+            $sql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) as date,
                            COALESCE(SUM(CASE 
                                WHEN transaction_type = 'CONTRA' THEN t.amount
                                WHEN transaction_type = 'CLEAR' THEN t.amount
@@ -4124,8 +4139,8 @@ try {
                       AND t.transaction_date BETWEEN ? AND ?
                       AND t.transaction_type IN $dailyFromTxnTypes"
                 . $currency_filter_t_from . $clearFilter . $fromDomainFilter . $contraApproval . $dashTxnSubSql . "
-                    GROUP BY DATE(t.transaction_date)
-                    ORDER BY DATE(t.transaction_date)";
+                    GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
+                    ORDER BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
             $daily_stmt = $pdo->prepare($sql);
             $daily_stmt->execute(array_merge([$ledgerCompanyId], $account_ids, [$date_from_db, $date_to_db], $currency_params_t_from));
             foreach ($daily_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -4137,7 +4152,7 @@ try {
             if (!$isExpensesRole && !$kpiOnly) {
             try {
                 if (dashboardHasTransactionEntry($pdo)) {
-                    $sql = "SELECT DATE(h.transaction_date) as date,
+                    $sql = "SELECT IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date)) as date,
                                    COALESCE(SUM(CASE
                                        WHEN e.entry_type IN ('RATE_FIRST_FROM','RATE_TRANSFER_FROM') THEN -e.amount
                                        WHEN e.entry_type IN ('RATE_FIRST_TO','RATE_TRANSFER_TO') THEN -e.amount
@@ -4150,7 +4165,7 @@ try {
                               AND e.company_id = ?
                               AND e.account_id IN ($ids_placeholder)
                               AND h.transaction_date BETWEEN ? AND ?" . $currency_filter_e . $dashTxnSubSqlH . "
-                            GROUP BY DATE(h.transaction_date)";
+                            GROUP BY IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date))";
                     $daily_stmt = $pdo->prepare($sql);
                     $daily_stmt->execute(array_merge([$ledgerCompanyId, $ledgerCompanyId], $account_ids, [$date_from_db, $date_to_db], $currency_params_e));
                     foreach ($daily_stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -4234,15 +4249,15 @@ try {
                 $adjPeriodStmt->execute(array_merge([$company_id], $primaryAccountIds, [$date_from_db, $date_to_db], $profitAdjCurrencyParams));
                 $rolePeriodDelta = dashboardMoneySub($rolePeriodDelta, $adjPeriodStmt->fetchColumn() ?? '0');
             } else {
-            $adjDailySql = "SELECT DATE(t.transaction_date) AS date, COALESCE(SUM(t.amount), 0) AS adj_total
+            $adjDailySql = "SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date, COALESCE(SUM(t.amount), 0) AS adj_total
                             FROM transactions t
                             WHERE t.company_id = ?
                               AND t.transaction_type = 'PAYMENT'
                               AND t.from_account_id IN ($profitIdsPlaceholder)
                               AND t.transaction_date BETWEEN ? AND ?
                               AND t.sms LIKE '[DOMAIN_SHARE_COMMISSION|%'" . $profitAdjCurrencyFilter . $dashTxnSubSql . "
-                            GROUP BY DATE(t.transaction_date)
-                            ORDER BY DATE(t.transaction_date)";
+                            GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
+                            ORDER BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))";
             $adjDailyStmt = $pdo->prepare($adjDailySql);
             $adjDailyStmt->execute(array_merge([$company_id], $primaryAccountIds, [$date_from_db, $date_to_db], $profitAdjCurrencyParams));
             foreach ($adjDailyStmt->fetchAll(PDO::FETCH_ASSOC) as $adjRow) {
@@ -4305,7 +4320,7 @@ try {
         try {
             $rateMMSql = "
                 SELECT
-                    DATE(h.transaction_date) AS date,
+                    IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date)) AS date,
                     COALESCE(SUM(e.amount), 0) AS total
                 FROM transaction_entry e
                 JOIN transactions h ON e.header_id = h.id
@@ -4349,7 +4364,7 @@ try {
                     $rateMMStmt->execute($rateMMParams);
                     $rateMMPeriodTotal = (string) ($rateMMStmt->fetchColumn() ?? '0');
                 } else {
-                $rateMMSql .= " GROUP BY DATE(h.transaction_date)";
+                $rateMMSql .= " GROUP BY IF(@c168_dash_month=1,LEFT(h.transaction_date,7),DATE(h.transaction_date))";
                 $rateMMStmt = $pdo->prepare($rateMMSql);
                 $rateMMStmt->execute($rateMMParams);
                 while ($rateRow = $rateMMStmt->fetch(PDO::FETCH_ASSOC)) {
@@ -4464,6 +4479,7 @@ function dashboard_api_capture(array $queryParams): array
     $backupGlobals = [
         'DASHBOARD_KPI_ONLY' => $GLOBALS['DASHBOARD_KPI_ONLY'] ?? null,
         'DASHBOARD_EARNINGS_ONLY' => $GLOBALS['DASHBOARD_EARNINGS_ONLY'] ?? null,
+        'DASHBOARD_CHART_MONTHLY' => $GLOBALS['DASHBOARD_CHART_MONTHLY'] ?? null,
         'DASHBOARD_SUBSIDIARY_LEDGER' => $GLOBALS['DASHBOARD_SUBSIDIARY_LEDGER'] ?? null,
     ];
     foreach ($queryParams as $key => $value) {
@@ -4534,7 +4550,7 @@ function calculateProfitPaymentDailyFlow(
 
     if ($hasTransactionCurrency && $filter_currency_code !== null) {
         $sql = "
-            SELECT DATE(t.transaction_date) AS date,
+            SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                    COALESCE(SUM(
                      CASE
                        WHEN to_ac.account_id IS NOT NULL THEN -t.amount
@@ -4564,15 +4580,15 @@ function calculateProfitPaymentDailyFlow(
               AND UPPER(c.code) = ?
               " . ($hasContraApproval ? " AND (t.transaction_type <> 'CONTRA' OR t.approval_status = 'APPROVED')" : "") . "{$txnSubSql}
               AND (to_ac.account_id IS NOT NULL OR from_ac.account_id IS NOT NULL)
-            GROUP BY DATE(t.transaction_date)
-            ORDER BY DATE(t.transaction_date)
+            GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
+            ORDER BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
         ";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $date_from, $date_to, $filter_currency_code]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } else {
         $sql = "
-            SELECT DATE(t.transaction_date) AS date,
+            SELECT IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date)) AS date,
                    COALESCE(SUM(
                      CASE
                        WHEN to_ac.account_id IS NOT NULL THEN -t.amount
@@ -4598,8 +4614,8 @@ function calculateProfitPaymentDailyFlow(
               AND t.transaction_date BETWEEN ? AND ?
               " . ($hasContraApproval ? " AND (t.transaction_type <> 'CONTRA' OR t.approval_status = 'APPROVED')" : "") . "{$txnSubSql}
               AND (to_ac.account_id IS NOT NULL OR from_ac.account_id IS NOT NULL)
-            GROUP BY DATE(t.transaction_date)
-            ORDER BY DATE(t.transaction_date)
+            GROUP BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
+            ORDER BY IF(@c168_dash_month=1,LEFT(t.transaction_date,7),DATE(t.transaction_date))
         ";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$company_id, $date_from, $date_to]);
