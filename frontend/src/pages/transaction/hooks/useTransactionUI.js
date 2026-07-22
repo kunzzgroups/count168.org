@@ -56,7 +56,8 @@ export function useTransactionUI() {
         const res = await queryClient.fetchQuery({
           queryKey: transactionQueryKeys.contraInbox(scopeApi),
           queryFn: ({ signal }) => loadContraInbox({ ...scopeApi, signal }),
-          staleTime: 10_000,
+          // Always hit network — SSE / poll must not serve a stale badge count.
+          staleTime: 0,
           gcTime: 5 * 60_000,
         });
         if (res?.success) {

@@ -60,6 +60,10 @@ try {
     try {
         deleteContraTransaction($pdo, $transactionId, $scope);
         $pdo->commit();
+        require_once __DIR__ . '/../includes/ledger_realtime.php';
+        tx_ledger_realtime_publish_scope($scope, 'reject', [
+            'transaction_id' => $transactionId,
+        ]);
         api_success(null, 'Rejected and deleted');
     } catch (Exception $e) {
         $pdo->rollBack();

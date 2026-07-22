@@ -56,12 +56,18 @@ export function useTransactionSync({
   const typeSearchFormTypeRef = useRef(typeSearchFormType);
   const submitFocusActiveRef = useRef(submitFocusActive);
   const searchStateRef = useRef(searchState);
+  const canApproveContraRef = useRef(canApproveContra);
+  const refreshContraInboxBadgeRef = useRef(refreshContraInboxBadge);
+  const transactionScopeRef = useRef(transactionScope);
   runSearchRef.current = runSearch;
   runTypeSearchRef.current = runTypeSearch;
   typeSearchActiveRef.current = typeSearchActive;
   typeSearchFormTypeRef.current = typeSearchFormType;
   submitFocusActiveRef.current = submitFocusActive;
   searchStateRef.current = searchState;
+  canApproveContraRef.current = canApproveContra;
+  refreshContraInboxBadgeRef.current = refreshContraInboxBadge;
+  transactionScopeRef.current = transactionScope;
 
   useEffect(() => {
     let retryTimer = null;
@@ -184,22 +190,27 @@ export function useTransactionSync({
               forceRefresh: true,
               silent: true,
             });
-            return;
+          } else {
+            // submit-focus: do not clear focus ids — presentation layer keeps the narrow list.
+            await runSearchRef.current?.({
+              silent: true,
+              forceRefresh: true,
+              typeSearchOverride: false,
+              searchStateOverride: submitFocusActiveRef.current
+                ? {
+                    ...searchStateRef.current,
+                    showPaymentOnly: false,
+                    showCaptureOnly: false,
+                    showZeroBalance: true,
+                  }
+                : undefined,
+            });
           }
-          // submit-focus: do not clear focus ids — presentation layer keeps the narrow list.
-          await runSearchRef.current?.({
-            silent: true,
-            forceRefresh: true,
-            typeSearchOverride: false,
-            searchStateOverride: submitFocusActiveRef.current
-              ? {
-                  ...searchStateRef.current,
-                  showPaymentOnly: false,
-                  showCaptureOnly: false,
-                  showZeroBalance: true,
-                }
-              : undefined,
-          });
+          // Manager+ Contra Inbox badge/list must update on PENDING submit / approve / reject.
+          if (canApproveContraRef.current) {
+            const scopeApi = transactionScopeApiParams(transactionScopeRef.current);
+            await refreshContraInboxBadgeRef.current?.(scopeApi);
+          }
         } finally {
           refreshInFlight = false;
           if (lastSearchCommitMsRef) {

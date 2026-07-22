@@ -995,15 +995,14 @@ try {
 
         // 提交成功后，清理 Transaction List 搜索缓存，保证前端立刻能搜到最新余额
         clearTransactionSearchCache();
-        // Only broadcast when the row is effective (not PENDING approval).
-        if (!$is_pending_approval) {
-            require_once __DIR__ . '/../includes/ledger_realtime.php';
-            tx_ledger_realtime_publish_scope($listScope, 'submit', [
-                'transaction_type' => $transaction_type,
-                'transaction_date' => $transaction_date_db ?? null,
-                'transaction_id' => $transaction_id,
-            ]);
-        }
+        // Broadcast always: APPROVED refreshes ledgers; PENDING refreshes Manager Contra Inbox badges.
+        require_once __DIR__ . '/../includes/ledger_realtime.php';
+        tx_ledger_realtime_publish_scope($listScope, $is_pending_approval ? 'submit_pending' : 'submit', [
+            'transaction_type' => $transaction_type,
+            'transaction_date' => $transaction_date_db ?? null,
+            'transaction_id' => $transaction_id,
+            'approval_status' => $is_pending_approval ? 'PENDING' : 'APPROVED',
+        ]);
 
         // 返回成功响应
         $responsePayload = [
