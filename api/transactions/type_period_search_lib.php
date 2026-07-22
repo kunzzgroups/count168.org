@@ -62,7 +62,7 @@ function typePeriodSearchCurrencyJoin(PDO $pdo, array $listScope): array
  */
 function typePeriodSearchSupportedFormTypes(): array
 {
-    return ['CONTRA', 'PAYMENT', 'CLAIM', 'CLEAR', 'RATE', 'ADJUSTMENT', 'PROFIT'];
+    return ['CONTRA', 'PAYMENT', 'CLAIM', 'CLEAR', 'RATE', 'ADJUSTMENT', 'PROFIT', 'ALL'];
 }
 
 function typePeriodSearchIsDualSideManualType(string $formType): bool
@@ -146,7 +146,9 @@ function typePeriodSearchFetchEligibleAccountIds(PDO $pdo, array $listScope, str
     $pureManualSql = typeTxSearchPureManualSqlFragment($formType, 't');
     $txnTypeSql = typePeriodSearchIsProfitType($formType)
         ? "t.transaction_type IN ('WIN', 'LOSE')"
-        : 't.transaction_type = ' . $pdo->quote($formType);
+        : ($formType === 'ALL'
+            ? "t.transaction_type IN ('CONTRA', 'PAYMENT', 'CLAIM', 'CLEAR', 'RATE', 'ADJUSTMENT')"
+            : 't.transaction_type = ' . $pdo->quote($formType));
 
     $queries = [
         "SELECT DISTINCT t.account_id AS account_id
