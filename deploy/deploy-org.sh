@@ -51,7 +51,12 @@ if ! git fetch origin "$BRANCH"; then
   fix_repo_permissions
   git fetch origin "$BRANCH"
 fi
-git reset --hard "origin/${BRANCH}"
+if ! git reset --hard "origin/${BRANCH}"; then
+  echo "==> git reset failed (often frontend/dist dir not writable) — fixing perms and retry"
+  fix_repo_permissions
+  fix_web_permissions
+  git reset --hard "origin/${BRANCH}"
+fi
 
 fix_web_permissions
 
