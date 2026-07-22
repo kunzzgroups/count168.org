@@ -45,7 +45,7 @@
 Hook 注入时应等价于：
 
 ```text
-按 e2e-pipeline skill 执行：圈定本次改动相关路由 → 对 https://count168.site 用 Playwright MCP 冒烟 → Review → 输出 Bug 清单后停步等我确认再修。不要调用外部 Codex 扩展。Live 测的是已部署版本。
+按 e2e-pipeline skill 执行：圈定本次改动相关路由 → 对 https://count168.site 用 Playwright MCP 冒烟 → Review → 输出 Bug 清单后停步等我确认再修。Live 测的是已部署版本。
 ```
 
 ## 启用 / 关闭自动跟进

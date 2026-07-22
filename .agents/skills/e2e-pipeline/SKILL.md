@@ -9,7 +9,7 @@ description: >
 
 # E2E Pipeline（改 → Playwright 测 → Review → 确认后修）
 
-本仓库闭环。不调用外部 Codex 扩展；Review 用当前 Agent（优先 GPT-5.3 Codex 模型若用户已选）。
+本仓库闭环。Review 用当前 Agent（对照 diff + Playwright 结果）。
 
 默认约定（用户未另说时）：
 
@@ -44,7 +44,7 @@ description: >
 
 ### 3. Review
 
-在 Playwright 结果之上做一轮审查（同一会话，勿另开外部 Codex）：
+在 Playwright 结果之上做一轮审查：
 
 - 对照 `git diff`：逻辑回归、空数据、重复提交、多租户 scope、金额精度、`Asia/Kuala_Lumpur`
 - 对照本仓库编排红线（`.cursor/rules/00-orchestrator.mdc`）
@@ -93,5 +93,4 @@ description: >
 
 - 未映射路由就全站乱点
 - 清单未确认就大范围重构
-- 用外部 Codex MCP/扩展当下一跳（本 skill 不需要）
 - 登录失败仍声称「全部通过」
