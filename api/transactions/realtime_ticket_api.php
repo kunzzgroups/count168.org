@@ -20,6 +20,11 @@ try {
         exit;
     }
 
+    if (!$pdo instanceof PDO) {
+        api_error('Database connection failed', 503);
+        exit;
+    }
+
     $cfg = tx_ledger_realtime_config();
     if (!$cfg['enabled']) {
         api_success([
