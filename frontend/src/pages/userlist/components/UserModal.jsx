@@ -342,9 +342,8 @@ function UserModal({
       });
     };
 
-    // 仅在 open / accounts / processes 变化时同步一次等高。
-    // 不再挂 ResizeObserver：选 Role 导致 Read Only 显隐时列宽微变会触发
-    // 对上百张卡片 clear+getBoundingClientRect+write，是选 Role 卡顿主因之一。
+    // Defer equal-height sync until the browser is idle so Role clicks right after
+    // Add User are not blocked by hundreds of getBoundingClientRect writes.
     const syncGridCardHeights = (gridEl) => {
       if (!gridEl) return;
       const cards = gridEl.querySelectorAll(".user-modal-select-card");
@@ -368,12 +367,22 @@ function UserModal({
       syncGridCardHeights(processGridRef.current);
     };
 
-    const r1 = requestAnimationFrame(() => {
-      syncAll();
+    let idleId = 0;
+    let timeoutId = 0;
+    const rafId = requestAnimationFrame(() => {
+      if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+        idleId = window.requestIdleCallback(syncAll, { timeout: 2500 });
+      } else {
+        timeoutId = window.setTimeout(syncAll, 400);
+      }
     });
 
     return () => {
-      cancelAnimationFrame(r1);
+      cancelAnimationFrame(rafId);
+      if (idleId && typeof window !== "undefined" && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) window.clearTimeout(timeoutId);
       clearMinHeights(accountGridRef.current);
       clearMinHeights(processGridRef.current);
     };
@@ -386,21 +395,27 @@ function UserModal({
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
+    // One idle reflow is enough — triple sync was fighting Role interaction.
+    let idleId = 0;
+    let timeoutId = 0;
     const forceReflow = () => {
       const nodes = [modalBodyRef.current, cardRef.current];
       nodes.forEach((el) => {
         if (el) void el.getBoundingClientRect();
       });
     };
-    forceReflow();
-    const a = requestAnimationFrame(() => {
-      forceReflow();
-      requestAnimationFrame(() => {
-        forceReflow();
-      });
-    });
-    return () => cancelAnimationFrame(a);
+    if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+      idleId = window.requestIdleCallback(forceReflow, { timeout: 1500 });
+    } else {
+      timeoutId = window.setTimeout(forceReflow, 200);
+    }
+    return () => {
+      if (idleId && typeof window !== "undefined" && typeof window.cancelIdleCallback === "function") {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
   }, [open]);
 
   useEffect(() => {
