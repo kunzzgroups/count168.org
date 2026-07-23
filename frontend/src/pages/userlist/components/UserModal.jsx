@@ -82,16 +82,25 @@ function PermissionBulkActions({ className, permissionsLocked, permDisabledMap, 
         className="btn-secondary btn-select-all"
         disabled={permissionsLocked}
         onClick={() => {
-          const n = new Set();
-          visiblePermissionKeys.forEach((k) => {
-            if (!permDisabledMap[k]) n.add(k);
+          startTransition(() => {
+            const n = new Set();
+            visiblePermissionKeys.forEach((k) => {
+              if (!permDisabledMap[k]) n.add(k);
+            });
+            setPermSelected(n);
           });
-          setPermSelected(n);
         }}
       >
         {t("selectAll")}
       </button>
-      <button type="button" className="btn-clearall" disabled={permissionsLocked} onClick={() => setPermSelected(new Set())}>
+      <button
+        type="button"
+        className="btn-clearall"
+        disabled={permissionsLocked}
+        onClick={() => {
+          startTransition(() => setPermSelected(new Set()));
+        }}
+      >
         {t("clearAll")}
       </button>
     </div>
@@ -150,6 +159,34 @@ import { sanitizeEmailInput } from "../../../utils/input/emailValidation.js";
  * 本列 props（items/selectedIds/locked 等）不变即跳过重渲染，
  * 避免上百个 checkbox 卡片在每次角色切换时全量重建。
  */
+const AccessSelectCard = React.memo(function AccessSelectCard({
+  id,
+  idPrefix,
+  primary,
+  secondary,
+  checked,
+  locked,
+  onToggle,
+}) {
+  return (
+    <label
+      className={`account-item-compact account-item-compact--process user-modal-select-card${checked ? " is-selected" : ""}${locked ? " is-disabled" : ""}`}
+    >
+      <input
+        type="checkbox"
+        id={`${idPrefix}-${id}`}
+        checked={checked}
+        disabled={locked}
+        onChange={(e) => onToggle(id, e.target.checked)}
+      />
+      <span className="account-label account-label--process">
+        {primary}
+        {secondary ? <span className="account-label-desc">{secondary}</span> : null}
+      </span>
+    </label>
+  );
+});
+
 const SelectionColumn = React.memo(function SelectionColumn({
   variant,
   title,
@@ -168,6 +205,19 @@ const SelectionColumn = React.memo(function SelectionColumn({
     variant === "account"
       ? "user-modal-col user-modal-col--account account-process-col"
       : "user-modal-col user-modal-col--process account-process-col";
+
+  const onToggle = useCallback(
+    (id, checked) => {
+      setSelectedIds((prev) => {
+        const n = new Set(prev);
+        if (checked) n.add(Number(id));
+        else n.delete(Number(id));
+        return n;
+      });
+    },
+    [setSelectedIds],
+  );
+
   return (
     <div className={colClass} style={userModalColStyle}>
       <label className="acc-proc-label user-modal-col-title">{title}</label>
@@ -179,26 +229,16 @@ const SelectionColumn = React.memo(function SelectionColumn({
           const primary = variant === "account" ? it.account_id : it.process_id;
           const secondary = variant === "account" ? it.name : it.description;
           return (
-            <label key={it.id} className="account-item-compact account-item-compact--process user-modal-select-card">
-              <input
-                type="checkbox"
-                id={`${idPrefix}-${it.id}`}
-                checked={selectedIds.has(Number(it.id))}
-                disabled={locked}
-                onChange={(e) => {
-                  setSelectedIds((prev) => {
-                    const n = new Set(prev);
-                    if (e.target.checked) n.add(Number(it.id));
-                    else n.delete(Number(it.id));
-                    return n;
-                  });
-                }}
-              />
-              <span className="account-label account-label--process">
-                {primary}
-                {secondary ? <span className="account-label-desc">{secondary}</span> : null}
-              </span>
-            </label>
+            <AccessSelectCard
+              key={it.id}
+              id={it.id}
+              idPrefix={idPrefix}
+              primary={primary}
+              secondary={secondary}
+              checked={selectedIds.has(Number(it.id))}
+              locked={locked}
+              onToggle={onToggle}
+            />
           );
         })}
       </div>
@@ -207,7 +247,7 @@ const SelectionColumn = React.memo(function SelectionColumn({
           type="button"
           className="btn-account-control"
           disabled={locked}
-          onClick={() => runBulkSelection(() => setSelectedIds(new Set(idList)))}
+          onClick={() => runBulkSelection(variant, () => setSelectedIds(new Set(idList)))}
         >
           {t("selectAll")}
         </button>
@@ -215,7 +255,7 @@ const SelectionColumn = React.memo(function SelectionColumn({
           type="button"
           className="btn-clearall"
           disabled={locked}
-          onClick={() => runBulkSelection(() => setSelectedIds(new Set()))}
+          onClick={() => runBulkSelection(variant, () => setSelectedIds(new Set()))}
         >
           {t("clearAll")}
         </button>
@@ -268,7 +308,7 @@ function UserModal({
   const [companyPickerOpen, setCompanyPickerOpen] = useState(false);
   const [permissionPickerOpen, setPermissionPickerOpen] = useState(false);
   const [companySearchQuery, setCompanySearchQuery] = useState("");
-  const [bulkSelectionSettling, setBulkSelectionSettling] = useState(false);
+  const [bulkSettlingVariant, setBulkSettlingVariant] = useState(null);
   const bulkSelectionTimerRef = useRef(null);
   const { submitting, guardSubmit } = useSubmitGuard(open);
 
@@ -395,11 +435,13 @@ function UserModal({
   const accountIdList = useMemo(() => modalAccounts.map((x) => Number(x.id)), [modalAccounts]);
   const processIdList = useMemo(() => modalProcesses.map((x) => Number(x.id)), [modalProcesses]);
 
-  const runBulkSelection = useCallback((update) => {
+  const runBulkSelection = useCallback((variant, update) => {
     if (bulkSelectionTimerRef.current) clearTimeout(bulkSelectionTimerRef.current);
-    setBulkSelectionSettling(true);
-    update();
-    bulkSelectionTimerRef.current = setTimeout(() => setBulkSelectionSettling(false), 120);
+    setBulkSettlingVariant(variant);
+    startTransition(() => {
+      update();
+    });
+    bulkSelectionTimerRef.current = setTimeout(() => setBulkSettlingVariant(null), 120);
   }, []);
 
   const getCompanyPickerLabel = (companyRow) => {
@@ -702,7 +744,7 @@ function UserModal({
               setSelectedIds={setSelectedAccountIds}
               idList={accountIdList}
               locked={accountProcessLocked}
-              bulkSelectionSettling={bulkSelectionSettling}
+              bulkSelectionSettling={bulkSettlingVariant === "account"}
               runBulkSelection={runBulkSelection}
               t={t}
             />
@@ -717,7 +759,7 @@ function UserModal({
                 setSelectedIds={setSelectedProcessIds}
                 idList={processIdList}
                 locked={accountProcessLocked}
-                bulkSelectionSettling={bulkSelectionSettling}
+                bulkSelectionSettling={bulkSettlingVariant === "process"}
                 runBulkSelection={runBulkSelection}
                 t={t}
               />
@@ -959,11 +1001,13 @@ function UserModal({
                         className="btn-secondary btn-select-all"
                         disabled={permissionsLocked}
                         onClick={() => {
-                          const n = new Set();
-                          visiblePermissionKeys.forEach((k) => {
-                            if (!permDisabledMap[k]) n.add(k);
+                          startTransition(() => {
+                            const n = new Set();
+                            visiblePermissionKeys.forEach((k) => {
+                              if (!permDisabledMap[k]) n.add(k);
+                            });
+                            setPermSelected(n);
                           });
-                          setPermSelected(n);
                         }}
                       >
                         {t("selectAll")}
@@ -972,7 +1016,9 @@ function UserModal({
                         type="button"
                         className="btn-clearall"
                         disabled={permissionsLocked}
-                        onClick={() => setPermSelected(new Set())}
+                        onClick={() => {
+                          startTransition(() => setPermSelected(new Set()));
+                        }}
                       >
                         {t("clearAll")}
                       </button>
