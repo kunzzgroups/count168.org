@@ -562,6 +562,7 @@ function UserModal({
                       placeholder={t("selectRole")}
                       disabled={roleSelectDisabled || fieldLocks.role || pageReadOnlyLock}
                       forcePortal
+                      debugOpenFail
                       required
                     />
                   </div>

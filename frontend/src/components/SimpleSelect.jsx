@@ -6,6 +6,30 @@ import { useListboxKeyboard } from "./useListboxKeyboard.js";
 const MODAL_SELECTOR =
   ".modal, .process-modal, #confirmBankResendModal, [role='dialog'], .account-modal, #userModal, #account-addModal, #account-editModal, .domain-form-modal-backdrop";
 
+/** TEMP: set window.__SIMPLE_SELECT_DEBUG__ = false to silence; remove with debugOpenFail prop later. */
+function isSimpleSelectDebugEnabled(debugOpenFail) {
+  if (!debugOpenFail || typeof window === "undefined") return false;
+  return window.__SIMPLE_SELECT_DEBUG__ !== false;
+}
+
+function rectSnapshot(el) {
+  if (!el?.getBoundingClientRect) return null;
+  const r = el.getBoundingClientRect();
+  return {
+    top: Math.round(r.top),
+    left: Math.round(r.left),
+    width: Math.round(r.width),
+    height: Math.round(r.height),
+    bottom: Math.round(r.bottom),
+    right: Math.round(r.right),
+  };
+}
+
+function isRectVisible(r) {
+  if (!r || r.width <= 0 || r.height <= 0) return false;
+  return r.bottom > 0 && r.right > 0 && r.top < window.innerHeight && r.left < window.innerWidth;
+}
+
 /**
  * Lightweight custom dropdown — same look as Bank Process「Type」select.
  * Uses portal inside modals so lists are not clipped.
@@ -27,6 +51,8 @@ export default function SimpleSelect({
   dropdownCap = 260,
   minWidth = 180,
   forcePortal = false,
+  /** TEMP debug: log only when open attempt fails visibility checks. */
+  debugOpenFail = false,
 }) {
   const [open, setOpen] = useState(false);
   const [usePortal, setUsePortal] = useState(false);
@@ -36,6 +62,16 @@ export default function SimpleSelect({
   const wrapRef = useRef(null);
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
+  const openRef = useRef(false);
+  const usePortalRef = useRef(false);
+  const menuStyleRef = useRef(null);
+  const openAttemptIdRef = useRef(0);
+  const openAttemptAtRef = useRef(0);
+  const loggedAttemptIdsRef = useRef(new Set());
+
+  openRef.current = open;
+  usePortalRef.current = usePortal;
+  menuStyleRef.current = menuStyle;
 
   const renderItems = useMemo(() => {
     const items = [];
@@ -72,6 +108,73 @@ export default function SimpleSelect({
     initialIndex: initialHighlight,
     getItemLabel,
   });
+
+  const logOpenFail = useCallback(
+    (reason, extra = {}) => {
+      if (!isSimpleSelectDebugEnabled(debugOpenFail)) return;
+      const attemptId = openAttemptIdRef.current;
+      const dedupeKey = `${attemptId}:${reason}`;
+      if (loggedAttemptIdsRef.current.has(dedupeKey)) return;
+      loggedAttemptIdsRef.current.add(dedupeKey);
+      const btn = buttonRef.current;
+      const dd = dropdownRef.current;
+      const dropdownRect = rectSnapshot(dd);
+      // eslint-disable-next-line no-console
+      console.warn(`[SimpleSelect:${id || "unknown"}] open failed`, {
+        reason,
+        attemptId,
+        open: openRef.current,
+        usePortal: usePortalRef.current,
+        hasMenuStyle: !!menuStyleRef.current,
+        menuStyle: menuStyleRef.current,
+        disabled,
+        forcePortal,
+        inModal: !!wrapRef.current?.closest(MODAL_SELECTOR),
+        optionCount: options.length,
+        buttonRect: rectSnapshot(btn),
+        dropdownInDom: !!dd,
+        dropdownRect,
+        dropdownVisible: isRectVisible(dropdownRect),
+        zIndex: menuStyleRef.current?.zIndex ?? null,
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "",
+        ts: new Date().toISOString(),
+        ...extra,
+      });
+    },
+    [debugOpenFail, disabled, forcePortal, id, options.length],
+  );
+
+  const verifyOpenVisible = useCallback(
+    (attemptId, phase) => {
+      if (!isSimpleSelectDebugEnabled(debugOpenFail)) return;
+      if (attemptId !== openAttemptIdRef.current) return;
+
+      if (!openRef.current) {
+        const msSinceOpen = Date.now() - openAttemptAtRef.current;
+        if (msSinceOpen < 200) logOpenFail("closed_immediately", { phase, msSinceOpen });
+        return;
+      }
+
+      const dd = dropdownRef.current;
+      const dropdownRect = rectSnapshot(dd);
+
+      if (usePortalRef.current && !menuStyleRef.current) {
+        logOpenFail("portal_without_style", { phase });
+        return;
+      }
+      if (!dd) {
+        logOpenFail("dropdown_not_in_dom", { phase });
+        return;
+      }
+      if (!isRectVisible(dropdownRect)) {
+        logOpenFail(usePortalRef.current ? "dropdown_not_visible" : "clipped_inline", {
+          phase,
+          dropdownRect,
+        });
+      }
+    },
+    [debugOpenFail, logOpenFail],
+  );
 
   const close = useCallback(() => {
     setOpen(false);
@@ -115,6 +218,16 @@ export default function SimpleSelect({
       const target = e.target;
       if (wrapRef.current?.contains(target)) return;
       if (dropdownRef.current?.contains(target)) return;
+      const msSinceOpen = Date.now() - openAttemptAtRef.current;
+      // Only log suspicious instant dismiss (normal outside-click to close is fine).
+      if (isSimpleSelectDebugEnabled(debugOpenFail) && openAttemptIdRef.current && msSinceOpen < 200) {
+        logOpenFail("closed_by_outside_pointer", {
+          phase: "pointerdown",
+          msSinceOpen,
+          targetTag: target?.tagName || null,
+          targetClass: typeof target?.className === "string" ? target.className.slice(0, 120) : null,
+        });
+      }
       close();
     };
     // Defer so the opening gesture does not immediately close the menu.
@@ -125,22 +238,38 @@ export default function SimpleSelect({
       window.clearTimeout(timer);
       document.removeEventListener("pointerdown", fn, true);
     };
-  }, [open, close]);
+  }, [open, close, debugOpenFail, logOpenFail]);
 
   const selected = options.find((opt) => String(opt.value) === String(value));
   const displayLabel = selected ? selected.label : placeholder;
   const showPlaceholderTone = !selected && placeholder;
 
   const openDropdown = () => {
-    if (disabled) return;
+    if (disabled) {
+      logOpenFail("disabled", { phase: "click" });
+      return;
+    }
     const inModal = !!wrapRef.current?.closest(MODAL_SELECTOR);
     const shouldPortal = forcePortal || inModal;
+    const attemptId = openAttemptIdRef.current + 1;
+    openAttemptIdRef.current = attemptId;
+    openAttemptAtRef.current = Date.now();
     setUsePortal(shouldPortal);
+    usePortalRef.current = shouldPortal;
     if (!shouldPortal) setMenuPlacement("below");
     // Position before paint so portal menu never mounts without fixed coords
     // (unpositioned body portal looks like "dropdown stuck / won't open").
     if (shouldPortal) positionMenu();
     setOpen(true);
+    openRef.current = true;
+
+    if (isSimpleSelectDebugEnabled(debugOpenFail)) {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => verifyOpenVisible(attemptId, "raf2"));
+      });
+      window.setTimeout(() => verifyOpenVisible(attemptId, "t50"), 50);
+      window.setTimeout(() => verifyOpenVisible(attemptId, "t150"), 150);
+    }
   };
 
   const pick = (nextValue) => {
