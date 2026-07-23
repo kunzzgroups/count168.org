@@ -3,7 +3,9 @@ export function DashboardFilterPanel({
   effectiveDateRangeText,
   groupIds,
   selectedGroup,
+  displaySelectedGroup,
   groupsAllMode,
+  displayGroupsAllMode,
   groupAllMode,
   displayGroupAllMode,
   companiesForPicker,
@@ -25,6 +27,10 @@ export function DashboardFilterPanel({
     groupIds.length > 0 || companiesForPicker.length > 0 || currencies.length > 0;
   const paintedGroupAll =
     displayGroupAllMode !== undefined ? displayGroupAllMode : groupAllMode;
+  const paintedSelectedGroup =
+    displaySelectedGroup !== undefined ? displaySelectedGroup : selectedGroup;
+  const paintedGroupsAll =
+    displayGroupsAllMode !== undefined ? displayGroupsAllMode : groupsAllMode;
 
   return (
     <div className="dashboard-card dashboard-filter-panel action-buttons-container">
@@ -62,7 +68,7 @@ export function DashboardFilterPanel({
                 <div className="user-gc-segment-group" role="group" aria-label={i18n.groupId}>
                   <button
                     type="button"
-                    className={`user-gc-segment${groupsAllMode ? " is-on" : ""}`}
+                    className={`user-gc-segment${paintedGroupsAll ? " is-on" : ""}`}
                     onClick={() => void onPickAllGroups?.()}
                   >
                     {i18n.all}
@@ -71,7 +77,9 @@ export function DashboardFilterPanel({
                     <button
                       key={gid}
                       type="button"
-                      className={`user-gc-segment${selectedGroup === gid && !groupsAllMode ? " is-on" : ""}`}
+                      className={`user-gc-segment${
+                        paintedSelectedGroup === gid && !paintedGroupsAll ? " is-on" : ""
+                      }`}
                       onClick={() => void onPickGroup(gid)}
                     >
                       {gid}

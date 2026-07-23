@@ -300,14 +300,20 @@ export default function AddTransactionSheet({
       if (!parsedRate.valid) return pushToast(m.pleaseEnterValidRateValue, "error");
       if (!rateDate) return pushToast(m.pleaseSelectTransactionDate, "error");
       const middleId = rateMiddlemanAccount?.id ? String(rateMiddlemanAccount.id) : "";
-      if ((middleId || String(rateMiddlemanRate || "").trim()) && !middleId) {
+      const mmrNorm = String(rateMiddlemanRate ?? "").replace(/,/g, "").trim();
+      const mmFeeNorm = String(rateMiddlemanInputAmount ?? "").replace(/,/g, "").trim();
+      const hasMiddleRate = mmrNorm !== "";
+      const hasMiddleFee = mmFeeNorm !== "";
+      if ((hasMiddleRate || hasMiddleFee) && !middleId) {
         return pushToast(m.pleaseSelectMiddleManAccount, "error");
       }
-      if ((middleId || String(rateMiddlemanRate || "").trim()) && (!rateMiddlemanRate || Number(rateMiddlemanRate) <= 0)) {
+      if (middleId && !hasMiddleRate && !hasMiddleFee) {
+        return pushToast(m.pleaseEnterMiddleManRateOrFee, "error");
+      }
+      if (hasMiddleRate && (!Number.isFinite(Number(mmrNorm)) || Number(mmrNorm) <= 0)) {
         return pushToast(m.pleaseEnterMiddleManRate, "error");
       }
-      const mmrNorm = String(rateMiddlemanRate ?? "").replace(/,/g, "").trim();
-      if (middleId && mmrNorm !== "" && countRateDecimalPlaces(mmrNorm) > 8) {
+      if (hasMiddleRate && countRateDecimalPlaces(mmrNorm) > 8) {
         return pushToast(m.middleManRateMaxDecimals, "error");
       }
 

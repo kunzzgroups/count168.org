@@ -389,19 +389,29 @@ export function useTransactionForm({
       }
 
       const middleId = rateMiddlemanAccount?.id ? String(rateMiddlemanAccount.id) : "";
-
-      if ((middleId || String(rateMiddlemanRate || "").trim()) && !middleId) {
-        pushToast(m.pleaseSelectMiddleManAccount, "error");
-        return;
-      }
-      if ((middleId || String(rateMiddlemanRate || "").trim()) && (!rateMiddlemanRate || Number(rateMiddlemanRate) <= 0)) {
-        pushToast(m.pleaseEnterMiddleManRate, "error");
-        return;
-      }
       const mmrNorm = String(rateMiddlemanRate ?? "")
         .replace(/,/g, "")
         .trim();
-      if (middleId && mmrNorm !== "" && countRateDecimalPlaces(mmrNorm) > 8) {
+      const mmFeeNorm = String(rateMiddlemanInputAmount ?? "")
+        .replace(/,/g, "")
+        .trim();
+      const hasMiddleRate = mmrNorm !== "";
+      const hasMiddleFee = mmFeeNorm !== "";
+
+      // Middle-Man: account alone needs rate multiplier OR fee; rate/fee alone still need account.
+      if ((hasMiddleRate || hasMiddleFee) && !middleId) {
+        pushToast(m.pleaseSelectMiddleManAccount, "error");
+        return;
+      }
+      if (middleId && !hasMiddleRate && !hasMiddleFee) {
+        pushToast(m.pleaseEnterMiddleManRateOrFee, "error");
+        return;
+      }
+      if (hasMiddleRate && (!Number.isFinite(Number(mmrNorm)) || Number(mmrNorm) <= 0)) {
+        pushToast(m.pleaseEnterMiddleManRate, "error");
+        return;
+      }
+      if (hasMiddleRate && countRateDecimalPlaces(mmrNorm) > 8) {
         pushToast(m.middleManRateMaxDecimals, "error");
         return;
       }
