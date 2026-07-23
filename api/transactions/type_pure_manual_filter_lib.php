@@ -27,7 +27,7 @@ function typeTxSearchBuildDescription(array $row): string
  */
 function typeTxSearchSupportsPureManualFilter(string $formType): bool
 {
-    return in_array(strtoupper(trim($formType)), ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'RATE', 'PROFIT'], true);
+    return in_array(strtoupper(trim($formType)), ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'RATE', 'PROFIT', 'ALL'], true);
 }
 
 /**
@@ -113,10 +113,19 @@ function typeTxSearchPassesPureManualFilter(string $formType, array $row): bool
             return strpos($canonical, 'CONTRA FROM ') === 0;
         case 'CLAIM':
             return strpos($canonical, 'CLAIM FROM ') === 0;
-        case 'CLEAR':
-            return strpos($canonical, 'CLEAR FROM ') === 0;
         case 'ADJUSTMENT':
             return strpos($canonical, 'ADJUSTMENT - WIN/LOSS') === 0;
+        case 'ALL':
+            $isManual = strpos($canonical, 'PAYMENT FROM ') === 0
+                || strpos($canonical, 'CONTRA FROM ') === 0
+                || strpos($canonical, 'CLAIM FROM ') === 0
+                || strpos($canonical, 'CLEAR FROM ') === 0
+                || strpos($canonical, 'ADJUSTMENT - WIN/LOSS') === 0;
+            if (!$isManual) {
+                return false;
+            }
+
+            return !typeTxSearchIsExcludedNonManualPayment((string) ($row['sms'] ?? ''), $canonical);
         case 'PROFIT':
             return typeTxSearchIsManualProfitTransaction($row);
         default:
@@ -159,7 +168,7 @@ function typeTxSearchPureRateEntrySqlFragment(string $alias = 'e'): string
 function typeTxSearchPureManualSqlFragment(string $formType, string $alias = 't'): string
 {
     $formType = strtoupper(trim($formType));
-    if (!in_array($formType, ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'PROFIT'], true)) {
+    if (!in_array($formType, ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR', 'ADJUSTMENT', 'PROFIT', 'ALL'], true)) {
         return '';
     }
 
@@ -169,6 +178,27 @@ function typeTxSearchPureManualSqlFragment(string $formType, string $alias = 't'
     $hasFrom = "{$alias}.from_account_id IS NOT NULL AND {$alias}.from_account_id > 0";
 
     switch ($formType) {
+        case 'ALL':
+            return " AND (
+                    ({$emptyDesc} AND {$hasFrom})
+                    OR {$desc} LIKE 'PAYMENT FROM %'
+                    OR {$desc} LIKE 'CONTRA FROM %'
+                    OR {$desc} LIKE 'CLAIM FROM %'
+                    OR {$desc} LIKE 'CLEAR FROM %'
+                    OR {$desc} LIKE 'ADJUSTMENT - WIN/LOSS%'
+                )
+                AND {$sms} NOT LIKE '[DOMAIN_SHARE_COMMISSION|%'
+                AND {$sms} NOT LIKE '[AUTO_RENEW|COMMISSION|%'
+                AND {$sms} NOT LIKE '[DOMAIN_NET_PROFIT|%'
+                AND {$sms} NOT LIKE '[AUTO_RENEW|NET_PROFIT|%'
+                AND {$sms} NOT LIKE '[DOMAIN_LIST_FEE|%'
+                AND {$desc} NOT LIKE 'DOMAIN LIST FEE FROM %'
+                AND {$desc} NOT LIKE 'PAY DOMAIN FEE%'
+                AND NOT (
+                    {$sms} LIKE '[AUTO_RENEW|%'
+                    AND {$sms} NOT LIKE '[AUTO_RENEW|COMMISSION|%'
+                    AND {$sms} NOT LIKE '[AUTO_RENEW|NET_PROFIT|%'
+                )";
         case 'PAYMENT':
             return " AND (
                     ({$emptyDesc} AND {$hasFrom})

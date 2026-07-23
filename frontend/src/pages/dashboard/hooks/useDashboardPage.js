@@ -630,6 +630,15 @@ function dashboardPayloadNeedsChartDaily(data) {
   );
 }
 
+/**
+ * Any painted→target scope change (company / date / group / All):
+ * KPI + trend + pie must swap in one frame — never paint cards/chart ahead of pie.
+ */
+function dashboardRequiresPieAtomicPaint(displayKey, targetKey) {
+  if (!targetKey) return false;
+  return String(displayKey || "") !== String(targetKey || "");
+}
+
 /** Mark payload so empty years do not re-fetch chart forever. */
 function markDashboardChartSettled(data) {
   if (!data || typeof data !== "object") return data;
@@ -847,6 +856,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const [companyAccessModal, setCompanyAccessModal] = useState({ open: false, message: "" });
   /** Matches `dashboardScopeKey` when `dashboardData` reflects the active filter scope. */
   const [displayScopeKey, setDisplayScopeKey] = useState("");
+  const displayScopeKeyRef = useRef(displayScopeKey);
+  displayScopeKeyRef.current = displayScopeKey;
 
   const currencyCodeRef = useRef(currencyCode);
   const earningsFetchGenRef = useRef(0);
@@ -3587,8 +3598,16 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     (key, cached, { codes = currencies } = {}) => {
       if (!key || !cached?.current) return false;
       const multiCodes = Array.isArray(codes) && codes.length > 1 ? codes : null;
-      // KPI + trend must be chart-settled together; pie may fill after paint.
+      // Never paint KPI/trend without settled chart series.
       if (dashboardPayloadNeedsChartDaily(cached.current)) return false;
+      // Date-range change (This Year): wait for complete pie — one atomic swap.
+      const requirePie = dashboardRequiresPieAtomicPaint(displayScopeKeyRef.current, key);
+      if (multiCodes && requirePie) {
+        const readyEarnings =
+          getCompleteCachedEarnings(cached, multiCodes) ||
+          (cacheEntryHasFullEarnings(cached, multiCodes) ? cached.earnings : null);
+        if (!readyEarnings) return false;
+      }
 
       setDashboardData(cached.current);
       dashboardDataRef.current = cached.current;
@@ -4594,6 +4613,116 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       if (!accessible.length) {
         throw new Error(i18n.failedToLoadDashboard);
       }
+
+      const viewGroupHint = String(viewGroupFallback ?? selectedGroup ?? "")
+        .trim()
+        .toUpperCase();
+      const cur = currencyOverride ?? currencyCodeRef.current;
+      const ids = accessible
+        .map((c) => parseInt(c.id, 10))
+        .filter((id) => Number.isFinite(id) && id > 0);
+
+      /** One HTTP: server runs per-company packs in-process; FE still owns mergeGroupData. */
+      const tryGroupAllBootstrap = async () => {
+        if (!ids.length || ids.length > 40) return null;
+        // Heterogeneous view_group (Groups All) — keep parallel per-company fetches.
+        const sameViewGroup = accessible.every((c) => {
+          const vg = resolveViewGroupForCompany(c, viewGroupFallback ?? selectedGroup);
+          return String(vg || "").trim().toUpperCase() === viewGroupHint;
+        });
+        if (!sameViewGroup || !viewGroupHint) return null;
+
+        const q = new URLSearchParams({
+          date_from: rangeFrom,
+          date_to: rangeTo,
+          group_all: "1",
+          company_ids: ids.join(","),
+          view_group: viewGroupHint,
+          bootstrap_scope: earningsOnly ? "earnings" : "full",
+        });
+        if (cur) q.set("currency", cur);
+        const codes = currenciesRef.current;
+        if (Array.isArray(codes) && codes.length > 1) {
+          q.set("currencies", codes.join(","));
+        }
+        if (!earningsOnly && shouldAggregateChartByMonth(rangeFrom, rangeTo)) {
+          q.set("chart_monthly", "1");
+        }
+
+        const { res, json } = await fetchBootstrapHttpDeduped(
+          bootstrapInflightRef.current,
+          q.toString(),
+          { credentials: "include" }
+        );
+        if (!res.ok || !json?.success || !json?.data?.group_all || !Array.isArray(json.data.companies)) {
+          return null;
+        }
+
+        const byId = new Map(
+          json.data.companies.map((row) => [parseInt(row.company_id, 10), row])
+        );
+        const pairs = [];
+        for (const c of accessible) {
+          const cid = parseInt(c.id, 10);
+          const pack = byId.get(cid);
+          const data = earningsOnly
+            ? pack?.current ?? pack?.earnings?.current?.[0]?.payload ?? null
+            : pack?.current;
+          if (!data) continue;
+          const viewGroup = resolveViewGroupForCompany(c, viewGroupFallback ?? selectedGroup);
+          seedDashboardPayloadCacheForCompany(cid, viewGroup, rangeFrom, rangeTo, cur, data);
+          if (!earningsOnly && pack?.previous) {
+            const prevRange = previousMonthEquivalentRange(rangeFrom, rangeTo);
+            seedDashboardPayloadCacheForCompany(
+              cid,
+              viewGroup,
+              prevRange.from,
+              prevRange.to,
+              cur,
+              pack.previous
+            );
+          }
+          pairs.push({ company: c, data, viewGroup });
+        }
+        if (!pairs.length) return null;
+
+        const merged = mergeGroupData(
+          pairs.map((p) => p.data),
+          { startDate: rangeFrom, endDate: rangeTo }
+        );
+        const byCompany = buildCompanyNetProfitRowsFromPairs(
+          pairs,
+          viewGroupFallback ?? selectedGroup
+        );
+        if (byCompany.length) {
+          merged.subsidiary_earnings_by_company = byCompany;
+        }
+        if (!earningsOnly && codes?.length > 1) {
+          const lists = [];
+          for (const c of accessible) {
+            const pack = byId.get(parseInt(c.id, 10));
+            if (!pack?.earnings?.current?.length) continue;
+            const rows = earningsRowsFromBootstrapEntries(
+              pack.earnings.current,
+              parseInt(c.id, 10),
+              resolveViewGroupForCompany(c, viewGroupFallback ?? selectedGroup)
+            );
+            if (rows.length) lists.push(rows);
+          }
+          if (lists.length) {
+            merged._group_all_earnings_by_currency = mergeEarningsByCurrency(lists, codes);
+          }
+        }
+        return merged;
+      };
+
+      try {
+        const bootMerged = await tryGroupAllBootstrap();
+        if (bootMerged) return bootMerged;
+      } catch {
+        /* fall back to parallel dashboard_api */
+      }
+
       const settled = await runTasksInBatches(
         accessible,
         MERGE_DASHBOARD_PARALLEL_BATCH,
@@ -4643,7 +4772,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       }
       return merged;
     },
-    [fetchDashboardPayload, selectedGroup, companies, i18n.failedToLoadDashboard]
+    [
+      fetchDashboardPayload,
+      selectedGroup,
+      companies,
+      i18n.failedToLoadDashboard,
+      seedDashboardPayloadCacheForCompany,
+      earningsRowsFromBootstrapEntries,
+    ]
   );
 
   const fetchGroupAllMergedDashboard = useCallback(
@@ -5842,12 +5978,16 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       Array.isArray(multiCurrencyCodes) && multiCurrencyCodes.length > 1;
     setLoadError("");
 
-    /** Fill chart then paint; previous/earnings hydrate in background so switches aren't blocked by pie. */
+    /** Paint cache when chart (and on date-change, pie) are ready — freeze prior UI until then. */
     const materializeCachedDashboard = async (entry) => {
       if (!entry?.current) return false;
       let currentCached = entry.current;
       let previousCached = entry.previous ?? null;
       let earningsCached = getCompleteCachedEarnings(entry, multiCurrencyCodes);
+      const requirePie = dashboardRequiresPieAtomicPaint(
+        displayScopeKeyRef.current,
+        cacheKey
+      );
 
       if (dashboardPayloadNeedsChartDaily(currentCached)) {
         try {
@@ -5866,37 +6006,66 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         currentCached = markDashboardChartSettled(currentCached);
       }
 
-      if (!previousCached && !allCurrenciesActive) {
-        void loadDashboardViaBootstrap({ scope: "previous" })
-          .then((prevBoot) => {
-            if (gen !== dashboardFetchGenRef.current) return;
-            if (!prevBoot?.previous) return;
-            setDashboardDataPrev(prevBoot.previous);
-            patchDashboardCache(cacheKey, { previous: prevBoot.previous });
-          })
-          .catch(() => {});
-      }
-
       if (needsMultiCurrencyEarnings && !earningsCached) {
-        void (async () => {
+        if (requirePie) {
           try {
             const earnBoot = await loadDashboardViaBootstrap({
               scope: "earnings",
               currencyCodesOverride: multiCurrencyCodes,
             });
-            if (gen !== dashboardFetchGenRef.current) return;
+            if (gen !== dashboardFetchGenRef.current) return false;
             if (Array.isArray(earnBoot?.earningsCurrent) && earnBoot.earningsCurrent.length > 1) {
-              setEarningsByCurrency(earnBoot.earningsCurrent);
-              setEarningsByCurrencyPrev(earnBoot.earningsPrevious ?? []);
-              setEarningsByCurrencyLoading(false);
-              patchDashboardCache(cacheKey, { earnings: earnBoot.earningsCurrent });
-            } else {
-              void upgradeActiveScopeEarnings();
+              earningsCached = earnBoot.earningsCurrent;
             }
           } catch {
-            void upgradeActiveScopeEarnings();
+            /* fall through */
           }
-        })();
+          if (!earningsCached) {
+            setLoading(true);
+            return false;
+          }
+        } else {
+          void (async () => {
+            try {
+              const earnBoot = await loadDashboardViaBootstrap({
+                scope: "earnings",
+                currencyCodesOverride: multiCurrencyCodes,
+              });
+              if (gen !== dashboardFetchGenRef.current) return;
+              if (Array.isArray(earnBoot?.earningsCurrent) && earnBoot.earningsCurrent.length > 1) {
+                setEarningsByCurrency(earnBoot.earningsCurrent);
+                setEarningsByCurrencyPrev(earnBoot.earningsPrevious ?? []);
+                setEarningsByCurrencyLoading(false);
+                patchDashboardCache(cacheKey, { earnings: earnBoot.earningsCurrent });
+              } else {
+                void upgradeActiveScopeEarnings();
+              }
+            } catch {
+              void upgradeActiveScopeEarnings();
+            }
+          })();
+        }
+      }
+
+      if (!previousCached && !allCurrenciesActive) {
+        if (requirePie) {
+          try {
+            const prevBoot = await loadDashboardViaBootstrap({ scope: "previous" });
+            if (gen !== dashboardFetchGenRef.current) return false;
+            if (prevBoot?.previous) previousCached = prevBoot.previous;
+          } catch {
+            /* MoM optional */
+          }
+        } else {
+          void loadDashboardViaBootstrap({ scope: "previous" })
+            .then((prevBoot) => {
+              if (gen !== dashboardFetchGenRef.current) return;
+              if (!prevBoot?.previous) return;
+              setDashboardDataPrev(prevBoot.previous);
+              patchDashboardCache(cacheKey, { previous: prevBoot.previous });
+            })
+            .catch(() => {});
+        }
       }
 
       setDashboardData(currentCached);
@@ -6059,10 +6228,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
       if (canUseDashboardBootstrap) {
         try {
-          // Long range (This Year): one `full` pack (KPI + monthly chart + previous + earnings).
-          // Short range: kpi first, then background previous/earnings.
+          // Long range / any scope swap: prefer `full` so KPI+chart+earnings arrive together.
           const longRange = shouldAggregateChartByMonth(dateFrom, dateTo);
-          const primaryBootstrapScope = longRange ? "full" : "kpi";
+          const requirePie = dashboardRequiresPieAtomicPaint(
+            displayScopeKeyRef.current,
+            cacheKey
+          );
+          const primaryBootstrapScope = longRange || requirePie ? "full" : "kpi";
           const boot = await loadDashboardViaBootstrap({
             scope: primaryBootstrapScope,
             currencyOverride: provisionalCurrency || undefined,
@@ -6084,14 +6256,23 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
               companyId,
               selectedGroup
             );
-            // `full` / long-range responses already include monthly chart buckets.
             if (longRange || !dashboardPayloadNeedsChartDaily(currentPayload)) {
               currentPayload = markDashboardChartSettled(currentPayload);
             }
           }
 
           const paintBootstrap = () => {
-            if (!currentPayload || dashboardPayloadNeedsChartDaily(currentPayload)) return;
+            if (!currentPayload || dashboardPayloadNeedsChartDaily(currentPayload)) return false;
+            const pieReady =
+              !needsMultiCurrencyEarnings ||
+              (Array.isArray(earningsCurrent) &&
+                earningsCurrent.length > 1 &&
+                dashboardEarningsRowsComplete(
+                  earningsCurrent,
+                  codesForEarnings || currenciesRef.current
+                ));
+            if (requirePie && needsMultiCurrencyEarnings && !pieReady) return false;
+
             current = currentPayload;
             setMultiCurrencyKpi(null);
             setMultiCurrencyKpiPrev(null);
@@ -6118,6 +6299,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                 resolveDashboardScopeKey
               );
             } else if (needsMultiCurrencyEarnings) {
+              // Should not paint partial pie on scope swap (gated above).
               const primary = currencyCodeRef.current;
               const metrics = computeCurrencyMetricsFromPayload(current);
               setEarningsByCurrency(
@@ -6136,10 +6318,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
             setDashboardCache(cacheKey, cacheEntry);
             setLoading(false);
+            return true;
           };
 
-          // Paint as soon as KPI+chart are ready — do not block on previous/earnings RTTs.
-          paintBootstrap();
+          // Only paint early when already on this scope (same-key refresh).
+          if (!requirePie) {
+            paintBootstrap();
+          }
 
           const panelTasks = [];
 
@@ -6151,8 +6336,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                   if (gen !== dashboardFetchGenRef.current) return;
                   if (prevBoot?.previous) {
                     previousPayload = prevBoot.previous;
-                    setDashboardDataPrev(previousPayload);
-                    patchDashboardCache(cacheKey, { previous: previousPayload });
+                    if (!requirePie) {
+                      setDashboardDataPrev(previousPayload);
+                      patchDashboardCache(cacheKey, { previous: previousPayload });
+                    }
                   }
                 } catch {
                   /* MoM optional */
@@ -6173,10 +6360,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                   currentPayload = markDashboardChartSettled(
                     applyDashboardPayloadAdjustments(withDaily, companyId, selectedGroup)
                   );
-                  paintBootstrap();
+                  if (!requirePie) paintBootstrap();
                 } catch {
                   currentPayload = markDashboardChartSettled(currentPayload);
-                  paintBootstrap();
+                  if (!requirePie) paintBootstrap();
                 }
               })()
             );
@@ -6197,15 +6384,17 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                   if (Array.isArray(earnBoot?.earningsCurrent) && earnBoot.earningsCurrent.length > 1) {
                     earningsCurrent = earnBoot.earningsCurrent;
                     earningsPrevious = earnBoot.earningsPrevious ?? null;
-                    setEarningsByCurrency(earningsCurrent);
-                    setEarningsByCurrencyPrev(earningsPrevious ?? []);
-                    setEarningsByCurrencyLoading(false);
-                    patchDashboardCache(cacheKey, { earnings: earningsCurrent });
-                    mirrorDashboardEarningsAcrossCurrencies(
-                      earningsCurrent,
-                      codesForEarnings || currenciesRef.current,
-                      resolveDashboardScopeKey
-                    );
+                    if (!requirePie) {
+                      setEarningsByCurrency(earningsCurrent);
+                      setEarningsByCurrencyPrev(earningsPrevious ?? []);
+                      setEarningsByCurrencyLoading(false);
+                      patchDashboardCache(cacheKey, { earnings: earningsCurrent });
+                      mirrorDashboardEarningsAcrossCurrencies(
+                        earningsCurrent,
+                        codesForEarnings || currenciesRef.current,
+                        resolveDashboardScopeKey
+                      );
+                    }
                   }
                 } catch {
                   /* Pie fills later if needed */
@@ -6219,7 +6408,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             if (gen !== dashboardFetchGenRef.current) return;
           }
 
-          paintBootstrap();
+          // Recompute readiness after fills (earningsCurrent may have updated).
+          const painted = paintBootstrap();
+          if (requirePie && !painted) {
+            setLoading(true);
+            return;
+          }
           return;
         } catch {
           /* Fall back to legacy per-endpoint loading. */
@@ -6283,7 +6477,32 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           current,
           previous: warmedGroupAll?.previous ?? cached?.previous ?? null,
         };
-        if (groupAllMode && needsMultiCurrencyEarnings && !warmedGroupAll?.earnings?.length) {
+        const bootEarnings = current?._group_all_earnings_by_currency;
+        if (
+          groupAllMode &&
+          needsMultiCurrencyEarnings &&
+          Array.isArray(bootEarnings) &&
+          bootEarnings.length > 1 &&
+          dashboardEarningsRowsComplete(bootEarnings, codesForEarnings || currenciesRef.current)
+        ) {
+          setEarningsByCurrency(bootEarnings);
+          setEarningsByCurrencyPrev([]);
+          setEarningsByCurrencyLoading(false);
+          cachePatch.earnings = bootEarnings;
+          mirrorDashboardEarningsAcrossCurrencies(
+            bootEarnings,
+            codesForEarnings || currenciesRef.current,
+            resolveDashboardScopeKey
+          );
+          // Drop ephemeral merge hint before caching the KPI payload.
+          if (current && current._group_all_earnings_by_currency) {
+            const { _group_all_earnings_by_currency: _drop, ...rest } = current;
+            current = rest;
+            cachePatch.current = rest;
+            setDashboardData(rest);
+            dashboardDataRef.current = rest;
+          }
+        } else if (groupAllMode && needsMultiCurrencyEarnings && !warmedGroupAll?.earnings?.length) {
           const codes = codesForEarnings || currenciesRef.current;
           const primary = currencyCode;
           const primaryMetrics = computeCurrencyMetricsFromPayload(current);

@@ -1370,7 +1370,22 @@ try {
 
     // 获取参数
     $account_id = (int) ($_GET['account_id'] ?? 0);
+    $account_code = trim((string) ($_GET['account_code'] ?? $_GET['account_id'] ?? ''));
     $virtual_company_code = strtoupper(trim((string) ($_GET['virtual_company_code'] ?? '')));
+
+    if ($account_id <= 0 && $account_code !== '') {
+        try {
+            $stAcc = $pdo->prepare("SELECT id FROM account WHERE account_id = ? LIMIT 1");
+            $stAcc->execute([$account_code]);
+            $accRow = $stAcc->fetch(PDO::FETCH_ASSOC);
+            if ($accRow && !empty($accRow['id'])) {
+                $account_id = (int) $accRow['id'];
+            }
+        } catch (Throwable $e) {
+            /* skip */
+        }
+    }
+
     $date_from = $_GET['date_from'] ?? null;
     $date_to = $_GET['date_to'] ?? null;
     $currency = $_GET['currency'] ?? null; // 可选：按 data_capture 的 currency 筛选

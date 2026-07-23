@@ -422,7 +422,10 @@ export async function getHistory({
     groupAggregate,
     subsidiaryAccountsOnly,
   });
-  if (accountId != null && accountId !== "") params.set("account_id", String(accountId));
+  const numericAccountId = Number(accountId);
+  if (Number.isFinite(numericAccountId) && numericAccountId > 0) {
+    params.set("account_id", String(numericAccountId));
+  }
   if (dateFrom) params.set("date_from", String(dateFrom));
   if (dateTo) params.set("date_to", String(dateTo));
   if (currency) params.set("currency", String(currency));

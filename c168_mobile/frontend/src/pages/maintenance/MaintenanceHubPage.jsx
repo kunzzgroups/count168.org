@@ -5,6 +5,7 @@ import { fetchJson } from "../../lib/fetchJson.js";
 import { maintenanceText } from "../../translateFile/maintenanceTranslate.js";
 import { buildApiUrl } from "../../utils/apiUrl.js";
 import {
+  canAccessBankProcess,
   canAccessMaintenance,
   canAccessPaymentMaintenance,
   canAccessTransactionMaintenance,
@@ -84,8 +85,18 @@ export default function MaintenanceHubPage() {
   const setup = [
     { icon: "fa-database", label: i18n.setupDataCapture },
     { icon: "fa-square-root-variable", label: i18n.setupFormula },
-    { icon: "fa-building-columns", label: i18n.setupBank },
   ];
+  if (canAccessBankProcess(me)) {
+    setup.push({
+      to: "/maintenance/bank-process",
+      icon: "fa-building-columns",
+      label: i18n.setupBank,
+      desc: i18n.setupBankDesc,
+      features: i18n.setupBankFeatures,
+    });
+  } else {
+    setup.push({ icon: "fa-building-columns", label: i18n.setupBank });
+  }
 
   return (
     <MobileShell
@@ -132,15 +143,29 @@ export default function MaintenanceHubPage() {
 
             <p className="m-mt-section-label">{i18n.sectionSetup}</p>
             <div className="m-mt-setup-list">
-              {setup.map((s) => (
-                <div key={s.label} className="m-mt-setup-row">
-                  <span className="m-mt-setup-icon">
-                    <i className={`fas ${s.icon}`} aria-hidden="true" />
-                  </span>
-                  <span className="m-mt-setup-label">{s.label}</span>
-                  <span className="m-mt-soon">{i18n.comingSoon}</span>
-                </div>
-              ))}
+              {setup.map((item) =>
+                item.to ? (
+                  <Link key={item.label} to={item.to} className="m-mt-record-card tap-scale">
+                    <span className="m-mt-record-icon is-violet">
+                      <i className={`fas ${item.icon}`} aria-hidden="true" />
+                    </span>
+                    <span className="m-mt-record-copy">
+                      <strong>{item.label}</strong>
+                      {item.desc ? <small>{item.desc}</small> : null}
+                      {item.features ? <em className="m-mt-record-features">{item.features}</em> : null}
+                    </span>
+                    <i className="fas fa-chevron-right m-mt-record-chevron" aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <div key={item.label} className="m-mt-setup-row">
+                    <span className="m-mt-setup-icon">
+                      <i className={`fas ${item.icon}`} aria-hidden="true" />
+                    </span>
+                    <span className="m-mt-setup-label">{item.label}</span>
+                    <span className="m-mt-soon">{i18n.comingSoon}</span>
+                  </div>
+                ),
+              )}
             </div>
           </>
         )}

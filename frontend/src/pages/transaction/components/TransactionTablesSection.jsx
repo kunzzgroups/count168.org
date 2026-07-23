@@ -6,6 +6,7 @@ export default function TransactionTablesSection({
   searchLoading,
   tp,
   searchState,
+  listPresentationModeActive = false,
   getRoleClass,
   fallbackRoleClass,
   openHistory,
@@ -14,7 +15,8 @@ export default function TransactionTablesSection({
   t,
 }) {
   const hasTableData = tp.mode !== "none";
-  const showNameColumn = Boolean(searchState.showName);
+  // Type Search / submit-focus: Show Name chip may toggle for UI only.
+  const showNameColumn = Boolean(searchState.showName) && !listPresentationModeActive;
   const presentationRowCount =
     (tp.defaultLeft?.length || 0) +
     (tp.defaultRight?.length || 0) +

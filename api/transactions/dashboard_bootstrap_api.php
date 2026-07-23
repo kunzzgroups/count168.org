@@ -3,6 +3,16 @@
  * Dashboard bootstrap: one HTTP request returns current KPI, previous period, and multi-currency earnings.
  * Reuses dashboard_api.php in-process via dashboard_api_capture() — same logic as
  * GET /api/transactions/dashboard_api.php (not a separate calculation path).
+ *
+ * Performance (multi-currency):
+ * - Primary currency on bootstrap_scope=full runs the chart-capable capture once.
+ * - Secondary currencies always use kpi_only + earnings_only (pie/sidebar totals only).
+ * - full no longer runs chart GROUP BY for secondary currencies then strips daily_data.
+ * - full skips secondary earnings.previous (primary MoM reuses KPI previous payload).
+ *
+ * Company All (group_all=1 + company_ids=…):
+ * - One HTTP runs per-company packs in-process (same capture rules); FE still mergeGroupData.
+ * - Cuts N client round-trips to 1 while keeping ownership merge semantics on the client.
  */
 
 session_start();
@@ -126,6 +136,28 @@ function dashboard_bootstrap_base_params(): array
 }
 
 /**
+ * Parse company_ids=1,2,3 for group_all batch packs.
+ *
+ * @return list<int>
+ */
+function dashboard_bootstrap_parse_company_ids(): array
+{
+    $raw = isset($_GET['company_ids']) ? trim((string) $_GET['company_ids']) : '';
+    if ($raw === '') {
+        return [];
+    }
+    $ids = [];
+    foreach (explode(',', $raw) as $part) {
+        $id = (int) trim($part);
+        if ($id > 0 && !in_array($id, $ids, true)) {
+            $ids[] = $id;
+        }
+    }
+
+    return $ids;
+}
+
+/**
  * Strip heavy chart series from earnings-only payloads.
  *
  * @param array<string, mixed>|null $data
@@ -172,56 +204,41 @@ function dashboard_bootstrap_capture_scoped(array $params, string $bootstrapScop
     return dashboard_bootstrap_capture($params);
 }
 
-try {
-    dashboard_api_begin_bootstrap_batch();
-    $baseParams = dashboard_bootstrap_base_params();
-    if ($baseParams === []) {
-        throw new Exception('Missing dashboard scope');
-    }
-
-    $primaryCurrency = isset($_GET['currency']) ? strtoupper(trim((string) $_GET['currency'])) : '';
-    $currencyListRaw = isset($_GET['currencies']) ? trim((string) $_GET['currencies']) : '';
-    $currencyCodes = [];
-    if ($currencyListRaw !== '') {
-        foreach (explode(',', $currencyListRaw) as $part) {
-            $code = strtoupper(trim($part));
-            if ($code !== '' && !in_array($code, $currencyCodes, true)) {
-                $currencyCodes[] = $code;
-            }
-        }
-    }
-    if ($primaryCurrency !== '' && !in_array($primaryCurrency, $currencyCodes, true)) {
-        array_unshift($currencyCodes, $primaryCurrency);
-    }
-    if ($primaryCurrency === '' && $currencyCodes !== []) {
-        $primaryCurrency = $currencyCodes[0];
-    }
-
-    $dateFrom = $baseParams['date_from'] ?? date('Y-m-01');
-    $dateTo = $baseParams['date_to'] ?? date('Y-m-t');
-    $prevRange = dashboard_bootstrap_previous_period($dateFrom, $dateTo);
-
-    $bootstrapScope = isset($_GET['bootstrap_scope']) ? strtolower(trim((string) $_GET['bootstrap_scope'])) : 'full';
-    if (!in_array($bootstrapScope, ['full', 'kpi', 'earnings', 'previous', 'chart'], true)) {
-        $bootstrapScope = 'full';
-    }
-    $isPrefetch = isset($_GET['prefetch']) && (string) $_GET['prefetch'] === '1';
-
+/**
+ * Build one scope pack (current / previous / multi-currency earnings) for fixed base params.
+ *
+ * @param array<string, string> $baseParams
+ * @param list<string> $currencyCodes
+ * @param array{from:string,to:string} $prevRange
+ * @return array{
+ *   current:?array,
+ *   previous:?array,
+ *   earnings:array{current:list<array{code:string,payload:?array}>,previous:list<array{code:string,payload:?array}>},
+ *   error:?string
+ * }
+ */
+function dashboard_bootstrap_build_pack(
+    array $baseParams,
+    string $bootstrapScope,
+    string $primaryCurrency,
+    array $currencyCodes,
+    array $prevRange,
+    bool $chartMonthly,
+    bool $isPrefetch
+): array {
     $currentJson = null;
     $previousData = null;
+    $earningsCurrent = [];
+    $earningsPrevious = [];
 
     if ($bootstrapScope === 'full' || $bootstrapScope === 'kpi' || $bootstrapScope === 'chart') {
         $currentParams = $baseParams;
         if ($primaryCurrency !== '') {
             $currentParams['currency'] = $primaryCurrency;
         }
-        // Long ranges: month buckets cut This Year chart SQL from ~365 groups to ~12.
         if (
             ($bootstrapScope === 'chart' || $bootstrapScope === 'full')
-            && (
-                dashboard_bootstrap_should_chart_monthly($dateFrom, $dateTo)
-                || (isset($_GET['chart_monthly']) && (string) $_GET['chart_monthly'] === '1')
-            )
+            && $chartMonthly
         ) {
             $currentParams['chart_monthly'] = '1';
         }
@@ -231,18 +248,16 @@ try {
         if (empty($currentJson['success']) || !is_array($currentJson['data'])) {
             $failMsg = $currentJson['message'] ?? $currentJson['error'] ?? 'Failed to load dashboard';
             if ($isPrefetch) {
-                echo json_encode([
-                    'success' => false,
-                    'message' => $failMsg,
-                    'data' => null,
+                return [
+                    'current' => null,
+                    'previous' => null,
+                    'earnings' => ['current' => [], 'previous' => []],
                     'error' => $failMsg,
-                ], JSON_UNESCAPED_UNICODE);
-                exit;
+                ];
             }
             throw new Exception($failMsg);
         }
 
-        // kpi: current only — previous period loads in a follow-up request so first paint is ~2× faster.
         if ($bootstrapScope === 'full') {
             $prevParams = $baseParams;
             $prevParams['date_from'] = $prevRange['from'];
@@ -268,9 +283,6 @@ try {
             : null;
     }
 
-    $earningsCurrent = [];
-    $earningsPrevious = [];
-
     if ($bootstrapScope === 'full' || $bootstrapScope === 'earnings') {
         if ($bootstrapScope === 'earnings' && ($currentJson === null || !is_array($currentJson['data'] ?? null))) {
             $currentParams = $baseParams;
@@ -280,7 +292,8 @@ try {
             $currentJson = dashboard_bootstrap_capture_scoped($currentParams, 'kpi');
         }
 
-        $skipEarningsPrevious = ($bootstrapScope === 'earnings');
+        $skipAllEarningsPrevious = ($bootstrapScope === 'earnings');
+        $skipSecondaryEarningsPrevious = ($bootstrapScope === 'full');
 
         foreach ($currencyCodes as $code) {
             if ($code === $primaryCurrency) {
@@ -289,7 +302,7 @@ try {
                     'code' => $code,
                     'payload' => dashboard_bootstrap_slim_payload($primaryCurrent),
                 ];
-                if (!$skipEarningsPrevious) {
+                if (!$skipAllEarningsPrevious) {
                     $earningsPrevious[] = [
                         'code' => $code,
                         'payload' => dashboard_bootstrap_slim_payload($previousData),
@@ -300,16 +313,14 @@ try {
 
             $curParams = $baseParams;
             $curParams['currency'] = $code;
-            $curJson = $bootstrapScope === 'earnings'
-                ? dashboard_bootstrap_capture_scoped($curParams, 'earnings')
-                : dashboard_bootstrap_capture($curParams);
+            $curJson = dashboard_bootstrap_capture_scoped($curParams, 'earnings');
             $curPayload = (!empty($curJson['success']) && is_array($curJson['data']))
                 ? dashboard_bootstrap_slim_payload($curJson['data'])
                 : null;
 
             $earningsCurrent[] = ['code' => $code, 'payload' => $curPayload];
 
-            if ($skipEarningsPrevious) {
+            if ($skipAllEarningsPrevious || $skipSecondaryEarningsPrevious) {
                 continue;
             }
 
@@ -317,7 +328,7 @@ try {
             $prevCurParams['date_from'] = $prevRange['from'];
             $prevCurParams['date_to'] = $prevRange['to'];
             $prevCurParams['currency'] = $code;
-            $prevCurJson = dashboard_bootstrap_capture($prevCurParams);
+            $prevCurJson = dashboard_bootstrap_capture_scoped($prevCurParams, 'earnings');
             $prevCurPayload = (!empty($prevCurJson['success']) && is_array($prevCurJson['data']))
                 ? dashboard_bootstrap_slim_payload($prevCurJson['data'])
                 : null;
@@ -326,11 +337,185 @@ try {
         }
     }
 
-    $responseData = [
+    $current = null;
+    $previous = null;
+    if ($bootstrapScope === 'full' || $bootstrapScope === 'kpi' || $bootstrapScope === 'chart') {
+        $current = is_array($currentJson['data'] ?? null) ? $currentJson['data'] : null;
+        $previous = $bootstrapScope === 'full' ? $previousData : null;
+    } elseif ($bootstrapScope === 'previous') {
+        $previous = $previousData;
+    } elseif ($bootstrapScope === 'earnings') {
+        $current = is_array($currentJson['data'] ?? null) ? $currentJson['data'] : null;
+    }
+
+    return [
+        'current' => $current,
+        'previous' => $previous,
         'earnings' => [
             'current' => $earningsCurrent,
             'previous' => $earningsPrevious,
         ],
+        'error' => null,
+    ];
+}
+
+try {
+    dashboard_api_begin_bootstrap_batch();
+
+    $groupAll = isset($_GET['group_all']) && (string) $_GET['group_all'] === '1';
+    $companyIds = dashboard_bootstrap_parse_company_ids();
+    $viewGroup = isset($_GET['view_group']) ? strtoupper(trim((string) $_GET['view_group'])) : '';
+
+    $primaryCurrency = isset($_GET['currency']) ? strtoupper(trim((string) $_GET['currency'])) : '';
+    $currencyListRaw = isset($_GET['currencies']) ? trim((string) $_GET['currencies']) : '';
+    $currencyCodes = [];
+    if ($currencyListRaw !== '') {
+        foreach (explode(',', $currencyListRaw) as $part) {
+            $code = strtoupper(trim($part));
+            if ($code !== '' && !in_array($code, $currencyCodes, true)) {
+                $currencyCodes[] = $code;
+            }
+        }
+    }
+    if ($primaryCurrency !== '' && !in_array($primaryCurrency, $currencyCodes, true)) {
+        array_unshift($currencyCodes, $primaryCurrency);
+    }
+    if ($primaryCurrency === '' && $currencyCodes !== []) {
+        $primaryCurrency = $currencyCodes[0];
+    }
+
+    $bootstrapScope = isset($_GET['bootstrap_scope']) ? strtolower(trim((string) $_GET['bootstrap_scope'])) : 'full';
+    if (!in_array($bootstrapScope, ['full', 'kpi', 'earnings', 'previous', 'chart'], true)) {
+        $bootstrapScope = 'full';
+    }
+    $isPrefetch = isset($_GET['prefetch']) && (string) $_GET['prefetch'] === '1';
+
+    $dateFrom = isset($_GET['date_from']) ? trim((string) $_GET['date_from']) : '';
+    $dateTo = isset($_GET['date_to']) ? trim((string) $_GET['date_to']) : '';
+    if ($dateFrom === '') {
+        $dateFrom = date('Y-m-01');
+    }
+    if ($dateTo === '') {
+        $dateTo = date('Y-m-t');
+    }
+    $prevRange = dashboard_bootstrap_previous_period($dateFrom, $dateTo);
+    $chartMonthly = dashboard_bootstrap_should_chart_monthly($dateFrom, $dateTo)
+        || (isset($_GET['chart_monthly']) && (string) $_GET['chart_monthly'] === '1');
+
+    if ($groupAll) {
+        if ($companyIds === []) {
+            throw new Exception('Missing company_ids for group_all');
+        }
+        // Cap batch size — FE already filters to accessible subsidiaries.
+        if (count($companyIds) > 40) {
+            throw new Exception('Too many company_ids for group_all');
+        }
+
+        $companyPacks = [];
+        foreach ($companyIds as $cid) {
+            $companyParams = [
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
+                'company_id' => (string) $cid,
+            ];
+            if ($viewGroup !== '') {
+                $companyParams['view_group'] = $viewGroup;
+                $companyParams['group_id'] = $viewGroup;
+                // Company All under a group tab merges subsidiaries, not the group-entity row.
+                $companyParams['subsidiary_accounts_only'] = '1';
+            }
+
+            $pack = dashboard_bootstrap_build_pack(
+                $companyParams,
+                $bootstrapScope,
+                $primaryCurrency,
+                $currencyCodes,
+                $prevRange,
+                $chartMonthly,
+                $isPrefetch
+            );
+            if ($pack['error'] !== null) {
+                // Skip inaccessible / failed companies (same as FE Promise.allSettled filter).
+                continue;
+            }
+            if (
+                ($bootstrapScope === 'full' || $bootstrapScope === 'kpi' || $bootstrapScope === 'chart')
+                && $pack['current'] === null
+            ) {
+                continue;
+            }
+            if ($bootstrapScope === 'previous' && $pack['previous'] === null) {
+                continue;
+            }
+
+            $companyPacks[] = [
+                'company_id' => $cid,
+                'current' => $pack['current'],
+                'previous' => $pack['previous'],
+                'earnings' => $pack['earnings'],
+            ];
+        }
+
+        if ($companyPacks === []) {
+            $failMsg = 'Failed to load dashboard';
+            if ($isPrefetch) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => $failMsg,
+                    'data' => null,
+                    'error' => $failMsg,
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+            throw new Exception($failMsg);
+        }
+
+        echo json_encode([
+            'success' => true,
+            'data' => [
+                'group_all' => true,
+                'companies' => $companyPacks,
+                'date_range' => [
+                    'from' => $dateFrom,
+                    'to' => $dateTo,
+                ],
+                'previous_date_range' => $prevRange,
+                'bootstrap_scope' => $bootstrapScope,
+            ],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $baseParams = dashboard_bootstrap_base_params();
+    if ($baseParams === []) {
+        throw new Exception('Missing dashboard scope');
+    }
+    // Prefer explicit dates from GET (base_params already includes them when set).
+    $dateFrom = $baseParams['date_from'] ?? $dateFrom;
+    $dateTo = $baseParams['date_to'] ?? $dateTo;
+    $prevRange = dashboard_bootstrap_previous_period($dateFrom, $dateTo);
+
+    $pack = dashboard_bootstrap_build_pack(
+        $baseParams,
+        $bootstrapScope,
+        $primaryCurrency,
+        $currencyCodes,
+        $prevRange,
+        $chartMonthly,
+        $isPrefetch
+    );
+    if ($pack['error'] !== null) {
+        echo json_encode([
+            'success' => false,
+            'message' => $pack['error'],
+            'data' => null,
+            'error' => $pack['error'],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $responseData = [
+        'earnings' => $pack['earnings'],
         'date_range' => [
             'from' => $dateFrom,
             'to' => $dateTo,
@@ -340,10 +525,12 @@ try {
     ];
 
     if ($bootstrapScope === 'full' || $bootstrapScope === 'kpi' || $bootstrapScope === 'chart') {
-        $responseData['current'] = $currentJson['data'] ?? null;
-        $responseData['previous'] = $bootstrapScope === 'full' ? $previousData : null;
+        $responseData['current'] = $pack['current'];
+        $responseData['previous'] = $bootstrapScope === 'full' ? $pack['previous'] : null;
     } elseif ($bootstrapScope === 'previous') {
-        $responseData['previous'] = $previousData;
+        $responseData['previous'] = $pack['previous'];
+    } elseif ($bootstrapScope === 'earnings') {
+        $responseData['current'] = $pack['current'];
     }
 
     echo json_encode([

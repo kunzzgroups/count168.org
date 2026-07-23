@@ -14,6 +14,7 @@ import AdminUsersPage from "./pages/admin/AdminUsersPage.jsx";
 import MaintenanceHubPage from "./pages/maintenance/MaintenanceHubPage.jsx";
 import MaintenanceTransactionPage from "./pages/maintenance/MaintenanceTransactionPage.jsx";
 import MaintenancePaymentPage from "./pages/maintenance/MaintenancePaymentPage.jsx";
+import BankProcessListPage from "./pages/bankprocess/BankProcessListPage.jsx";
 import MobileBottomNavHost from "./components/layout/MobileBottomNavHost.jsx";
 
 /** Drop list snapshot when leaving Transaction so bottom-nav re-entry stays default. */
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="/maintenance" element={<MaintenanceHubPage />} />
         <Route path="/maintenance/transaction" element={<MaintenanceTransactionPage />} />
         <Route path="/maintenance/payment" element={<MaintenancePaymentPage />} />
+        <Route path="/maintenance/bank-process" element={<BankProcessListPage />} />
         <Route path="/more" element={<MorePage />} />
         <Route path="/more/users" element={<AdminUsersPage />} />
         <Route path="/reset-password" element={<StubPage title="重置密码" />} />

@@ -187,7 +187,19 @@ function typePeriodSearchFetchEligibleAccountIds(PDO $pdo, array $listScope, str
         }
     }
 
-    return array_map('intval', array_keys($ids));
+    $result = array_map('intval', array_keys($ids));
+    if ($formType === 'ALL') {
+        $profitIds = typePeriodSearchFetchEligibleAccountIds($pdo, $listScope, 'PROFIT');
+        if ($profitIds !== []) {
+            $merged = [];
+            foreach (array_merge($result, $profitIds) as $id) {
+                $merged[(int) $id] = true;
+            }
+            $result = array_map('intval', array_keys($merged));
+        }
+    }
+
+    return $result;
 }
 
 /**
@@ -1083,4 +1095,82 @@ function typePeriodSearchMetricForCombo(
 function typePeriodSearchMetricFor(array $bucket, int $accountId, int $currencyId): string
 {
     return money_out($bucket[$accountId][$currencyId] ?? '0');
+}
+
+/**
+ * Supported form types for Type Search period-activity union (scheme B).
+ *
+ * @return string[]
+ */
+function typePeriodSearchUnionFormTypes(): array
+{
+    return ['CONTRA', 'PAYMENT', 'CLAIM', 'CLEAR', 'RATE', 'ADJUSTMENT', 'PROFIT'];
+}
+
+/**
+ * Capture Date union: account+currency visible when ANY pure manual type has period activity.
+ * Used for Type Search list visibility — independent of the right-side form type.
+ *
+ * @param int[] $accountIds
+ * @param string[] $currencyCodes
+ * @return array{
+ *   period_txn_count: array<int, array<int, int>>,
+ *   currencies: array<int, array<int, string>>
+ * }
+ */
+function typePeriodSearchBulkUnionPeriodActivityMetrics(
+    PDO $pdo,
+    array $listScope,
+    string $dateFromDb,
+    string $dateToDb,
+    array $accountIds,
+    array $currencyCodes = []
+): array {
+    $merged = ['period_txn_count' => [], 'currencies' => []];
+    $accountIds = array_values(array_unique(array_filter(array_map('intval', $accountIds), static fn (int $id): bool => $id > 0)));
+    if ($accountIds === []) {
+        return $merged;
+    }
+
+    foreach (typePeriodSearchUnionFormTypes() as $formType) {
+        if (!typePeriodSearchIsSupported($formType)) {
+            continue;
+        }
+        $pack = typePeriodSearchBulkTypeMetrics(
+            $pdo,
+            $listScope,
+            $formType,
+            $dateFromDb,
+            $dateToDb,
+            $accountIds,
+            $currencyCodes
+        );
+        foreach ($pack['period_txn_count'] ?? [] as $aid => $byCur) {
+            $aidInt = (int) $aid;
+            foreach ($byCur as $cid => $cnt) {
+                $cidInt = (int) $cid;
+                $n = (int) $cnt;
+                if ($aidInt <= 0 || $cidInt <= 0 || $n <= 0) {
+                    continue;
+                }
+                $merged['period_txn_count'][$aidInt][$cidInt] = ($merged['period_txn_count'][$aidInt][$cidInt] ?? 0) + $n;
+            }
+        }
+        foreach ($pack['currencies'] ?? [] as $aid => $byCur) {
+            $aidInt = (int) $aid;
+            foreach ($byCur as $cid => $code) {
+                $cidInt = (int) $cid;
+                $curCode = strtoupper(trim((string) $code));
+                if ($aidInt <= 0 || $cidInt <= 0 || $curCode === '') {
+                    continue;
+                }
+                if ((int) ($merged['period_txn_count'][$aidInt][$cidInt] ?? 0) <= 0) {
+                    continue;
+                }
+                $merged['currencies'][$aidInt][$cidInt] = $curCode;
+            }
+        }
+    }
+
+    return $merged;
 }

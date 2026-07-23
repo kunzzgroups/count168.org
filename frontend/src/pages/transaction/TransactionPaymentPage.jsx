@@ -428,6 +428,7 @@ function TransactionPaymentPageMain() {
           searchLoading={false}
           tp={search.tablePresentation}
           searchState={search.searchState}
+          listPresentationModeActive={search.listPresentationModeActive}
           getRoleClass={getRoleClass}
           fallbackRoleClass={singleCategoryFallbackRoleClass}
           openHistory={(row) =>

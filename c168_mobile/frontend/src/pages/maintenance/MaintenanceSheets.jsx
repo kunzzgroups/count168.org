@@ -77,6 +77,8 @@ function buildDraft({
   category,
   process,
   transactionType,
+  currency = "",
+  statusFilters = null,
 }) {
   return {
     dateFrom,
@@ -88,6 +90,16 @@ function buildDraft({
     category: category ?? "",
     process: process ?? "",
     transactionType: transactionType ?? "",
+    currency: currency ?? "",
+    statusFilters: statusFilters
+      ? { ...statusFilters }
+      : {
+          showActive: true,
+          showInactive: false,
+          showOfficial: false,
+          showEInvoice: false,
+          showBlock: false,
+        },
   };
 }
 
@@ -124,12 +136,30 @@ export function MaintenanceFilterSheet({
   types = null,
   transactionType = "",
   readOnlyNote = false,
+  readOnlyNoteText = "",
+  /** Bank Process: currency codes + status chip draft */
+  currencies = null,
+  currency = "",
+  statusFilters = null,
+  withBankStatus = false,
   onApply,
 }) {
   const bodyRef = useRef(null);
   const [rangeOpen, setRangeOpen] = useState(false);
   const [draft, setDraft] = useState(() =>
-    buildDraft({ dateFrom, dateTo, activePreset, groupMode, selectedGroup, companyId, category, process, transactionType }),
+    buildDraft({
+      dateFrom,
+      dateTo,
+      activePreset,
+      groupMode,
+      selectedGroup,
+      companyId,
+      category,
+      process,
+      transactionType,
+      currency,
+      statusFilters,
+    }),
   );
   const [processOptions, setProcessOptions] = useState([]);
   useOverlayLock(open, onClose);
@@ -140,7 +170,19 @@ export function MaintenanceFilterSheet({
       return;
     }
     setDraft(
-      buildDraft({ dateFrom, dateTo, activePreset, groupMode, selectedGroup, companyId, category, process, transactionType }),
+      buildDraft({
+        dateFrom,
+        dateTo,
+        activePreset,
+        groupMode,
+        selectedGroup,
+        companyId,
+        category,
+        process,
+        transactionType,
+        currency,
+        statusFilters,
+      }),
     );
     bodyRef.current?.scrollTo?.({ top: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -198,6 +240,24 @@ export function MaintenanceFilterSheet({
       category: categories?.[0] ?? prev.category,
       process: "",
       transactionType: "",
+      currency: "",
+      statusFilters: {
+        showActive: true,
+        showInactive: false,
+        showOfficial: false,
+        showEInvoice: false,
+        showBlock: false,
+      },
+    }));
+  };
+
+  const toggleStatus = (key) => {
+    setDraft((prev) => ({
+      ...prev,
+      statusFilters: {
+        ...prev.statusFilters,
+        [key]: !prev.statusFilters?.[key],
+      },
     }));
   };
 
@@ -210,6 +270,8 @@ export function MaintenanceFilterSheet({
       category: draft.category,
       process: draft.process,
       transactionType: draft.transactionType,
+      currency: draft.currency ?? "",
+      statusFilters: draft.statusFilters,
     });
     onClose?.();
   };
@@ -400,9 +462,54 @@ export function MaintenanceFilterSheet({
             </Section>
           )}
 
-          {readOnlyNote ? (
+          {withBankStatus ? (
+            <Section title={i18n.bankStatus || i18n.status || "Status"}>
+              <div className="m-filter-pill-wrap">
+                <Pill active={!!draft.statusFilters?.showActive} onClick={() => toggleStatus("showActive")}>
+                  {i18n.bankShowActive}
+                </Pill>
+                <Pill active={!!draft.statusFilters?.showInactive} onClick={() => toggleStatus("showInactive")}>
+                  {i18n.bankShowInactive}
+                </Pill>
+                <Pill active={!!draft.statusFilters?.showOfficial} onClick={() => toggleStatus("showOfficial")}>
+                  {i18n.bankShowOfficial}
+                </Pill>
+                <Pill active={!!draft.statusFilters?.showEInvoice} onClick={() => toggleStatus("showEInvoice")}>
+                  {i18n.bankShowEInvoice}
+                </Pill>
+                <Pill active={!!draft.statusFilters?.showBlock} onClick={() => toggleStatus("showBlock")}>
+                  {i18n.bankShowBlocked}
+                </Pill>
+              </div>
+            </Section>
+          ) : null}
+
+          {Array.isArray(currencies) && currencies.length > 0 ? (
+            <Section title={i18n.currency}>
+              <div className="m-filter-pill-wrap">
+                <Pill
+                  active={!draft.currency}
+                  onClick={() => setDraft((prev) => ({ ...prev, currency: "" }))}
+                >
+                  {i18n.bankAllCurrencies || i18n.allTypes}
+                </Pill>
+                {currencies.map((code) => (
+                  <Pill
+                    key={code}
+                    active={draft.currency === code}
+                    onClick={() => setDraft((prev) => ({ ...prev, currency: code }))}
+                  >
+                    {code}
+                  </Pill>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+
+          {readOnlyNote || readOnlyNoteText ? (
             <p className="m-mt-readonly-note">
-              <i className="fas fa-circle-info" aria-hidden="true" /> {i18n.readOnlyNote}
+              <i className="fas fa-circle-info" aria-hidden="true" />{" "}
+              {readOnlyNoteText || i18n.readOnlyNote}
             </p>
           ) : null}
         </div>

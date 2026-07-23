@@ -1,12 +1,13 @@
 /** Shared fetch helper for mobile APIs — abort-safe, no throw on empty body. */
 
-export async function fetchJson(pathAndQuery, { signal, method = "GET", body } = {}) {
+export async function fetchJson(pathAndQuery, { signal, method = "GET", body, headers } = {}) {
   const options = {
     method,
     credentials: "include",
     cache: "no-store",
     signal,
   };
+  if (headers) options.headers = headers;
   if (body !== undefined) options.body = body;
 
   const res = await fetch(pathAndQuery, options);

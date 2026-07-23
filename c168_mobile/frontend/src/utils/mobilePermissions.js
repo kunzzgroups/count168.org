@@ -73,6 +73,11 @@ export function canAccessMaintenance(me) {
   return canAccessTransactionMaintenance(me);
 }
 
+/** Bank Process list — desktop sidebar "process" permission. */
+export function canAccessBankProcess(me) {
+  return canAccessPermission(me, "process");
+}
+
 /** First mobile route after login — aligned with desktop sidebar order where possible. */
 export function resolveMobileLandingPath(me) {
   if (!me) return "/login";
