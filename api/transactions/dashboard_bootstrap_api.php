@@ -8,7 +8,9 @@
  * - Primary currency on bootstrap_scope=full runs the chart-capable capture once.
  * - Secondary currencies always use kpi_only + earnings_only (pie/sidebar totals only).
  * - full no longer runs chart GROUP BY for secondary currencies then strips daily_data.
- * - full skips secondary earnings.previous (primary MoM reuses KPI previous payload).
+ * - full skips previous-period capture (FE loads MoM via bootstrap_scope=previous after paint).
+ * - full skips secondary earnings.previous (primary MoM reuses KPI previous payload when filled).
+ * - prefetch=1 uses the same slim full path (no previous) so company warm stays cheap.
  *
  * Company All (group_all=1 + company_ids=…):
  * - One HTTP runs per-company packs in-process (same capture rules); FE still mergeGroupData.
@@ -258,18 +260,9 @@ function dashboard_bootstrap_build_pack(
             throw new Exception($failMsg);
         }
 
-        if ($bootstrapScope === 'full') {
-            $prevParams = $baseParams;
-            $prevParams['date_from'] = $prevRange['from'];
-            $prevParams['date_to'] = $prevRange['to'];
-            if ($primaryCurrency !== '') {
-                $prevParams['currency'] = $primaryCurrency;
-            }
-            $previousJson = dashboard_bootstrap_capture_scoped($prevParams, 'previous');
-            $previousData = (!empty($previousJson['success']) && is_array($previousJson['data']))
-                ? $previousJson['data']
-                : null;
-        }
+        // Previous-period MoM is loaded by FE after atomic paint (bootstrap_scope=previous).
+        // Keeping it inside full added a full extra capture on the critical path for every
+        // company/currency switch (This Month IG+95 felt multi-second even with data).
     } elseif ($bootstrapScope === 'previous') {
         $prevParams = $baseParams;
         $prevParams['date_from'] = $prevRange['from'];
@@ -341,7 +334,8 @@ function dashboard_bootstrap_build_pack(
     $previous = null;
     if ($bootstrapScope === 'full' || $bootstrapScope === 'kpi' || $bootstrapScope === 'chart') {
         $current = is_array($currentJson['data'] ?? null) ? $currentJson['data'] : null;
-        $previous = $bootstrapScope === 'full' ? $previousData : null;
+        // full no longer embeds previous — callers use bootstrap_scope=previous.
+        $previous = null;
     } elseif ($bootstrapScope === 'previous') {
         $previous = $previousData;
     } elseif ($bootstrapScope === 'earnings') {

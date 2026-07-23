@@ -141,15 +141,25 @@ export function buildRatePayload({
 
   if (transferToId && transferFromId) {
     const transferGross = grossDec;
-    let transferToSide = transferGross;
-    let transferFromSide = transferGross;
+
+    // Fee is already included in the first-currency amount: second-currency Cr/Dr
+    // uses net on BOTH sides (do not asymmetrically deduct converted fee again).
+    let convertedFeeDec = MoneyDecimal.toDecimal("0", 0);
+    if (inputAmtDec.gt(0) && rateDec.gt(0)) {
+      convertedFeeDec = inputAmtDec.times(rateDec);
+    }
+    const transferBase = convertedFeeDec.gt(0) ? transferGross.minus(convertedFeeDec) : transferGross;
+
+    let transferToSide = transferBase;
+    let transferFromSide = transferBase;
     if (middleId && !middleDec.isZero()) {
-      let finalFeeForPayload = middleDec;
-      if (inputAmtDec.gt(0) && rateDec.gt(0)) {
-        const convertedInputAmtDec = inputAmtDec.times(rateDec);
-        finalFeeForPayload = middleDec.minus(convertedInputAmtDec);
+      let rateMultiplierFeeDec = middleDec;
+      if (convertedFeeDec.gt(0)) {
+        rateMultiplierFeeDec = middleDec.minus(convertedFeeDec);
       }
-      transferFromSide = transferGross.minus(finalFeeForPayload);
+      if (rateMultiplierFeeDec.gt(0)) {
+        transferFromSide = transferBase.minus(rateMultiplierFeeDec);
+      }
     }
 
     payload.rate_transfer_from_account_id = transferToId;

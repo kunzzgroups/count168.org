@@ -58,11 +58,7 @@ export default function TransactionDashboardPage() {
             companyId={page.companyId}
             displayCompanyId={page.displayCompanyId}
             mergedSubsetIds={page.mergedSubsetIds}
-            currencies={
-              page.displayCurrencies?.length
-                ? page.displayCurrencies
-                : page.currencies
-            }
+            currencies={page.displayCurrencies ?? page.currencies}
             currencyCode={page.displayFilterCurrencyCode ?? page.currencyCode}
             onPickGroup={page.handlePickGroup}
             onPickAllGroups={page.handlePickAllGroups}
@@ -97,8 +93,8 @@ export default function TransactionDashboardPage() {
             />
             <DashboardEarningsSummary
               i18n={i18n}
-              currencyCode={page.currencyCode}
-              currencies={page.currencies}
+              currencyCode={page.displayFilterCurrencyCode ?? page.currencyCode}
+              currencies={page.displayCurrencies ?? page.currencies}
               panelCurrencyRows={page.panelCurrencyRows}
               useConvertedEarnings={page.useConvertedEarnings}
               earningsBreakdownShowsRate={page.earningsBreakdownShowsRate}

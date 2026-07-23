@@ -506,13 +506,11 @@ try {
             $rate_transfer_from_amount = !empty($_POST['rate_transfer_from_amount']) ? submitRateRound2($_POST['rate_transfer_from_amount']) : null;
             $rate_transfer_to_amount = !empty($_POST['rate_transfer_to_amount']) ? submitRateRound2($_POST['rate_transfer_to_amount']) : null;
 
-            // If rate_middleman_input_amount is positive, execute target amount deduction on the backend
+            // Fee is already baked into the first-currency amount; frontend sends second-currency
+            // transfer legs at the net amount. Do NOT deduct converted fee from transfer_to again.
+            // Only keep the Service Fees SMS remark when a positive fee was entered.
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             if ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
-                $converted_input_amount = submitRateRound2(money_mul($rate_middleman_input_amount, $rate_exchange_rate, 8));
-                if ($rate_transfer_to_amount !== null) {
-                    $rate_transfer_to_amount = submitRateRound2(money_sub($rate_transfer_to_amount, $converted_input_amount, 8));
-                }
                 if ($rate_from_currency !== '') {
                     $feeDisplay = $rate_middleman_input_amount;
                     if (strpos($feeDisplay, '.') !== false) {
