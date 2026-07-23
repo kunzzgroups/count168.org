@@ -67,6 +67,8 @@ export default function SimpleSelect({
   const menuStyleRef = useRef(null);
   const openAttemptIdRef = useRef(0);
   const openAttemptAtRef = useRef(0);
+  const sawVisibleAttemptIdRef = useRef(0);
+  const closeSourceRef = useRef("");
   const loggedAttemptIdsRef = useRef(new Set());
 
   openRef.current = open;
@@ -149,14 +151,25 @@ export default function SimpleSelect({
       if (!isSimpleSelectDebugEnabled(debugOpenFail)) return;
       if (attemptId !== openAttemptIdRef.current) return;
 
-      if (!openRef.current) {
-        const msSinceOpen = Date.now() - openAttemptAtRef.current;
-        if (msSinceOpen < 200) logOpenFail("closed_immediately", { phase, msSinceOpen });
-        return;
-      }
-
       const dd = dropdownRef.current;
       const dropdownRect = rectSnapshot(dd);
+      if (openRef.current && isRectVisible(dropdownRect)) {
+        sawVisibleAttemptIdRef.current = attemptId;
+      }
+
+      if (!openRef.current) {
+        const msSinceOpen = Date.now() - openAttemptAtRef.current;
+        // Skip if this attempt already painted a visible menu (user closed it), or
+        // close happened after the grace window (normal dismiss).
+        if (msSinceOpen < 350 && sawVisibleAttemptIdRef.current !== attemptId) {
+          logOpenFail("closed_immediately", {
+            phase,
+            msSinceOpen,
+            closeSource: closeSourceRef.current || "unknown",
+          });
+        }
+        return;
+      }
 
       if (usePortalRef.current && !menuStyleRef.current) {
         logOpenFail("portal_without_style", { phase });
@@ -176,7 +189,9 @@ export default function SimpleSelect({
     [debugOpenFail, logOpenFail],
   );
 
-  const close = useCallback(() => {
+  const close = useCallback((source = "unknown") => {
+    closeSourceRef.current = source;
+    openRef.current = false;
     setOpen(false);
     setMenuStyle(null);
   }, []);
@@ -219,8 +234,9 @@ export default function SimpleSelect({
       if (wrapRef.current?.contains(target)) return;
       if (dropdownRef.current?.contains(target)) return;
       const msSinceOpen = Date.now() - openAttemptAtRef.current;
-      // Only log suspicious instant dismiss (normal outside-click to close is fine).
-      if (isSimpleSelectDebugEnabled(debugOpenFail) && openAttemptIdRef.current && msSinceOpen < 200) {
+      // Grace: ignore outside closes right after open (duplicate pointer/ghost events).
+      if (msSinceOpen < 100) return;
+      if (isSimpleSelectDebugEnabled(debugOpenFail) && openAttemptIdRef.current && msSinceOpen < 350) {
         logOpenFail("closed_by_outside_pointer", {
           phase: "pointerdown",
           msSinceOpen,
@@ -228,7 +244,7 @@ export default function SimpleSelect({
           targetClass: typeof target?.className === "string" ? target.className.slice(0, 120) : null,
         });
       }
-      close();
+      close("outside_pointer");
     };
     // Defer so the opening gesture does not immediately close the menu.
     const timer = window.setTimeout(() => {
@@ -254,6 +270,7 @@ export default function SimpleSelect({
     const attemptId = openAttemptIdRef.current + 1;
     openAttemptIdRef.current = attemptId;
     openAttemptAtRef.current = Date.now();
+    closeSourceRef.current = "";
     setUsePortal(shouldPortal);
     usePortalRef.current = shouldPortal;
     if (!shouldPortal) setMenuPlacement("below");
@@ -269,12 +286,34 @@ export default function SimpleSelect({
       });
       window.setTimeout(() => verifyOpenVisible(attemptId, "t50"), 50);
       window.setTimeout(() => verifyOpenVisible(attemptId, "t150"), 150);
+      window.setTimeout(() => verifyOpenVisible(attemptId, "t350"), 350);
     }
+  };
+
+  const toggleFromTrigger = () => {
+    if (openRef.current) {
+      // Evidence from prod logs: open then closed_immediately ~150ms without
+      // outside_pointer — duplicate click / double-tap was toggling closed.
+      const msSinceOpen = Date.now() - openAttemptAtRef.current;
+      if (msSinceOpen < 350) {
+        if (isSimpleSelectDebugEnabled(debugOpenFail)) {
+          // eslint-disable-next-line no-console
+          console.info(`[SimpleSelect:${id || "unknown"}] ignored trigger-close`, {
+            msSinceOpen,
+            attemptId: openAttemptIdRef.current,
+          });
+        }
+        return;
+      }
+      close("trigger");
+      return;
+    }
+    openDropdown();
   };
 
   const pick = (nextValue) => {
     onChange(nextValue);
-    close();
+    close("pick");
   };
 
   const selectByIndex = (idx) => {
@@ -287,7 +326,7 @@ export default function SimpleSelect({
     handleButtonKeyDown(e, {
       isOpen: open,
       onToggleOpen: openDropdown,
-      onClose: close,
+      onClose: () => close("escape"),
       len: selectableItems.length,
       onSelectIndex: selectByIndex,
     });
@@ -386,7 +425,7 @@ export default function SimpleSelect({
           // Prevent focus-driven scroll inside overflow:hidden modal panels.
           if (e.button === 0) e.preventDefault();
         }}
-        onClick={() => (open ? close() : openDropdown())}
+        onClick={toggleFromTrigger}
         onKeyDown={onButtonKeyDown}
       >
         {displayLabel}
