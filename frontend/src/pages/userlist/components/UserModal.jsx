@@ -565,7 +565,7 @@ function UserModal({
                     required
                     disabled={loginDisabled || pageReadOnlyLock}
                     value={form.login_id}
-                    onChange={(e) => setForm((f) => ({ ...f, login_id: e.target.value.toUpperCase() }))}
+                    onChange={(e) => setForm((f) => ({ ...f, login_id: e.target.value }))}
                   />
                 </div>
                 {showSecondaryPassword ? (
@@ -597,7 +597,7 @@ function UserModal({
                 <div className="user-info-field-row">
                   <div className="form-group user-info-field">
                     <label htmlFor="name">{t("nameRequired")}</label>
-                    <input id="name" required disabled={fieldLocks.name || pageReadOnlyLock} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value.toUpperCase() }))} />
+                    <input id="name" required disabled={fieldLocks.name || pageReadOnlyLock} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
                   </div>
                   <div className="form-group user-info-field">
                     <label htmlFor="role">{t("roleRequired")}</label>

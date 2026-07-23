@@ -484,9 +484,12 @@ export function useMobileAccount() {
     setSaving(true);
     try {
       const fd = scopeFormData(new FormData());
-      Object.entries(form).forEach(([key, value]) =>
-        fd.set(key, key === "alert_amount" ? normalizeAlertAmount(value) : String(value ?? "")),
-      );
+      Object.entries(form).forEach(([key, value]) => {
+        let out = String(value ?? "");
+        if (key === "alert_amount") out = normalizeAlertAmount(value);
+        else if (key === "account_id" || key === "name" || key === "remark") out = upper(out);
+        fd.set(key, out);
+      });
       if (Number(companyId) > 0) {
         fd.set("company_id", String(companyId));
         fd.set("company_ids", JSON.stringify([Number(companyId)]));

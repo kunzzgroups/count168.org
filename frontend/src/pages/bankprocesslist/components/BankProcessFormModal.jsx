@@ -193,7 +193,8 @@ export default function BankProcessFormModal({
                         value={form.name}
                         readOnly={editMode}
                         required={!editMode}
-                        onChange={(ev) => setForm((prev) => ({ ...prev, name: String(ev.target.value).toUpperCase() }))}
+                        onChange={(ev) => setForm((prev) => ({ ...prev, name: ev.target.value }))}
+                        style={{ textTransform: "uppercase" }}
                       />
                     </div>
                   </div>

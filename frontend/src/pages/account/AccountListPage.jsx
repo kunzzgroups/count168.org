@@ -2211,7 +2211,16 @@ export default function AccountListPage() {
     }
     const amount = normalizeAlertAmount(form.alert_amount);
     const fd = new FormData();
-    Object.entries(form).forEach(([k, v]) => fd.append(k, k === "alert_amount" ? amount : (v ?? "")));
+    Object.entries(form).forEach(([k, v]) => {
+      if (k === "alert_amount") {
+        fd.append(k, amount);
+        return;
+      }
+      const raw = v ?? "";
+      const out =
+        k === "account_id" || k === "name" || k === "remark" ? toUpper(raw) : raw;
+      fd.append(k, out);
+    });
     if (!groupOnlyAccountMode && scopeCompanyId) {
       fd.set("company_id", String(scopeCompanyId));
     }

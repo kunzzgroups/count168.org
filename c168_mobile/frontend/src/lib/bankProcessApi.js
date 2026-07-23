@@ -679,6 +679,7 @@ export async function submitBankProcess(form, { companyId, editMode }) {
 
   const moneyNormalized = {
     ...form,
+    name: String(form.name || "").toUpperCase(),
     cost: formatBankMoneyFixed2(form.cost),
     price: formatBankMoneyFixed2(form.price),
     profit: calcBankNetProfitDisplay(form.cost, form.price, form.profit_sharing),
