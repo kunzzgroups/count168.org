@@ -95,11 +95,17 @@ export default function SimpleSelect({
     if (!open || !usePortal) return undefined;
     positionMenu();
     const onReflow = () => positionMenu();
+    const onScroll = (e) => {
+      // Ignore scrolls inside the portaled list — highlight sync must not reflow
+      // the menu (can leave it off-screen in some browsers).
+      if (dropdownRef.current?.contains(e.target)) return;
+      positionMenu();
+    };
     window.addEventListener("resize", onReflow);
-    window.addEventListener("scroll", onReflow, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       window.removeEventListener("resize", onReflow);
-      window.removeEventListener("scroll", onReflow, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [open, usePortal, positionMenu]);
 
@@ -111,12 +117,13 @@ export default function SimpleSelect({
       if (dropdownRef.current?.contains(target)) return;
       close();
     };
+    // Defer so the opening gesture does not immediately close the menu.
     const timer = window.setTimeout(() => {
-      document.addEventListener("mousedown", fn);
+      document.addEventListener("pointerdown", fn, true);
     }, 0);
     return () => {
       window.clearTimeout(timer);
-      document.removeEventListener("mousedown", fn);
+      document.removeEventListener("pointerdown", fn, true);
     };
   }, [open, close]);
 
@@ -130,8 +137,10 @@ export default function SimpleSelect({
     const shouldPortal = forcePortal || inModal;
     setUsePortal(shouldPortal);
     if (!shouldPortal) setMenuPlacement("below");
-    setOpen(true);
+    // Position before paint so portal menu never mounts without fixed coords
+    // (unpositioned body portal looks like "dropdown stuck / won't open").
     if (shouldPortal) positionMenu();
+    setOpen(true);
   };
 
   const pick = (nextValue) => {
@@ -174,7 +183,7 @@ export default function SimpleSelect({
     <div
       ref={dropdownRef}
       className={`custom-select-dropdown show${placementClass}${usePortal ? " custom-select-dropdown-portal" : ""}${portalDropdownClassName ? ` ${portalDropdownClassName}` : ""}`}
-      style={usePortal && menuStyle ? menuStyle : undefined}
+      style={usePortal ? menuStyle ?? undefined : undefined}
       role="listbox"
       id={id ? `${id}_dropdown` : undefined}
     >
@@ -206,6 +215,7 @@ export default function SimpleSelect({
               role="option"
               aria-selected={isSelected}
               data-kb-idx={kbIdx}
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(item.value)}
               onMouseEnter={() => setHighlightIdx(kbIdx)}
             >
@@ -216,6 +226,16 @@ export default function SimpleSelect({
       </div>
     </div>
   );
+
+  // Portal menus must wait for fixed coords — mounting without menuStyle puts an
+  // absolute panel at document end (looks like the dropdown never opened).
+  const portalReady = usePortal && !!menuStyle;
+  const menu =
+    open && (!usePortal || portalReady)
+      ? usePortal
+        ? createPortal(dropdownNode, document.body)
+        : dropdownNode
+      : null;
 
   return (
     <div
@@ -233,12 +253,16 @@ export default function SimpleSelect({
         aria-required={required || undefined}
         aria-labelledby={ariaLabelledBy || undefined}
         aria-label={!ariaLabelledBy && ariaLabel ? ariaLabel : undefined}
+        onMouseDown={(e) => {
+          // Prevent focus-driven scroll inside overflow:hidden modal panels.
+          if (e.button === 0) e.preventDefault();
+        }}
         onClick={() => (open ? close() : openDropdown())}
         onKeyDown={onButtonKeyDown}
       >
         {displayLabel}
       </button>
-      {open ? (usePortal ? createPortal(dropdownNode, document.body) : dropdownNode) : null}
+      {menu}
     </div>
   );
 }
