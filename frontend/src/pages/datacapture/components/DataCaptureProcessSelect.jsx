@@ -131,7 +131,8 @@ export default function DataCaptureProcessSelect({
             placeholder={t("searchProcess")}
             autoComplete="off"
             value={processFilter}
-            onChange={(e) => setProcessFilter(e.target.value.toUpperCase())}
+            onChange={(e) => setProcessFilter(e.target.value)}
+            style={{ textTransform: "uppercase" }}
             onKeyDown={(e) => {
               handleListKeyDown(e, {
                 len: visibleProcesses.length,

@@ -62,7 +62,6 @@ import {
   getGroupOnlyProcessOptions,
   isGroupOnlyProcessId,
 } from "./lib/dataCaptureGroupOnlyProcesses.js";
-import { toDataCaptureWordFieldCase } from "./lib/dataCaptureFormRules.js";
 import { resolveDataCaptureGridDimensions } from "./grid/dataCaptureGridMeta.js";
 import DataCaptureProcessSelect from "./components/DataCaptureProcessSelect.jsx";
 import SimpleSelect from "../../components/SimpleSelect.jsx";
@@ -1156,7 +1155,8 @@ function DataCapturePageContent() {
                       name="replace_word_from"
                       placeholder={t("oldWord")}
                       value={form.replaceFrom}
-                      onChange={(e) => form.setReplaceFrom(toDataCaptureWordFieldCase(e.target.value))}
+                      onChange={(e) => form.setReplaceFrom(e.target.value)}
+                      style={{ textTransform: "uppercase" }}
                     />
                   </div>
 
@@ -1174,7 +1174,8 @@ function DataCapturePageContent() {
                         name="replace_word_to"
                         placeholder={t("newWord")}
                         value={form.replaceTo}
-                        onChange={(e) => form.setReplaceTo(toDataCaptureWordFieldCase(e.target.value))}
+                        onChange={(e) => form.setReplaceTo(e.target.value)}
+                        style={{ textTransform: "uppercase" }}
                       />
                     </div>
                   </div>
@@ -1201,7 +1202,8 @@ function DataCapturePageContent() {
                       name="remark"
                       placeholder={t("enterRemark")}
                       value={form.remark}
-                      onChange={(e) => form.setRemark(toDataCaptureWordFieldCase(e.target.value))}
+                      onChange={(e) => form.setRemark(e.target.value)}
+                      style={{ textTransform: "uppercase" }}
                     />
                   </div>
                 </div>
@@ -1265,7 +1267,8 @@ function DataCapturePageContent() {
                         name="remark"
                         placeholder={t("enterRemark")}
                         value={form.remark}
-                        onChange={(e) => form.setRemark(toDataCaptureWordFieldCase(e.target.value))}
+                        onChange={(e) => form.setRemark(e.target.value)}
+                        style={{ textTransform: "uppercase" }}
                       />
                     </div>
                   </div>

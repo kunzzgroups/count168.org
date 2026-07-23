@@ -263,7 +263,8 @@ export default function EditFormulaModal({
                               placeholder={t("searchAccount")}
                               autoComplete="off"
                               value={accountSearch}
-                              onChange={(e) => setAccountSearch(e.target.value.toUpperCase())}
+                              onChange={(e) => setAccountSearch(e.target.value)}
+                              style={{ textTransform: "uppercase" }}
                               onKeyDown={(e) => {
                                 handleListKeyDown(e, {
                                   len: filteredAccounts.length,

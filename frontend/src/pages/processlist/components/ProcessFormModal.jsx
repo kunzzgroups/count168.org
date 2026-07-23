@@ -170,7 +170,7 @@ export default function ProcessFormModal({
                           !e.altKey
                         ) {
                           e.preventDefault();
-                          setCopySearch(e.key.toUpperCase());
+                          setCopySearch(e.key);
                           setCopyOpen(true);
                           return;
                         }
@@ -205,7 +205,8 @@ export default function ProcessFormModal({
                               autoComplete="off"
                               value={copySearch}
                               disabled={ro}
-                              onChange={(e) => setCopySearch(e.target.value.toUpperCase())}
+                              onChange={(e) => setCopySearch(e.target.value)}
+                              style={{ textTransform: "uppercase" }}
                               onKeyDown={(e) => {
                                 copyKeyboard.handleListKeyDown(e, {
                                   len: copyListCount,

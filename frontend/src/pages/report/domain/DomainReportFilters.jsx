@@ -115,7 +115,8 @@ export default function DomainReportFilters({
                           placeholder={t("searchProcess")}
                           autoComplete="off"
                           value={processSearch}
-                          onChange={(e) => setProcessSearch(e.target.value.toUpperCase())}
+                          onChange={(e) => setProcessSearch(e.target.value)}
+                          style={{ textTransform: "uppercase" }}
                           autoFocus
                           onKeyDown={(e) => {
                             handleListKeyDown(e, {

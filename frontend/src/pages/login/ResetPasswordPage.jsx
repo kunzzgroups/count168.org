@@ -226,7 +226,8 @@ export default function ResetPasswordPage() {
                   type="text"
                   placeholder={i18n.companyPlaceholder}
                   value={companyId}
-                  onChange={(event) => setCompanyId(event.target.value.toUpperCase())}
+                  onChange={(event) => setCompanyId(event.target.value)}
+                  style={{ textTransform: "uppercase" }}
                   required
                 />
               </div>

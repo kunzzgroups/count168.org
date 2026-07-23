@@ -442,7 +442,8 @@ export default function LoginPage() {
                   placeholder={i18n.companyPlaceholder}
                   required
                   value={companyId}
-                  onChange={(e) => setCompanyId(e.target.value.toUpperCase())}
+                  onChange={(e) => setCompanyId(e.target.value)}
+                  style={{ textTransform: "uppercase" }}
                 />
               </div>
 
@@ -455,7 +456,8 @@ export default function LoginPage() {
                   placeholder={userPlaceholder}
                   required
                   value={userField}
-                  onChange={(e) => setUserField(e.target.value.toUpperCase())}
+                  onChange={(e) => setUserField(e.target.value)}
+                  style={{ textTransform: "uppercase" }}
                 />
               </div>
 

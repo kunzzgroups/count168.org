@@ -796,7 +796,8 @@ export default function AutoRenewPage() {
                     className="search-input userlist-search-input"
                     placeholder={t("searchPlaceholder")}
                     value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </div>
                 <div className="transaction-date-range-group auto-renew-date-range-group">

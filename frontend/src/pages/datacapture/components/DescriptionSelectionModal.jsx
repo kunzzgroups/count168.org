@@ -221,7 +221,7 @@ export default function DescriptionSelectionModal({
                   type="text"
                   placeholder={t("searchDescriptions")}
                   value={search}
-                  onChange={(e) => setSearch(e.target.value.toUpperCase())}
+                  onChange={(e) => setSearch(e.target.value)}
                   style={{ textTransform: "uppercase" }}
                 />
               </div>

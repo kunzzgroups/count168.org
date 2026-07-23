@@ -134,8 +134,9 @@ export default function ProcessSelect({
               autoComplete="off"
               value={searchTerm}
               onChange={(e) => {
-                setSearchTerm(e.target.value.toUpperCase());
+                setSearchTerm(e.target.value);
               }}
+              style={{ textTransform: "uppercase" }}
               onKeyDown={handleKeyDown}
               ref={searchInputRef}
             />
