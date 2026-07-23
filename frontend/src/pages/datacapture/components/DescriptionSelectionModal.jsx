@@ -205,7 +205,7 @@ export default function DescriptionSelectionModal({
                       placeholder={t("enterNewDescriptionName")}
                       required
                       value={newName}
-                      onChange={(e) => setNewName(e.target.value)}
+                      onChange={(e) => setNewName(e.target.value.toUpperCase())}
                       style={{ textTransform: "uppercase" }}
                     />
                     <button type="submit" className="btn btn-save">

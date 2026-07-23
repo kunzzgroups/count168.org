@@ -582,7 +582,7 @@ export function buildFormulaSavePatchFromForm(form, row) {
 
   const sourcePercentValue = String(form.sourcePercent || "1").trim() || "1";
   const inputMethodValue = String(form.inputMethod || "").trim();
-  const descriptionValue = String(form.description || "").trim().toUpperCase();
+  const descriptionValue = String(form.description || "").trim();
   const enableInputMethod = Boolean(inputMethodValue);
   const enableSourcePercent = resolveEnableSourcePercent(sourcePercentValue);
   const clickedRefs = form.clickedColumns || "";

@@ -103,7 +103,7 @@ export default function DescriptionPickerModal({
                       placeholder={t("enterNewDescriptionName")}
                       value={newDescName}
                       disabled={ro}
-                      onChange={(e) => setNewDescName(e.target.value)}
+                      onChange={(e) => setNewDescName(e.target.value.toUpperCase())}
                       style={{ textTransform: "uppercase" }}
                       required
                     />
