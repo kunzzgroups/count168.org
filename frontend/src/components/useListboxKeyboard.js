@@ -34,8 +34,18 @@ export function useListboxKeyboard({ open, itemCount, resetToken = null, initial
 
   useEffect(() => {
     if (!open || highlightIdx < 0 || !listRef.current) return;
-    const node = listRef.current.querySelector(`[data-kb-idx="${highlightIdx}"]`);
-    node?.scrollIntoView({ block: "nearest" });
+    const list = listRef.current;
+    const node = list.querySelector(`[data-kb-idx="${highlightIdx}"]`);
+    if (!node) return;
+    // Scroll only the listbox container — Element.scrollIntoView can scroll
+    // ancestors/document and break position:fixed portal menus in overflow:hidden modals.
+    const listRect = list.getBoundingClientRect();
+    const nodeRect = node.getBoundingClientRect();
+    if (nodeRect.bottom > listRect.bottom) {
+      list.scrollTop += nodeRect.bottom - listRect.bottom;
+    } else if (nodeRect.top < listRect.top) {
+      list.scrollTop -= listRect.top - nodeRect.top;
+    }
   }, [highlightIdx, open, itemCount]);
 
   const buildLabels = useCallback(

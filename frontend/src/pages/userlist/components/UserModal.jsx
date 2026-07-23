@@ -561,6 +561,7 @@ function UserModal({
                       options={roleOptions}
                       placeholder={t("selectRole")}
                       disabled={roleSelectDisabled || fieldLocks.role || pageReadOnlyLock}
+                      forcePortal
                       required
                     />
                   </div>
