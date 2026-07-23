@@ -48,6 +48,7 @@ import {
   invalidateProcessListCompanyCache,
   buildOptimisticProcessRows,
   mergeProcessRowsById,
+  toProcessFormUpperInput,
 } from "./processListHelpers.js";
 import {
   fetchGamesProcessListSlice,
@@ -1352,16 +1353,16 @@ export default function ProcessListPage() {
     const fd = new FormData();
     if (editMode) {
       fd.append("id", form.id);
-      fd.append("process_name", form.process_name);
+      fd.append("process_name", toProcessFormUpperInput(form.process_name));
       fd.append("status", form.status || "active");
       const names = form.selected_descriptions.map((d) => d.name).filter(Boolean);
       fd.append("selected_descriptions", JSON.stringify(names.length ? names : [form.selected_descriptions[0].name]));
       fd.append("description", form.selected_descriptions[0].name);
       fd.append("day_use", form.day_use.join(","));
       fd.append("remove_word", submittedRemoveWord);
-      fd.append("replace_word_from", form.replace_word_from || "");
-      fd.append("replace_word_to", form.replace_word_to || "");
-      fd.append("remark", form.remark || "");
+      fd.append("replace_word_from", toProcessFormUpperInput(form.replace_word_from || ""));
+      fd.append("replace_word_to", toProcessFormUpperInput(form.replace_word_to || ""));
+      fd.append("remark", toProcessFormUpperInput(form.remark || ""));
       fd.append("currency_id", form.currency_id);
       try {
         const res = await fetch(buildApiUrl("api/processes/processlist_api.php?action=update_process"), {
@@ -1387,15 +1388,15 @@ export default function ProcessListPage() {
     if (form.is_multi_process && form.selected_processes?.length > 0) {
       fd.append("selected_processes", JSON.stringify(form.selected_processes));
     } else {
-      fd.append("process_id", form.process_name);
+      fd.append("process_id", toProcessFormUpperInput(form.process_name));
     }
     fd.append("selected_descriptions", JSON.stringify(form.selected_descriptions.map((d) => d.name)));
     fd.append("currency_id", form.currency_id);
     fd.append("day_use", form.day_use.join(","));
     fd.append("remove_word", submittedRemoveWord);
-    fd.append("replace_word_from", form.replace_word_from || "");
-    fd.append("replace_word_to", form.replace_word_to || "");
-    fd.append("remark", form.remark || "");
+    fd.append("replace_word_from", toProcessFormUpperInput(form.replace_word_from || ""));
+    fd.append("replace_word_to", toProcessFormUpperInput(form.replace_word_to || ""));
+    fd.append("remark", toProcessFormUpperInput(form.remark || ""));
     if (form.copy_from) fd.append("copy_from", form.copy_from);
     fd.append("permission", "Games");
     const submitCompanyId = activeCompanyId ?? companyId;

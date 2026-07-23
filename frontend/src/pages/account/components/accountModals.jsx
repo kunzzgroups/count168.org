@@ -279,7 +279,8 @@ export function CurrencySettingModal({
                   className="currency-setting-input"
                   placeholder={t("pleaseEnterNewCurrency")}
                   value={currencyInput}
-                  onChange={(e) => setCurrencyInput(toUpper(e.target.value))}
+                  onChange={(e) => setCurrencyInput(e.target.value)}
+                  style={{ textTransform: "uppercase" }}
                 />
                 <button
                   type="button"

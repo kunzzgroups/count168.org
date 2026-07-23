@@ -322,7 +322,8 @@ export function BankProcessFormSheet({
                   value={form.name || ""}
                   readOnly={editMode}
                   autoCapitalize="characters"
-                  onChange={(e) => patch({ name: String(e.target.value).toUpperCase() })}
+                  onChange={(e) => patch({ name: e.target.value })}
+                  style={{ textTransform: "uppercase" }}
                   placeholder={i18n.bankCardOwnerPlaceholder}
                 />
               </Field>

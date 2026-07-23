@@ -579,8 +579,14 @@ export function useBankProcessListPage() {
 
     const fd = new FormData();
     Object.entries(accountModalForm).forEach(([k, v]) => {
-      if (k === "alert_amount") fd.append(k, alertAmount);
-      else fd.append(k, v ?? "");
+      if (k === "alert_amount") {
+        fd.append(k, alertAmount);
+        return;
+      }
+      const raw = v ?? "";
+      const out =
+        k === "account_id" || k === "name" || k === "remark" ? toUpper(raw) : raw;
+      fd.append(k, out);
     });
     if (accountModalForm.payment_alert === "0") {
       fd.set("alert_type", "");
@@ -1936,6 +1942,7 @@ export function useBankProcessListPage() {
     else normalizedFreq = "1st_of_every_month";
     const moneyNormalized = {
       ...form,
+      name: toUpper(form.name),
       cost: formatBankMoneyFixed2(form.cost),
       price: formatBankMoneyFixed2(form.price),
       profit: calcBankNetProfitDisplay(form.cost, form.price, form.profit_sharing),
