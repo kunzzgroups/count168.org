@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { useLocation, useNavigate } from "react-router-dom";
 import { notifyCompanySessionUpdated } from "../../utils/company/companySessionEvents.js";
@@ -1692,28 +1692,38 @@ export default function UserListPage() {
     ],
   );
 
-  const fetchModalAccountsProcesses = useCallback(async (cid, force = false) => {
+  const fetchModalAccountsProcesses = useCallback(async (cid, force = false, { background = false } = {}) => {
     const normalizedGroupId = String(selectedGroup || "").trim().toUpperCase();
     const useGroupScopedAccounts = groupOnlyUserList && normalizedGroupId !== "";
     const cacheKey = useGroupScopedAccounts ? `group:${normalizedGroupId}` : `company:${String(cid || "")}`;
+    const applyAccessState = (next) => {
+      const commit = () => {
+        modalAccessCompanyIdRef.current = Number(cid);
+        setModalAccounts(next.accounts);
+        setModalProcesses(next.processes);
+        setModalAccessReadyCompanyId(Number(cid));
+      };
+      if (background) startTransition(commit);
+      else commit();
+    };
     const cached = modalAccessCacheRef.current.get(cacheKey);
     if (cached && !force) {
-      modalAccessCompanyIdRef.current = Number(cid);
-      setModalAccounts(cached.accounts);
-      setModalProcesses(cached.processes);
-      setModalAccessReadyCompanyId(Number(cid));
+      applyAccessState(cached);
       return cached;
     }
     const pending = modalAccessPendingRef.current.get(cacheKey);
     if (pending) {
       try {
         const next = await pending;
-        modalAccessCompanyIdRef.current = Number(cid);
-        setModalAccounts(next.accounts);
-        setModalProcesses(next.processes);
-        setModalAccessReadyCompanyId(Number(cid));
+        applyAccessState(next);
         return next;
-      } catch { setModalAccounts([]); setModalProcesses([]); return { accounts: [], processes: [] }; }
+      } catch {
+        if (!background) {
+          setModalAccounts([]);
+          setModalProcesses([]);
+        }
+        return { accounts: [], processes: [] };
+      }
     }
     try {
       const accountQuery = useGroupScopedAccounts
@@ -1731,15 +1741,12 @@ export default function UserListPage() {
       modalAccessPendingRef.current.set(cacheKey, request);
       const next = await request;
       modalAccessCacheRef.current.set(cacheKey, next);
-      modalAccessCompanyIdRef.current = Number(cid);
-      setModalAccounts(next.accounts); setModalProcesses(next.processes); setModalAccessReadyCompanyId(Number(cid)); return next;
+      applyAccessState(next);
+      return next;
     } catch {
       const empty = { accounts: [], processes: [] };
       modalAccessCacheRef.current.set(cacheKey, cached || empty);
-      modalAccessCompanyIdRef.current = Number(cid);
-      setModalAccounts((cached || empty).accounts);
-      setModalProcesses((cached || empty).processes);
-      setModalAccessReadyCompanyId(Number(cid));
+      applyAccessState(cached || empty);
       return cached || empty;
     }
     finally { modalAccessPendingRef.current.delete(cacheKey); }
@@ -1901,7 +1908,8 @@ export default function UserListPage() {
     }
     if (!mutationScopeCompanyId) return;
     const modalCacheKey = resolveModalAccessCacheKey(mutationScopeCompanyId, groupOnlyUserList, selectedGroup);
-    if (!modalAccessCacheRef.current.has(modalCacheKey)) {
+    const hadAccessCache = modalAccessCacheRef.current.has(modalCacheKey);
+    if (!hadAccessCache) {
       await fetchModalAccountsProcesses(mutationScopeCompanyId);
     }
     const avail = getAvailableRolesForCreation(currentUserRole);
@@ -1957,10 +1965,24 @@ export default function UserListPage() {
       }
     }
     setModalOpen(true);
-    void fetchModalAccountsProcesses(mutationScopeCompanyId, true).then(({ accounts: accList, processes: procList }) => {
-      if (loadSeq !== modalLoadSeqRef.current) return;
-      setSelectedAccountIds(new Set(accList.map((a) => Number(a.id)))); setSelectedProcessIds(new Set(procList.map((p) => Number(p.id))));
-    });
+    // Soft revalidate only when opening from cache — avoid a second main-thread grid
+    // commit racing with Role clicks right after Add User.
+    if (hadAccessCache) {
+      const softRefresh = () => {
+        void fetchModalAccountsProcesses(mutationScopeCompanyId, true, { background: true }).then(({ accounts: accList, processes: procList }) => {
+          if (loadSeq !== modalLoadSeqRef.current) return;
+          startTransition(() => {
+            setSelectedAccountIds(new Set(accList.map((a) => Number(a.id))));
+            setSelectedProcessIds(new Set(procList.map((p) => Number(p.id))));
+          });
+        });
+      };
+      if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(softRefresh, { timeout: 4000 });
+      } else {
+        window.setTimeout(softRefresh, 1500);
+      }
+    }
   };
 
   const applyPermTemplate = useCallback((role, force) => {
@@ -2131,7 +2153,7 @@ export default function UserListPage() {
       ? selectedCompanyIds.length > 0
       : !groupOnlyUserList;
     const processPerms = Array.from(selectedProcessIds).map(id => { const p = modalProcesses.find(x => Number(x.id) === Number(id)); return { id: Number(id), process_id: p?.process_id || "", description: p?.description || "" }; });
-    let payload = { action: isEditMode ? "update" : "create", id: form.id || undefined, login_id: form.login_id.trim(), name: form.name.trim(), email: emailCheck.normalized, role: form.role, status: form.status };
+    let payload = { action: isEditMode ? "update" : "create", id: form.id || undefined, login_id: form.login_id.trim().toUpperCase(), name: form.name.trim().toUpperCase(), email: emailCheck.normalized, role: form.role, status: form.status };
     let saveGroupId = null;
     let saveCompanyIds = selectedCompanyIds;
     let saveGroupCodes = [];

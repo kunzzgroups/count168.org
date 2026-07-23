@@ -68,10 +68,10 @@ function buildProcessCapturePayload(form, captureType, currencies, selectedDescr
     descriptions: getActiveDescriptions(form.descriptionDisplay, selectedDescriptions),
     currency: form.currencyId,
     currencyName: currencyOpt?.code || "",
-    removeWord: form.removeWord || "",
-    replaceWordFrom: form.replaceFrom || "",
-    replaceWordTo: form.replaceTo || "",
-    remark: form.remark || "",
+    removeWord: String(form.removeWord || "").toUpperCase(),
+    replaceWordFrom: String(form.replaceFrom || "").toUpperCase(),
+    replaceWordTo: String(form.replaceTo || "").toUpperCase(),
+    remark: String(form.remark || "").toUpperCase(),
   };
 }
 

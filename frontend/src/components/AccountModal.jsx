@@ -247,7 +247,8 @@ export default function AccountModal({
                 <input
                   type="text"
                   value={form.account_id}
-                  onChange={(e) => setForm((f) => ({ ...f, account_id: upper(e.target.value) }))}
+                  onChange={(e) => setForm((f) => ({ ...f, account_id: e.target.value }))}
+                  style={{ textTransform: "uppercase" }}
                   disabled={!!isEditMode}
                   required
                 />
@@ -285,7 +286,8 @@ export default function AccountModal({
                 <input
                   type="text"
                   value={form.name}
-                  onChange={(e) => setForm((f) => ({ ...f, name: upper(e.target.value) }))}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                  style={{ textTransform: "uppercase" }}
                   required
                 />
               </div>
@@ -328,7 +330,8 @@ export default function AccountModal({
                     type="text"
                     id={isEditMode ? "edit_remark" : "add_remark"}
                     value={form.remark}
-                    onChange={(e) => setForm((f) => ({ ...f, remark: upper(e.target.value) }))}
+                    onChange={(e) => setForm((f) => ({ ...f, remark: e.target.value }))}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </div>
               )}
@@ -375,7 +378,8 @@ export default function AccountModal({
                     type="text"
                     id={isEditMode ? "edit_remark" : "add_remark"}
                     value={form.remark}
-                    onChange={(e) => setForm((f) => ({ ...f, remark: upper(e.target.value) }))}
+                    onChange={(e) => setForm((f) => ({ ...f, remark: e.target.value }))}
+                    style={{ textTransform: "uppercase" }}
                   />
                 </div>
               ) : (
@@ -394,7 +398,8 @@ export default function AccountModal({
                       size={currencyInputCols}
                       placeholder={currencyPlaceholder}
                       value={currencyInput}
-                      onChange={(e) => setCurrencyInput(upper(e.target.value))}
+                      onChange={(e) => setCurrencyInput(e.target.value)}
+                      style={{ textTransform: "uppercase" }}
                     />
                     <button type="button" className="account-btn-add-currency" onClick={onCreateCurrency}>
                       {text("createCurrency")}

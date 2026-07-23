@@ -3846,17 +3846,18 @@ body.user-page .pagination-container {
     transition: none;
 }
 
-#userModal .user-modal-select-card:hover:not(:has(input[type="checkbox"]:disabled)) {
+#userModal .user-modal-select-card:hover:not(.is-disabled) {
     background-color: #e8eef5 !important;
     border-color: #94a3b8 !important;
 }
 
-#userModal .user-modal-select-card:has(input[type="checkbox"]:checked) {
+/* Class-based selected state — avoid :has(:checked) which is costly on Select All/Clear All. */
+#userModal .user-modal-select-card.is-selected {
     background-color: var(--account-select-card-bg-checked);
     border: 1.5px solid var(--account-select-card-border-checked);
 }
 
-#userModal .user-modal-select-card:has(input[type="checkbox"]:checked):hover {
+#userModal .user-modal-select-card.is-selected:hover {
     background-color: #f8fbff !important;
     border-color: var(--account-select-card-border-checked) !important;
 }
@@ -3895,12 +3896,12 @@ body.user-page .pagination-container {
     letter-spacing: 0;
 }
 
-#userModal .user-modal-select-card:has(input[type="checkbox"]:checked) .account-label,
-#userModal .user-modal-select-card:has(input[type="checkbox"]:checked) .account-label.account-label--process {
+#userModal .user-modal-select-card.is-selected .account-label,
+#userModal .user-modal-select-card.is-selected .account-label.account-label--process {
     color: var(--account-select-label-checked);
 }
 
-#userModal .user-modal-select-card:has(input[type="checkbox"]:checked) .account-label-desc {
+#userModal .user-modal-select-card.is-selected .account-label-desc {
     color: var(--account-select-desc-checked);
 }
 
@@ -3919,7 +3920,7 @@ body.user-page .pagination-container {
     pointer-events: none;
 }
 
-#userModal .user-modal-select-card:has(input[type="checkbox"]:disabled) {
+#userModal .user-modal-select-card.is-disabled {
     cursor: not-allowed;
     opacity: 0.55;
 }
@@ -3929,7 +3930,7 @@ body.user-page .pagination-container {
     font-weight: var(--font-weight-bold);
 }
 
-#userModal .user-modal-select-card:has(input[type="checkbox"]:focus-visible) {
+#userModal .user-modal-select-card:focus-within {
     outline: 2px solid #0d60ff;
     outline-offset: 2px;
 }
