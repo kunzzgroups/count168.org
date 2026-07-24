@@ -24,51 +24,6 @@ export async function updateSessionCompany(companyId, signal) {
   return json.data;
 }
 
-/** Desktop parity: Bank category uses fixed payroll processes (no processlist call). */
-export const PAYROLL_PROCESS_OPTIONS = ["PROFIT", "SALARY", "COMMISSION", "BONUS"];
-
-/** Transaction Maintenance only has data for these categories (desktop parity). */
-const TXN_MAINTENANCE_CATEGORIES = new Set(["games", "gambling", "bank"]);
-
-/**
- * Company permission categories for Transaction Maintenance, filtered to
- * Games/Gambling/Bank (mirrors desktop fetchCompanyPermissions +
- * filterTransactionMaintenancePermissions). Fallback matches desktop defaults.
- * @returns {Promise<string[]>}
- */
-export async function fetchMaintenanceCategories(companyCode, signal) {
-  const fallback = ["Games", "Bank"];
-  if (!companyCode) return fallback;
-  try {
-    const { res, json } = await fetchJson(buildApiUrl("api/domain/domain_api.php"), {
-      method: "POST",
-      body: JSON.stringify({ action: "get_company_permissions", company_id: companyCode }),
-      signal,
-    });
-    if (res.ok && json?.success && Array.isArray(json.data?.permissions)) {
-      const filtered = json.data.permissions.filter((p) =>
-        TXN_MAINTENANCE_CATEGORIES.has(String(p).toLowerCase()),
-      );
-      return filtered.length > 0 ? filtered : ["Games"];
-    }
-  } catch (e) {
-    if (e?.name === "AbortError") throw e;
-  }
-  return fallback;
-}
-
-/** Default category pick: keep current if valid, else Games/Gambling, else Bank (desktop parity). */
-export function pickMaintenanceCategory(categories, current) {
-  const list = Array.isArray(categories) ? categories : [];
-  if (current && list.includes(current)) return current;
-  return (
-    list.find((p) => ["games", "gambling"].includes(String(p).toLowerCase())) ||
-    list.find((p) => String(p).toLowerCase() === "bank") ||
-    list[0] ||
-    "Games"
-  );
-}
-
 function uniqueProcessNames(rows, pickName) {
   const names = (Array.isArray(rows) ? rows : [])
     .map((row) => String(pickName(row) ?? "").trim())
@@ -77,15 +32,11 @@ function uniqueProcessNames(rows, pickName) {
 }
 
 /**
- * Process options for the Transaction Maintenance filter (mirrors desktop
- * fetchProcessesForMaintenance): Bank → fixed payroll list; group scope →
- * domain report processes; company scope → processlist_api.
+ * Process options for the Transaction Maintenance filter.
+ * Group scope → domain report processes; company scope → processlist_api.
  * @returns {Promise<string[]>} process names
  */
-export async function fetchMaintenanceProcessOptions({ scope, category, signal }) {
-  if (String(category).toLowerCase() === "bank") {
-    return [...PAYROLL_PROCESS_OPTIONS];
-  }
+export async function fetchMaintenanceProcessOptions({ scope, signal }) {
   if (scope?.mode === "group" && scope.groupId) {
     const params = new URLSearchParams();
     params.set("action", "processes");
@@ -103,7 +54,6 @@ export async function fetchMaintenanceProcessOptions({ scope, category, signal }
   if (!(Number(scope?.companyId) > 0)) return [];
   const params = new URLSearchParams();
   params.set("company_id", String(scope.companyId));
-  if (category) params.set("permission", category);
   const { res, json } = await fetchJson(
     buildApiUrl(`api/processes/processlist_api.php?${params.toString()}`),
     { signal },

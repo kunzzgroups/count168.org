@@ -1,6 +1,4 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
-import { isC168CompanyCode } from "../../../utils/company/c168CaptureChannel.js";
-import { companiesNativeInGroupList } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   fetchFormulaCompanyPermissionsRaw,
   fetchMaintenanceProcesses,
@@ -76,20 +74,11 @@ export async function fetchCompanyPermissionsRaw(companyCode) {
   return fetchFormulaCompanyPermissionsRaw(companyCode);
 }
 
-export async function fetchCompanyPermissions(companyCode) {
-  const code = String(companyCode ?? "").trim().toUpperCase();
-  if (isC168CompanyCode(code)) {
-    return ["Games", "Gambling"];
-  }
-  const permissions = await fetchCompanyPermissionsRaw(companyCode);
-  return permissions.length > 0 ? permissions : ["Games", "Gambling", "Bank", "Loan", "Rate", "Money"];
-}
-
 export { isBankOnlyCategoryCompany } from "../shared/maintenanceCompanyApi.js";
 
-export async function fetchProcesses(companyId, scope = null, permission = "") {
+export async function fetchProcesses(companyId, scope = null) {
   const payrollChannel = Boolean(scope?.c168Channel || scope?.companyPayrollChannel);
-  if (String(permission).toLowerCase() === "bank" || payrollChannel) {
+  if (payrollChannel) {
     return [
       { id: "PROFIT", process_name: "PROFIT", description: null },
       { id: "SALARY", process_name: "SALARY", description: null },
@@ -112,28 +101,6 @@ export async function fetchProcesses(companyId, scope = null, permission = "") {
     );
   }
   return mapped;
-}
-
-/** Pick Category for formula maintenance (saved localStorage perm when still valid). */
-export function pickFormulaMaintenancePermission(permissions, saved) {
-  const perms = Array.isArray(permissions) ? permissions : [];
-  if (saved && perms.includes(saved)) return saved;
-  return perms.length > 0 ? perms[0] : "";
-}
-
-export async function bootstrapFormulaMaintenanceMeta({ companies, groupId = null }) {
-  const anchor =
-    (groupId ? companiesNativeInGroupList(companies, groupId)[0] : null) ??
-    (Array.isArray(companies) ? companies[0] : null) ??
-    null;
-  const code = anchor?.company_id ? String(anchor.company_id) : "";
-  const rawPerms = code
-    ? await fetchCompanyPermissionsRaw(code)
-    : ["Games", "Gambling", "Bank", "Loan", "Rate", "Money"];
-  const companyPerms = rawPerms;
-  const savedPerm = code ? localStorage.getItem(`selectedPermission_${code}`) : null;
-  const initialActive = pickFormulaMaintenancePermission(companyPerms, savedPerm);
-  return { permissions: companyPerms, activePermission: initialActive, rawPerms };
 }
 
 export async function fetchAccounts(companyId, scope = null) {

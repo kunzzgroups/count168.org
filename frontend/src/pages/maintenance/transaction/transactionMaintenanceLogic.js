@@ -1,7 +1,6 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { formatDmy, parseDdMmYyyyToYmd, parseYmd } from "../../../utils/date/dateUtils.js";
 import {
-  companiesInGroupList,
   pickDefaultSubsidiaryForGroup,
   pickGroupAnchorCompany,
 } from "../../../utils/company/sharedCompanyFilter.js";
@@ -14,7 +13,6 @@ import {
 } from "../shared/maintenanceCompanyApi.js";
 import { fetchProcesses as fetchDomainReportProcesses } from "../../report/domain/domainReportApi.js";
 import { mapDomainGroupProcesses } from "../../report/domain/domainReportGroupProcesses.js";
-import { GROUP_ONLY_PROCESS_CODES } from "../../datacapture/lib/dataCaptureGroupOnlyProcesses.js";
 import {
   transactionMaintenanceScopeApiParams,
   transactionMaintenanceScopeCacheKey,
@@ -122,16 +120,8 @@ function appendMaintenanceScopeToParams(params, scope) {
 }
 
 export async function fetchProcesses(companyId, scope = null) {
-  return fetchProcessesForMaintenance(companyId, "", scope);
-}
-
-export async function fetchProcessesForPermission(companyId, permission, scope = null) {
-  return fetchProcessesForMaintenance(companyId, permission, scope);
-}
-
-export async function fetchProcessesForMaintenance(companyId, permission, scope = null) {
   const payrollChannel = Boolean(scope?.c168Channel || scope?.companyPayrollChannel);
-  if (String(permission).toLowerCase() === "bank" || payrollChannel) {
+  if (payrollChannel) {
     return [
       { id: "PROFIT", process_name: "PROFIT", description: null },
       { id: "SALARY", process_name: "SALARY", description: null },
@@ -144,89 +134,20 @@ export async function fetchProcessesForMaintenance(companyId, permission, scope 
     return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList));
   }
   const effectiveId = scope?.scopeCompanyId ?? companyId;
-  const permForApi =
-    payrollChannel && String(permission).toLowerCase() === "bank" ? "" : permission;
   const rows = await fetchMaintenanceProcesses(effectiveId, {
     credentials: true,
-    permission: permForApi,
   });
-  let mapped = mapProcessesForMaintenanceSelect(rows);
-  if (payrollChannel) {
-    const payrollCodes = new Set(GROUP_ONLY_PROCESS_CODES);
-    mapped = mapped.filter((p) =>
-      payrollCodes.has(String(p.process_name ?? "").trim().toUpperCase()),
-    );
-  }
-  return mapped;
+  return mapProcessesForMaintenanceSelect(rows);
 }
 
-/**
- * Load permission/category + process list when Company is cleared (group-only).
- * Uses a group anchor company for permissions UI only — does not select that company.
- */
-export async function bootstrapTransactionMaintenanceMeta({
-  companies,
-  groupId = null,
-  anchorCompany = null,
-}) {
-  const anchor =
-    anchorCompany ??
-    (groupId ? companiesInGroupList(companies, groupId)[0] : null) ??
-    (Array.isArray(companies) ? companies[0] : null) ??
-    null;
-  const code = anchor?.company_id ? String(anchor.company_id) : "";
-  const companyPerms = code
-    ? await fetchCompanyPermissions(code)
-    : filterTransactionMaintenancePermissions(["Games", "Gambling", "Bank"]);
-  const savedPerm = code ? localStorage.getItem(`selectedPermission_${code}`) : null;
-  const activePermission = pickTransactionMaintenancePermission(companyPerms, savedPerm);
-  return { permissions: companyPerms, activePermission };
-}
-
-/** Transaction Maintenance 仅 Games/Gambling/Bank 有数据；Loan/Rate/Money 与其它维护页共用 localStorage 时会误传。 */
-const TXN_MAINTENANCE_SEARCH_CATEGORIES = new Set(["games", "gambling", "bank"]);
-const TXN_MAINTENANCE_EMPTY_CATEGORIES = new Set(["loan", "rate", "money"]);
-/** 与 Payment 等页共用 localStorage；Bank 在本页会跳过 Data Capture，默认不恢复 saved Bank。 */
-const TXN_MAINTENANCE_IGNORE_SAVED_CATEGORIES = new Set(["loan", "rate", "money", "bank"]);
-
-/** 本页可选的 Category 按钮（过滤 Loan/Rate/Money）。 */
-export function filterTransactionMaintenancePermissions(permissions) {
-  const perms = Array.isArray(permissions) ? permissions : [];
-  const filtered = perms.filter((p) =>
-    TXN_MAINTENANCE_SEARCH_CATEGORIES.has(String(p).toLowerCase()),
-  );
-  return filtered.length > 0 ? filtered : perms;
-}
-
-/** 选择默认 Category：优先 Games/Gambling，忽略 Loan/Rate/Money/Bank 的 localStorage。 */
-export function pickTransactionMaintenancePermission(permissions, saved) {
-  const perms = filterTransactionMaintenancePermissions(permissions);
-  const savedLower = String(saved ?? "").toLowerCase();
-  if (
-    saved &&
-    perms.includes(saved) &&
-    !TXN_MAINTENANCE_IGNORE_SAVED_CATEGORIES.has(savedLower)
-  ) {
-    return saved;
-  }
-  return (
-    perms.find((p) => {
-      const lower = String(p).toLowerCase();
-      return lower === "games" || lower === "gambling";
-    }) ||
-    perms.find((p) => String(p).toLowerCase() === "bank") ||
-    perms[0] ||
-    ""
-  );
-}
-
-/** 传给 maintenance_search_api 的 category（Loan/Rate/Money → Games）。 */
+/** Normalize category for maintenance_search_api (always Games after Category UI removal). */
 export function resolveTransactionMaintenanceCategory(permission, scope = null) {
   const raw = String(permission ?? "").trim();
   if (!raw) return "";
   const lower = raw.toLowerCase();
-  if (TXN_MAINTENANCE_EMPTY_CATEGORIES.has(lower)) return "Games";
-  if (lower === "gambling") return "Games";
+  if (lower === "loan" || lower === "rate" || lower === "money" || lower === "gambling") {
+    return "Games";
+  }
   // Bank-only payroll subsidiaries (e.g. CX): Data Capture uses Games semantics, not Bank ledger.
   if (lower === "bank" && (scope?.companyPayrollChannel || scope?.c168Channel)) {
     return "Games";

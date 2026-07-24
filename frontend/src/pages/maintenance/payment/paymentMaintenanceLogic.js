@@ -1,5 +1,4 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
-import { fetchDomainCompanyPermissions } from "../shared/maintenanceCompanyApi.js";
 import { fetchReportScopeCurrencies } from "../../report/shared/reportCompanyApi.js";
 import { paymentMaintenanceScopeApiParams } from "./paymentMaintenanceScope.js";
 
@@ -32,10 +31,6 @@ export function pickPaymentMaintenanceCurrency(currList, scope) {
   }
   const hasMYR = currList.some((c) => String(c?.code || "").toUpperCase() === "MYR");
   return hasMYR ? "MYR" : currList[0]?.code || null;
-}
-
-export async function fetchCompanyPermissions(companyCode) {
-  return fetchDomainCompanyPermissions(companyCode, { emptyForC168: true });
 }
 
 /** Currencies for active group ledger vs subsidiary company (no cross-scope bleed). */

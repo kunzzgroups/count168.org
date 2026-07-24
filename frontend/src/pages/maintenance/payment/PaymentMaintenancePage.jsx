@@ -11,7 +11,6 @@ import {
 } from "../shared/maintenanceCompanySwitch.js";
 import { useMaintenancePageScrollLock } from "../shared/useMaintenancePageScrollLock.js";
 import {
-  companiesInGroupList,
   isDashboardGroupOnlyMode,
   notifyDashboardGroupFilterChanged,
   persistDashboardFilterState,
@@ -33,7 +32,6 @@ import "../../../../public/css/report-outlined-fields.css";
 import "../../../../public/css/payment_maintenance.css";
 import "../../../../public/css/maintenance_unified_filters.css";
 import {
-  fetchCompanyPermissions,
   fetchCompanyCurrencies,
   pickPaymentMaintenanceCurrency,
   searchPaymentData,
@@ -63,7 +61,6 @@ export default function PaymentMaintenancePage() {
   // -- Boot State --
   const [bootLoading, setBootLoading] = useState(true);
   const [companies, setCompanies] = useState([]);
-  const [permissions, setPermissions] = useState([]);
 
   // -- Filter State --
   const [companyId, setCompanyId] = useState(null);
@@ -71,7 +68,6 @@ export default function PaymentMaintenancePage() {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [transactionType, setTransactionType] = useState("");
   const [query, setQuery] = useState("");
-  const [activePermission, setActivePermission] = useState("");
   const [currencies, setCurrencies] = useState([]);
   const [selectedCurrency, setSelectedCurrency] = useState(null);
   
@@ -282,24 +278,9 @@ export default function PaymentMaintenancePage() {
             selectedGroup: bootGroup,
             companyId: null,
           });
-          const anchor = bootGroup ? companiesInGroupList(rows, bootGroup)[0] : null;
-          const code = anchor?.company_id ? String(anchor.company_id) : "";
-          const scopeCompanyId = bootScope?.scopeCompanyId;
-          const [companyPerms, currList] = await Promise.all([
-            code ? fetchCompanyPermissions(code) : Promise.resolve([]),
-            fetchCompanyCurrencies(null, bootScope),
-          ]);
+          const currList = await fetchCompanyCurrencies(null, bootScope);
           if (cancelled) return;
-          setPermissions(companyPerms);
           setCurrencies(currList);
-          const savedPerm = code ? localStorage.getItem(`selectedPermission_${code}`) : null;
-          setActivePermission(
-            savedPerm && companyPerms.includes(savedPerm)
-              ? savedPerm
-              : companyPerms.length > 0
-                ? companyPerms[0]
-                : "",
-          );
           setSelectedCurrency(pickPaymentMaintenanceCurrency(currList, bootScope));
           if (bootGroup) sessionStorage.setItem("dashboard_group_filter", bootGroup);
           skipMetaAfterBootRef.current = true;
@@ -318,17 +299,8 @@ export default function PaymentMaintenancePage() {
             companyId: initialCompanyId,
           });
 
-          const [companyPerms, currList] = await Promise.all([
-            fetchCompanyPermissions(code),
-            fetchCompanyCurrencies(null, bootScope),
-          ]);
-          setPermissions(companyPerms);
+          const currList = await fetchCompanyCurrencies(null, bootScope);
           setCurrencies(currList);
-
-          const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
-          const initialActive = savedPerm && companyPerms.includes(savedPerm) ? savedPerm : (companyPerms.length > 0 ? companyPerms[0] : "");
-          setActivePermission(initialActive);
-
           setSelectedCurrency(pickPaymentMaintenanceCurrency(currList, bootScope));
 
           if (bootGroup) sessionStorage.setItem("dashboard_group_filter", bootGroup);
@@ -377,7 +349,7 @@ export default function PaymentMaintenancePage() {
     };
   }, [bootLoading, companyId, companies, selectedGroup, me?.company_id]);
 
-  // -- Load Meta Data (Permissions & Currencies) --
+  // -- Load Meta Data (Currencies) --
   useEffect(() => {
     if (bootLoading || !paymentMaintenanceScopeIsReady(paymentScope)) return;
     if (skipMetaAfterBootRef.current) {
@@ -387,30 +359,11 @@ export default function PaymentMaintenancePage() {
 
     let cancelled = false;
     const scope = paymentScope;
-    const permCode =
-      companyCode ||
-      (selectedGroup
-        ? companiesInGroupList(companies, selectedGroup)[0]?.company_id
-        : "") ||
-      "";
     (async () => {
       try {
-        const [permList, currList] = await Promise.all([
-          permCode ? fetchCompanyPermissions(permCode) : Promise.resolve([]),
-          fetchCompanyCurrencies(null, scope),
-        ]);
+        const currList = await fetchCompanyCurrencies(null, scope);
         if (cancelled) return;
-        setPermissions(permList);
         setCurrencies(currList);
-        
-        // Initial permission
-        const savedPerm = permCode ? localStorage.getItem(`selectedPermission_${permCode}`) : null;
-        if (savedPerm && permList.includes(savedPerm)) {
-          setActivePermission(savedPerm);
-        } else if (permList.length > 0) {
-          setActivePermission(permList[0]);
-        }
-
         setSelectedCurrency(pickPaymentMaintenanceCurrency(currList, scope));
       } catch (err) {
         if (cancelled) return;
@@ -525,32 +478,13 @@ export default function PaymentMaintenancePage() {
   );
 
   // -- Handlers --
-  const reloadScopeMeta = useCallback(async (scope, permCodeHint = "") => {
-    const permCode =
-      permCodeHint ||
-      companyCode ||
-      (scope?.selectedGroup
-        ? companiesInGroupList(companies, scope.selectedGroup)[0]?.company_id
-        : "") ||
-      "";
-    const [permList, currList] = await Promise.all([
-      permCode ? fetchCompanyPermissions(String(permCode)) : Promise.resolve([]),
-      fetchCompanyCurrencies(null, scope),
-    ]);
-    setPermissions(permList);
+  const reloadScopeMeta = useCallback(async (scope) => {
+    const currList = await fetchCompanyCurrencies(null, scope);
     setCurrencies(currList);
-    const savedPerm = permCode ? localStorage.getItem(`selectedPermission_${permCode}`) : null;
-    setActivePermission(
-      savedPerm && permList.includes(savedPerm)
-        ? savedPerm
-        : permList.length > 0
-          ? permList[0]
-          : "",
-    );
     const nextCurrency = pickPaymentMaintenanceCurrency(currList, scope);
     setSelectedCurrency(nextCurrency);
     return nextCurrency;
-  }, [companies, companyCode]);
+  }, []);
 
   const handleClearCompany = useCallback(
     (groupForPersist) => {
@@ -607,7 +541,7 @@ export default function PaymentMaintenancePage() {
         companyId: nextId,
       });
       try {
-        const nextCurrency = await reloadScopeMeta(nextScope, nextCode);
+        const nextCurrency = await reloadScopeMeta(nextScope);
         await performSearch({
           companyId: nextId,
           selectedGroup: newGroup,
@@ -650,7 +584,7 @@ export default function PaymentMaintenancePage() {
             companyId: nextId,
           });
           try {
-            const nextCurrency = await reloadScopeMeta(nextScope, nextCode);
+            const nextCurrency = await reloadScopeMeta(nextScope);
             await performSearch({
               companyId: nextId,
               selectedGroup: newGroup,
@@ -673,11 +607,6 @@ export default function PaymentMaintenancePage() {
   onClearCompanyRef.current = handleClearCompany;
 
   followGroupRef.current = () => {};
-
-  const handlePermissionSwitch = (p) => {
-    setActivePermission(p);
-    localStorage.setItem(`selectedPermission_${companyCode}`, p);
-  };
 
   const handleCurrencySelectAll = useCallback(() => {
     setSelectedCurrency(null);
@@ -735,26 +664,6 @@ export default function PaymentMaintenancePage() {
 
   return (
     <div className="container">
-      {permissions.length > 1 ? (
-      <div className="maintenance-header">
-          <div id="maintenance-permission-filter" className="maintenance-permission-filter-header">
-            <span className="maintenance-company-label">{m.category}</span>
-            <div id="maintenance-permission-buttons" className="maintenance-company-buttons">
-              {permissions.map(p => (
-                <button 
-                  key={p} 
-                  type="button" 
-                  className={`maintenance-company-btn ${p === activePermission ? 'active' : ''}`}
-                  onClick={() => handlePermissionSwitch(p)}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-      </div>
-      ) : null}
-
       <div className="payment-maintenance-page-root">
       <PaymentMaintenanceFilters 
         transactionType={transactionType}

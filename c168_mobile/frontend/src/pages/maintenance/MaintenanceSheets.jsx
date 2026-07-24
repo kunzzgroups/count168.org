@@ -74,7 +74,6 @@ function buildDraft({
   groupMode,
   selectedGroup,
   companyId,
-  category,
   process,
   transactionType,
   currency = "",
@@ -87,7 +86,6 @@ function buildDraft({
     groupMode: Boolean(groupMode),
     groupId: selectedGroup || null,
     companyId: companyId ?? null,
-    category: category ?? "",
     process: process ?? "",
     transactionType: transactionType ?? "",
     currency: currency ?? "",
@@ -114,7 +112,7 @@ function draftScope(draft) {
 /**
  * Unified maintenance filter sheet — mirrors dashboard/transaction FilterSheet
  * (date range + quick select + group/company + apply), plus maintenance-only
- * sections: Category + Process (transaction) or Transaction type (payment).
+ * sections: Process (transaction) or Transaction type (payment).
  */
 export function MaintenanceFilterSheet({
   open,
@@ -129,8 +127,6 @@ export function MaintenanceFilterSheet({
   companies = [],
   groupIds = [],
   allowedGroupIds = [],
-  categories = null,
-  category = "",
   withProcess = false,
   process = "",
   types = null,
@@ -154,7 +150,6 @@ export function MaintenanceFilterSheet({
       groupMode,
       selectedGroup,
       companyId,
-      category,
       process,
       transactionType,
       currency,
@@ -177,7 +172,6 @@ export function MaintenanceFilterSheet({
         groupMode,
         selectedGroup,
         companyId,
-        category,
         process,
         transactionType,
         currency,
@@ -188,20 +182,23 @@ export function MaintenanceFilterSheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  /** Process options follow the draft scope + category (desktop parity). */
+  /** Process options follow the draft scope. */
   const scope = draftScope(draft);
   const scopeKey = `${scope.mode}:${scope.companyId ?? ""}:${scope.groupId ?? ""}`;
   useEffect(() => {
     if (!open || !withProcess) return undefined;
     const ac = new AbortController();
-    fetchMaintenanceProcessOptions({ scope: draftScope(draft), category: draft.category, signal: ac.signal })
+    fetchMaintenanceProcessOptions({
+      scope: draftScope(draft),
+      signal: ac.signal,
+    })
       .then((names) => setProcessOptions(names))
       .catch((e) => {
         if (e?.name !== "AbortError") setProcessOptions([]);
       });
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, withProcess, scopeKey, draft.category]);
+  }, [open, withProcess, scopeKey]);
 
   /** Dashboard parity: company pills follow the selected group. */
   const pickable = companiesForPicker(companies, {
@@ -237,7 +234,6 @@ export function MaintenanceFilterSheet({
       dateFrom: t,
       dateTo: t,
       activePreset: "today",
-      category: categories?.[0] ?? prev.category,
       process: "",
       transactionType: "",
       currency: "",
@@ -267,7 +263,6 @@ export function MaintenanceFilterSheet({
       dateTo: draft.dateTo,
       activePreset: draft.activePreset,
       scope: draftScope(draft),
-      category: draft.category,
       process: draft.process,
       transactionType: draft.transactionType,
       currency: draft.currency ?? "",
@@ -404,23 +399,6 @@ export function MaintenanceFilterSheet({
               })}
             </div>
           </Section>
-
-          {/* Desktop parity: category buttons only when the company has multiple categories. */}
-          {Array.isArray(categories) && categories.length > 1 && (
-            <Section title={i18n.category}>
-              <div className="m-filter-pill-scroll">
-                {categories.map((cat) => (
-                  <Pill
-                    key={cat}
-                    active={draft.category === cat}
-                    onClick={() => setDraft((prev) => ({ ...prev, category: cat, process: "" }))}
-                  >
-                    {cat}
-                  </Pill>
-                ))}
-              </div>
-            </Section>
-          )}
 
           {withProcess && (
             <Section title={i18n.process}>
