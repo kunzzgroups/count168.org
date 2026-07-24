@@ -447,6 +447,46 @@ function domainApiCascadeDeleteCompanies(PDO $pdo, array $companyDbIds, array $c
 }
 
 /**
+ * Make owner deletable after companies were removed/detached earlier.
+ * - Null transaction owner FKs (created_by_owner RESTRICT blocks DELETE)
+ * - Clear small live refs; delete C168 auto MEMBER for owner_code
+ * - Never touches company_backup / *_backup
+ */
+function domainApiPrepareOwnerForDelete(PDO $pdo, int $ownerId, string $ownerCode = ''): void
+{
+    if ($ownerId <= 0) {
+        return;
+    }
+
+    if (tableHasColumn($pdo, 'transactions', 'created_by_owner')) {
+        $pdo->prepare('UPDATE transactions SET created_by_owner = NULL WHERE created_by_owner = ?')->execute([$ownerId]);
+    }
+    if (tableHasColumn($pdo, 'transactions', 'approved_by_owner')) {
+        $pdo->prepare('UPDATE transactions SET approved_by_owner = NULL WHERE approved_by_owner = ?')->execute([$ownerId]);
+    }
+
+    if (domainApiTableExists($pdo, 'password_reset_tac_owner')) {
+        deleteByIds($pdo, 'password_reset_tac_owner', 'owner_id', [$ownerId]);
+    }
+
+    if (domainApiTableExists($pdo, 'company_ownership') && tableHasColumn($pdo, 'company_ownership', 'owner_type')) {
+        try {
+            $pdo->prepare("DELETE FROM company_ownership WHERE owner_type = 'owner' AND account_id = ?")->execute([$ownerId]);
+        } catch (PDOException $e) {
+            error_log('domainApiPrepareOwnerForDelete company_ownership: ' . $e->getMessage());
+        }
+    }
+    if (domainApiTableExists($pdo, 'group_ownership') && tableHasColumn($pdo, 'group_ownership', 'owner_id')) {
+        deleteByIds($pdo, 'group_ownership', 'owner_id', [$ownerId]);
+    }
+
+    $code = strtoupper(trim($ownerCode));
+    if ($code !== '' && $code !== 'C168') {
+        domainApiDeleteC168ProvisionedMemberAccountsByCodes($pdo, [$code]);
+    }
+}
+
+/**
  * 检查公司是否为 C168（用于二级密码等权限判断）
  */
 /**
@@ -3827,10 +3867,10 @@ try {
                 jsonResponse(false, 'Forbidden', null, 403);
                 exit;
             }
-            // Delete owner and cascade delete all related data手動
-            $id = $data['id'] ?? 0;
+            // Owner may only be deleted after all companies were removed manually.
+            $id = (int) ($data['id'] ?? 0);
             
-            if (empty($id)) {
+            if ($id <= 0) {
                 echo json_encode(['success' => false, 'message' => 'Invalid ID', 'data' => null]);
                 exit;
             }
@@ -3841,23 +3881,33 @@ try {
             $pdo->beginTransaction();
             
             try {
-                // 获取 owner 旗下的所有公司并安全级联删除
-                $stmt = $pdo->prepare("SELECT id, company_id FROM company WHERE owner_id = ?");
+                $ocStmt = $pdo->prepare('SELECT UPPER(TRIM(COALESCE(owner_code, \'\'))) FROM owner WHERE id = ? LIMIT 1');
+                $ocStmt->execute([$id]);
+                $ownerCode = (string) ($ocStmt->fetchColumn() ?: '');
+                if ($ownerCode === '') {
+                    throw new Exception('Owner not found');
+                }
+
+                $stmt = $pdo->prepare('SELECT id, company_id FROM company WHERE owner_id = ? ORDER BY company_id ASC');
                 $stmt->execute([$id]);
                 $ownerCompanyRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                [$toDetach, $toHardDelete] = domainApiPartitionCompaniesForDomainRemoval($pdo, $ownerCompanyRows);
-                if ($toDetach !== []) {
-                    domainApiDetachCompaniesFromOwner(
-                        $pdo,
-                        normalizeIds(array_column($toDetach, 'id')),
-                        (int) $id
-                    );
-                }
-                if ($toHardDelete !== []) {
-                    domainApiCascadeDeleteCompanies(
-                        $pdo,
-                        normalizeIds(array_column($toHardDelete, 'id')),
-                        array_map(static fn ($row) => (string) ($row['company_id'] ?? ''), $toHardDelete)
+                if ($ownerCompanyRows !== []) {
+                    $codes = [];
+                    foreach ($ownerCompanyRows as $row) {
+                        $code = strtoupper(trim((string) ($row['company_id'] ?? '')));
+                        if ($code !== '') {
+                            $codes[] = $code;
+                        }
+                    }
+                    $codes = array_values(array_unique($codes));
+                    $list = implode(', ', array_slice($codes, 0, 20));
+                    if (count($codes) > 20) {
+                        $list .= ', …';
+                    }
+                    throw new Exception(
+                        'Cannot delete owner while companies remain. Remove all companies first'
+                        . ($list !== '' ? ': ' . $list : '')
+                        . '.'
                     );
                 }
 
@@ -3881,16 +3931,18 @@ try {
                 }
                 
                 deleteByIds($pdo, 'transactions', 'created_by', [$id]);
+
+                // Unblock leftover FKs from previously removed companies; never touch backups
+                domainApiPrepareOwnerForDelete($pdo, $id, $ownerCode);
                 
-                // 删除 company -> owner
-                deleteByIds($pdo, 'company', 'owner_id', [$id]);
                 deleteByIds($pdo, 'owner', 'id', [$id]);
                 
                 $pdo->commit();
+                domain_api_clear_session_user_cache();
                 
                 echo json_encode([
                     'success' => true,
-                    'message' => 'Owner and all related data deleted successfully',
+                    'message' => 'Owner deleted successfully',
                     'data' => null
                 ]);
                 
