@@ -193,15 +193,23 @@ export default function DomainPage() {
     }
     if (checkedIds.size === 0) { showDomainAlert(t("selectOwnersToDeleteFirst"), "danger"); return; }
 
-    const invalid = domains.filter((d) => checkedIds.has(d.id) && hasProtectedCompany(d.companies_full));
-    const valid = domains.filter((d) => checkedIds.has(d.id) && !hasProtectedCompany(d.companies_full));
+    const selected = domains.filter((d) => checkedIds.has(d.id));
+    const withCompanies = selected.filter((d) => {
+      const comps = Array.isArray(d.companies_full) ? d.companies_full : [];
+      return comps.length > 0;
+    });
+    const valid = selected.filter((d) => {
+      const comps = Array.isArray(d.companies_full) ? d.companies_full : [];
+      return comps.length === 0;
+    });
 
-    if (invalid.length > 0 && valid.length === 0) {
-      showDomainAlert(t("cannotDeleteC168Owners"), "danger"); return;
+    if (withCompanies.length > 0 && valid.length === 0) {
+      showDomainAlert(t("cannotDeleteOwnersWithCompanies"), "danger");
+      return;
     }
-    if (invalid.length > 0 && valid.length > 0) {
+    if (withCompanies.length > 0 && valid.length > 0) {
       showDomainAlert(
-        t("c168OwnersCannotDeleteOthersWillDelete", { count: valid.length }),
+        t("ownersWithCompaniesSkippedWillDelete", { count: valid.length }),
         "danger"
       );
     }
@@ -221,12 +229,26 @@ export default function DomainPage() {
               }).then((r) => r.json())
             )
           );
-          const ok = results.filter((r) => r.success).length;
-          const fail = results.length - ok;
+          const okResults = results.filter((r) => r && r.success);
+          const failResults = results.filter((r) => !(r && r.success));
+          const ok = okResults.length;
+          const fail = failResults.length;
           if (fail === 0) showDomainAlert(t("deletedOwnersSuccess", { ok }));
-          else showDomainAlert(t("deletionCompleted", { ok, fail }), "danger");
-          const deletedIds = new Set(valid.map((d) => d.id));
-          setDomains((prev) => prev.filter((d) => !deletedIds.has(d.id)));
+          else {
+            const detail = failResults.map((r) => r && r.message).filter(Boolean).join("; ");
+            showDomainAlert(
+              detail
+                ? `${t("deletionCompleted", { ok, fail })}: ${detail}`
+                : t("deletionCompleted", { ok, fail }),
+              "danger"
+            );
+          }
+          const deletedIds = new Set(
+            valid.filter((_, i) => results[i] && results[i].success).map((d) => d.id)
+          );
+          if (deletedIds.size > 0) {
+            setDomains((prev) => prev.filter((d) => !deletedIds.has(d.id)));
+          }
           setCheckedIds(new Set());
         } catch {
           showDomainAlert(t("batchDeleteError"), "danger");
