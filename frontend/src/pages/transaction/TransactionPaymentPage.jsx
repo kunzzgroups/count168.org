@@ -418,6 +418,8 @@ function TransactionPaymentPageMain() {
             rateMiddlemanAmount={form.rateMiddlemanAmount}
             rateMiddlemanInputAmount={form.rateMiddlemanInputAmount}
             setRateMiddlemanInputAmount={form.setRateMiddlemanInputAmount}
+            rateMiddlemanPlatformFee={form.rateMiddlemanPlatformFee}
+            setRateMiddlemanPlatformFee={form.setRateMiddlemanPlatformFee}
             m={m}
             t={t}
           />
