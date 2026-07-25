@@ -419,6 +419,7 @@ export default function CompanySettingsModal({
               action: "save_group_tenant_settings",
               group_code: apiEntityCode,
               expiration_date: expDate || null,
+              selectedPeriod: period || company.selectedPeriod || null,
               fee_share_allocations: cleanFsa,
               apply_commission_payments: chargeOnSave,
             }),
