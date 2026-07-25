@@ -628,6 +628,7 @@ function historyResolveAutoRenewCommissionSourceCompany(string $smsText, string 
 
 /**
  * Share% Profit 池账号：将「入账 List Fee + 同源 Sales/CS/IT 佣金划出」合并为一条净 Profit 行（Payment History 展示口径）。
+ * 无佣金（Profit 100%）时仍合并：隐藏原始 Pay Domain Fee，展示 Net Profit From {src}。
  * @return array skip=txn id 集合, rollups=合并行元数据
  */
 function historyCollectDomainHubProfitRollup(array $transactions, array $account_ids_int): array
@@ -702,9 +703,7 @@ function historyCollectDomainHubProfitRollup(array $transactions, array $account
             $commTotal = money_add($commTotal, historyTrunc2($t2['amount'] ?? '0'), 8);
             $commIds[] = $id2;
         }
-        if (empty($commIds)) {
-            continue;
-        }
+        // 有佣金：net = fee - commission；无佣金（Profit 100%）：net = fee，仍走 Net Profit From 展示
         $net = historyTrunc2(money_sub($feeAmt, $commTotal, 8));
         if (money_cmp(money_abs($net), '0.00001') < 0) {
             continue;
