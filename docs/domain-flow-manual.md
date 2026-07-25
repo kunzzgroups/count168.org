@@ -430,14 +430,16 @@ domainApiApply…FromPayload
 
 ### 10.4 Payment History 上怎么看
 
-在 C168（或对应客户）Payment History 中常见：
+| 视角 | DESCRIPTION | PRODUCT | 金额方向（例 2400） |
+|------|-------------|---------|---------------------|
+| 付款方账号（如 JJS） | `PAY DOMAIN FEE` | PAYMENT | **-2400** |
+| C168 Profit 池账号 | `NET PROFIT FROM {公司/集团}` | PROFIT | **+2400**（或 fee−佣金） |
 
-- `ID PRODUCT = PAYMENT`
-- `DESCRIPTION = PAY DOMAIN FEE`
-- `CR/DR` 为负数金额（支出侧展示习惯）
-- `CREATER` 为操作者
+说明：
 
-金额必须等于 **该租户所选周期对应价**，不是工具栏「随便一个数」，也不是一律 6 个月价。
+- 落库 Fee 行 description 仍是 `Pay Domain Fee`；History 在 Profit 池侧会**合并展示**为 `Net Profit From …`（`historyCollectDomainHubProfitRollup`）。
+- **Profit 100%、无 Sales/CS/IT 佣金时同样合并**；有佣金时净额 = Fee − 佣金。
+- 金额必须等于 **该租户所选周期对应价**（扣佣金后为净利），不是一律 6 个月价。
 
 ### 10.5 各 API 是否记账
 
