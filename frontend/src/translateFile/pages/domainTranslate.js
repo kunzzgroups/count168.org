@@ -186,6 +186,8 @@ export const DOMAIN_I18N = {
     companyUpdatedShareAfterSave: "Company settings updated. Share % will apply after you save the domain.",
     shareSaveFailed: "Share % save failed",
     feePostsHint: " Fee posts when you Confirm the domain (main modal).",
+    chargeRequiresStartDate:
+      "Start Date is required when Charge is On ({id}).",
     companyShareChargeAria: "Charge when domain is confirmed",
     companyUpdatedSuccess: "Company settings updated successfully!",
     commissionSettings: "Commission Settings",
@@ -398,6 +400,7 @@ export const DOMAIN_I18N = {
     companyUpdatedShareAfterSave: "公司设置已更新。保存域名后将应用分成比例。",
     shareSaveFailed: "分成比例保存失败",
     feePostsHint: " 在主弹窗点击“确认域名”后会记账。",
+    chargeRequiresStartDate: "开启收费时必须填写开始日期（{id}）。",
     companyShareChargeAria: "域名确认时计费",
     companyUpdatedSuccess: "公司设置更新成功！",
     commissionSettings: "佣金设置",

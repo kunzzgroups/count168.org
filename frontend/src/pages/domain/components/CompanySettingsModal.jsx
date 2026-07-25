@@ -27,6 +27,7 @@ import {
   formatShareRowAmount2,
   resolveDomainFeePriceForPeriod,
   forceUppercaseValue,
+  normalizeDomainStartDateYmd,
 } from "../domainHelpers.js";
 import AddAccountModal from "./AddAccountModal.jsx";
 import { getDomainText } from "../../../translateFile/pages/domainTranslate.js";
@@ -376,6 +377,16 @@ export default function CompanySettingsModal({
       return;
     }
 
+    if (chargeOnSave && !normalizeDomainStartDateYmd(startDate)) {
+      showDomainAlert(
+        t("chargeRequiresStartDate", {
+          id: apiEntityCode || company.company_id || company.group_code || "",
+        }),
+        "danger"
+      );
+      return;
+    }
+
     // Validate permissions (company only — groups do not use Process List / Data Capture categories)
     if (!isGroup && SINGLE_CATEGORY_MODE) {
       if (permissions.length === 0) { showDomainAlert(t("pleaseSelectOneCategory"), "danger"); return; }
@@ -420,6 +431,7 @@ export default function CompanySettingsModal({
               group_code: apiEntityCode,
               expiration_date: expDate || null,
               selectedPeriod: period || company.selectedPeriod || null,
+              startDate: normalizeDomainStartDateYmd(startDate) || null,
               fee_share_allocations: cleanFsa,
               apply_commission_payments: chargeOnSave,
             }),

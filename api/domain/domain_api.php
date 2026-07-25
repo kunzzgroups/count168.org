@@ -1439,6 +1439,47 @@ function domainApiExtractFeePeriodFromRow(array $row): ?string
 }
 
 /**
+ * Normalize fee transaction date (Company/Group Start Date / daystart) to Y-m-d.
+ * Past and future dates are allowed; empty/invalid → null.
+ */
+function domainApiNormalizeFeeTransactionDate(?string $raw): ?string
+{
+    $raw = trim((string) ($raw ?? ''));
+    if ($raw === '') {
+        return null;
+    }
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})/', $raw, $m)) {
+        $ymd = $m[1];
+        $dt = DateTime::createFromFormat('Y-m-d', $ymd);
+        if ($dt instanceof DateTime && $dt->format('Y-m-d') === $ymd) {
+            return $ymd;
+        }
+        return null;
+    }
+    foreach (['d/m/Y', 'd-m-Y', 'j/n/Y', 'j-n-Y'] as $fmt) {
+        $dt = DateTime::createFromFormat($fmt, $raw);
+        if ($dt instanceof DateTime) {
+            $errors = DateTime::getLastErrors();
+            if (is_array($errors) && (($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0)) {
+                continue;
+            }
+            return $dt->format('Y-m-d');
+        }
+    }
+    return null;
+}
+
+/** Prefer startDate / start_date / daystart from charge payload. */
+function domainApiExtractFeeTransactionDateFromRow(array $row): ?string
+{
+    $raw = $row['startDate'] ?? $row['start_date'] ?? $row['daystart'] ?? null;
+    if ($raw === null || $raw === '') {
+        return null;
+    }
+    return domainApiNormalizeFeeTransactionDate((string) $raw);
+}
+
+/**
  * Period-aware fee for charge/commission. Falls back to legacy flat 6-month columns when period missing/unpriced.
  */
 function getDomainFeePriceForTenant(PDO $pdo, string $tenantKind = 'company', ?string $period = null): ?string
@@ -1655,7 +1696,8 @@ function createDomainNetProfitPayment(
     ?int $fromPoolAccountId,
     ?int $createdByUser,
     ?int $createdByOwner,
-    string $tenantKind = 'company'
+    string $tenantKind = 'company',
+    ?string $transactionDate = null
 ): array {
     $out = [
         'created' => false,
@@ -1675,7 +1717,7 @@ function createDomainNetProfitPayment(
     }
 
     $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
-    $today = date('Y-m-d');
+    $txnDate = domainApiNormalizeFeeTransactionDate($transactionDate) ?? date('Y-m-d');
     $srcU = strtoupper(trim($sourceCompanyCode));
     $smsMarker = domainFeeSmsMarker('DOMAIN_NET_PROFIT', $srcU, $tenantKind);
     $dupStmt = $pdo->prepare("
@@ -1723,7 +1765,7 @@ function createDomainNetProfitPayment(
         'account_id' => $profitAccId,
         'from_account_id' => null,
         'amount' => $net,
-        'transaction_date' => $today,
+        'transaction_date' => $txnDate,
         'description' => 'Profit By ' . $ownerCode,
         'sms' => $smsMarker,
         'created_by' => $createdByUser,
@@ -2029,7 +2071,8 @@ function createDomainListFeePayment(
     ?int $createdByUser,
     ?int $createdByOwner,
     string $tenantKind = 'company',
-    ?string $period = null
+    ?string $period = null,
+    ?string $transactionDate = null
 ): array {
     $out = [
         'created' => false,
@@ -2073,7 +2116,7 @@ function createDomainListFeePayment(
     if ($poolEarly && $poolEarly > 0) {
         $out['pool_account_id'] = (int) $poolEarly;
     }
-    $today = date('Y-m-d');
+    $txnDate = domainApiNormalizeFeeTransactionDate($transactionDate) ?? date('Y-m-d');
     $feeSms = domainFeeSmsMarker('DOMAIN_LIST_FEE', $custCodeU, $tenantKind);
     $dupStmt = $pdo->prepare("
         SELECT id FROM transactions
@@ -2121,7 +2164,7 @@ function createDomainListFeePayment(
         'account_id' => $toC168Pool,
         'from_account_id' => $fromCustomer,
         'amount' => $out['amount'],
-        'transaction_date' => $today,
+        'transaction_date' => $txnDate,
         'description' => $desc,
         'sms' => $feeSms,
         'created_by' => $createdByUser,
@@ -2166,7 +2209,8 @@ function createDomainShareCommissionPayments(
     ?int $createdByUser,
     ?int $createdByOwner,
     string $tenantKind = 'company',
-    ?string $period = null
+    ?string $period = null,
+    ?string $transactionDate = null
 ): array {
     $result = [
         'created_count' => 0,
@@ -2205,7 +2249,7 @@ function createDomainShareCommissionPayments(
     $hasCreatedAt = tableHasColumn($pdo, 'transactions', 'created_at');
     $defaultTxnCurrencyId = $hasCurrencyId ? resolveC168DefaultTransactionCurrencyId($pdo, $c168Pk) : null;
 
-    $today = date('Y-m-d');
+    $txnDate = domainApiNormalizeFeeTransactionDate($transactionDate) ?? date('Y-m-d');
     $now = date('Y-m-d H:i:s');
     $c168OwnerCode = getCompanyOwnerCodeByPk($pdo, $c168Pk);
     if ($c168OwnerCode === '') {
@@ -2288,7 +2332,7 @@ function createDomainShareCommissionPayments(
                 'account_id' => $aid,
                 'from_account_id' => $fromPoolId,
                 'amount' => $amount,
-                'transaction_date' => $today,
+                'transaction_date' => $txnDate,
                 'description' => $description,
                 'sms' => $smsMarker,
                 'created_by' => $createdByUser,
@@ -2560,12 +2604,18 @@ function domainApiApplyDomainListFeePaymentsFromPayload(PDO $pdo, $companies, bo
             // ignore and keep payload normalization
         }
         $period = domainApiExtractFeePeriodFromRow($row);
-        $feeResult = createDomainListFeePayment($pdo, $cid, $u, $o, 'company', $period);
+        $txnDate = domainApiExtractFeeTransactionDateFromRow($row);
+        if ($txnDate === null) {
+            throw new Exception(
+                'Start Date is required when Charge is On for company ' . $cid . '.'
+            );
+        }
+        $feeResult = createDomainListFeePayment($pdo, $cid, $u, $o, 'company', $period, $txnDate);
         $poolId = isset($feeResult['pool_account_id']) ? (int) $feeResult['pool_account_id'] : null;
         if ($poolId <= 0) {
             $poolId = null;
         }
-        $commissionResult = createDomainShareCommissionPayments($pdo, $cid, $normalized, $poolId, $u, $o, 'company', $period);
+        $commissionResult = createDomainShareCommissionPayments($pdo, $cid, $normalized, $poolId, $u, $o, 'company', $period, $txnDate);
         $profitResult = createDomainNetProfitPayment(
             $pdo,
             $cid,
@@ -2573,7 +2623,9 @@ function domainApiApplyDomainListFeePaymentsFromPayload(PDO $pdo, $companies, bo
             (string) ($commissionResult['commission_total'] ?? '0'),
             $poolId,
             $u,
-            $o
+            $o,
+            'company',
+            $txnDate
         );
         if (
             !empty($feeResult['created'])
@@ -2631,12 +2683,18 @@ function domainApiApplyGroupDomainListFeePaymentsFromPayload(PDO $pdo, $groups, 
             }
         }
         $period = domainApiExtractFeePeriodFromRow($row);
-        $feeResult = createDomainListFeePayment($pdo, $gid, $u, $o, 'group', $period);
+        $txnDate = domainApiExtractFeeTransactionDateFromRow($row);
+        if ($txnDate === null) {
+            throw new Exception(
+                'Start Date is required when Charge is On for group ' . $gid . '.'
+            );
+        }
+        $feeResult = createDomainListFeePayment($pdo, $gid, $u, $o, 'group', $period, $txnDate);
         $poolId = isset($feeResult['pool_account_id']) ? (int) $feeResult['pool_account_id'] : null;
         if ($poolId <= 0) {
             $poolId = null;
         }
-        $commissionResult = createDomainShareCommissionPayments($pdo, $gid, $normalized, $poolId, $u, $o, 'group', $period);
+        $commissionResult = createDomainShareCommissionPayments($pdo, $gid, $normalized, $poolId, $u, $o, 'group', $period, $txnDate);
         $profitResult = createDomainNetProfitPayment(
             $pdo,
             $gid,
@@ -2645,7 +2703,8 @@ function domainApiApplyGroupDomainListFeePaymentsFromPayload(PDO $pdo, $groups, 
             $poolId,
             $u,
             $o,
-            'group'
+            'group',
+            $txnDate
         );
         if (
             !empty($feeResult['created'])
@@ -4476,10 +4535,20 @@ try {
                     throw $e;
                 }
                 if ($applyCommission) {
+                    $chargeStartDate = domainApiNormalizeFeeTransactionDate(
+                        isset($data['startDate']) ? (string) $data['startDate'] : (
+                            isset($data['start_date']) ? (string) $data['start_date'] : null
+                        )
+                    );
+                    if ($chargeStartDate === null) {
+                        jsonResponse(false, 'Start Date is required when Charge is On for group ' . $groupCode . '.', null);
+                        exit;
+                    }
                     domainApiApplyGroupDomainListFeePaymentsFromPayload($pdo, [[
                         'group_code' => $groupCode,
                         'expiration_date' => $expDate,
                         'selectedPeriod' => $data['selectedPeriod'] ?? $data['period'] ?? null,
+                        'startDate' => $chargeStartDate,
                         'permissions' => [],
                         'fee_share_allocations' => $saveNormalized,
                         'apply_commission_payments_on_domain_save' => true,

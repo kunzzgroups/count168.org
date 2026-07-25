@@ -18,6 +18,7 @@ import {
   tempGroupCode,
   forceUppercaseValue,
   forceNumericValue,
+  findChargeMissingStartDate,
 } from "../domainHelpers.js";
 import { sanitizeEmailInput, validateEmail } from "../../../utils/input/emailValidation.js";
 import { getDomainText } from "../../../translateFile/pages/domainTranslate.js";
@@ -407,6 +408,11 @@ export default function DomainFormModal({
     const overlap = findGroupCompanyCodeOverlap(tempGroups, tempCompanies);
     if (overlap) {
       toastDanger(t("groupCompanyIdOverlapSave", { id: overlap }));
+      return;
+    }
+    const missingStart = findChargeMissingStartDate(tempCompanies, tempGroups);
+    if (missingStart) {
+      toastDanger(t("chargeRequiresStartDate", { id: missingStart.id }));
       return;
     }
     const data = {
