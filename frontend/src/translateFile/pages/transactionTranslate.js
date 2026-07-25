@@ -199,7 +199,7 @@ export const TRANSACTION_I18N = {
     reverseAccounts: "互换账户",
     selectCurrency: "--选择货币--",
     rateTransactionDate: "汇率交易日期",
-    rateMultiplier: "汇率乘数",
+    rateMultiplier: "汇率倍数",
     fee: "手续费",
     platformFee: "平台费",
     middleMan: "中间人",
