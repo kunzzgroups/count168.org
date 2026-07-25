@@ -274,6 +274,10 @@ export function companyToDomainPayloadEntry(c) {
     apply_commission_payments_on_domain_save:
       !!c.apply_commission_payments_on_domain_save,
   };
+  const period = String(c.selectedPeriod ?? c.period ?? "").trim();
+  if (period && DOMAIN_FEE_PERIOD_KEYS.includes(period)) {
+    entry.selectedPeriod = period;
+  }
   const previousId = String(c.previous_company_id ?? "").trim().toUpperCase();
   if (previousId && previousId !== companyId) {
     entry.previous_company_id = previousId;
@@ -327,6 +331,10 @@ export function groupToDomainPayloadEntry(g) {
     apply_commission_payments_on_domain_save:
       !!g.apply_commission_payments_on_domain_save,
   };
+  const period = String(g.selectedPeriod ?? g.period ?? "").trim();
+  if (period && DOMAIN_FEE_PERIOD_KEYS.includes(period)) {
+    entry.selectedPeriod = period;
+  }
   const previousCode = String(g.previous_group_code ?? "").trim().toUpperCase();
   if (previousCode && previousCode !== groupCode) {
     entry.previous_group_code = previousCode;

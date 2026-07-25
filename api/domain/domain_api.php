@@ -1326,8 +1326,128 @@ function getGroupDomainFeePrice(PDO $pdo): ?string
     return null;
 }
 
-function getDomainFeePriceForTenant(PDO $pdo, string $tenantKind = 'company'): ?string
+/** @return ?string one of domainListFeePeriodKeys() */
+function normalizeDomainListFeePeriod(?string $period): ?string
 {
+    $period = trim((string) ($period ?? ''));
+    return in_array($period, domainListFeePeriodKeys(), true) ? $period : null;
+}
+
+/**
+ * Resolve fee by selected period (company → company_period_prices, group → group_period_prices).
+ * Matches frontend resolveDomainFeePriceForPeriod / auto_renew_resolve_price_for_period.
+ */
+function resolveDomainFeePriceForPeriod(PDO $pdo, ?string $period, string $tenantKind = 'company'): ?string
+{
+    $period = normalizeDomainListFeePeriod($period);
+    if ($period === null) {
+        return null;
+    }
+    $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
+    $row = fetchDomainListFeeSettingsRow($pdo);
+    $prices = $tenantKind === 'group'
+        ? ($row['group_period_prices'] ?? [])
+        : ($row['company_period_prices'] ?? []);
+    $price = is_array($prices) ? ($prices[$period] ?? null) : null;
+    if ($price !== null && $price !== '' && money_cmp($price, '0') > 0) {
+        return money_normalize($price);
+    }
+    return null;
+}
+
+/**
+ * Infer period from expiration vs today when selectedPeriod was not sent (aligns with frontend getPeriodFromDate).
+ */
+function domainApiInferFeePeriodFromExpiration(?string $expirationDate): ?string
+{
+    if ($expirationDate === null || trim((string) $expirationDate) === '') {
+        return null;
+    }
+    $expTs = strtotime((string) $expirationDate);
+    if ($expTs === false) {
+        return null;
+    }
+    $todayTs = strtotime(date('Y-m-d'));
+    if ($todayTs === false) {
+        return null;
+    }
+    $diffDays = (int) round(($expTs - $todayTs) / 86400);
+
+    if ($diffDays >= 360 && $diffDays <= 370) {
+        return '1year';
+    }
+    if ($diffDays >= 175 && $diffDays <= 190) {
+        return '6months';
+    }
+    if ($diffDays >= 88 && $diffDays <= 95) {
+        return '3months';
+    }
+    if ($diffDays >= 28 && $diffDays <= 32) {
+        return '1month';
+    }
+    if ($diffDays >= 5 && $diffDays <= 9) {
+        return '7days';
+    }
+
+    try {
+        $expDt = new DateTime('@' . $expTs);
+        $todayDt = new DateTime('@' . $todayTs);
+        $expDt->setTimezone(new DateTimeZone(date_default_timezone_get()));
+        $todayDt->setTimezone(new DateTimeZone(date_default_timezone_get()));
+        $diffMonths = ((int) $expDt->format('Y') - (int) $todayDt->format('Y')) * 12
+            + ((int) $expDt->format('n') - (int) $todayDt->format('n'));
+    } catch (Exception $e) {
+        return null;
+    }
+
+    if ($diffMonths >= 11) {
+        return '1year';
+    }
+    if ($diffMonths >= 5) {
+        return '6months';
+    }
+    if ($diffMonths >= 2) {
+        return '3months';
+    }
+    if ($diffDays >= 28) {
+        return '1month';
+    }
+    if ($diffDays >= 5) {
+        return '7days';
+    }
+    return null;
+}
+
+/** Prefer selectedPeriod from payload; else infer from expiration_date. */
+function domainApiExtractFeePeriodFromRow(array $row): ?string
+{
+    $period = normalizeDomainListFeePeriod(
+        isset($row['selectedPeriod']) ? (string) $row['selectedPeriod'] : (
+            isset($row['selected_period']) ? (string) $row['selected_period'] : (
+                isset($row['period']) ? (string) $row['period'] : (
+                    isset($row['fee_period']) ? (string) $row['fee_period'] : null
+                )
+            )
+        )
+    );
+    if ($period !== null) {
+        return $period;
+    }
+    return domainApiInferFeePeriodFromExpiration(
+        isset($row['expiration_date']) ? (string) $row['expiration_date'] : null
+    );
+}
+
+/**
+ * Period-aware fee for charge/commission. Falls back to legacy flat 6-month columns when period missing/unpriced.
+ */
+function getDomainFeePriceForTenant(PDO $pdo, string $tenantKind = 'company', ?string $period = null): ?string
+{
+    $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
+    $periodPrice = resolveDomainFeePriceForPeriod($pdo, $period, $tenantKind);
+    if ($periodPrice !== null) {
+        return $periodPrice;
+    }
     return $tenantKind === 'group'
         ? getGroupDomainFeePrice($pdo)
         : getDomainFeePrice($pdo);
@@ -1908,7 +2028,8 @@ function createDomainListFeePayment(
     string $customerCompanyCode,
     ?int $createdByUser,
     ?int $createdByOwner,
-    string $tenantKind = 'company'
+    string $tenantKind = 'company',
+    ?string $period = null
 ): array {
     $out = [
         'created' => false,
@@ -1921,7 +2042,7 @@ function createDomainListFeePayment(
         'pool_account_id' => null,
     ];
     $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
-    $feePrice = getDomainFeePriceForTenant($pdo, $tenantKind);
+    $feePrice = getDomainFeePriceForTenant($pdo, $tenantKind, $period);
     if ($feePrice === null || money_cmp($feePrice, '0') <= 0) {
         $out['skipped_no_price'] = true;
         return $out;
@@ -2044,7 +2165,8 @@ function createDomainShareCommissionPayments(
     ?int $c168SourceAccountId,
     ?int $createdByUser,
     ?int $createdByOwner,
-    string $tenantKind = 'company'
+    string $tenantKind = 'company',
+    ?string $period = null
 ): array {
     $result = [
         'created_count' => 0,
@@ -2056,7 +2178,7 @@ function createDomainShareCommissionPayments(
     ];
 
     $tenantKind = $tenantKind === 'group' ? 'group' : 'company';
-    $feePrice = getDomainFeePriceForTenant($pdo, $tenantKind);
+    $feePrice = getDomainFeePriceForTenant($pdo, $tenantKind, $period);
     if ($feePrice === null || money_cmp($feePrice, '0') <= 0) {
         return $result;
     }
@@ -2437,12 +2559,13 @@ function domainApiApplyDomainListFeePaymentsFromPayload(PDO $pdo, $companies, bo
         } catch (Exception $e) {
             // ignore and keep payload normalization
         }
-        $feeResult = createDomainListFeePayment($pdo, $cid, $u, $o);
+        $period = domainApiExtractFeePeriodFromRow($row);
+        $feeResult = createDomainListFeePayment($pdo, $cid, $u, $o, 'company', $period);
         $poolId = isset($feeResult['pool_account_id']) ? (int) $feeResult['pool_account_id'] : null;
         if ($poolId <= 0) {
             $poolId = null;
         }
-        $commissionResult = createDomainShareCommissionPayments($pdo, $cid, $normalized, $poolId, $u, $o);
+        $commissionResult = createDomainShareCommissionPayments($pdo, $cid, $normalized, $poolId, $u, $o, 'company', $period);
         $profitResult = createDomainNetProfitPayment(
             $pdo,
             $cid,
@@ -2507,12 +2630,13 @@ function domainApiApplyGroupDomainListFeePaymentsFromPayload(PDO $pdo, $groups, 
                 // keep payload normalization
             }
         }
-        $feeResult = createDomainListFeePayment($pdo, $gid, $u, $o, 'group');
+        $period = domainApiExtractFeePeriodFromRow($row);
+        $feeResult = createDomainListFeePayment($pdo, $gid, $u, $o, 'group', $period);
         $poolId = isset($feeResult['pool_account_id']) ? (int) $feeResult['pool_account_id'] : null;
         if ($poolId <= 0) {
             $poolId = null;
         }
-        $commissionResult = createDomainShareCommissionPayments($pdo, $gid, $normalized, $poolId, $u, $o, 'group');
+        $commissionResult = createDomainShareCommissionPayments($pdo, $gid, $normalized, $poolId, $u, $o, 'group', $period);
         $profitResult = createDomainNetProfitPayment(
             $pdo,
             $gid,
@@ -4355,6 +4479,7 @@ try {
                     domainApiApplyGroupDomainListFeePaymentsFromPayload($pdo, [[
                         'group_code' => $groupCode,
                         'expiration_date' => $expDate,
+                        'selectedPeriod' => $data['selectedPeriod'] ?? $data['period'] ?? null,
                         'permissions' => [],
                         'fee_share_allocations' => $saveNormalized,
                         'apply_commission_payments_on_domain_save' => true,
