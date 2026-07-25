@@ -449,6 +449,20 @@ domainApiApply…FromPayload
 | `save_group_tenant_settings` + `apply_commission_payments` | ✅（Group 即时路径） |
 | Auto Renew 续费 | 走 Auto Renew 自己的写账，不走 Domain Confirm 流水线 |
 
+### 10.6 记账日期（Start Date / daystart）
+
+Domain 收费三笔的 `transaction_date` **取自** Company/Group Settings 的 **Start Date**，不是系统「今天」。
+
+| 规则 | 行为 |
+|------|------|
+| 有 Start Date | Fee / 佣金 / 净利 均记在该日 |
+| Start Date = 今天 | 进今日账单 |
+| Start Date 为过去/未来 | 均允许，按该日落账 |
+| 开启收费但未填 Start Date | **报错**；Confirm 整单回滚 |
+| Auto Renew | **仍用系统今天**，不跟 daystart |
+
+Payment History 按 `transaction_date` 筛选时，会在 daystart 那天看到该笔，而不是操作当天（除非两者相同）。
+
 ---
 
 ## 11. 按周期取价（Period-aware Pricing）
@@ -661,6 +675,7 @@ Group 带 `GROUP|` 前缀，避免与同名 Company 代码冲突。
   },
   apply_commission_payments_on_domain_save: true,
   selectedPeriod: "1year",           // 有效周期才带
+  startDate: "2026-07-10",           // 收费记账日（daystart）；开启收费时必填
   previous_company_id: "OLD",        // 仅改名时
 }
 ```
@@ -675,6 +690,7 @@ Group 带 `GROUP|` 前缀，避免与同名 Company 代码冲突。
   fee_share_allocations: { … },
   apply_commission_payments_on_domain_save: true,
   selectedPeriod: "1year",
+  startDate: "2026-07-10",
   previous_group_code: "OLD",        // 仅改名时
 }
 ```
@@ -765,8 +781,10 @@ Domain 删改租户时，可能触发 `auto_renew_purge_detached_domain_requests
 6. **再 Confirm 不会重复扣** — 除非删掉旧 Fee 交易。
 7. **Profit % 开关 Off** — 指 Share 区块 UI 开关（若存在），与「收费 On/Off」不是同一控件；收费看 charge toggle。
 8. **Domain Report ≠ Domain Fee 历史**。
-9. **`docs/agents/domain.md` ≠ 本说明书**。
-10. **C168 自己不能作为收费客户**；含 C168 公司的 Owner 不能从列表勾选删除。
+9. **收费记账日 = Start Date（daystart）**，不是操作当天；未填却开收费会报错并回滚 Confirm。
+10. **Auto Renew 续费日期仍是系统今天**，与 Domain Confirm 的 daystart 无关。
+11. **`docs/agents/domain.md` ≠ 本说明书**。
+12. **C168 自己不能作为收费客户**；含 C168 公司的 Owner 不能从列表勾选删除。
 
 ---
 
@@ -780,6 +798,10 @@ Domain 删改租户时，可能触发 `auto_renew_purge_detached_domain_requests
 - [ ] 关闭收费开关再 Confirm → 无新 Domain Fee
 - [ ] 同一公司第二次 Confirm → 因 SMS 去重跳过
 - [ ] 删除 Domain Fee 后再 Confirm → 可按**当前**周期价重新入账
+- [ ] Start Date = 7/10、今日不是 7/10、收费 Confirm → History 落在 **7/10**
+- [ ] Start Date = 今天 → 进今日账单
+- [ ] 开启收费但清空 Start Date → 前端/后端报错，不入账
+- [ ] Auto Renew 续费仍记系统今天
 - [ ] Share 含 Sales% 时佣金金额 = fee × %
 - [ ] 仅 Save Company Share、不 Confirm → 无新 Fee
 - [ ] Auto Renew 改 Share / 续费不影响 Domain Confirm 去重标记语义

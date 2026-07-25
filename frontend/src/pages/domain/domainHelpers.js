@@ -278,6 +278,10 @@ export function companyToDomainPayloadEntry(c) {
   if (period && DOMAIN_FEE_PERIOD_KEYS.includes(period)) {
     entry.selectedPeriod = period;
   }
+  const startYmd = normalizeDomainStartDateYmd(c.startDate ?? c.start_date ?? "");
+  if (startYmd) {
+    entry.startDate = startYmd;
+  }
   const previousId = String(c.previous_company_id ?? "").trim().toUpperCase();
   if (previousId && previousId !== companyId) {
     entry.previous_company_id = previousId;
@@ -335,6 +339,10 @@ export function groupToDomainPayloadEntry(g) {
   if (period && DOMAIN_FEE_PERIOD_KEYS.includes(period)) {
     entry.selectedPeriod = period;
   }
+  const startYmd = normalizeDomainStartDateYmd(g.startDate ?? g.start_date ?? "");
+  if (startYmd) {
+    entry.startDate = startYmd;
+  }
   const previousCode = String(g.previous_group_code ?? "").trim().toUpperCase();
   if (previousCode && previousCode !== groupCode) {
     entry.previous_group_code = previousCode;
@@ -346,6 +354,45 @@ export function tempGroupCode(groupOrCode) {
   if (groupOrCode == null) return "";
   if (typeof groupOrCode === "string") return groupOrCode.trim().toUpperCase();
   return String(groupOrCode.group_code ?? "").trim().toUpperCase();
+}
+
+/** Normalize Start Date / daystart to YYYY-MM-DD (empty if invalid). */
+export function normalizeDomainStartDateYmd(raw) {
+  if (raw == null || raw === "") return "";
+  const s = String(raw).trim();
+  if (!s) return "";
+  if (s.includes("-")) {
+    const ymd = s.split("T")[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return ymd;
+    return "";
+  }
+  return parseDdMmYyyyToYmd(s) || "";
+}
+
+/**
+ * When Charge is On, Start Date is required (used as transaction_date).
+ * @returns {{ id: string, kind: 'company'|'group' }|null}
+ */
+export function findChargeMissingStartDate(companies, groups) {
+  const cos = Array.isArray(companies) ? companies : [];
+  for (const c of cos) {
+    if (!c?.apply_commission_payments_on_domain_save) continue;
+    const id = String(c.company_id ?? "").trim().toUpperCase();
+    if (!id || id === "C168") continue;
+    if (!normalizeDomainStartDateYmd(c.startDate ?? c.start_date ?? "")) {
+      return { id, kind: "company" };
+    }
+  }
+  const gs = Array.isArray(groups) ? groups : [];
+  for (const g of gs) {
+    if (!g?.apply_commission_payments_on_domain_save) continue;
+    const id = String(g.group_code ?? "").trim().toUpperCase();
+    if (!id || id === "C168") continue;
+    if (!normalizeDomainStartDateYmd(g.startDate ?? g.start_date ?? "")) {
+      return { id, kind: "group" };
+    }
+  }
+  return null;
 }
 
 // ===================== Display Helpers =====================
