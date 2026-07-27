@@ -205,136 +205,107 @@
 .m-rpt-content {
   width: min(100%, var(--m-page-max-width));
   margin-inline: auto;
-  padding: 0 var(--m-page-gutter) 1rem;
+  padding: 0.55rem var(--m-page-gutter) 1.25rem;
   font-size: var(--m-text-compact);
 }
 
-/* Desktop-aligned Domain table — horizontal scroll so amounts never overlap */
-.m-rpt-content--domain {
-  padding-inline: 0;
+/* Domain: humane 2-line rows — process + labeled metrics, no horizontal scroll */
+.m-rpt-summary {
+  border: 1px solid #93c5fd;
+  border-radius: var(--m-radius-card);
+  background: #eff6ff;
+  padding: 0.55rem 0.65rem;
 }
 
-.m-rpt-content--domain > .m-rpt-toast,
-.m-rpt-content--domain > .m-rpt-error,
-.m-rpt-content--domain > .m-rpt-state {
-  margin-inline: var(--m-page-gutter);
+.m-rpt-summary-label {
+  margin-bottom: 0.35rem;
+  color: var(--m-color-primary);
+  font-size: var(--m-text-label-ratio);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
-.m-rpt-hscroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-  padding-inline: var(--m-page-gutter);
-}
-
-.m-rpt-table-board {
-  min-width: 40rem;
-}
-
-.m-rpt-table-chrome {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-}
-
-.m-rpt-table-head,
-.m-rpt-table-row,
-.m-rpt-table-total {
+.m-rpt-metric-row {
   display: grid;
-  grid-template-columns: minmax(9rem, 1.35fr) repeat(4, minmax(7rem, 1fr));
-  gap: 0.35rem 0.55rem;
-  align-items: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.65rem;
+}
+
+@media (min-width: 400px) {
+  .m-rpt-metric-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.m-rpt-metric {
   min-width: 0;
 }
 
-.m-rpt-table-head {
-  padding: 0.5rem 0.65rem;
-  border-radius: 0.45rem 0.45rem 0 0;
-  background: linear-gradient(180deg, #60c1fe 0%, #0f61ff 100%);
-  color: #fff;
-  font-size: 1.1rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-}
-
-.m-rpt-table-head > div:nth-child(n + 2) {
-  text-align: right;
-}
-
-.m-rpt-table-total {
-  padding: 0.5rem 0.65rem;
-  border: 1px solid #93c5fd;
-  border-top: 0;
-  background: #eff6ff;
-  font-size: 1.15rem;
-}
-
-.m-rpt-table-total-label {
-  color: var(--m-color-primary);
-  font-weight: 800;
+.m-rpt-metric span {
+  display: block;
+  color: var(--m-color-label);
+  font-size: var(--m-text-label-ratio);
+  font-weight: 700;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 1.05rem;
+  line-height: 1.2;
 }
 
-.m-rpt-table {
+.m-rpt-metric strong {
+  display: block;
+  margin-top: 0.1rem;
+  overflow: hidden;
+  color: var(--m-color-text);
+  font-size: clamp(1.15rem, 3.2vw, 1.3rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.m-rpt-metric.is-pos strong {
+  color: #047857;
+}
+
+.m-rpt-metric.is-neg strong {
+  color: #b91c1c;
+}
+
+.m-rpt-lines {
+  display: grid;
+  gap: 0;
   border: 1px solid var(--m-color-ring);
-  border-top: 0;
-  border-radius: 0 0 0.45rem 0.45rem;
+  border-radius: var(--m-radius-card);
   overflow: hidden;
   background: var(--m-color-surface);
 }
 
-.m-rpt-table-row {
-  padding: 0.42rem 0.65rem;
+.m-rpt-line {
+  padding: 0.55rem 0.7rem;
   border-bottom: 1px solid rgb(148 163 184 / 28%);
-  font-size: 1.15rem;
   content-visibility: auto;
-  contain-intrinsic-size: auto 2.5rem;
+  contain-intrinsic-size: auto 4.2rem;
 }
 
-.m-rpt-table-row:nth-child(even) {
-  background: #e8f6ff;
+.m-rpt-line:nth-child(even) {
+  background: #f3faff;
 }
 
-.m-rpt-table-row:nth-child(odd) {
-  background: #fff;
-}
-
-.m-rpt-table-row:last-child {
+.m-rpt-line:last-child {
   border-bottom: 0;
 }
 
-.m-rpt-table-process {
-  min-width: 0;
+.m-rpt-line-name {
+  margin-bottom: 0.35rem;
   overflow: hidden;
   color: var(--m-color-text);
-  font-weight: 700;
+  font-size: clamp(1.2rem, 3.4vw, 1.35rem);
+  font-weight: 800;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.m-rpt-num {
-  min-width: 0;
-  overflow: hidden;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-
-.m-rpt-num strong {
-  color: var(--m-color-text);
-  font-weight: 700;
-  font-size: inherit;
-}
-
-.m-rpt-num.is-pos strong {
-  color: #047857;
-}
-
-.m-rpt-num.is-neg strong {
-  color: #b91c1c;
 }
 
 .m-rpt-state {
