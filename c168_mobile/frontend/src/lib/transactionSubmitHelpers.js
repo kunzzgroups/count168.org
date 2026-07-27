@@ -12,8 +12,8 @@ function cleanAmt(raw) {
     .trim();
 }
 
-/** RATE Middle-Man 手续费 remark：charge {第一币种} {用户输入} Service Fees */
-export function buildRateServiceFeeRemark(currencyFrom, middlemanInputAmount) {
+/** RATE Middle-Man 手续费 remark：charge {第二币种} {用户输入} Service Fees */
+export function buildRateServiceFeeRemark(currencyTo, middlemanInputAmount) {
   const inputStr = cleanAmt(middlemanInputAmount);
   if (!inputStr) return "";
   try {
@@ -22,7 +22,7 @@ export function buildRateServiceFeeRemark(currencyFrom, middlemanInputAmount) {
   } catch {
     return "";
   }
-  const currency = String(currencyFrom ?? "").trim().toUpperCase();
+  const currency = String(currencyTo ?? "").trim().toUpperCase();
   if (!currency) return "";
   return `charge ${currency} ${inputStr} Service Fees`;
 }
@@ -76,15 +76,6 @@ export function buildRatePayload({
     // ignore
   }
 
-  let rateDec = MoneyDecimal.toDecimal("0", 0);
-  try {
-    if (parsedRateNormalizedStr) {
-      rateDec = MoneyDecimal.toDecimal(parsedRateNormalizedStr, 0);
-    }
-  } catch {
-    // ignore
-  }
-
   const fromCode = rateFromAccount?.account_id || "";
   const toCode = rateToAccount?.account_id || "";
   const fromDesc = `Transaction to ${toCode} (Rate: ${rateExchangeRateRaw})`;
@@ -100,7 +91,7 @@ export function buildRatePayload({
       ? `Rate charge (x${rateMiddlemanRate}) from ${rateCurrencyFrom} ${MoneyDecimal.formatFixed(fromDec.toString(), 2)}`
       : "";
 
-  const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyFrom, rateMiddlemanInputAmount);
+  const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyTo, rateMiddlemanInputAmount);
   const sms = serviceFeeRemark || txRemark;
 
   const payload = {
@@ -142,20 +133,17 @@ export function buildRatePayload({
   if (transferToId && transferFromId) {
     const transferGross = grossDec;
 
-    // Fee is already included in the first-currency amount: second-currency Cr/Dr
-    // uses net on BOTH sides (do not asymmetrically deduct converted fee again).
-    let convertedFeeDec = MoneyDecimal.toDecimal("0", 0);
-    if (inputAmtDec.gt(0) && rateDec.gt(0)) {
-      convertedFeeDec = inputAmtDec.times(rateDec);
-    }
-    const transferBase = convertedFeeDec.gt(0) ? transferGross.minus(convertedFeeDec) : transferGross;
+    // Fee is face value — do not multiply by FX rate.
+    // Second-currency Cr/Dr uses net (gross - fee) on BOTH sides.
+    const feeDec = inputAmtDec.gt(0) ? inputAmtDec : MoneyDecimal.toDecimal("0", 0);
+    const transferBase = feeDec.gt(0) ? transferGross.minus(feeDec) : transferGross;
 
     let transferToSide = transferBase;
     let transferFromSide = transferBase;
     if (middleId && !middleDec.isZero()) {
       let rateMultiplierFeeDec = middleDec;
-      if (convertedFeeDec.gt(0)) {
-        rateMultiplierFeeDec = middleDec.minus(convertedFeeDec);
+      if (feeDec.gt(0)) {
+        rateMultiplierFeeDec = middleDec.minus(feeDec);
       }
       if (rateMultiplierFeeDec.gt(0)) {
         transferFromSide = transferBase.minus(rateMultiplierFeeDec);

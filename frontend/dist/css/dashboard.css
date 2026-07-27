@@ -871,6 +871,214 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     gap: var(--dashboard-section-gap);
 }
 
+/* Scope switch pending: keep Filter bright; FB-style skeleton over KPI/chart/pie. */
+.dashboard-data-surface {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--dashboard-section-gap);
+    flex: 1;
+    min-height: 0;
+}
+
+.dashboard-data-surface__live {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dashboard-section-gap);
+    flex: 1;
+    min-height: 0;
+    transition: opacity 160ms ease;
+}
+
+.dashboard-data-surface.is-scope-pending .dashboard-data-surface__live {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.dashboard-data-surface.is-scope-pending {
+    pointer-events: none;
+}
+
+.dashboard-scope-skeleton {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    gap: var(--dashboard-section-gap);
+    min-height: 0;
+    pointer-events: none;
+}
+
+.dashboard-scope-skeleton__kpi-card,
+.dashboard-scope-skeleton__panel {
+    background: #ffffff;
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    min-width: 0;
+}
+
+.dashboard-scope-skeleton__kpi-card {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(10px, 0.9vw, 14px);
+    padding: clamp(16px, 1.25vw, 22px) clamp(18px, 1.4vw, 24px);
+}
+
+.dashboard-scope-skeleton__kpi-head {
+    display: flex;
+    align-items: center;
+    gap: clamp(8px, 0.65vw, 10px);
+}
+
+.dashboard-scope-skeleton__panels {
+    flex: 1;
+    min-height: 0;
+}
+
+.dashboard-scope-skeleton__panel {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(12px, 1vw, 16px);
+    padding: clamp(16px, 1.25vw, 22px);
+    min-height: 0;
+    overflow: hidden;
+}
+
+.dashboard-scope-skeleton__panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.dashboard-scope-skeleton__chart-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
+
+.dashboard-scope-skeleton__summary-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.dashboard-scope-skeleton__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: auto;
+}
+
+.dashboard-skel-bar {
+    display: block;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #e2e8f0 0%, #f8fafc 45%, #e2e8f0 90%);
+    background-size: 200% 100%;
+    animation: dashboard-skel-shimmer 1.15s ease-in-out infinite;
+}
+
+.dashboard-skel-bar--icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.dashboard-skel-bar--label {
+    width: 42%;
+    max-width: 110px;
+    height: 12px;
+}
+
+.dashboard-skel-bar--value {
+    width: 58%;
+    max-width: 160px;
+    height: clamp(22px, 2vw, 28px);
+    border-radius: 8px;
+}
+
+.dashboard-skel-bar--foot {
+    width: 48%;
+    max-width: 140px;
+    height: 10px;
+}
+
+.dashboard-skel-bar--title {
+    width: 36%;
+    max-width: 140px;
+    height: 14px;
+}
+
+.dashboard-skel-bar--pill {
+    width: 150px;
+    max-width: 42%;
+    height: 28px;
+    border-radius: 999px;
+}
+
+.dashboard-skel-bar--chart {
+    flex: 1;
+    width: 100%;
+    min-height: 120px;
+    border-radius: 12px;
+}
+
+.dashboard-skel-bar--hero-label {
+    width: 72px;
+    height: 10px;
+}
+
+.dashboard-skel-bar--hero-value {
+    width: 120px;
+    height: 28px;
+    border-radius: 8px;
+}
+
+.dashboard-skel-bar--donut {
+    width: min(148px, 46%);
+    aspect-ratio: 1;
+    height: auto;
+    margin: 4px auto;
+    border-radius: 50%;
+    flex-shrink: 0;
+    /* Ring look: hollow center like a pie placeholder */
+    -webkit-mask: radial-gradient(circle at center, transparent 52%, #000 54%);
+    mask: radial-gradient(circle at center, transparent 52%, #000 54%);
+}
+
+.dashboard-skel-bar--row {
+    width: 100%;
+    height: 12px;
+}
+
+@keyframes dashboard-skel-shimmer {
+    0% {
+        background-position: 100% 0;
+    }
+
+    100% {
+        background-position: -100% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .dashboard-skel-bar {
+        animation: none;
+        background: #e2e8f0;
+    }
+
+    .dashboard-data-surface__live {
+        transition: none;
+    }
+}
+
 .dashboard-card {
     background-color: var(--scd-card);
     border: 1px solid var(--scd-border);
@@ -3101,14 +3309,22 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 /* KPI 單行：覆蓋舊版 grid 2 欄媒體查詢（2026-06） */
 body.dashboard-page .dashboard-content > .dashboard-kpi-grid,
-body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid {
+body.dashboard-page .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid,
+body.dashboard-page .dashboard-content > .dashboard-data-surface > .dashboard-data-surface__live > .dashboard-kpi-grid,
+body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid,
+body.ec-auth-shell .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid,
+body.ec-auth-shell .dashboard-content > .dashboard-data-surface > .dashboard-data-surface__live > .dashboard-kpi-grid {
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: stretch;
 }
 
 body.dashboard-page .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card,
-body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card {
+body.dashboard-page .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid .dashboard-kpi-card,
+body.dashboard-page .dashboard-content > .dashboard-data-surface > .dashboard-data-surface__live > .dashboard-kpi-grid .dashboard-kpi-card,
+body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card,
+body.ec-auth-shell .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid .dashboard-kpi-card,
+body.ec-auth-shell .dashboard-content > .dashboard-data-surface > .dashboard-data-surface__live > .dashboard-kpi-grid .dashboard-kpi-card {
     flex: 1 1 0 !important;
     min-width: 0 !important;
 }

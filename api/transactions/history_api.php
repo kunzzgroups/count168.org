@@ -2736,11 +2736,12 @@ try {
             $transactionCreatedBy = $row['created_by_owner_name'];
         }
 
-        $rateFirstRowRemark = null;
-        if (in_array($entryType, ['RATE_FIRST_FROM', 'RATE_FIRST_TO'], true)) {
+        // Service fee / header SMS: show on second-currency From leg only (RATE_TRANSFER_TO).
+        $rateServiceFeeRemark = null;
+        if ($entryType === 'RATE_TRANSFER_TO') {
             $headerSms = trim((string) ($row['sms'] ?? ''));
             if ($headerSms !== '') {
-                $rateFirstRowRemark = $headerSms;
+                $rateServiceFeeRemark = $headerSms;
             }
         }
 
@@ -2764,7 +2765,7 @@ try {
             'description' => $description,
             'entry_description_raw' => (string) ($row['entry_description'] ?? ''),
             'sms' => '-',
-            'remark' => $rateFirstRowRemark,
+            'remark' => $rateServiceFeeRemark,
             'created_by' => $transactionCreatedBy,
             'from_currency_code' => $row['from_currency_code'] ?? null,
             'to_currency_code' => $row['to_currency_code'] ?? null,
