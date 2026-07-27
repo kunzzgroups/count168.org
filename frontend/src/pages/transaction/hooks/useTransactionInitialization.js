@@ -102,10 +102,12 @@ export function useTransactionInitialization({
       return;
     }
 
-    // Company/scope enter: always select the first ordered currency (not last MYR / saved filter).
+    // Company/scope enter: always select THIS company's first ordered currency.
     const nextShowAll = false;
     const nextSel = defaultCode ? [defaultCode] : codes[0] ? [codes[0]] : [];
 
+    // Block cross-page sync from re-applying the previous company's currency.
+    activeSearch.beginScopeCurrencyDefault?.();
     activeSearch.setShowAllCurrencies((prev) => (prev === nextShowAll ? prev : nextShowAll));
     activeSearch.setSelectedCurrencies((prev) => (sameCurrencySelection(prev, nextSel) ? prev : nextSel));
     currencyRestoredScopeKeyRef.current = scopeKey;

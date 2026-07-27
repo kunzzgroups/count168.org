@@ -204,19 +204,36 @@ const AVATAR_MAP = {
 
 export default function AuthenticatedLayout() {
   const navigate = useNavigate();
-  const goTo = useCallback(
-    (path) => {
-      resetMaintenanceCalendarPopupOnNavigation();
-      startTransition(() => {
-        navigate(buildSpaPath(path));
-      });
-    },
-    [navigate],
-  );
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const path = location.pathname;
   const pageKey = pathnameToPageKey(path);
+  /** Bumped on same-page sidebar re-click so AnimatedOutlet remounts the current page. */
+  const [pageRefreshKey, setPageRefreshKey] = useState(0);
+  const goTo = useCallback(
+    (nextPath) => {
+      resetMaintenanceCalendarPopupOnNavigation();
+      const targetPath = buildSpaPath(nextPath);
+      const targetKey = pathnameToPageKey(targetPath);
+      const currentKey = pathnameToPageKey(location.pathname);
+
+      // Already on this sidebar page → soft-reset page state (not a full browser reload).
+      if (targetKey && targetKey === currentKey) {
+        const cleanPath = spaPath(targetKey);
+        const currentFull = `${location.pathname}${location.search}${location.hash}`;
+        if (currentFull !== cleanPath) {
+          navigate(cleanPath, { replace: true });
+        }
+        setPageRefreshKey((key) => key + 1);
+        return;
+      }
+
+      startTransition(() => {
+        navigate(targetPath);
+      });
+    },
+    [navigate, location.pathname, location.search, location.hash],
+  );
   const isDataCaptureSidebarActive =
     pageKey === "datacapture" || pageKey === "datacapturesummary";
   const chromelessPaymentHistory = isPaymentHistoryChromelessPath(path, searchParams);
@@ -1696,7 +1713,7 @@ export default function AuthenticatedLayout() {
         i18n={i18n}
       />
 
-      <AnimatedOutlet />
+      <AnimatedOutlet pageRefreshKey={pageRefreshKey} />
     </>
     </AuthSessionProvider>
   );

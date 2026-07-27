@@ -66,24 +66,23 @@ export function buildTransactionSearchRequestKey({
   });
 }
 
-function resolveDefaultSearchCurrencies(scopeCacheCompanyKey) {
+/** Default filter = first currency in this company's saved drag order. */
+function resolveDefaultSearchCurrencies(scope, snapCompanies = []) {
+  const scopeCacheCompanyKey = transactionScopeCacheCompanyKey(scope);
   // Group-only: wait for scoped account currencies from API.
   if (String(scopeCacheCompanyKey || "").startsWith("group:")) {
     return { showAll: false, currencies: [] };
   }
-  // Default = first in saved drag order (not hardcoded MYR / last selected filter).
-  const companyId = /^\d+$/.test(String(scopeCacheCompanyKey || ""))
-    ? Number(scopeCacheCompanyKey)
-    : null;
-  const order = resolveSavedCurrencyOrder(companyId, null) || [];
+  const orderCompanyId = resolveTransactionCurrencyOrderCompanyId(scope, snapCompanies);
+  const order = resolveSavedCurrencyOrder(orderCompanyId, null) || [];
   const code = pickTransactionDefaultCurrency(order.length ? order : ["MYR"]);
   return { showAll: false, currencies: code ? [code] : [] };
 }
 
-export function buildDefaultSearchApiParams(scope, { dateFrom, dateTo } = {}) {
+export function buildDefaultSearchApiParams(scope, { dateFrom, dateTo, snapCompanies = [] } = {}) {
   const scopeApi = transactionScopeApiParams(scope);
   const scopeCacheCompanyKey = transactionScopeCacheCompanyKey(scope);
-  const currencyPrefs = resolveDefaultSearchCurrencies(scopeCacheCompanyKey);
+  const currencyPrefs = resolveDefaultSearchCurrencies(scope, snapCompanies);
   const subsidiarySearch =
     scopeApi.subsidiaryAccountsOnly ||
     (scopeApi.companyId != null && Number(scopeApi.companyId) > 0);
@@ -149,9 +148,13 @@ export function hydrateTransactionScopeMetadataFromCache(queryClient, scope, sna
   };
 }
 
-async function prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo) {
+async function prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo, snapCompanies = []) {
   if (!scope || scope.mode === "aggregate") return;
-  const { searchParams, requestKey } = buildDefaultSearchApiParams(scope, { dateFrom, dateTo });
+  const { searchParams, requestKey } = buildDefaultSearchApiParams(scope, {
+    dateFrom,
+    dateTo,
+    snapCompanies,
+  });
   if (!searchParams.dateFrom || !searchParams.dateTo) return;
 
   if (queryClient) {
@@ -227,7 +230,7 @@ export function prefetchTransactionScopeBundle(queryClient, { nextSnap, todayDmy
 
   return Promise.all([
     prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderCompanyId),
-    prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo).catch(() => null),
+    prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo, companies).catch(() => null),
   ]).catch(() => null);
 }
 
