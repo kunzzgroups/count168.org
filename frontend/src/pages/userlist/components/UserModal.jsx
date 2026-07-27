@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { accountCompanyPickerZIndex, accountModalOverlayZIndex } from "../../../components/ProcessModalPortal.jsx";
 import SimpleSelect from "../../../components/SimpleSelect.jsx";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
+import PasswordInput from "../../../components/PasswordInput.jsx";
 
 /** Inline so first paint is 3-column even if extracted CSS applies one frame late */
 const modalBodyStyle = {
@@ -573,26 +574,45 @@ function UserModal({
                   <div className="form-group user-info-field password-row-container password-row-container--split">
                     <div className="password-field-wrapper">
                       <label htmlFor="password">{isEditMode ? t("password") : t("passwordRequiredMark")}</label>
-                      <input id="password" type="password" disabled={pageReadOnlyLock} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+                      <PasswordInput
+                        id="password"
+                        disabled={pageReadOnlyLock}
+                        value={form.password}
+                        onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                        showLabel={t("showPassword")}
+                        hideLabel={t("hidePassword")}
+                        autoComplete="new-password"
+                      />
                     </div>
                     <div className="password-field-wrapper">
                       <label htmlFor="secondary_password">{t("secondaryPassword")}</label>
-                      <input
+                      <PasswordInput
                         id="secondary_password"
-                        type="password"
                         maxLength={6}
                         pattern="[0-9]{6}"
                         placeholder={t("secondaryPasswordPlaceholder")}
                         disabled={pageReadOnlyLock}
                         value={form.secondary_password}
                         onChange={(e) => setForm((f) => ({ ...f, secondary_password: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+                        showLabel={t("showPassword")}
+                        hideLabel={t("hidePassword")}
+                        autoComplete="off"
+                        inputMode="numeric"
                       />
                     </div>
                   </div>
                 ) : (
                   <div className="form-group user-info-field">
                     <label htmlFor="password">{isEditMode ? t("password") : t("passwordRequiredMark")}</label>
-                    <input id="password" type="password" disabled={pageReadOnlyLock} value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+                    <PasswordInput
+                      id="password"
+                      disabled={pageReadOnlyLock}
+                      value={form.password}
+                      onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                      showLabel={t("showPassword")}
+                      hideLabel={t("hidePassword")}
+                      autoComplete="new-password"
+                    />
                   </div>
                 )}
                 <div className="user-info-field-row">
