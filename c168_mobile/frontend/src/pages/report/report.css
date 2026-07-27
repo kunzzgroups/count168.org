@@ -92,7 +92,7 @@
 
 .m-rpt-record-copy strong {
   color: var(--m-color-text);
-  font-size: 0.95rem;
+  font-size: var(--m-text-compact);
 }
 
 .m-rpt-record-copy small {
@@ -145,7 +145,7 @@
 .m-rpt-title-copy strong {
   display: block;
   color: var(--m-color-text);
-  font-size: 0.95rem;
+  font-size: var(--m-text-compact);
   line-height: 1.2;
 }
 
@@ -366,7 +366,7 @@
 .m-rpt-card-head strong {
   min-width: 0;
   color: var(--m-color-text);
-  font-size: 0.95rem;
+  font-size: var(--m-text-compact);
   word-break: break-word;
 }
 
@@ -427,7 +427,7 @@
 }
 
 .m-rpt-total-sticky .m-rpt-metrics strong {
-  font-size: 0.82rem;
+  font-size: var(--m-text-secondary);
 }
 
 .m-rpt-total-bar {
@@ -454,7 +454,7 @@
 
 .m-rpt-metrics strong {
   color: var(--m-color-text);
-  font-size: 0.92rem;
+  font-size: var(--m-text-compact);
   font-variant-numeric: tabular-nums;
 }
 

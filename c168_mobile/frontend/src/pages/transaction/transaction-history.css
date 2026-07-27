@@ -287,7 +287,7 @@
 }
 
 .m-tx-hist-chev {
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   opacity: 0.75;
 }
 
@@ -299,7 +299,7 @@
   white-space: nowrap;
   border-radius: 0.25rem;
   padding: 0.0625rem 0.25rem;
-  font-size: 0.6875rem;
+  font-size: 0.8125rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   vertical-align: middle;
@@ -358,7 +358,7 @@
 }
 
 .m-tx-hist-detail-label {
-  font-size: 0.625rem;
+  font-size: var(--m-text-caption);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;

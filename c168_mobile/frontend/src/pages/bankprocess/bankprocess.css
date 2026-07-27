@@ -169,7 +169,7 @@
 .m-bp-kv span {
   display: block;
   color: var(--m-color-muted);
-  font-size: 0.75rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -195,7 +195,7 @@
 .m-bp-section-label {
   margin: 0.4rem 0 0.45rem;
   color: var(--m-color-muted);
-  font-size: 0.75rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -266,12 +266,12 @@
 .m-bp-field {
   display: grid;
   gap: 0.375rem;
-  font-size: 0.75rem;
+  font-size: var(--m-text-secondary);
 }
 
 .m-bp-field > span {
   color: var(--m-color-muted);
-  font-size: 0.75rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;

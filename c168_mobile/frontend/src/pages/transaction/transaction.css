@@ -48,7 +48,7 @@
   border-radius: var(--m-radius-pill);
   background: #dc2626;
   padding: 0 0.25rem;
-  font-size: 0.5625rem;
+  font-size: var(--m-text-micro);
   font-weight: 700;
   color: #fff;
 }

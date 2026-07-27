@@ -161,7 +161,7 @@ export default function ExportPdfSheet({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.from}</span>
+              <span className="text-[12px] font-bold uppercase tracking-wide text-slate-400">{m.from}</span>
               <input
                 type="date"
                 value={dateFromYmd}
@@ -171,7 +171,7 @@ export default function ExportPdfSheet({
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.to}</span>
+              <span className="text-[12px] font-bold uppercase tracking-wide text-slate-400">{m.to}</span>
               <input
                 type="date"
                 value={dateToYmd}
