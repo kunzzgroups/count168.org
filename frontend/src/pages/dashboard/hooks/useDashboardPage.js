@@ -7692,12 +7692,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     showAllCurrencies && canShowAllCurrencies ? conversionBaseCurrency : currencyCode;
 
   const kpiFooter = useMemo(() => {
+    /* Freeze caption to painted scope — live currency would update before KPI values. */
+    const paintedCurrency = summaryCurrencyCode || currencyCode;
     const cur =
       showAllCurrencies && canShowAllCurrencies
         ? `${i18n.all} · ${conversionBaseCurrency || "—"}`
-        : currencyCode || "—";
-    const from = parseYmd(dateFrom);
-    const to = parseYmd(dateTo);
+        : paintedCurrency || "—";
+    const from = parseYmd(summaryDateFrom || dateFrom);
+    const to = parseYmd(summaryDateTo || dateTo);
     if (from.getFullYear() === to.getFullYear() && from.getMonth() === to.getMonth()) {
       return `${cur} · ${formatDmyDash(to)}`;
     }
@@ -7705,11 +7707,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     const right = formatDmyDash(to);
     return `${cur} · ${left} – ${right}`;
   }, [
+    summaryCurrencyCode,
     currencyCode,
     conversionBaseCurrency,
     showAllCurrencies,
     canShowAllCurrencies,
     i18n.all,
+    summaryDateFrom,
+    summaryDateTo,
     dateFrom,
     dateTo,
   ]);
@@ -7866,11 +7871,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       code: row.code,
       earnings: earningsPanelView === "earning" ? row.earnings : row.netProfit,
     }));
-    return sumConvertedEarnings(rows, displayCurrencyCode, exchangeRates.rates).total;
+    const base = summaryCurrencyCode || displayCurrencyCode;
+    return sumConvertedEarnings(rows, base, exchangeRates.rates).total;
   }, [
     useConvertedEarnings,
     earningsCurrencyRows,
     earningsPanelView,
+    summaryCurrencyCode,
     displayCurrencyCode,
     exchangeRates.rates,
   ]);
@@ -7981,15 +7988,28 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     }
   }, [showEarningPanelTab, showNetProfitForTab, earningsPanelView]);
 
+  /**
+   * Pie remount key — must stay on painted scope while pending.
+   * Live currency here remounts the pie before KPI cards swap (broken atomic paint).
+   */
   const exchangeRateScopeKey = useMemo(
     () =>
       [
-        companyId ?? "",
-        displayCurrencyCode ?? "",
-        [...currencies].sort().join(","),
-        dateTo ?? "",
+        summaryCompanyId ?? companyId ?? "",
+        summaryCurrencyCode || displayCurrencyCode || "",
+        [...(summaryCurrencies.length ? summaryCurrencies : currencies)].sort().join(","),
+        summaryDateTo || dateTo || "",
       ].join("|"),
-    [companyId, displayCurrencyCode, currencies, dateTo]
+    [
+      summaryCompanyId,
+      companyId,
+      summaryCurrencyCode,
+      displayCurrencyCode,
+      summaryCurrencies,
+      currencies,
+      summaryDateTo,
+      dateTo,
+    ]
   );
 
   /**
@@ -8029,8 +8049,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   }, [scopeDataPending, displayScopeKey]);
   const displayCurrencies =
     summaryCurrencies?.length > 0 ? summaryCurrencies : currencies;
+  /* Never fall through to live currency while pending — that updates pie center/hero early. */
   const displayFilterCurrencyCode = scopeDataPending
-    ? summaryCurrencyCode || displayCurrencyCode
+    ? summaryCurrencyCode || ""
     : displayCurrencyCode;
   const chartDataStable = useMemo(
     () =>
