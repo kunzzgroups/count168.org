@@ -1,9 +1,9 @@
 ---
+name: product-manager
+description: >-
   产品经理。需求澄清、用户故事、验收标准、风险与影响分析。
   新功能、需求不清、涉及权限/金额/多租户时主动使用。
-name: product-manager
 model: inherit
-description: >-
 is_background: true
 ---
 

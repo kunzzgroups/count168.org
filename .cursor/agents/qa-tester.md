@@ -1,9 +1,9 @@
 ---
+name: qa-tester
+description: >-
   测试员。改码后机器验证、手动回归清单、多租户/金额/权限专项检查。
   任何代码改动完成、发版前主动使用。
-name: qa-tester
 model: inherit
-description: >-
 is_background: true
 ---
 

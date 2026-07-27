@@ -45,6 +45,7 @@ description: >-
 | 路由 | `frontend/src/utils/routing/pageRoutes.js` |
 | API | `api/{domain}/*_api.php` |
 | 权限/租户 | `includes/permissions.php`、`tenant_scope.php` |
+| Mobile | `c168_mobile/frontend/src/` |
 
 复杂模块先读 `frontend/src/pages/{domain}/README.md`。
 

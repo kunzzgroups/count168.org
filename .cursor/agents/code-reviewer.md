@@ -1,10 +1,9 @@
-
 ---
+name: code-reviewer
+description: >-
   EazyCount / count168 项目代码审查专家。在编写或修改 PHP API、React 页面、数据库迁移后主动审查。
   关注多租户 scope、金额精度、权限、安全与项目约定。Use proactively after code changes.
-name: code-reviewer
 model: inherit
-description: >-
 is_background: true
 ---
 

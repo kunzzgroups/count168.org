@@ -16,6 +16,7 @@ alwaysApply: true
 | API | `api/{domain}/*_api.php` |
 | 全局 PHP | `includes/`（config、session、permissions、租户） |
 | 数据库 | `database/schema/` + `database/migrations/` |
+| Mobile | `c168_mobile/frontend/src/` |
 
 复杂模块先读 `frontend/src/pages/{domain}/README.md`。红线：多租户 scope、`decimal.js` / `money_decimal.php` 算钱、时区 `Asia/Kuala_Lumpur`。
 
@@ -117,4 +118,4 @@ alwaysApply: true
 
 ## Git 收尾
 
-改完且验证通过后，遵守 `22-git.mdc` 做 stage；未要求 commit 时不 commit。
+改完且验证通过后，遵守用户 git 规则做 stage；未要求 commit 时不 commit。
