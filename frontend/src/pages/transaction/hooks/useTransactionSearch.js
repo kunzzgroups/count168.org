@@ -172,6 +172,7 @@ export function useTransactionSearch({
   const scopeReady = transactionScopeIsReady(transactionScope);
   const scopeApi = useMemo(() => transactionScopeApiParams(transactionScope), [transactionScope]);
   const scopeCacheCompanyKey = transactionScopeCacheCompanyKey(transactionScope);
+  const scopeKey = transactionScopeCacheKey(transactionScope) || null;
   const orderCompanyId = useMemo(
     () =>
       resolveTransactionCurrencyOrderCompanyId(
@@ -1922,9 +1923,6 @@ export function useTransactionSearch({
     submitFocusActive,
     submitFocusByCurrency,
   ]);
-
-  /** 切换 scope（含 group/company 模式）：中止旧请求、清空列表，后台重搜。 */
-  const scopeKey = transactionScopeCacheKey(transactionScope) || null;
 
   /** Cold boot: pre-select first ordered currency before metadata returns so initial search can start early. */
   useLayoutEffect(() => {
