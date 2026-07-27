@@ -245,9 +245,8 @@ export default function AddTransactionSheet({
     } catch {
       /* ignore */
     }
-    let convertedInputAmtDec = inputAmtDec;
-    if (inputAmtDec.gt(0) && rateDec.gt(0)) convertedInputAmtDec = inputAmtDec.times(rateDec);
-    const finalFeeDec = baseFeeDec.plus(convertedInputAmtDec);
+    // Fee is taken at face value; do not multiply by FX rate.
+    const finalFeeDec = baseFeeDec.plus(inputAmtDec);
     let middleStr = "";
     if (!finalFeeDec.isZero()) middleStr = formatRateAmount(finalFeeDec.toString());
     else if (finalFeeDec.isZero() && (baseFeeDec.gt(0) || !inputAmtDec.isZero())) middleStr = "0.00";

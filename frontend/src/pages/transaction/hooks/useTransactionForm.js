@@ -273,12 +273,8 @@ export function useTransactionForm({
       // ignore
     }
 
-    let convertedInputAmtDec = inputAmtDec;
-    if (inputAmtDec.gt(0) && rateDec.gt(0)) {
-      convertedInputAmtDec = inputAmtDec.times(rateDec);
-    }
-
-    const finalFeeDec = baseFeeDec.plus(convertedInputAmtDec);
+    // Fee is taken at face value (same currency semantics as before); do not multiply by FX rate.
+    const finalFeeDec = baseFeeDec.plus(inputAmtDec);
     let middleStr = "";
     if (!finalFeeDec.isZero()) {
       middleStr = formatRateAmount(finalFeeDec.toString());
