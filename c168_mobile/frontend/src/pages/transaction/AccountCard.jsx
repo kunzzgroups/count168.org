@@ -31,7 +31,7 @@ export default function AccountCard({ row, showName, m, onOpenHistory }) {
           <p className="truncate text-[15px] font-bold text-slate-900">{code}</p>
           {name ? <p className="truncate text-[12px] text-slate-500">{name}</p> : null}
         </div>
-        <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[12px] font-bold tracking-wide text-slate-600">
+        <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-bold tracking-wide text-slate-600">
           {currency}
         </span>
       </div>
@@ -49,9 +49,9 @@ export default function AccountCard({ row, showName, m, onOpenHistory }) {
 function Metric({ label, value, emphasize = false }) {
   return (
     <div>
-      <p className="text-[12px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
       <p
-        className={`mt-0.5 text-[13px] font-bold tabular-nums ${
+        className={`mt-0.5 text-[11px] font-bold tabular-nums ${
           emphasize ? "text-[#2f6bf6]" : "text-slate-700"
         }`}
       >

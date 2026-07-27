@@ -112,13 +112,13 @@ export default function DashboardTrendChart({
                 interval={xAxisLayout.interval}
                 minTickGap={xAxisLayout.minTickGap}
                 height={xAxisLayout.height}
-                tick={{ fontSize: 12, fill: "#94a3b8", fontWeight: 600 }}
+                tick={{ fontSize: 10, fill: "#94a3b8", fontWeight: 600 }}
                 axisLine={false}
                 tickLine={false}
               />
               <YAxis
                 domain={yDomain}
-                tick={{ fontSize: 12, fill: "#94a3b8", fontWeight: 600 }}
+                tick={{ fontSize: 10, fill: "#94a3b8", fontWeight: 600 }}
                 tickFormatter={(v) => formatCompactAxis(v)}
                 width={44}
                 axisLine={false}

@@ -157,11 +157,11 @@ export default function ExportPdfSheet({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-          <p className="text-[12px] leading-relaxed text-slate-500">{m.exportPdfHint}</p>
+          <p className="text-[11px] leading-relaxed text-slate-500">{m.exportPdfHint}</p>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1">
-              <span className="text-[12px] font-bold uppercase tracking-wide text-slate-400">{m.from}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.from}</span>
               <input
                 type="date"
                 value={dateFromYmd}
@@ -171,7 +171,7 @@ export default function ExportPdfSheet({
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[12px] font-bold uppercase tracking-wide text-slate-400">{m.to}</span>
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">{m.to}</span>
               <input
                 type="date"
                 value={dateToYmd}
@@ -183,7 +183,7 @@ export default function ExportPdfSheet({
           </div>
 
           <div>
-            <p className="mb-2 text-[12px] font-bold uppercase tracking-wide text-slate-500">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">
               {m.exportPdfCurrency}
             </p>
             {loadingCurrencies ? (
@@ -199,7 +199,7 @@ export default function ExportPdfSheet({
                       setIsAllSelected(true);
                       setSelectedCurrencies([]);
                     }}
-                    className={`tap-scale rounded-xl px-3 py-2 text-[12px] font-bold ${
+                    className={`tap-scale rounded-xl px-3 py-2 text-[11px] font-bold ${
                       isAllSelected ? "bg-[#2f6bf6] text-white" : "bg-slate-100 text-slate-600"
                     }`}
                   >
@@ -213,7 +213,7 @@ export default function ExportPdfSheet({
                       key={code}
                       type="button"
                       onClick={() => toggleCurrency(code)}
-                      className={`tap-scale rounded-xl px-3 py-2 text-[12px] font-bold ${
+                      className={`tap-scale rounded-xl px-3 py-2 text-[11px] font-bold ${
                         active || (currencies.length === 1 && selectedCurrencies.includes(code))
                           ? "bg-[#2f6bf6] text-white"
                           : "bg-slate-100 text-slate-600"
@@ -228,7 +228,7 @@ export default function ExportPdfSheet({
           </div>
 
           {error ? (
-            <p className="rounded-xl bg-rose-50 px-3 py-2 text-[12px] font-semibold text-rose-700">{error}</p>
+            <p className="rounded-xl bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">{error}</p>
           ) : null}
         </div>
 
