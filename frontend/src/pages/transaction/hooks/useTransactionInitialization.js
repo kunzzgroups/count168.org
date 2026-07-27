@@ -1,8 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import {
-  pickTransactionDefaultCurrency,
-  readTransactionCurrencyFilterState,
-} from "../lib/transactionPaymentLogic.js";
+import { pickTransactionDefaultCurrency } from "../lib/transactionPaymentLogic.js";
 import {
   transactionScopeCacheCompanyKey,
   transactionScopeCacheKey,
@@ -13,33 +10,6 @@ function sameCurrencySelection(a, b) {
   const right = Array.isArray(b) ? b.map((x) => String(x || "").toUpperCase()) : [];
   if (left.length !== right.length) return false;
   return left.every((code, idx) => code === right[idx]);
-}
-
-/** Prefer in-session company-switch prefs; else persisted filter (incl. empty = no lists). */
-function resolveSavedCurrencyPrefs(companyCacheKey, memoryStore) {
-  const mem = companyCacheKey != null ? memoryStore[companyCacheKey] : null;
-
-  if (mem) {
-    if (mem?.showAll || mem?.showAllCurrencies) {
-      return { showAll: true, currencies: [] };
-    }
-
-    const memCurrencies = Array.isArray(mem?.currencies)
-      ? mem.currencies
-      : Array.isArray(mem?.selectedCurrencies)
-        ? mem.selectedCurrencies
-        : null;
-
-    // Explicit empty selection is valid (no currency → hide lists).
-    if (memCurrencies != null) {
-      return {
-        showAll: false,
-        currencies: memCurrencies.map((c) => String(c || "").trim()).filter(Boolean),
-      };
-    }
-  }
-
-  return readTransactionCurrencyFilterState(companyCacheKey);
 }
 
 export function useTransactionInitialization({
@@ -53,8 +23,6 @@ export function useTransactionInitialization({
   form,
 }) {
   const currencyRestoredScopeKeyRef = useRef(null);
-  const currencyPrefsByCompanyRef = useRef({});
-  const prevCompanyCacheKeyRef = useRef(null);
   const prevScopeCacheKeyRef = useRef(null);
   const searchRef = useRef(search);
   const formRef = useRef(form);
@@ -76,15 +44,6 @@ export function useTransactionInitialization({
       currencyRestoredScopeKeyRef.current = null;
       prevScopeCacheKeyRef.current = scopeCacheKey;
     }
-
-    const prevCompanyKey = prevCompanyCacheKeyRef.current;
-    if (prevCompanyKey != null && prevCompanyKey !== companyCacheKey) {
-      currencyPrefsByCompanyRef.current[prevCompanyKey] = {
-        showAll: activeSearch.showAllCurrencies,
-        currencies: [...activeSearch.selectedCurrencies],
-      };
-    }
-    prevCompanyCacheKeyRef.current = companyCacheKey;
 
     const cid = companyCacheKey;
     const scopeKey = transactionScope
@@ -108,6 +67,7 @@ export function useTransactionInitialization({
     const rows = currencyScopeBundle.rows;
     const codes = rows.map((x) => String(x.code || x.currency || "").toUpperCase().trim()).filter(Boolean);
 
+    // Form defaults follow sort order (first position).
     const defaultCode = pickTransactionDefaultCurrency(codes);
     const pickDefault =
       (defaultCode ? rows.find((c) => String(c.code || "").toUpperCase() === defaultCode) : null) ||
@@ -142,27 +102,9 @@ export function useTransactionInitialization({
       return;
     }
 
-    const saved = resolveSavedCurrencyPrefs(cid, currencyPrefsByCompanyRef.current);
-    let nextShowAll = false;
-    let nextSel = [];
-
-    if (saved?.showAll && codes.length >= 2) {
-      nextShowAll = true;
-      nextSel = [];
-    } else if (saved) {
-      const valid = (saved.currencies || []).filter((code) =>
-        rows.some((c) => String(c.code) === String(code)),
-      );
-      nextSel = valid;
-    }
-
-    // Cold boot / no in-session prefs: default to MYR (or first). Explicit empty prefs stay empty.
-    if (saved == null && !nextShowAll && nextSel.length === 0 && rows.length > 0) {
-      const code = pickTransactionDefaultCurrency(codes);
-      const pick =
-        (code ? rows.find((c) => String(c.code || "").toUpperCase() === code) : null) || rows[0];
-      if (pick?.code) nextSel = [pick.code];
-    }
+    // Company/scope enter: always select the first ordered currency (not last MYR / saved filter).
+    const nextShowAll = false;
+    const nextSel = defaultCode ? [defaultCode] : codes[0] ? [codes[0]] : [];
 
     activeSearch.setShowAllCurrencies((prev) => (prev === nextShowAll ? prev : nextShowAll));
     activeSearch.setSelectedCurrencies((prev) => (sameCurrencySelection(prev, nextSel) ? prev : nextSel));

@@ -1,4 +1,5 @@
 import { resolveViewGroupForCompany } from "../../../utils/company/sharedCompanyFilter.js";
+import { resolveSavedCurrencyOrder } from "../../../utils/company/currencyDisplayOrder.js";
 import { setTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
 import {
   getAccounts,
@@ -21,7 +22,6 @@ import {
   resolveTransactionCurrencyOrderCompanyId,
 } from "./transactionScope.js";
 
-const TRANSACTION_CURRENCY_FILTER_KEY_PREFIX = "transaction_currency_filter_v1_";
 const hoverWarmInflight = new Map();
 
 /** Must match useTransactionSearch `requestKey` JSON shape. */
@@ -66,38 +66,18 @@ export function buildTransactionSearchRequestKey({
   });
 }
 
-/** @returns {{ showAll: boolean, currencies: string[] } | null} null when nothing persisted */
-export function readPersistedCurrencyForCompany(companyCacheKey) {
-  if (!companyCacheKey) return null;
-  try {
-    const raw = localStorage.getItem(`${TRANSACTION_CURRENCY_FILTER_KEY_PREFIX}${companyCacheKey}`);
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    if (!o || typeof o !== "object") return null;
-    return {
-      showAll: !!o.showAll,
-      currencies: Array.isArray(o.currencies)
-        ? o.currencies.map((c) => String(c || "").toUpperCase().trim()).filter(Boolean)
-        : [],
-    };
-  } catch {
-    return null;
-  }
-}
-
 function resolveDefaultSearchCurrencies(scopeCacheCompanyKey) {
-  const prefs = readPersistedCurrencyForCompany(scopeCacheCompanyKey);
-  if (prefs?.showAll) return { showAll: true, currencies: [] };
-  // Explicit prefs (including empty selection → no lists) must be respected.
-  if (prefs) {
-    return { showAll: false, currencies: prefs.currencies };
-  }
-  // Group-only: never pre-select MYR — wait for scoped account currencies from API.
+  // Group-only: wait for scoped account currencies from API.
   if (String(scopeCacheCompanyKey || "").startsWith("group:")) {
     return { showAll: false, currencies: [] };
   }
-  const code = pickTransactionDefaultCurrency(["MYR"]);
-  return { showAll: false, currencies: code ? [code] : ["MYR"] };
+  // Default = first in saved drag order (not hardcoded MYR / last selected filter).
+  const companyId = /^\d+$/.test(String(scopeCacheCompanyKey || ""))
+    ? Number(scopeCacheCompanyKey)
+    : null;
+  const order = resolveSavedCurrencyOrder(companyId, null) || [];
+  const code = pickTransactionDefaultCurrency(order.length ? order : ["MYR"]);
+  return { showAll: false, currencies: code ? [code] : [] };
 }
 
 export function buildDefaultSearchApiParams(scope, { dateFrom, dateTo } = {}) {
