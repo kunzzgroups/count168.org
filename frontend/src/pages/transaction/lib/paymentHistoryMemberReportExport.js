@@ -138,8 +138,8 @@ const MEMBER_REPORT_PRINT_CSS = `
     vertical-align: middle;
     word-break: break-word;
   }
-  table.report-table tbody tr:nth-child(odd) td { background: #ffffff; }
-  table.report-table tbody tr:nth-child(even) td { background: #f4f7fc; }
+  table.report-table tbody tr:nth-child(odd) td { background: #f9fbff; }
+  table.report-table tbody tr:nth-child(even) td { background: rgb(228, 235, 255); }
   table.report-table tbody tr.row-bf td {
     background: #eef4ff !important;
     color: #1e3a5f;
@@ -1015,6 +1015,7 @@ export async function downloadMemberReportPdf({
         textColor: [15, 23, 42],
         overflow: "hidden",
         valign: "middle",
+        fillColor: [249, 251, 255],
       },
       headStyles: {
         fillColor: [0, 44, 73],
@@ -1030,7 +1031,7 @@ export async function downloadMemberReportPdf({
         fontStyle: "bold",
         fontSize: 9,
       },
-      alternateRowStyles: { fillColor: [244, 247, 252] },
+      alternateRowStyles: { fillColor: [228, 235, 255] },
       columnStyles: PDF_TABLE_COLUMN_STYLES,
       didParseCell: (hookData) => {
         const colIdx = hookData.column.index;

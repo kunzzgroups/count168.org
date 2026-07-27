@@ -728,10 +728,10 @@ body.transaction-page {
     box-sizing: border-box;
 }
 .member-winloss-table .transaction-table-row:nth-child(odd) td {
-    background-color: #ffffff;
+    background-color: #f9fbff;
 }
 .member-winloss-table .transaction-table-row:nth-child(even) td {
-    background-color: #f4f7fc;
+    background-color: rgb(228, 235, 255);
 }
 .member-winloss-table .transaction-table-row.member-bf-row td {
     background-color: #eef4ff !important;
