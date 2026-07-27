@@ -228,7 +228,7 @@ export default function DomainReportPage() {
         />
       }
     >
-      <div className={`m-rpt-content${totals ? " m-rpt-content--with-total" : ""}`}>
+      <div className="m-rpt-content">
         {s.toast ? (
           <div className={`m-rpt-toast${s.toast.tone === "error" ? " is-error" : ""}`}>
             {s.toast.message}
@@ -289,35 +289,33 @@ export default function DomainReportPage() {
                   {shown} / {total}
                 </span>
               </div>
+            ) : totals ? (
+              <div className="m-rpt-total-bar">
+                <strong>{i18n.total}</strong>
+                <div className="m-rpt-metrics m-rpt-metrics--compact">
+                  <div>
+                    <span>{i18n.turnover}</span>
+                    <strong>{formatReportAmount(totals.turnover)}</strong>
+                  </div>
+                  <div>
+                    <span>{i18n.win}</span>
+                    <strong className="is-pos">{formatReportAmount(totals.win)}</strong>
+                  </div>
+                  <div>
+                    <span>{i18n.lose}</span>
+                    <strong className="is-neg">{formatReportAmount(totals.lose)}</strong>
+                  </div>
+                  <div>
+                    <span>{i18n.winLose}</span>
+                    <strong className={reportAmountTone(totals.win_lose)}>
+                      {formatReportAmount(totals.win_lose)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
             ) : null}
           </>
         )}
-
-        {totals ? (
-          <div className="m-rpt-total-bar">
-            <strong>{i18n.total}</strong>
-            <div className="m-rpt-metrics m-rpt-metrics--compact">
-              <div>
-                <span>{i18n.turnover}</span>
-                <strong>{formatReportAmount(totals.turnover)}</strong>
-              </div>
-              <div>
-                <span>{i18n.win}</span>
-                <strong className="is-pos">{formatReportAmount(totals.win)}</strong>
-              </div>
-              <div>
-                <span>{i18n.lose}</span>
-                <strong className="is-neg">{formatReportAmount(totals.lose)}</strong>
-              </div>
-              <div>
-                <span>{i18n.winLose}</span>
-                <strong className={reportAmountTone(totals.win_lose)}>
-                  {formatReportAmount(totals.win_lose)}
-                </strong>
-              </div>
-            </div>
-          </div>
-        ) : null}
       </div>
     </MobileShell>
   );

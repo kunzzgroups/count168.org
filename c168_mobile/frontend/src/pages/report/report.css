@@ -205,13 +205,8 @@
 .m-rpt-content {
   width: min(100%, var(--m-page-max-width));
   margin-inline: auto;
-  padding: 0.75rem var(--m-page-gutter) 1rem;
+  padding: 0.75rem var(--m-page-gutter) 1.25rem;
   font-size: var(--m-text-compact);
-}
-
-.m-rpt-content--with-total {
-  /* Room for fixed TOTAL bar above bottom nav */
-  padding-bottom: calc(7.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 .m-rpt-state {
@@ -352,19 +347,11 @@
 }
 
 .m-rpt-total-bar {
-  position: fixed;
-  left: 50%;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 4.75rem);
-  z-index: 45;
-  width: min(calc(100% - 1.5rem), var(--m-page-max-width));
-  transform: translateX(-50%);
+  margin-top: 0.35rem;
   border: 1px solid #bfdbfe;
   border-radius: var(--m-radius-card-lg);
-  background: rgb(239 246 255 / 96%);
-  backdrop-filter: blur(8px);
-  padding: 0.75rem 0.85rem;
-  box-shadow: var(--m-shadow-card);
-  pointer-events: none;
+  background: #eff6ff;
+  padding: 0.85rem;
 }
 
 .m-rpt-total-bar > strong {
@@ -417,11 +404,6 @@
 
 @media (orientation: landscape) and (max-height: 500px) {
   .m-rpt-total-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 3.5rem);
-    padding: 0.55rem 0.75rem;
-  }
-
-  .m-rpt-content--with-total {
-    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.65rem 0.75rem;
   }
 }
