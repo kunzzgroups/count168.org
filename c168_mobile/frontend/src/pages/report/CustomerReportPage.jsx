@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
-import { useIncrementalList } from "../../hooks/useIncrementalList.js";
 import { useMaintenanceSession } from "../../hooks/useMaintenanceSession.js";
 import { periodPresetRange } from "../../lib/dashboardDateUtils.js";
 import {
   companyIsBankOnly,
   fetchCustomerReport,
   formatReportAmount,
-  reportAmountTone,
 } from "../../lib/reportApi.js";
 import {
   maintenanceScopeIsReady,
@@ -21,6 +19,28 @@ import "./report.css";
 
 function defaultThisMonth() {
   return periodPresetRange("thisMonth") || { dateFrom: "", dateTo: "" };
+}
+
+function CustomerMetric({ label, value, tone = "" }) {
+  return (
+    <div className={`m-rpt-metric${tone ? ` ${tone}` : ""}`}>
+      <span>{label}</span>
+      <strong>{formatReportAmount(value)}</strong>
+    </div>
+  );
+}
+
+function CustomerTotalStrip({ i18n, totals }) {
+  if (!totals) return null;
+  return (
+    <div className="m-rpt-summary">
+      <div className="m-rpt-summary-label">{i18n.total}</div>
+      <div className="m-rpt-metric-row m-rpt-metric-row--2">
+        <CustomerMetric label={i18n.win} value={totals.win} tone="is-pos" />
+        <CustomerMetric label={i18n.lose} value={totals.lose} tone="is-neg" />
+      </div>
+    </div>
+  );
 }
 
 export default function CustomerReportPage() {
@@ -38,6 +58,7 @@ export default function CustomerReportPage() {
   const [showAllCurrencies, setShowAllCurrencies] = useState(true);
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState([]);
+  const [totals, setTotals] = useState(null);
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
@@ -67,10 +88,16 @@ export default function CustomerReportPage() {
         );
         if (seq !== seqRef.current) return;
         setRows(Array.isArray(json?.data) ? json.data : []);
+        setTotals(
+          json?.total_win != null || json?.total_lose != null
+            ? { win: json.total_win, lose: json.total_lose }
+            : null,
+        );
       } catch (e) {
         if (e?.name === "AbortError" || seq !== seqRef.current) return;
         setListError(e?.message || i18n.loadFailed);
         setRows([]);
+        setTotals(null);
       } finally {
         if (seq === seqRef.current) setListLoading(false);
       }
@@ -123,17 +150,6 @@ export default function CustomerReportPage() {
     }
     return [...map.entries()];
   }, [displayRows]);
-
-  const flatForIncremental = useMemo(() => {
-    const out = [];
-    for (const [currency, items] of grouped) {
-      out.push({ __type: "header", currency });
-      for (const item of items) out.push({ __type: "row", item });
-    }
-    return out;
-  }, [grouped]);
-
-  const { visible, hasMore, sentinelRef, shown, total } = useIncrementalList(flatForIncremental);
 
   const scopeLabel = s.groupMode
     ? s.selectedGroup || i18n.group
@@ -206,7 +222,20 @@ export default function CustomerReportPage() {
         </Link>
         <div className="m-rpt-title-copy">
           <strong>{i18n.customerTitle}</strong>
-          <small>{i18n.customerFeatures}</small>
+        </div>
+        <div className="m-rpt-search m-rpt-search--inline">
+          <i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={i18n.searchAccount}
+            inputMode="search"
+          />
+          {query ? (
+            <button type="button" onClick={() => setQuery("")} aria-label={i18n.reset}>
+              <i className="fas fa-xmark" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </div>
       <ReportFilterBar
@@ -230,20 +259,7 @@ export default function CustomerReportPage() {
               <span className="m-rpt-chip">{i18n.all || "All"}</span>
             )}
       </div>
-      <div className="m-rpt-search">
-        <i className="fas fa-magnifying-glass" aria-hidden="true" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={i18n.searchAccount}
-          inputMode="search"
-        />
-        {query ? (
-          <button type="button" onClick={() => setQuery("")} aria-label={i18n.reset}>
-            <i className="fas fa-xmark" aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
+      <CustomerTotalStrip i18n={i18n} totals={totals} />
     </div>
   );
 
@@ -303,52 +319,33 @@ export default function CustomerReportPage() {
             <p>{scopeReady ? i18n.noData : i18n.needCompany}</p>
           </div>
         ) : (
-          <>
-            <div className="m-rpt-list">
-              {visible.map((entry, idx) => {
-                if (entry.__type === "header") {
+          <div className="m-rpt-lines">
+            {grouped.map(([currency, items]) => (
+              <div key={currency} className="m-rpt-currency-block">
+                <div className="m-rpt-currency-head">{currency}</div>
+                {items.map((row, idx) => {
+                  const code = String(row.account_id || "").toUpperCase();
+                  const label = row.name ? `${code} (${row.name})` : code || i18n.account;
                   return (
-                    <div key={`h-${entry.currency}-${idx}`} className="m-rpt-currency-head">
-                      {entry.currency}
-                    </div>
+                    <article
+                      key={`${row.account_id}|${row.currency}|${idx}`}
+                      className="m-rpt-line"
+                    >
+                      <div className="m-rpt-line-name">{label}</div>
+                      <div className="m-rpt-metric-row m-rpt-metric-row--2">
+                        <CustomerMetric
+                          label={i18n.win}
+                          value={row.win}
+                          tone="is-pos"
+                        />
+                        <CustomerMetric label={i18n.lose} value={row.lose} tone="is-neg" />
+                      </div>
+                    </article>
                   );
-                }
-                const row = entry.item;
-                return (
-                  <article
-                    key={`${row.account_id}|${row.currency}|${idx}`}
-                    className="m-rpt-card m-rpt-card--customer"
-                  >
-                    <div className="m-rpt-card-head">
-                      <strong>{String(row.account_id || "").toUpperCase() || "—"}</strong>
-                      <span className="m-rpt-tag">{String(row.currency || "").toUpperCase()}</span>
-                    </div>
-                    <p className="m-rpt-name">{row.name || "—"}</p>
-                    <div className="m-rpt-metrics m-rpt-metrics--2">
-                      <div>
-                        <span>{i18n.win}</span>
-                        <strong className="is-pos">{formatReportAmount(row.win)}</strong>
-                      </div>
-                      <div>
-                        <span>{i18n.lose}</span>
-                        <strong className={`is-neg ${reportAmountTone(row.lose)}`}>
-                          {formatReportAmount(row.lose)}
-                        </strong>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-            {hasMore ? (
-              <div ref={sentinelRef} className="m-rpt-more">
-                <i className="fas fa-spinner fa-spin" aria-hidden="true" />
-                <span>
-                  {shown} / {total}
-                </span>
+                })}
               </div>
-            ) : null}
-          </>
+            ))}
+          </div>
         )}
       </div>
     </MobileShell>
