@@ -159,6 +159,15 @@ export default function DomainReportPage() {
 
   const stickyBar = (
     <div className="m-rpt-sticky">
+      <div className="m-rpt-title-row">
+        <Link to="/report" className="m-rpt-title-back tap-scale" aria-label={i18n.backToHub}>
+          <i className="fas fa-arrow-left" aria-hidden="true" />
+        </Link>
+        <div className="m-rpt-title-copy">
+          <strong>{i18n.domainTitle}</strong>
+          <small>{i18n.domainFeatures}</small>
+        </div>
+      </div>
       <ReportFilterBar
         i18n={i18n}
         dateFrom={dateFrom}
@@ -181,12 +190,6 @@ export default function DomainReportPage() {
             <i className="fas fa-xmark" aria-hidden="true" />
           </button>
         ) : null}
-      </div>
-      <div className="m-rpt-back-row">
-        <Link to="/report" className="m-rpt-back">
-          <i className="fas fa-arrow-left" aria-hidden="true" />
-          {i18n.backToHub}
-        </Link>
       </div>
     </div>
   );
@@ -225,7 +228,7 @@ export default function DomainReportPage() {
         />
       }
     >
-      <div className="m-rpt-content">
+      <div className={`m-rpt-content${totals ? " m-rpt-content--with-total" : ""}`}>
         {s.toast ? (
           <div className={`m-rpt-toast${s.toast.tone === "error" ? " is-error" : ""}`}>
             {s.toast.message}

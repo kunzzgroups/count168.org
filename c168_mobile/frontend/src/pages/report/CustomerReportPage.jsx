@@ -200,6 +200,15 @@ export default function CustomerReportPage() {
 
   const stickyBar = (
     <div className="m-rpt-sticky">
+      <div className="m-rpt-title-row">
+        <Link to="/report" className="m-rpt-title-back tap-scale" aria-label={i18n.backToHub}>
+          <i className="fas fa-arrow-left" aria-hidden="true" />
+        </Link>
+        <div className="m-rpt-title-copy">
+          <strong>{i18n.customerTitle}</strong>
+          <small>{i18n.customerFeatures}</small>
+        </div>
+      </div>
       <ReportFilterBar
         i18n={i18n}
         dateFrom={dateFrom}
@@ -234,12 +243,6 @@ export default function CustomerReportPage() {
             <i className="fas fa-xmark" aria-hidden="true" />
           </button>
         ) : null}
-      </div>
-      <div className="m-rpt-back-row">
-        <Link to="/report" className="m-rpt-back">
-          <i className="fas fa-arrow-left" aria-hidden="true" />
-          {i18n.backToHub}
-        </Link>
       </div>
     </div>
   );
