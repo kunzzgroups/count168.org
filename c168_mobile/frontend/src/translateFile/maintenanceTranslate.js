@@ -27,6 +27,16 @@ export const MAINTENANCE_I18N = {
     payFeatures: "Payment history · Deleted records",
     deleteAccess: "Delete access",
 
+    bpMaintenanceTitle: "Bank Maintenance",
+    bpMaintenanceDesc: "Review and remove bank-process transactions.",
+    bpFeatures: "Bank process posts · Batch select · Delete",
+    bpSearchPlaceholder: "Process, account, bank or owner…",
+    bpNeedCompany: "Pick a Bank company to load records.",
+    bpScopeNote: "Company scope only. Same Post/Resend batch selects together.",
+    bpDeleteConfirmTitle: "Delete {n} bank-process record(s)?",
+    bpDeleteConfirmBody:
+      "Deleted records stay visible in history. Only bank-process-sourced transactions are removed.",
+
     setupDataCapture: "Data Capture",
     setupFormula: "Formula",
     setupBank: "Bank Process",
@@ -228,6 +238,15 @@ export const MAINTENANCE_I18N = {
     payMaintenanceDesc: "查看并删除支付记录。",
     payFeatures: "支付历史 · 删除记录",
     deleteAccess: "删除权限",
+
+    bpMaintenanceTitle: "银行维护",
+    bpMaintenanceDesc: "查看并删除银行流程入账交易。",
+    bpFeatures: "银行流程入账 · 批次勾选 · 删除",
+    bpSearchPlaceholder: "流程、账户、银行或卡主…",
+    bpNeedCompany: "请选择 Bank 公司以加载记录。",
+    bpScopeNote: "仅支持公司范围。同一 Post/Resend 批次会一起勾选。",
+    bpDeleteConfirmTitle: "删除 {n} 条银行流程记录？",
+    bpDeleteConfirmBody: "删除后记录仍会显示在历史中。仅删除由银行流程入账的交易。",
 
     setupDataCapture: "数据采集",
     setupFormula: "公式",

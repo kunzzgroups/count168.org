@@ -6,6 +6,7 @@ import { maintenanceText } from "../../translateFile/maintenanceTranslate.js";
 import { buildApiUrl } from "../../utils/apiUrl.js";
 import {
   canAccessBankProcess,
+  canAccessBankprocessMaintenance,
   canAccessMaintenance,
   canAccessPaymentMaintenance,
   canAccessTransactionMaintenance,
@@ -77,6 +78,17 @@ export default function MaintenanceHubPage() {
       title: i18n.payMaintenanceTitle,
       desc: i18n.payMaintenanceDesc,
       features: i18n.payFeatures,
+      badge: i18n.deleteAccess,
+      violet: true,
+    });
+  }
+  if (canAccessBankprocessMaintenance(me)) {
+    records.push({
+      to: "/maintenance/bankprocess",
+      icon: "fa-building-columns",
+      title: i18n.bpMaintenanceTitle,
+      desc: i18n.bpMaintenanceDesc,
+      features: i18n.bpFeatures,
       badge: i18n.deleteAccess,
       violet: true,
     });
