@@ -694,16 +694,18 @@ const CURRENCY_REFRESH_DEFER_MS = 600;
 /** Parallel company dashboard fetches when merging Group/Company "All". */
 const MERGE_DASHBOARD_PARALLEL_BATCH = 12;
 /** Idle delay before one-time session warm of picker companies (current currency only). */
-const SESSION_DASHBOARD_WARM_DELAY_MS = 1500;
+const SESSION_DASHBOARD_WARM_DELAY_MS = 600;
+/** Cross-group / independent company warm after active scope settles. */
+const CROSS_GROUP_COMPANY_WARM_DELAY_MS = 2000;
 /** Parallel kpi bootstrap requests when filling multi-currency earnings sidebar. */
 const EARNINGS_KPI_PARALLEL_BATCH = 3;
 /** Defer trend-chart daily fetch so MoM previous can use DB first (skip for month-bucket ranges). */
 const CHART_DAILY_DEFER_MS = 250;
-/** Sibling currency KPI warm — shorter when This Year (chart/FX feel laggy otherwise). */
-const CURRENCY_PREFETCH_DELAY_MS = 3500;
-const CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS = 800;
+/** Sibling currency warm — start soon after settle so early currency clicks hit cache. */
+const CURRENCY_PREFETCH_DELAY_MS = 1200;
+const CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS = 600;
 /** After Company All settles, warm picker companies (behind currency warm). */
-const COMPANY_ALL_COMPANY_WARM_DELAY_MS = 2800;
+const COMPANY_ALL_COMPANY_WARM_DELAY_MS = 1800;
 /** After picking a company, warm siblings quickly so cold CX/RS/VG feel hot. */
 const COMPANY_SWITCH_PREFETCH_DELAY_MS = 250;
 
@@ -7264,7 +7266,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       drain();
     };
 
-    const timer = window.setTimeout(run, 4500);
+    const timer = window.setTimeout(run, CROSS_GROUP_COMPANY_WARM_DELAY_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -7990,12 +7992,15 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     [companyId, displayCurrencyCode, currencies, dateTo]
   );
 
-  /** Company pill highlight follows painted data — not the in-flight selection. */
+  /**
+   * Painted-scope mirrors for summary/KPI atomic paint.
+   * Filter pills use live selection (TransactionDashboardPage) so clicks feel instant;
+   * earnings summary still consumes these frozen values until the pack lands.
+   */
   const displayCompanyId = useMemo(
     () => parsePaintedCompanyIdFromScopeKey(displayScopeKey, companyId),
     [displayScopeKey, companyId]
   );
-  /** "All" company pill follows painted scope (cache key segment 5 = groupAllMode). */
   const displayGroupAllMode = useMemo(() => {
     if (!displayScopeKey || !scopeDataPending) return groupAllMode;
     const parts = String(displayScopeKey).split("|");
@@ -8003,7 +8008,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     if (raw.startsWith("groupAll:") || raw === "groups:all") return true;
     return parts[5] === "1";
   }, [displayScopeKey, scopeDataPending, groupAllMode]);
-  /** Group pills freeze with painted scope while next pack loads. */
   const displaySelectedGroup = useMemo(() => {
     if (!displayScopeKey || !scopeDataPending) return selectedGroup;
     const parts = String(displayScopeKey).split("|");
@@ -8014,7 +8018,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     if (!displayScopeKey || !scopeDataPending) return groupsAllMode;
     return String(displayScopeKey).split("|")[0] === "groups:all";
   }, [displayScopeKey, scopeDataPending, groupsAllMode]);
-  /** Date range label freezes with painted scope (avoid "This Year" label + Month KPI). */
   const displayEffectiveDateRangeText = useMemo(() => {
     if (!scopeDataPending || !displayScopeKey) return null;
     const dates = parseDashboardCacheKeyDates(displayScopeKey);
@@ -8024,7 +8027,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     if (!left || !right) return null;
     return `${left} - ${right}`;
   }, [scopeDataPending, displayScopeKey]);
-  /** Currency pills freeze with painted scope — no live list leak during company switch. */
   const displayCurrencies =
     summaryCurrencies?.length > 0 ? summaryCurrencies : currencies;
   const displayFilterCurrencyCode = scopeDataPending

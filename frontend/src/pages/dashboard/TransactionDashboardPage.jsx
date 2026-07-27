@@ -44,22 +44,17 @@ export default function TransactionDashboardPage() {
         <div id="app" className="dashboard-content">
           <DashboardFilterPanel
             i18n={i18n}
-            effectiveDateRangeText={
-              page.displayEffectiveDateRangeText ?? effectiveDateRangeText
-            }
+            /* Live selection highlight — do not freeze pills while KPI/chart/pie catch up. */
+            effectiveDateRangeText={effectiveDateRangeText}
             groupIds={page.groupIds}
             selectedGroup={page.selectedGroup}
-            displaySelectedGroup={page.displaySelectedGroup}
             groupsAllMode={page.groupsAllMode}
-            displayGroupsAllMode={page.displayGroupsAllMode}
             groupAllMode={page.groupAllMode}
-            displayGroupAllMode={page.displayGroupAllMode}
             companiesForPicker={page.companiesForPicker}
             companyId={page.companyId}
-            displayCompanyId={page.displayCompanyId}
             mergedSubsetIds={page.mergedSubsetIds}
-            currencies={page.displayCurrencies ?? page.currencies}
-            currencyCode={page.displayFilterCurrencyCode ?? page.currencyCode}
+            currencies={page.currencies}
+            currencyCode={page.currencyCode}
             onPickGroup={page.handlePickGroup}
             onPickAllGroups={page.handlePickAllGroups}
             onPickCompany={page.handlePickCompany}

@@ -984,8 +984,12 @@ export default function AuthenticatedLayout() {
     }
 
     prefetchRouteModule(path);
-    if (pageKey !== "dashboard" && canAccessPermission(me, "home")) {
-      prefetchRouteModule(spaPath("dashboard"));
+    /* Warm persisted dashboard scope on every authenticated idle — including Home landing —
+     * so sibling company/currency page warm can reuse the same session cache sooner. */
+    if (canAccessPermission(me, "home")) {
+      if (pageKey !== "dashboard") {
+        prefetchRouteModule(spaPath("dashboard"));
+      }
       void import("../pages/dashboard/dashboardRoutePrefetch.js").then(({ warmDashboardRouteCache }) => {
         warmDashboardRouteCache({ me });
       });
