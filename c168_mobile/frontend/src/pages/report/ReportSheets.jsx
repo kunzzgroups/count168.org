@@ -149,8 +149,14 @@ export function ReportFilterSheet({
         });
     } else {
       Promise.all([
-        fetchCustomerAccounts(scope, { signal: ac.signal }),
-        fetchReportCurrencies(scope, { signal: ac.signal }),
+        fetchCustomerAccounts(scope, { signal: ac.signal }).catch((e) => {
+          if (e?.name === "AbortError") throw e;
+          return [];
+        }),
+        fetchReportCurrencies(scope, { signal: ac.signal }).catch((e) => {
+          if (e?.name === "AbortError") throw e;
+          return [];
+        }),
       ])
         .then(([accounts, currencies]) => {
           setAccountOptions(accounts);
@@ -241,9 +247,13 @@ export function ReportFilterSheet({
 
   const currencyCodes = useMemo(
     () =>
-      currencyOptions
-        .map((c) => String(c.code || c.currency || c).trim().toUpperCase())
-        .filter(Boolean),
+      [
+        ...new Set(
+          currencyOptions
+            .map((c) => String(c.code || c.currency || c).trim().toUpperCase())
+            .filter((code) => /^[A-Z]{3}$/.test(code)),
+        ),
+      ].sort(),
     [currencyOptions],
   );
 

@@ -42,6 +42,9 @@ export function appendReportScopeParams(params, scope) {
     params.set("company_id", String(scope.companyId));
     params.set("report_scope", "company");
     if (scope.groupId) params.set("view_group", String(scope.groupId).trim().toUpperCase());
+    // Match desktop transactionScopeApiParams / customerReportScopeApiParams:
+    // company drill-down must use subsidiary currency pool (not group-ledger-only).
+    params.set("subsidiary_accounts_only", "1");
   }
   return params;
 }
