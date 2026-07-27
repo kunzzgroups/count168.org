@@ -5842,6 +5842,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       });
       setExchangeRatesError("");
       setExchangeRatesLoading(!cachedComplete);
+    } else if (displayScopeKeyRef.current) {
+      /**
+       * Currency/company swap still painting previous scope: do not blank rates.
+       * Wiping here made pie % / hero jump before KPI atomic paint landed.
+       */
+      setExchangeRatesLoading(true);
+      setExchangeRatesError("");
     } else {
       setExchangeRates({ rates: { [rateBase]: 1 }, date: null, unsupported: [], scopeKey: "" });
       setExchangeRatesLoading(true);
@@ -7527,8 +7534,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     Boolean(dashboardScopeKey) && displayScopeKey !== dashboardScopeKey;
 
   /**
-   * Freeze summary inputs to the painted scope during pending — live `currencies` jumps
-   * on company pick (primeCurrenciesFromCache) and would make the pie/table update before KPI.
+   * Freeze summary inputs + FX to the painted scope during pending.
+   * Live currency reload of Frankfurter rates must not recompute pie/hero ahead of KPI.
    */
   const paintedSummaryRef = useRef({
     currencies: [],
@@ -7538,6 +7545,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     dateTo: "",
     selectedGroup: null,
     companyId: null,
+    exchangeRates: { rates: {}, date: null, unsupported: [], scopeKey: "" },
+    exchangeRatesLoading: false,
+    exchangeRatesError: "",
   });
   if (!scopeDataPending) {
     paintedSummaryRef.current = {
@@ -7548,6 +7558,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       dateTo: dateTo || "",
       selectedGroup,
       companyId,
+      exchangeRates,
+      exchangeRatesLoading,
+      exchangeRatesError,
     };
   }
   const summaryCurrencies = scopeDataPending
@@ -7557,7 +7570,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     ? paintedSummaryRef.current.earningsByCurrency
     : earningsByCurrency;
   const summaryCurrencyCode = scopeDataPending
-    ? paintedSummaryRef.current.currencyCode || currencyCode
+    ? paintedSummaryRef.current.currencyCode || ""
     : currencyCode;
   const summaryDateFrom = scopeDataPending
     ? paintedSummaryRef.current.dateFrom || dateFrom
@@ -7571,6 +7584,15 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const summaryCompanyId = scopeDataPending
     ? paintedSummaryRef.current.companyId
     : companyId;
+  const summaryExchangeRates = scopeDataPending
+    ? paintedSummaryRef.current.exchangeRates
+    : exchangeRates;
+  const summaryExchangeRatesLoading = scopeDataPending
+    ? false
+    : exchangeRatesLoading;
+  const summaryExchangeRatesError = scopeDataPending
+    ? paintedSummaryRef.current.exchangeRatesError
+    : exchangeRatesError;
 
   const kpi = useMemo(() => {
     const empty = {
@@ -7768,10 +7790,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     );
 
     const base = String(summaryCurrencyCode || "").toUpperCase();
-    const rates = exchangeRates.rates || {};
+    const rates = summaryExchangeRates.rates || {};
     const canConvert =
       summaryCurrencies.length > 1 &&
-      !exchangeRatesLoading &&
+      !summaryExchangeRatesLoading &&
       frankfurterRatesPartiallyUsable(base, summaryCurrencies, rates);
 
     return summaryCurrencies.map((code) => {
@@ -7808,9 +7830,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     kpi.showEarnings,
     kpi.earnings,
     kpi.netProfit,
-    exchangeRates.rates,
-    exchangeRatesError,
-    exchangeRatesLoading,
+    summaryExchangeRates.rates,
+    summaryExchangeRatesError,
+    summaryExchangeRatesLoading,
   ]);
 
   const allCurrencyEarningsReady = useMemo(
@@ -7827,18 +7849,18 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const useConvertedEarnings = useMemo(
     () =>
       summaryCurrencies.length > 1 &&
-      !exchangeRatesLoading &&
+      !summaryExchangeRatesLoading &&
       frankfurterRatesPartiallyUsable(
         summaryCurrencyCode || displayCurrencyCode,
         summaryCurrencies,
-        exchangeRates.rates || {}
+        summaryExchangeRates.rates || {}
       ),
     [
       summaryCurrencies.length,
       summaryCurrencyCode,
       displayCurrencyCode,
-      exchangeRatesLoading,
-      exchangeRates.rates,
+      summaryExchangeRatesLoading,
+      summaryExchangeRates.rates,
     ]
   );
 
@@ -7872,24 +7894,24 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       earnings: earningsPanelView === "earning" ? row.earnings : row.netProfit,
     }));
     const base = summaryCurrencyCode || displayCurrencyCode;
-    return sumConvertedEarnings(rows, base, exchangeRates.rates).total;
+    return sumConvertedEarnings(rows, base, summaryExchangeRates.rates).total;
   }, [
     useConvertedEarnings,
     earningsCurrencyRows,
     earningsPanelView,
     summaryCurrencyCode,
     displayCurrencyCode,
-    exchangeRates.rates,
+    summaryExchangeRates.rates,
   ]);
 
   const earningsCurrencyRowsPrev = useMemo(() => {
     if (!earningsByCurrencyPrev.length) return [];
-    const base = String(currencyCode || "").toUpperCase();
-    const rates = exchangeRates.rates || {};
+    const base = String(summaryCurrencyCode || currencyCode || "").toUpperCase();
+    const rates = summaryExchangeRates.rates || {};
     const canConvert =
-      currencies.length > 1 &&
-      !exchangeRatesLoading &&
-      frankfurterRatesPartiallyUsable(base, currencies, rates);
+      summaryCurrencies.length > 1 &&
+      !summaryExchangeRatesLoading &&
+      frankfurterRatesPartiallyUsable(base, summaryCurrencies, rates);
 
     return earningsByCurrencyPrev.map((row) => ({
       ...row,
@@ -7904,17 +7926,25 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     }));
   }, [
     earningsByCurrencyPrev,
+    summaryCurrencyCode,
     currencyCode,
-    currencies.length,
-    exchangeRates.rates,
-    exchangeRatesError,
-    exchangeRatesLoading,
+    summaryCurrencies.length,
+    summaryExchangeRates.rates,
+    summaryExchangeRatesError,
+    summaryExchangeRatesLoading,
   ]);
 
   const convertedEarningsTotalPrev = useMemo(() => {
     if (!useConvertedEarnings || !earningsCurrencyRowsPrev.length) return null;
-    return sumConvertedEarnings(earningsCurrencyRowsPrev, currencyCode, exchangeRates.rates).total;
-  }, [useConvertedEarnings, earningsCurrencyRowsPrev, currencyCode, exchangeRates.rates]);
+    const base = summaryCurrencyCode || currencyCode;
+    return sumConvertedEarnings(earningsCurrencyRowsPrev, base, summaryExchangeRates.rates).total;
+  }, [
+    useConvertedEarnings,
+    earningsCurrencyRowsPrev,
+    summaryCurrencyCode,
+    currencyCode,
+    summaryExchangeRates.rates,
+  ]);
 
   const showNetProfitForTab = useMemo(
     () =>
@@ -8066,7 +8096,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     summaryScopeLoading ||
     (!scopeDataPending &&
       summaryCurrencies.length > 1 &&
-      (exchangeRatesLoading ||
+      (summaryExchangeRatesLoading ||
         earningsByCurrencyLoading ||
         !allCurrencyEarningsReady ||
         (showAllCurrencies &&
@@ -8076,7 +8106,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const earningsPanelStable =
     summaryCurrencies.length <= 1 ||
     scopeDataPending ||
-    (allCurrencyEarningsReady && !earningsByCurrencyLoading && !exchangeRatesLoading);
+    (allCurrencyEarningsReady &&
+      !earningsByCurrencyLoading &&
+      !summaryExchangeRatesLoading);
   /**
    * True when KPI + chart (+ multi-currency earnings) are ready for the active scope.
    * Used for compare badges / panel stability — do not blank the layout while waiting.
@@ -8926,9 +8958,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     summaryEarningsLoading,
     earningsPanelStable,
     earningsByCurrencyLoading,
-    exchangeRates,
-    exchangeRatesError,
-    exchangeRatesLoading,
+    exchangeRates: summaryExchangeRates,
+    exchangeRatesError: summaryExchangeRatesError,
+    exchangeRatesLoading: summaryExchangeRatesLoading,
     exchangeRateScopeKey,
     convertedPanelTotal,
     showSummaryPanelTabs,
