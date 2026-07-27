@@ -253,6 +253,11 @@ export function useTransactionSearch({
     [currencyRowsOrdered],
   );
 
+  const beginScopeCurrencyDefault = useCallback(() => {
+    bootCurrencyDefaultRef.current = true;
+    suppressCrossPageCurrencyRef.current = true;
+  }, []);
+
   const notifySingleCurrencyIfNeeded = useCallback(
     (codes) => {
       if (!Array.isArray(codes) || codes.length !== 1) return;
@@ -1856,6 +1861,9 @@ export function useTransactionSearch({
     }
 
     if (scopeChanged) {
+      // Lock until user picks a currency — prevents cross-page sync from re-applying the previous company's code.
+      bootCurrencyDefaultRef.current = true;
+      suppressCrossPageCurrencyRef.current = true;
       earlyCurrencyScopeRef.current = null;
       currenciesBeforeAllRef.current = [];
       prevCaptureDateRangeKeyRef.current = null;
@@ -1867,9 +1875,28 @@ export function useTransactionSearch({
       lastCompletedSearchKeyRef.current = "";
 
       const date = effectiveDateFrom || todayDmy;
-      const { currencyPrefs, requestKey } = buildDefaultSearchApiParams(transactionScope, {
+      const snapCompanies =
+        filterSnapshot?.snapCompaniesAll || filterSnapshot?.snapCompanies || [];
+      // Prefer live ordered pills for this scope when already loaded; else this company's saved order.
+      const liveCodes =
+        currencyScopeBundle?.scopeKey === scopeKey
+          ? (currencyRowsOrdered || [])
+              .map((r) => String(r.code || r.currency || "").toUpperCase().trim())
+              .filter(Boolean)
+          : [];
+      const savedOrder =
+        orderCompanyId != null ? resolveSavedCurrencyOrder(orderCompanyId, null) : null;
+      const firstCode = pickTransactionDefaultCurrency(
+        liveCodes.length ? liveCodes : savedOrder?.length ? savedOrder : ["MYR"],
+      );
+      const currencyPrefs = {
+        showAll: false,
+        currencies: firstCode ? [firstCode] : [],
+      };
+      const { requestKey } = buildDefaultSearchApiParams(transactionScope, {
         dateFrom: date,
         dateTo: effectiveDateTo || date,
+        snapCompanies,
       });
       const instantReplay =
         getTxSearchCache(requestKey) ??
@@ -1903,12 +1930,12 @@ export function useTransactionSearch({
         suppressBlockingOverlayOnceRef.current = true;
       }
 
-      if (currencyPrefs.showAll) {
-        setShowAllCurrencies(true);
-        setSelectedCurrencies([]);
-      } else {
-        setShowAllCurrencies(false);
-        setSelectedCurrencies(currencyPrefs.currencies);
+      // Each company defaults to its own first ordered currency (not the previous company's selection).
+      setShowAllCurrencies(false);
+      setSelectedCurrencies(currencyPrefs.currencies);
+      if (currencyPrefs.currencies.length === 0) {
+        setRawSearchData(null);
+        setTablesVisible(false);
       }
 
       try {
@@ -1930,6 +1957,11 @@ export function useTransactionSearch({
     queryClient,
     transactionScope,
     scopeCacheCompanyKey,
+    orderCompanyId,
+    currencyScopeBundle?.scopeKey,
+    currencyRowsOrdered,
+    filterSnapshot?.snapCompanies,
+    filterSnapshot?.snapCompaniesAll,
     effectiveDateFrom,
     effectiveDateTo,
     todayDmy,
@@ -2148,6 +2180,7 @@ export function useTransactionSearch({
     onCurrencyDragStart,
     onCurrencyDropOn,
     toggleCurrencyBtn,
+    beginScopeCurrencyDefault,
   };
 }
 
