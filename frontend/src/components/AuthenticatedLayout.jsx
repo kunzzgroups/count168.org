@@ -78,9 +78,14 @@ import {
   patchMeFromCompanyContext,
 } from "../utils/company/loginScope.js";
 import { pathnameIs, pathnameToPageKey, spaPath } from "../utils/routing/pageRoutes.js";
+import { markSidebarPageSoftRefresh } from "../utils/routing/sidebarPageSoftRefresh.js";
 import { stripPrivateQueryFromBrowserUrl } from "../utils/routing/privateBrowserUrl.js";
 import { resetDashboardSessionCaches } from "../utils/dashboard/dashboardCache.js";
-import { resetMaintenanceCalendarPopupOnNavigation } from "../utils/date/dateRangePicker.js";
+import {
+  commitMaintenanceDateRangeToDmy,
+  resetMaintenanceCalendarPopupOnNavigation,
+} from "../utils/date/dateRangePicker.js";
+import { formatDmy } from "../utils/date/dateUtils.js";
 import AnnouncementUpdateCard from "./announcements/AnnouncementUpdateCard.jsx";
 import {
   publishMaintenanceModeEvent,
@@ -204,19 +209,40 @@ const AVATAR_MAP = {
 
 export default function AuthenticatedLayout() {
   const navigate = useNavigate();
-  const goTo = useCallback(
-    (path) => {
-      resetMaintenanceCalendarPopupOnNavigation();
-      startTransition(() => {
-        navigate(buildSpaPath(path));
-      });
-    },
-    [navigate],
-  );
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const path = location.pathname;
   const pageKey = pathnameToPageKey(path);
+  /** Bumped on same-page sidebar re-click so AnimatedOutlet remounts the current page. */
+  const [pageRefreshKey, setPageRefreshKey] = useState(0);
+  const goTo = useCallback(
+    (nextPath) => {
+      resetMaintenanceCalendarPopupOnNavigation();
+      const targetPath = buildSpaPath(nextPath);
+      const targetKey = pathnameToPageKey(targetPath);
+      const currentKey = pathnameToPageKey(location.pathname);
+
+      // Already on this sidebar page → soft-reset page state (not a full browser reload).
+      if (targetKey && targetKey === currentKey) {
+        const cleanPath = spaPath(targetKey);
+        const currentFull = `${location.pathname}${location.search}${location.hash}`;
+        if (currentFull !== cleanPath) {
+          navigate(cleanPath, { replace: true });
+        }
+        // Capture Date lives in a module singleton — pin to today before remount.
+        const today = formatDmy(new Date());
+        if (today) commitMaintenanceDateRangeToDmy(today, today, { triggerOnChange: false });
+        markSidebarPageSoftRefresh(targetKey);
+        setPageRefreshKey((key) => key + 1);
+        return;
+      }
+
+      startTransition(() => {
+        navigate(targetPath);
+      });
+    },
+    [navigate, location.pathname, location.search, location.hash],
+  );
   const isDataCaptureSidebarActive =
     pageKey === "datacapture" || pageKey === "datacapturesummary";
   const chromelessPaymentHistory = isPaymentHistoryChromelessPath(path, searchParams);
@@ -958,8 +984,12 @@ export default function AuthenticatedLayout() {
     }
 
     prefetchRouteModule(path);
-    if (pageKey !== "dashboard" && canAccessPermission(me, "home")) {
-      prefetchRouteModule(spaPath("dashboard"));
+    /* Warm persisted dashboard scope on every authenticated idle — including Home landing —
+     * so sibling company/currency page warm can reuse the same session cache sooner. */
+    if (canAccessPermission(me, "home")) {
+      if (pageKey !== "dashboard") {
+        prefetchRouteModule(spaPath("dashboard"));
+      }
       void import("../pages/dashboard/dashboardRoutePrefetch.js").then(({ warmDashboardRouteCache }) => {
         warmDashboardRouteCache({ me });
       });
@@ -1696,7 +1726,7 @@ export default function AuthenticatedLayout() {
         i18n={i18n}
       />
 
-      <AnimatedOutlet />
+      <AnimatedOutlet pageRefreshKey={pageRefreshKey} />
     </>
     </AuthSessionProvider>
   );

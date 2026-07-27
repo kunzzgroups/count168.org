@@ -59,13 +59,20 @@ function syncCaptureDateDom(dateFromDmy, dateToDmy) {
   const dt = document.getElementById("date_to");
   if (df) df.value = from;
   if (dt) dt.value = to;
+  if (window.MaintenanceDateRangePicker?.commitRangeToDmy) {
+    window.MaintenanceDateRangePicker.commitRangeToDmy(from, to, { triggerOnChange: false });
+    return;
+  }
   window.MaintenanceDateRangePicker?.refreshInputsDisplay?.({
     dateFromId: "date_from",
     dateToId: "date_to",
     displayId: "date-range-display",
   });
 }
-import { persistCurrencyDisplayOrder } from "../../../utils/company/currencyDisplayOrder.js";
+import {
+  persistCurrencyDisplayOrder,
+  resolveSavedCurrencyOrder,
+} from "../../../utils/company/currencyDisplayOrder.js";
 import { useCrossPageCurrencySync } from "../../../utils/company/useCrossPageCurrencySync.js";
 import {
   transactionScopeApiParams,
@@ -95,7 +102,7 @@ export function useTransactionSearch({
   const [selectedCurrencies, setSelectedCurrencies] = useState([]);
   /** Block cross-page currency sync when All or multi-select is active (empty currentCode would re-apply MYR etc.). */
   const suppressCrossPageCurrencyRef = useRef(false);
-  /** Until user changes currency, keep MYR default on cold boot (ignore dashboard cross-page SGD etc.). */
+  /** Until user changes currency, keep ordered-first default on cold boot (ignore dashboard cross-page sync). */
   const bootCurrencyDefaultRef = useRef(true);
   const coldBootCurrencyAppliedRef = useRef(false);
   /** Snapshot of selected currencies immediately before entering All — restored when All is toggled off. */
@@ -165,6 +172,7 @@ export function useTransactionSearch({
   const scopeReady = transactionScopeIsReady(transactionScope);
   const scopeApi = useMemo(() => transactionScopeApiParams(transactionScope), [transactionScope]);
   const scopeCacheCompanyKey = transactionScopeCacheCompanyKey(transactionScope);
+  const scopeKey = transactionScopeCacheKey(transactionScope) || null;
   const orderCompanyId = useMemo(
     () =>
       resolveTransactionCurrencyOrderCompanyId(
@@ -250,6 +258,11 @@ export function useTransactionSearch({
     [currencyRowsOrdered],
   );
 
+  const beginScopeCurrencyDefault = useCallback(() => {
+    bootCurrencyDefaultRef.current = true;
+    suppressCrossPageCurrencyRef.current = true;
+  }, []);
+
   const notifySingleCurrencyIfNeeded = useCallback(
     (codes) => {
       if (!Array.isArray(codes) || codes.length !== 1) return;
@@ -277,14 +290,19 @@ export function useTransactionSearch({
       const restored = currenciesBeforeAllRef.current
         .map((c) => String(c || "").toUpperCase().trim())
         .filter((c) => c && avail.has(c));
-      const nextSel =
-        restored.length > 0 ? restored : txCurrencyCodes[0] ? [txCurrencyCodes[0]] : [];
+      // Restore prior selection as-is (including empty → no lists).
+      const nextSel = restored;
 
       suppressCrossPageCurrencyRef.current = nextSel.length !== 1;
       setShowAllCurrencies(false);
       setSelectedCurrencies(nextSel);
       persistCurrencyFilter(scopeCacheCompanyKey, false, nextSel, transactionScope?.selectedGroup);
       notifySingleCurrencyIfNeeded(nextSel);
+      if (nextSel.length === 0) {
+        setRawSearchData(null);
+        setTablesVisible(false);
+        return;
+      }
       scheduleAutoSearch();
       return;
     }
@@ -387,11 +405,7 @@ export function useTransactionSearch({
       const nextSel = [...set];
       const nextShowAll = false;
 
-      if (nextSel.length === 0) {
-        pushToast(m.pleaseSelectAtLeastOneCurrency, "info");
-        return;
-      }
-
+      // Empty selection is allowed: hide lists (no search) until a currency is chosen again.
       // Set before notify/state — cross-page listener runs synchronously and would collapse multi-select.
       suppressCrossPageCurrencyRef.current = nextShowAll || nextSel.length !== 1;
 
@@ -399,6 +413,11 @@ export function useTransactionSearch({
       setSelectedCurrencies(nextSel);
       persistCurrencyFilter(scopeCacheCompanyKey, nextShowAll, nextSel, transactionScope?.selectedGroup);
       notifySingleCurrencyIfNeeded(nextSel);
+      if (nextSel.length === 0) {
+        setRawSearchData(null);
+        setTablesVisible(false);
+        return;
+      }
       scheduleAutoSearch();
     },
     [
@@ -408,8 +427,6 @@ export function useTransactionSearch({
       scheduleAutoSearch,
       transactionScope?.selectedGroup,
       notifySingleCurrencyIfNeeded,
-      pushToast,
-      m,
     ],
   );
 
@@ -602,7 +619,6 @@ export function useTransactionSearch({
       if (!effectiveShowAll && effectiveSelectedCurrencies.length === 0) {
         setRawSearchData(null);
         setTablesVisible(false);
-        pushToast(m.pleaseSelectAtLeastOneCurrency, "info");
         return;
       }
 
@@ -900,9 +916,8 @@ export function useTransactionSearch({
         const availableCodes = (txCurrencyCodes || [])
           .map((c) => String(c || "").toUpperCase().trim())
           .filter(Boolean);
-        entryFocusCurrencyFallback = availableCodes.includes("MYR")
-          ? "MYR"
-          : pickTransactionDefaultCurrency(availableCodes) || availableCodes[0] || "MYR";
+        entryFocusCurrencyFallback =
+          pickTransactionDefaultCurrency(availableCodes) || availableCodes[0] || "MYR";
 
         if (today) {
           if (!filtersBeforeTypeSearchRef.current) {
@@ -968,7 +983,8 @@ export function useTransactionSearch({
         .filter(Boolean);
 
       if (preserveCurrencyFilter && !queryShowAll && querySelected.length === 0) {
-        pushToast(m.pleaseSelectAtLeastOneCurrency, "info");
+        setRawSearchData(null);
+        setTablesVisible(false);
         return;
       }
 
@@ -1592,6 +1608,113 @@ export function useTransactionSearch({
     runSearch,
   ]);
 
+  /**
+   * Sidebar same-page soft refresh: restore Capture Date / chips / categories / currency
+   * to cold-boot defaults. Does not touch company/group scope.
+   */
+  const resetPageFiltersToDefaults = useCallback(async () => {
+    const today = String(todayDmy || "").trim();
+    if (!today) return false;
+
+    const bundleCodes = (currencyScopeBundle?.rows || [])
+      .map((r) => String(r.code || r.currency || "").toUpperCase().trim())
+      .filter(Boolean);
+    const orderedCodes = (currencyRowsOrdered || [])
+      .map((r) => String(r.code || "").toUpperCase().trim())
+      .filter(Boolean);
+    const codes = bundleCodes.length ? bundleCodes : orderedCodes;
+    const defaultCode = pickTransactionDefaultCurrency(codes);
+    const nextSel =
+      defaultCode && codes.includes(defaultCode) ? [defaultCode] : codes[0] ? [codes[0]] : [];
+
+    setSearchLoading(true);
+    try {
+      filtersBeforeTypeSearchRef.current = null;
+      typeSearchSessionActiveRef.current = false;
+      typeSearchFirstSubmitFocusDoneRef.current = false;
+      setTypeSearchActive(false);
+      setTypeSearchFormType(null);
+      setTypeSearchAccountIds([]);
+      setSubmitFocusByCurrency({});
+      setSubmitFocusRangeKey(null);
+      submitFocusLeftRangeKeysRef.current.clear();
+
+      setSearchState({ ...INITIAL_TRANSACTION_SEARCH_STATE });
+      setSelectedCategories([]);
+      categoryChangedByUserRef.current = false;
+      setDateFrom(today);
+      setDateTo(today);
+      syncCaptureDateDom(today, today);
+      prevCaptureDateRangeKeyRef.current = `${today}|${today}`;
+      prevServerSideFiltersRef.current = {
+        showPaymentOnly: INITIAL_TRANSACTION_SEARCH_STATE.showPaymentOnly,
+        showCaptureOnly: INITIAL_TRANSACTION_SEARCH_STATE.showCaptureOnly,
+        showZeroBalance: INITIAL_TRANSACTION_SEARCH_STATE.showZeroBalance,
+      };
+
+      beginScopeCurrencyDefault();
+      bootCurrencyDefaultRef.current = true;
+      coldBootCurrencyAppliedRef.current = true;
+      earlyCurrencyScopeRef.current = scopeKey || earlyCurrencyScopeRef.current;
+      currenciesBeforeAllRef.current = [];
+      setShowAllCurrencies(false);
+      if (nextSel.length > 0) {
+        setSelectedCurrencies(nextSel);
+      } else {
+        // Metadata not ready — allow cold-boot / init to pick first ordered currency.
+        coldBootCurrencyAppliedRef.current = false;
+        earlyCurrencyScopeRef.current = null;
+        setSelectedCurrencies([]);
+      }
+
+      if (scopeCacheCompanyKey != null && nextSel.length > 0) {
+        persistCurrencyFilter(scopeCacheCompanyKey, false, nextSel, transactionScope?.selectedGroup);
+      }
+
+      lastInitialSearchKeyRef.current = "";
+      lastCompletedSearchKeyRef.current = "";
+      initialSearchDoneRef.current = false;
+      clearTxSearchCache();
+      try {
+        await queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
+      } catch {
+        /* ignore */
+      }
+
+      if (nextSel.length === 0) {
+        // Initial-search effect will run once currency defaults land.
+        return true;
+      }
+
+      await runSearch({
+        forceRefresh: true,
+        silent: false,
+        isInitialLoad: true,
+        typeSearchOverride: false,
+        dateFromOverride: today,
+        dateToOverride: today,
+        searchStateOverride: { ...INITIAL_TRANSACTION_SEARCH_STATE },
+        selectedCategoriesOverride: [],
+        showAllCurrenciesOverride: false,
+        selectedCurrenciesOverride: nextSel,
+      });
+      return true;
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [
+    todayDmy,
+    currencyRowsOrdered,
+    currencyScopeBundle,
+    beginScopeCurrencyDefault,
+    scopeKey,
+    scopeCacheCompanyKey,
+    persistCurrencyFilter,
+    transactionScope?.selectedGroup,
+    queryClient,
+    runSearch,
+  ]);
+
   useEffect(() => {
     return () => {
       if (autoSearchTimerRef.current) {
@@ -1801,26 +1924,27 @@ export function useTransactionSearch({
     submitFocusByCurrency,
   ]);
 
-  /** 切换 scope（含 group/company 模式）：中止旧请求、清空列表，后台重搜。 */
-  const scopeKey = transactionScopeCacheKey(transactionScope) || null;
-
-  /** Cold boot: pre-select MYR before metadata returns so initial search can start early. */
+  /** Cold boot: pre-select first ordered currency before metadata returns so initial search can start early. */
   useLayoutEffect(() => {
     if (!scopeReady || !scopeCacheCompanyKey || !scopeKey) return;
     if (earlyCurrencyScopeRef.current === scopeKey) return;
     earlyCurrencyScopeRef.current = scopeKey;
 
     if (coldBootCurrencyAppliedRef.current) return;
-    // Group-only ledger: wait for scoped account currencies — do not default MYR.
+    // Group-only ledger: wait for scoped account currencies — do not default early.
     if (transactionScope?.mode === "group") return;
 
     coldBootCurrencyAppliedRef.current = true;
 
-    const defaultCode = pickTransactionDefaultCurrency(["MYR"]);
+    const savedOrder =
+      orderCompanyId != null ? resolveSavedCurrencyOrder(orderCompanyId, null) : null;
+    const defaultCode = pickTransactionDefaultCurrency(
+      savedOrder?.length ? savedOrder : ["MYR"],
+    );
     if (!defaultCode) return;
     setShowAllCurrencies(false);
     setSelectedCurrencies([defaultCode]);
-  }, [scopeReady, scopeCacheCompanyKey, scopeKey, transactionScope?.mode]);
+  }, [scopeReady, scopeCacheCompanyKey, scopeKey, transactionScope?.mode, orderCompanyId]);
 
   useEffect(() => {
     const prev = prevScopeKeyForSearchRef.current;
@@ -1846,6 +1970,9 @@ export function useTransactionSearch({
     }
 
     if (scopeChanged) {
+      // Lock until user picks a currency — prevents cross-page sync from re-applying the previous company's code.
+      bootCurrencyDefaultRef.current = true;
+      suppressCrossPageCurrencyRef.current = true;
       earlyCurrencyScopeRef.current = null;
       currenciesBeforeAllRef.current = [];
       prevCaptureDateRangeKeyRef.current = null;
@@ -1857,9 +1984,28 @@ export function useTransactionSearch({
       lastCompletedSearchKeyRef.current = "";
 
       const date = effectiveDateFrom || todayDmy;
-      const { currencyPrefs, requestKey } = buildDefaultSearchApiParams(transactionScope, {
+      const snapCompanies =
+        filterSnapshot?.snapCompaniesAll || filterSnapshot?.snapCompanies || [];
+      // Prefer live ordered pills for this scope when already loaded; else this company's saved order.
+      const liveCodes =
+        currencyScopeBundle?.scopeKey === scopeKey
+          ? (currencyRowsOrdered || [])
+              .map((r) => String(r.code || r.currency || "").toUpperCase().trim())
+              .filter(Boolean)
+          : [];
+      const savedOrder =
+        orderCompanyId != null ? resolveSavedCurrencyOrder(orderCompanyId, null) : null;
+      const firstCode = pickTransactionDefaultCurrency(
+        liveCodes.length ? liveCodes : savedOrder?.length ? savedOrder : ["MYR"],
+      );
+      const currencyPrefs = {
+        showAll: false,
+        currencies: firstCode ? [firstCode] : [],
+      };
+      const { requestKey } = buildDefaultSearchApiParams(transactionScope, {
         dateFrom: date,
         dateTo: effectiveDateTo || date,
+        snapCompanies,
       });
       const instantReplay =
         getTxSearchCache(requestKey) ??
@@ -1893,12 +2039,12 @@ export function useTransactionSearch({
         suppressBlockingOverlayOnceRef.current = true;
       }
 
-      if (!currencyPrefs.showAll && currencyPrefs.currencies.length > 0) {
-        setShowAllCurrencies(false);
-        setSelectedCurrencies(currencyPrefs.currencies);
-      } else if (currencyPrefs.showAll) {
-        setShowAllCurrencies(true);
-        setSelectedCurrencies([]);
+      // Each company defaults to its own first ordered currency (not the previous company's selection).
+      setShowAllCurrencies(false);
+      setSelectedCurrencies(currencyPrefs.currencies);
+      if (currencyPrefs.currencies.length === 0) {
+        setRawSearchData(null);
+        setTablesVisible(false);
       }
 
       try {
@@ -1920,6 +2066,11 @@ export function useTransactionSearch({
     queryClient,
     transactionScope,
     scopeCacheCompanyKey,
+    orderCompanyId,
+    currencyScopeBundle?.scopeKey,
+    currencyRowsOrdered,
+    filterSnapshot?.snapCompanies,
+    filterSnapshot?.snapCompaniesAll,
     effectiveDateFrom,
     effectiveDateTo,
     todayDmy,
@@ -1935,7 +2086,7 @@ export function useTransactionSearch({
     [selectedCategories],
   );
 
-  // Initial search — MYR default can run before account/currency metadata finishes.
+  // Initial search — ordered-first default can run before account/currency metadata finishes.
   useEffect(() => {
     if (!scopeReady) return;
     if (!scopeKey) return;
@@ -2138,6 +2289,8 @@ export function useTransactionSearch({
     onCurrencyDragStart,
     onCurrencyDropOn,
     toggleCurrencyBtn,
+    beginScopeCurrencyDefault,
+    resetPageFiltersToDefaults,
   };
 }
 

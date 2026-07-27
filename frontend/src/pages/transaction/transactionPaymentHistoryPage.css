@@ -490,12 +490,12 @@ body.ec-payment-history-chromeless .transaction-payment-history-page-root .trans
 
 body.transaction-payment-history-page .transaction-payment-history-page-root .transaction-history-report-table tbody tr:nth-child(even) td,
 body.ec-payment-history-chromeless .transaction-payment-history-page-root .transaction-history-report-table tbody tr:nth-child(even) td {
-  background-color: #f8fafc;
+  background-color: rgb(228, 235, 255);
 }
 
 body.transaction-payment-history-page .transaction-payment-history-page-root .transaction-history-report-table tbody tr:nth-child(odd) td,
 body.ec-payment-history-chromeless .transaction-payment-history-page-root .transaction-history-report-table tbody tr:nth-child(odd) td {
-  background-color: #ffffff;
+  background-color: #f9fbff;
 }
 
 body.transaction-payment-history-page .transaction-payment-history-page-root .transaction-history-report-table tbody .transaction-history-bf-row td,

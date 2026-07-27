@@ -12,7 +12,6 @@ import {
   hasProtectedCompany,
   forceSearchValue,
   normalizeDomainFeeSettingsFromApi,
-  formatDomainFeeToolbarChip,
 } from "./domainHelpers.js";
 
 // Sub-components
@@ -81,16 +80,8 @@ export default function DomainPage() {
   const [expModal, setExpModal] = useState(null);       // companies array
   const [groupExpModal, setGroupExpModal] = useState(null); // groups array
 
-  // ── Domain fee price (for share calc + toolbar chips) ─────────────────────
+  // ── Domain fee price (for share calc + Price modal) ───────────────────────
   const [domainPeriodPrices, setDomainPeriodPrices] = useState(null);
-  const feeChipCompany = useMemo(
-    () => (domainPeriodPrices ? formatDomainFeeToolbarChip(domainPeriodPrices.company) : ""),
-    [domainPeriodPrices]
-  );
-  const feeChipGroup = useMemo(
-    () => (domainPeriodPrices ? formatDomainFeeToolbarChip(domainPeriodPrices.group) : ""),
-    [domainPeriodPrices]
-  );
 
   // ── Initial data load (session from AuthenticatedLayout) ─────────────────────
   useEffect(() => {
@@ -352,26 +343,6 @@ export default function DomainPage() {
             >
               {t("price")}
             </button>
-            {domainPeriodPrices && (
-              <div className="domain-fee-price-chips" aria-label={t("displayPrices")}>
-                <button
-                  type="button"
-                  className="domain-fee-price-chip domain-fee-price-chip--company"
-                  title={t("feeChipCompanyAria")}
-                  onClick={() => setFeeModal(true)}
-                >
-                  C {feeChipCompany}
-                </button>
-                <button
-                  type="button"
-                  className="domain-fee-price-chip domain-fee-price-chip--group"
-                  title={t("feeChipGroupAria")}
-                  onClick={() => setFeeModal(true)}
-                >
-                  G {feeChipGroup}
-                </button>
-              </div>
-            )}
           </div>
           <div className="domain-toolbar-right">
             <button

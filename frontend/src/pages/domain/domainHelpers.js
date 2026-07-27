@@ -525,19 +525,7 @@ export function resolveDomainFeePriceForPeriod(feeSettings, period, feeKind = "c
   return 0;
 }
 
-/** 工具栏紧凑标签：仅 6 个月 / 1 年，如 6M/1Y: 1200/2400 */
-export function formatDomainFeeToolbarChip(periodPrices) {
-  if (!periodPrices || typeof periodPrices !== "object") {
-    return "6M/1Y: 0.00/0.00";
-  }
-  const six = formatDomainFeeDisplay2(periodPrices["6months"]);
-  const one = formatDomainFeeDisplay2(periodPrices["1year"]);
-  const sixDisp = six === "—" ? "0.00" : six;
-  const oneDisp = one === "—" ? "0.00" : one;
-  return `6M/1Y: ${sixDisp}/${oneDisp}`;
-}
-
-/** 工具栏摘要：列出已配置的非零周期价 */
+/** 摘要：列出已配置的非零周期价 */
 export function formatDomainPeriodPricesInlineSummary(periodPrices, t) {
   if (!periodPrices || typeof periodPrices !== "object") return "";
   const parts = [];

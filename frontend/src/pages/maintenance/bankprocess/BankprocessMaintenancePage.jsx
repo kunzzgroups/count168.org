@@ -30,7 +30,6 @@ import { fetchOwnerCompaniesAll } from "../../../utils/company/sharedCompanyFilt
 import {
   deleteBankprocessData,
   fetchCompanyCurrencies,
-  fetchCompanyPermissions,
   formatDmy,
   isBankprocessMaintenanceRowSelectable,
   searchBankprocessData,
@@ -68,8 +67,6 @@ export default function BankprocessMaintenancePage() {
   const [companyId, setCompanyId] = useState(null);
   const [companyCode, setCompanyCode] = useState("");
   const [selectedGroup, setSelectedGroup] = useState(null);
-  const [permissions, setPermissions] = useState([]);
-  const [selectedPermission, setSelectedPermission] = useState("");
   const [currencies, setCurrencies] = useState([]);
   /** true = omit currency API param — all company currencies */
   const [allCurrenciesSelected, setAllCurrenciesSelected] = useState(false);
@@ -191,19 +188,8 @@ export default function BankprocessMaintenancePage() {
         setCompanyId(initialCompanyId);
         currentCompanyIdRef.current = initialCompanyId;
         setCompanyCode(currentComp?.company_id || "");
-        const code = currentComp?.company_id || "";
 
-        // Fetch initial metadata here to ensure the first query starts with the correct selectedPermission
-        const [perms, currencyList] = await Promise.all([
-          fetchCompanyPermissions(code),
-          fetchCompanyCurrencies(initialCompanyId).catch(() => [])
-        ]);
-
-        setPermissions(perms);
-        const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
-        if (savedPerm && perms.includes(savedPerm)) setSelectedPermission(savedPerm);
-        else setSelectedPermission(perms[0] || "");
-
+        const currencyList = await fetchCompanyCurrencies(initialCompanyId).catch(() => []);
         setCurrencies(currencyList);
         if (currencyList.length === 0) {
           setAllCurrenciesSelected(true);
@@ -266,13 +252,6 @@ export default function BankprocessMaintenancePage() {
     let cancelled = false;
     setCurrenciesReady(false);
     (async () => {
-      const perms = await fetchCompanyPermissions(companyCode);
-      if (cancelled) return;
-      setPermissions(perms);
-      const saved = localStorage.getItem(`selectedPermission_${companyCode}`);
-      if (saved && perms.includes(saved)) setSelectedPermission(saved);
-      else setSelectedPermission(perms[0] || "");
-
       const currencyList = await fetchCompanyCurrencies(companyId).catch(() => []);
       if (cancelled) return;
       setCurrencies(currencyList);
@@ -341,7 +320,7 @@ export default function BankprocessMaintenancePage() {
         if (data.length > 0) {
           notify(t("foundRecords", { n: data.length }), "success");
         } else {
-          const dedupeKey = `${searchCompanyId}|${dateFrom}|${dateTo}|${currencyKey}|${selectedPermission}|${query}|empty`;
+          const dedupeKey = `${searchCompanyId}|${dateFrom}|${dateTo}|${currencyKey}|${query}|empty`;
           if (consumeNoDataToastDedupeKey(dedupeKey)) {
             notify(t("noDataAdjustSearch"), "info");
           }
@@ -372,7 +351,6 @@ export default function BankprocessMaintenancePage() {
     currenciesReady,
     allCurrenciesSelected,
     selectedCurrencies,
-    selectedPermission,
     query,
     notify,
     t,
@@ -393,7 +371,6 @@ export default function BankprocessMaintenancePage() {
     selectedCurrencies,
     dateFrom,
     dateTo,
-    selectedPermission,
     query,
     performSearch,
   ]);
@@ -404,11 +381,6 @@ export default function BankprocessMaintenancePage() {
     },
     [],
   );
-
-  useEffect(() => {
-    if (!selectedPermission || !companyCode) return;
-    localStorage.setItem(`selectedPermission_${companyCode}`, selectedPermission);
-  }, [selectedPermission, companyCode]);
 
   const followGroupRef = useRef(() => {});
 
@@ -583,9 +555,6 @@ export default function BankprocessMaintenancePage() {
   return (
     <div className="bankprocess-maintenance-page-root container">
       <BankprocessMaintenanceFilters
-        permissions={permissions}
-        selectedPermission={selectedPermission}
-        setSelectedPermission={setSelectedPermission}
         dateFrom={dateFrom}
         dateTo={dateTo}
         setDateFrom={setDateFrom}

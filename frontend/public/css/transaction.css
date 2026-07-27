@@ -1972,11 +1972,11 @@ body.transaction-page #historyModal .transaction-history-modal .transaction-moda
 }
 
 .transaction-history-modal .transaction-modal-body .transaction-table tbody tr:nth-child(even) td {
-    background-color: #eef2ff;
+    background-color: rgb(228, 235, 255);
 }
 
 .transaction-history-modal .transaction-modal-body .transaction-table tbody tr:nth-child(odd) td {
-    background-color: #ffffff;
+    background-color: #f9fbff;
 }
 
 .transaction-history-modal .transaction-modal-body .transaction-table tbody tr:hover td {
@@ -3200,11 +3200,11 @@ body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-f
 }
 
 /*
- * Middle-Man：三欄同等寬（舊版 rate-row-three-cols / PHP 版面）
+ * Middle-Man：五欄同等寬（Account / Rate multiplier / Fee / Platform Fee / Amount）
  */
 body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-mm {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 5px;
     align-items: stretch;
     flex: 1 1 auto;

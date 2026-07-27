@@ -33,6 +33,12 @@ Route: `/transaction` (see `App.jsx`). Entry: `TransactionPaymentPage.jsx`.
 
 Route: `/transaction-maintenance` — `pages/maintenance/transaction/` (separate from this folder).
 
+## RATE 手动交易逻辑
+
+完整说明（字段、Fee、计算、description/remark、落库、历史展示）：
+
+- [`docs/transaction-rate-manual-logic.md`](../../../docs/transaction-rate-manual-logic.md)
+
 ## Styles & i18n
 
 - CSS: `frontend/public/css/transaction.css`, `report-outlined-fields.css`, `userlist.css`

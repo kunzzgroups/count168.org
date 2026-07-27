@@ -1981,6 +1981,9 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
     background: linear-gradient(90deg, #94a3b8, #64748b);
 }
 
+/*
+ * Record (DTS)：灰底保留只读语义；字号/字重靠近可填字段，避免「过小过灰」造成不统一观感。
+ */
 #addBankModal .bank-form-dts-readonly {
     display: flex;
     justify-content: space-between;
@@ -1989,25 +1992,28 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
     width: 100%;
     box-sizing: border-box;
     margin-top: 2px;
-    padding: 8px 10px;
-    min-height: clamp(2.5rem, 2.25vw, 3rem);
+    padding: 0.625rem 0.875rem;
+    min-height: 4rem;
     background-color: #f8fafc;
     border: 1px solid #dbe3ee;
-    border-radius: 0.42rem;
-    color: #1f2937;
-    font-size: var(--text-small);
-    font-family: var(--font-ui);
-    line-height: 1.35;
+    border-radius: 0.52rem;
+    color: var(--bank-form-field-text, #0f172a);
+    font-size: var(--text-small) !important;
+    font-family: var(--font-ui) !important;
+    font-weight: 700 !important;
+    line-height: 1.4;
 }
 
 #addBankModal .bank-form-dts-readonly span {
     min-width: 0;
+    font-weight: 700 !important;
 }
 
 #addBankModal .bank-form-dts-readonly-user {
-    font-weight: 600;
+    font-weight: 700 !important;
     flex-shrink: 0;
     text-align: right;
+    color: var(--bank-form-field-text, #0f172a);
 }
 
 @media (max-width: 900px) {
@@ -2174,17 +2180,31 @@ body.ec-auth-shell .process-page #addBankModal .bank-remark-actions .bank-note-o
 #addBankModal .bank-form .custom-select-button,
 #addBankModal .bank-form .account-select-with-buttons .custom-select-button {
     color: var(--bank-form-field-text) !important;
+    font-weight: 700 !important;
+}
+
+/* 可填控件：压过 global-13inch 的 11px，与下拉同字号/高度，观感统一 */
+#addBankModal .bank-form .bank-input,
+#addBankModal .bank-form .bank-form-datepicker-input {
+    font-size: var(--text-small) !important;
+    font-family: var(--font-ui) !important;
+    min-height: 4rem !important;
+    padding: 0.625rem 0.875rem !important;
+    line-height: 1.4;
+    box-sizing: border-box;
 }
 
 #addBankModal .bank-form .bank-input::placeholder,
 #addBankModal .bank-form .bank-form-datepicker-input::placeholder {
     color: var(--bank-form-placeholder-text) !important;
+    font-weight: 400 !important;
     opacity: 1;
 }
 
 #addBankModal .bank-form .custom-select-button.simple-select-button--placeholder,
 #addBankModal .bank-form .account-select-with-buttons .custom-select-button.simple-select-button--placeholder {
     color: var(--bank-form-placeholder-text) !important;
+    font-weight: 400 !important;
 }
 
 #addBankModal .bank-form .custom-select-button::after {

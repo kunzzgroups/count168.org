@@ -1,8 +1,4 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
-import {
-  DEFAULT_PERMISSIONS_BANKPROCESS,
-  fetchDomainCompanyPermissions,
-} from "../shared/maintenanceCompanyApi.js";
 import { formatDmyFromDate } from "../shared/maintenanceDateHelpers.js";
 
 export function formatDmy(d) {
@@ -84,13 +80,6 @@ export function toggleBankprocessMaintenanceBatchSelection(selectedIds, rows, cl
     return [...next];
   }
   return prev.filter((id) => !batchIds.includes(id));
-}
-
-export async function fetchCompanyPermissions(companyCode) {
-  return fetchDomainCompanyPermissions(companyCode, {
-    excludeGames: true,
-    defaultPermissions: DEFAULT_PERMISSIONS_BANKPROCESS,
-  });
 }
 
 export async function fetchCompanyCurrencies(companyId) {

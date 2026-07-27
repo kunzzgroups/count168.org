@@ -17,8 +17,6 @@ import {
 } from "../shared/maintenanceGroupBoot.js";
 import { canUseGroupOnlyMode } from "../../../utils/company/loginScope.js";
 import {
-  companiesInGroupList,
-  companiesNativeInGroupList,
   isDashboardGroupOnlyMode,
   persistDashboardFilterState,
   persistDashboardGroupOnlyMode,
@@ -41,8 +39,6 @@ import "../../../../public/css/report-outlined-fields.css";
 import "../../../../public/css/formula_maintenance.css";
 import "../../../../public/css/maintenance_unified_filters.css";
 import {
-  bootstrapFormulaMaintenanceMeta,
-  fetchCompanyPermissions,
   fetchCompanyPermissionsRaw,
   fetchProcesses,
   fetchAccounts,
@@ -54,7 +50,6 @@ import {
   filterFormulaRowsBySearch,
   formulaRowIdsMatch,
   patchFormulaRowAfterSave,
-  pickFormulaMaintenancePermission,
 } from "./formulaMaintenanceLogic.js";
 import {
   formulaMaintenanceEffectiveCompanyId,
@@ -107,7 +102,6 @@ export default function FormulaMaintenancePage() {
   const [bootLoading, setBootLoading] = useState(true);
   const [filtersReady, setFiltersReady] = useState(false);
   const [companies, setCompanies] = useState(() => getCachedOwnerCompanies() || []);
-  const [permissions, setPermissions] = useState([]);
 
   // -- Filter State --
   const [companyId, setCompanyId] = useState(null);
@@ -115,7 +109,6 @@ export default function FormulaMaintenancePage() {
   const [selectedGroup, setSelectedGroup] = useState(null);
   const [selectedProcess, setSelectedProcess] = useState(null);
   const [textSearch, setTextSearch] = useState("");
-  const [activePermission, setActivePermission] = useState("");
   const [processes, setProcesses] = useState([]);
   const [accounts, setAccounts] = useState([]);
   
@@ -147,7 +140,6 @@ export default function FormulaMaintenancePage() {
   const selectedProcessRef = useRef(null);
   const skipMetaAfterBootRef = useRef(false);
   const handledMetaScopeKeyRef = useRef("");
-  const switchPermsCacheRef = useRef(null);
   const performSearchRef = useRef(async () => {});
   const followGroupRef = useRef(() => {});
   const switchCompanyRef = useRef(async () => {});
@@ -196,7 +188,7 @@ export default function FormulaMaintenancePage() {
     () =>
       JSON.stringify([
         formulaScopeKey,
-        activePermission,
+        "Games",
         selectedProcess === null
           ? "__unset__"
           : selectedProcess === ""
@@ -204,7 +196,7 @@ export default function FormulaMaintenancePage() {
             : String(selectedProcess),
         textSearch.trim().toUpperCase(),
       ]),
-    [formulaScopeKey, activePermission, selectedProcess, textSearch],
+    [formulaScopeKey, selectedProcess, textSearch],
   );
 
   const listQueryEnabled =
@@ -445,20 +437,13 @@ export default function FormulaMaintenancePage() {
             groupsAllMode: false,
             groupAllMode: false,
           });
-          const meta = await bootstrapFormulaMaintenanceMeta({
-            companies: rows,
-            groupId: effectiveGroup,
-          });
-          if (cancelled) return;
           let procList = [];
           try {
-            procList = bootScope ? await fetchProcesses(null, bootScope, meta.activePermission) : [];
+            procList = bootScope ? await fetchProcesses(null, bootScope) : [];
           } catch (procErr) {
             console.error("Group process list load error:", procErr);
             notify(procErr.message || t("failedLoadProcesses"), "error");
           }
-          setPermissions(meta.permissions);
-          setActivePermission(meta.activePermission);
           setProcesses(procList);
           if (bootScope?.scopeCompanyId) {
             void fetchAccounts(bootScope.scopeCompanyId, bootScope)
@@ -498,11 +483,7 @@ export default function FormulaMaintenancePage() {
           const rawPerms = await fetchCompanyPermissionsRaw(code);
           if (cancelled) return;
 
-          const permList = rawPerms;
-          const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
-          const initialActive = pickFormulaMaintenancePermission(permList, savedPerm);
-
-          const procList = await fetchProcesses(initialCompanyId, bootScope, initialActive);
+          const procList = await fetchProcesses(initialCompanyId, bootScope);
           if (cancelled) return;
 
           const skipCategoryGuard = shouldSkipMaintenanceCategoryGuard({
@@ -522,10 +503,7 @@ export default function FormulaMaintenancePage() {
             }
           }
 
-          setPermissions(permList);
           setProcesses(procList);
-          setActivePermission(initialActive);
-          switchPermsCacheRef.current = { companyCode: code, perms: permList };
           skipMetaAfterBootRef.current = true;
           handledMetaScopeKeyRef.current = buildFormulaMetaEffectKey(
             formulaMaintenanceScopeCacheKey(bootScope),
@@ -583,30 +561,12 @@ export default function FormulaMaintenancePage() {
 
     let cancelled = false;
     const scope = formulaScope;
-    const permCode =
-      companyCode ||
-      (selectedGroup ? companiesNativeInGroupList(companies, selectedGroup)[0]?.company_id : "") ||
-      "";
     const accountCompanyId = scope?.scopeCompanyId ?? companyId;
 
     (async () => {
       try {
-        const cached = switchPermsCacheRef.current;
-        let permList;
-        if (cached && cached.companyCode === permCode) {
-          permList = cached.perms;
-          switchPermsCacheRef.current = null;
-        } else if (permCode) {
-          permList = await fetchCompanyPermissions(permCode);
-        } else {
-          permList = [];
-        }
-        const savedPerm = permCode ? localStorage.getItem(`selectedPermission_${permCode}`) : null;
-        const nextPerm = pickFormulaMaintenancePermission(permList, savedPerm);
-        const procList = await fetchProcesses(companyId, scope, nextPerm);
+        const procList = await fetchProcesses(companyId, scope);
         if (cancelled) return;
-        setPermissions(permList);
-        setActivePermission(nextPerm);
         setProcesses(procList);
 
         setSelectedProcess((prev) => {
@@ -634,7 +594,7 @@ export default function FormulaMaintenancePage() {
     return () => {
       cancelled = true;
     };
-  }, [filtersReady, formulaScope, formulaScopeKey, companyId, companyCode, selectedGroup, companies, notify, t]);
+  }, [filtersReady, formulaScope, formulaScopeKey, companyId, companyCode, selectedGroup, notify, t]);
 
   // -- Search Logic --
   /** 首次整表 Loading；之后（切换公司等）listSyncing 保留旧表直至新数据返回 */
@@ -667,7 +627,7 @@ export default function FormulaMaintenancePage() {
 
     const searchScopeKey = formulaMaintenanceScopeCacheKey(effectiveScope);
     const searchCompanyId = Number(effectiveScope.scopeCompanyId);
-    const category = overrides.category ?? activePermission;
+    const category = "Games";
     const effectiveSearchKey = JSON.stringify([
       searchScopeKey,
       category,
@@ -747,7 +707,6 @@ export default function FormulaMaintenancePage() {
     companyId,
     groupsAllMode,
     groupAllMode,
-    activePermission,
     selectedProcess,
     notify,
     t,
@@ -798,10 +757,7 @@ export default function FormulaMaintenancePage() {
             groupsAllMode,
             groupAllMode,
           });
-          const meta = await bootstrapFormulaMaintenanceMeta({ companies, groupId: g });
           const procList = scope ? await fetchProcesses(null, scope) : [];
-          setPermissions(meta.permissions);
-          setActivePermission(meta.activePermission);
           setProcesses(procList);
           if (scope?.scopeCompanyId) {
             void fetchAccounts(scope.scopeCompanyId, scope)
@@ -831,7 +787,6 @@ export default function FormulaMaintenancePage() {
         groupAllMode,
       });
       suppressNextSearchEffectRef.current = true;
-      switchPermsCacheRef.current = null;
       handledMetaScopeKeyRef.current = buildFormulaMetaEffectKey(
         formulaMaintenanceScopeCacheKey(nextScope),
         nextId,
@@ -861,7 +816,6 @@ export default function FormulaMaintenancePage() {
       const nextCompanyId = Number(c.id);
       const code = c.company_id || "";
       const newGroup = c.group_id ? String(c.group_id).toUpperCase().trim() : null;
-      const savedPerm = localStorage.getItem(`selectedPermission_${code}`);
 
       try {
         const { redirected } = await runMaintenanceCompanySwitch({
@@ -871,12 +825,6 @@ export default function FormulaMaintenancePage() {
           navigate,
           updateSessionCompany,
           onStay: async () => {
-            const perms = await fetchCompanyPermissions(code);
-            const nextActive = pickFormulaMaintenancePermission(perms, savedPerm);
-            switchPermsCacheRef.current = { companyCode: code, perms };
-            setActivePermission(nextActive);
-            setPermissions(perms);
-
             const nextScope = resolveFormulaMaintenanceScope({
               companies,
               selectedGroup: newGroup,
@@ -892,7 +840,7 @@ export default function FormulaMaintenancePage() {
             );
 
             try {
-              const procList = await fetchProcesses(nextCompanyId, nextScope, nextActive);
+              const procList = await fetchProcesses(nextCompanyId, nextScope);
               setProcesses(procList);
             } catch (procErr) {
               console.error("Process list load error:", procErr);
@@ -912,30 +860,6 @@ export default function FormulaMaintenancePage() {
   onClearCompanyRef.current = handleClearCompany;
 
   followGroupRef.current = () => {};
-
-  const handlePermissionSwitch = (p) => {
-    startTransition(() => {
-      setActivePermission(p);
-    });
-    const permCode =
-      companyCode ||
-      (selectedGroup ? companiesNativeInGroupList(companies, selectedGroup)[0]?.company_id : "") ||
-      "";
-    if (permCode) localStorage.setItem(`selectedPermission_${permCode}`, p);
-    setSelectedProcess(null);
-    clearFormulaList();
-    lastSearchQueryKeyRef.current = "";
-    setConfirmDelete(false);
-    void (async () => {
-      try {
-        const procList = await fetchProcesses(companyId, formulaScope, p);
-        setProcesses(procList);
-      } catch (err) {
-        console.error("Process list load error:", err);
-        notify(err.message || t("failedLoadProcesses"), "error");
-      }
-    })();
-  };
 
   const handleSetSelectedProcess = useCallback(
     (value) => {
@@ -1142,26 +1066,6 @@ export default function FormulaMaintenancePage() {
 
   return (
     <div className="container">
-      {permissions.length > 1 ? (
-      <div className="maintenance-header">
-          <div id="maintenance-permission-filter" className="maintenance-permission-filter-header">
-            <span className="maintenance-company-label">{m.category}</span>
-            <div id="maintenance-permission-buttons" className="maintenance-company-buttons">
-              {permissions.map(p => (
-                <button 
-                  key={p} 
-                  type="button" 
-                  className={`maintenance-company-btn ${p === activePermission ? 'active' : ''}`}
-                  onClick={() => handlePermissionSwitch(p)}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-      </div>
-      ) : null}
-
       <div className="formula-maintenance-page-root">
       <FormulaMaintenanceFilters 
         processes={processes}

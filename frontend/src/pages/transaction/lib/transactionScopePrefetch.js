@@ -1,4 +1,5 @@
 import { resolveViewGroupForCompany } from "../../../utils/company/sharedCompanyFilter.js";
+import { resolveSavedCurrencyOrder } from "../../../utils/company/currencyDisplayOrder.js";
 import { setTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
 import {
   getAccounts,
@@ -21,7 +22,6 @@ import {
   resolveTransactionCurrencyOrderCompanyId,
 } from "./transactionScope.js";
 
-const TRANSACTION_CURRENCY_FILTER_KEY_PREFIX = "transaction_currency_filter_v1_";
 const hoverWarmInflight = new Map();
 
 /** Must match useTransactionSearch `requestKey` JSON shape. */
@@ -66,42 +66,23 @@ export function buildTransactionSearchRequestKey({
   });
 }
 
-export function readPersistedCurrencyForCompany(companyCacheKey) {
-  if (!companyCacheKey) return { showAll: false, currencies: [] };
-  try {
-    const raw = localStorage.getItem(`${TRANSACTION_CURRENCY_FILTER_KEY_PREFIX}${companyCacheKey}`);
-    if (!raw) return { showAll: false, currencies: [] };
-    const o = JSON.parse(raw);
-    if (!o || typeof o !== "object") return { showAll: false, currencies: [] };
-    return {
-      showAll: !!o.showAll,
-      currencies: Array.isArray(o.currencies)
-        ? o.currencies.map((c) => String(c || "").toUpperCase().trim()).filter(Boolean)
-        : [],
-    };
-  } catch {
-    return { showAll: false, currencies: [] };
-  }
-}
-
-function resolveDefaultSearchCurrencies(scopeCacheCompanyKey) {
-  const prefs = readPersistedCurrencyForCompany(scopeCacheCompanyKey);
-  if (prefs.showAll) return { showAll: true, currencies: [] };
-  if (prefs.currencies.length > 0) {
-    return { showAll: false, currencies: prefs.currencies };
-  }
-  // Group-only: never pre-select MYR — wait for scoped account currencies from API.
+/** Default filter = first currency in this company's saved drag order. */
+function resolveDefaultSearchCurrencies(scope, snapCompanies = []) {
+  const scopeCacheCompanyKey = transactionScopeCacheCompanyKey(scope);
+  // Group-only: wait for scoped account currencies from API.
   if (String(scopeCacheCompanyKey || "").startsWith("group:")) {
     return { showAll: false, currencies: [] };
   }
-  const code = pickTransactionDefaultCurrency(["MYR"]);
-  return { showAll: false, currencies: code ? [code] : ["MYR"] };
+  const orderCompanyId = resolveTransactionCurrencyOrderCompanyId(scope, snapCompanies);
+  const order = resolveSavedCurrencyOrder(orderCompanyId, null) || [];
+  const code = pickTransactionDefaultCurrency(order.length ? order : ["MYR"]);
+  return { showAll: false, currencies: code ? [code] : [] };
 }
 
-export function buildDefaultSearchApiParams(scope, { dateFrom, dateTo } = {}) {
+export function buildDefaultSearchApiParams(scope, { dateFrom, dateTo, snapCompanies = [] } = {}) {
   const scopeApi = transactionScopeApiParams(scope);
   const scopeCacheCompanyKey = transactionScopeCacheCompanyKey(scope);
-  const currencyPrefs = resolveDefaultSearchCurrencies(scopeCacheCompanyKey);
+  const currencyPrefs = resolveDefaultSearchCurrencies(scope, snapCompanies);
   const subsidiarySearch =
     scopeApi.subsidiaryAccountsOnly ||
     (scopeApi.companyId != null && Number(scopeApi.companyId) > 0);
@@ -167,9 +148,13 @@ export function hydrateTransactionScopeMetadataFromCache(queryClient, scope, sna
   };
 }
 
-async function prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo) {
+async function prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo, snapCompanies = []) {
   if (!scope || scope.mode === "aggregate") return;
-  const { searchParams, requestKey } = buildDefaultSearchApiParams(scope, { dateFrom, dateTo });
+  const { searchParams, requestKey } = buildDefaultSearchApiParams(scope, {
+    dateFrom,
+    dateTo,
+    snapCompanies,
+  });
   if (!searchParams.dateFrom || !searchParams.dateTo) return;
 
   if (queryClient) {
@@ -245,7 +230,7 @@ export function prefetchTransactionScopeBundle(queryClient, { nextSnap, todayDmy
 
   return Promise.all([
     prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderCompanyId),
-    prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo).catch(() => null),
+    prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo, companies).catch(() => null),
   ]).catch(() => null);
 }
 

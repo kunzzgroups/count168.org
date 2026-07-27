@@ -1,6 +1,5 @@
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
 import { isC168CompanyCode } from "../../../utils/company/c168CaptureChannel.js";
-import { companiesNativeInGroupList } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   fetchDomainCompanyPermissions,
   fetchMaintenanceProcesses,
@@ -46,7 +45,7 @@ export async function fetchCompanyPermissions(companyCode) {
     return ["Games", "Gambling"];
   }
   const perms = await fetchDomainCompanyPermissions(companyCode);
-  return perms.length > 0 ? perms : ["Games", "Gambling", "Bank", "Loan", "Rate", "Money"];
+  return perms.length > 0 ? perms : ["Games", "Bank"];
 }
 
 export async function fetchProcesses(companyId, scope = null) {
@@ -76,29 +75,11 @@ export async function fetchProcesses(companyId, scope = null) {
 }
 
 /**
- * Permissions + process list when Group is selected without Company (group-only).
- */
-export async function bootstrapCaptureMaintenanceMeta({ companies, groupId = null }) {
-  const anchor =
-    (groupId ? companiesNativeInGroupList(companies, groupId)[0] : null) ??
-    (Array.isArray(companies) ? companies[0] : null) ??
-    null;
-  const code = anchor?.company_id ? String(anchor.company_id) : "";
-  const companyPerms = code
-    ? await fetchCompanyPermissions(code)
-    : ["Games", "Gambling", "Bank", "Loan", "Rate", "Money"];
-  const savedPerm = code ? localStorage.getItem(`selectedPermission_${code}`) : null;
-  const initialActive =
-    savedPerm && companyPerms.includes(savedPerm) ? savedPerm : companyPerms.length > 0 ? companyPerms[0] : "";
-  return { permissions: companyPerms, activePermission: initialActive };
-}
-
-/**
  * Search capture data
  * @param {AbortSignal} [options.signal] — 切换公司等场景取消过时请求，避免列表闪动与竞态
  */
 export async function searchCaptureData(
-  { dateFrom, dateTo, process, category, query, scope },
+  { dateFrom, dateTo, process, query, scope },
   options = {},
 ) {
   const { signal } = options;
@@ -107,9 +88,6 @@ export async function searchCaptureData(
   params.append("date_to", dateTo);
   if (process) {
     params.append("process", process);
-  }
-  if (category) {
-    params.append("category", category);
   }
   if (query?.trim()) {
     params.set("q", query.trim().toUpperCase());
