@@ -1,27 +1,75 @@
-name: Deploy to EC2
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy-site:
-    name: count168.site
-    runs-on: ubuntu-latest
-    steps:
-      - name: SSH deploy to /var/www/count168
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          command_timeout: 10m
-          debug: true
-          script: |
-            set -euo pipefail
-            if [[ ! -f /var/www/count168/deploy/deploy.sh ]]; then
-              echo "ERROR: /var/www/count168/deploy/deploy.sh missing"
-              exit 1
-            fi
-            bash /var/www/count168/deploy/deploy.sh
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy-site:
+    name: count168.site
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy to /var/www/count168
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          command_timeout: 10m
+          debug: true
+          script: |
+            set -euo pipefail
+            if [[ ! -f /var/www/count168/deploy/deploy.sh ]]; then
+              echo "ERROR: /var/www/count168/deploy/deploy.sh missing"
+              exit 1
+            fi
+            bash /var/www/count168/deploy/deploy.sh
+
+  deploy-org:
+    name: count168.org
+    needs: deploy-site
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH deploy to /var/www/count168.org
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          command_timeout: 10m
+          debug: true
+          script: |
+            set -euo pipefail
+            APP_ROOT=/var/www/count168.org
+            if [[ ! -d "${APP_ROOT}/.git" ]]; then
+              echo "ERROR: ${APP_ROOT}/.git missing — run on EC2:"
+              echo "  sudo git clone --branch main --depth 1 https://github.com/kunzzgroups/count168test.git ${APP_ROOT}"
+              echo "  sudo chown -R ec2-user:nginx ${APP_ROOT}"
+              exit 1
+            fi
+            ORG_DEPLOY=""
+            for candidate in \
+              "${APP_ROOT}/deploy/deploy-org.sh" \
+              "/var/www/count168/deploy/deploy-org.sh"; do
+              if [[ -f "$candidate" ]]; then
+                ORG_DEPLOY="$candidate"
+                break
+              fi
+            done
+            if [[ -n "$ORG_DEPLOY" ]]; then
+              bash "$ORG_DEPLOY"
+            else
+              echo "==> fallback: git pull ${APP_ROOT} (deploy-org.sh not found)"
+              cd "$APP_ROOT"
+              git fetch origin main
+              git reset --hard origin/main
+              if command -v chcon >/dev/null 2>&1; then
+                chcon -R -t httpd_sys_content_t "$APP_ROOT" 2>/dev/null || true
+              fi
+              if systemctl is-active --quiet nginx 2>/dev/null; then
+                sudo systemctl reload nginx || true
+              fi
+              echo "==> org deploy OK (fallback)"
+            fi
