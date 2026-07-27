@@ -88,8 +88,9 @@ export function useTransactionSync({
         queueRetry();
         return;
       }
+      // No currency selected → lists are intentionally empty; don't retry-spam.
       if (!showAllCurrencies && selectedCurrencies.length === 0) {
-        queueRetry();
+        markInvalidateHandled(invalidateTs);
         return;
       }
       if (refreshInFlight) return;

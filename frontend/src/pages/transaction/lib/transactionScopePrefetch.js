@@ -66,13 +66,14 @@ export function buildTransactionSearchRequestKey({
   });
 }
 
+/** @returns {{ showAll: boolean, currencies: string[] } | null} null when nothing persisted */
 export function readPersistedCurrencyForCompany(companyCacheKey) {
-  if (!companyCacheKey) return { showAll: false, currencies: [] };
+  if (!companyCacheKey) return null;
   try {
     const raw = localStorage.getItem(`${TRANSACTION_CURRENCY_FILTER_KEY_PREFIX}${companyCacheKey}`);
-    if (!raw) return { showAll: false, currencies: [] };
+    if (!raw) return null;
     const o = JSON.parse(raw);
-    if (!o || typeof o !== "object") return { showAll: false, currencies: [] };
+    if (!o || typeof o !== "object") return null;
     return {
       showAll: !!o.showAll,
       currencies: Array.isArray(o.currencies)
@@ -80,14 +81,15 @@ export function readPersistedCurrencyForCompany(companyCacheKey) {
         : [],
     };
   } catch {
-    return { showAll: false, currencies: [] };
+    return null;
   }
 }
 
 function resolveDefaultSearchCurrencies(scopeCacheCompanyKey) {
   const prefs = readPersistedCurrencyForCompany(scopeCacheCompanyKey);
-  if (prefs.showAll) return { showAll: true, currencies: [] };
-  if (prefs.currencies.length > 0) {
+  if (prefs?.showAll) return { showAll: true, currencies: [] };
+  // Explicit prefs (including empty selection → no lists) must be respected.
+  if (prefs) {
     return { showAll: false, currencies: prefs.currencies };
   }
   // Group-only: never pre-select MYR — wait for scoped account currencies from API.

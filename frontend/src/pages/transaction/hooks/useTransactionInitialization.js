@@ -1,5 +1,8 @@
 import { useLayoutEffect, useRef } from "react";
-import { pickTransactionDefaultCurrency } from "../lib/transactionPaymentLogic.js";
+import {
+  pickTransactionDefaultCurrency,
+  readTransactionCurrencyFilterState,
+} from "../lib/transactionPaymentLogic.js";
 import {
   transactionScopeCacheCompanyKey,
   transactionScopeCacheKey,
@@ -12,28 +15,31 @@ function sameCurrencySelection(a, b) {
   return left.every((code, idx) => code === right[idx]);
 }
 
-/** In-session company switch only — refresh always falls back to MYR default (not localStorage). */
+/** Prefer in-session company-switch prefs; else persisted filter (incl. empty = no lists). */
 function resolveSavedCurrencyPrefs(companyCacheKey, memoryStore) {
   const mem = companyCacheKey != null ? memoryStore[companyCacheKey] : null;
 
-  const memCurrencies = Array.isArray(mem?.currencies)
-    ? mem.currencies
-    : Array.isArray(mem?.selectedCurrencies)
-      ? mem.selectedCurrencies
-      : [];
+  if (mem) {
+    if (mem?.showAll || mem?.showAllCurrencies) {
+      return { showAll: true, currencies: [] };
+    }
 
-  if (mem?.showAll || mem?.showAllCurrencies) {
-    return { showAll: true, currencies: [] };
+    const memCurrencies = Array.isArray(mem?.currencies)
+      ? mem.currencies
+      : Array.isArray(mem?.selectedCurrencies)
+        ? mem.selectedCurrencies
+        : null;
+
+    // Explicit empty selection is valid (no currency → hide lists).
+    if (memCurrencies != null) {
+      return {
+        showAll: false,
+        currencies: memCurrencies.map((c) => String(c || "").trim()).filter(Boolean),
+      };
+    }
   }
 
-  if (memCurrencies.length > 0) {
-    return {
-      showAll: false,
-      currencies: memCurrencies.map((c) => String(c || "").trim()).filter(Boolean),
-    };
-  }
-
-  return null;
+  return readTransactionCurrencyFilterState(companyCacheKey);
 }
 
 export function useTransactionInitialization({
@@ -109,6 +115,8 @@ export function useTransactionInitialization({
 
     const ensureCurrencySelection = () => {
       if (activeSearch.showAllCurrencies || rows.length === 0) return;
+      // Empty selection is intentional — do not force a default currency.
+      if (activeSearch.selectedCurrencies.length === 0) return;
       const valid = activeSearch.selectedCurrencies.filter((code) =>
         codes.includes(String(code || "").toUpperCase().trim()),
       );
@@ -118,12 +126,8 @@ export function useTransactionInitialization({
         }
         return;
       }
-      const code = pickTransactionDefaultCurrency(codes);
-      const pick =
-        (code ? rows.find((c) => String(c.code || "").toUpperCase() === code) : null) || rows[0];
-      if (pick?.code) {
-        activeSearch.setSelectedCurrencies([pick.code]);
-      }
+      // Prior codes are no longer in scope — clear rather than forcing a pick.
+      activeSearch.setSelectedCurrencies([]);
     };
 
     const resetSelection = currencyRestoredScopeKeyRef.current !== scopeKey;
@@ -145,12 +149,15 @@ export function useTransactionInitialization({
     if (saved?.showAll && codes.length >= 2) {
       nextShowAll = true;
       nextSel = [];
-    } else if (saved?.currencies?.length) {
-      const valid = saved.currencies.filter((code) => rows.some((c) => String(c.code) === String(code)));
-      if (valid.length > 0) nextSel = valid;
+    } else if (saved) {
+      const valid = (saved.currencies || []).filter((code) =>
+        rows.some((c) => String(c.code) === String(code)),
+      );
+      nextSel = valid;
     }
 
-    if (!nextShowAll && nextSel.length === 0 && rows.length > 0) {
+    // Cold boot / no in-session prefs: default to MYR (or first). Explicit empty prefs stay empty.
+    if (saved == null && !nextShowAll && nextSel.length === 0 && rows.length > 0) {
       const code = pickTransactionDefaultCurrency(codes);
       const pick =
         (code ? rows.find((c) => String(c.code || "").toUpperCase() === code) : null) || rows[0];

@@ -277,14 +277,19 @@ export function useTransactionSearch({
       const restored = currenciesBeforeAllRef.current
         .map((c) => String(c || "").toUpperCase().trim())
         .filter((c) => c && avail.has(c));
-      const nextSel =
-        restored.length > 0 ? restored : txCurrencyCodes[0] ? [txCurrencyCodes[0]] : [];
+      // Restore prior selection as-is (including empty → no lists).
+      const nextSel = restored;
 
       suppressCrossPageCurrencyRef.current = nextSel.length !== 1;
       setShowAllCurrencies(false);
       setSelectedCurrencies(nextSel);
       persistCurrencyFilter(scopeCacheCompanyKey, false, nextSel, transactionScope?.selectedGroup);
       notifySingleCurrencyIfNeeded(nextSel);
+      if (nextSel.length === 0) {
+        setRawSearchData(null);
+        setTablesVisible(false);
+        return;
+      }
       scheduleAutoSearch();
       return;
     }
@@ -387,11 +392,7 @@ export function useTransactionSearch({
       const nextSel = [...set];
       const nextShowAll = false;
 
-      if (nextSel.length === 0) {
-        pushToast(m.pleaseSelectAtLeastOneCurrency, "info");
-        return;
-      }
-
+      // Empty selection is allowed: hide lists (no search) until a currency is chosen again.
       // Set before notify/state — cross-page listener runs synchronously and would collapse multi-select.
       suppressCrossPageCurrencyRef.current = nextShowAll || nextSel.length !== 1;
 
@@ -399,6 +400,11 @@ export function useTransactionSearch({
       setSelectedCurrencies(nextSel);
       persistCurrencyFilter(scopeCacheCompanyKey, nextShowAll, nextSel, transactionScope?.selectedGroup);
       notifySingleCurrencyIfNeeded(nextSel);
+      if (nextSel.length === 0) {
+        setRawSearchData(null);
+        setTablesVisible(false);
+        return;
+      }
       scheduleAutoSearch();
     },
     [
@@ -408,8 +414,6 @@ export function useTransactionSearch({
       scheduleAutoSearch,
       transactionScope?.selectedGroup,
       notifySingleCurrencyIfNeeded,
-      pushToast,
-      m,
     ],
   );
 
@@ -602,7 +606,6 @@ export function useTransactionSearch({
       if (!effectiveShowAll && effectiveSelectedCurrencies.length === 0) {
         setRawSearchData(null);
         setTablesVisible(false);
-        pushToast(m.pleaseSelectAtLeastOneCurrency, "info");
         return;
       }
 
@@ -968,7 +971,8 @@ export function useTransactionSearch({
         .filter(Boolean);
 
       if (preserveCurrencyFilter && !queryShowAll && querySelected.length === 0) {
-        pushToast(m.pleaseSelectAtLeastOneCurrency, "info");
+        setRawSearchData(null);
+        setTablesVisible(false);
         return;
       }
 
@@ -1893,12 +1897,12 @@ export function useTransactionSearch({
         suppressBlockingOverlayOnceRef.current = true;
       }
 
-      if (!currencyPrefs.showAll && currencyPrefs.currencies.length > 0) {
-        setShowAllCurrencies(false);
-        setSelectedCurrencies(currencyPrefs.currencies);
-      } else if (currencyPrefs.showAll) {
+      if (currencyPrefs.showAll) {
         setShowAllCurrencies(true);
         setSelectedCurrencies([]);
+      } else {
+        setShowAllCurrencies(false);
+        setSelectedCurrencies(currencyPrefs.currencies);
       }
 
       try {
