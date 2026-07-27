@@ -218,8 +218,6 @@ export default function DomainReportPage() {
         selectedCompany={s.selectedCompany}
         onOpen={() => setFilterOpen(true)}
       />
-      <DomainTableHead i18n={i18n} />
-      <DomainTotalRow i18n={i18n} totals={totals} />
     </div>
   );
 
@@ -257,7 +255,7 @@ export default function DomainReportPage() {
         />
       }
     >
-      <div className="m-rpt-content">
+      <div className="m-rpt-content m-rpt-content--domain">
         {s.toast ? (
           <div className={`m-rpt-toast${s.toast.tone === "error" ? " is-error" : ""}`}>
             {s.toast.message}
@@ -276,37 +274,45 @@ export default function DomainReportPage() {
             <p>{scopeReady ? i18n.noData : i18n.needCompany}</p>
           </div>
         ) : (
-          <div className="m-rpt-table" role="table">
-            {displayRows.map((row, idx) => {
-              const label =
-                !isGroupScope && row.description
-                  ? `${row.process} (${row.description})`
-                  : row.process;
-              const wlTone = reportAmountTone(row.win_lose);
-              return (
-                <div
-                  key={`${row.process}|${row.description}|${idx}`}
-                  className="m-rpt-table-row"
-                  role="row"
-                >
-                  <div className="m-rpt-table-process" title={label || ""}>
-                    {label || i18n.process}
-                  </div>
-                  <div className="m-rpt-num">
-                    <strong>{formatReportAmount(row.turnover)}</strong>
-                  </div>
-                  <div className="m-rpt-num is-pos">
-                    <strong>{formatReportAmount(row.win)}</strong>
-                  </div>
-                  <div className="m-rpt-num is-neg">
-                    <strong>{formatReportAmount(row.lose)}</strong>
-                  </div>
-                  <div className={`m-rpt-num ${wlTone}`}>
-                    <strong>{formatReportAmount(row.win_lose)}</strong>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="m-rpt-hscroll">
+            <div className="m-rpt-table-board">
+              <div className="m-rpt-table-chrome">
+                <DomainTableHead i18n={i18n} />
+                <DomainTotalRow i18n={i18n} totals={totals} />
+              </div>
+              <div className="m-rpt-table" role="table">
+                {displayRows.map((row, idx) => {
+                  const label =
+                    !isGroupScope && row.description
+                      ? `${row.process} (${row.description})`
+                      : row.process;
+                  const wlTone = reportAmountTone(row.win_lose);
+                  return (
+                    <div
+                      key={`${row.process}|${row.description}|${idx}`}
+                      className="m-rpt-table-row"
+                      role="row"
+                    >
+                      <div className="m-rpt-table-process" title={label || ""}>
+                        {label || i18n.process}
+                      </div>
+                      <div className="m-rpt-num">
+                        <strong>{formatReportAmount(row.turnover)}</strong>
+                      </div>
+                      <div className="m-rpt-num is-pos">
+                        <strong>{formatReportAmount(row.win)}</strong>
+                      </div>
+                      <div className="m-rpt-num is-neg">
+                        <strong>{formatReportAmount(row.lose)}</strong>
+                      </div>
+                      <div className={`m-rpt-num ${wlTone}`}>
+                        <strong>{formatReportAmount(row.win_lose)}</strong>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
