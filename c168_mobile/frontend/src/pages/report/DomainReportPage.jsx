@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
-import { useIncrementalList } from "../../hooks/useIncrementalList.js";
 import { useMaintenanceSession } from "../../hooks/useMaintenanceSession.js";
 import { periodPresetRange } from "../../lib/dashboardDateUtils.js";
 import {
@@ -21,6 +20,35 @@ import "./report.css";
 
 function defaultThisMonth() {
   return periodPresetRange("thisMonth") || { dateFrom: "", dateTo: "" };
+}
+
+function DomainTotalStrip({ i18n, totals }) {
+  if (!totals) return null;
+  return (
+    <div className="m-rpt-total-sticky">
+      <strong>{i18n.total}</strong>
+      <div className="m-rpt-metrics m-rpt-metrics--4">
+        <div>
+          <span>{i18n.turnover}</span>
+          <strong>{formatReportAmount(totals.turnover)}</strong>
+        </div>
+        <div>
+          <span>{i18n.win}</span>
+          <strong className="is-pos">{formatReportAmount(totals.win)}</strong>
+        </div>
+        <div>
+          <span>{i18n.lose}</span>
+          <strong className="is-neg">{formatReportAmount(totals.lose)}</strong>
+        </div>
+        <div>
+          <span>{i18n.winLose}</span>
+          <strong className={reportAmountTone(totals.win_lose)}>
+            {formatReportAmount(totals.win_lose)}
+          </strong>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function DomainReportPage() {
@@ -93,8 +121,6 @@ export default function DomainReportPage() {
     });
   }, [rows, query]);
 
-  const { visible, hasMore, sentinelRef, shown, total } = useIncrementalList(displayRows);
-
   const scopeLabel = s.groupMode
     ? s.selectedGroup || i18n.group
     : String(s.selectedCompany?.company_id || "").toUpperCase() || i18n.company;
@@ -131,7 +157,6 @@ export default function DomainReportPage() {
     [scope, s, i18n.bankOnlyBlocked],
   );
 
-  // Guard initial company if bank-only
   useEffect(() => {
     if (!s.me || s.loading || s.groupMode || !s.selectedCompany) return undefined;
     const code = String(s.selectedCompany.company_id || "").trim();
@@ -141,7 +166,6 @@ export default function DomainReportPage() {
       const bankOnly = await companyIsBankOnly(code);
       if (cancelled || !bankOnly) return;
       s.notify(i18n.bankOnlyBlocked, "error");
-      // Prefer a non-bank company in the same group, else first non-bank
       const candidates = s.companies.filter((c) => Number(c.id) !== Number(s.companyId));
       for (const c of candidates) {
         const ok = !(await companyIsBankOnly(String(c.company_id || "").trim()));
@@ -177,6 +201,7 @@ export default function DomainReportPage() {
         selectedCompany={s.selectedCompany}
         onOpen={() => setFilterOpen(true)}
       />
+      <DomainTotalStrip i18n={i18n} totals={totals} />
       <div className="m-rpt-search">
         <i className="fas fa-magnifying-glass" aria-hidden="true" />
         <input
@@ -247,74 +272,40 @@ export default function DomainReportPage() {
             <p>{scopeReady ? i18n.noData : i18n.needCompany}</p>
           </div>
         ) : (
-          <>
-            <div className="m-rpt-list">
-              {visible.map((row, idx) => {
-                const label =
-                  !isGroupScope && row.description
-                    ? `${row.process} (${row.description})`
-                    : row.process;
-                const wlTone = reportAmountTone(row.win_lose);
-                return (
-                  <article key={`${row.process}|${row.description}|${idx}`} className="m-rpt-card">
-                    <div className="m-rpt-card-head">
-                      <strong>{label || i18n.process}</strong>
+          <div className="m-rpt-list">
+            {displayRows.map((row, idx) => {
+              const label =
+                !isGroupScope && row.description
+                  ? `${row.process} (${row.description})`
+                  : row.process;
+              const wlTone = reportAmountTone(row.win_lose);
+              return (
+                <article key={`${row.process}|${row.description}|${idx}`} className="m-rpt-card">
+                  <div className="m-rpt-card-head">
+                    <strong>{label || i18n.process}</strong>
+                  </div>
+                  <div className="m-rpt-metrics">
+                    <div>
+                      <span>{i18n.turnover}</span>
+                      <strong>{formatReportAmount(row.turnover)}</strong>
                     </div>
-                    <div className="m-rpt-metrics">
-                      <div>
-                        <span>{i18n.turnover}</span>
-                        <strong>{formatReportAmount(row.turnover)}</strong>
-                      </div>
-                      <div>
-                        <span>{i18n.win}</span>
-                        <strong className="is-pos">{formatReportAmount(row.win)}</strong>
-                      </div>
-                      <div>
-                        <span>{i18n.lose}</span>
-                        <strong className="is-neg">{formatReportAmount(row.lose)}</strong>
-                      </div>
-                      <div>
-                        <span>{i18n.winLose}</span>
-                        <strong className={wlTone}>{formatReportAmount(row.win_lose)}</strong>
-                      </div>
+                    <div>
+                      <span>{i18n.win}</span>
+                      <strong className="is-pos">{formatReportAmount(row.win)}</strong>
                     </div>
-                  </article>
-                );
-              })}
-            </div>
-            {hasMore ? (
-              <div ref={sentinelRef} className="m-rpt-more">
-                <i className="fas fa-spinner fa-spin" aria-hidden="true" />
-                <span>
-                  {shown} / {total}
-                </span>
-              </div>
-            ) : totals ? (
-              <div className="m-rpt-total-bar">
-                <strong>{i18n.total}</strong>
-                <div className="m-rpt-metrics m-rpt-metrics--compact">
-                  <div>
-                    <span>{i18n.turnover}</span>
-                    <strong>{formatReportAmount(totals.turnover)}</strong>
+                    <div>
+                      <span>{i18n.lose}</span>
+                      <strong className="is-neg">{formatReportAmount(row.lose)}</strong>
+                    </div>
+                    <div>
+                      <span>{i18n.winLose}</span>
+                      <strong className={wlTone}>{formatReportAmount(row.win_lose)}</strong>
+                    </div>
                   </div>
-                  <div>
-                    <span>{i18n.win}</span>
-                    <strong className="is-pos">{formatReportAmount(totals.win)}</strong>
-                  </div>
-                  <div>
-                    <span>{i18n.lose}</span>
-                    <strong className="is-neg">{formatReportAmount(totals.lose)}</strong>
-                  </div>
-                  <div>
-                    <span>{i18n.winLose}</span>
-                    <strong className={reportAmountTone(totals.win_lose)}>
-                      {formatReportAmount(totals.win_lose)}
-                    </strong>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </>
+                </article>
+              );
+            })}
+          </div>
         )}
       </div>
     </MobileShell>
