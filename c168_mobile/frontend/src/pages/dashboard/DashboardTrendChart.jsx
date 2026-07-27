@@ -1,35 +1,17 @@
+import { useEffect, useState } from "react";
 import {
   Area,
-  AreaChart,
+  Bar,
   CartesianGrid,
+  Cell,
+  ComposedChart,
   ReferenceLine,
   ResponsiveContainer,
-  Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
 import { computeTrendYDomain } from "../../lib/dashboardChart.js";
 import { formatCompactAxis, formatCurrency } from "../../lib/dashboardFormat.js";
-
-function TrendTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="m-dash-trend-tooltip">
-      <p className="m-dash-trend-tooltip-title">{label}</p>
-      <ul>
-        {payload.map((entry) => (
-          <li key={entry.dataKey} className="m-dash-trend-tooltip-row">
-            <span className="m-dash-trend-tooltip-label">
-              <span className="size-2 rounded-full" style={{ backgroundColor: entry.color }} aria-hidden="true" />
-              {entry.name}
-            </span>
-            <span className="m-dash-trend-tooltip-value">{formatCurrency(entry.value)}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 export default function DashboardTrendChart({
   rows,
@@ -40,10 +22,29 @@ export default function DashboardTrendChart({
   dateRangeText,
   xAxisLayout,
   emptyText,
+  monthly = false,
+  tapHint,
+  tapMonthHint,
 }) {
-  const activeKeys = series.filter((s) => visible[s.idx]).map((s) => s.dataKey);
+  const activeSeries = series.filter((s) => visible[s.idx]);
+  const activeKeys = activeSeries.map((s) => s.dataKey);
   const yDomain = computeTrendYDomain(rows, activeKeys);
   const hasSeriesOn = activeKeys.length > 0;
+  const [activeIndex, setActiveIndex] = useState(null);
+
+  useEffect(() => {
+    setActiveIndex(null);
+  }, [rows, monthly]);
+
+  const selected =
+    activeIndex != null && rows?.[activeIndex] ? rows[activeIndex] : null;
+
+  const handleChartClick = (state) => {
+    if (state?.activeTooltipIndex == null) return;
+    const idx = Number(state.activeTooltipIndex);
+    if (!Number.isFinite(idx) || idx < 0) return;
+    setActiveIndex((prev) => (prev === idx ? null : idx));
+  };
 
   return (
     <section className="m-dash-card m-dash-trend">
@@ -75,10 +76,10 @@ export default function DashboardTrendChart({
         })}
       </div>
 
-      <div className="m-dash-trend-chart">
+      <div className={`m-dash-trend-chart${monthly ? " m-dash-trend-chart--monthly" : ""}`}>
         {rows?.length && hasSeriesOn ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart
+            <ComposedChart
               data={rows}
               margin={{
                 top: 10,
@@ -86,6 +87,7 @@ export default function DashboardTrendChart({
                 left: 0,
                 bottom: xAxisLayout.marginBottom ?? 10,
               }}
+              onClick={handleChartClick}
             >
               <defs>
                 <linearGradient id="mGProfit" x1="0" y1="0" x2="0" y2="1">
@@ -124,29 +126,69 @@ export default function DashboardTrendChart({
                 axisLine={false}
                 tickLine={false}
               />
-              <Tooltip content={<TrendTooltip />} />
-              {series.map((s) =>
-                visible[s.idx] ? (
-                  <Area
-                    key={s.dataKey}
-                    type="monotone"
-                    dataKey={s.dataKey}
-                    name={s.label}
-                    stroke={s.color}
-                    fill={s.fill}
-                    strokeWidth={s.dataKey === "netProfit" ? 2.5 : 2}
-                    dot={false}
-                    activeDot={{ r: 5, strokeWidth: 2, stroke: s.color, fill: "#fff" }}
-                    isAnimationActive={false}
-                  />
-                ) : null,
-              )}
-            </AreaChart>
+              {monthly
+                ? activeSeries.map((s) => (
+                    <Bar
+                      key={s.dataKey}
+                      dataKey={s.dataKey}
+                      name={s.label}
+                      fill={s.color}
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={activeSeries.length > 1 ? 18 : 28}
+                      isAnimationActive={false}
+                    >
+                      {rows.map((_, idx) => (
+                        <Cell
+                          key={`${s.dataKey}-${idx}`}
+                          fill={s.color}
+                          fillOpacity={activeIndex == null || activeIndex === idx ? 1 : 0.35}
+                        />
+                      ))}
+                    </Bar>
+                  ))
+                : activeSeries.map((s) => (
+                    <Area
+                      key={s.dataKey}
+                      type="monotone"
+                      dataKey={s.dataKey}
+                      name={s.label}
+                      stroke={s.color}
+                      fill={s.fill}
+                      strokeWidth={s.dataKey === "netProfit" ? 2.5 : 2}
+                      dot={false}
+                      activeDot={{ r: 5, strokeWidth: 2, stroke: s.color, fill: "#fff" }}
+                      isAnimationActive={false}
+                    />
+                  ))}
+            </ComposedChart>
           </ResponsiveContainer>
         ) : (
           <p className="m-dash-card-empty">{rows?.length && !hasSeriesOn ? emptyText || "—" : emptyText}</p>
         )}
       </div>
+
+      {selected ? (
+        <div className="m-dash-trend-detail" role="status">
+          <p className="m-dash-trend-detail-label">{selected.label}</p>
+          <ul className="m-dash-trend-detail-list">
+            {activeSeries.map((s) => (
+              <li key={s.dataKey} className="m-dash-trend-detail-row">
+                <span>
+                  <span
+                    className="m-dash-trend-detail-dot"
+                    style={{ backgroundColor: s.color }}
+                    aria-hidden="true"
+                  />
+                  {s.label}
+                </span>
+                <strong>{formatCurrency(selected[s.dataKey])}</strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : rows?.length && hasSeriesOn ? (
+        <p className="m-dash-trend-hint">{monthly ? tapMonthHint || "Tap a month" : tapHint || "Tap the chart"}</p>
+      ) : null}
     </section>
   );
 }

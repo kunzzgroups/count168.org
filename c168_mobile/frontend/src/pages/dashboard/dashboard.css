@@ -674,6 +674,60 @@
   min-width: 0;
 }
 
+.m-dash-trend-chart--monthly {
+  height: 220px;
+}
+
+.m-dash-trend-hint {
+  margin-top: 0.45rem;
+  color: var(--m-color-label);
+  font-size: var(--m-text-caption);
+  text-align: center;
+}
+
+.m-dash-trend-detail {
+  margin-top: 0.55rem;
+  border: 1px solid var(--m-color-ring);
+  border-radius: var(--m-radius-card);
+  background: var(--m-color-surface-muted);
+  padding: 0.55rem 0.7rem;
+}
+
+.m-dash-trend-detail-label {
+  margin-bottom: 0.35rem;
+  color: var(--m-color-text);
+  font-size: var(--m-text-compact);
+  font-weight: 800;
+}
+
+.m-dash-trend-detail-list {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.m-dash-trend-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--m-color-text-secondary);
+  font-size: var(--m-text-secondary);
+}
+
+.m-dash-trend-detail-row strong {
+  color: var(--m-color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.m-dash-trend-detail-dot {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.35rem;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
 .m-dash-trend-tooltip {
   border-radius: 0.75rem;
   border: 1px solid #e2e8f0;
