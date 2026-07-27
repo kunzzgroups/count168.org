@@ -22,30 +22,34 @@ function defaultThisMonth() {
   return periodPresetRange("thisMonth") || { dateFrom: "", dateTo: "" };
 }
 
-function DomainTotalStrip({ i18n, totals }) {
+function DomainTableHead({ i18n }) {
+  return (
+    <div className="m-rpt-table-head" role="row">
+      <div>{i18n.process}</div>
+      <div>{i18n.turnover}</div>
+      <div>{i18n.win}</div>
+      <div>{i18n.lose}</div>
+      <div>{i18n.winLose}</div>
+    </div>
+  );
+}
+
+function DomainTotalRow({ i18n, totals }) {
   if (!totals) return null;
   return (
-    <div className="m-rpt-total-sticky">
-      <strong>{i18n.total}</strong>
-      <div className="m-rpt-metrics m-rpt-metrics--4">
-        <div>
-          <span>{i18n.turnover}</span>
-          <strong>{formatReportAmount(totals.turnover)}</strong>
-        </div>
-        <div>
-          <span>{i18n.win}</span>
-          <strong className="is-pos">{formatReportAmount(totals.win)}</strong>
-        </div>
-        <div>
-          <span>{i18n.lose}</span>
-          <strong className="is-neg">{formatReportAmount(totals.lose)}</strong>
-        </div>
-        <div>
-          <span>{i18n.winLose}</span>
-          <strong className={reportAmountTone(totals.win_lose)}>
-            {formatReportAmount(totals.win_lose)}
-          </strong>
-        </div>
+    <div className="m-rpt-table-total" role="row">
+      <div className="m-rpt-table-total-label">{i18n.total}</div>
+      <div className="m-rpt-num">
+        <strong>{formatReportAmount(totals.turnover)}</strong>
+      </div>
+      <div className="m-rpt-num is-pos">
+        <strong>{formatReportAmount(totals.win)}</strong>
+      </div>
+      <div className="m-rpt-num is-neg">
+        <strong>{formatReportAmount(totals.lose)}</strong>
+      </div>
+      <div className={`m-rpt-num ${reportAmountTone(totals.win_lose)}`}>
+        <strong>{formatReportAmount(totals.win_lose)}</strong>
       </div>
     </div>
   );
@@ -189,7 +193,20 @@ export default function DomainReportPage() {
         </Link>
         <div className="m-rpt-title-copy">
           <strong>{i18n.domainTitle}</strong>
-          <small>{i18n.domainFeatures}</small>
+        </div>
+        <div className="m-rpt-search m-rpt-search--inline">
+          <i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={i18n.searchProcess}
+            inputMode="search"
+          />
+          {query ? (
+            <button type="button" onClick={() => setQuery("")} aria-label={i18n.reset}>
+              <i className="fas fa-xmark" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </div>
       <ReportFilterBar
@@ -201,21 +218,8 @@ export default function DomainReportPage() {
         selectedCompany={s.selectedCompany}
         onOpen={() => setFilterOpen(true)}
       />
-      <DomainTotalStrip i18n={i18n} totals={totals} />
-      <div className="m-rpt-search">
-        <i className="fas fa-magnifying-glass" aria-hidden="true" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={i18n.searchProcess}
-          inputMode="search"
-        />
-        {query ? (
-          <button type="button" onClick={() => setQuery("")} aria-label={i18n.reset}>
-            <i className="fas fa-xmark" aria-hidden="true" />
-          </button>
-        ) : null}
-      </div>
+      <DomainTableHead i18n={i18n} />
+      <DomainTotalRow i18n={i18n} totals={totals} />
     </div>
   );
 
@@ -272,7 +276,7 @@ export default function DomainReportPage() {
             <p>{scopeReady ? i18n.noData : i18n.needCompany}</p>
           </div>
         ) : (
-          <div className="m-rpt-list">
+          <div className="m-rpt-table" role="table">
             {displayRows.map((row, idx) => {
               const label =
                 !isGroupScope && row.description
@@ -280,29 +284,27 @@ export default function DomainReportPage() {
                   : row.process;
               const wlTone = reportAmountTone(row.win_lose);
               return (
-                <article key={`${row.process}|${row.description}|${idx}`} className="m-rpt-card">
-                  <div className="m-rpt-card-head">
-                    <strong>{label || i18n.process}</strong>
+                <div
+                  key={`${row.process}|${row.description}|${idx}`}
+                  className="m-rpt-table-row"
+                  role="row"
+                >
+                  <div className="m-rpt-table-process" title={label || ""}>
+                    {label || i18n.process}
                   </div>
-                  <div className="m-rpt-metrics">
-                    <div>
-                      <span>{i18n.turnover}</span>
-                      <strong>{formatReportAmount(row.turnover)}</strong>
-                    </div>
-                    <div>
-                      <span>{i18n.win}</span>
-                      <strong className="is-pos">{formatReportAmount(row.win)}</strong>
-                    </div>
-                    <div>
-                      <span>{i18n.lose}</span>
-                      <strong className="is-neg">{formatReportAmount(row.lose)}</strong>
-                    </div>
-                    <div>
-                      <span>{i18n.winLose}</span>
-                      <strong className={wlTone}>{formatReportAmount(row.win_lose)}</strong>
-                    </div>
+                  <div className="m-rpt-num">
+                    <strong>{formatReportAmount(row.turnover)}</strong>
                   </div>
-                </article>
+                  <div className="m-rpt-num is-pos">
+                    <strong>{formatReportAmount(row.win)}</strong>
+                  </div>
+                  <div className="m-rpt-num is-neg">
+                    <strong>{formatReportAmount(row.lose)}</strong>
+                  </div>
+                  <div className={`m-rpt-num ${wlTone}`}>
+                    <strong>{formatReportAmount(row.win_lose)}</strong>
+                  </div>
+                </div>
               );
             })}
           </div>
