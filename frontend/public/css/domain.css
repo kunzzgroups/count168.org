@@ -1382,55 +1382,6 @@ body.domain-page .domain-react-page .domain-fee-inline-summary {
     align-self: center;
 }
 
-body.domain-page .domain-react-page .domain-fee-price-chips {
-    display: flex;
-    align-items: center;
-    gap: clamp(6px, 0.5vw, 10px);
-    flex-shrink: 0;
-    flex-wrap: nowrap;
-}
-
-body.domain-page .domain-react-page .domain-fee-price-chip {
-    font-family: var(--font-heading-page);
-    font-size: var(--text-small);
-    font-weight: var(--font-weight-semibold);
-    line-height: 1.2;
-    white-space: nowrap;
-    padding: clamp(5px, 0.35vw, 7px) clamp(8px, 0.55vw, 12px);
-    border-radius: 6px;
-    border: 1px solid transparent;
-    cursor: pointer;
-    background: rgba(255, 255, 255, 0.72);
-    color: var(--color-text-toolbar-meta);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
-}
-
-body.domain-page .domain-react-page .domain-fee-price-chip:hover {
-    transform: translateY(-1px);
-    background: rgba(255, 255, 255, 0.95);
-}
-
-body.domain-page .domain-react-page .domain-fee-price-chip--company {
-    border-color: rgba(37, 99, 235, 0.22);
-    color: #1e40af;
-}
-
-body.domain-page .domain-react-page .domain-fee-price-chip--company:hover {
-    border-color: rgba(37, 99, 235, 0.4);
-    background: rgba(239, 246, 255, 0.95);
-}
-
-body.domain-page .domain-react-page .domain-fee-price-chip--group {
-    border-color: rgba(13, 148, 136, 0.22);
-    color: #0f766e;
-}
-
-body.domain-page .domain-react-page .domain-fee-price-chip--group:hover {
-    border-color: rgba(13, 148, 136, 0.4);
-    background: rgba(240, 253, 250, 0.95);
-}
-
 /* Price modal (Domain fee settings): match measured legacy layout */
 .domain-fee-react-modal {
     position: relative;
@@ -5522,11 +5473,6 @@ body.domain-page .domain-react-page .domain-renew-badge--approved {
     body.domain-page .domain-react-page .btn-add,
     body.domain-page .domain-react-page .btn-fee-settings {
         flex-shrink: 0;
-    }
-
-    /* Tablet：隐藏 C/G 价格标签，顶栏留给搜索与按钮 */
-    body.domain-page .domain-react-page .domain-fee-price-chips {
-        display: none !important;
     }
 
     body.domain-page .domain-react-page .domain-list-table {
