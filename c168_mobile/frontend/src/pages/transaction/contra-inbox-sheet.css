@@ -44,7 +44,7 @@
 }
 
 .m-contra-sheet-sub {
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 500;
   color: var(--m-color-muted);
 }
@@ -115,7 +115,7 @@
 }
 
 .m-contra-item-meta {
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   color: var(--m-color-muted);
 }
 
@@ -138,7 +138,7 @@
 
 .m-contra-item-by {
   margin-top: 0.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   color: var(--m-color-label);
 }
 

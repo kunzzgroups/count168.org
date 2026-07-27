@@ -217,7 +217,7 @@
 
 .m-tx-form-hint {
   margin-top: 0.5rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 500;
   line-height: 1.375;
   color: var(--m-color-muted);
@@ -303,7 +303,7 @@
 
 .m-tx-date-label {
   display: block;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -341,7 +341,7 @@
 }
 
 .m-tx-date-chevron {
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   color: #cbd5e1;
 }
 

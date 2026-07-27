@@ -131,7 +131,7 @@
   border-collapse: separate;
   border-spacing: 0;
   table-layout: auto;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
 }
 
 .m-tx-hist-dense-th,
@@ -161,7 +161,7 @@
 
 .m-tx-hist-dense-th {
   padding: 0.5rem 0.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -287,7 +287,7 @@
 }
 
 .m-tx-hist-chev {
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   opacity: 0.75;
 }
 
@@ -299,7 +299,7 @@
   white-space: nowrap;
   border-radius: 0.25rem;
   padding: 0.0625rem 0.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   letter-spacing: 0.02em;
   vertical-align: middle;
@@ -368,7 +368,7 @@
 
 .m-tx-hist-detail-desc {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 600;
   line-height: 1.45;
   color: #1e293b;
@@ -383,7 +383,7 @@
 
 .m-tx-hist-detail-value {
   min-width: 0;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   color: #1e293b;
   word-break: break-word;

@@ -34,16 +34,22 @@
   --m-color-ring: rgba(226, 232, 240, 0.9);
   --m-color-ring-soft: rgba(241, 245, 249, 1);
 
-  /* Market phone type scale (1rem = 16px; NOT desktop 62.5%) */
+  /*
+   * Market phone type scale — absolute rem only (1rem = 16px).
+   * Do NOT use em here: nested parents (page compact → label) would compound-shrink.
+   * NOT desktop 62.5% scale.
+   */
+  --m-text-title: 1.125rem; /* 18px — page / section titles */
   --m-text-body: 1rem; /* 16px — primary readable body */
   --m-text-compact: 0.9375rem; /* 15px — dense lists / filter chrome */
   --m-text-secondary: 0.875rem; /* 14px — secondary copy */
   --m-text-caption: 0.75rem; /* 12px — captions / meta floor */
   --m-text-micro: 0.6875rem; /* 11px — badge / chrome floor only */
-  --m-text-label-ratio: 0.75em; /* ~12px on body */
-  --m-text-sub-ratio: 0.875em; /* ~14px on body */
-  --m-text-tab-minus-ratio: 1.125em;
-  --m-text-badge-ratio: 0.6875em; /* ~11px on body */
+  /* Legacy aliases → absolute rem (same visual size everywhere) */
+  --m-text-label-ratio: var(--m-text-caption);
+  --m-text-sub-ratio: var(--m-text-secondary);
+  --m-text-badge-ratio: var(--m-text-micro);
+  --m-text-tab-minus-ratio: 1.125rem;
 
   --m-radius-card: 0.75rem;
   --m-radius-card-lg: 1rem;

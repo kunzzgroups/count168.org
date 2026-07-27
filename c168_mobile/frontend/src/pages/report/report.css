@@ -145,7 +145,8 @@
 .m-rpt-title-copy strong {
   display: block;
   color: var(--m-color-text);
-  font-size: var(--m-text-compact);
+  font-size: var(--m-text-title);
+  font-weight: 800;
   line-height: 1.2;
 }
 
@@ -220,7 +221,7 @@
 .m-rpt-summary-label {
   margin-bottom: 0.35rem;
   color: var(--m-color-primary);
-  font-size: var(--m-text-label-ratio);
+  font-size: var(--m-text-caption);
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -245,7 +246,7 @@
 .m-rpt-metric span {
   display: block;
   color: var(--m-color-label);
-  font-size: var(--m-text-label-ratio);
+  font-size: var(--m-text-caption);
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -257,7 +258,7 @@
   margin-top: 0.1rem;
   overflow: hidden;
   color: var(--m-color-text);
-  font-size: clamp(1.15rem, 3.2vw, 1.3rem);
+  font-size: var(--m-text-body);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.25;
@@ -301,8 +302,8 @@
   margin-bottom: 0.35rem;
   overflow: hidden;
   color: var(--m-color-text);
-  font-size: clamp(1.2rem, 3.4vw, 1.35rem);
-  font-weight: 800;
+  font-size: var(--m-text-body);
+  font-weight: 700;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;

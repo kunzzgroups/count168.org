@@ -30,7 +30,7 @@
 
 .m-ann-fallback-time {
   margin-top: 0.5rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 500;
   color: var(--m-color-label);
 }
@@ -140,7 +140,7 @@
 
 .m-ann-time {
   margin-top: 0.125rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 500;
   color: var(--m-color-label);
 }
@@ -160,7 +160,7 @@
   border-radius: 0.75rem;
   background: rgba(241, 245, 249, 0.8);
   padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -185,7 +185,7 @@
 .m-ann-item-index {
   margin-top: 0.125rem;
   flex-shrink: 0;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 700;
   color: var(--m-color-label);
 }
@@ -238,7 +238,7 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 600;
   color: var(--m-color-muted);
 }
@@ -253,7 +253,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--m-text-secondary);
   font-weight: 500;
   color: var(--m-color-label);
 }
