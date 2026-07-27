@@ -557,6 +557,10 @@
   background: var(--m-color-primary);
 }
 
+.m-rpt-toggle.is-on .m-rpt-toggle-knob::after {
+  transform: translateX(1.15rem);
+}
+
 @media (orientation: landscape) and (max-height: 500px) {
   .m-rpt-total-bar {
     padding: 0.65rem 0.75rem;

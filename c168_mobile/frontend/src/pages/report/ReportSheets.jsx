@@ -239,8 +239,6 @@ export function ReportFilterSheet({
   const span = daysInclusive(draft.dateFrom, draft.dateTo);
   const daysLabel = (i18n.daysCount || "{n} days").replace("{n}", String(span));
 
-  const accountSelectDisabled = draft.groupMode;
-
   const currencyCodes = useMemo(
     () =>
       currencyOptions
@@ -391,17 +389,19 @@ export function ReportFilterSheet({
               <Section title={i18n.account}>
                 <label className="m-mt-field">
                   <select
-                    value={draft.accountId}
-                    disabled={accountSelectDisabled}
+                    value={draft.accountId === "" || draft.accountId == null ? "" : String(draft.accountId)}
                     onChange={(e) => setDraft((prev) => ({ ...prev, accountId: e.target.value }))}
                   >
                     <option value="">{i18n.allAccounts}</option>
                     {accountOptions.map((a) => {
-                      const id = String(a.account_id || a.id || "");
-                      const name = String(a.name || "").trim();
+                      const id = String(a.id ?? "");
+                      if (!id) return null;
+                      const label =
+                        a.display_text ||
+                        `${a.account_id || id}${a.name ? ` (${a.name})` : ""}`;
                       return (
                         <option key={id} value={id}>
-                          {name ? `${id} · ${name}` : id}
+                          {label}
                         </option>
                       );
                     })}
@@ -442,6 +442,7 @@ export function ReportFilterSheet({
                 <button
                   type="button"
                   className={`m-rpt-toggle tap-scale${draft.showAll ? " is-on" : ""}`}
+                  aria-pressed={draft.showAll}
                   onClick={() => setDraft((prev) => ({ ...prev, showAll: !prev.showAll }))}
                 >
                   <span>{i18n.showAll}</span>
