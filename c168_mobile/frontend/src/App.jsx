@@ -16,6 +16,9 @@ import MaintenanceTransactionPage from "./pages/maintenance/MaintenanceTransacti
 import MaintenancePaymentPage from "./pages/maintenance/MaintenancePaymentPage.jsx";
 import MaintenanceBankprocessPage from "./pages/maintenance/MaintenanceBankprocessPage.jsx";
 import BankProcessListPage from "./pages/bankprocess/BankProcessListPage.jsx";
+import ReportHubPage from "./pages/report/ReportHubPage.jsx";
+import DomainReportPage from "./pages/report/DomainReportPage.jsx";
+import CustomerReportPage from "./pages/report/CustomerReportPage.jsx";
 import MobileBottomNavHost from "./components/layout/MobileBottomNavHost.jsx";
 
 /** Drop list snapshot when leaving Transaction so bottom-nav re-entry stays default. */
@@ -39,7 +42,9 @@ export default function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/home" element={<Navigate to="/dashboard" replace />} />
         <Route path="/member" element={<StubPage title="会员 Win/Loss" backTo="/login" />} />
-        <Route path="/report" element={<StubPage title="报表 Report" backTo="/dashboard" />} />
+        <Route path="/report" element={<ReportHubPage />} />
+        <Route path="/report/domain" element={<DomainReportPage />} />
+        <Route path="/report/customer" element={<CustomerReportPage />} />
         <Route path="/transaction" element={<TransactionLayout />}>
           <Route index element={<TransactionPage />} />
           <Route path="history" element={<TransactionHistoryPage />} />
