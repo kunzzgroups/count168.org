@@ -252,6 +252,8 @@
   border-radius: var(--m-radius-card);
   background: var(--m-color-surface);
   padding: 0.85rem;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 7.5rem;
 }
 
 .m-rpt-card-head {
@@ -295,8 +297,46 @@
   grid-template-columns: 1fr 1fr;
 }
 
+.m-rpt-metrics--4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 380px) {
+  .m-rpt-metrics--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
 .m-rpt-metrics--compact {
   margin-top: 0.45rem;
+}
+
+.m-rpt-total-sticky {
+  border: 1px solid #bfdbfe;
+  border-radius: var(--m-radius-card);
+  background: #eff6ff;
+  padding: 0.55rem 0.7rem;
+}
+
+.m-rpt-total-sticky > strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--m-color-primary);
+  font-size: var(--m-text-label-ratio);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.m-rpt-total-sticky .m-rpt-metrics strong {
+  font-size: 0.82rem;
+}
+
+.m-rpt-total-bar {
+  margin-top: 0.35rem;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--m-radius-card-lg);
+  background: #eff6ff;
+  padding: 0.85rem;
 }
 
 .m-rpt-metrics > div {
@@ -344,14 +384,6 @@
   padding: 0.85rem;
   color: var(--m-color-muted);
   font-size: var(--m-text-sub-ratio);
-}
-
-.m-rpt-total-bar {
-  margin-top: 0.35rem;
-  border: 1px solid #bfdbfe;
-  border-radius: var(--m-radius-card-lg);
-  background: #eff6ff;
-  padding: 0.85rem;
 }
 
 .m-rpt-total-bar > strong {
