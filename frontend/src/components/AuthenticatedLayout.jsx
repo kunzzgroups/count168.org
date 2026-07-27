@@ -78,9 +78,14 @@ import {
   patchMeFromCompanyContext,
 } from "../utils/company/loginScope.js";
 import { pathnameIs, pathnameToPageKey, spaPath } from "../utils/routing/pageRoutes.js";
+import { markSidebarPageSoftRefresh } from "../utils/routing/sidebarPageSoftRefresh.js";
 import { stripPrivateQueryFromBrowserUrl } from "../utils/routing/privateBrowserUrl.js";
 import { resetDashboardSessionCaches } from "../utils/dashboard/dashboardCache.js";
-import { resetMaintenanceCalendarPopupOnNavigation } from "../utils/date/dateRangePicker.js";
+import {
+  commitMaintenanceDateRangeToDmy,
+  resetMaintenanceCalendarPopupOnNavigation,
+} from "../utils/date/dateRangePicker.js";
+import { formatDmy } from "../utils/date/dateUtils.js";
 import AnnouncementUpdateCard from "./announcements/AnnouncementUpdateCard.jsx";
 import {
   publishMaintenanceModeEvent,
@@ -224,6 +229,10 @@ export default function AuthenticatedLayout() {
         if (currentFull !== cleanPath) {
           navigate(cleanPath, { replace: true });
         }
+        // Capture Date lives in a module singleton — pin to today before remount.
+        const today = formatDmy(new Date());
+        if (today) commitMaintenanceDateRangeToDmy(today, today, { triggerOnChange: false });
+        markSidebarPageSoftRefresh(targetKey);
         setPageRefreshKey((key) => key + 1);
         return;
       }

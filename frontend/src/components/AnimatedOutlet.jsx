@@ -17,9 +17,9 @@ export default function AnimatedOutlet({ pageRefreshKey = 0 }) {
 
   return (
     <main className="ec-page-shell" aria-live="polite">
-      <Suspense fallback={<PageShellLoading />} key={`${pathname}:${pageRefreshKey}`}>
-        <div className="ec-page-shell__content">
-          <Outlet />
+      <Suspense fallback={<PageShellLoading />}>
+        <div className="ec-page-shell__content" key={`${pathname}:${pageRefreshKey}`}>
+          <Outlet context={{ pageRefreshKey }} />
         </div>
       </Suspense>
     </main>

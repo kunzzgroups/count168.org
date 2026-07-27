@@ -59,6 +59,10 @@ function syncCaptureDateDom(dateFromDmy, dateToDmy) {
   const dt = document.getElementById("date_to");
   if (df) df.value = from;
   if (dt) dt.value = to;
+  if (window.MaintenanceDateRangePicker?.commitRangeToDmy) {
+    window.MaintenanceDateRangePicker.commitRangeToDmy(from, to, { triggerOnChange: false });
+    return;
+  }
   window.MaintenanceDateRangePicker?.refreshInputsDisplay?.({
     dateFromId: "date_from",
     dateToId: "date_to",
@@ -1603,6 +1607,113 @@ export function useTransactionSearch({
     runSearch,
   ]);
 
+  /**
+   * Sidebar same-page soft refresh: restore Capture Date / chips / categories / currency
+   * to cold-boot defaults. Does not touch company/group scope.
+   */
+  const resetPageFiltersToDefaults = useCallback(async () => {
+    const today = String(todayDmy || "").trim();
+    if (!today) return false;
+
+    const bundleCodes = (currencyScopeBundle?.rows || [])
+      .map((r) => String(r.code || r.currency || "").toUpperCase().trim())
+      .filter(Boolean);
+    const orderedCodes = (currencyRowsOrdered || [])
+      .map((r) => String(r.code || "").toUpperCase().trim())
+      .filter(Boolean);
+    const codes = bundleCodes.length ? bundleCodes : orderedCodes;
+    const defaultCode = pickTransactionDefaultCurrency(codes);
+    const nextSel =
+      defaultCode && codes.includes(defaultCode) ? [defaultCode] : codes[0] ? [codes[0]] : [];
+
+    setSearchLoading(true);
+    try {
+      filtersBeforeTypeSearchRef.current = null;
+      typeSearchSessionActiveRef.current = false;
+      typeSearchFirstSubmitFocusDoneRef.current = false;
+      setTypeSearchActive(false);
+      setTypeSearchFormType(null);
+      setTypeSearchAccountIds([]);
+      setSubmitFocusByCurrency({});
+      setSubmitFocusRangeKey(null);
+      submitFocusLeftRangeKeysRef.current.clear();
+
+      setSearchState({ ...INITIAL_TRANSACTION_SEARCH_STATE });
+      setSelectedCategories([]);
+      categoryChangedByUserRef.current = false;
+      setDateFrom(today);
+      setDateTo(today);
+      syncCaptureDateDom(today, today);
+      prevCaptureDateRangeKeyRef.current = `${today}|${today}`;
+      prevServerSideFiltersRef.current = {
+        showPaymentOnly: INITIAL_TRANSACTION_SEARCH_STATE.showPaymentOnly,
+        showCaptureOnly: INITIAL_TRANSACTION_SEARCH_STATE.showCaptureOnly,
+        showZeroBalance: INITIAL_TRANSACTION_SEARCH_STATE.showZeroBalance,
+      };
+
+      beginScopeCurrencyDefault();
+      bootCurrencyDefaultRef.current = true;
+      coldBootCurrencyAppliedRef.current = true;
+      earlyCurrencyScopeRef.current = scopeKey || earlyCurrencyScopeRef.current;
+      currenciesBeforeAllRef.current = [];
+      setShowAllCurrencies(false);
+      if (nextSel.length > 0) {
+        setSelectedCurrencies(nextSel);
+      } else {
+        // Metadata not ready — allow cold-boot / init to pick first ordered currency.
+        coldBootCurrencyAppliedRef.current = false;
+        earlyCurrencyScopeRef.current = null;
+        setSelectedCurrencies([]);
+      }
+
+      if (scopeCacheCompanyKey != null && nextSel.length > 0) {
+        persistCurrencyFilter(scopeCacheCompanyKey, false, nextSel, transactionScope?.selectedGroup);
+      }
+
+      lastInitialSearchKeyRef.current = "";
+      lastCompletedSearchKeyRef.current = "";
+      initialSearchDoneRef.current = false;
+      clearTxSearchCache();
+      try {
+        await queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
+      } catch {
+        /* ignore */
+      }
+
+      if (nextSel.length === 0) {
+        // Initial-search effect will run once currency defaults land.
+        return true;
+      }
+
+      await runSearch({
+        forceRefresh: true,
+        silent: false,
+        isInitialLoad: true,
+        typeSearchOverride: false,
+        dateFromOverride: today,
+        dateToOverride: today,
+        searchStateOverride: { ...INITIAL_TRANSACTION_SEARCH_STATE },
+        selectedCategoriesOverride: [],
+        showAllCurrenciesOverride: false,
+        selectedCurrenciesOverride: nextSel,
+      });
+      return true;
+    } finally {
+      setSearchLoading(false);
+    }
+  }, [
+    todayDmy,
+    currencyRowsOrdered,
+    currencyScopeBundle,
+    beginScopeCurrencyDefault,
+    scopeKey,
+    scopeCacheCompanyKey,
+    persistCurrencyFilter,
+    transactionScope?.selectedGroup,
+    queryClient,
+    runSearch,
+  ]);
+
   useEffect(() => {
     return () => {
       if (autoSearchTimerRef.current) {
@@ -2181,6 +2292,7 @@ export function useTransactionSearch({
     onCurrencyDropOn,
     toggleCurrencyBtn,
     beginScopeCurrencyDefault,
+    resetPageFiltersToDefaults,
   };
 }
 
