@@ -506,17 +506,17 @@ try {
             $rate_transfer_from_amount = !empty($_POST['rate_transfer_from_amount']) ? submitRateRound2($_POST['rate_transfer_from_amount']) : null;
             $rate_transfer_to_amount = !empty($_POST['rate_transfer_to_amount']) ? submitRateRound2($_POST['rate_transfer_to_amount']) : null;
 
-            // Fee is already baked into the first-currency amount; frontend sends second-currency
-            // transfer legs at the net amount. Do NOT deduct converted fee from transfer_to again.
-            // Only keep the Service Fees SMS remark when a positive fee was entered.
+            // Fee is face value in second-currency terms; frontend sends transfer legs at net.
+            // Service Fees SMS uses the second currency (rate_to), shown on RATE_TRANSFER_TO in history.
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             if ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
-                if ($rate_from_currency !== '') {
+                $feeCurrency = trim((string) $rate_to_currency);
+                if ($feeCurrency !== '') {
                     $feeDisplay = $rate_middleman_input_amount;
                     if (strpos($feeDisplay, '.') !== false) {
                         $feeDisplay = rtrim(rtrim($feeDisplay, '0'), '.');
                     }
-                    $sms = 'charge ' . strtoupper(trim($rate_from_currency)) . ' ' . $feeDisplay . ' Service Fees';
+                    $sms = 'charge ' . strtoupper($feeCurrency) . ' ' . $feeDisplay . ' Service Fees';
                 }
             }
 

@@ -12,8 +12,8 @@ function cleanAmt(raw) {
     .trim();
 }
 
-/** RATE Middle-Man 手续费 remark：charge {第一币种} {用户输入} Service Fees */
-export function buildRateServiceFeeRemark(currencyFrom, middlemanInputAmount) {
+/** RATE Middle-Man 手续费 remark：charge {第二币种} {用户输入} Service Fees */
+export function buildRateServiceFeeRemark(currencyTo, middlemanInputAmount) {
   const inputStr = cleanAmt(middlemanInputAmount);
   if (!inputStr) return "";
   try {
@@ -22,7 +22,7 @@ export function buildRateServiceFeeRemark(currencyFrom, middlemanInputAmount) {
   } catch {
     return "";
   }
-  const currency = String(currencyFrom ?? "").trim().toUpperCase();
+  const currency = String(currencyTo ?? "").trim().toUpperCase();
   if (!currency) return "";
   return `charge ${currency} ${inputStr} Service Fees`;
 }
@@ -91,7 +91,7 @@ export function buildRatePayload({
       ? `Rate charge (x${rateMiddlemanRate}) from ${rateCurrencyFrom} ${MoneyDecimal.formatFixed(fromDec.toString(), 2)}`
       : "";
 
-  const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyFrom, rateMiddlemanInputAmount);
+  const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyTo, rateMiddlemanInputAmount);
   const sms = serviceFeeRemark || String(txRemark || "").toUpperCase();
 
   const payload = {
