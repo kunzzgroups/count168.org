@@ -871,6 +871,21 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     gap: var(--dashboard-section-gap);
 }
 
+/* Scope switch pending: keep Filter bright; dim painted KPI/chart/pie until atomic paint. */
+.dashboard-data-surface {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dashboard-section-gap);
+    flex: 1;
+    min-height: 0;
+    transition: opacity 160ms ease;
+}
+
+.dashboard-data-surface.is-scope-pending {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
 .dashboard-card {
     background-color: var(--scd-card);
     border: 1px solid var(--scd-border);
@@ -3101,14 +3116,18 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 
 /* KPI 單行：覆蓋舊版 grid 2 欄媒體查詢（2026-06） */
 body.dashboard-page .dashboard-content > .dashboard-kpi-grid,
-body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid {
+body.dashboard-page .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid,
+body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid,
+body.ec-auth-shell .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid {
     display: flex !important;
     flex-wrap: nowrap !important;
     align-items: stretch;
 }
 
 body.dashboard-page .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card,
-body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card {
+body.dashboard-page .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid .dashboard-kpi-card,
+body.ec-auth-shell .dashboard-content > .dashboard-kpi-grid .dashboard-kpi-card,
+body.ec-auth-shell .dashboard-content > .dashboard-data-surface > .dashboard-kpi-grid .dashboard-kpi-card {
     flex: 1 1 0 !important;
     min-width: 0 !important;
 }

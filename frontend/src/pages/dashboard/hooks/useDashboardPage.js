@@ -8935,6 +8935,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     handleCurrencyDropOn,
     loading: kpiLoading,
     dashboardViewReady,
+    scopeDataPending,
     dashboardData,
     kpi,
     kpiCompareLabel,
