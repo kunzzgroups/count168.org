@@ -89,7 +89,7 @@ function typeAccountSearchResolveQueryMode(string $formType): array
         case 'CLEAR':
             return ['mode' => 'transactions', 'types' => ['CLEAR']];
         case 'ALL':
-            return ['mode' => 'transactions', 'types' => ['CONTRA', 'PAYMENT', 'CLAIM', 'ADJUSTMENT', 'CLEAR']];
+            return ['mode' => 'transactions', 'types' => ['CONTRA', 'PAYMENT', 'CLAIM', 'ADJUSTMENT', 'CLEAR', 'RATE']];
         case 'PROFIT':
             return ['mode' => 'transactions', 'types' => ['WIN', 'LOSE']];
         case 'RATE':

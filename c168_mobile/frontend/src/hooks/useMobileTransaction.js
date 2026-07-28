@@ -227,11 +227,13 @@ export function useMobileTransaction({ listPaused = false } = {}) {
           try {
             const ids = await fetchTypeAccountSearch({
               ...scopeApi,
-              transactionType: typeSearchFormType,
+              // Same as desktop: Capture Date × all pure manual types (ignore form Type).
+              transactionType: "ALL",
               signal,
             });
             if (signal?.aborted) return;
             paramsBase.typeAccountIds = ids;
+            paramsBase.typeSearchFormType = "ALL";
           } catch {
             /* still run search without ids */
           }
@@ -716,7 +718,8 @@ export function useMobileTransaction({ listPaused = false } = {}) {
       const tType = String(txType || "").toUpperCase().trim();
       if (!tType) return;
       setTypeSearchActive(true);
-      setTypeSearchFormType(tType);
+      // List ignores form Type — always ALL (Capture Date × any pure manual type).
+      setTypeSearchFormType("ALL");
       setReloadNonce((n) => n + 1);
     },
     [],

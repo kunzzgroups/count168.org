@@ -107,11 +107,12 @@ function typePeriodSearchFilterByPeriodActivityOnly(string $formType): bool
  * Type Search grid metrics from full account ledger (aligned with Payment History).
  * B/F, Win/Loss, Cr/Dr use calculateBFByCurrency + history-column alignment.
  * RATE (−amount) / ADJUSTMENT (+amount) sign rules in typePeriodSearchBulk*Metrics remain for period_txn_count only.
- * List visibility still requires pure type activity in Capture Date (per form type).
+ * List visibility uses Capture Date union of all pure manual types (see BulkUnionPeriodActivityMetrics).
+ * ALL = Type Search ignores right-side form type for metrics (same native ledger path).
  */
 function typePeriodSearchUsesAccountNativeBf(string $formType): bool
 {
-    return in_array(strtoupper(trim($formType)), ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR', 'RATE', 'ADJUSTMENT', 'PROFIT'], true);
+    return in_array(strtoupper(trim($formType)), ['PAYMENT', 'CONTRA', 'CLAIM', 'CLEAR', 'RATE', 'ADJUSTMENT', 'PROFIT', 'ALL'], true);
 }
 
 /**
@@ -189,10 +190,15 @@ function typePeriodSearchFetchEligibleAccountIds(PDO $pdo, array $listScope, str
 
     $result = array_map('intval', array_keys($ids));
     if ($formType === 'ALL') {
-        $profitIds = typePeriodSearchFetchEligibleAccountIds($pdo, $listScope, 'PROFIT');
-        if ($profitIds !== []) {
+        // PROFIT (WIN/LOSE) + RATE (transaction_entry) are not covered by the ALL
+        // description filter on transactions — merge like dedicated type fetches.
+        $extraIds = array_merge(
+            typePeriodSearchFetchEligibleAccountIds($pdo, $listScope, 'PROFIT'),
+            typePeriodSearchFetchRateEligibleAccountIds($pdo, $listScope)
+        );
+        if ($extraIds !== []) {
             $merged = [];
-            foreach (array_merge($result, $profitIds) as $id) {
+            foreach (array_merge($result, $extraIds) as $id) {
                 $merged[(int) $id] = true;
             }
             $result = array_map('intval', array_keys($merged));

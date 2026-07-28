@@ -52,6 +52,7 @@ const TYPE_SEARCH_FULL_ACCOUNT_LEDGER_TYPES = new Set([
   "RATE",
   "ADJUSTMENT",
   "PROFIT",
+  "ALL",
 ]);
 
 export default function TransactionPaymentPage() {
