@@ -1,12 +1,9 @@
+import { resolveSavedCurrencyOrder } from "./currencyOrder.js";
 import { parseBalanceValue } from "./transactionFormat.js";
 import { MoneyDecimal } from "./money/moneyDecimal.js";
 
 function clearTxSearchCache() {
   /* mobile: no desktop search cache */
-}
-
-function resolveSavedCurrencyOrder(_companyId, order) {
-  return Array.isArray(order) ? order : null;
 }
 
 export const TRANSACTION_CURRENCY_FILTER_KEY_PREFIX = "transaction_currency_filter_v1_";

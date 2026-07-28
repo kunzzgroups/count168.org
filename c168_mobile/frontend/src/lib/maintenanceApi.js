@@ -1,4 +1,5 @@
 import { buildApiUrl } from "../utils/apiUrl.js";
+import { orderCurrencyCodesForCompany } from "./currencyOrder.js";
 import { fetchJson, assertApiOk } from "./fetchJson.js";
 import {
   appendTransactionMaintenanceScope,
@@ -230,7 +231,7 @@ export function bankprocessMaintenanceRowKey(row, index) {
   return `bp-v-${index}-${String(row?.dts_created ?? "")}`;
 }
 
-/** Company currency codes for Bankprocess Maintenance filter. */
+/** Company currency codes for Bankprocess Maintenance filter (desktop company order). */
 export async function fetchCompanyCurrencies(companyId, signal) {
   const params = new URLSearchParams();
   if (companyId) params.set("company_id", String(companyId));
@@ -241,7 +242,7 @@ export async function fetchCompanyCurrencies(companyId, signal) {
   );
   if (!res.ok || !json?.success) return [];
   const raw = Array.isArray(json.data) ? json.data : [];
-  return raw
+  const codes = raw
     .map((item) => {
       if (typeof item === "string") return item.trim().toUpperCase();
       return String(item?.code ?? item?.currency ?? item?.currency_code ?? "")
@@ -249,6 +250,7 @@ export async function fetchCompanyCurrencies(companyId, signal) {
         .toUpperCase();
     })
     .filter(Boolean);
+  return orderCurrencyCodesForCompany(codes, companyId, signal);
 }
 
 /**

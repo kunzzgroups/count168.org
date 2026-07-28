@@ -29,6 +29,7 @@ import {
   buildTransactionSearchQueryFilters,
   calculateTotals,
   mergeSearchApiDataList,
+  orderCurrencyRows,
   sanitizeSearchApiData,
   sortByRole,
 } from "../lib/transactionPaymentLogic.js";
@@ -37,6 +38,7 @@ import {
   getAccounts,
   getCategories,
   getCompanyCurrencies,
+  getUserCurrencyOrder,
   loadContraInbox,
   rejectContra,
   searchTransactions,
@@ -293,10 +295,14 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   const loadAccountsAndCurrencies = useCallback(
     async (signal) => {
       if (!scopeReady) return;
+      const orderCid = resolveTransactionCurrencyOrderCompanyId(transactionScope, companies);
       try {
-        const [accRes, curRes] = await Promise.all([
+        const [accRes, curRes, ordRes] = await Promise.all([
           getAccounts({ ...scopeApi, status: "active", signal }),
           getCompanyCurrencies({ ...scopeApi, signal }),
+          orderCid
+            ? getUserCurrencyOrder({ companyId: orderCid, signal }).catch(() => null)
+            : Promise.resolve(null),
         ]);
         if (signal?.aborted) return;
 
@@ -312,7 +318,8 @@ export function useMobileTransaction({ listPaused = false } = {}) {
         );
 
         const curRows = Array.isArray(curRes?.data) ? curRes.data : [];
-        const codes = curRows
+        const ordered = orderCurrencyRows(curRows, ordRes, orderCid);
+        const codes = ordered
           .map((r) => String(r.code || r.currency || "").trim().toUpperCase())
           .filter(Boolean);
         setFormCurrencies(codes.length ? [...new Set(codes)] : currencies);
@@ -320,7 +327,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
         if (!signal?.aborted) setFormCurrencies(currencies);
       }
     },
-    [scopeReady, scopeApi, currencies],
+    [scopeReady, scopeApi, currencies, transactionScope, companies],
   );
 
   useEffect(() => {

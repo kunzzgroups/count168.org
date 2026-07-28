@@ -11,6 +11,7 @@ import {
   companiesForPicker,
   resolveCompanyPickForGroup,
 } from "../../lib/dashboardScope.js";
+import { orderCurrencyCodesForCompany } from "../../lib/currencyOrder.js";
 import { fetchCustomerAccounts, fetchDomainProcesses, fetchReportCurrencies } from "../../lib/reportApi.js";
 import { dashboardLabel } from "../../translateFile/dashboardTranslate.js";
 import {
@@ -153,10 +154,36 @@ export function ReportFilterSheet({
           if (e?.name === "AbortError") throw e;
           return [];
         }),
-        fetchReportCurrencies(scope, { signal: ac.signal }).catch((e) => {
-          if (e?.name === "AbortError") throw e;
-          return [];
-        }),
+        fetchReportCurrencies(scope, { signal: ac.signal })
+          .then(async (currencies) => {
+            const codes = (currencies || [])
+              .map((c) => String(c?.code || c?.currency || c).trim().toUpperCase())
+              .filter((code) => /^[A-Z]{3}$/.test(code));
+            const orderCid =
+              Number(scope.companyId) > 0
+                ? Number(scope.companyId)
+                : Number(
+                    companiesForPicker(companies, {
+                      selectedGroup: scope.groupId,
+                      groupsAllMode: false,
+                    })?.[0]?.id,
+                  ) || 0;
+            const ordered = await orderCurrencyCodesForCompany(codes, orderCid, ac.signal);
+            // Keep objects but reorder to company display order (not A–Z).
+            const byCode = new Map(
+              (currencies || []).map((row) => [
+                String(row?.code || row?.currency || row)
+                  .trim()
+                  .toUpperCase(),
+                row,
+              ]),
+            );
+            return ordered.map((code) => byCode.get(code) || { code });
+          })
+          .catch((e) => {
+            if (e?.name === "AbortError") throw e;
+            return [];
+          }),
       ])
         .then(([accounts, currencies]) => {
           setAccountOptions(accounts);
@@ -204,15 +231,15 @@ export function ReportFilterSheet({
 
   const thisMonth = periodPresetRange("thisMonth") || { dateFrom: todayYmd(), dateTo: todayYmd() };
 
+  // Preserve company / API order — never A–Z sort (matches desktop per-company order).
   const currencyCodes = useMemo(
-    () =>
-      [
-        ...new Set(
-          currencyOptions
-            .map((c) => String(c.code || c.currency || c).trim().toUpperCase())
-            .filter((code) => /^[A-Z]{3}$/.test(code)),
-        ),
-      ].sort(),
+    () => [
+      ...new Set(
+        currencyOptions
+          .map((c) => String(c.code || c.currency || c).trim().toUpperCase())
+          .filter((code) => /^[A-Z]{3}$/.test(code)),
+      ),
+    ],
     [currencyOptions],
   );
 

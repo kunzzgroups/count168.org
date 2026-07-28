@@ -1,4 +1,5 @@
 import { buildApiUrl } from "../utils/apiUrl.js";
+import { orderCurrencyCodesForCompany } from "./currencyOrder.js";
 import { fetchJson, assertApiOk } from "./fetchJson.js";
 
 export function normalizeBankIssueFlag(v) {
@@ -194,6 +195,13 @@ export async function fetchBankProcessList(companyId, { signal } = {}) {
     currencyCodes = [
       ...new Set(rows.map((r) => String(r.country || "").trim().toUpperCase()).filter(Boolean)),
     ];
+  }
+
+  // Align filter chips with desktop per-company order (not A–Z).
+  try {
+    currencyCodes = await orderCurrencyCodesForCompany(currencyCodes, cid, signal);
+  } catch (e) {
+    if (e?.name === "AbortError") throw e;
   }
 
   return { rows, currencyCodes };
