@@ -6,18 +6,40 @@ function daysInclusiveYmd(fromYmd, toYmd) {
   return Math.floor((b - a) / 86400000) + 1;
 }
 
-function parseYmd(value) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || "").trim());
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-  return { y, mo, d };
+/**
+ * Payment History scope uses dd/mm/yyyy; some callers may pass yyyy-mm-dd.
+ * @returns {{ y: number, mo: number, d: number, style: 'dmy' | 'ymd' } | null}
+ */
+export function parseHistoryDate(value) {
+  const s = String(value || "").trim();
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) {
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    return { y, mo, d, style: "ymd" };
+  }
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (m) {
+    const d = Number(m[1]);
+    const mo = Number(m[2]);
+    const y = Number(m[3]);
+    if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    return { y, mo, d, style: "dmy" };
+  }
+  return null;
 }
 
 function formatYmd({ y, mo, d }) {
   return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function formatHistoryDate({ y, mo, d }, style) {
+  if (style === "dmy") {
+    return `${String(d).padStart(2, "0")}/${String(mo).padStart(2, "0")}/${String(y).padStart(4, "0")}`;
+  }
+  return formatYmd({ y, mo, d });
 }
 
 function lastDayOfMonth({ y, mo }) {
@@ -36,8 +58,9 @@ function ymdNum({ y, mo, d }) {
 }
 
 /**
- * Split a long inclusive Y-m-d range into calendar-month chunks so Payment History
+ * Split a long inclusive date range into calendar-month chunks so Payment History
  * can paint the first month before the rest of "This Year" finishes loading.
+ * Accepts dd/mm/yyyy (scope default) or yyyy-mm-dd; chunk output keeps input style.
  * Short ranges stay a single request.
  */
 export function splitHistoryDateChunks(dateFrom, dateTo, { minDaysToChunk = 40 } = {}) {
@@ -45,22 +68,27 @@ export function splitHistoryDateChunks(dateFrom, dateTo, { minDaysToChunk = 40 }
   const to = String(dateTo || "").trim();
   if (!from || !to) return [{ dateFrom: from, dateTo: to }];
 
-  const start = parseYmd(from);
-  const end = parseYmd(to);
+  const start = parseHistoryDate(from);
+  const end = parseHistoryDate(to);
   if (!start || !end || ymdNum(start) > ymdNum(end)) {
     return [{ dateFrom: from, dateTo: to }];
   }
 
-  if (daysInclusiveYmd(from, to) <= minDaysToChunk) {
+  const style = start.style === "dmy" || end.style === "dmy" ? "dmy" : "ymd";
+  const span = daysInclusiveYmd(formatYmd(start), formatYmd(end));
+  if (span <= minDaysToChunk) {
     return [{ dateFrom: from, dateTo: to }];
   }
 
   const chunks = [];
-  let cur = start;
+  let cur = { y: start.y, mo: start.mo, d: start.d };
   while (ymdNum(cur) <= ymdNum(end)) {
     const monthEnd = lastDayOfMonth(cur);
     const chunkEnd = ymdNum(monthEnd) <= ymdNum(end) ? monthEnd : end;
-    chunks.push({ dateFrom: formatYmd(cur), dateTo: formatYmd(chunkEnd) });
+    chunks.push({
+      dateFrom: formatHistoryDate(cur, style),
+      dateTo: formatHistoryDate(chunkEnd, style),
+    });
     cur = addOneDay(chunkEnd);
   }
   return chunks;
