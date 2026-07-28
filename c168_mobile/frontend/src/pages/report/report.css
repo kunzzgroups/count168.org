@@ -270,8 +270,9 @@
   white-space: nowrap;
 }
 
+/* Match desktop domain/customer report: win/positive #172a9f, lose/negative #b91c1c */
 .m-rpt-metric.is-pos strong {
-  color: #047857;
+  color: #172a9f;
 }
 
 .m-rpt-metric.is-neg strong {
@@ -464,7 +465,7 @@
 }
 
 .m-rpt-metrics strong.is-pos {
-  color: #047857;
+  color: #172a9f;
 }
 
 .m-rpt-metrics strong.is-neg {
