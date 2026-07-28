@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
+import MobileSubpageHeader from "../../components/layout/MobileSubpageHeader.jsx";
 import { useMaintenanceSession } from "../../hooks/useMaintenanceSession.js";
 import { periodPresetRange } from "../../lib/dashboardDateUtils.js";
 import {
@@ -182,28 +182,17 @@ export default function DomainReportPage() {
 
   const stickyBar = (
     <div className="m-rpt-sticky">
-      <div className="m-rpt-title-row">
-        <Link to="/report" className="m-rpt-title-back tap-scale" aria-label={i18n.backToHub}>
-          <i className="fas fa-arrow-left" aria-hidden="true" />
-        </Link>
-        <div className="m-rpt-title-copy">
-          <strong>{i18n.domainTitle}</strong>
-        </div>
-        <div className="m-rpt-search m-rpt-search--inline">
-          <i className="fas fa-magnifying-glass" aria-hidden="true" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={i18n.searchProcess}
-            inputMode="search"
-          />
-          {query ? (
-            <button type="button" onClick={() => setQuery("")} aria-label={i18n.reset}>
-              <i className="fas fa-xmark" aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      </div>
+      <MobileSubpageHeader
+        backTo="/report"
+        backAriaLabel={i18n.backToHub}
+        title={i18n.domainTitle}
+        search={{
+          value: query,
+          onChange: setQuery,
+          placeholder: i18n.searchProcess,
+          clearAriaLabel: i18n.reset,
+        }}
+      />
       <ReportFilterBar
         i18n={i18n}
         dateFrom={dateFrom}

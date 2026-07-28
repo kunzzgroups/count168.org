@@ -14,6 +14,7 @@ export const MAINTENANCE_I18N = {
     // Hub
     hubTitle: "Maintenance Centre",
     hubSubtitle: "Review operational records and manage data.",
+    backToHub: "Back to maintenance",
     sectionRecords: "Records",
     sectionSetup: "Setup",
     comingSoon: "Coming soon",
@@ -226,6 +227,7 @@ export const MAINTENANCE_I18N = {
 
     hubTitle: "维护中心",
     hubSubtitle: "查看业务记录并管理数据。",
+    backToHub: "返回维护",
     sectionRecords: "记录",
     sectionSetup: "设置",
     comingSoon: "即将上线",
