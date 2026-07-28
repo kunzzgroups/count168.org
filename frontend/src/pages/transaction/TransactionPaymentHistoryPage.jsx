@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import TransactionHistoryTable from "./components/TransactionHistoryTable.jsx";
 import PaymentHistoryExportPdfModal from "./components/PaymentHistoryExportPdfModal.jsx";
 import { formatHistoryMoney, formatHistoryBalanceMoney } from "./lib/transactionFormat.js";
+import { getHistory, transactionQueryKeys } from "./lib/transactionApi.js";
 import { spaPath } from "../../utils/routing/pageRoutes.js";
 import {
   paymentHistoryParamsReady,
@@ -13,7 +15,6 @@ import {
   stripPaymentHistoryUrlQuery,
 } from "./lib/transactionPaymentHistoryUrl.js";
 import { TRANSACTION_SHOW_DESCRIPTION_COLUMN } from "./lib/transactionPaymentPageUtils.js";
-import { usePaymentHistoryProgressive } from "./hooks/usePaymentHistoryProgressive.js";
 import "../../../public/css/transaction.css";
 import "../../../public/css/portal-tooltip.css";
 import "../../../public/css/date-range-picker.css";
@@ -85,46 +86,45 @@ export default function TransactionPaymentHistoryPage() {
   );
 
   const scopeApi = useMemo(() => paymentHistoryScopeApiParams(scope), [scope]);
-  const paramsReady = paymentHistoryParamsReady(scope);
 
-  const {
-    rows,
-    accountMeta: apiAccount,
-    isInitialLoading,
-    isLoadingMore,
-    errorMessage,
-    tableReady,
-  } = usePaymentHistoryProgressive({
-    scope,
-    scopeApi,
-    enabled: paramsReady,
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: transactionQueryKeys.history({
+      companyId: scopeApi.companyId,
+      viewGroup: scopeApi.viewGroup,
+      groupId: scopeApi.groupId,
+      groupAggregate: scopeApi.groupAggregate,
+      accountDbId: scope.accountDbId,
+      dateFrom: scope.dateFrom,
+      dateTo: scope.dateTo,
+      currency: scope.currency,
+      virtualCompanyCode: scope.virtualCompanyCode,
+      subsidiaryAccountsOnly: scopeApi.subsidiaryAccountsOnly,
+      pureTypeSearch: scope.pureTypeSearch,
+    }),
+    queryFn: ({ signal }) =>
+      getHistory({
+        ...scopeApi,
+        accountId: scope.accountDbId,
+        dateFrom: scope.dateFrom,
+        dateTo: scope.dateTo,
+        currency: scope.currency,
+        virtualCompanyCode: scope.virtualCompanyCode,
+        pureTypeSearch: scope.pureTypeSearch,
+        signal,
+      }),
+    enabled: paymentHistoryParamsReady(scope),
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
   });
 
-  /** When older months prepend, keep the viewport anchored on previously visible rows. */
-  const scrollAnchorRef = useRef({ len: 0, height: 0 });
-  useLayoutEffect(() => {
-    if (!rows.length) {
-      scrollAnchorRef.current = { len: 0, height: 0 };
-      return;
-    }
-    const el = document.querySelector(
-      ".transaction-payment-history-page-root .transaction-history-report-scroll",
-    );
-    if (!el) return;
-    const prev = scrollAnchorRef.current;
-    if (rows.length > prev.len && prev.height > 0) {
-      const delta = el.scrollHeight - prev.height;
-      if (delta > 0) el.scrollTop += delta;
-    }
-    scrollAnchorRef.current = { len: rows.length, height: el.scrollHeight };
-  }, [rows]);
-
-  const accountMeta = apiAccount
+  const paramsReady = paymentHistoryParamsReady(scope);
+  const rows = data?.success && Array.isArray(data.data) ? data.data : [];
+  const accountMeta = data?.account
     ? {
-        ...apiAccount,
+        ...data.account,
         name: resolveHistoryAccountName({
           accountName: scope.accountName,
-          accountMeta: apiAccount,
+          accountMeta: data.account,
           accountCode: scope.accountCode,
         }),
       }
@@ -136,6 +136,7 @@ export default function TransactionPaymentHistoryPage() {
         accountMeta,
       })
     : initialTitle;
+  const errorMessage = isError ? error?.message || "Failed to load history" : data?.success === false ? data?.message : null;
 
   useEffect(() => {
     const prev = document.title;
@@ -148,11 +149,6 @@ export default function TransactionPaymentHistoryPage() {
   if (!paramsReady) {
     return <Navigate to={spaPath("transaction")} replace />;
   }
-
-  const showingLabel =
-    typeof m.paymentHistoryShowingEntries === "string"
-      ? m.paymentHistoryShowingEntries.replace("{count}", String(rows.length))
-      : null;
 
   return (
     <div className="transaction-payment-history-page-root">
@@ -199,52 +195,25 @@ export default function TransactionPaymentHistoryPage() {
             </button>
           </div>
           <div className="transaction-modal-body transaction-payment-history-body">
-            {isInitialLoading ? (
+            {isLoading ? (
               <div className="transaction-payment-history-loading" aria-live="polite">
                 <span className="transaction-payment-history-loading__spinner" aria-hidden="true" />
                 <span>{m.loadingHistory}</span>
               </div>
             ) : null}
-            {errorMessage && !rows.length ? (
+            {errorMessage ? (
               <p className="transaction-payment-history-error" role="alert">
                 {errorMessage}
               </p>
             ) : (
-              <div
-                className={
-                  tableReady
-                    ? "transaction-payment-history-table-wrap transaction-payment-history-table-wrap--ready"
-                    : "transaction-payment-history-table-wrap"
-                }
-              >
-                <TransactionHistoryTable
-                  rows={rows}
-                  histMoney={formatHistoryMoney}
-                  histBalanceMoney={formatHistoryBalanceMoney}
-                  showDescriptionColumn={TRANSACTION_SHOW_DESCRIPTION_COLUMN}
-                  m={m}
-                  compactHeaders={compactHeaders}
-                />
-                {isLoadingMore || errorMessage ? (
-                  <div
-                    className="transaction-payment-history-load-more"
-                    aria-live="polite"
-                    role={errorMessage ? "alert" : "status"}
-                  >
-                    {isLoadingMore ? (
-                      <>
-                        <span className="transaction-payment-history-loading__spinner" aria-hidden="true" />
-                        <span>
-                          {m.loadingMoreHistory || m.loadingHistory}
-                          {showingLabel ? ` · ${showingLabel}` : null}
-                        </span>
-                      </>
-                    ) : (
-                      <span>{errorMessage}</span>
-                    )}
-                  </div>
-                ) : null}
-              </div>
+              <TransactionHistoryTable
+                rows={rows}
+                histMoney={formatHistoryMoney}
+                histBalanceMoney={formatHistoryBalanceMoney}
+                showDescriptionColumn={TRANSACTION_SHOW_DESCRIPTION_COLUMN}
+                m={m}
+                compactHeaders={compactHeaders}
+              />
             )}
           </div>
         </div>
