@@ -25,7 +25,7 @@ export default function DashboardKpiCard({
   return (
     <button
       type="button"
-      className={`m-dash-kpi tap-scale${selected ? " m-dash-kpi--selected" : ""}`}
+      className="m-dash-kpi tap-scale"
       aria-pressed={selected}
       onClick={onSelect}
     >
