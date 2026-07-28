@@ -132,8 +132,9 @@ export function eachMonthInRange(startYmd, endYmd) {
   return months;
 }
 
-export function formatChartMonthLabel(year, month) {
-  return `${MONTHS_SHORT[month - 1]} ${year}`;
+/** Month tick for Trend Chart X-axis — omit year to avoid crowded labels on narrow phones. */
+export function formatChartMonthLabel(_year, month) {
+  return MONTHS_SHORT[month - 1] || "";
 }
 
 /** Inclusive day count for a YMD range. */
