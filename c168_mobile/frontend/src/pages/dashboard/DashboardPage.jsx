@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const kpiCards = [
     { variant: "profit", label: i18n.profit, value: kpi?.profit, compare: kpi?.comparisons?.profit },
     { variant: "expense", label: i18n.expenses, value: kpi?.expenses, compare: kpi?.comparisons?.expenses },
+    { variant: "net", label: i18n.netProfit, value: kpi?.netProfit, compare: kpi?.comparisons?.netProfit },
   ];
   if (kpi?.showEarnings) {
     kpiCards.push({
