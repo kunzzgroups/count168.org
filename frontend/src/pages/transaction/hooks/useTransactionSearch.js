@@ -11,7 +11,6 @@ import {
   buildTxListSessionKey,
   calculateTotals,
   countDisplayedRows,
-  normalizeRateRowsByCrDr,
   applyTypeSearchAccountFilter,
   hasSubmitFocusByCurrency,
   getSubmitFocusAccountIdsForCurrency,
@@ -1779,17 +1778,14 @@ export function useTransactionSearch({
         baseRight: viewRight,
       };
     }
-    const presentationTxType = typeSearchFormType || txType;
-    const norm = normalizeRateRowsByCrDr(viewLeft, viewRight, presentationTxType === "RATE");
+    // Keep API Balance-based left/right for all types (including RATE) — do not re-split by Cr/Dr.
     return {
       hasData: true,
-      baseLeft: sortByRole(norm.leftRows),
-      baseRight: sortByRole(norm.rightRows),
+      baseLeft: sortByRole(viewLeft),
+      baseRight: sortByRole(viewRight),
     };
   }, [
     rawSearchData,
-    txType,
-    typeSearchFormType,
     typeSearchActive,
     submitFocusActive,
     submitFocusByCurrency,
