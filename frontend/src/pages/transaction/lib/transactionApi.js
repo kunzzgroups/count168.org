@@ -412,6 +412,8 @@ export async function getHistory({
   currency,
   virtualCompanyCode,
   pureTypeSearch,
+  limit,
+  offset,
   signal,
 } = {}) {
   const params = new URLSearchParams();
@@ -432,6 +434,10 @@ export async function getHistory({
   if (virtualCompanyCode) params.set("virtual_company_code", String(virtualCompanyCode));
   const pureType = String(pureTypeSearch || "").toUpperCase().trim();
   if (pureType) params.set("pure_type_search", pureType);
+  const lim = Number(limit);
+  if (Number.isFinite(lim) && lim > 0) params.set("limit", String(Math.floor(lim)));
+  const off = Number(offset);
+  if (Number.isFinite(off) && off > 0) params.set("offset", String(Math.floor(off)));
 
   const res = await fetch(buildApiUrl(`api/transactions/history_api.php?${params.toString()}&_t=${Date.now()}`), {
     credentials: "include",
@@ -440,7 +446,7 @@ export async function getHistory({
     signal,
   });
   const body = await safeJson(res);
-  /** PHP returns { data: { account, date_range, history: Row[] } }; normalize to rows + meta for React. */
+  /** PHP returns { data: { account, date_range, history: Row[], pagination? } }; normalize to rows + meta for React. */
   if (
     body?.success &&
     body.data &&
@@ -453,6 +459,7 @@ export async function getHistory({
       data: body.data.history,
       account: body.data.account,
       date_range: body.data.date_range,
+      pagination: body.data.pagination ?? null,
     };
   }
   return body;

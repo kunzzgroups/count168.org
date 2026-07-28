@@ -178,6 +178,28 @@ body.ec-payment-history-chromeless .transaction-payment-history-loading__spinner
   }
 }
 
+body.transaction-payment-history-page .transaction-payment-history-load-more,
+body.ec-payment-history-chromeless .transaction-payment-history-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 10px 12px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: clamp(1.2rem, 0.15vw + 1.0rem, 1.3rem);
+  font-weight: 500;
+  background: #f8fafc;
+}
+
+body.transaction-payment-history-page .transaction-payment-history-load-more .transaction-payment-history-loading__spinner,
+body.ec-payment-history-chromeless .transaction-payment-history-load-more .transaction-payment-history-loading__spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
 body.transaction-payment-history-page .transaction-payment-history-page-root .transaction-history-report-scroll,
 body.ec-payment-history-chromeless .transaction-payment-history-page-root .transaction-history-report-scroll,
 body.transaction-payment-history-page .transaction-payment-history-page-root .transaction-history-table-frame,

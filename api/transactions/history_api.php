@@ -147,6 +147,55 @@ function historyFormatRateMax6($value): string
     return historyDisplayDecimal($value, 6);
 }
 
+/**
+ * Optional pagination for Payment History JSON.
+ * No limit / limit<=0 → full list (PDF export, legacy callers).
+ * With limit → slice + pagination meta (has_more / total).
+ *
+ * @return array{history: array, pagination: ?array}
+ */
+function historyApiApplyPagination(array $history): array
+{
+    $limitRaw = isset($_GET['limit']) ? (int) $_GET['limit'] : 0;
+    if ($limitRaw <= 0) {
+        return ['history' => $history, 'pagination' => null];
+    }
+    $limit = min(500, max(1, $limitRaw));
+    $offset = isset($_GET['offset']) ? max(0, (int) $_GET['offset']) : 0;
+    $total = count($history);
+    $sliced = array_values(array_slice($history, $offset, $limit));
+
+    return [
+        'history' => $sliced,
+        'pagination' => [
+            'offset' => $offset,
+            'limit' => $limit,
+            'total' => $total,
+            'has_more' => ($offset + $limit) < $total,
+        ],
+    ];
+}
+
+/**
+ * @param array $dataPayload Keys: account, date_range, history (full, pre-pagination)
+ */
+function historyApiEchoSuccess(array $dataPayload): void
+{
+    $history = isset($dataPayload['history']) && is_array($dataPayload['history'])
+        ? $dataPayload['history']
+        : [];
+    $paged = historyApiApplyPagination($history);
+    $data = $dataPayload;
+    $data['history'] = $paged['history'];
+    if ($paged['pagination'] !== null) {
+        $data['pagination'] = $paged['pagination'];
+    }
+    echo json_encode([
+        'success' => true,
+        'data' => $data,
+    ]);
+}
+
 /** Payment History：业务日 Y-m-d，按日历旧→新排序（与 Date 列同一业务含义） */
 function historySortDateYmdFromRaw($raw): string
 {
@@ -1441,13 +1490,10 @@ try {
                 $date_to_db,
                 $currency_id ? (int) $currency_id : null
             );
-        echo json_encode([
-            'success' => true,
-            'data' => [
-                'account' => $virtual['account'],
-                'date_range' => ['from' => $date_from, 'to' => $date_to],
-                'history' => $virtual['history']
-            ]
+        historyApiEchoSuccess([
+            'account' => $virtual['account'],
+            'date_range' => ['from' => $date_from, 'to' => $date_to],
+            'history' => $virtual['history'],
         ]);
         exit;
     }
@@ -2976,22 +3022,19 @@ try {
         ];
     }
 
-    // 返回结果
-    echo json_encode([
-        'success' => true,
-        'data' => [
-            'account' => [
-                'id' => $account['id'],
-                'account_id' => $account['account_id'],
-                'name' => $account['name'],
-                'currency' => $bfCurrency
-            ],
-            'date_range' => [
-                'from' => $date_from,
-                'to' => $date_to
-            ],
-            'history' => $history
-        ]
+    // 返回结果（可选 limit/offset 分页，未传则全量）
+    historyApiEchoSuccess([
+        'account' => [
+            'id' => $account['id'],
+            'account_id' => $account['account_id'],
+            'name' => $account['name'],
+            'currency' => $bfCurrency,
+        ],
+        'date_range' => [
+            'from' => $date_from,
+            'to' => $date_to,
+        ],
+        'history' => $history,
     ]);
 
 } catch (PDOException $e) {
