@@ -674,10 +674,6 @@
   min-width: 0;
 }
 
-.m-dash-trend-chart--monthly {
-  height: 220px;
-}
-
 .m-dash-trend-hint {
   margin-top: 0.45rem;
   color: var(--m-color-label);

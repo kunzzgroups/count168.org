@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Area,
-  Bar,
   CartesianGrid,
-  Cell,
   ComposedChart,
   ReferenceLine,
   ResponsiveContainer,
@@ -22,9 +20,7 @@ export default function DashboardTrendChart({
   dateRangeText,
   xAxisLayout,
   emptyText,
-  monthly = false,
   tapHint,
-  tapMonthHint,
 }) {
   const activeSeries = series.filter((s) => visible[s.idx]);
   const activeKeys = activeSeries.map((s) => s.dataKey);
@@ -34,7 +30,7 @@ export default function DashboardTrendChart({
 
   useEffect(() => {
     setActiveIndex(null);
-  }, [rows, monthly]);
+  }, [rows]);
 
   const selected =
     activeIndex != null && rows?.[activeIndex] ? rows[activeIndex] : null;
@@ -76,7 +72,7 @@ export default function DashboardTrendChart({
         })}
       </div>
 
-      <div className={`m-dash-trend-chart${monthly ? " m-dash-trend-chart--monthly" : ""}`}>
+      <div className="m-dash-trend-chart">
         {rows?.length && hasSeriesOn ? (
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
@@ -126,40 +122,20 @@ export default function DashboardTrendChart({
                 axisLine={false}
                 tickLine={false}
               />
-              {monthly
-                ? activeSeries.map((s) => (
-                    <Bar
-                      key={s.dataKey}
-                      dataKey={s.dataKey}
-                      name={s.label}
-                      fill={s.color}
-                      radius={[6, 6, 0, 0]}
-                      maxBarSize={activeSeries.length > 1 ? 18 : 28}
-                      isAnimationActive={false}
-                    >
-                      {rows.map((_, idx) => (
-                        <Cell
-                          key={`${s.dataKey}-${idx}`}
-                          fill={s.color}
-                          fillOpacity={activeIndex == null || activeIndex === idx ? 1 : 0.35}
-                        />
-                      ))}
-                    </Bar>
-                  ))
-                : activeSeries.map((s) => (
-                    <Area
-                      key={s.dataKey}
-                      type="monotone"
-                      dataKey={s.dataKey}
-                      name={s.label}
-                      stroke={s.color}
-                      fill={s.fill}
-                      strokeWidth={s.dataKey === "netProfit" ? 2.5 : 2}
-                      dot={false}
-                      activeDot={{ r: 5, strokeWidth: 2, stroke: s.color, fill: "#fff" }}
-                      isAnimationActive={false}
-                    />
-                  ))}
+              {activeSeries.map((s) => (
+                <Area
+                  key={s.dataKey}
+                  type="monotone"
+                  dataKey={s.dataKey}
+                  name={s.label}
+                  stroke={s.color}
+                  fill={s.fill}
+                  strokeWidth={s.dataKey === "netProfit" ? 2.5 : 2}
+                  dot={false}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: s.color, fill: "#fff" }}
+                  isAnimationActive={false}
+                />
+              ))}
             </ComposedChart>
           </ResponsiveContainer>
         ) : (
@@ -187,7 +163,7 @@ export default function DashboardTrendChart({
           </ul>
         </div>
       ) : rows?.length && hasSeriesOn ? (
-        <p className="m-dash-trend-hint">{monthly ? tapMonthHint || "Tap a month" : tapHint || "Tap the chart"}</p>
+        <p className="m-dash-trend-hint">{tapHint || "Tap the chart for details"}</p>
       ) : null}
     </section>
   );

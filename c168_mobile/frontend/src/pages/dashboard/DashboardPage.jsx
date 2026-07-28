@@ -212,10 +212,8 @@ export default function DashboardPage() {
             label={i18n.trendChart}
             dateRangeText={dash.dateRangeShort}
             xAxisLayout={dash.chartXAxisLayout}
-            monthly={dash.chartIsMonthly}
             emptyText={loading ? i18n.loading : i18n.chartSelectSeries || i18n.noData}
             tapHint={i18n.chartTapHint}
-            tapMonthHint={i18n.chartTapMonthHint}
           />
 
           <CurrencyDistributionCard
