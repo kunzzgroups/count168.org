@@ -42,7 +42,19 @@ import {
 } from "../../../utils/company/sharedCompanyFilter.js";
 
 /** Type Search uses Capture Date + search_api period metrics (not all-time grid API). */
-const PERIOD_TYPE_SEARCH_TYPES = new Set(["CONTRA", "PAYMENT", "CLAIM", "CLEAR", "RATE", "ADJUSTMENT", "PROFIT"]);
+/** Period Type Search: Capture Date × all pure manual types (form Type is ignored for filtering). */
+const PERIOD_TYPE_SEARCH_TYPES = new Set([
+  "CONTRA",
+  "PAYMENT",
+  "CLAIM",
+  "CLEAR",
+  "RATE",
+  "ADJUSTMENT",
+  "PROFIT",
+  "ALL",
+]);
+/** Fixed search form type — list visibility/metrics do not follow the right-side Type dropdown. */
+const TYPE_SEARCH_LIST_FORM_TYPE = "ALL";
 
 const INITIAL_TRANSACTION_SEARCH_STATE = {
   showName: false,
@@ -637,7 +649,9 @@ export function useTransactionSearch({
           : activeTypeSearch
             ? typeSearchAccountIds
             : [];
-      const presentationFormType = typeSearchFormTypeOverride ?? typeSearchFormType ?? txType;
+      const presentationFormType = activeTypeSearch
+        ? TYPE_SEARCH_LIST_FORM_TYPE
+        : typeSearchFormTypeOverride ?? typeSearchFormType ?? txType;
 
       const categoryParam =
         effectiveCategories.length > 0 && !effectiveCategories.includes("")
@@ -1038,16 +1052,18 @@ export function useTransactionSearch({
         let payload = null;
         let typeAccountIds = [];
 
+        // Period Type Search: always ALL — Capture Date × any pure manual type.
+        // Right-side Type dropdown is for submit only; do not filter the list by it.
         if (PERIOD_TYPE_SEARCH_TYPES.has(normalizedType)) {
           typeAccountIds = await fetchTypeAccountSearch({
             ...scopeParams,
-            transactionType: "ALL",
+            transactionType: TYPE_SEARCH_LIST_FORM_TYPE,
           });
           if (typeAccountIds.length === 0) {
             const fallbackCode = entryFocusCurrencyFallback || "MYR";
             flushSync(() => {
               setTypeSearchActive(true);
-              setTypeSearchFormType(normalizedType);
+              setTypeSearchFormType(TYPE_SEARCH_LIST_FORM_TYPE);
               setTypeSearchAccountIds([]);
               setRawSearchData({ left_table: [], right_table: [], totals: null });
               setTablesVisible(false);
@@ -1085,7 +1101,7 @@ export function useTransactionSearch({
             currencyCodes,
             typeSearch: true,
             typeAccountIds,
-            typeSearchFormType: normalizedType,
+            typeSearchFormType: TYPE_SEARCH_LIST_FORM_TYPE,
           });
           if (!result?.success || !result?.data) {
             pushToast(result?.message || result?.error || m.searchFailed, "error");
@@ -1180,7 +1196,7 @@ export function useTransactionSearch({
 
         flushSync(() => {
           setTypeSearchActive(true);
-          setTypeSearchFormType(normalizedType);
+          setTypeSearchFormType(TYPE_SEARCH_LIST_FORM_TYPE);
           setTypeSearchAccountIds(typeAccountIds);
           setRawSearchData(cleaned);
           if (didApplyTypeSearchEntryClear) {
@@ -1840,7 +1856,7 @@ export function useTransactionSearch({
 
     const groupedMap = {};
     const pushRow = (row, side) => {
-      const cur = row.currency || "UNKNOWN";
+      const cur = String(row?.currency || "UNKNOWN").toUpperCase().trim() || "UNKNOWN";
       if (!groupedMap[cur]) groupedMap[cur] = { left: [], right: [] };
       groupedMap[cur][side].push(row);
     };
@@ -1855,16 +1871,42 @@ export function useTransactionSearch({
       if (!orderedCurrs.includes(code)) orderedCurrs.push(code);
     });
 
+    // active_currency_codes only applies when the user explicitly enables
+    // "Show all 0 balance". Type Search / submit-focus force showZeroBalance for
+    // ROW visibility — that must NOT hide currency sections that already have
+    // period activity (e.g. MYR+SGD selected but only MYR section rendered).
     const activeCodes = rawSearchData.active_currency_codes;
-    const effectiveShowZeroBalance = listPresentationModeActive ? true : searchState.showZeroBalance;
-    if (effectiveShowZeroBalance && Array.isArray(activeCodes) && activeCodes.length > 0) {
-      const activeSet = new Set(activeCodes.map((c) => String(c || "").toUpperCase()));
-      orderedCurrs = orderedCurrs.filter((code) => activeSet.has(String(code || "").toUpperCase()));
+    if (
+      !listPresentationModeActive &&
+      searchState.showZeroBalance &&
+      Array.isArray(activeCodes) &&
+      activeCodes.length > 0
+    ) {
+      const activeSet = new Set(activeCodes.map((c) => String(c || "").toUpperCase().trim()));
+      orderedCurrs = orderedCurrs.filter((code) => {
+        const upper = String(code || "").toUpperCase().trim();
+        if (activeSet.has(upper)) return true;
+        const g = groupedMap[upper];
+        return Boolean(g && ((g.left?.length || 0) + (g.right?.length || 0) > 0));
+      });
     }
 
     if (!showAllCurrencies && selectedCurrencies.length > 1) {
       const selSet = new Set(selectedCurrencies.map((x) => String(x || "").toUpperCase().trim()));
-      orderedCurrs = orderedCurrs.filter((code) => selSet.has(String(code || "").toUpperCase()));
+      orderedCurrs = orderedCurrs.filter((code) => selSet.has(String(code || "").toUpperCase().trim()));
+    }
+
+    // Multi-select: still show every selected currency that has rows, even if
+    // order/active filters dropped it (keeps Type Search MYR+SGD sections honest).
+    if (!showAllCurrencies && selectedCurrencies.length > 1) {
+      selectedCurrencies.forEach((raw) => {
+        const code = String(raw || "").toUpperCase().trim();
+        if (!code || orderedCurrs.includes(code)) return;
+        const g = groupedMap[code];
+        if (g && ((g.left?.length || 0) + (g.right?.length || 0) > 0)) {
+          orderedCurrs.push(code);
+        }
+      });
     }
 
     const grouped = orderedCurrs.map((currency) => {

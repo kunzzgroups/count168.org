@@ -309,6 +309,8 @@ function UserModal({
   const [companyPickerOpen, setCompanyPickerOpen] = useState(false);
   const [permissionPickerOpen, setPermissionPickerOpen] = useState(false);
   const [companySearchQuery, setCompanySearchQuery] = useState("");
+  const [draftSelectedCompanyIds, setDraftSelectedCompanyIds] = useState([]);
+  const [draftSelectedGroupIds, setDraftSelectedGroupIds] = useState([]);
   const [bulkSettlingVariant, setBulkSettlingVariant] = useState(null);
   const bulkSelectionTimerRef = useRef(null);
   const { submitting, guardSubmit } = useSubmitGuard(open);
@@ -429,6 +431,8 @@ function UserModal({
 
   useEffect(() => {
     if (!companyPickerOpen) return undefined;
+    setDraftSelectedCompanyIds(selectedCompanyIds);
+    setDraftSelectedGroupIds(selectedGroupIds);
     const onKey = (e) => {
       if (e.key === "Escape") {
         setCompanyPickerOpen(false);
@@ -467,24 +471,26 @@ function UserModal({
 
   const pickerGroupRows = dualTenantPicker ? modalGroupCompanies : groupPickerMode ? modalCompanies : [];
   const pickerCompanyRows = dualTenantPicker ? modalSubsidiaryCompanies : groupPickerMode ? [] : modalCompanies;
+  const activeSelectedCompanyIds = companyPickerOpen ? draftSelectedCompanyIds : selectedCompanyIds;
+  const activeSelectedGroupIds = companyPickerOpen ? draftSelectedGroupIds : selectedGroupIds;
 
   const selectedGroupLabels = useMemo(() => {
     if (!dualTenantPicker) return [];
-    const set = new Set(selectedGroupIds.map(Number));
+    const set = new Set(activeSelectedGroupIds.map(Number));
     return pickerGroupRows
       .filter((c) => set.has(Number(c.id)))
       .map((c) => String(c?.group_id || c?.company_id || "").trim().toUpperCase())
       .filter(Boolean);
-  }, [dualTenantPicker, pickerGroupRows, selectedGroupIds]);
+  }, [dualTenantPicker, pickerGroupRows, activeSelectedGroupIds]);
 
   const selectedCompanyLabels = useMemo(() => {
-    const set = new Set(selectedCompanyIds.map(Number));
+    const set = new Set(activeSelectedCompanyIds.map(Number));
     const rows = dualTenantPicker ? pickerCompanyRows : modalCompanies;
     return rows
       .filter((c) => set.has(Number(c.id)))
       .map((c) => getCompanyPickerLabel(c))
       .filter(Boolean);
-  }, [modalCompanies, pickerCompanyRows, selectedCompanyIds, groupPickerMode, dualTenantPicker]);
+  }, [modalCompanies, pickerCompanyRows, activeSelectedCompanyIds, groupPickerMode, dualTenantPicker]);
 
   const assignmentSummaryText = useMemo(() => {
     if (dualTenantPicker) {
@@ -517,7 +523,7 @@ function UserModal({
     [pickerCompanyRows, companySearchQuery, groupPickerMode]
   );
 
-  const showProcessColumn = dualTenantPicker ? selectedCompanyIds.length > 0 : !groupPickerMode;
+  const showProcessColumn = dualTenantPicker ? activeSelectedCompanyIds.length > 0 : !groupPickerMode;
 
   const selectedPermissionLabels = useMemo(
     () => visiblePermissionKeys.filter((k) => permSelected.has(k)).map((k) => getPermissionLabel(k, t)),
@@ -878,12 +884,12 @@ function UserModal({
                   className="user-modal-company-picker-select-all"
                   disabled={fieldLocks.company || !!editingRow?.is_owner_shadow || modalCompanies.length === 0 || pageReadOnlyLock}
                   onClick={() => {
-                    if (dualTenantPicker && setSelectedGroupIds) {
-                      setSelectedGroupIds(pickerGroupRows.map((c) => Number(c.id)));
-                      setSelectedCompanyIds(pickerCompanyRows.map((c) => Number(c.id)));
+                    if (dualTenantPicker) {
+                      setDraftSelectedGroupIds(pickerGroupRows.map((c) => Number(c.id)));
+                      setDraftSelectedCompanyIds(pickerCompanyRows.map((c) => Number(c.id)));
                       return;
                     }
-                    setSelectedCompanyIds(modalCompanies.map((c) => Number(c.id)));
+                    setDraftSelectedCompanyIds(modalCompanies.map((c) => Number(c.id)));
                   }}
                 >
                   {t("selectAll")}
@@ -898,7 +904,7 @@ function UserModal({
                         {groupPickerFiltered.map((c) => {
                           const id = Number(c.id);
                           const label = String(c?.group_id || c?.company_id || "").trim().toUpperCase();
-                          const checked = selectedGroupIds.includes(id);
+                          const checked = draftSelectedGroupIds.includes(id);
                           const rowDisabled = fieldLocks.company || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
                           return (
                             <li key={`g-${c.id}`} className="user-modal-company-picker-row">
@@ -908,7 +914,7 @@ function UserModal({
                                   checked={checked}
                                   disabled={rowDisabled || !setSelectedGroupIds}
                                   onChange={() => {
-                                    setSelectedGroupIds?.((prev) => {
+                                    setDraftSelectedGroupIds((prev) => {
                                       if (prev.includes(id)) return prev.filter((x) => x !== id);
                                       return [...prev, id];
                                     });
@@ -927,7 +933,7 @@ function UserModal({
                         {companyPickerFiltered.map((c) => {
                           const id = Number(c.id);
                           const label = getCompanyPickerLabel(c);
-                          const checked = selectedCompanyIds.includes(id);
+                          const checked = draftSelectedCompanyIds.includes(id);
                           const rowDisabled = fieldLocks.company || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
                           return (
                             <li key={`c-${c.id}`} className="user-modal-company-picker-row">
@@ -937,7 +943,7 @@ function UserModal({
                                   checked={checked}
                                   disabled={rowDisabled}
                                   onChange={() => {
-                                    setSelectedCompanyIds((prev) => {
+                                    setDraftSelectedCompanyIds((prev) => {
                                       if (prev.includes(id)) return prev.filter((x) => x !== id);
                                       return [...prev, id];
                                     });
@@ -956,7 +962,7 @@ function UserModal({
                     {companyPickerFiltered.map((c) => {
                       const id = Number(c.id);
                       const label = getCompanyPickerLabel(c);
-                      const checked = selectedCompanyIds.includes(id);
+                      const checked = draftSelectedCompanyIds.includes(id);
                       const rowDisabled = fieldLocks.company || !!editingRow?.is_owner_shadow || pageReadOnlyLock;
                       return (
                         <li key={c.id} className="user-modal-company-picker-row">
@@ -966,7 +972,7 @@ function UserModal({
                               checked={checked}
                               disabled={rowDisabled}
                               onChange={() => {
-                                setSelectedCompanyIds((prev) => {
+                                setDraftSelectedCompanyIds((prev) => {
                                   if (prev.includes(id)) return prev.filter((x) => x !== id);
                                   return [...prev, id];
                                 });
@@ -985,6 +991,10 @@ function UserModal({
                   type="button"
                   className="user-modal-company-picker-done"
                   onClick={() => {
+                    if (dualTenantPicker && setSelectedGroupIds) {
+                      setSelectedGroupIds(draftSelectedGroupIds);
+                    }
+                    setSelectedCompanyIds(draftSelectedCompanyIds);
                     setCompanyPickerOpen(false);
                     setCompanySearchQuery("");
                   }}
