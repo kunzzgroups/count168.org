@@ -112,5 +112,41 @@ export function mergeHistoryChunkRows(existing, incoming, { isFirstChunk }) {
   return existing.concat(withoutBf);
 }
 
+/**
+ * Assemble rows from chronological chunk slots, using only the contiguous
+ * suffix of loaded months (newest → older). Lets us fetch the latest month
+ * first for a fast first paint, then prepend older months as they arrive.
+ *
+ * @param {(Array|null|undefined)[]} slots
+ */
+export function assembleContiguousSuffix(slots) {
+  const list = Array.isArray(slots) ? slots : [];
+  if (!list.length) return [];
+
+  let start = list.length;
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    if (list[i] == null) break;
+    start = i;
+  }
+  if (start >= list.length) return [];
+
+  let out = [];
+  for (let i = start; i < list.length; i += 1) {
+    out = mergeHistoryChunkRows(out, list[i], { isFirstChunk: i === start });
+  }
+  return out;
+}
+
+/** Newest-first fetch order indices for chronological chunks. */
+export function historyChunkFetchOrder(chunkCount) {
+  const n = Math.max(0, Number(chunkCount) || 0);
+  const order = [];
+  for (let i = n - 1; i >= 0; i -= 1) order.push(i);
+  return order;
+}
+
 /** Default page size when callers use API limit/offset. */
 export const HISTORY_PAGE_LIMIT = 200;
+
+/** Parallel in-flight month requests after the newest month paints. */
+export const HISTORY_CHUNK_CONCURRENCY = 3;

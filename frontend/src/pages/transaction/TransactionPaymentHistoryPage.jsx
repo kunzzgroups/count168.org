@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import TransactionHistoryTable from "./components/TransactionHistoryTable.jsx";
 import PaymentHistoryExportPdfModal from "./components/PaymentHistoryExportPdfModal.jsx";
@@ -93,11 +93,31 @@ export default function TransactionPaymentHistoryPage() {
     isInitialLoading,
     isLoadingMore,
     errorMessage,
+    tableReady,
   } = usePaymentHistoryProgressive({
     scope,
     scopeApi,
     enabled: paramsReady,
   });
+
+  /** When older months prepend, keep the viewport anchored on previously visible rows. */
+  const scrollAnchorRef = useRef({ len: 0, height: 0 });
+  useLayoutEffect(() => {
+    if (!rows.length) {
+      scrollAnchorRef.current = { len: 0, height: 0 };
+      return;
+    }
+    const el = document.querySelector(
+      ".transaction-payment-history-page-root .transaction-history-report-scroll",
+    );
+    if (!el) return;
+    const prev = scrollAnchorRef.current;
+    if (rows.length > prev.len && prev.height > 0) {
+      const delta = el.scrollHeight - prev.height;
+      if (delta > 0) el.scrollTop += delta;
+    }
+    scrollAnchorRef.current = { len: rows.length, height: el.scrollHeight };
+  }, [rows]);
 
   const accountMeta = apiAccount
     ? {
@@ -190,7 +210,13 @@ export default function TransactionPaymentHistoryPage() {
                 {errorMessage}
               </p>
             ) : (
-              <>
+              <div
+                className={
+                  tableReady
+                    ? "transaction-payment-history-table-wrap transaction-payment-history-table-wrap--ready"
+                    : "transaction-payment-history-table-wrap"
+                }
+              >
                 <TransactionHistoryTable
                   rows={rows}
                   histMoney={formatHistoryMoney}
@@ -218,7 +244,7 @@ export default function TransactionPaymentHistoryPage() {
                     )}
                   </div>
                 ) : null}
-              </>
+              </div>
             )}
           </div>
         </div>

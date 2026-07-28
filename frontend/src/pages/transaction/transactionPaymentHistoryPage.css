@@ -178,6 +178,41 @@ body.ec-payment-history-chromeless .transaction-payment-history-loading__spinner
   }
 }
 
+body.transaction-payment-history-page .transaction-payment-history-table-wrap,
+body.ec-payment-history-chromeless .transaction-payment-history-table-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+body.transaction-payment-history-page .transaction-payment-history-table-wrap--ready,
+body.ec-payment-history-chromeless .transaction-payment-history-table-wrap--ready {
+  animation: transaction-payment-history-enter 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes transaction-payment-history-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.transaction-payment-history-page .transaction-payment-history-table-wrap--ready,
+  body.ec-payment-history-chromeless .transaction-payment-history-table-wrap--ready {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 body.transaction-payment-history-page .transaction-payment-history-load-more,
 body.ec-payment-history-chromeless .transaction-payment-history-load-more {
   display: flex;
@@ -185,7 +220,7 @@ body.ec-payment-history-chromeless .transaction-payment-history-load-more {
   justify-content: center;
   gap: 10px;
   flex-shrink: 0;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-top: 1px solid #e2e8f0;
   color: #64748b;
   font-size: clamp(1.2rem, 0.15vw + 1.0rem, 1.3rem);
@@ -195,8 +230,8 @@ body.ec-payment-history-chromeless .transaction-payment-history-load-more {
 
 body.transaction-payment-history-page .transaction-payment-history-load-more .transaction-payment-history-loading__spinner,
 body.ec-payment-history-chromeless .transaction-payment-history-load-more .transaction-payment-history-loading__spinner {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-width: 2px;
 }
 
