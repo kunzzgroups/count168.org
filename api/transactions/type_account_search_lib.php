@@ -162,6 +162,7 @@ function typeAccountSearchFetchAccountIds(PDO $pdo, array $listScope, string $fo
 
 /**
  * RATE accounts from transaction_entry (PM fetchRateTransactionItems alignment).
+ * Includes RATE_MIDDLEMAN (Middle-Man / MARKUP Win-Loss legs).
  *
  * @return int[]
  */
@@ -182,7 +183,11 @@ function typeAccountSearchFetchRateAccountIds(PDO $pdo, array $listScope): array
             {$companyJoin}
             WHERE {$hFilter['sql']}
               AND h.transaction_type = 'RATE'
-              AND e.entry_type IN ('RATE_FIRST_FROM', 'RATE_FIRST_TO', 'RATE_TRANSFER_FROM', 'RATE_TRANSFER_TO')
+              AND e.entry_type IN (
+                    'RATE_FIRST_FROM', 'RATE_FIRST_TO',
+                    'RATE_TRANSFER_FROM', 'RATE_TRANSFER_TO',
+                    'RATE_MIDDLEMAN'
+              )
               AND e.account_id IS NOT NULL
               AND e.account_id > 0";
 
