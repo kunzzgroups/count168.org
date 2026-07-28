@@ -6,6 +6,7 @@ import { periodPresetRange } from "../../lib/dashboardDateUtils.js";
 import {
   companyIsBankOnly,
   fetchCustomerReport,
+  fetchReportCurrencies,
   formatReportAmount,
 } from "../../lib/reportApi.js";
 import {
@@ -54,8 +55,8 @@ export default function CustomerReportPage() {
   const [activePreset, setActivePreset] = useState("thisMonth");
   const [accountId, setAccountId] = useState("");
   const [showAll, setShowAll] = useState(false);
-  const [selectedCurrencies, setSelectedCurrencies] = useState([]);
-  const [showAllCurrencies, setShowAllCurrencies] = useState(true);
+  const [selectedCurrencies, setSelectedCurrencies] = useState(["MYR"]);
+  const [showAllCurrencies, setShowAllCurrencies] = useState(false);
   const [query, setQuery] = useState("");
   const [rows, setRows] = useState([]);
   const [totals, setTotals] = useState(null);
@@ -114,6 +115,35 @@ export default function CustomerReportPage() {
       i18n.loadFailed,
     ],
   );
+
+  // Align with desktop: pick MYR (or first available) when scope changes — never "All".
+  useEffect(() => {
+    if (!s.me || !scopeReady) return undefined;
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const list = await fetchReportCurrencies(scope, { signal: ac.signal });
+        const codes = [
+          ...new Set(
+            (list || [])
+              .map((c) => String(c.code || c.currency || c).trim().toUpperCase())
+              .filter((code) => /^[A-Z]{3}$/.test(code)),
+          ),
+        ];
+        if (!codes.length) return;
+        const preferred = codes.includes("MYR") ? "MYR" : codes[0];
+        setShowAllCurrencies(false);
+        setSelectedCurrencies((prev) => {
+          const cur = prev.map((c) => String(c).toUpperCase()).filter((c) => codes.includes(c));
+          if (cur.length) return cur;
+          return [preferred];
+        });
+      } catch (e) {
+        if (e?.name === "AbortError") return;
+      }
+    })();
+    return () => ac.abort();
+  }, [s.me, scopeReady, scopeCacheKey, scope]);
 
   useEffect(() => {
     if (!s.me || !scopeReady) return undefined;
@@ -184,8 +214,12 @@ export default function CustomerReportPage() {
       setActivePreset(next.activePreset);
       setAccountId(next.accountId ?? "");
       setShowAll(Boolean(next.showAll));
-      setSelectedCurrencies(Array.isArray(next.selectedCurrencies) ? next.selectedCurrencies : []);
-      setShowAllCurrencies(Boolean(next.showAllCurrencies));
+      const nextCurrencies = Array.isArray(next.selectedCurrencies)
+        ? next.selectedCurrencies.map((c) => String(c).toUpperCase()).filter(Boolean)
+        : [];
+      setSelectedCurrencies(nextCurrencies.length ? nextCurrencies : ["MYR"]);
+      // Desktop customer report uses concrete currency chips — never "All currencies".
+      setShowAllCurrencies(false);
     },
     [scope, s, i18n.bankOnlyBlocked],
   );
@@ -249,15 +283,11 @@ export default function CustomerReportPage() {
       />
       <div className="m-rpt-chip-row">
         {showAll ? <span className="m-rpt-chip is-on">{i18n.showAll}</span> : null}
-        {!showAllCurrencies && selectedCurrencies.length > 0
-          ? selectedCurrencies.map((c) => (
-              <span key={c} className="m-rpt-chip">
-                {String(c).toUpperCase()}
-              </span>
-            ))
-          : (
-              <span className="m-rpt-chip">{i18n.all || "All"}</span>
-            )}
+        {selectedCurrencies.map((c) => (
+          <span key={c} className="m-rpt-chip">
+            {String(c).toUpperCase()}
+          </span>
+        ))}
       </div>
       <CustomerTotalStrip i18n={i18n} totals={totals} />
     </div>

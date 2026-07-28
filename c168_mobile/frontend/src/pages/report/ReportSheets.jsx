@@ -204,47 +204,6 @@ export function ReportFilterSheet({
 
   const thisMonth = periodPresetRange("thisMonth") || { dateFrom: todayYmd(), dateTo: todayYmd() };
 
-  const handleReset = () => {
-    setDraft((prev) => ({
-      ...prev,
-      dateFrom: thisMonth.dateFrom,
-      dateTo: thisMonth.dateTo,
-      activePreset: "thisMonth",
-      processId: "",
-      accountId: "",
-      showAll: false,
-      selectedCurrencies: [],
-      showAllCurrencies: false,
-    }));
-  };
-
-  const toggleCurrency = (code) => {
-    const upper = String(code || "").toUpperCase();
-    setDraft((prev) => {
-      const cur = prev.selectedCurrencies.map((c) => String(c).toUpperCase());
-      const next = cur.includes(upper) ? cur.filter((c) => c !== upper) : [...cur, upper];
-      return { ...prev, selectedCurrencies: next, showAllCurrencies: false };
-    });
-  };
-
-  const handleApply = () => {
-    onApply?.({
-      dateFrom: draft.dateFrom,
-      dateTo: draft.dateTo,
-      activePreset: draft.activePreset,
-      scope: draftScope(draft),
-      processId: draft.processId,
-      accountId: draft.accountId,
-      showAll: draft.showAll,
-      selectedCurrencies: draft.selectedCurrencies,
-      showAllCurrencies: draft.showAllCurrencies || draft.selectedCurrencies.length === 0,
-    });
-    onClose?.();
-  };
-
-  const span = daysInclusive(draft.dateFrom, draft.dateTo);
-  const daysLabel = (i18n.daysCount || "{n} days").replace("{n}", String(span));
-
   const currencyCodes = useMemo(
     () =>
       [
@@ -256,6 +215,80 @@ export function ReportFilterSheet({
       ].sort(),
     [currencyOptions],
   );
+
+  const defaultCurrencyCode = useMemo(() => {
+    if (!currencyCodes.length) return "MYR";
+    if (currencyCodes.includes("MYR")) return "MYR";
+    return currencyCodes[0];
+  }, [currencyCodes]);
+
+  // Customer report: seed a concrete currency (MYR / first) — never leave "All currencies".
+  useEffect(() => {
+    if (!open || !isCustomer || !currencyCodes.length) return;
+    setDraft((prev) => {
+      const cur = prev.selectedCurrencies.map((c) => String(c).toUpperCase());
+      const valid = cur.filter((c) => currencyCodes.includes(c));
+      if (valid.length > 0 && !prev.showAllCurrencies) {
+        if (valid.length === cur.length) return prev;
+        return { ...prev, selectedCurrencies: valid, showAllCurrencies: false };
+      }
+      return {
+        ...prev,
+        selectedCurrencies: [defaultCurrencyCode],
+        showAllCurrencies: false,
+      };
+    });
+  }, [open, isCustomer, currencyCodes, defaultCurrencyCode]);
+
+  const handleReset = () => {
+    setDraft((prev) => ({
+      ...prev,
+      dateFrom: thisMonth.dateFrom,
+      dateTo: thisMonth.dateTo,
+      activePreset: "thisMonth",
+      processId: "",
+      accountId: "",
+      showAll: false,
+      selectedCurrencies: isCustomer ? [defaultCurrencyCode] : [],
+      showAllCurrencies: false,
+    }));
+  };
+
+  const toggleCurrency = (code) => {
+    const upper = String(code || "").toUpperCase();
+    setDraft((prev) => {
+      const cur = prev.selectedCurrencies.map((c) => String(c).toUpperCase());
+      const next = cur.includes(upper) ? cur.filter((c) => c !== upper) : [...cur, upper];
+      // Keep at least one currency selected (no All-currencies mode on mobile Customer Report).
+      if (isCustomer && next.length === 0) return { ...prev, showAllCurrencies: false };
+      return { ...prev, selectedCurrencies: next, showAllCurrencies: false };
+    });
+  };
+
+  const handleApply = () => {
+    const currencies = draft.selectedCurrencies
+      .map((c) => String(c).toUpperCase())
+      .filter(Boolean);
+    const customerCurrencies =
+      currencies.length > 0 ? currencies : isCustomer ? [defaultCurrencyCode] : [];
+    onApply?.({
+      dateFrom: draft.dateFrom,
+      dateTo: draft.dateTo,
+      activePreset: draft.activePreset,
+      scope: draftScope(draft),
+      processId: draft.processId,
+      accountId: draft.accountId,
+      showAll: draft.showAll,
+      selectedCurrencies: isCustomer ? customerCurrencies : draft.selectedCurrencies,
+      showAllCurrencies: isCustomer
+        ? false
+        : draft.showAllCurrencies || draft.selectedCurrencies.length === 0,
+    });
+    onClose?.();
+  };
+
+  const span = daysInclusive(draft.dateFrom, draft.dateTo);
+  const daysLabel = (i18n.daysCount || "{n} days").replace("{n}", String(span));
 
   return (
     <div
@@ -421,25 +454,12 @@ export function ReportFilterSheet({
 
               <Section title={i18n.currency}>
                 <div className="m-filter-pill-wrap">
-                  <Pill
-                    active={draft.showAllCurrencies || draft.selectedCurrencies.length === 0}
-                    onClick={() =>
-                      setDraft((prev) => ({
-                        ...prev,
-                        showAllCurrencies: true,
-                        selectedCurrencies: [],
-                      }))
-                    }
-                  >
-                    {i18n.all || "All"}
-                  </Pill>
                   {currencyCodes.map((code) => (
                     <Pill
                       key={code}
-                      active={
-                        !draft.showAllCurrencies &&
-                        draft.selectedCurrencies.map((c) => String(c).toUpperCase()).includes(code)
-                      }
+                      active={draft.selectedCurrencies
+                        .map((c) => String(c).toUpperCase())
+                        .includes(code)}
                       onClick={() => toggleCurrency(code)}
                     >
                       {code}
