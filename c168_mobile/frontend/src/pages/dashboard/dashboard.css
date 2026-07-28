@@ -254,6 +254,23 @@
   padding: 1.25rem;
   color: #fff;
   box-shadow: 0 20px 44px -16px rgba(30, 79, 216, 0.55);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.m-dash-hero--net,
+.m-dash-hero--profit {
+  background: linear-gradient(to bottom right, #1e4fd8, #2f6bff, #3ecfff);
+  box-shadow: 0 20px 44px -16px rgba(30, 79, 216, 0.55);
+}
+
+.m-dash-hero--expense {
+  background: linear-gradient(to bottom right, #be123c, #e11d48, #fb7185);
+  box-shadow: 0 20px 44px -16px rgba(225, 29, 72, 0.5);
+}
+
+.m-dash-hero--earnings {
+  background: linear-gradient(to bottom right, #b45309, #f59e0b, #fbbf24);
+  box-shadow: 0 20px 44px -16px rgba(245, 158, 11, 0.5);
 }
 
 .m-dash-hero-glow {
@@ -410,6 +427,14 @@
   padding: 0.75rem 0.875rem;
   box-shadow: 0 8px 24px -14px rgba(15, 23, 42, 0.18);
   outline: 1px solid rgba(241, 245, 249, 0.9);
+  text-align: left;
+  cursor: pointer;
+}
+
+.m-dash-kpi--selected {
+  outline: 2px solid var(--m-color-primary);
+  outline-offset: 0;
+  box-shadow: 0 10px 28px -12px rgba(47, 107, 246, 0.45);
 }
 
 .m-dash-kpi-accent {
