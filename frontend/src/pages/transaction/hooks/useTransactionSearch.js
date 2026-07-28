@@ -1856,7 +1856,7 @@ export function useTransactionSearch({
 
     const groupedMap = {};
     const pushRow = (row, side) => {
-      const cur = row.currency || "UNKNOWN";
+      const cur = String(row?.currency || "UNKNOWN").toUpperCase().trim() || "UNKNOWN";
       if (!groupedMap[cur]) groupedMap[cur] = { left: [], right: [] };
       groupedMap[cur][side].push(row);
     };
@@ -1871,16 +1871,42 @@ export function useTransactionSearch({
       if (!orderedCurrs.includes(code)) orderedCurrs.push(code);
     });
 
+    // active_currency_codes only applies when the user explicitly enables
+    // "Show all 0 balance". Type Search / submit-focus force showZeroBalance for
+    // ROW visibility — that must NOT hide currency sections that already have
+    // period activity (e.g. MYR+SGD selected but only MYR section rendered).
     const activeCodes = rawSearchData.active_currency_codes;
-    const effectiveShowZeroBalance = listPresentationModeActive ? true : searchState.showZeroBalance;
-    if (effectiveShowZeroBalance && Array.isArray(activeCodes) && activeCodes.length > 0) {
-      const activeSet = new Set(activeCodes.map((c) => String(c || "").toUpperCase()));
-      orderedCurrs = orderedCurrs.filter((code) => activeSet.has(String(code || "").toUpperCase()));
+    if (
+      !listPresentationModeActive &&
+      searchState.showZeroBalance &&
+      Array.isArray(activeCodes) &&
+      activeCodes.length > 0
+    ) {
+      const activeSet = new Set(activeCodes.map((c) => String(c || "").toUpperCase().trim()));
+      orderedCurrs = orderedCurrs.filter((code) => {
+        const upper = String(code || "").toUpperCase().trim();
+        if (activeSet.has(upper)) return true;
+        const g = groupedMap[upper];
+        return Boolean(g && ((g.left?.length || 0) + (g.right?.length || 0) > 0));
+      });
     }
 
     if (!showAllCurrencies && selectedCurrencies.length > 1) {
       const selSet = new Set(selectedCurrencies.map((x) => String(x || "").toUpperCase().trim()));
-      orderedCurrs = orderedCurrs.filter((code) => selSet.has(String(code || "").toUpperCase()));
+      orderedCurrs = orderedCurrs.filter((code) => selSet.has(String(code || "").toUpperCase().trim()));
+    }
+
+    // Multi-select: still show every selected currency that has rows, even if
+    // order/active filters dropped it (keeps Type Search MYR+SGD sections honest).
+    if (!showAllCurrencies && selectedCurrencies.length > 1) {
+      selectedCurrencies.forEach((raw) => {
+        const code = String(raw || "").toUpperCase().trim();
+        if (!code || orderedCurrs.includes(code)) return;
+        const g = groupedMap[code];
+        if (g && ((g.left?.length || 0) + (g.right?.length || 0) > 0)) {
+          orderedCurrs.push(code);
+        }
+      });
     }
 
     const grouped = orderedCurrs.map((currency) => {
