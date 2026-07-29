@@ -102,14 +102,14 @@ const MEMBER_REPORT_PRINT_CSS = `
     border: 1px solid #e2e8f0;
     font-size: 9.5pt;
   }
-  table.report-table col.col-date { width: 7%; }
-  table.report-table col.col-product { width: 12%; }
-  table.report-table col.col-rate { width: 6%; }
+  table.report-table col.col-date { width: 5%; }
+  table.report-table col.col-product { width: 10%; }
+  table.report-table col.col-rate { width: 4%; }
   table.report-table col.col-winloss,
   table.report-table col.col-crdr,
-  table.report-table col.col-balance { width: 10%; }
-  table.report-table col.col-description { width: 31%; }
-  table.report-table col.col-remark { width: 14%; }
+  table.report-table col.col-balance { width: 9%; }
+  table.report-table col.col-description { width: 28%; }
+  table.report-table col.col-remark { width: 26%; }
   table.report-table thead { display: table-header-group; }
   table.report-table tfoot { display: table-footer-group; }
   table.report-table th {
@@ -851,16 +851,16 @@ function drawPdfPageFooter(doc, { pageW, pageH, pageLabel, cjkFontFamily }) {
   doc.text(pageLabel, pageW / 2, pageH - PDF_FOOTER_BOTTOM_MM, { align: "center" });
 }
 
-/** A4 landscape — column widths total 277mm; match UI: Date tight, Remark ~2× prior share. */
+/** A4 landscape — column widths total 277mm; Date tight, Remark ~same share as Description. */
 const PDF_TABLE_COLUMN_STYLES = {
-  0: { cellWidth: 18, halign: "left", overflow: "hidden", fontStyle: "bold" }, // Date
-  1: { cellWidth: 28, overflow: "hidden", fontStyle: "bold" }, // Id Product
-  2: { cellWidth: 16, halign: "right", overflow: "hidden" }, // Rate
-  3: { cellWidth: 26, halign: "right", overflow: "hidden" }, // Win/Loss
-  4: { cellWidth: 26, halign: "right", overflow: "hidden" }, // Cr/Dr
-  5: { cellWidth: 28, halign: "right", overflow: "hidden" }, // Balance
-  6: { cellWidth: 70, halign: "left", overflow: "linebreak" }, // Description
-  7: { cellWidth: 65, halign: "left", overflow: "linebreak" }, // Remark
+  0: { cellWidth: 16, halign: "left", overflow: "hidden", fontStyle: "bold" }, // Date
+  1: { cellWidth: 26, overflow: "hidden", fontStyle: "bold" }, // Id Product
+  2: { cellWidth: 14, halign: "right", overflow: "hidden" }, // Rate
+  3: { cellWidth: 24, halign: "right", overflow: "hidden" }, // Win/Loss
+  4: { cellWidth: 24, halign: "right", overflow: "hidden" }, // Cr/Dr
+  5: { cellWidth: 26, halign: "right", overflow: "hidden" }, // Balance
+  6: { cellWidth: 74, halign: "left", overflow: "linebreak" }, // Description
+  7: { cellWidth: 73, halign: "left", overflow: "linebreak" }, // Remark
 };
 
 /**
