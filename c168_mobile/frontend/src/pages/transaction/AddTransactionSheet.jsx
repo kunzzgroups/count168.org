@@ -8,7 +8,7 @@ import {
   formatRateAmount,
   parseRateExpression,
 } from "../../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike } from "../../lib/transactionSubmitHelpers.js";
+import { buildRatePayload, toNumberLike, computeRateMiddlemanProfit } from "../../lib/transactionSubmitHelpers.js";
 import { formatYmd, parseYmd, formatDisplayDate } from "../../lib/dashboardDateUtils.js";
 import "./add-transaction-sheet.css";
 
@@ -127,6 +127,7 @@ export default function AddTransactionSheet({
   const [rateMiddlemanRate, setRateMiddlemanRate] = useState("");
   const [rateMiddlemanAmount, setRateMiddlemanAmount] = useState("");
   const [rateMiddlemanInputAmount, setRateMiddlemanInputAmount] = useState("");
+  const [rateMiddlemanPlatformFee, setRateMiddlemanPlatformFee] = useState("");
   const [rateTransferToAccount, setRateTransferToAccount] = useState(null);
   const [rateTransferFromAccount, setRateTransferFromAccount] = useState(null);
 
@@ -159,6 +160,7 @@ export default function AddTransactionSheet({
     setRateMiddlemanRate("");
     setRateMiddlemanAmount("");
     setRateMiddlemanInputAmount("");
+    setRateMiddlemanPlatformFee("");
     setRateTransferToAccount(null);
     setRateTransferFromAccount(null);
   }, []);
@@ -237,19 +239,20 @@ export default function AddTransactionSheet({
         /* ignore */
       }
     }
-    let baseFeeDec = MoneyDecimal.toDecimal("0", 0);
-    try {
-      const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
-      const mmrDec = MoneyDecimal.toDecimal(clean(rateMiddlemanRate) || "0", 0);
-      if (fromDec.gt(0) && mmrDec.gt(0)) baseFeeDec = fromDec.times(mmrDec);
-    } catch {
-      /* ignore */
-    }
-    // Fee is taken at face value; do not multiply by FX rate.
-    const finalFeeDec = baseFeeDec.plus(inputAmtDec);
+    const finalFeeDec = computeRateMiddlemanProfit({
+      fromAmount: rateCurrencyFromAmount,
+      middlemanRate: rateMiddlemanRate,
+      feeAmount: rateMiddlemanInputAmount,
+      platformFeeAmount: rateMiddlemanPlatformFee,
+    });
     let middleStr = "";
     if (!finalFeeDec.isZero()) middleStr = formatRateAmount(finalFeeDec.toString());
-    else if (finalFeeDec.isZero() && (baseFeeDec.gt(0) || !inputAmtDec.isZero())) middleStr = "0.00";
+    else if (
+      finalFeeDec.isZero() &&
+      (clean(rateMiddlemanRate) || clean(rateMiddlemanInputAmount) || clean(rateMiddlemanPlatformFee))
+    ) {
+      middleStr = "0.00";
+    }
     setRateMiddlemanAmount(middleStr);
 
     try {
@@ -277,6 +280,7 @@ export default function AddTransactionSheet({
     rateExchangeRateRaw,
     rateMiddlemanRate,
     rateMiddlemanInputAmount,
+    rateMiddlemanPlatformFee,
   ]);
 
   const handleSubmit = async () => {
@@ -337,6 +341,7 @@ export default function AddTransactionSheet({
           rateTransferToAccount,
           rateTransferFromAccount,
           rateMiddlemanInputAmount,
+          rateMiddlemanPlatformFee,
         });
         const res = await onSubmit(payload, buildClientRequestId());
         if (res?.success) onClose?.();
@@ -710,14 +715,24 @@ export default function AddTransactionSheet({
                   <input
                     type="text"
                     inputMode="decimal"
-                    value={rateMiddlemanAmount}
-                    readOnly
+                    value={rateMiddlemanPlatformFee}
                     disabled={mutationsBlocked}
-                    placeholder={m.amount}
-                    className="m-tx-form-input m-tx-form-input--readonly"
-                    aria-label={m.middleMan}
+                    onChange={(e) => setRateMiddlemanPlatformFee(sanitizeAmountInput(e.target.value))}
+                    placeholder={m.platformFee}
+                    className="m-tx-form-input"
+                    aria-label={m.platformFee}
                   />
                 </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={rateMiddlemanAmount}
+                  readOnly
+                  disabled={mutationsBlocked}
+                  placeholder={m.amount}
+                  className="m-tx-form-input m-tx-form-input--readonly"
+                  aria-label={m.middleMan}
+                />
               </div>
             </>
           ) : null}

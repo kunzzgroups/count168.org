@@ -12,7 +12,7 @@ import {
   countRateDecimalPlaces,
   formatRateAmount,
 } from "../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds } from "../lib/transactionSubmitHelpers.js";
+import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds, computeRateMiddlemanProfit } from "../lib/transactionSubmitHelpers.js";
 import { submitTransaction, transactionQueryKeys } from "../lib/transactionApi.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveGridRowToAccountOption } from "../lib/transactionPaymentLogic.js";
@@ -241,7 +241,7 @@ export function useTransactionForm({
     if (txType !== "RATE") return;
 
     const clean = (v) => String(v ?? "").replace(/,/g, "").trim();
-    
+
     let inputAmtDec = MoneyDecimal.toDecimal("0", 0);
     try {
       const inputStr = clean(rateMiddlemanInputAmount);
@@ -262,23 +262,20 @@ export function useTransactionForm({
       }
     }
 
-    let baseFeeDec = MoneyDecimal.toDecimal("0", 0);
-    try {
-      const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
-      const mmrDec = MoneyDecimal.toDecimal(clean(rateMiddlemanRate) || "0", 0);
-      if (fromDec.gt(0) && mmrDec.gt(0)) {
-        baseFeeDec = fromDec.times(mmrDec);
-      }
-    } catch {
-      // ignore
-    }
-
-    // Fee is taken at face value (same currency semantics as before); do not multiply by FX rate.
-    const finalFeeDec = baseFeeDec.plus(inputAmtDec);
+    // MM profit = rate-mul commission + (Fee − Platform Fee); no FX multiply on fees.
+    const finalFeeDec = computeRateMiddlemanProfit({
+      fromAmount: rateCurrencyFromAmount,
+      middlemanRate: rateMiddlemanRate,
+      feeAmount: rateMiddlemanInputAmount,
+      platformFeeAmount: rateMiddlemanPlatformFee,
+    });
     let middleStr = "";
     if (!finalFeeDec.isZero()) {
       middleStr = formatRateAmount(finalFeeDec.toString());
-    } else if (finalFeeDec.isZero() && (baseFeeDec.gt(0) || !inputAmtDec.isZero())) {
+    } else if (
+      finalFeeDec.isZero() &&
+      (clean(rateMiddlemanRate) || clean(rateMiddlemanInputAmount) || clean(rateMiddlemanPlatformFee))
+    ) {
       middleStr = "0.00";
     }
     setRateMiddlemanAmount(middleStr);
@@ -295,9 +292,9 @@ export function useTransactionForm({
         setRateToAmountGrossStr("");
         return;
       }
-      
+
       const baseGross = fromDec.times(rateDec);
-      
+
       let finalGrossForBackend = baseGross;
       if (inputAmtDec.lt(0)) {
         finalGrossForBackend = baseGross.plus(inputAmtDec);
@@ -306,17 +303,25 @@ export function useTransactionForm({
       const grossDisplayStr = formatRateAmount(finalGrossForBackend.toString());
       setRateToAmountGrossStr(grossDisplayStr);
 
+      // Preview net: gross − MM profit (commission + fee − platform).
       let displayVal = finalGrossForBackend;
       if (!finalFeeDec.isZero()) {
         displayVal = displayVal.minus(finalFeeDec);
       }
-      
+
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));
     } catch {
       setRateCurrencyToAmount("");
       setRateToAmountGrossStr("");
     }
-  }, [txType, rateCurrencyFromAmount, rateExchangeRateRaw, rateMiddlemanRate, rateMiddlemanInputAmount]);
+  }, [
+    txType,
+    rateCurrencyFromAmount,
+    rateExchangeRateRaw,
+    rateMiddlemanRate,
+    rateMiddlemanInputAmount,
+    rateMiddlemanPlatformFee,
+  ]);
 
   const onRateCurrencyRowReverse = useCallback(() => {
     const tmpAmt = rateCurrencyFromAmount;
@@ -435,6 +440,7 @@ export function useTransactionForm({
           rateTransferToAccount,
           rateTransferFromAccount,
           rateMiddlemanInputAmount,
+          rateMiddlemanPlatformFee,
         });
 
         const res = await submitMutation.mutateAsync({ scopeApi, payload, clientRequestId });

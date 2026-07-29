@@ -280,7 +280,8 @@ function mapEntryTypeToProduct($entryType)
         'RATE_TRANSFER_FROM' => 'RATE',
         'RATE_TRANSFER_TO' => 'RATE',
         'RATE_MIDDLEMAN' => 'RATE',
-        'RATE_FEE' => 'RATE',
+        'RATE_FEE' => 'Fee',
+        'RATE_PLATFORM_FEE' => 'Fee',
         'NORMAL_FROM' => 'TRANSFER',
         'NORMAL_TO' => 'TRANSFER'
     ];
@@ -301,7 +302,7 @@ function historyRateLegSortGroup(?string $entryType): int
     if (in_array($t, ['RATE_FIRST_TO', 'RATE_TRANSFER_TO'], true)) {
         return 1;
     }
-    if ($t === 'RATE_MIDDLEMAN' || $t === 'RATE_FEE') {
+    if ($t === 'RATE_MIDDLEMAN' || $t === 'RATE_FEE' || $t === 'RATE_PLATFORM_FEE') {
         return 2;
     }
     return 3;
@@ -2717,6 +2718,8 @@ try {
                 $row['rate_from_amount'] ?? null,
                 $row['rate_transfer_from_account_code'] ?? null
             );
+        } elseif (in_array($entryType, ['RATE_FEE', 'RATE_PLATFORM_FEE'], true)) {
+            // Keep Fee / Platform Fee descriptions as stored (Charge … Service Fees / PlatForm Fee).
         } else {
             $description = formatExchangeRateDescription(
                 $description,
