@@ -252,13 +252,13 @@ export function buildRatePayload({
   };
 
   if (transferToId && transferFromId) {
-    // To = gross − Service Fee（正/负 PT 都不改 To）
+    // To = full gross（不扣 Service Fee / 正 PT）→ TEST 2 = 310
     // From = gross − rateMul − Service Fee − max(PT,0)；Service Fee 另写 RATE_FEE，避免双计
     // Negative PT-Fee：From/To 不因 PT 变动；Middle Remark only
     const transferBase = grossDec;
     const serviceFeeDec = parsePositiveAmt(rateMiddlemanInputAmount);
     const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
-    let transferToSide = serviceFeeDec.gt(0) ? transferBase.minus(serviceFeeDec) : transferBase;
+    const transferToSide = transferBase;
     let transferFromSide = transferBase;
     if (middleId && rateMulDec.gt(0)) {
       transferFromSide = transferBase.minus(rateMulDec);

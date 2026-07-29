@@ -24,7 +24,7 @@
 
 | 项目 | 规则 |
 |------|------|
-| **Service Fee**（表单 Fee 输入） | **桌面**：独立 `RATE_FEE` 挂第二 form account（Select From）；From 腿金额已扣 Fee，**不**走 Remark。**Mobile（暂未改）**：仍用主单 `sms` Remark，不写 `RATE_FEE`。To 腿仍为 gross − Service Fee。 |
+| **Service Fee**（表单 Fee 输入） | **桌面**：独立 `RATE_FEE` 挂 Select From；From 腿扣 Fee；To 腿 = **全额 gross**（不扣 Fee）。**Mobile（暂未改）**：仍 sms Remark；To 仍可能为 gross − Fee。 |
 | **Platform Fee > 0** | **实时**从第二币种金额预览与 **From** 腿扣减；Middle-Man Amount = **仅 Fee**（+ Rate-Mul），**不加** PT；**不**写 `RATE_PLATFORM_FEE` 行。 |
 | **Platform Fee < 0** | From / To 金额**不变**；Middle-Man Amount = `Fee − abs(PT-Fee)`；**不**写独立 Fee 行，Remark 挂在 `RATE_MIDDLEMAN`（如 `charge MYR 1.5 PlatForm Fee`）。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man（及负 PT 的 Remark / fallback）。 |
@@ -78,12 +78,12 @@ displayAmt = gross − (Rate-Mul 佣金 + Service Fee) − max(PT, 0)
 - **正 PT-Fee**：右侧金额实时变为 From 口径（例：`300 − 1.5 = 298.5`）。
 - **负 PT-Fee**：不扣预览金额（仍为 `gross − Rate-Mul − Service Fee`）。
 
-To 腿入库仍只扣 Service Fee（正 PT **不**改 To 腿）。
+To 腿入库 = **全额 gross**（不扣 Service Fee / 正 PT）。正 PT 只改 From。表单右侧预览仍可按 From 口径显示（扣 Fee + 正 PT）。
 
 ### 3.3 Transfer 金额（有第二组账户时）
 
 ```text
-transfer To 侧金额   = gross − Service Fee
+transfer To 侧金额   = gross                         （桌面：不扣 Service Fee）
 transfer From 侧金额 = gross − rateMulCommission − Service Fee − max(PT, 0)   （桌面）
 + RATE_FEE（正数，仅桌面发 rate_service_fee_amount）挂 Select From
 ```
@@ -159,7 +159,7 @@ POST RATE
 1. 一笔 **RATE**（金额已扣 Fee 与正 PT；**无** Service Fee Remark）  
 2. 一笔 **Fee**（Service Fee，独立行）  
 3. Middle-Man：MARKUP = **仅 Fee**（不含正 PT）  
-4. To：未扣 PT 的 To 腿 
+4. To：全额 gross（例 310） 
 
 ---
 
@@ -188,7 +188,7 @@ Schema 已同步：`easycount_schema.sql` / `banks_schema.sql` / `easycount_fres
 |------|------|
 | Middle 利润 | `10`（正 PT **不**加进 Middle） |
 | 表单右侧预览 | `310 − 10 − 1.50 = 298.50` |
-| Transfer To 腿 | **300**（gross − Service Fee） |
+| Transfer To 腿 | **310**（全额 gross，不扣 Fee） |
 | Transfer From 腿 | **298.50**（gross − Fee − PT） |
 | **写** | Select From：`RATE_FEE` **+10**（Description，无 Remark） |
 | **不写** | RATE 行 Service Fee Remark；`RATE_PLATFORM_FEE`；Middle 不含 `1.50` |
