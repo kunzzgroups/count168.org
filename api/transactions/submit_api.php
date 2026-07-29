@@ -527,11 +527,28 @@ try {
                 submitEnsureAmountMaxDecimals($_POST['rate_transfer_to_amount'], SUBMIT_STORE_SCALE_RATE, 'Rate Transfer To Amount');
             }
 
-            // Service Fee: SMS/remark only on RATE_TRANSFER_TO (already baked into transfer amount).
-            // Platform Fee sign selects its account; stored ledger amount is always negative.
+            // Service Fee:
+            // - Desktop sends rate_service_fee_amount → insert RATE_FEE once on Select From (no sms remark).
+            // - Mobile / legacy (no rate_service_fee_amount) → sms remark only (unchanged).
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             $rate_middleman_platform_fee = !empty($_POST['rate_middleman_platform_fee']) ? money_normalize($_POST['rate_middleman_platform_fee']) : null;
-            if ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
+            $rate_service_fee_amount = !empty($_POST['rate_service_fee_amount'])
+                ? submitStoreAmount($_POST['rate_service_fee_amount'], SUBMIT_STORE_SCALE_RATE)
+                : null;
+            $rate_service_fee_description = trim($_POST['rate_service_fee_description'] ?? '');
+            if (
+                $rate_service_fee_amount !== null
+                && money_cmp($rate_service_fee_amount, '0') > 0
+            ) {
+                if ($rate_service_fee_description === '') {
+                    $feeCurrency = strtoupper(trim((string) $rate_to_currency));
+                    $feeDisplay = money_abs($rate_service_fee_amount);
+                    if (strpos($feeDisplay, '.') !== false) {
+                        $feeDisplay = rtrim(rtrim($feeDisplay, '0'), '.');
+                    }
+                    $rate_service_fee_description = 'charge ' . $feeCurrency . ' ' . $feeDisplay . ' Service Fees';
+                }
+            } elseif ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
                 $feeCurrency = trim((string) $rate_to_currency);
                 if ($feeCurrency !== '') {
                     $feeDisplay = $rate_middleman_input_amount;
@@ -959,6 +976,26 @@ try {
                         'RATE_TRANSFER_TO',
                         $rate_transfer_to_description
                     ]);
+
+                    // Desktop Service Fee：独立 RATE_FEE（正数）挂 Select From；仅当 POST 带 rate_service_fee_amount。
+                    // From 腿金额已由前端扣掉 Service Fee，此处只写一次，避免双计。
+                    if (
+                        $rate_service_fee_amount !== null
+                        && money_cmp($rate_service_fee_amount, '0') > 0
+                        && (int) $rate_transfer_to_account_id > 0
+                    ) {
+                        $entryStmt->execute([
+                            $main_transaction_id,
+                            $company_id,
+                            (int) $rate_transfer_to_account_id,
+                            $myrCurrencyId,
+                            submitStoreAmount($rate_service_fee_amount, SUBMIT_STORE_SCALE_RATE),
+                            'RATE_FEE',
+                            $rate_service_fee_description !== ''
+                                ? $rate_service_fee_description
+                                : 'charge Service Fees'
+                        ]);
+                    }
 
                     // Middle-man：第二币种 Win/Loss（如果存在）
                     // 负 PT-Fee：不另开 RATE_PLATFORM_FEE（金额已含在 middleman profit），改挂 Remark。

@@ -2753,8 +2753,9 @@ try {
             $transactionCreatedBy = $row['created_by_owner_name'];
         }
 
-        // Service fee / header SMS: show on second-currency From leg only (RATE_TRANSFER_TO).
-        // Negative Platform Fee: remark-only on RATE_MIDDLEMAN (no separate Fee ledger row).
+        // Desktop: Service Fee is its own RATE_FEE row — RATE_TRANSFER_TO has no Fee Remark.
+        // Mobile/legacy: header sms still carries "Service Fees" → keep as Remark on TRANSFER_TO.
+        // Negative Platform Fee: remark-only on RATE_MIDDLEMAN.
         $rateServiceFeeRemark = null;
         if ($entryType === 'RATE_TRANSFER_TO') {
             $headerSms = trim((string) ($row['sms'] ?? ''));

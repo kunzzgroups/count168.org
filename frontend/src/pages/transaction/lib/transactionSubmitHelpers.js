@@ -210,8 +210,8 @@ export function buildRatePayload({
 
   const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyTo, rateMiddlemanInputAmount);
   const platformFeeRemark = buildRatePlatformFeeRemark(rateCurrencyTo, rateMiddlemanPlatformFee);
-  // Service Fee → header sms / history Remark only (no RATE_FEE row).
-  const sms = serviceFeeRemark || String(txRemark || "").toUpperCase();
+  // Service Fee → separate RATE_FEE row (desktop). Do not put Fee text into sms/Remark.
+  const sms = String(txRemark || "").toUpperCase();
 
   const storeFrom = store(fromDec.toString());
   const storeGross = store(grossDec.toString());
@@ -254,9 +254,9 @@ export function buildRatePayload({
   };
 
   if (transferToId && transferFromId) {
-    // To = net (exclude Service Fee) so 收款方 matches form amount (e.g. 300 not 310).
-    // From keeps Service Fee; positive PT-Fee deducts From in-leg (no RATE_PLATFORM_FEE row).
-    // Negative PT-Fee does not touch From/To; Middle = Fee − abs(PT), Remark on MARKUP.
+    // To = gross − Service Fee（正/负 PT 都不改 To）
+    // From = gross − rateMul − Service Fee − max(PT,0)；Service Fee 另写 RATE_FEE，避免双计
+    // Negative PT-Fee：From/To 不因 PT 变动；Middle Remark only
     const transferBase = grossDec;
     const serviceFeeDec = parsePositiveAmt(rateMiddlemanInputAmount);
     const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
@@ -264,6 +264,9 @@ export function buildRatePayload({
     let transferFromSide = transferBase;
     if (middleId && rateMulDec.gt(0)) {
       transferFromSide = transferBase.minus(rateMulDec);
+    }
+    if (serviceFeeDec.gt(0)) {
+      transferFromSide = transferFromSide.minus(serviceFeeDec);
     }
     if (positivePtDec.gt(0)) {
       transferFromSide = transferFromSide.minus(positivePtDec);
@@ -287,6 +290,14 @@ export function buildRatePayload({
       payload.rate_middleman_currency = rateCurrencyTo;
       payload.rate_middleman_amount = store(middleDec.toString());
       payload.rate_middleman_description = middleDesc;
+    }
+
+    // Desktop-only flag: PHP inserts RATE_FEE once on Select From when this is present.
+    if (serviceFeeDec.gt(0)) {
+      payload.rate_service_fee_amount = store(serviceFeeDec.toString());
+      payload.rate_service_fee_description =
+        serviceFeeRemark ||
+        `charge ${String(rateCurrencyTo ?? "").trim().toUpperCase()} ${store(serviceFeeDec.toString())} Service Fees`;
     }
 
     // Only negative PT-Fee still needs platform-fee fields (Middle Remark / fallback Fee row).

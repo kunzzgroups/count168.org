@@ -283,8 +283,8 @@ export function useTransactionForm({
     }
     setRateMiddlemanAmount(middleStr);
 
-    // Second-currency preview: Rate-Mul + Service Fee (To side), then positive PT-Fee (From side realtime).
-    // Negative PT-Fee does not change this amount. To ledger at submit still excludes only Service Fee.
+    // Second-currency preview: Rate-Mul + Service Fee, then positive PT-Fee.
+    // Desktop submit: From leg also deducts Service Fee; RATE_FEE row carries the Fee once.
     const toAmountDeductionDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
