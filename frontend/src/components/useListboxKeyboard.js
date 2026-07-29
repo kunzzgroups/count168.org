@@ -7,7 +7,7 @@ import {
 } from "./typeAheadMatch.js";
 
 /**
- * Keyboard navigation for custom listbox dropdowns (ArrowUp/Down, Enter, Escape, type-ahead).
+ * Keyboard navigation for custom listbox dropdowns (ArrowUp/Down, Enter, Escape, first-letter type-ahead).
  * When closed + getItemLabel: letter keys open the menu and jump to the first match.
  */
 export function useListboxKeyboard({ open, itemCount, resetToken = null, initialIndex = 0, getItemLabel = null, onTypeAheadChange = null }) {
