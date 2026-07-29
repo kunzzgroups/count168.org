@@ -962,10 +962,9 @@ try {
 
                     // Middle-man：第二币种 Win/Loss（如果存在）
                     // 负 PT-Fee：不另开 RATE_PLATFORM_FEE（金额已含在 middleman profit），改挂 Remark。
+                    // 正 PT-Fee：已扣在 From 腿金额，并入 Middle = Fee+PT，不再写 RATE_PLATFORM_FEE。
                     $platformFeeIsNegative =
                         $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') < 0;
-                    $platformFeeIsPositive =
-                        $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0;
                     $platformFeeRemarkText = $rate_platform_fee_description !== ''
                         ? $rate_platform_fee_description
                         : 'charge PlatForm Fee';
@@ -993,18 +992,9 @@ try {
                         $middlemanRowInserted = true;
                     }
 
-                    // Platform Fee 独立负数分录：
-                    // - 正数输入 → 挂第二币种 From
-                    // - 负数输入且已有 RATE_MIDDLEMAN → Remark only（避免与 Amount 双计）
-                    // - 负数输入但无 Middle-Man 行 → fallback 仍写 RATE_PLATFORM_FEE 挂 Middle-Man
-                    $secondFromAccountId = (int) $rate_transfer_to_account_id;
-                    $platformFeeLedgerAccountId = 0;
-                    if ($platformFeeIsPositive && $secondFromAccountId > 0) {
-                        $platformFeeLedgerAccountId = $secondFromAccountId;
-                    } elseif ($platformFeeIsNegative && !$middlemanRowInserted && $rate_middleman_account_id) {
-                        $platformFeeLedgerAccountId = (int) $rate_middleman_account_id;
-                    }
-                    if ($platformFeeLedgerAccountId > 0) {
+                    // 正 PT-Fee：永不写 RATE_PLATFORM_FEE（已体现在 From 扣减 + Middle Fee+PT）。
+                    // 负 PT-Fee：优先 Remark on MIDDLEMAN；若无 Middle-Man 行则 fallback 写 Fee 挂 Middle-Man。
+                    if ($platformFeeIsNegative && !$middlemanRowInserted && $rate_middleman_account_id) {
                         $platformFeeLedgerAmount = money_mul(
                             money_abs($rate_platform_fee_amount),
                             '-1',
@@ -1013,7 +1003,7 @@ try {
                         $entryStmt->execute([
                             $main_transaction_id,
                             $company_id,
-                            $platformFeeLedgerAccountId,
+                            (int) $rate_middleman_account_id,
                             $myrCurrencyId,
                             submitStoreAmount($platformFeeLedgerAmount, SUBMIT_STORE_SCALE_RATE),
                             'RATE_PLATFORM_FEE',

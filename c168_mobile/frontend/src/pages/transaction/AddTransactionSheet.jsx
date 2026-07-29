@@ -11,7 +11,7 @@ import {
   RATE_STORE_MAX_DECIMALS,
   TX_STORE_MAX_DECIMALS,
 } from "../../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike, computeRateMiddlemanProfit } from "../../lib/transactionSubmitHelpers.js";
+import { buildRatePayload, toNumberLike, computeRateMiddlemanProfit, positivePlatformFeeDeduction } from "../../lib/transactionSubmitHelpers.js";
 import { formatYmd, parseYmd, formatDisplayDate } from "../../lib/dashboardDateUtils.js";
 import "./add-transaction-sheet.css";
 
@@ -258,13 +258,14 @@ export default function AddTransactionSheet({
     }
     setRateMiddlemanAmount(middleStr);
 
-    // Second-currency preview ignores Platform Fee (separate ledger row).
+    // Rate-Mul + Service Fee, then positive PT-Fee (From realtime). Negative PT does not change amount.
     const toAmountDeductionDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
       feeAmount: rateMiddlemanInputAmount,
       platformFeeAmount: "0",
     });
+    const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
 
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
@@ -280,6 +281,7 @@ export default function AddTransactionSheet({
       setRateToAmountGrossStr(grossDisplayStr);
       let displayVal = finalGrossForBackend;
       if (!toAmountDeductionDec.isZero()) displayVal = displayVal.minus(toAmountDeductionDec);
+      if (positivePtDec.gt(0)) displayVal = displayVal.minus(positivePtDec);
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));
     } catch {
       setRateCurrencyToAmount("");

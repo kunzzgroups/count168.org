@@ -15,7 +15,7 @@ import {
   RATE_STORE_MAX_DECIMALS,
   TX_STORE_MAX_DECIMALS,
 } from "../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds, computeRateMiddlemanProfit } from "../lib/transactionSubmitHelpers.js";
+import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds, computeRateMiddlemanProfit, positivePlatformFeeDeduction } from "../lib/transactionSubmitHelpers.js";
 import { submitTransaction, transactionQueryKeys } from "../lib/transactionApi.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveGridRowToAccountOption } from "../lib/transactionPaymentLogic.js";
@@ -265,7 +265,7 @@ export function useTransactionForm({
       }
     }
 
-    // MM profit = rate-mul commission + (Fee − Platform Fee); no FX multiply on fees.
+    // MM profit: PT>0 → Fee+PT；PT<0 → Fee−|PT|
     const finalFeeDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
@@ -283,14 +283,15 @@ export function useTransactionForm({
     }
     setRateMiddlemanAmount(middleStr);
 
-    // Second-currency preview: deduct Rate-Mul + Service Fee only.
-    // Platform Fee is a separate ledger row — must not change To amount (e.g. 100×3=300, not 301.50).
+    // Second-currency preview: Rate-Mul + Service Fee (To side), then positive PT-Fee (From side realtime).
+    // Negative PT-Fee does not change this amount. To ledger at submit still excludes only Service Fee.
     const toAmountDeductionDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
       feeAmount: rateMiddlemanInputAmount,
       platformFeeAmount: "0",
     });
+    const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
 
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
@@ -318,6 +319,10 @@ export function useTransactionForm({
       let displayVal = finalGrossForBackend;
       if (!toAmountDeductionDec.isZero()) {
         displayVal = displayVal.minus(toAmountDeductionDec);
+      }
+      // Positive PT-Fee: realtime From amount = amount − PT (e.g. 300 − 1.5 = 298.5).
+      if (positivePtDec.gt(0)) {
+        displayVal = displayVal.minus(positivePtDec);
       }
 
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));

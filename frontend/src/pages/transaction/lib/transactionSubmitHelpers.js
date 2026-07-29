@@ -35,10 +35,6 @@ function parseSignedAmt(raw) {
   }
 }
 
-function parseAbsoluteAmt(raw) {
-  return parseSignedAmt(raw).abs();
-}
-
 /** Rate-Mul factor: plain number or expression (`/0.1` → 10), same rules as exchange Rate. */
 function parseMiddlemanRateFactor(raw) {
   const parsed = parseRateExpression(raw);
@@ -84,7 +80,9 @@ export function buildRatePlatformFeeRemark(currencyTo, platformFeeAmount) {
 }
 
 /**
- * Middle-Man profit: rate-mul commission + (Fee − Platform Fee).
+ * Middle-Man profit: rate-mul commission + signed Platform Fee mix.
+ * - PT-Fee > 0 → Fee + PT-Fee（正数从顾客 From 扣，并入 Middle）
+ * - PT-Fee < 0 → Fee − abs(PT-Fee)
  * Fee / Platform Fee are face values (no FX multiply).
  */
 export function computeRateMiddlemanProfit({
@@ -100,8 +98,21 @@ export function computeRateMiddlemanProfit({
     rateMulDec = fromDec.times(mmrDec);
   }
   const feeDec = parsePositiveAmt(feeAmount);
-  const platformDec = parseAbsoluteAmt(platformFeeAmount);
-  return rateMulDec.plus(feeDec.minus(platformDec));
+  const platformSigned = parseSignedAmt(platformFeeAmount);
+  const platformAbs = platformSigned.abs();
+  let feeNet = feeDec;
+  if (platformSigned.gt(0)) {
+    feeNet = feeDec.plus(platformAbs);
+  } else if (platformSigned.lt(0)) {
+    feeNet = feeDec.minus(platformAbs);
+  }
+  return rateMulDec.plus(feeNet);
+}
+
+/** Positive PT-Fee abs for From-amount deduction; otherwise 0. */
+export function positivePlatformFeeDeduction(platformFeeAmount) {
+  const platformSigned = parseSignedAmt(platformFeeAmount);
+  return platformSigned.gt(0) ? platformSigned.abs() : MoneyDecimal.toDecimal("0", 0);
 }
 
 /**
@@ -244,14 +255,18 @@ export function buildRatePayload({
 
   if (transferToId && transferFromId) {
     // To = net (exclude Service Fee) so 收款方 matches form amount (e.g. 300 not 310).
-    // From keeps gross so 乙方 still bears Service Fee in the transfer leg.
-    // Platform Fee stays a separate negative row; input sign selects From or Middle-Man.
+    // From keeps Service Fee; positive PT-Fee deducts From in-leg (no RATE_PLATFORM_FEE row).
+    // Negative PT-Fee does not touch From/To; Middle = Fee − abs(PT), Remark on MARKUP.
     const transferBase = grossDec;
     const serviceFeeDec = parsePositiveAmt(rateMiddlemanInputAmount);
+    const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
     let transferToSide = serviceFeeDec.gt(0) ? transferBase.minus(serviceFeeDec) : transferBase;
     let transferFromSide = transferBase;
     if (middleId && rateMulDec.gt(0)) {
       transferFromSide = transferBase.minus(rateMulDec);
+    }
+    if (positivePtDec.gt(0)) {
+      transferFromSide = transferFromSide.minus(positivePtDec);
     }
 
     payload.rate_transfer_from_account_id = transferToId;
@@ -274,7 +289,8 @@ export function buildRatePayload({
       payload.rate_middleman_description = middleDesc;
     }
 
-    if (!platformInputDec.isZero()) {
+    // Only negative PT-Fee still needs platform-fee fields (Middle Remark / fallback Fee row).
+    if (platformInputDec.lt(0)) {
       payload.rate_platform_fee_amount = store(platformInputDec.toString());
       payload.rate_platform_fee_description =
         platformFeeRemark ||
