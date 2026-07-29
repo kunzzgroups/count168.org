@@ -68,10 +68,11 @@ middlemanProfit   = rateMulCommission + (serviceFee − platformFee)
 
 ```text
 gross     = fromAmount × exchangeRate     （写入后端的毛额 / transfer 基数）
-displayTo = gross − middlemanProfit       （表单右侧只读预览，可因 Platform 减小扣减而变大）
+displayTo = gross − (Rate-Mul 佣金 + Service Fee)   （不含 Platform Fee）
 ```
 
-注意：预览变大 **不等于**「把 Platform Fee 加进毛额」。毛额仍是兑换结果；Platform 只影响「少扣多少 Middle 利润」。
+Platform Fee **不**参与第二币种预览；它只影响 Middle-Man Amount（`Fee − Platform Fee`）并单独落 `RATE_PLATFORM_FEE`。
+因此 `100 × 3` + Platform `1.5` 时，右侧金额仍为 **300.00**，不会变成 301.50。
 
 ### 3.3 Transfer 金额（有第二组账户时）
 

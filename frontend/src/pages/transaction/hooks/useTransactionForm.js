@@ -283,6 +283,15 @@ export function useTransactionForm({
     }
     setRateMiddlemanAmount(middleStr);
 
+    // Second-currency preview: deduct Rate-Mul + Service Fee only.
+    // Platform Fee is a separate ledger row — must not change To amount (e.g. 100×3=300, not 301.50).
+    const toAmountDeductionDec = computeRateMiddlemanProfit({
+      fromAmount: rateCurrencyFromAmount,
+      middlemanRate: rateMiddlemanRate,
+      feeAmount: rateMiddlemanInputAmount,
+      platformFeeAmount: "0",
+    });
+
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
       if (!parsed.valid || !fromDec.gt(0)) {
@@ -306,10 +315,9 @@ export function useTransactionForm({
       const grossDisplayStr = formatRateAmount(finalGrossForBackend.toString());
       setRateToAmountGrossStr(grossDisplayStr);
 
-      // Preview net: gross − MM profit (commission + fee − platform).
       let displayVal = finalGrossForBackend;
-      if (!finalFeeDec.isZero()) {
-        displayVal = displayVal.minus(finalFeeDec);
+      if (!toAmountDeductionDec.isZero()) {
+        displayVal = displayVal.minus(toAmountDeductionDec);
       }
 
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));

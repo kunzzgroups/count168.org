@@ -258,6 +258,14 @@ export default function AddTransactionSheet({
     }
     setRateMiddlemanAmount(middleStr);
 
+    // Second-currency preview ignores Platform Fee (separate ledger row).
+    const toAmountDeductionDec = computeRateMiddlemanProfit({
+      fromAmount: rateCurrencyFromAmount,
+      middlemanRate: rateMiddlemanRate,
+      feeAmount: rateMiddlemanInputAmount,
+      platformFeeAmount: "0",
+    });
+
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
       if (!parsed.valid || !fromDec.gt(0) || !rateDec.gt(0)) {
@@ -271,7 +279,7 @@ export default function AddTransactionSheet({
       const grossDisplayStr = formatRateAmount(finalGrossForBackend.toString());
       setRateToAmountGrossStr(grossDisplayStr);
       let displayVal = finalGrossForBackend;
-      if (!finalFeeDec.isZero()) displayVal = displayVal.minus(finalFeeDec);
+      if (!toAmountDeductionDec.isZero()) displayVal = displayVal.minus(toAmountDeductionDec);
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));
     } catch {
       setRateCurrencyToAmount("");
