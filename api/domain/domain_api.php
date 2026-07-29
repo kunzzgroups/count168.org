@@ -1078,7 +1078,8 @@ function domainApiResolveFeeShareC168CompanyPk(PDO $pdo): ?int
 }
 
 /**
- * Share % 下拉数据：始终仅列出 C168 公司本体 Account（排除 Group 账本账户），role 只能是 staff/agent。
+ * Share % 下拉数据：始终仅列出 C168 公司本体 Account（排除 Group 账本账户），role 为 staff/agent/partner。
+ * 用于 Domain Company Setting 与 Auto Renew Commission Setting（Sales/CS/IT）。
  */
 function fetchFeeSharePickerAccounts(PDO $pdo): array {
     $rows = [];
@@ -1092,7 +1093,7 @@ function fetchFeeSharePickerAccounts(PDO $pdo): array {
             INNER JOIN account_company ac ON ac.account_id = a.id
             WHERE ac.company_id = ?
               {$subsidiaryOnly}
-              AND LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent')
+              AND LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent', 'partner')
               {$excludeNonC168}
               AND (a.status IS NULL OR LOWER(TRIM(a.status)) = 'active')
             ORDER BY a.account_id ASC
@@ -1189,7 +1190,7 @@ function applyDefaultProfitAllocationIfEmpty(PDO $pdo, array $normalized): array
 }
 
 /**
- * 校验：C168 旗下；Profit 池仅 profit role；Sales/CS/IT 仅 staff/agent。
+ * 校验：C168 旗下；Profit 池仅 profit role；Sales/CS/IT 仅 staff/agent/partner。
  */
 function feeShareAllocationsTargetsValid(PDO $pdo, array $normalized): bool {
     $c168Pk = domainApiResolveFeeShareC168CompanyPk($pdo);
@@ -1257,7 +1258,7 @@ function feeShareAllocationsTargetsValid(PDO $pdo, array $normalized): bool {
               {$subsidiaryOnly}
               {$excludeNonC168}
               AND a.id IN ($placeholders)
-              AND LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent')
+              AND LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent', 'partner')
         ";
         $stmt = $pdo->prepare($sql);
         $stmt->execute(array_merge([$c168Pk], $otherIds));
@@ -2287,7 +2288,7 @@ function createDomainShareCommissionPayments(
                 continue;
             }
 
-            $roleSql = "LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent')";
+            $roleSql = "LOWER(TRIM(COALESCE(a.role, ''))) IN ('staff', 'agent', 'partner')";
             $chk = $pdo->prepare("
                 SELECT COUNT(*)
                 FROM account_company ac
@@ -4401,7 +4402,7 @@ try {
                 }
                 $saveCompanyPk = (int) $saveRow['id'];
                 if (!feeShareAllocationsTargetsValid($pdo, $saveNormalized)) {
-                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff or agent under C168.', null);
+                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff, agent, or partner under C168.', null);
                     exit;
                 }
                 $saveJson = feeShareAllocationsToJson($saveNormalized);
@@ -4466,7 +4467,7 @@ try {
                     exit;
                 }
                 if (!feeShareAllocationsTargetsValid($pdo, $saveNormalized)) {
-                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff or agent under C168.', null);
+                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff, agent, or partner under C168.', null);
                     exit;
                 }
                 $feeJson = feeShareAllocationsToJson($saveNormalized);
@@ -4519,7 +4520,7 @@ try {
                     exit;
                 }
                 if (!feeShareAllocationsTargetsValid($pdo, $saveNormalized)) {
-                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff or agent under C168.', null);
+                    jsonResponse(false, 'Share %: Profit rows must use profit-role accounts under C168; Sales/CS/IT must use staff, agent, or partner under C168.', null);
                     exit;
                 }
                 $feeJson = feeShareAllocationsToJson($saveNormalized);
