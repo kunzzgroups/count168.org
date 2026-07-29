@@ -1,4 +1,4 @@
-﻿/* Scrollbars: app-wide — dashboard-scrollbar.css (incl. .member-dash-matrix-scroll) */
+/* Scrollbars: app-wide — dashboard-scrollbar.css (incl. .member-dash-matrix-scroll) */
 
 body.transaction-page {
     font-family: var(--font-ui) !important;
@@ -758,7 +758,7 @@ body.transaction-page {
 }
 /* 按币种分表：8 列宽合计 100%，避免 Remark 右侧留白 */
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-date {
-    width: 11%;
+    width: 7%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-product {
     width: 12%;
@@ -772,13 +772,13 @@ body.transaction-page {
     width: 10%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-description {
-    width: 34%;
+    width: 31%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-remark {
-    width: 7%;
+    width: 14%;
 }
 .member-winloss-table .transaction-history-col-date {
-    min-width: 96px;
+    min-width: 72px;
 }
 .member-winloss-table .transaction-history-col-product {
     text-align: left;
@@ -811,7 +811,7 @@ body.transaction-page {
 .member-winloss-table .transaction-history-col-remark {
     text-align: center;
     color: #64748b;
-    min-width: 56px;
+    min-width: 110px;
 }
 .member-winloss-table .transaction-history-col-rate:empty,
 .member-winloss-table td.transaction-history-col-rate,
