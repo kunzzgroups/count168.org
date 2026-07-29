@@ -324,11 +324,8 @@ export default function AddTransactionSheet({
       if (middleId && !hasMiddleRate && !hasMiddleFee) {
         return pushToast(m.pleaseEnterMiddleManRateOrFee, "error");
       }
-      if (hasMiddleRate && (!Number.isFinite(Number(mmrNorm)) || Number(mmrNorm) <= 0)) {
+      if (hasMiddleRate && !parseRateExpression(mmrNorm).valid) {
         return pushToast(m.pleaseEnterMiddleManRate, "error");
-      }
-      if (hasMiddleRate && countRateDecimalPlaces(mmrNorm) > 8) {
-        return pushToast(m.middleManRateMaxDecimals, "error");
       }
       if (countRateDecimalPlaces(String(rateCurrencyFromAmount ?? "").replace(/,/g, "").trim()) > RATE_STORE_MAX_DECIMALS) {
         return pushToast(m.rateAmountMaxDecimals, "error");

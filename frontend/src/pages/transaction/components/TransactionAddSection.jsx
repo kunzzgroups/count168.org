@@ -386,8 +386,8 @@ export default function TransactionAddSection({
               />
             </div>
             <input
-              type="number"
-              step="0.0001"
+              type="text"
+              inputMode="decimal"
               id="rate_middleman_rate"
               className="transaction-input"
               placeholder={m.rateMultiplier}

@@ -420,12 +420,8 @@ export function useTransactionForm({
         pushToast(m.pleaseEnterMiddleManRateOrFee, "error");
         return;
       }
-      if (hasMiddleRate && (!Number.isFinite(Number(mmrNorm)) || Number(mmrNorm) <= 0)) {
+      if (hasMiddleRate && !parseRateExpression(mmrNorm).valid) {
         pushToast(m.pleaseEnterMiddleManRate, "error");
-        return;
-      }
-      if (hasMiddleRate && countRateDecimalPlaces(mmrNorm) > 8) {
-        pushToast(m.middleManRateMaxDecimals, "error");
         return;
       }
       if (countRateDecimalPlaces(String(finalRateAmount ?? "").replace(/,/g, "").trim()) > RATE_STORE_MAX_DECIMALS) {

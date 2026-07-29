@@ -1,4 +1,8 @@
-import { formatAmountForStore, RATE_STORE_MAX_DECIMALS } from "./transactionFormat.js";
+import {
+  formatAmountForStore,
+  parseRateExpression,
+  RATE_STORE_MAX_DECIMALS,
+} from "./transactionFormat.js";
 import MoneyDecimal from "../../../utils/money/moneyDecimal.js";
 
 export function toNumberLike(raw) {
@@ -33,6 +37,18 @@ function parseSignedAmt(raw) {
 
 function parseAbsoluteAmt(raw) {
   return parseSignedAmt(raw).abs();
+}
+
+/** Rate-Mul factor: plain number or expression (`/0.1` → 10), same rules as exchange Rate. */
+function parseMiddlemanRateFactor(raw) {
+  const parsed = parseRateExpression(raw);
+  if (!parsed.valid) return MoneyDecimal.toDecimal("0", 0);
+  try {
+    const dec = MoneyDecimal.toDecimal(parsed.value || "0", 0);
+    return dec.gt(0) ? dec : MoneyDecimal.toDecimal("0", 0);
+  } catch {
+    return MoneyDecimal.toDecimal("0", 0);
+  }
 }
 
 /** RATE Service Fee remark / desc：charge {第二币种} {用户输入} Service Fees */
@@ -79,13 +95,9 @@ export function computeRateMiddlemanProfit({
 }) {
   const fromDec = parsePositiveAmt(fromAmount);
   let rateMulDec = MoneyDecimal.toDecimal("0", 0);
-  try {
-    const mmrDec = MoneyDecimal.toDecimal(cleanAmt(middlemanRate) || "0", 0);
-    if (fromDec.gt(0) && mmrDec.gt(0)) {
-      rateMulDec = fromDec.times(mmrDec);
-    }
-  } catch {
-    // ignore
+  const mmrDec = parseMiddlemanRateFactor(middlemanRate);
+  if (fromDec.gt(0) && mmrDec.gt(0)) {
+    rateMulDec = fromDec.times(mmrDec);
   }
   const feeDec = parsePositiveAmt(feeAmount);
   const platformDec = parseAbsoluteAmt(platformFeeAmount);
@@ -163,15 +175,11 @@ export function buildRatePayload({
 
   const platformInputDec = parseSignedAmt(rateMiddlemanPlatformFee);
 
-  // Rate-mul commission only (excludes fee / platform fee).
+  // Rate-mul commission only (excludes fee / platform fee). Supports `/0.1` via parseRateExpression.
   let rateMulDec = MoneyDecimal.toDecimal("0", 0);
-  try {
-    const mmrDec = MoneyDecimal.toDecimal(cleanAmt(rateMiddlemanRate) || "0", 0);
-    if (fromDec.gt(0) && mmrDec.gt(0)) {
-      rateMulDec = fromDec.times(mmrDec);
-    }
-  } catch {
-    // ignore
+  const mmrDec = parseMiddlemanRateFactor(rateMiddlemanRate);
+  if (fromDec.gt(0) && mmrDec.gt(0)) {
+    rateMulDec = fromDec.times(mmrDec);
   }
 
   const fromCode = rateFromAccount?.account_id || "";
