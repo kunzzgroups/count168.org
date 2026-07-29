@@ -160,6 +160,8 @@ export function useTransactionSearch({
   /** After a real company switch, skip one blocking "Loading data" overlay (still fetch in background). */
   const suppressBlockingOverlayOnceRef = useRef(false);
   const prevScopeKeyForSearchRef = useRef(null);
+  /** Detect company strip switch — reset Category / date / display chips (not Currency). */
+  const prevCompanyIdForFilterResetRef = useRef(null);
   /** Capture Date 变更后触发搜索；与「仅首次拉数」的 initial effect 分离，避免 initialSearchDoneRef 为 true 时改日期不请求 */
   const prevCaptureDateRangeKeyRef = useRef(null);
   /** First approved submit may jump Capture Date to the tx date; later submits keep the current range. */
@@ -1987,6 +1989,10 @@ export function useTransactionSearch({
   useEffect(() => {
     const prev = prevScopeKeyForSearchRef.current;
     const scopeChanged = prev != null && prev !== scopeKey;
+    const prevCompanyId = prevCompanyIdForFilterResetRef.current;
+    const companyChanged =
+      prevCompanyId != null &&
+      String(prevCompanyId) !== String(scopeCacheCompanyKey ?? "");
 
     if (scopeKey == null) {
       if (prev != null) {
@@ -2004,6 +2010,7 @@ export function useTransactionSearch({
         }
       }
       prevScopeKeyForSearchRef.current = null;
+      prevCompanyIdForFilterResetRef.current = null;
       return;
     }
 
@@ -2013,15 +2020,45 @@ export function useTransactionSearch({
       suppressCrossPageCurrencyRef.current = true;
       earlyCurrencyScopeRef.current = null;
       currenciesBeforeAllRef.current = [];
-      prevCaptureDateRangeKeyRef.current = null;
-      prevServerSideFiltersRef.current = null;
       setSubmitFocusByCurrency({});
       setSubmitFocusRangeKey(null);
       submitFocusLeftRangeKeysRef.current.clear();
       setSearchLoading(false);
       lastCompletedSearchKeyRef.current = "";
 
-      const date = effectiveDateFrom || todayDmy;
+      const today = String(todayDmy || "").trim();
+      // Company switch: restore Category / Capture Date / display chips to cold-boot defaults.
+      // Currency keeps the existing per-company default logic below.
+      let date = effectiveDateFrom || today;
+      if (companyChanged) {
+        if (today) {
+          date = today;
+          setDateFrom(today);
+          setDateTo(today);
+          syncCaptureDateDom(today, today);
+          prevCaptureDateRangeKeyRef.current = `${today}|${today}`;
+        } else {
+          prevCaptureDateRangeKeyRef.current = null;
+        }
+        setSelectedCategories([]);
+        categoryChangedByUserRef.current = false;
+        setSearchState({ ...INITIAL_TRANSACTION_SEARCH_STATE });
+        prevServerSideFiltersRef.current = {
+          showPaymentOnly: INITIAL_TRANSACTION_SEARCH_STATE.showPaymentOnly,
+          showCaptureOnly: INITIAL_TRANSACTION_SEARCH_STATE.showCaptureOnly,
+          showZeroBalance: INITIAL_TRANSACTION_SEARCH_STATE.showZeroBalance,
+        };
+        filtersBeforeTypeSearchRef.current = null;
+        typeSearchSessionActiveRef.current = false;
+        typeSearchFirstSubmitFocusDoneRef.current = false;
+        setTypeSearchActive(false);
+        setTypeSearchFormType(null);
+        setTypeSearchAccountIds([]);
+      } else {
+        prevCaptureDateRangeKeyRef.current = null;
+        prevServerSideFiltersRef.current = null;
+      }
+
       const snapCompanies =
         filterSnapshot?.snapCompaniesAll || filterSnapshot?.snapCompanies || [];
       // Prefer live ordered pills for this scope when already loaded; else this company's saved order.
@@ -2042,7 +2079,7 @@ export function useTransactionSearch({
       };
       const { requestKey } = buildDefaultSearchApiParams(transactionScope, {
         dateFrom: date,
-        dateTo: effectiveDateTo || date,
+        dateTo: companyChanged && today ? today : effectiveDateTo || date,
         snapCompanies,
       });
       const instantReplay =
@@ -2052,7 +2089,7 @@ export function useTransactionSearch({
             const sessionKey = buildTxListSessionKey({
               companyId: scopeCacheCompanyKey,
               dateFrom: date,
-              dateTo: effectiveDateTo || date,
+              dateTo: companyChanged && today ? today : effectiveDateTo || date,
               selectedCategories: [],
               showInactive: false,
               showCaptureOnly: false,
@@ -2094,6 +2131,7 @@ export function useTransactionSearch({
     }
 
     prevScopeKeyForSearchRef.current = scopeKey;
+    prevCompanyIdForFilterResetRef.current = scopeCacheCompanyKey ?? null;
     if (scopeChanged) {
       lastCompletedSearchKeyRef.current = "";
       initialSearchDoneRef.current = false;

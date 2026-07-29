@@ -280,7 +280,8 @@ function mapEntryTypeToProduct($entryType)
         'RATE_TRANSFER_FROM' => 'RATE',
         'RATE_TRANSFER_TO' => 'RATE',
         'RATE_MIDDLEMAN' => 'RATE',
-        'RATE_FEE' => 'RATE',
+        'RATE_FEE' => 'Fee',
+        'RATE_PLATFORM_FEE' => 'Fee',
         'NORMAL_FROM' => 'TRANSFER',
         'NORMAL_TO' => 'TRANSFER'
     ];
@@ -301,7 +302,7 @@ function historyRateLegSortGroup(?string $entryType): int
     if (in_array($t, ['RATE_FIRST_TO', 'RATE_TRANSFER_TO'], true)) {
         return 1;
     }
-    if ($t === 'RATE_MIDDLEMAN' || $t === 'RATE_FEE') {
+    if ($t === 'RATE_MIDDLEMAN' || $t === 'RATE_FEE' || $t === 'RATE_PLATFORM_FEE') {
         return 2;
     }
     return 3;
@@ -2692,6 +2693,7 @@ try {
         }
 
         $description = $row['entry_description'] ?: 'RATE';
+        $platformFeeRemark = null;
 
         // RATE 后缀：仅 TO 侧显示净汇率（exchange_rate - middleman_rate），FROM 侧保持原始汇率。
         // 适用于第一行与第二行（RATE_FIRST_TO / RATE_TRANSFER_TO）。
@@ -2709,14 +2711,21 @@ try {
         }
 
         if ($entryType === 'RATE_MIDDLEMAN') {
+            $rawMiddleDesc = (string) ($row['entry_description'] ?? '');
+            if (preg_match('/\n\[\[PFEE_REMARK\]\](.+)$/s', $rawMiddleDesc, $pfeeMatch)) {
+                $platformFeeRemark = trim((string) ($pfeeMatch[1] ?? ''));
+                $rawMiddleDesc = preg_replace('/\n\[\[PFEE_REMARK\]\].+$/s', '', $rawMiddleDesc);
+            }
             $description = formatMarkupDescription(
-                $description,
+                $rawMiddleDesc,
                 $row['from_currency_code'] ?? null,
                 $row['to_currency_code'] ?? null,
                 $row['rate_middleman_rate'] ?? null,
                 $row['rate_from_amount'] ?? null,
                 $row['rate_transfer_from_account_code'] ?? null
             );
+        } elseif (in_array($entryType, ['RATE_FEE', 'RATE_PLATFORM_FEE'], true)) {
+            // Keep Fee / Platform Fee descriptions as stored (Charge … Service Fees / PlatForm Fee).
         } else {
             $description = formatExchangeRateDescription(
                 $description,
@@ -2744,13 +2753,17 @@ try {
             $transactionCreatedBy = $row['created_by_owner_name'];
         }
 
-        // Service fee / header SMS: show on second-currency From leg only (RATE_TRANSFER_TO).
+        // Desktop: Service Fee is its own RATE_FEE row — RATE_TRANSFER_TO has no Fee Remark.
+        // Mobile/legacy: header sms still carries "Service Fees" → keep as Remark on TRANSFER_TO.
+        // Negative Platform Fee: remark-only on RATE_MIDDLEMAN.
         $rateServiceFeeRemark = null;
         if ($entryType === 'RATE_TRANSFER_TO') {
             $headerSms = trim((string) ($row['sms'] ?? ''));
             if ($headerSms !== '') {
                 $rateServiceFeeRemark = $headerSms;
             }
+        } elseif ($entryType === 'RATE_MIDDLEMAN' && !empty($platformFeeRemark)) {
+            $rateServiceFeeRemark = $platformFeeRemark;
         }
 
         $events[] = [

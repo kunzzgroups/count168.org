@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { accountModalOverlayZIndex, portalToDocumentBody } from "../../../components/ProcessModalPortal.jsx";
 import ConfirmDeleteModal from "../../../components/ConfirmDeleteModal.jsx";
 import { toUpper } from "../accountLogic.js";
 import { useSubmitGuard } from "../../../hooks/useSubmitGuard.js";
 import { formatAccountRoleDisplay } from "../../../translateFile/pages/accountTranslate.js";
+import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
 
 const confirmModalZIndex = accountModalOverlayZIndex + 50;
 
@@ -224,6 +225,28 @@ export function CurrencySettingModal({
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const { submitting, runGuarded } = useSubmitGuard(open);
 
+  const roleOptions = useMemo(
+    () => [{ value: "", label: t("filterRow") }, ...roles.map((r) => ({ value: r, label: formatAccountRoleDisplay(t, r) }))],
+    [roles, t],
+  );
+  const roleLabel = settingRole ? formatAccountRoleDisplay(t, settingRole) : t("filterRow");
+  const getRoleItemLabel = useCallback((idx) => roleOptions[idx]?.label ?? "", [roleOptions]);
+  const initialRoleHighlight = useMemo(() => {
+    const idx = roleOptions.findIndex((opt) => String(opt.value || "") === String(settingRole || ""));
+    return idx >= 0 ? idx : 0;
+  }, [roleOptions, settingRole]);
+  const {
+    setHighlightIdx: setRoleHighlightIdx,
+    listRef: roleListRef,
+    handleButtonKeyDown: handleRoleButtonKeyDown,
+    highlightClass: roleHighlightClass,
+  } = useListboxKeyboard({
+    open: roleDropdownOpen,
+    itemCount: roleOptions.length,
+    initialIndex: initialRoleHighlight,
+    getItemLabel: getRoleItemLabel,
+  });
+
   useEffect(() => {
     if (!open || !roleDropdownOpen) return undefined;
     const onPointerDown = (e) => {
@@ -244,8 +267,6 @@ export function CurrencySettingModal({
 
   if (!open) return null;
 
-  const roleOptions = [{ value: "", label: t("filterRow") }, ...roles.map(r => ({ value: r, label: formatAccountRoleDisplay(t, r) }))];
-  const roleLabel = settingRole ? formatAccountRoleDisplay(t, settingRole) : t("filterRow");
   const selectedCurrencyMatchesList =
     settingCurrencyId != null &&
     currencies.some((c) => Number(c.id) === Number(settingCurrencyId));
@@ -372,6 +393,20 @@ export function CurrencySettingModal({
                     aria-haspopup="listbox"
                     aria-expanded={roleDropdownOpen}
                     onClick={() => setRoleDropdownOpen((openNow) => !openNow)}
+                    onKeyDown={(e) => {
+                      handleRoleButtonKeyDown(e, {
+                        isOpen: roleDropdownOpen,
+                        onToggleOpen: () => setRoleDropdownOpen(true),
+                        onClose: () => setRoleDropdownOpen(false),
+                        len: roleOptions.length,
+                        onSelectIndex: (idx) => {
+                          const option = roleOptions[idx];
+                          if (!option) return;
+                          setSettingRole(option.value);
+                          setRoleDropdownOpen(false);
+                        },
+                      });
+                    }}
                   >
                     <span>{roleLabel}</span>
                     <svg className="currency-setting-role-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -379,16 +414,18 @@ export function CurrencySettingModal({
                     </svg>
                   </button>
                   {roleDropdownOpen ? (
-                    <div className="currency-setting-role-menu" role="listbox">
-                      {roleOptions.map((option) => {
+                    <div className="currency-setting-role-menu" role="listbox" ref={roleListRef}>
+                      {roleOptions.map((option, idx) => {
                         const selected = String(settingRole || "") === String(option.value || "");
                         return (
                           <button
                             key={option.value || "all"}
                             type="button"
-                            className={`currency-setting-role-option${selected ? " is-selected" : ""}`}
+                            className={`currency-setting-role-option${selected ? " is-selected" : ""}${roleHighlightClass(idx)}`}
                             role="option"
                             aria-selected={selected}
+                            data-kb-idx={idx}
+                            onMouseEnter={() => setRoleHighlightIdx(idx)}
                             onClick={() => {
                               setSettingRole(option.value);
                               setRoleDropdownOpen(false);

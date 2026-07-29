@@ -1,4 +1,4 @@
-﻿/* Scrollbars: app-wide — dashboard-scrollbar.css (incl. .member-dash-matrix-scroll) */
+/* Scrollbars: app-wide — dashboard-scrollbar.css (incl. .member-dash-matrix-scroll) */
 
 body.transaction-page {
     font-family: var(--font-ui) !important;
@@ -683,7 +683,7 @@ body.transaction-page {
     background: #cbd5f5 !important;
     color: #1e1b4b !important;
 }
-.member-winloss-table .transaction-table {
+.member-winloss-table.transaction-table {
     width: 100%;
     max-width: 100%;
     min-width: 0;
@@ -756,33 +756,35 @@ body.transaction-page {
 .member-winloss-table .transaction-table-row.transaction-summary-total td:not(.transaction-summary-total-label) {
     text-align: right;
 }
-/* 按币种分表：8 列宽合计 100%，避免 Remark 右侧留白 */
+/* 按币种分表：Date 收紧、Remark 加宽（合计 100%） */
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-date {
-    width: 11%;
+    width: 5%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-product {
-    width: 12%;
+    width: 16%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-rate {
-    width: 6%;
+    width: 5%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-winloss,
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-crdr,
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-balance {
-    width: 10%;
+    width: 8%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-description {
-    width: 34%;
+    width: 26%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-remark {
-    width: 7%;
+    width: 24%;
 }
 .member-winloss-table .transaction-history-col-date {
-    min-width: 96px;
+    min-width: 0;
+    max-width: 5.6rem;
+    padding-inline: 6px !important;
 }
 .member-winloss-table .transaction-history-col-product {
     text-align: left;
-    min-width: 88px;
+    min-width: 0;
 }
 .member-winloss-table .transaction-history-col-currency {
     text-align: center;
@@ -790,28 +792,30 @@ body.transaction-page {
 }
 .member-winloss-table .transaction-history-col-rate {
     text-align: right;
-    color: #64748b;
-    min-width: 48px;
+    color: #0f172a;
+    font-weight: 700;
+    min-width: 0;
 }
 .member-winloss-table .transaction-history-col-winloss,
 .member-winloss-table .transaction-history-col-crdr,
 .member-winloss-table .transaction-history-col-balance {
     text-align: right;
-    min-width: 84px;
+    min-width: 0;
 }
 .member-winloss-table .transaction-history-col-description {
     text-align: left;
     word-break: break-word;
-    min-width: 120px;
+    min-width: 0;
 }
 
 .member-winloss-table td.transaction-history-col-description {
     text-transform: uppercase;
 }
 .member-winloss-table .transaction-history-col-remark {
-    text-align: center;
+    text-align: left;
     color: #64748b;
-    min-width: 56px;
+    min-width: 0;
+    padding-inline: 8px !important;
 }
 .member-winloss-table .transaction-history-col-rate:empty,
 .member-winloss-table td.transaction-history-col-rate,
@@ -3303,7 +3307,7 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
         overflow: visible;
     }
 
-    .member-winloss-table .transaction-table {
+    .member-winloss-table.transaction-table {
         table-layout: fixed;
         width: 980px;
         min-width: 980px;
@@ -3311,7 +3315,7 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
     }
 
     .member-winloss-table .transaction-history-col-remark {
-        min-width: 5.5rem;
+        min-width: 0;
     }
 
     .member-winloss-page .member-winloss-grid-account-filter .user-gc-inline-label {

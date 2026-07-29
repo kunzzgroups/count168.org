@@ -1,22 +1,29 @@
 /** Text transforms applied to captured grid before summary rows are built. */
 
+import { parseRemoveWordChips } from "../../../lib/removeWordChips.js";
+
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function applyTextTransformations(text, removeWord, replaceWordFrom, replaceWordTo) {
+/**
+ * Remove whole tokens only — ASCII alnum/`_` neighbors block a match so short
+ * codes (XX123) do not carve into longer ones (XX1234). CJK neighbors do not
+ * block, so Chinese remove-words still work inside Chinese phrases.
+ */
+function buildRemoveWordRegex(word) {
+  return new RegExp(`(?<![A-Za-z0-9_])${escapeRegex(word)}(?![A-Za-z0-9_])`, "gi");
+}
+
+export function applyTextTransformations(text, removeWord, replaceWordFrom, replaceWordTo) {
   if (!text || typeof text !== "string") return text;
 
   let result = text;
 
   if (removeWord && removeWord.trim() !== "") {
-    const wordsToRemove = removeWord
-      .split(/[,;]+/)
-      .map((word) => word.trim())
-      .filter((word) => word !== "");
+    const wordsToRemove = parseRemoveWordChips(removeWord).sort((a, b) => b.length - a.length);
     wordsToRemove.forEach((word) => {
-      const removeRegex = new RegExp(escapeRegex(word), "gi");
-      result = result.replace(removeRegex, "");
+      result = result.replace(buildRemoveWordRegex(word), "");
     });
   }
 

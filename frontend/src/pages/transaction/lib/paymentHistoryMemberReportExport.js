@@ -102,14 +102,14 @@ const MEMBER_REPORT_PRINT_CSS = `
     border: 1px solid #e2e8f0;
     font-size: 9.5pt;
   }
-  table.report-table col.col-date { width: 11%; }
-  table.report-table col.col-product { width: 12%; }
-  table.report-table col.col-rate { width: 6%; }
+  table.report-table col.col-date { width: 5%; }
+  table.report-table col.col-product { width: 16%; }
+  table.report-table col.col-rate { width: 5%; }
   table.report-table col.col-winloss,
   table.report-table col.col-crdr,
-  table.report-table col.col-balance { width: 10%; }
-  table.report-table col.col-description { width: 34%; }
-  table.report-table col.col-remark { width: 7%; }
+  table.report-table col.col-balance { width: 8%; }
+  table.report-table col.col-description { width: 26%; }
+  table.report-table col.col-remark { width: 24%; }
   table.report-table thead { display: table-header-group; }
   table.report-table tfoot { display: table-footer-group; }
   table.report-table th {
@@ -146,13 +146,17 @@ const MEMBER_REPORT_PRINT_CSS = `
   }
   table.report-table td.col-date { white-space: nowrap; }
   table.report-table td.col-product { text-align: left; }
-  table.report-table td.col-rate,
-  table.report-table td.col-remark {
+  table.report-table td.col-rate {
     text-align: right;
+    color: #0f172a;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  table.report-table td.col-remark {
+    text-align: center;
     color: #64748b;
     font-variant-numeric: tabular-nums;
   }
-  table.report-table td.col-remark { text-align: center; }
   table.report-table td.col-description {
     text-align: left;
     text-transform: uppercase;
@@ -851,16 +855,16 @@ function drawPdfPageFooter(doc, { pageW, pageH, pageLabel, cjkFontFamily }) {
   doc.text(pageLabel, pageW / 2, pageH - PDF_FOOTER_BOTTOM_MM, { align: "center" });
 }
 
-/** A4 landscape — column widths total 277mm; tuned for readable remark/description columns. */
+/** A4 landscape — 277mm; Id Product wider (no truncate), Rate readable. */
 const PDF_TABLE_COLUMN_STYLES = {
-  0: { cellWidth: 30, halign: "left", overflow: "hidden", fontStyle: "bold" },
-  1: { cellWidth: 30, overflow: "hidden", fontStyle: "bold" },
-  2: { cellWidth: 16, halign: "right", overflow: "hidden" },
-  3: { cellWidth: 28, halign: "right", overflow: "hidden" },
-  4: { cellWidth: 28, halign: "right", overflow: "hidden" },
-  5: { cellWidth: 30, halign: "right", overflow: "hidden" },
-  6: { cellWidth: 68, halign: "left", overflow: "linebreak" },
-  7: { cellWidth: 47, halign: "left", overflow: "linebreak" },
+  0: { cellWidth: 16,halign: "left", overflow: "hidden", fontStyle: "bold" }, // Date
+  1: { cellWidth: 42, halign: "left", overflow: "linebreak", fontStyle: "bold" }, // Id Product
+  2: { cellWidth: 18, halign: "right", overflow: "hidden", fontStyle: "bold" }, // Rate
+  3: { cellWidth: 24,halign: "right", overflow: "hidden" }, // Win/Loss
+  4: { cellWidth: 24,halign: "right", overflow: "hidden" }, // Cr/Dr
+  5: { cellWidth: 26,halign: "right", overflow: "hidden" }, // Balance
+  6: { cellWidth: 64,halign: "left", overflow: "linebreak" }, // Description
+  7: { cellWidth: 63,halign: "left", overflow: "linebreak" }, // Remark
 };
 
 /**
@@ -1080,8 +1084,14 @@ export async function downloadMemberReportPdf({
             hookData.cell.styles.overflow = "linebreak";
             hookData.cell.styles.halign = "left";
           }
+          if (colIdx === 1) {
+            hookData.cell.styles.overflow = "linebreak";
+            hookData.cell.styles.fontStyle = "bold";
+            hookData.cell.styles.textColor = [15, 23, 42];
+          }
           if (colIdx === 2) {
-            hookData.cell.styles.textColor = [100, 116, 139];
+            hookData.cell.styles.textColor = [15, 23, 42];
+            hookData.cell.styles.fontStyle = "bold";
           }
         }
         if (hookData.section === "foot") {

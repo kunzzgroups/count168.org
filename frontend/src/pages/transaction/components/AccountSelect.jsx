@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { isTypeAheadKey } from "../../../components/typeAheadMatch.js";
 import { useListboxKeyboard } from "../../../components/useListboxKeyboard.js";
 
 export function AccountSelect({
@@ -24,7 +25,7 @@ export function AccountSelect({
     return rows.filter((r) => String(r.display_text || "").toUpperCase().includes(q));
   }, [options, filter]);
 
-  const { highlightIdx, setHighlightIdx, listRef, handleListKeyDown, highlightClass } = useListboxKeyboard({
+  const { setHighlightIdx, listRef, handleListKeyDown, handleButtonKeyDown, highlightClass } = useListboxKeyboard({
     open,
     itemCount: filtered.length,
     resetToken: filter,
@@ -56,11 +57,40 @@ export function AccountSelect({
     setOpen(false);
   };
 
+  const openMenu = useCallback((seed = "") => {
+    if (disabled) return;
+    setFilter(seed);
+    setOpen(true);
+  }, [disabled]);
+
+  const selectByIndex = (idx) => {
+    const opt = filtered[idx];
+    if (opt) pick(opt);
+  };
+
+  const onButtonKeyDown = (e) => {
+    if (disabled) return;
+    if (!open && isTypeAheadKey(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      openMenu(e.key);
+      return;
+    }
+    handleButtonKeyDown(e, {
+      isOpen: open,
+      onToggleOpen: () => openMenu(""),
+      onClose: () => setOpen(false),
+      len: filtered.length,
+      onSelectIndex: selectByIndex,
+    });
+  };
+
   return (
     <div className="custom-select-wrapper" ref={containerRef}>
       <button
         type="button"
         className={`custom-select-button${open ? " open" : ""}`}
+        aria-expanded={open}
+        aria-haspopup="listbox"
         aria-label={ariaLabel || undefined}
         aria-labelledby={ariaLabel ? undefined : ariaLabelledBy || undefined}
         data-placeholder={placeholder}
@@ -71,8 +101,13 @@ export function AccountSelect({
         disabled={disabled}
         onClick={() => {
           if (disabled) return;
-          setOpen((v) => !v);
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          openMenu("");
         }}
+        onKeyDown={onButtonKeyDown}
       >
         {displayText}
       </button>
@@ -99,10 +134,7 @@ export function AccountSelect({
               }
               handleListKeyDown(e, {
                 len: filtered.length,
-                onSelectIndex: (idx) => {
-                  const opt = filtered[idx];
-                  if (opt) pick(opt);
-                },
+                onSelectIndex: selectByIndex,
                 onClose: () => setOpen(false),
               });
             }}

@@ -67,7 +67,7 @@ export const DASHBOARD_I18N = {
     noAnnouncements: "No announcements",
     updateIncludes: "This update includes",
     versionUpdated: "System updated to {version}",
-    announcementTeam: "EAZY COUNT Team",
+    announcementTeam: "EAZY COUNT TEAM",
     viewingCompany: "Viewing company",
     switchCompany: "Switch",
     language: "Language",

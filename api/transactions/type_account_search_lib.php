@@ -186,7 +186,9 @@ function typeAccountSearchFetchRateAccountIds(PDO $pdo, array $listScope): array
               AND e.entry_type IN (
                     'RATE_FIRST_FROM', 'RATE_FIRST_TO',
                     'RATE_TRANSFER_FROM', 'RATE_TRANSFER_TO',
-                    'RATE_MIDDLEMAN'
+                    'RATE_MIDDLEMAN',
+                    'RATE_FEE',
+                    'RATE_PLATFORM_FEE'
               )
               AND e.account_id IS NOT NULL
               AND e.account_id > 0";
