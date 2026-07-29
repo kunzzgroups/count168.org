@@ -3,7 +3,7 @@
 > 范围：Transaction Payment（桌面 `/transaction` + mobile 同 API）在 **Type = RATE** 时，**Service Fee** 与 **Platform Fee** 的计算、提交、落库、Payment History 展示。
 >
 > 日期：2026-07-29  
-> 状态：与当前代码一致（桌面：独立 `RATE_FEE`；正 PT-Fee 扣 From + Middle=`Fee+PT`；负 PT-Fee Remark-only；Mobile Service Fee 仍为 sms Remark）。
+> 状态：与当前代码一致（桌面：独立 `RATE_FEE`；正 PT-Fee 只扣 From、不进 Middle；负 PT-Fee Remark-only；Mobile Service Fee 仍为 sms Remark）。
 >
 > 完整 RATE 手册仍见 `docs/transaction-rate-manual-logic.md`；其中 §18「Platform Fee 仅 UI」**已过时**，以本文为准。
 
@@ -25,7 +25,7 @@
 | 项目 | 规则 |
 |------|------|
 | **Service Fee**（表单 Fee 输入） | **桌面**：独立 `RATE_FEE` 挂第二 form account（Select From）；From 腿金额已扣 Fee，**不**走 Remark。**Mobile（暂未改）**：仍用主单 `sms` Remark，不写 `RATE_FEE`。To 腿仍为 gross − Service Fee。 |
-| **Platform Fee > 0** | **实时**从第二币种金额预览与 **From** 腿扣减；Middle-Man Amount = `Fee + PT-Fee`；**不**写 `RATE_PLATFORM_FEE` 行。 |
+| **Platform Fee > 0** | **实时**从第二币种金额预览与 **From** 腿扣减；Middle-Man Amount = **仅 Fee**（+ Rate-Mul），**不加** PT；**不**写 `RATE_PLATFORM_FEE` 行。 |
 | **Platform Fee < 0** | From / To 金额**不变**；Middle-Man Amount = `Fee − abs(PT-Fee)`；**不**写独立 Fee 行，Remark 挂在 `RATE_MIDDLEMAN`（如 `charge MYR 1.5 PlatForm Fee`）。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man（及负 PT 的 Remark / fallback）。 |
 
@@ -61,12 +61,12 @@
 
 ```text
 rateMulCommission = fromAmount × middlemanRate   （>0 才算）
-PT > 0 : middlemanProfit = rateMulCommission + (serviceFee + PT)
+PT > 0 : middlemanProfit = rateMulCommission + serviceFee     （正 PT 不进 Middle）
 PT < 0 : middlemanProfit = rateMulCommission + (serviceFee − abs(PT))
 PT = 0 : middlemanProfit = rateMulCommission + serviceFee
 ```
 
-`computeRateMiddlemanProfit(...)`：Fee / Platform Fee **不做 FX 换算**。
+`computeRateMiddlemanProfit(...)`：Fee / Platform Fee **不做 FX 换算**。正 PT 只影响 From 扣减。
 
 ### 3.2 第二币种金额预览
 
@@ -88,7 +88,7 @@ transfer From 侧金额 = gross − rateMulCommission − Service Fee − max(PT
 + RATE_FEE（正数，仅桌面发 rate_service_fee_amount）挂 Select From
 ```
 
-- 正 PT：扣在 From 腿；金额已并入 Middle（`Fee+PT`），**不**另开 `RATE_PLATFORM_FEE`。
+- 正 PT：只扣 From 腿；**不**进 Middle；**不**另开 `RATE_PLATFORM_FEE`。
 - 负 PT：From/To 都不扣 PT；Middle = `Fee−|PT|`，Remark only。
 - **Mobile**：From 仍不因 Service Fee 再扣（Fee 在金额里 + sms Remark），不发 `rate_service_fee_*`。
 
@@ -138,7 +138,7 @@ POST RATE
 
 1. 金额优先 `rate_platform_fee_amount`，否则 `rate_middleman_platform_fee`
 2. 描述默认使用绝对值：`charge {币种} {abs(金额)} PlatForm Fee`
-3. 输入 `> 0`：**不**写 `RATE_PLATFORM_FEE`（From 金额已扣；Middle = Fee+PT）
+3. 输入 `> 0`：**不**写 `RATE_PLATFORM_FEE`（From 金额已扣；Middle 不含正 PT）
 4. 输入 `< 0`：有 `RATE_MIDDLEMAN` 时**不**写 `RATE_PLATFORM_FEE`，Remark 写入该分录（`[[PFEE_REMARK]]`）；若无 Middle-Man 行则 fallback 仍写 `RATE_PLATFORM_FEE` 挂 Middle-Man
 
 ---
@@ -158,7 +158,7 @@ POST RATE
 
 1. 一笔 **RATE**（金额已扣 Fee 与正 PT；**无** Service Fee Remark）  
 2. 一笔 **Fee**（Service Fee，独立行）  
-3. Middle-Man：MARKUP = `Fee + PT`  
+3. Middle-Man：MARKUP = **仅 Fee**（不含正 PT）  
 4. To：未扣 PT 的 To 腿 
 
 ---
@@ -186,14 +186,14 @@ Schema 已同步：`easycount_schema.sql` / `banks_schema.sql` / `easycount_fres
 
 | 步骤 | 结果 |
 |------|------|
-| Middle 利润 | `10 + 1.50 = 11.50` |
+| Middle 利润 | `10`（正 PT **不**加进 Middle） |
 | 表单右侧预览 | `310 − 10 − 1.50 = 298.50` |
 | Transfer To 腿 | **300**（gross − Service Fee） |
 | Transfer From 腿 | **298.50**（gross − Fee − PT） |
 | **写** | Select From：`RATE_FEE` **+10**（Description，无 Remark） |
-| **不写** | RATE 行 Service Fee Remark；`RATE_PLATFORM_FEE` |
+| **不写** | RATE 行 Service Fee Remark；`RATE_PLATFORM_FEE`；Middle 不含 `1.50` |
 
-From 净影响：`298.50 + 10 = 308.50`（与拆行前一致）。
+From 净影响：`298.50 + 10 = 308.50`（与拆行前一致）。正 PT `1.50` 仅体现在 From 扣减。
 
 ### 8.2 负 PT-Fee
 
@@ -255,6 +255,6 @@ Payment History
 2. **停写 Service Fee 独立分录**：不再 `INSERT RATE_FEE`；前端也不再发 `rate_service_fee_*`。  
 3. **Service Fee 仅 Remark**：主单 `sms` → 第二币种 From 腿 Remark。  
 4. **旧 `RATE_FEE` 行**：历史/搜索仍识别，仅兼容存量数据。  
-5. **正 PT-Fee**：扣 From 金额 + Middle=`Fee+PT`，**不再**写 `RATE_PLATFORM_FEE`。  
+5. **正 PT-Fee**：只扣 From，**不**进 Middle；**不再**写 `RATE_PLATFORM_FEE`。  
 6. **负 PT-Fee**：From/To 不动；Middle=`Fee−|PT|`；Remark-only（无 Middle 行时 fallback Fee）。  
 7. **桌面 Service Fee**：独立 `RATE_FEE` + From 腿扣 Fee；不走 Remark。Mobile 暂未同步。

@@ -265,7 +265,7 @@ export function useTransactionForm({
       }
     }
 
-    // MM profit: PT>0 → Fee+PT；PT<0 → Fee−|PT|
+    // MM profit: PT>0 → 仅 Fee（正 PT 不进 Middle）；PT<0 → Fee−|PT|
     const finalFeeDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,

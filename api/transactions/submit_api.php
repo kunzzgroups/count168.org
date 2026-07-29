@@ -999,7 +999,7 @@ try {
 
                     // Middle-man：第二币种 Win/Loss（如果存在）
                     // 负 PT-Fee：不另开 RATE_PLATFORM_FEE（金额已含在 middleman profit），改挂 Remark。
-                    // 正 PT-Fee：已扣在 From 腿金额，并入 Middle = Fee+PT，不再写 RATE_PLATFORM_FEE。
+                    // 正 PT-Fee：已扣在 From 腿金额，不进 Middle；不再写 RATE_PLATFORM_FEE。
                     $platformFeeIsNegative =
                         $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') < 0;
                     $platformFeeRemarkText = $rate_platform_fee_description !== ''
@@ -1029,7 +1029,7 @@ try {
                         $middlemanRowInserted = true;
                     }
 
-                    // 正 PT-Fee：永不写 RATE_PLATFORM_FEE（已体现在 From 扣减 + Middle Fee+PT）。
+                    // 正 PT-Fee：永不写 RATE_PLATFORM_FEE（已体现在 From 扣减；不进 Middle）。
                     // 负 PT-Fee：优先 Remark on MIDDLEMAN；若无 Middle-Man 行则 fallback 写 Fee 挂 Middle-Man。
                     if ($platformFeeIsNegative && !$middlemanRowInserted && $rate_middleman_account_id) {
                         $platformFeeLedgerAmount = money_mul(

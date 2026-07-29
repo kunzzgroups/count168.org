@@ -80,9 +80,9 @@ export function buildRatePlatformFeeRemark(currencyTo, platformFeeAmount) {
 }
 
 /**
- * Middle-Man profit: rate-mul commission + signed Platform Fee mix.
- * - PT-Fee > 0 → Fee + PT-Fee（正数从顾客 From 扣，并入 Middle）
- * - PT-Fee < 0 → Fee − abs(PT-Fee)
+ * Middle-Man profit: rate-mul commission + Service Fee, with negative PT only.
+ * - PT-Fee > 0 → 外来平台费，只扣 From，**不**进 Middle（Middle = Fee + rateMul）
+ * - PT-Fee < 0 → Middle = Fee − abs(PT-Fee)
  * Fee / Platform Fee are face values (no FX multiply).
  */
 export function computeRateMiddlemanProfit({
@@ -99,12 +99,10 @@ export function computeRateMiddlemanProfit({
   }
   const feeDec = parsePositiveAmt(feeAmount);
   const platformSigned = parseSignedAmt(platformFeeAmount);
-  const platformAbs = platformSigned.abs();
   let feeNet = feeDec;
-  if (platformSigned.gt(0)) {
-    feeNet = feeDec.plus(platformAbs);
-  } else if (platformSigned.lt(0)) {
-    feeNet = feeDec.minus(platformAbs);
+  // Positive PT is external — never add into Middle-Man profit.
+  if (platformSigned.lt(0)) {
+    feeNet = feeDec.minus(platformSigned.abs());
   }
   return rateMulDec.plus(feeNet);
 }
