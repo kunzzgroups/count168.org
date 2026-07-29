@@ -9,6 +9,17 @@
 
 ---
 
+## 金额入库精度（现行）
+
+| 类型 | 入库 | 展示 |
+|------|------|------|
+| 非 RATE | 最多 **6** 位小数（截断，不做 round-2） | 页面 round 2 仅供查看 |
+| RATE | 最多 **8** 位小数（截断，不做 round-2） | 页面 round 2 仅供查看 |
+
+实现：`submitStoreAmount` + 前端 `formatAmountForStore`；RATE 不再调用旧的 `submitRateRound2` round-2。
+
+---
+
 ## 1. 产品规则（现行）
 
 | 项目 | 规则 |

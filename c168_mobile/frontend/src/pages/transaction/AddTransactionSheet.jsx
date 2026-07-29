@@ -6,7 +6,10 @@ import {
   countRateDecimalPlaces,
   formatDmy,
   formatRateAmount,
+  formatAmountForStore,
   parseRateExpression,
+  RATE_STORE_MAX_DECIMALS,
+  TX_STORE_MAX_DECIMALS,
 } from "../../lib/transactionFormat.js";
 import { buildRatePayload, toNumberLike, computeRateMiddlemanProfit } from "../../lib/transactionSubmitHelpers.js";
 import { formatYmd, parseYmd, formatDisplayDate } from "../../lib/dashboardDateUtils.js";
@@ -319,6 +322,9 @@ export default function AddTransactionSheet({
       if (hasMiddleRate && countRateDecimalPlaces(mmrNorm) > 8) {
         return pushToast(m.middleManRateMaxDecimals, "error");
       }
+      if (countRateDecimalPlaces(String(rateCurrencyFromAmount ?? "").replace(/,/g, "").trim()) > RATE_STORE_MAX_DECIMALS) {
+        return pushToast(m.rateAmountMaxDecimals, "error");
+      }
 
       setSubmitting(true);
       try {
@@ -379,15 +385,22 @@ export default function AddTransactionSheet({
     if (!isAdjustment && !isProfitTx && amtDec.lt(0)) {
       return pushToast(m.pleaseEnterValidAmountGteZero, "error");
     }
+    if (countRateDecimalPlaces(cleanedAmt) > TX_STORE_MAX_DECIMALS) {
+      return pushToast(m.amountMaxDecimals, "error");
+    }
     if (!txCurrency) return pushToast(m.pleaseSelectCurrency, "error");
 
     setSubmitting(true);
     try {
+      const storeAmt = formatAmountForStore(
+        isProfitTx ? amtDec.abs().toString() : cleanedAmt,
+        TX_STORE_MAX_DECIMALS,
+      );
       const payload = {
         transaction_type: isProfitTx ? (amtDec.lt(0) ? "LOSE" : "WIN") : txType,
         account_id: toId,
         from_account_id: isAdjustment ? "" : fromId || "",
-        amount: isProfitTx ? MoneyDecimal.formatFixedHalfUp(amtDec.abs().toString(), 2) : txAmount,
+        amount: storeAmt,
         transaction_date: txDate,
         description: "",
         sms: String(txRemark || "").toUpperCase(),
