@@ -882,13 +882,13 @@ try {
                 $sgdAmount      = submitStoreAmount($rate_from_amount, SUBMIT_STORE_SCALE_RATE);
                 $sgdCurrencyId  = (int)$rate_from_currency_id;
 
-                // From account：减
+                // From account：减（保持入库精度，禁止 PHP 一元负号转 float）
                 $entryStmt->execute([
                     $main_transaction_id,
                     $company_id,
                     $rate_from_account_id,
                     $sgdCurrencyId,
-                    -$sgdAmount,
+                    money_mul($sgdAmount, '-1', SUBMIT_STORE_SCALE_RATE),
                     'RATE_FIRST_FROM',
                     $rate_from_description
                 ]);
@@ -927,13 +927,13 @@ try {
                         $rate_transfer_from_description
                     ]);
 
-                    // account4（Select From/付款方）：写入负数
+                    // account4（Select From/付款方）：写入负数（scale 与入库一致，勿用 2 以免 309.999→309.99）
                     $entryStmt->execute([
                         $main_transaction_id,
                         $company_id,
                         $rate_transfer_to_account_id,
                         $myrCurrencyId,
-                        money_mul($myrToAmount, '-1', 2),
+                        money_mul($myrToAmount, '-1', SUBMIT_STORE_SCALE_RATE),
                         'RATE_TRANSFER_TO',
                         $rate_transfer_to_description
                     ]);
