@@ -829,8 +829,11 @@ try {
                         $rate_middleman_description
                     ]);
                     
+                    // Legacy transactions row for Rate-Mul gap only (To − From > 0).
+                    // Service Fee makes To < From (net vs gross); that must NOT insert a negative amount
+                    // (trigger: 金额不能小于 0). Ledger already uses transaction_entry for both sides.
                     $middleman_deduction = submitStoreAmount(money_sub($rate_transfer_from_amount, $rate_transfer_to_amount, SUBMIT_STORE_SCALE_RATE), SUBMIT_STORE_SCALE_RATE);
-                    if (money_cmp(money_abs($middleman_deduction), '0.01') > 0) {
+                    if (money_cmp($middleman_deduction, '0.01') > 0) {
                         $rateDeduct = [
                             'company_id' => $company_id,
                             'transaction_type' => 'RATE',
