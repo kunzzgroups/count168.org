@@ -761,21 +761,21 @@ body.transaction-page {
     width: 5%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-product {
-    width: 10%;
+    width: 16%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-rate {
-    width: 4%;
+    width: 5%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-winloss,
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-crdr,
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-balance {
-    width: 9%;
+    width: 8%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-description {
-    width: 28%;
+    width: 26%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-remark {
-    width: 26%;
+    width: 24%;
 }
 .member-winloss-table .transaction-history-col-date {
     min-width: 0;
@@ -792,7 +792,8 @@ body.transaction-page {
 }
 .member-winloss-table .transaction-history-col-rate {
     text-align: right;
-    color: #64748b;
+    color: #0f172a;
+    font-weight: 700;
     min-width: 0;
 }
 .member-winloss-table .transaction-history-col-winloss,
