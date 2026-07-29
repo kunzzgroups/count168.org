@@ -2693,6 +2693,7 @@ try {
         }
 
         $description = $row['entry_description'] ?: 'RATE';
+        $platformFeeRemark = null;
 
         // RATE 后缀：仅 TO 侧显示净汇率（exchange_rate - middleman_rate），FROM 侧保持原始汇率。
         // 适用于第一行与第二行（RATE_FIRST_TO / RATE_TRANSFER_TO）。
@@ -2710,8 +2711,13 @@ try {
         }
 
         if ($entryType === 'RATE_MIDDLEMAN') {
+            $rawMiddleDesc = (string) ($row['entry_description'] ?? '');
+            if (preg_match('/\n\[\[PFEE_REMARK\]\](.+)$/s', $rawMiddleDesc, $pfeeMatch)) {
+                $platformFeeRemark = trim((string) ($pfeeMatch[1] ?? ''));
+                $rawMiddleDesc = preg_replace('/\n\[\[PFEE_REMARK\]\].+$/s', '', $rawMiddleDesc);
+            }
             $description = formatMarkupDescription(
-                $description,
+                $rawMiddleDesc,
                 $row['from_currency_code'] ?? null,
                 $row['to_currency_code'] ?? null,
                 $row['rate_middleman_rate'] ?? null,
@@ -2748,12 +2754,15 @@ try {
         }
 
         // Service fee / header SMS: show on second-currency From leg only (RATE_TRANSFER_TO).
+        // Negative Platform Fee: remark-only on RATE_MIDDLEMAN (no separate Fee ledger row).
         $rateServiceFeeRemark = null;
         if ($entryType === 'RATE_TRANSFER_TO') {
             $headerSms = trim((string) ($row['sms'] ?? ''));
             if ($headerSms !== '') {
                 $rateServiceFeeRemark = $headerSms;
             }
+        } elseif ($entryType === 'RATE_MIDDLEMAN' && !empty($platformFeeRemark)) {
+            $rateServiceFeeRemark = $platformFeeRemark;
         }
 
         $events[] = [

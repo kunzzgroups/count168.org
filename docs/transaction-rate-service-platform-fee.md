@@ -25,7 +25,7 @@
 | 项目 | 规则 |
 |------|------|
 | **Service Fee**（表单 Fee 输入） | **不**再写入独立 `RATE_FEE` 分录。To 腿用 **净额**（gross − Service Fee）；From 腿仍含该费。只在主单 `sms` 上写 remark，历史里挂在第二币种 **From** 腿（`RATE_TRANSFER_TO`）的 **Remark**。 |
-| **Platform Fee** | **单独**写一条负数 `RATE_PLATFORM_FEE`：正数输入挂第二币种 **From**，负数输入挂 **Middle-Man**；**不**进入 To 腿金额。 |
+| **Platform Fee** | 正数输入：单独写负数 `RATE_PLATFORM_FEE` 挂第二币种 **From**。负数输入：不另开 Fee 分录（金额已含在 Middle-Man Amount），Remark 挂在 `RATE_MIDDLEMAN`（如 `charge MYR 1.5 PlatForm Fee`）。 |
 | **Middle-Man Amount（只读）** | `Rate-Mul 佣金 + (Service Fee − abs(Platform Fee))`，正负 PT-Fee 都按绝对值扣。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man、Platform Fee。 |
 
@@ -81,7 +81,7 @@ transfer To 侧金额   = gross − Service Fee   （收款方不含手续费，
 transfer From 侧金额 = gross − rateMulCommission   （仅扣 Rate-Mul；Service Fee 仍留在 From 腿）
 ```
 
-Platform Fee **不**进 transfer 金额，另写负数 `RATE_PLATFORM_FEE`；输入正数挂 From，输入负数挂 Middle-Man。
+Platform Fee **不**进 transfer 金额。正数输入另写负数 `RATE_PLATFORM_FEE` 挂 From；负数输入只写 Middle-Man Remark，不另开 Fee 行。
 
 ---
 
@@ -114,7 +114,7 @@ POST RATE
         ├─ RATE_TRANSFER_FROM    第二币种 To（有 transfer 时）
         ├─ RATE_TRANSFER_TO      第二币种 From（有 transfer 时）
         ├─ RATE_MIDDLEMAN        可选（利润 > 0）
-        ├─ RATE_PLATFORM_FEE     可选（始终负数；输入符号决定挂 From / Middle-Man）
+        ├─ RATE_PLATFORM_FEE     可选（仅正数 PT-Fee；负数改为 MIDDLEMAN Remark）
         └─ （不再写 RATE_FEE）
 ```
 
@@ -128,8 +128,8 @@ POST RATE
 
 1. 金额优先 `rate_platform_fee_amount`，否则 `rate_middleman_platform_fee`
 2. 描述默认使用绝对值：`charge {币种} {abs(金额)} PlatForm Fee`
-3. 输入 `> 0`：账户 = 第二币种 From；输入 `< 0`：账户 = Middle-Man（未选时报错）
-4. `INSERT`：`entry_type = 'RATE_PLATFORM_FEE'`，amount 始终为 `-abs(输入)`
+3. 输入 `> 0`：账户 = 第二币种 From，`INSERT RATE_PLATFORM_FEE` amount=`-abs(输入)`
+4. 输入 `< 0`：有 `RATE_MIDDLEMAN` 时**不**写 `RATE_PLATFORM_FEE`，Remark 写入该分录（`[[PFEE_REMARK]]`），History 显示在 MARKUP 行 Remark 列；若无 Middle-Man 行则 fallback 仍写 `RATE_PLATFORM_FEE` 挂 Middle-Man
 
 ---
 
@@ -188,7 +188,7 @@ Schema 已同步：`easycount_schema.sql` / `banks_schema.sql` / `easycount_fres
 From 账户余额增量（简化）：`3010 − 1.50`；To 为 **3000**（不含费）。
 
 若 Platform Fee 输入 `-1.50`：Middle 利润仍为 `10 − abs(-1.50) = 8.50`，
-但独立的 `RATE_PLATFORM_FEE -1.50` 改挂 Middle-Man，不挂 From。
+**不**再写独立 `RATE_PLATFORM_FEE`；MARKUP 行 Remark 显示 `charge MYR 1.5 PlatForm Fee`。
 
 ---
 
@@ -236,4 +236,4 @@ Payment History
 2. **停写 Service Fee 独立分录**：不再 `INSERT RATE_FEE`；前端也不再发 `rate_service_fee_*`。  
 3. **Service Fee 仅 Remark**：主单 `sms` → 第二币种 From 腿 Remark。  
 4. **旧 `RATE_FEE` 行**：历史/搜索仍识别，仅兼容存量数据。
-5. **Platform Fee 符号分流**：正输入挂 From、负输入挂 Middle-Man；分录金额始终为负。
+5. **Platform Fee 符号分流**：正输入 → From 负数 Fee 分录；负输入 → Middle-Man Remark only（避免与 Amount 双计）。

@@ -961,9 +961,25 @@ try {
                     ]);
 
                     // Middle-man：第二币种 Win/Loss（如果存在）
+                    // 负 PT-Fee：不另开 RATE_PLATFORM_FEE（金额已含在 middleman profit），改挂 Remark。
+                    $platformFeeIsNegative =
+                        $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') < 0;
+                    $platformFeeIsPositive =
+                        $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0;
+                    $platformFeeRemarkText = $rate_platform_fee_description !== ''
+                        ? $rate_platform_fee_description
+                        : 'charge PlatForm Fee';
+
+                    $middlemanRowInserted = false;
                     if ($rate_middleman_account_id && $rate_middleman_amount !== null && money_cmp($rate_middleman_amount, '0') > 0) {
                         $middleAmount = submitStoreAmount($rate_middleman_amount, SUBMIT_STORE_SCALE_RATE);
                         $middleCurrencyId = (int)$rate_middleman_currency_id ?: $myrCurrencyId;
+                        $middleEntryDescription = $rate_middleman_description;
+                        if ($platformFeeIsNegative) {
+                            $middleEntryDescription = rtrim((string) $rate_middleman_description)
+                                . "\n[[PFEE_REMARK]]"
+                                . $platformFeeRemarkText;
+                        }
 
                         $entryStmt->execute([
                             $main_transaction_id,
@@ -972,19 +988,23 @@ try {
                             $middleCurrencyId,
                             $middleAmount,
                             'RATE_MIDDLEMAN',
-                            $rate_middleman_description
+                            $middleEntryDescription
                         ]);
+                        $middlemanRowInserted = true;
                     }
 
                     // Platform Fee 独立负数分录：
-                    // - 正数输入挂第二币种 From
-                    // - 负数输入挂 Middle-Man
-                    // Middle-Man Amount 仍由前端按 Fee - abs(Platform Fee) 计算。
+                    // - 正数输入 → 挂第二币种 From
+                    // - 负数输入且已有 RATE_MIDDLEMAN → Remark only（避免与 Amount 双计）
+                    // - 负数输入但无 Middle-Man 行 → fallback 仍写 RATE_PLATFORM_FEE 挂 Middle-Man
                     $secondFromAccountId = (int) $rate_transfer_to_account_id;
-                    if ($rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') !== 0) {
-                        $platformFeeAccountId = money_cmp($rate_platform_fee_amount, '0') < 0
-                            ? (int) $rate_middleman_account_id
-                            : $secondFromAccountId;
+                    $platformFeeLedgerAccountId = 0;
+                    if ($platformFeeIsPositive && $secondFromAccountId > 0) {
+                        $platformFeeLedgerAccountId = $secondFromAccountId;
+                    } elseif ($platformFeeIsNegative && !$middlemanRowInserted && $rate_middleman_account_id) {
+                        $platformFeeLedgerAccountId = (int) $rate_middleman_account_id;
+                    }
+                    if ($platformFeeLedgerAccountId > 0) {
                         $platformFeeLedgerAmount = money_mul(
                             money_abs($rate_platform_fee_amount),
                             '-1',
@@ -993,11 +1013,11 @@ try {
                         $entryStmt->execute([
                             $main_transaction_id,
                             $company_id,
-                            $platformFeeAccountId,
+                            $platformFeeLedgerAccountId,
                             $myrCurrencyId,
                             submitStoreAmount($platformFeeLedgerAmount, SUBMIT_STORE_SCALE_RATE),
                             'RATE_PLATFORM_FEE',
-                            $rate_platform_fee_description !== '' ? $rate_platform_fee_description : 'charge PlatForm Fee'
+                            $platformFeeRemarkText
                         ]);
                     }
                 }
