@@ -100,7 +100,7 @@ export function getOrderedRoles(roles) {
 }
 
 /** Add/Edit Account modal：DB 未建 role 时仍展示的核心角色 */
-const ACCOUNT_MODAL_FALLBACK_ROLES = ["DEBTOR"];
+const ACCOUNT_MODAL_FALLBACK_ROLES = ["PARTNER", "DEBTOR"];
 
 export function getAccountModalOrderedRoles(roles) {
   const merged = [...(roles || [])];
