@@ -1,5 +1,10 @@
 function normalizeRemoveWordToken(value) {
-  return String(value ?? "").trim().toUpperCase();
+  // Strip Excel-style leading/trailing apostrophes ("'XX123").
+  return String(value ?? "")
+    .trim()
+    .replace(/^'+|'+$/g, "")
+    .trim()
+    .toUpperCase();
 }
 
 /** Split on comma or legacy semicolon; store uppercase. */

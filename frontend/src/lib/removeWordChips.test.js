@@ -31,3 +31,9 @@ test("parses legacy semicolon values and serializes as uppercase commas", () => 
   assert.equal(serializeRemoveWordChips(parseRemoveWordChips("sad;aa;aaa")), "SAD,AA,AAA");
   assert.deepEqual(parseRemoveWordChips("sad, aa; aaa"), ["SAD", "AA", "AAA"]);
 });
+
+test("strips Excel leading/trailing apostrophes from chips", () => {
+  assert.deepEqual(parseRemoveWordChips("'XX123,'XX1234"), ["XX123", "XX1234"]);
+  assert.deepEqual(parseRemoveWordChips("'FREE'"), ["FREE"]);
+  assert.equal(serializeRemoveWordChips(parseRemoveWordChips("'XX123,'XX1234")), "XX123,XX1234");
+});
