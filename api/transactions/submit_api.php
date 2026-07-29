@@ -955,7 +955,7 @@ try {
                     }
 
                     // Platform Fee only：第二币种 From（rate_transfer_to_account_id），Cr/Dr 正数。
-                    // Service Fee 不再写 RATE_FEE（避免与已含手续费的 transfer 金额双计）；仅靠 header sms → history Remark。
+                    // Service Fee：前端 To 腿已扣费（净额）；From 腿仍含费；不写 RATE_FEE，仅 header sms → history Remark。
                     $secondFromAccountId = (int) $rate_transfer_to_account_id;
                     if ($secondFromAccountId > 0 && $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0) {
                         $entryStmt->execute([

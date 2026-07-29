@@ -221,11 +221,12 @@ export function buildRatePayload({
   };
 
   if (transferToId && transferFromId) {
-    // Exchange legs use full gross. Platform Fee is a separate + row on second From.
-    // Service Fee is sms/remark only (already reflected in transfer amount).
-    // Rate-mul commission still reduces the From transfer side only.
+    // To = net (exclude Service Fee) so 收款方 matches form amount (e.g. 300 not 310).
+    // From keeps gross so 乙方 still bears Service Fee in the transfer leg.
+    // Platform Fee stays a separate + row on second From; Rate-mul still cuts From only.
     const transferBase = grossDec;
-    let transferToSide = transferBase;
+    const serviceFeeDec = parsePositiveAmt(rateMiddlemanInputAmount);
+    let transferToSide = serviceFeeDec.gt(0) ? transferBase.minus(serviceFeeDec) : transferBase;
     let transferFromSide = transferBase;
     if (middleId && rateMulDec.gt(0)) {
       transferFromSide = transferBase.minus(rateMulDec);

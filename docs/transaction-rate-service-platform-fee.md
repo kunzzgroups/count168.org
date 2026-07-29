@@ -24,8 +24,8 @@
 
 | 项目 | 规则 |
 |------|------|
-| **Service Fee**（表单 Fee 输入） | **不**再写入独立 `RATE_FEE` 分录。金额视为已含在第二币种 transfer / 兑换腿金额中；只在主单 `sms` 上写 remark，历史里挂在第二币种 **From** 腿（`RATE_TRANSFER_TO`）的 **Remark**。 |
-| **Platform Fee** | **单独**写一条 `transaction_entry`，类型 `RATE_PLATFORM_FEE`，挂在第二币种 **From** 账户，Product 显示为 **Fee**，计入 Cr/Dr。 |
+| **Service Fee**（表单 Fee 输入） | **不**再写入独立 `RATE_FEE` 分录。To 腿用 **净额**（gross − Service Fee）；From 腿仍含该费。只在主单 `sms` 上写 remark，历史里挂在第二币种 **From** 腿（`RATE_TRANSFER_TO`）的 **Remark**。 |
+| **Platform Fee** | **单独**写一条 `transaction_entry`，类型 `RATE_PLATFORM_FEE`，挂在第二币种 **From** 账户，Product 显示为 **Fee**，计入 Cr/Dr；**不**进入 To 腿金额。 |
 | **Middle-Man Amount（只读）** | `Rate-Mul 佣金 + (Service Fee − Platform Fee)`，进 Middle-Man 账户的 `RATE_MIDDLEMAN`（Win/Loss）。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man、Platform Fee。 |
 
@@ -77,11 +77,11 @@ Platform Fee **不**参与第二币种预览；它只影响 Middle-Man Amount（
 ### 3.3 Transfer 金额（有第二组账户时）
 
 ```text
-transfer To 侧金额   = gross
-transfer From 侧金额 = gross − rateMulCommission   （仅扣 Rate-Mul 佣金，不扣 Fee/Platform）
+transfer To 侧金额   = gross − Service Fee   （收款方不含手续费，与表单右侧预览一致）
+transfer From 侧金额 = gross − rateMulCommission   （仅扣 Rate-Mul；Service Fee 仍留在 From 腿）
 ```
 
-Service Fee / Platform Fee **不**再从 transfer 金额里扣减；Platform 另写分录。
+Platform Fee **不**进 transfer 金额，另写 `RATE_PLATFORM_FEE` 挂在第二币种 From。
 
 ---
 
@@ -179,12 +179,13 @@ Schema 已同步：`easycount_schema.sql` / `banks_schema.sql` / `easycount_fres
 |------|------|
 | Middle 利润 | `0 + (10 − 1.50) = 8.50` → `RATE_MIDDLEMAN`（若选了 Middle 账户） |
 | 表单右侧预览 | `3010 − 8.50 = 3001.50` |
-| Transfer / RATE 腿金额 | 以 gross **3010** 为基数（Rate-Mul 为 0 则两侧同为 3010） |
+| Transfer To 腿 | **3000**（= gross − Service Fee 10） |
+| Transfer From 腿 | **3010**（gross；Rate-Mul 为 0） |
 | 主单 sms / Remark | `charge MYR 10 Service Fees`（展示大小写以库内为准） |
 | **不写** | `RATE_FEE` +10 |
 | **写** | `RATE_PLATFORM_FEE` +1.50 |
 
-From 账户余额增量（简化）：`3010 + 1.50`（+ Middle 账户另计），**不会**再 `+10` Service Fee 分录。
+From 账户余额增量（简化）：`3010 + 1.50`（含 Service Fee 在 transfer 腿 + Platform 分录）；To 为 **3000**（不含费）。
 
 ---
 
