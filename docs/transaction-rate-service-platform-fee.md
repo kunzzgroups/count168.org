@@ -25,8 +25,8 @@
 | 项目 | 规则 |
 |------|------|
 | **Service Fee**（表单 Fee 输入） | **不**再写入独立 `RATE_FEE` 分录。To 腿用 **净额**（gross − Service Fee）；From 腿仍含该费。只在主单 `sms` 上写 remark，历史里挂在第二币种 **From** 腿（`RATE_TRANSFER_TO`）的 **Remark**。 |
-| **Platform Fee** | **单独**写一条 `transaction_entry`，类型 `RATE_PLATFORM_FEE`，挂在第二币种 **From** 账户，Product 显示为 **Fee**，计入 Cr/Dr；**不**进入 To 腿金额。 |
-| **Middle-Man Amount（只读）** | `Rate-Mul 佣金 + (Service Fee − Platform Fee)`，进 Middle-Man 账户的 `RATE_MIDDLEMAN`（Win/Loss）。 |
+| **Platform Fee** | **单独**写一条负数 `RATE_PLATFORM_FEE`：正数输入挂第二币种 **From**，负数输入挂 **Middle-Man**；**不**进入 To 腿金额。 |
+| **Middle-Man Amount（只读）** | `Rate-Mul 佣金 + (Service Fee − abs(Platform Fee))`，正负 PT-Fee 都按绝对值扣。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man、Platform Fee。 |
 
 **为何去掉 `RATE_FEE`：**  
@@ -59,10 +59,10 @@
 
 ```text
 rateMulCommission = fromAmount × middlemanRate   （>0 才算）
-middlemanProfit   = rateMulCommission + (serviceFee − platformFee)
+middlemanProfit   = rateMulCommission + (serviceFee − abs(platformFee))
 ```
 
-`computeRateMiddlemanProfit(...)`：Fee / Platform Fee **不做 FX 换算**，按用户输入面值加减。
+`computeRateMiddlemanProfit(...)`：Fee / Platform Fee **不做 FX 换算**；Platform Fee 永远按绝对值扣。
 
 ### 3.2 第二币种金额预览
 
@@ -81,7 +81,7 @@ transfer To 侧金额   = gross − Service Fee   （收款方不含手续费，
 transfer From 侧金额 = gross − rateMulCommission   （仅扣 Rate-Mul；Service Fee 仍留在 From 腿）
 ```
 
-Platform Fee **不**进 transfer 金额，另写 `RATE_PLATFORM_FEE` 挂在第二币种 From。
+Platform Fee **不**进 transfer 金额，另写负数 `RATE_PLATFORM_FEE`；输入正数挂 From，输入负数挂 Middle-Man。
 
 ---
 
@@ -114,7 +114,7 @@ POST RATE
         ├─ RATE_TRANSFER_FROM    第二币种 To（有 transfer 时）
         ├─ RATE_TRANSFER_TO      第二币种 From（有 transfer 时）
         ├─ RATE_MIDDLEMAN        可选（利润 > 0）
-        ├─ RATE_PLATFORM_FEE     可选（Platform Fee > 0，挂 second From）
+        ├─ RATE_PLATFORM_FEE     可选（始终负数；输入符号决定挂 From / Middle-Man）
         └─ （不再写 RATE_FEE）
 ```
 
@@ -127,9 +127,9 @@ POST RATE
 ### Platform Fee
 
 1. 金额优先 `rate_platform_fee_amount`，否则 `rate_middleman_platform_fee`
-2. 描述默认：`charge {币种} {金额} PlatForm Fee`
-3. 条件：存在 transfer 且 `secondFromAccountId = rate_transfer_to_account_id > 0` 且金额 > 0
-4. `INSERT`：`entry_type = 'RATE_PLATFORM_FEE'`，账户 = 第二币种 From，金额为正（Cr/Dr）
+2. 描述默认使用绝对值：`charge {币种} {abs(金额)} PlatForm Fee`
+3. 输入 `> 0`：账户 = 第二币种 From；输入 `< 0`：账户 = Middle-Man（未选时报错）
+4. `INSERT`：`entry_type = 'RATE_PLATFORM_FEE'`，amount 始终为 `-abs(输入)`
 
 ---
 
@@ -141,10 +141,10 @@ POST RATE
 |------------|---------|-----------------|--------|
 | `RATE_TRANSFER_TO` 等兑换腿 | RATE / EXCH… | 符号按既有 RATE 规则翻号 | 仅 **TRANSFER_TO**：用主单 `sms` 作为 Remark（Service Fee 文案） |
 | `RATE_MIDDLEMAN` | MARKUP 等 | Win/Loss | — |
-| `RATE_PLATFORM_FEE` | **Fee** | Cr/Dr（保持正数语义） | Description 为 PlatForm Fee 文案 |
+| `RATE_PLATFORM_FEE` | **Fee** | Cr/Dr（当前新单为负数） | Description 为 PlatForm Fee 文案 |
 | `RATE_FEE`（旧数据） | Fee | 同左 | 历史兼容；**新单不再产生** |
 
-期望新单在 **第二币种 From** 账户上看到：
+正数 PT-Fee 的新单在 **第二币种 From** 账户上看到：
 
 1. 一笔 **RATE**（金额为 transfer/兑换腿，Remark 可含 Service Fee）  
 2. 若有 Platform Fee：一笔 **Fee**（Platform Fee）  
@@ -183,9 +183,12 @@ Schema 已同步：`easycount_schema.sql` / `banks_schema.sql` / `easycount_fres
 | Transfer From 腿 | **3010**（gross；Rate-Mul 为 0） |
 | 主单 sms / Remark | `charge MYR 10 Service Fees`（展示大小写以库内为准） |
 | **不写** | `RATE_FEE` +10 |
-| **写** | `RATE_PLATFORM_FEE` +1.50 |
+| **写** | From 账户 `RATE_PLATFORM_FEE` **-1.50** |
 
-From 账户余额增量（简化）：`3010 + 1.50`（含 Service Fee 在 transfer 腿 + Platform 分录）；To 为 **3000**（不含费）。
+From 账户余额增量（简化）：`3010 − 1.50`；To 为 **3000**（不含费）。
+
+若 Platform Fee 输入 `-1.50`：Middle 利润仍为 `10 − abs(-1.50) = 8.50`，
+但独立的 `RATE_PLATFORM_FEE -1.50` 改挂 Middle-Man，不挂 From。
 
 ---
 
@@ -205,9 +208,9 @@ submit_api.php
         ▼
 history_api.php
         │  TRANSFER_TO.remark ← sms
-        │  PLATFORM_FEE → Product=Fee
+        │  PLATFORM_FEE → Product=Fee（From 或 Middle-Man）
         ▼
-Payment History（第二币种 From）
+Payment History
 ```
 
 ---
@@ -233,3 +236,4 @@ Payment History（第二币种 From）
 2. **停写 Service Fee 独立分录**：不再 `INSERT RATE_FEE`；前端也不再发 `rate_service_fee_*`。  
 3. **Service Fee 仅 Remark**：主单 `sms` → 第二币种 From 腿 Remark。  
 4. **旧 `RATE_FEE` 行**：历史/搜索仍识别，仅兼容存量数据。
+5. **Platform Fee 符号分流**：正输入挂 From、负输入挂 Middle-Man；分录金额始终为负。

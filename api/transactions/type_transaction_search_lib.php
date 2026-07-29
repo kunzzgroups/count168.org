@@ -279,7 +279,7 @@ function typeTxSearchFetchRateTransactions(PDO $pdo, array $listScope, array $cu
         }
         $grid = typeTxSearchRowToGrid($r);
         // Align with history_api / search_api: RATE_FIRST_* and RATE_TRANSFER_* rows use -amount.
-        // RATE_FEE / RATE_PLATFORM_FEE stay positive (second-From Cr/Dr credits).
+        // Fee rows keep their stored sign; current RATE_PLATFORM_FEE rows are negative.
         $entryType = strtoupper(trim((string) ($r['entry_type'] ?? '')));
         $rawAmt = money_out($r['amount'] ?? '0');
         $signedAmount = in_array($entryType, ['RATE_FEE', 'RATE_PLATFORM_FEE'], true)

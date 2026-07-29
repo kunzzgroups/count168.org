@@ -528,7 +528,7 @@ try {
             }
 
             // Service Fee: SMS/remark only on RATE_TRANSFER_TO (already baked into transfer amount).
-            // Platform Fee: separate Cr/Dr row on second-currency From (RATE_PLATFORM_FEE).
+            // Platform Fee sign selects its account; stored ledger amount is always negative.
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             $rate_middleman_platform_fee = !empty($_POST['rate_middleman_platform_fee']) ? money_normalize($_POST['rate_middleman_platform_fee']) : null;
             if ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
@@ -544,13 +544,13 @@ try {
 
             $rate_platform_fee_amount = !empty($_POST['rate_platform_fee_amount'])
                 ? submitStoreAmount($_POST['rate_platform_fee_amount'], SUBMIT_STORE_SCALE_RATE)
-                : (($rate_middleman_platform_fee !== null && money_cmp($rate_middleman_platform_fee, '0') > 0)
+                : (($rate_middleman_platform_fee !== null && money_cmp($rate_middleman_platform_fee, '0') !== 0)
                     ? submitStoreAmount($rate_middleman_platform_fee, SUBMIT_STORE_SCALE_RATE)
                     : null);
             $rate_platform_fee_description = trim($_POST['rate_platform_fee_description'] ?? '');
-            if ($rate_platform_fee_description === '' && $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0) {
+            if ($rate_platform_fee_description === '' && $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') !== 0) {
                 $feeCurrency = strtoupper(trim((string) $rate_to_currency));
-                $feeDisplay = $rate_platform_fee_amount;
+                $feeDisplay = money_abs($rate_platform_fee_amount);
                 if (strpos($feeDisplay, '.') !== false) {
                     $feeDisplay = rtrim(rtrim($feeDisplay, '0'), '.');
                 }
@@ -563,6 +563,25 @@ try {
             $rate_transfer_to_currency = trim($_POST['rate_transfer_to_currency'] ?? '');
             
             $rate_middleman_account_id = !empty($_POST['rate_middleman_account_id']) ? (int)$_POST['rate_middleman_account_id'] : null;
+            if (
+                $rate_platform_fee_amount !== null
+                && money_cmp($rate_platform_fee_amount, '0') < 0
+                && !$rate_middleman_account_id
+            ) {
+                throw new Exception('负数 Platform Fee 必须选择 Middle-Man Account');
+            }
+            if ($rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') < 0) {
+                $stmt = $pdo->prepare("
+                    SELECT 1
+                    FROM account_company
+                    WHERE account_id = ? AND company_id = ?
+                    LIMIT 1
+                ");
+                $stmt->execute([$rate_middleman_account_id, $company_id]);
+                if (!$stmt->fetchColumn()) {
+                    throw new Exception('Rate Middleman Account 不存在或不属于当前公司');
+                }
+            }
             $rate_middleman_amount = !empty($_POST['rate_middleman_amount']) ? submitStoreAmount($_POST['rate_middleman_amount'], SUBMIT_STORE_SCALE_RATE) : null;
             $rate_middleman_description = trim($_POST['rate_middleman_description'] ?? '');
             $rawRateMiddlemanRate = $_POST['rate_middleman_rate'] ?? null;
@@ -957,16 +976,26 @@ try {
                         ]);
                     }
 
-                    // Platform Fee only：第二币种 From（rate_transfer_to_account_id），Cr/Dr 正数。
-                    // Service Fee：前端 To 腿已扣费（净额）；From 腿仍含费；不写 RATE_FEE，仅 header sms → history Remark。
+                    // Platform Fee 独立负数分录：
+                    // - 正数输入挂第二币种 From
+                    // - 负数输入挂 Middle-Man
+                    // Middle-Man Amount 仍由前端按 Fee - abs(Platform Fee) 计算。
                     $secondFromAccountId = (int) $rate_transfer_to_account_id;
-                    if ($secondFromAccountId > 0 && $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0) {
+                    if ($rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') !== 0) {
+                        $platformFeeAccountId = money_cmp($rate_platform_fee_amount, '0') < 0
+                            ? (int) $rate_middleman_account_id
+                            : $secondFromAccountId;
+                        $platformFeeLedgerAmount = money_mul(
+                            money_abs($rate_platform_fee_amount),
+                            '-1',
+                            SUBMIT_STORE_SCALE_RATE
+                        );
                         $entryStmt->execute([
                             $main_transaction_id,
                             $company_id,
-                            $secondFromAccountId,
+                            $platformFeeAccountId,
                             $myrCurrencyId,
-                            submitStoreAmount($rate_platform_fee_amount, SUBMIT_STORE_SCALE_RATE),
+                            submitStoreAmount($platformFeeLedgerAmount, SUBMIT_STORE_SCALE_RATE),
                             'RATE_PLATFORM_FEE',
                             $rate_platform_fee_description !== '' ? $rate_platform_fee_description : 'charge PlatForm Fee'
                         ]);

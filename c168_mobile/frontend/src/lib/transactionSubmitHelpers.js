@@ -23,6 +23,18 @@ function parsePositiveAmt(raw) {
   }
 }
 
+function parseSignedAmt(raw) {
+  try {
+    return MoneyDecimal.toDecimal(cleanAmt(raw) || "0", 0);
+  } catch {
+    return MoneyDecimal.toDecimal("0", 0);
+  }
+}
+
+function parseAbsoluteAmt(raw) {
+  return parseSignedAmt(raw).abs();
+}
+
 /** RATE Service Fee remark / desc：charge {第二币种} {用户输入} Service Fees */
 export function buildRateServiceFeeRemark(currencyTo, middlemanInputAmount) {
   const inputStr = cleanAmt(middlemanInputAmount);
@@ -42,15 +54,17 @@ export function buildRateServiceFeeRemark(currencyTo, middlemanInputAmount) {
 export function buildRatePlatformFeeRemark(currencyTo, platformFeeAmount) {
   const inputStr = cleanAmt(platformFeeAmount);
   if (!inputStr) return "";
+  let displayAmount;
   try {
     const dec = MoneyDecimal.toDecimal(inputStr, 0);
-    if (dec.lte(0)) return "";
+    if (dec.isZero()) return "";
+    displayAmount = dec.abs().toString();
   } catch {
     return "";
   }
   const currency = String(currencyTo ?? "").trim().toUpperCase();
   if (!currency) return "";
-  return `charge ${currency} ${inputStr} PlatForm Fee`;
+  return `charge ${currency} ${displayAmount} PlatForm Fee`;
 }
 
 /**
@@ -74,7 +88,7 @@ export function computeRateMiddlemanProfit({
     // ignore
   }
   const feeDec = parsePositiveAmt(feeAmount);
-  const platformDec = parsePositiveAmt(platformFeeAmount);
+  const platformDec = parseAbsoluteAmt(platformFeeAmount);
   return rateMulDec.plus(feeDec.minus(platformDec));
 }
 
@@ -147,7 +161,7 @@ export function buildRatePayload({
     }
   }
 
-  const platformDec = parsePositiveAmt(rateMiddlemanPlatformFee);
+  const platformInputDec = parseSignedAmt(rateMiddlemanPlatformFee);
 
   // Rate-mul commission only (excludes fee / platform fee).
   let rateMulDec = MoneyDecimal.toDecimal("0", 0);
@@ -223,7 +237,7 @@ export function buildRatePayload({
   if (transferToId && transferFromId) {
     // To = net (exclude Service Fee) so 收款方 matches form amount (e.g. 300 not 310).
     // From keeps gross so 乙方 still bears Service Fee in the transfer leg.
-    // Platform Fee stays a separate + row on second From; Rate-mul still cuts From only.
+    // Platform Fee stays a separate negative row; input sign selects From or Middle-Man.
     const transferBase = grossDec;
     const serviceFeeDec = parsePositiveAmt(rateMiddlemanInputAmount);
     let transferToSide = serviceFeeDec.gt(0) ? transferBase.minus(serviceFeeDec) : transferBase;
@@ -252,11 +266,11 @@ export function buildRatePayload({
       payload.rate_middleman_description = middleDesc;
     }
 
-    if (platformDec.gt(0)) {
-      payload.rate_platform_fee_amount = store(platformDec.toString());
+    if (!platformInputDec.isZero()) {
+      payload.rate_platform_fee_amount = store(platformInputDec.toString());
       payload.rate_platform_fee_description =
         platformFeeRemark ||
-        `charge ${String(rateCurrencyTo ?? "").trim().toUpperCase()} ${store(platformDec.toString())} PlatForm Fee`;
+        `charge ${String(rateCurrencyTo ?? "").trim().toUpperCase()} ${store(platformInputDec.abs().toString())} PlatForm Fee`;
     }
   }
 
