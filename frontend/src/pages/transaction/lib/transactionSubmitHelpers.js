@@ -118,7 +118,6 @@ export function buildRatePayload({
   }
   if (middleDec.isZero()) middleDec = MoneyDecimal.toDecimal("0", 0);
 
-  const feeDec = parsePositiveAmt(rateMiddlemanInputAmount);
   const platformDec = parsePositiveAmt(rateMiddlemanPlatformFee);
 
   // Rate-mul commission only (excludes fee / platform fee).
@@ -149,11 +148,7 @@ export function buildRatePayload({
 
   const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyTo, rateMiddlemanInputAmount);
   const platformFeeRemark = buildRatePlatformFeeRemark(rateCurrencyTo, rateMiddlemanPlatformFee);
-  const serviceFeeDesc = serviceFeeRemark
-    ? `Charge ${String(rateCurrencyTo ?? "")
-        .trim()
-        .toUpperCase()} ${cleanAmt(rateMiddlemanInputAmount)} Service Fees`
-    : "";
+  // Service Fee → header sms / history Remark only (no RATE_FEE row).
   const sms = serviceFeeRemark || String(txRemark || "").toUpperCase();
 
   const payload = {
@@ -194,7 +189,8 @@ export function buildRatePayload({
   };
 
   if (transferToId && transferFromId) {
-    // Exchange legs use full gross. Fee / Platform Fee are separate + rows on second From.
+    // Exchange legs use full gross. Platform Fee is a separate + row on second From.
+    // Service Fee is sms/remark only (already reflected in transfer amount).
     // Rate-mul commission still reduces the From transfer side only.
     const transferBase = grossDec;
     let transferToSide = transferBase;
@@ -223,11 +219,6 @@ export function buildRatePayload({
       payload.rate_middleman_description = middleDesc;
     }
 
-    if (feeDec.gt(0)) {
-      payload.rate_service_fee_amount = formatRateAmount(feeDec.toString());
-      payload.rate_service_fee_description =
-        serviceFeeDesc || `Charge ${String(rateCurrencyTo ?? "").trim().toUpperCase()} ${formatRateAmount(feeDec.toString())} Service Fees`;
-    }
     if (platformDec.gt(0)) {
       payload.rate_platform_fee_amount = formatRateAmount(platformDec.toString());
       payload.rate_platform_fee_description =

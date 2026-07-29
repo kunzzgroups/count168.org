@@ -506,8 +506,8 @@ try {
             $rate_transfer_from_amount = !empty($_POST['rate_transfer_from_amount']) ? submitRateRound2($_POST['rate_transfer_from_amount']) : null;
             $rate_transfer_to_amount = !empty($_POST['rate_transfer_to_amount']) ? submitRateRound2($_POST['rate_transfer_to_amount']) : null;
 
-            // Fee / Platform Fee are face values on second-currency From (separate Cr/Dr rows).
-            // Service Fees SMS uses the second currency (rate_to), shown on RATE_TRANSFER_TO in history.
+            // Service Fee: SMS/remark only on RATE_TRANSFER_TO (already baked into transfer amount).
+            // Platform Fee: separate Cr/Dr row on second-currency From (RATE_PLATFORM_FEE).
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             $rate_middleman_platform_fee = !empty($_POST['rate_middleman_platform_fee']) ? money_normalize($_POST['rate_middleman_platform_fee']) : null;
             if ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
@@ -521,26 +521,12 @@ try {
                 }
             }
 
-            $rate_service_fee_amount = !empty($_POST['rate_service_fee_amount'])
-                ? submitRateRound2($_POST['rate_service_fee_amount'])
-                : (($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0)
-                    ? submitRateRound2($rate_middleman_input_amount)
-                    : null);
-            $rate_service_fee_description = trim($_POST['rate_service_fee_description'] ?? '');
             $rate_platform_fee_amount = !empty($_POST['rate_platform_fee_amount'])
                 ? submitRateRound2($_POST['rate_platform_fee_amount'])
                 : (($rate_middleman_platform_fee !== null && money_cmp($rate_middleman_platform_fee, '0') > 0)
                     ? submitRateRound2($rate_middleman_platform_fee)
                     : null);
             $rate_platform_fee_description = trim($_POST['rate_platform_fee_description'] ?? '');
-            if ($rate_service_fee_description === '' && $rate_service_fee_amount !== null && money_cmp($rate_service_fee_amount, '0') > 0) {
-                $feeCurrency = strtoupper(trim((string) $rate_to_currency));
-                $feeDisplay = $rate_service_fee_amount;
-                if (strpos($feeDisplay, '.') !== false) {
-                    $feeDisplay = rtrim(rtrim($feeDisplay, '0'), '.');
-                }
-                $rate_service_fee_description = 'Charge ' . $feeCurrency . ' ' . $feeDisplay . ' Service Fees';
-            }
             if ($rate_platform_fee_description === '' && $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0) {
                 $feeCurrency = strtoupper(trim((string) $rate_to_currency));
                 $feeDisplay = $rate_platform_fee_amount;
@@ -947,19 +933,9 @@ try {
                         ]);
                     }
 
-                    // Service Fee / Platform Fee：挂在第二币种 From（rate_transfer_to_account_id），Cr/Dr 正数
+                    // Platform Fee only：第二币种 From（rate_transfer_to_account_id），Cr/Dr 正数。
+                    // Service Fee 不再写 RATE_FEE（避免与已含手续费的 transfer 金额双计）；仅靠 header sms → history Remark。
                     $secondFromAccountId = (int) $rate_transfer_to_account_id;
-                    if ($secondFromAccountId > 0 && $rate_service_fee_amount !== null && money_cmp($rate_service_fee_amount, '0') > 0) {
-                        $entryStmt->execute([
-                            $main_transaction_id,
-                            $company_id,
-                            $secondFromAccountId,
-                            $myrCurrencyId,
-                            submitTrunc2($rate_service_fee_amount),
-                            'RATE_FEE',
-                            $rate_service_fee_description !== '' ? $rate_service_fee_description : 'Charge Service Fees'
-                        ]);
-                    }
                     if ($secondFromAccountId > 0 && $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0) {
                         $entryStmt->execute([
                             $main_transaction_id,
