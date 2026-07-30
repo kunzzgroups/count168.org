@@ -589,16 +589,18 @@ body.ec-auth-shell .datacapture-table tbody tr:hover td {
    Global "WOW Factor" Final Polish
    ========================================================================== */
 
-    /* 4. SPA-like Entrance Animation (Makes PHP page loads feel modern) */
+    /*
+     * 4. SPA-like Entrance Animation
+     * Opacity only — translateY expands body scrollHeight under overflow-y:auto
+     * and flashes a window scrollbar on short pages (Transaction / Admin / Process).
+     */
     @keyframes premiumEntrance {
         from {
             opacity: 0;
-            transform: translateY(12px);
         }
 
         to {
             opacity: 1;
-            transform: translateY(0);
         }
     }
 
