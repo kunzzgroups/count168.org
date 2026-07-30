@@ -1,18 +1,25 @@
 /** Text transforms applied to captured grid before summary rows are built. */
 
-import { parseRemoveWordChips } from "../../../lib/removeWordChips.js";
+import {
+  isExactRemoveWordChip,
+  parseRemoveWordChips,
+  removeWordChipBody,
+} from "../../../lib/removeWordChips.js";
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 /**
- * Remove whole tokens only — ASCII alnum/`_` neighbors block a match so short
- * codes (XX123) do not carve into longer ones (XX1234). CJK neighbors do not
- * block, so Chinese remove-words still work inside Chinese phrases.
+ * Default: contain (substring).
+ * Exact (`=WORD`): ASCII alnum/`_` neighbors block a match so short codes
+ * (XX123) do not carve into longer ones (XX1234). CJK neighbors do not block.
  */
-function buildRemoveWordRegex(word) {
-  return new RegExp(`(?<![A-Za-z0-9_])${escapeRegex(word)}(?![A-Za-z0-9_])`, "gi");
+function buildRemoveWordRegex(word, exact) {
+  if (exact) {
+    return new RegExp(`(?<![A-Za-z0-9_])${escapeRegex(word)}(?![A-Za-z0-9_])`, "gi");
+  }
+  return new RegExp(escapeRegex(word), "gi");
 }
 
 export function applyTextTransformations(text, removeWord, replaceWordFrom, replaceWordTo) {
@@ -21,9 +28,13 @@ export function applyTextTransformations(text, removeWord, replaceWordFrom, repl
   let result = text;
 
   if (removeWord && removeWord.trim() !== "") {
-    const wordsToRemove = parseRemoveWordChips(removeWord).sort((a, b) => b.length - a.length);
-    wordsToRemove.forEach((word) => {
-      result = result.replace(buildRemoveWordRegex(word), "");
+    const wordsToRemove = parseRemoveWordChips(removeWord).sort(
+      (a, b) => removeWordChipBody(b).length - removeWordChipBody(a).length,
+    );
+    wordsToRemove.forEach((chip) => {
+      const word = removeWordChipBody(chip);
+      if (!word) return;
+      result = result.replace(buildRemoveWordRegex(word, isExactRemoveWordChip(chip)), "");
     });
   }
 
