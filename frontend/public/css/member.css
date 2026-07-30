@@ -709,20 +709,20 @@ body.transaction-page {
     display: block;
     width: 100%;
 }
-/* Date / Id Product / Rate / WinLoss / CrDr / Balance / Description / Remark */
+/* Date：7.2rem 下限可放下 DD/MM/YYYY + padding；其余贴近原 table 列比 */
 .member-winloss-table thead tr,
 .member-winloss-table tbody tr,
 .member-winloss-table tfoot tr {
     display: grid;
     grid-template-columns:
-        minmax(0, 0.6fr)
-        minmax(0, 1.6fr)
-        minmax(0, 0.5fr)
-        minmax(0, 0.8fr)
-        minmax(0, 0.8fr)
-        minmax(0, 0.8fr)
-        minmax(0, 3fr)
-        minmax(0, 1.8fr);
+        minmax(7.2rem, 0.95fr)
+        minmax(0, 1.35fr)
+        minmax(0, 0.55fr)
+        minmax(0, 0.9fr)
+        minmax(0, 0.9fr)
+        minmax(0, 1.05fr)
+        minmax(0, 2.65fr)
+        minmax(0, 1.7fr);
     width: 100%;
     align-items: stretch;
 }
@@ -803,6 +803,12 @@ body.transaction-page {
     text-align: right;
     justify-content: flex-end;
 }
+/* 与原 table 一致：Total 行 Description / Remark 留白（非浅蓝底） */
+.member-winloss-table tfoot .transaction-table-row.transaction-summary-total td.transaction-history-col-description,
+.member-winloss-table tfoot .transaction-table-row.transaction-summary-total td.transaction-history-col-remark {
+    background-color: #fff !important;
+    font-weight: 600;
+}
 .member-winloss-table .member-winloss-empty-cell {
     grid-column: 1 / -1;
     justify-content: center;
@@ -810,9 +816,13 @@ body.transaction-page {
     color: #64748b;
     font-weight: 600;
 }
-.member-winloss-table .transaction-history-col-date {
+.member-winloss-table .transaction-table-header th.transaction-history-col-date,
+.member-winloss-table .transaction-table-row td.transaction-history-col-date {
     padding-inline: 6px !important;
     justify-content: flex-start;
+    min-width: 7.2rem;
+    overflow: hidden;
+    text-overflow: clip;
 }
 .member-winloss-table .transaction-history-col-product {
     text-align: left;
@@ -868,7 +878,7 @@ body.transaction-page {
 .member-winloss-table td.transaction-history-col-balance .member-amount-pill {
     display: inline-block;
     text-align: right;
-    min-width: 4.5rem;
+    min-width: 0;
 }
 .member-amount {
     display: inline-block;
@@ -3188,18 +3198,18 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
         font-size: 11px;
     }
 
-    /* 中屏：Description 仍优先，收紧窄列避免公式过早截断 */
+    /* 中屏：Date 仍保下限，避免把年份裁掉 */
     .member-winloss-table thead tr,
     .member-winloss-table tbody tr,
     .member-winloss-table tfoot tr {
         grid-template-columns:
+            minmax(7.2rem, 1fr)
+            minmax(0, 1.3fr)
             minmax(0, 0.55fr)
-            minmax(0, 1.45fr)
-            minmax(0, 0.45fr)
-            minmax(0, 0.75fr)
-            minmax(0, 0.75fr)
-            minmax(0, 0.75fr)
-            minmax(0, 3.2fr)
+            minmax(0, 0.9fr)
+            minmax(0, 0.9fr)
+            minmax(0, 1.05fr)
+            minmax(0, 2.6fr)
             minmax(0, 1.6fr);
     }
 }
@@ -3369,14 +3379,14 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
     .member-winloss-table tbody tr,
     .member-winloss-table tfoot tr {
         grid-template-columns:
-            minmax(0, 0.6fr)
-            minmax(0, 1.6fr)
-            minmax(0, 0.5fr)
-            minmax(0, 0.8fr)
-            minmax(0, 0.8fr)
-            minmax(0, 0.8fr)
-            minmax(0, 3fr)
-            minmax(0, 1.8fr);
+            minmax(7.2rem, 1fr)
+            minmax(0, 1.3fr)
+            minmax(0, 0.55fr)
+            minmax(0, 0.9fr)
+            minmax(0, 0.9fr)
+            minmax(0, 1.05fr)
+            minmax(0, 2.55fr)
+            minmax(0, 1.55fr);
     }
 
     .member-winloss-table .transaction-table-header th,
@@ -3384,6 +3394,10 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
         min-height: 20px;
         padding: 4px 6px;
         font-size: 11px;
+    }
+
+    .member-winloss-table .transaction-history-col-date {
+        min-width: 7.2rem;
     }
 
     .member-winloss-table .transaction-history-col-remark {
