@@ -998,10 +998,18 @@ try {
                     }
 
                     // Middle-man：第二币种 Win/Loss（如果存在）
-                    // 负 PT-Fee：不另开 RATE_PLATFORM_FEE（金额已含在 middleman profit），改挂 Remark。
-                    // 正 PT-Fee：已扣在 From 腿金额，不进 Middle；不再写 RATE_PLATFORM_FEE。
+                    // 正 PT：Middle = Fee+PT（前端已算好 middleman_amount）；不写 RATE_PLATFORM_FEE。
+                    // 负 PT：
+                    //   - 桌面 rate_platform_fee_from_credit=1 → From 上写正数 RATE_PLATFORM_FEE，无 Middle Remark
+                    //   - Mobile/旧路径 → Middle Remark（[[PFEE_REMARK]]）或 fallback 负数 Fee 挂 Middle
                     $platformFeeIsNegative =
                         $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') < 0;
+                    $platformFeeFromCredit = !empty($_POST['rate_platform_fee_from_credit'])
+                        && (
+                            $_POST['rate_platform_fee_from_credit'] === '1'
+                            || $_POST['rate_platform_fee_from_credit'] === 1
+                            || $_POST['rate_platform_fee_from_credit'] === true
+                        );
                     $platformFeeRemarkText = $rate_platform_fee_description !== ''
                         ? $rate_platform_fee_description
                         : 'charge PlatForm Fee';
@@ -1011,7 +1019,8 @@ try {
                         $middleAmount = submitStoreAmount($rate_middleman_amount, SUBMIT_STORE_SCALE_RATE);
                         $middleCurrencyId = (int)$rate_middleman_currency_id ?: $myrCurrencyId;
                         $middleEntryDescription = $rate_middleman_description;
-                        if ($platformFeeIsNegative) {
+                        // Mobile/legacy remark path only（桌面负 PT 已改 From Fee 行）
+                        if ($platformFeeIsNegative && !$platformFeeFromCredit) {
                             $middleEntryDescription = rtrim((string) $rate_middleman_description)
                                 . "\n[[PFEE_REMARK]]"
                                 . $platformFeeRemarkText;
@@ -1029,9 +1038,20 @@ try {
                         $middlemanRowInserted = true;
                     }
 
-                    // 正 PT-Fee：永不写 RATE_PLATFORM_FEE（已体现在 From 扣减；不进 Middle）。
-                    // 负 PT-Fee：优先 Remark on MIDDLEMAN；若无 Middle-Man 行则 fallback 写 Fee 挂 Middle-Man。
-                    if ($platformFeeIsNegative && !$middlemanRowInserted && $rate_middleman_account_id) {
+                    // 桌面负 PT：Select From 上独立 Fee 行，金额为正数 +abs(PT)
+                    if ($platformFeeIsNegative && $platformFeeFromCredit && (int) $rate_transfer_to_account_id > 0) {
+                        $platformFeeLedgerAmount = money_abs($rate_platform_fee_amount);
+                        $entryStmt->execute([
+                            $main_transaction_id,
+                            $company_id,
+                            (int) $rate_transfer_to_account_id,
+                            $myrCurrencyId,
+                            submitStoreAmount($platformFeeLedgerAmount, SUBMIT_STORE_SCALE_RATE),
+                            'RATE_PLATFORM_FEE',
+                            $platformFeeRemarkText
+                        ]);
+                    } elseif ($platformFeeIsNegative && !$platformFeeFromCredit && !$middlemanRowInserted && $rate_middleman_account_id) {
+                        // Mobile/legacy fallback：无 Middle 行时仍写负数 Fee 挂 Middle-Man
                         $platformFeeLedgerAmount = money_mul(
                             money_abs($rate_platform_fee_amount),
                             '-1',

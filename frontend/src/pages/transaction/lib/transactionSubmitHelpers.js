@@ -80,9 +80,9 @@ export function buildRatePlatformFeeRemark(currencyTo, platformFeeAmount) {
 }
 
 /**
- * Middle-Man profit: rate-mul commission + Service Fee, with negative PT only.
- * - PT-Fee > 0 → 外来平台费，只扣 From，**不**进 Middle（Middle = Fee + rateMul）
- * - PT-Fee < 0 → Middle = Fee − abs(PT-Fee)
+ * Middle-Man profit: rate-mul commission + signed Platform Fee mix (desktop).
+ * - PT-Fee > 0 → Fee + PT（正 PT 并入 Middle；From 另扣）
+ * - PT-Fee < 0 → Fee − abs(PT)
  * Fee / Platform Fee are face values (no FX multiply).
  */
 export function computeRateMiddlemanProfit({
@@ -99,10 +99,12 @@ export function computeRateMiddlemanProfit({
   }
   const feeDec = parsePositiveAmt(feeAmount);
   const platformSigned = parseSignedAmt(platformFeeAmount);
+  const platformAbs = platformSigned.abs();
   let feeNet = feeDec;
-  // Positive PT is external — never add into Middle-Man profit.
-  if (platformSigned.lt(0)) {
-    feeNet = feeDec.minus(platformSigned.abs());
+  if (platformSigned.gt(0)) {
+    feeNet = feeDec.plus(platformAbs);
+  } else if (platformSigned.lt(0)) {
+    feeNet = feeDec.minus(platformAbs);
   }
   return rateMulDec.plus(feeNet);
 }
@@ -111,6 +113,12 @@ export function computeRateMiddlemanProfit({
 export function positivePlatformFeeDeduction(platformFeeAmount) {
   const platformSigned = parseSignedAmt(platformFeeAmount);
   return platformSigned.gt(0) ? platformSigned.abs() : MoneyDecimal.toDecimal("0", 0);
+}
+
+/** Negative PT-Fee abs credited on From via separate Fee row; otherwise 0. */
+export function negativePlatformFeeCredit(platformFeeAmount) {
+  const platformSigned = parseSignedAmt(platformFeeAmount);
+  return platformSigned.lt(0) ? platformSigned.abs() : MoneyDecimal.toDecimal("0", 0);
 }
 
 /**
@@ -252,9 +260,10 @@ export function buildRatePayload({
   };
 
   if (transferToId && transferFromId) {
-    // To = full gross（不扣 Service Fee / 正 PT）→ TEST 2 = 310
-    // From = gross − rateMul − Service Fee − max(PT,0)；Service Fee 另写 RATE_FEE，避免双计
-    // Negative PT-Fee：From/To 不因 PT 变动；Middle Remark only
+    // To = full gross（不扣 Service Fee / PT）
+    // From RATE = gross − rateMul − Service Fee − max(PT,0)
+    // 正 PT：扣在 From RATE；并入 Middle = Fee+PT；不写 PLATFORM_FEE 行
+    // 负 PT：From RATE 不动；另写 PLATFORM_FEE 正数行挂 From；Middle = Fee−|PT|
     const transferBase = grossDec;
     const serviceFeeDec = parsePositiveAmt(rateMiddlemanInputAmount);
     const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
@@ -298,12 +307,13 @@ export function buildRatePayload({
         `charge ${String(rateCurrencyTo ?? "").trim().toUpperCase()} ${store(serviceFeeDec.toString())} Service Fees`;
     }
 
-    // Only negative PT-Fee still needs platform-fee fields (Middle Remark / fallback Fee row).
+    // Desktop: negative PT → separate Fee row (+abs) on Select From (not Middle Remark).
     if (platformInputDec.lt(0)) {
       payload.rate_platform_fee_amount = store(platformInputDec.toString());
       payload.rate_platform_fee_description =
         platformFeeRemark ||
         `charge ${String(rateCurrencyTo ?? "").trim().toUpperCase()} ${store(platformInputDec.abs().toString())} PlatForm Fee`;
+      payload.rate_platform_fee_from_credit = "1";
     }
   }
 
