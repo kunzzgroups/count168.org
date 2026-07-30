@@ -7,6 +7,8 @@ import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
 import { notifyCompanySessionUpdated } from "../../../utils/company/companySessionEvents.js";
 import { syncCompanySessionApi } from "../../../utils/company/companySessionSync.js";
 import { ymdToDmy } from "../lib/dashboardDateUtils.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import {
   bindDashboardSessionCache,
   buildDashboardCacheKey,
@@ -6973,6 +6975,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     ensureDeferredDashboardLoads,
     upgradeActiveScopeEarnings,
   ]);
+
+  useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
+    void loadDashboard();
+  }, { enabled: gcBootstrapReady });
 
   const loadDashboardTriggerKey = useMemo(
     () =>

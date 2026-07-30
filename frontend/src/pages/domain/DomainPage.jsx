@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { assetUrl, buildApiUrl } from "../../utils/core/apiUrl.js";
 import "../../../public/css/domain.css";
@@ -25,6 +25,8 @@ import { getDomainText } from "../../translateFile/pages/domainTranslate.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
 import { fetchOwnerCompaniesAll, readPersistedDashboardGcFilter } from "../../utils/company/sharedCompanyFilter.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
 
 export default function DomainPage() {
   const navigate = useNavigate();
@@ -83,6 +85,42 @@ export default function DomainPage() {
   // ── Domain fee price (for share calc + Price modal) ───────────────────────
   const [domainPeriodPrices, setDomainPeriodPrices] = useState(null);
 
+  // ── Fee summary ────────────────────────────────────────────────────────────
+  function refreshFeeSummary() {
+    fetch(buildApiUrl("api/domain/domain_api.php"), {
+      cache: "no-cache", method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "get_domain_fee_settings" }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.success && res.data) {
+          setDomainPeriodPrices(normalizeDomainFeeSettingsFromApi(res.data));
+        }
+      })
+      .catch(() => {});
+  }
+
+  const loadDomains = useCallback(async ({ silent = false } = {}) => {
+    try {
+      const r2 = await fetch(buildApiUrl("api/domain/domain_api.php"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list" }),
+      });
+      const j2 = await r2.json();
+      if (!r2.ok || !j2?.success) {
+        if (!silent) setLoadError(j2?.message || getDomainText(lang, "failedToLoadDomainData"));
+        return;
+      }
+      setDomains(Array.isArray(j2?.data?.domains) ? j2.data.domains : []);
+      refreshFeeSummary();
+    } catch {
+      if (!silent) setLoadError(getDomainText(lang, "failedToLoadDomainData"));
+    }
+  }, [lang]);
+
   // ── Initial data load (session from AuthenticatedLayout) ─────────────────────
   useEffect(() => {
     if (!sessionReady || !me) return;
@@ -102,44 +140,19 @@ export default function DomainPage() {
           navigate(spaPath("dashboard"), { replace: true });
           return;
         }
-
-        const r2 = await fetch(buildApiUrl("api/domain/domain_api.php"), {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "list" }),
-        });
-        const j2 = await r2.json();
-        if (!r2.ok || !j2?.success) {
-          if (!cancelled) setLoadError(j2?.message || t("failedToLoadDomainData"));
-          return;
-        }
-        if (!cancelled) setDomains(Array.isArray(j2?.data?.domains) ? j2.data.domains : []);
-        refreshFeeSummary();
+        if (!cancelled) await loadDomains();
       } catch {
-        if (!cancelled) setLoadError(t("failedToLoadDomainData"));
+        if (!cancelled) setLoadError(getDomainText(lang, "failedToLoadDomainData"));
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [sessionReady, me, navigate]);
+  }, [sessionReady, me, navigate, loadDomains, lang]);
 
-  // ── Fee summary ────────────────────────────────────────────────────────────
-  function refreshFeeSummary() {
-    fetch(buildApiUrl("api/domain/domain_api.php"), {
-      cache: "no-cache", method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "get_domain_fee_settings" }),
-    })
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success && res.data) {
-          setDomainPeriodPrices(normalizeDomainFeeSettingsFromApi(res.data));
-        }
-      })
-      .catch(() => {});
-  }
+  useRealtimeDomain(REALTIME_DOMAINS.DOMAIN, () => {
+    void loadDomains({ silent: true });
+  }, { enabled: sessionReady && Boolean(me) });
 
   // ── Filtered + paginated list ──────────────────────────────────────────────
   const filteredDomains = useMemo(() => {

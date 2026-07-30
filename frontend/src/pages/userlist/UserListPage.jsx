@@ -53,6 +53,8 @@ import GcInlineFilterPanel from "../../components/GcInlineFilterPanel.jsx";
 import { isPartnershipAuditReadOnlyLocked, isPartnershipAuditReadOnlyBlockingUserEdit } from "../../utils/audit/partnershipAuditReadOnly.js";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
 import "../../../public/css/accountCSS.css";
 import "../../../public/css/userlist.css";
 import "../../../public/css/admin-responsive.css";
@@ -1064,6 +1066,10 @@ export default function UserListPage() {
     groupAllMode,
     applyUserListResult,
   ]);
+
+  useRealtimeDomain(REALTIME_DOMAINS.USERS, () => {
+    void fetchUsers(null, { silent: true });
+  });
 
   const onSwitchCompany = useCallback(async (c, { viewGroup = null } = {}) => {
     const nextCompanyId = Number(c?.id);

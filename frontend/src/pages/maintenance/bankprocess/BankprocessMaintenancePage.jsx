@@ -39,6 +39,8 @@ import {
 import { notifyTransactionListInvalidated } from "../../transaction/lib/transactionPaymentLogic.js";
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
 import { getMaintenanceText, MAINTENANCE_I18N } from "../../../translateFile/pages/maintenanceTranslate.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 
 /** Dedupe empty-result toast (Strict Mode remount + back-to-back searches with same filters). */
 const bankprocessNoDataToastKeys = new Set();
@@ -355,6 +357,10 @@ export default function BankprocessMaintenancePage() {
     notify,
     t,
   ]);
+
+  useRealtimeDomain(REALTIME_DOMAINS.MAINTENANCE, () => {
+    void performSearch();
+  }, { enabled: !bootLoading && Boolean(companyId) && currenciesReady });
 
   useEffect(() => {
     if (bootLoading || !companyId || !dateFrom || !dateTo || !currenciesReady) return;

@@ -46,6 +46,8 @@ import { getReportText, REPORT_I18N } from "../../../translateFile/pages/reportT
 import DomainReportFilters from "./DomainReportFilters.jsx";
 import DomainReportTable from "./DomainReportTable.jsx";
 import { reportToastMaintenanceVariant } from "../shared/reportAmountFormat.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import {
   buildReportSnapshotKey,
   getReportSnapshot,
@@ -431,6 +433,10 @@ export default function DomainReportPage() {
       }
     }
   }, [reportScope, dateFrom, dateTo, reportParams, beginReportFetch, isReportFetchCurrent, t, notify]);
+
+  useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
+    void loadReport();
+  }, { enabled: domainReportScopeIsReady(reportScope) && metaReady });
 
   const loadMetaData = useCallback(async () => {
     if (!domainReportScopeIsReady(reportScope)) return;

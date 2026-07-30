@@ -50,6 +50,8 @@ import {
   transactionMaintenanceScopeIsReady,
   transactionMaintenanceUsesGroupProcesses,
 } from "./transactionMaintenanceScope.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
 import { getMaintenanceText, MAINTENANCE_I18N } from "../../../translateFile/pages/maintenanceTranslate.js";
 import { formatDmyFromYmd } from "../shared/maintenanceDateHelpers.js";
@@ -421,6 +423,10 @@ export default function TransactionMaintenancePage() {
       clearTransactionRows,
     ],
   );
+
+  useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
+    void performMaintenanceSearch();
+  }, { enabled: listQueryEnabled });
 
   const runBootMaintenanceSearch = useCallback(async (pending) => {
     if (!pending?.scope || !transactionMaintenanceScopeIsReady(pending.scope)) return false;

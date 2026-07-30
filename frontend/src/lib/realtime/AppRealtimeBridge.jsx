@@ -87,10 +87,23 @@ export default function AppRealtimeBridge() {
 
       if (domain === REALTIME_DOMAINS.DATACAPTURE) {
         void queryClient.invalidateQueries({ queryKey: dataCaptureQueryKeys.root() });
+        void queryClient.invalidateQueries({
+          predicate: (q) => q.queryKey?.[0] === "summary",
+        });
         return;
       }
 
-      // Ownership / users / maintenance / announcements / domain / app:
+      if (domain === REALTIME_DOMAINS.USERS) {
+        void queryClient.invalidateQueries({
+          predicate: (q) => {
+            const k = q.queryKey?.[0];
+            return k === "users" || k === "user-list" || k === "useraccess";
+          },
+        });
+        return;
+      }
+
+      // Ownership / maintenance / announcements / domain / app:
       // pages listen via useRealtimeDomain or full refresh hooks.
     });
   }, [queryClient]);

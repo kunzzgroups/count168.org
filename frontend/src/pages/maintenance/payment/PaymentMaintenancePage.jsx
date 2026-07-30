@@ -42,6 +42,8 @@ import {
 import { notifyTransactionListInvalidated } from "../../transaction/lib/transactionPaymentLogic.js";
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
 import { getMaintenanceText, MAINTENANCE_I18N } from "../../../translateFile/pages/maintenanceTranslate.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 
 // Components
 import PaymentMaintenanceFilters from "./components/PaymentMaintenanceFilters.jsx";
@@ -447,6 +449,10 @@ export default function PaymentMaintenancePage() {
     },
     [companies, selectedGroup, companyId, dateFrom, dateTo, transactionType, query, selectedCurrency, notify, t],
   );
+
+  useRealtimeDomain(REALTIME_DOMAINS.MAINTENANCE, () => {
+    void performSearch();
+  }, { enabled: listQueryEnabled });
 
   // Auto-search when filters change（defer 0ms；切换公司已手动 performSearch 时跳过一轮避免重复）
   useEffect(() => {

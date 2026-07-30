@@ -48,6 +48,8 @@ import {
   updateSessionCompany,
 } from "./captureMaintenanceLogic.js";
 import { companyPermsAllowDataCaptureMaintenance } from "../shared/maintenanceCompanyApi.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import {
   captureMaintenanceScopeCacheCompanyKey,
   captureMaintenanceScopeCacheKey,
@@ -468,6 +470,10 @@ export default function CaptureMaintenancePage() {
     },
     [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, dateFrom, dateTo, selectedProcess, query, notify, t],
   );
+
+  useRealtimeDomain(REALTIME_DOMAINS.MAINTENANCE, () => {
+    void performSearch();
+  }, { enabled: !bootLoading && listQueryEnabled });
 
   // Auto-search when filters change（defer 0ms；切换公司已手动 performSearch 时跳过一轮避免重复）
   useEffect(() => {
