@@ -81,7 +81,8 @@ try {
     }
 
     $id = (int) $_POST['id'];
-    $name = trim($_POST['name']);
+    // Canonical store: uppercase names (callers may send CSS-only "uppercase" visual values).
+    $name = strtoupper(trim($_POST['name']));
     $role = trim($_POST['role']);
     $password = trim($_POST['password']);
     $payment_alert = isset($_POST['payment_alert']) ? (int) $_POST['payment_alert'] : 0;
@@ -129,7 +130,7 @@ try {
 
     $alert_day = $alert_type;
     $alert_specific_date = $alert_start_date;
-    $remark = !empty($_POST['remark']) ? trim($_POST['remark']) : null;
+    $remark = !empty($_POST['remark']) ? strtoupper(trim($_POST['remark'])) : null;
 
     $submitted_company_ids = null;
     if (isset($_POST['company_ids']) && $_POST['company_ids'] !== '') {

@@ -179,7 +179,17 @@ export default function AddAccountModal({ companyId, companyCode, preferredRole,
     }
     const amount = normalizeAlertAmount(form.alert_amount);
     const fd = new FormData();
-    Object.entries(form).forEach(([k, v]) => fd.append(k, k === "alert_amount" ? amount : v ?? ""));
+    Object.entries(form).forEach(([k, v]) => {
+      if (k === "alert_amount") {
+        fd.append(k, amount);
+        return;
+      }
+      const raw = v ?? "";
+      // Align with AccountListPage / Summary: CSS text-transform is visual-only.
+      const out =
+        k === "account_id" || k === "name" || k === "remark" ? toUpper(raw) : raw;
+      fd.append(k, out);
+    });
     if (selectedCompanyIds.length) fd.set("company_ids", JSON.stringify(selectedCompanyIds));
     if (numericCompanyId) fd.set("company_id", String(numericCompanyId));
     if (selectedCurrencyIds.length) fd.set("currency_ids", JSON.stringify(selectedCurrencyIds));
