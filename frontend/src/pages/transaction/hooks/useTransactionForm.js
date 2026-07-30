@@ -15,7 +15,7 @@ import {
   RATE_STORE_MAX_DECIMALS,
   TX_STORE_MAX_DECIMALS,
 } from "../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds, computeRateMiddlemanProfit, positivePlatformFeeDeduction, negativePlatformFeeCredit } from "../lib/transactionSubmitHelpers.js";
+import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds, computeRateMiddlemanProfit, positivePlatformFeeDeduction } from "../lib/transactionSubmitHelpers.js";
 import { submitTransaction, transactionQueryKeys } from "../lib/transactionApi.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveGridRowToAccountOption } from "../lib/transactionPaymentLogic.js";
@@ -283,7 +283,8 @@ export function useTransactionForm({
     }
     setRateMiddlemanAmount(middleStr);
 
-    // From preview: gross − (Rate-Mul + Service Fee) − positive PT + negative PT credit.
+    // From preview: gross − (Rate-Mul + Service Fee) − positive PT only.
+    // Negative PT: keep form amount (e.g. 300); History Fee +|PT| may make Balance 301.50.
     const toAmountDeductionDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
@@ -291,7 +292,6 @@ export function useTransactionForm({
       platformFeeAmount: "0",
     });
     const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
-    const negativePtCreditDec = negativePlatformFeeCredit(rateMiddlemanPlatformFee);
 
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
@@ -320,12 +320,9 @@ export function useTransactionForm({
       if (!toAmountDeductionDec.isZero()) {
         displayVal = displayVal.minus(toAmountDeductionDec);
       }
-      // Positive PT: 980 − 1.5 = 978.5；Negative PT: 980 + 1.5 = 981.5（提交时另开 Fee 行）
+      // Positive PT only: 300 − 1.5 = 298.50. Negative PT does not change form amount.
       if (positivePtDec.gt(0)) {
         displayVal = displayVal.minus(positivePtDec);
-      }
-      if (negativePtCreditDec.gt(0)) {
-        displayVal = displayVal.plus(negativePtCreditDec);
       }
 
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));

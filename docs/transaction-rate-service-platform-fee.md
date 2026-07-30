@@ -24,7 +24,7 @@
 
 | 项目 | 规则 |
 |------|------|
-| **Service Fee**（表单 Fee 输入） | **桌面**：独立 `RATE_FEE` 挂 Select From；From 腿扣 Fee；To 腿 = **全额 gross**（不扣 Fee）。**Mobile（暂未改）**：仍 sms Remark；To 仍可能为 gross − Fee。 |
+| **Service Fee** | **桌面**：From RATE 扣 Fee（如 310→300）；**不**在 From 写 `RATE_FEE`；To = gross（已含 Fee 口径）。发 `rate_skip_from_service_fee=1`。**Mobile**：仍 sms Remark。 |
 | **Platform Fee > 0** | From RATE 扣 PT；Middle = **`Fee + PT`**；不写 `RATE_PLATFORM_FEE`。To = gross。 |
 | **Platform Fee < 0** | **桌面**：From RATE 不动；Select From 另写 **正数** `RATE_PLATFORM_FEE`（+|PT|）；Middle = `Fee − \|PT\|`；无 Middle Remark。**Mobile**：仍 Remark-only。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man（及负 PT 的 Remark / fallback）。 |
@@ -71,11 +71,13 @@ PT = 0 : middlemanProfit = rateMulCommission + serviceFee
 ### 3.2 第二币种金额预览
 
 ```text
-displayAmt = gross − (Rate-Mul + Service Fee) − max(PT, 0) + max(−PT, 0)
+displayAmt = gross − (Rate-Mul + Service Fee) − max(PT, 0)
 ```
 
-例：gross 1000、Fee 20、PT `-1.5` → 预览 `981.50`；PT `+1.5` → `978.50`。  
-提交时负 PT 的 `+1.5` 落在独立 Fee 行（RATE 腿仍为 980）。
+- 正 PT：表单显示扣后金额（如 298.50）。
+- 负 PT：表单仍显示 300（不预加）；History 可另有 Fee +1.5，Balance 到 301.50。
+
+To 腿 = **全额 gross**。
 
 ### 3.3 Transfer 金额（有第二组账户时）
 

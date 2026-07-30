@@ -214,9 +214,8 @@ export function buildRatePayload({
       ? `Rate charge (x${rateMiddlemanRate}) from ${rateCurrencyFrom} ${MoneyDecimal.formatFixed(fromDec.toString(), 2)}`
       : "";
 
-  const serviceFeeRemark = buildRateServiceFeeRemark(rateCurrencyTo, rateMiddlemanInputAmount);
   const platformFeeRemark = buildRatePlatformFeeRemark(rateCurrencyTo, rateMiddlemanPlatformFee);
-  // Service Fee → separate RATE_FEE row (desktop). Do not put Fee text into sms/Remark.
+  // Service Fee → embedded in To/From amounts (desktop skips From RATE_FEE + sms).
   const sms = String(txRemark || "").toUpperCase();
 
   const storeFrom = store(fromDec.toString());
@@ -260,10 +259,10 @@ export function buildRatePayload({
   };
 
   if (transferToId && transferFromId) {
-    // To = full gross（不扣 Service Fee / PT）
-    // From RATE = gross − rateMul − Service Fee − max(PT,0)
-    // 正 PT：扣在 From RATE；并入 Middle = Fee+PT；不写 PLATFORM_FEE 行
-    // 负 PT：From RATE 不动；另写 PLATFORM_FEE 正数行挂 From；Middle = Fee−|PT|
+    // To = full gross（已含 Service Fee 口径，不另扣）
+    // From RATE = gross − rateMul − Service Fee − max(PT,0)（Fee 只扣进 From 金额，不写 From 的 RATE_FEE 行）
+    // 正 PT：扣 From RATE；Middle = Fee+PT
+    // 负 PT：From RATE 展示/入库保持（如 300）；History 另写 PLATFORM_FEE +|PT|（Balance 可到 301.5）
     const transferBase = grossDec;
     const serviceFeeDec = parsePositiveAmt(rateMiddlemanInputAmount);
     const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
@@ -299,15 +298,10 @@ export function buildRatePayload({
       payload.rate_middleman_description = middleDesc;
     }
 
-    // Desktop-only flag: PHP inserts RATE_FEE once on Select From when this is present.
-    if (serviceFeeDec.gt(0)) {
-      payload.rate_service_fee_amount = store(serviceFeeDec.toString());
-      payload.rate_service_fee_description =
-        serviceFeeRemark ||
-        `charge ${String(rateCurrencyTo ?? "").trim().toUpperCase()} ${store(serviceFeeDec.toString())} Service Fees`;
-    }
+    // Desktop: Service Fee 已含在 To / 已从 From RATE 扣除 — 不在 From 写 RATE_FEE，也不用 sms Remark。
+    payload.rate_skip_from_service_fee = "1";
 
-    // Desktop: negative PT → separate Fee row (+abs) on Select From (not Middle Remark).
+    // Desktop: negative PT → History Fee 行 (+abs) on From；表单金额不预加。
     if (platformInputDec.lt(0)) {
       payload.rate_platform_fee_amount = store(platformInputDec.toString());
       payload.rate_platform_fee_description =

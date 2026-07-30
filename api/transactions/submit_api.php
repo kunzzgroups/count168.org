@@ -528,11 +528,18 @@ try {
             }
 
             // Service Fee:
-            // - Desktop sends rate_service_fee_amount → insert RATE_FEE once on Select From (no sms remark).
-            // - Mobile / legacy (no rate_service_fee_amount) → sms remark only (unchanged).
+            // - Desktop rate_skip_from_service_fee=1 → 不写 From RATE_FEE、不用 sms Remark（Fee 已在 To/From 金额里）。
+            // - Desktop rate_service_fee_amount → insert RATE_FEE on From（旧桌面路径，现已停发）。
+            // - Mobile / legacy → sms remark only.
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             $rate_middleman_platform_fee = !empty($_POST['rate_middleman_platform_fee']) ? money_normalize($_POST['rate_middleman_platform_fee']) : null;
-            $rate_service_fee_amount = !empty($_POST['rate_service_fee_amount'])
+            $rate_skip_from_service_fee = !empty($_POST['rate_skip_from_service_fee'])
+                && (
+                    $_POST['rate_skip_from_service_fee'] === '1'
+                    || $_POST['rate_skip_from_service_fee'] === 1
+                    || $_POST['rate_skip_from_service_fee'] === true
+                );
+            $rate_service_fee_amount = !$rate_skip_from_service_fee && !empty($_POST['rate_service_fee_amount'])
                 ? submitStoreAmount($_POST['rate_service_fee_amount'], SUBMIT_STORE_SCALE_RATE)
                 : null;
             $rate_service_fee_description = trim($_POST['rate_service_fee_description'] ?? '');
@@ -548,7 +555,11 @@ try {
                     }
                     $rate_service_fee_description = 'charge ' . $feeCurrency . ' ' . $feeDisplay . ' Service Fees';
                 }
-            } elseif ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
+            } elseif (
+                !$rate_skip_from_service_fee
+                && $rate_middleman_input_amount !== null
+                && money_cmp($rate_middleman_input_amount, '0') > 0
+            ) {
                 $feeCurrency = trim((string) $rate_to_currency);
                 if ($feeCurrency !== '') {
                     $feeDisplay = $rate_middleman_input_amount;
