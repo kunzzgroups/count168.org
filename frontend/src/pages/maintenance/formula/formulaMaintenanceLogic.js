@@ -4,13 +4,15 @@ import {
   fetchMaintenanceProcesses,
 } from "../shared/maintenanceCompanyApi.js";
 import { fetchProcesses as fetchDomainReportProcesses } from "../../report/domain/domainReportApi.js";
-import { mapDomainGroupProcesses } from "../../report/domain/domainReportGroupProcesses.js";
 import {
   buildFormulaDisplayParenFromParts,
   formatSourcePercent,
   normalizeMaintenanceFormulaInput,
 } from "../../../shared/formula/index.js";
-import { GROUP_PAYROLL_PROCESS_CODES } from "../../datacapture/lib/dataCaptureGroupOnlyProcesses.js";
+import {
+  GROUP_PAYROLL_PROCESS_CODES,
+  mapGroupPayrollProcesses,
+} from "../../datacapture/lib/dataCaptureGroupOnlyProcesses.js";
 import {
   formulaMaintenanceScopeApiParams,
   formulaMaintenanceUsesGroupProcesses,
@@ -88,7 +90,7 @@ export async function fetchProcesses(companyId, scope = null) {
   }
   if (scope && formulaMaintenanceUsesGroupProcesses(scope) && !payrollChannel) {
     const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });
-    return mapProcessesForMaintenanceSelect(mapDomainGroupProcesses(apiList), {
+    return mapProcessesForMaintenanceSelect(mapGroupPayrollProcesses(apiList), {
       groupPayrollShort: true,
     });
   }
