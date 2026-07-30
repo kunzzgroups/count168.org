@@ -99,6 +99,8 @@ try {
     $savedBy = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
     ownership_history_snapshot_group_from_live($pdo, $group_id, $savedBy);
 
+    ownership_realtime_publish_for_group($pdo, $group_id, 'upsert_group');
+
     echo json_encode([
         'status'  => 'success',
         'message' => "Group ownership for '{$group_id}' saved (" . money_out($percentage, 2) . "%)"

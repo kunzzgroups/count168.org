@@ -142,6 +142,8 @@ if ($saveHistoryOnly) {
         ownership_history_save_group_for_month($pdo, $group_id, $owner_id, $historyRows, $savedBy, $effectiveMonth);
         $pdo->commit();
 
+        ownership_realtime_publish_for_group($pdo, (string) $group_id, 'batch_save_group_history');
+
         echo json_encode([
             'status'  => 'success',
             'message' => 'Historical group ownership saved successfully',
@@ -295,6 +297,8 @@ try {
     }
 
     $pdo->commit();
+
+    ownership_realtime_publish_for_group($pdo, (string) $group_id, 'batch_save_group');
 
     echo json_encode([
         'status'  => 'success',

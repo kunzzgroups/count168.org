@@ -11,6 +11,7 @@ import { dataCaptureQueryKeys } from "../../pages/datacapture/lib/dataCaptureApi
 import { clearAccountListRouteWarmCache } from "../../pages/account/accountRoutePrefetch.js";
 import { clearProcessListRouteWarmCaches } from "../../pages/processlist/processRoutePrefetch.js";
 import { clearAllOwnershipCompaniesCache } from "../../pages/ownership/ownershipRoutePrefetch.js";
+import { clearAllAutoRenewListCache } from "../../pages/autorenew/autoRenewRoutePrefetch.js";
 import { onRealtimeInvalidate, REALTIME_DOMAINS } from "./realtimeEvents.js";
 import { subscribeAppRealtime } from "./subscribeAppRealtime.js";
 
@@ -73,6 +74,7 @@ export default function AppRealtimeBridge() {
       const domain = String(detail.domain || "");
 
       if (domain === REALTIME_DOMAINS.LEDGER || detail.type === "ledger_changed") {
+        clearAllAutoRenewListCache();
         notifyTransactionListInvalidated("realtime_ledger");
         void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
         void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.contraInboxRoot() });

@@ -6,6 +6,8 @@ import {
   splitHistoryDateChunks,
 } from "../lib/transactionHistoryProgressive.js";
 import { paymentHistoryParamsReady } from "../lib/transactionPaymentHistoryUrl.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 
 /**
  * Progressive Payment History: newest month first (fast paint), then one
@@ -18,9 +20,20 @@ export function usePaymentHistoryProgressive({ scope, scopeApi, enabled }) {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [tableReady, setTableReady] = useState(false);
+  const [ledgerReloadToken, setLedgerReloadToken] = useState(0);
+
+  const historyParamsReady = enabled && paymentHistoryParamsReady(scope);
+
+  useRealtimeDomain(
+    REALTIME_DOMAINS.LEDGER,
+    () => {
+      setLedgerReloadToken((n) => n + 1);
+    },
+    { enabled: historyParamsReady },
+  );
 
   useEffect(() => {
-    if (!enabled || !paymentHistoryParamsReady(scope)) {
+    if (!historyParamsReady) {
       setRows([]);
       setAccountMeta(null);
       setIsInitialLoading(false);
@@ -114,7 +127,8 @@ export function usePaymentHistoryProgressive({ scope, scopeApi, enabled }) {
       ac.abort();
     };
   }, [
-    enabled,
+    historyParamsReady,
+    ledgerReloadToken,
     scope.accountDbId,
     scope.currency,
     scope.dateFrom,
