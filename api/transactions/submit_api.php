@@ -528,9 +528,9 @@ try {
             }
 
             // Service Fee:
-            // - Desktop rate_skip_from_service_fee=1 → 不写 From RATE_FEE、不用 sms Remark（Fee 已在 To/From 金额里）。
-            // - Desktop rate_service_fee_amount → insert RATE_FEE on From（旧桌面路径，现已停发）。
-            // - Mobile / legacy → sms remark only.
+            // - 现行桌面：Fee 已含在 To/From 金额，默认**永不**写 From 的 RATE_FEE（避免旧缓存 JS 仍发 rate_service_fee_amount）。
+            // - 仅当显式 rate_write_from_service_fee=1 时才写 RATE_FEE（紧急回滚用）。
+            // - Mobile / legacy：无 skip 时仍可用 sms Remark。
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             $rate_middleman_platform_fee = !empty($_POST['rate_middleman_platform_fee']) ? money_normalize($_POST['rate_middleman_platform_fee']) : null;
             $rate_skip_from_service_fee = !empty($_POST['rate_skip_from_service_fee'])
@@ -539,7 +539,13 @@ try {
                     || $_POST['rate_skip_from_service_fee'] === 1
                     || $_POST['rate_skip_from_service_fee'] === true
                 );
-            $rate_service_fee_amount = !$rate_skip_from_service_fee && !empty($_POST['rate_service_fee_amount'])
+            $rate_write_from_service_fee = !empty($_POST['rate_write_from_service_fee'])
+                && (
+                    $_POST['rate_write_from_service_fee'] === '1'
+                    || $_POST['rate_write_from_service_fee'] === 1
+                    || $_POST['rate_write_from_service_fee'] === true
+                );
+            $rate_service_fee_amount = $rate_write_from_service_fee && !empty($_POST['rate_service_fee_amount'])
                 ? submitStoreAmount($_POST['rate_service_fee_amount'], SUBMIT_STORE_SCALE_RATE)
                 : null;
             $rate_service_fee_description = trim($_POST['rate_service_fee_description'] ?? '');
@@ -557,6 +563,7 @@ try {
                 }
             } elseif (
                 !$rate_skip_from_service_fee
+                && !$rate_write_from_service_fee
                 && $rate_middleman_input_amount !== null
                 && money_cmp($rate_middleman_input_amount, '0') > 0
             ) {
@@ -988,10 +995,10 @@ try {
                         $rate_transfer_to_description
                     ]);
 
-                    // Desktop Service Fee：独立 RATE_FEE（正数）挂 Select From；仅当 POST 带 rate_service_fee_amount。
-                    // From 腿金额已由前端扣掉 Service Fee，此处只写一次，避免双计。
+                    // Service Fee 分录：默认不写。仅显式 rate_write_from_service_fee=1 时插入（现行桌面不发该旗标）。
                     if (
-                        $rate_service_fee_amount !== null
+                        $rate_write_from_service_fee
+                        && $rate_service_fee_amount !== null
                         && money_cmp($rate_service_fee_amount, '0') > 0
                         && (int) $rate_transfer_to_account_id > 0
                     ) {

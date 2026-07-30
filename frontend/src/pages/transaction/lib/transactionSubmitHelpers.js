@@ -298,9 +298,6 @@ export function buildRatePayload({
       payload.rate_middleman_description = middleDesc;
     }
 
-    // Desktop: Service Fee 已含在 To / 已从 From RATE 扣除 — 不在 From 写 RATE_FEE，也不用 sms Remark。
-    payload.rate_skip_from_service_fee = "1";
-
     // Desktop: negative PT → History Fee 行 (+abs) on From；表单金额不预加。
     if (platformInputDec.lt(0)) {
       payload.rate_platform_fee_amount = store(platformInputDec.toString());
@@ -310,6 +307,9 @@ export function buildRatePayload({
       payload.rate_platform_fee_from_credit = "1";
     }
   }
+
+  // Ensure skip flag survives even if transfer block early-returned somehow.
+  payload.rate_skip_from_service_fee = "1";
 
   return { payload, middleId };
 }
