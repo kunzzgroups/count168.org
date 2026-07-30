@@ -356,6 +356,7 @@ function DataCapturePageContent() {
   const { submittedItems, submissionsError, refreshSubmitted } = useDataCaptureSubmittedList(
     captureScope,
     form.captureDate,
+    selectedPermission,
   );
 
   const topSectionRef = useRef(null);

@@ -12,7 +12,9 @@ function dcFetchGroupPayrollSubmissionsByCaptureDate(
     array $permissionProcessIds
 ): array {
     $ledgerDc = dcSubmittedLedgerFilter('dc', 'data_captures');
-    $scopeProcessFilter = dcSubmittedProcessScopeFilter('p');
+    // Bank/group payroll lists are driven by each capture, and must not include
+    // unrelated Games processes from the same company/date.
+    $scopeProcessFilter = dcSqlGroupProcessFilter('p');
 
     $stmt = $pdo->prepare("
         SELECT
@@ -109,8 +111,26 @@ function dcGetSubmissionsByCaptureDate(int $user_id): void
         $notExistsCorrelate = dcSqlSubmittedProcessCorrelatesWithCapture('spx', 'dc', $pdo);
         $notExistsDateClause = dcSqlSubmittedProcessCaptureDateMatch('spx', 'dc', $hasCaptureDateColumn);
         $scopeProcessFilter = dcSubmittedProcessScopeFilter('p');
+        $permissionCategory = strtoupper(trim((string) ($_GET['permission'] ?? '')));
+        $bankCategoryRequested = $permissionCategory === 'BANK';
 
-        if ($capture_scope_group) {
+        if ($bankCategoryRequested) {
+            $groupIdForAccess = dcNormalizeGroupId(
+                $_GET['group_id'] ?? $_GET['view_group'] ?? ''
+            );
+            $hasBankAccess = checkCompanyCategoryPermission($pdo, (int) $currentCompanyId, 'Bank')
+                || reportGroupHasBankSubsidiary($pdo, $groupIdForAccess);
+            if (!$hasBankAccess) {
+                http_response_code(403);
+                echo json_encode([
+                    'success' => false,
+                    'error' => 'Unauthorized category permission (Bank required)',
+                ]);
+                return;
+            }
+        }
+
+        if ($capture_scope_group || $bankCategoryRequested) {
             $submissions = dcFetchGroupPayrollSubmissionsByCaptureDate(
                 $pdo,
                 $capture_scope_ctx,
