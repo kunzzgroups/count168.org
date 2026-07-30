@@ -2243,8 +2243,8 @@ try {
         bmp_restoreNormalAccountingDueDismissals($pdo, $company_id);
     }
 
-    $today = date('Y-m-d');
-    //$today = '2026-06-12';
+    //$today = date('Y-m-d');
+    $today = '2026-07-31';
 
     bmp_promoteExpiredNaturalMonthlySoftDismissals($pdo, $company_id, $today);
     if (isset($_GET['restore_dismissed']) && (string) $_GET['restore_dismissed'] === '1') {
