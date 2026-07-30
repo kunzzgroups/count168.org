@@ -10,12 +10,13 @@ import {
   formatSourcePercent,
   normalizeMaintenanceFormulaInput,
 } from "../../../shared/formula/index.js";
+import { GROUP_PAYROLL_PROCESS_CODES } from "../../datacapture/lib/dataCaptureGroupOnlyProcesses.js";
 import {
   formulaMaintenanceScopeApiParams,
   formulaMaintenanceUsesGroupProcesses,
 } from "./formulaMaintenanceScope.js";
 
-const FORMULA_PAYROLL_PROCESS_CODES = new Set(["SALARY", "COMMISSION", "BONUS"]);
+const FORMULA_PAYROLL_PROCESS_CODES = new Set(GROUP_PAYROLL_PROCESS_CODES);
 
 /** ProcessSelect expects process_name; domain report rows use process / display_text. */
 export function mapProcessesForMaintenanceSelect(apiList, { groupPayrollShort = false } = {}) {
@@ -79,12 +80,11 @@ export { isBankOnlyCategoryCompany } from "../shared/maintenanceCompanyApi.js";
 export async function fetchProcesses(companyId, scope = null) {
   const payrollChannel = Boolean(scope?.c168Channel || scope?.companyPayrollChannel);
   if (payrollChannel) {
-    return [
-      { id: "PROFIT", process_name: "PROFIT", description: null },
-      { id: "SALARY", process_name: "SALARY", description: null },
-      { id: "COMMISSION", process_name: "COMMISSION", description: null },
-      { id: "BONUS", process_name: "BONUS", description: null },
-    ];
+    return GROUP_PAYROLL_PROCESS_CODES.map((code) => ({
+      id: code,
+      process_name: code,
+      description: null,
+    }));
   }
   if (scope && formulaMaintenanceUsesGroupProcesses(scope) && !payrollChannel) {
     const apiList = await fetchDomainReportProcesses(scope, { credentials: "include" });

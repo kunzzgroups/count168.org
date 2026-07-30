@@ -2,10 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  fetchProcesses,
+  mapProcessesForMaintenanceSelect,
   syncEditFormDescriptionInput,
   syncEditFormFormulaInput,
   syncEditFormSourcePercent,
 } from "./formulaMaintenanceLogic.js";
+import { resolveFormulaMaintenanceScope } from "./formulaMaintenanceScope.js";
 
 const editForm = {
   source_percent: "1",
@@ -75,4 +78,34 @@ test("description edit converts letters to uppercase", () => {
   );
 
   assert.equal(changed.description, "TEST 1 - ABC");
+});
+
+test("bank-only company scope is marked as a payroll channel", () => {
+  const scope = resolveFormulaMaintenanceScope({
+    companies: [
+      { id: 42, company_id: "CX", permissions: ["Bank"], group_id: "CX" },
+    ],
+    selectedGroup: "CX",
+    companyId: 42,
+  });
+
+  assert.equal(scope.c168Channel, false);
+  assert.equal(scope.companyPayrollChannel, true);
+});
+
+test("payroll channel exposes the fixed process list including PROFIT", async () => {
+  const processes = await fetchProcesses(42, { companyPayrollChannel: true });
+
+  assert.deepEqual(
+    processes.map((process) => process.process_name),
+    ["PROFIT", "SALARY", "COMMISSION", "BONUS"],
+  );
+});
+
+test("PROFIT uses the same payroll display normalization as other payroll codes", () => {
+  const [process] = mapProcessesForMaintenanceSelect([
+    { id: 1, process_name: "PROFIT", description: "Legacy description" },
+  ]);
+
+  assert.equal(process.description, "PROFIT");
 });
