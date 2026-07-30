@@ -268,3 +268,13 @@ export function clearDashboardPayloadCache() {
 export function clearDashboardCache() {
   store.clear();
 }
+
+/**
+ * Ledger / transaction writes: drop session KPI + payload dedupe so the next
+ * Dashboard visit (or mounted realtime reload) cannot early-return on stale data.
+ * Does not reset bootstrap/warm session flags — only numeric caches.
+ */
+export function invalidateDashboardCachesForLedgerChange() {
+  store.clear();
+  payloadStore.clear();
+}

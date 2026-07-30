@@ -5,6 +5,7 @@ import {
   readPersistedDashboardGcFilter,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { transactionQueryKeys } from "../../pages/transaction/lib/transactionApi.js";
+import { notifyTransactionListInvalidated } from "../../pages/transaction/lib/transactionPaymentLogic.js";
 import { dataCaptureQueryKeys } from "../../pages/datacapture/lib/dataCaptureApi.js";
 import { onRealtimeInvalidate, REALTIME_DOMAINS } from "./realtimeEvents.js";
 import { subscribeAppRealtime } from "./subscribeAppRealtime.js";
@@ -68,6 +69,7 @@ export default function AppRealtimeBridge() {
       const domain = String(detail.domain || "");
 
       if (domain === REALTIME_DOMAINS.LEDGER || detail.type === "ledger_changed") {
+        notifyTransactionListInvalidated("realtime_ledger");
         void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
         void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.contraInboxRoot() });
         return;

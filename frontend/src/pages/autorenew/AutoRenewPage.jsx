@@ -468,6 +468,7 @@ export default function AutoRenewPage() {
         fromAccountId,
         toAccountId,
       });
+      invalidateTransactionListCache("auto_renew_approve");
       notify(t("approvedSuccess"), "success");
       await refreshListAfterMutation();
     } catch (err) {
