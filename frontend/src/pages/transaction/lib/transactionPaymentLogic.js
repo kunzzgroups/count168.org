@@ -11,6 +11,16 @@ export const TX_LIST_INVALIDATE_LS_KEY = "count168_tx_invalidate_ts";
 export const TX_LIST_INVALIDATE_HANDLED_KEY = "count168_tx_invalidate_handled";
 export const TX_DATA_CHANGED_EVENT = "tx-data-changed";
 
+/** Current ledger-list invalidate timestamp (0 if unset). Used by route warm to drop stale fills. */
+export function readTxListInvalidateTs() {
+  try {
+    const n = Number(localStorage.getItem(TX_LIST_INVALIDATE_LS_KEY) || 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * Central ledger-client invalidate: Dashboard session caches, TX search Map,
  * report remount snapshots, and tx-data-changed broadcast for mounted listeners.

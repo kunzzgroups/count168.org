@@ -12,6 +12,7 @@ import { formatDmy } from "./transactionFormat.js";
 import {
   orderCurrencyRows,
   pickTransactionDefaultCurrency,
+  readTxListInvalidateTs,
   sanitizeSearchApiData,
 } from "./transactionPaymentLogic.js";
 import {
@@ -157,22 +158,17 @@ async function prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo, sna
   });
   if (!searchParams.dateFrom || !searchParams.dateTo) return;
 
-  if (queryClient) {
-    const body = await queryClient.fetchQuery({
-      queryKey: transactionQueryKeys.search(searchParams),
-      queryFn: ({ signal }) => searchTransactions({ ...searchParams, signal }),
-      staleTime: 5 * 60_000,
-      gcTime: 15 * 60_000,
-    });
-    if (body?.success && body?.data) {
-      setTxSearchCache(requestKey, sanitizeSearchApiData(body.data));
-    }
-    return;
-  }
+  // Capture before network — drop fill if ledger invalidate lands while we wait.
+  const invalidateTsAtStart = readTxListInvalidateTs();
 
-  const body = await searchTransactions(searchParams).catch(() => null);
-  if (body?.success && body?.data) {
-    setTxSearchCache(requestKey, sanitizeSearchApiData(body.data));
+  const body = await searchTransactions({ ...searchParams }).catch(() => null);
+  if (readTxListInvalidateTs() !== invalidateTsAtStart) return;
+  if (!body?.success || !body?.data) return;
+
+  const cleaned = sanitizeSearchApiData(body.data);
+  setTxSearchCache(requestKey, cleaned);
+  if (queryClient) {
+    queryClient.setQueryData(transactionQueryKeys.search(searchParams), body);
   }
 }
 
