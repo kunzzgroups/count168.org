@@ -41,6 +41,8 @@ import {
   resolveAccountListRouteCache,
   warmAccountListRouteCache,
 } from "./accountRoutePrefetch.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
 import {
   canClearCompanySelection,
   canUseGroupOnlyMode,
@@ -253,9 +255,8 @@ export default function AccountListPage() {
     modalLedgerScopeRef.current = scope;
     setModalLedgerScope(scope);
   }, []);
-  const [settingCurrencyId, setSettingCurrencyId] = useState(null);
+  const [settingCurrencyIds, setSettingCurrencyIds] = useState(() => new Set());
   const [settingLinked, setSettingLinked] = useState(new Set());
-  const [settingInitial, setSettingInitial] = useState(new Set());
   const [settingSearch, setSettingSearch] = useState("");
   const [settingRole, setSettingRole] = useState("");
 
@@ -681,6 +682,10 @@ export default function AccountListPage() {
     },
     [fetchAccounts, invalidateAccountListCacheForScope, resolveGroupOnlyFetch],
   );
+
+  useRealtimeDomain(REALTIME_DOMAINS.ACCOUNTS, () => {
+    refreshAccountList({ silent: true });
+  });
 
   const sessionUserId = sessionMe?.user_id ?? sessionMe?.id ?? null;
 
@@ -2129,15 +2134,9 @@ export default function AccountListPage() {
     }
     if (!hasAccountMutationScope) return;
     syncModalLedgerScope(null);
+    setSettingLinked(new Set());
     setCurrencySettingOpen(true);
     void loadSelectionMeta(null, false, { forcePageLedgerScope: true });
-    if (settingCurrencyId) void loadCurrencyLinks(settingCurrencyId);
-  };
-
-  const clearCurrencySettingSelection = () => {
-    setSettingCurrencyId(null);
-    setSettingLinked(new Set());
-    setSettingInitial(new Set());
   };
 
   const openEdit = async (id) => {
@@ -2285,7 +2284,6 @@ export default function AccountListPage() {
           }
         }
         setInitialEditCurrencyIds([...after]);
-        if (settingCurrencyId) void loadCurrencyLinks(settingCurrencyId);
       }
       setAddModalOpen(false); setEditModalOpen(false);
       setHiddenCurrencyIds([]);
@@ -2417,13 +2415,11 @@ export default function AccountListPage() {
     setSelectedCurrencyIds((prev) => prev.filter((x) => Number(x) !== id));
     setHiddenCurrencyIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setCurrencies((prev) => prev.filter((c) => Number(c.id) !== id));
-    setSettingCurrencyId((prev) => {
-      if (Number(prev) === id) {
-        setSettingLinked(new Set());
-        setSettingInitial(new Set());
-        return null;
-      }
-      return prev;
+    setSettingCurrencyIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
     });
   }, []);
 
@@ -2483,7 +2479,7 @@ export default function AccountListPage() {
       notify(t("apiCurrencySyncedFromSubsidiary"), "danger");
       return;
     }
-    if (settingCurrencyId != null && Number(settingCurrencyId) === id) {
+    if (settingCurrencyIds.has(id)) {
       notify(t("deselectCurrencyBeforeDelete"), "danger");
       return;
     }
@@ -2610,34 +2606,42 @@ export default function AccountListPage() {
     }
   };
 
-  const loadCurrencyLinks = async (curId) => {
-    try {
-      const params = new URLSearchParams({ action: "get_linked_accounts_by_currency", currency_id: String(curId) });
-      appendCurrencyScopeParams(params);
-      const res = await fetch(buildApiUrl(`api/accounts/bulk_account_currency_api.php?${params.toString()}`), { method: "POST", credentials: "include" });
-      const json = await res.json();
-      const ids = new Set((json.data?.linked_account_ids || []).map(Number));
-      setSettingLinked(ids); setSettingInitial(new Set(ids));
-    } catch { notify(t("loadLinksFailed"), "danger"); }
-  };
-
   const saveCurrencySetting = async () => {
     if (accountMutationsBlocked) {
       notify(t("readOnlyActionBlocked"), "danger");
       return;
     }
-    const linked = [], unlinked = [];
-    accounts.forEach(a => {
-      const id = Number(a.id); const was = settingInitial.has(id), now = settingLinked.has(id);
-      if (now && !was) linked.push(id); if (!now && was) unlinked.push(id);
-    });
+    const currencyIds = [...settingCurrencyIds]
+      .map(Number)
+      .filter((id) => id > 0 && currencies.some((c) => Number(c.id) === id));
+    const linkedAccountIds = [...settingLinked].map(Number).filter((id) => id > 0);
+    if (!currencyIds.length) {
+      notify(t("pleaseSelectCurrencyFirst"), "danger");
+      return;
+    }
+    if (!linkedAccountIds.length) {
+      notify(t("pleaseSelectAccountFirst"), "danger");
+      return;
+    }
     try {
       const params = new URLSearchParams({ action: "bulk_update" });
       appendCurrencyScopeParams(params);
-      const res = await fetch(buildApiUrl(`api/accounts/bulk_account_currency_api.php?${params.toString()}`), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currency_id: settingCurrencyId, linked_account_ids: linked, unlinked_account_ids: unlinked }), credentials: "include" });
-      const json = await res.json();
-      if (!res.ok || !json.success) return notifyApi(json.message, "saveFailed", "danger");
-      setSettingInitial(new Set(settingLinked));
+      const url = buildApiUrl(`api/accounts/bulk_account_currency_api.php?${params.toString()}`);
+      for (const currencyId of currencyIds) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currency_id: currencyId,
+            linked_account_ids: linkedAccountIds,
+            unlinked_account_ids: [],
+          }),
+          credentials: "include",
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) return notifyApi(json.message, "saveFailed", "danger");
+      }
+      setSettingLinked(new Set());
       setCurrencySettingOpen(false);
       notify(t("currencySettingsSaved"));
       refreshAccountList();
@@ -3096,7 +3100,7 @@ export default function AccountListPage() {
         onClose={() => setForceCurrencyDeletePrompt(null)}
         t={t}
       />
-      <CurrencySettingModal open={currencySettingOpen} onClose={() => setCurrencySettingOpen(false)} currencies={currencies} settingCurrencyId={settingCurrencyId} setSettingCurrencyId={setSettingCurrencyId} settingLinked={settingLinked} setSettingLinked={setSettingLinked} settingSearch={settingSearch} setSettingSearch={setSettingSearch} settingRole={settingRole} setSettingRole={setSettingRole} onLoadCurrencyLinks={loadCurrencyLinks} onClearCurrencySelection={clearCurrencySettingSelection} onSave={saveCurrencySetting} accounts={accounts} roles={roles} currencyInput={currencyInput} setCurrencyInput={setCurrencyInput} onCreateCurrency={createCurrency} onRemoveCurrency={removeSettingCurrency} t={t} />
+      <CurrencySettingModal open={currencySettingOpen} onClose={() => setCurrencySettingOpen(false)} currencies={currencies} settingCurrencyIds={settingCurrencyIds} setSettingCurrencyIds={setSettingCurrencyIds} settingLinked={settingLinked} setSettingLinked={setSettingLinked} settingSearch={settingSearch} setSettingSearch={setSettingSearch} settingRole={settingRole} setSettingRole={setSettingRole} onSave={saveCurrencySetting} accounts={accounts} roles={roles} currencyInput={currencyInput} setCurrencyInput={setCurrencyInput} onCreateCurrency={createCurrency} onRemoveCurrency={removeSettingCurrency} t={t} />
       <LinkAccountModal open={linkModalOpen} accounts={linkAccountsPool} currentAccountId={linkingAccountId} selectedIds={selectedLinkedIds} setSelectedIds={setSelectedLinkedIds} linkType={linkType} setLinkType={setLinkType} searchTerm={linkSearchTerm} setSearchTerm={setLinkSearchTerm} onSave={saveLinks} onClose={() => setLinkModalOpen(false)} t={t} />
     </>
   );

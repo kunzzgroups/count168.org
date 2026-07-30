@@ -10,6 +10,7 @@ import AvatarPickerModal from "./AvatarPickerModal.jsx";
 import ConfirmLogoutModal from "./ConfirmLogoutModal.jsx";
 import ExpirationReminderModal from "./ExpirationReminderModal.jsx";
 import { AuthSessionProvider } from "../context/AuthSessionContext.jsx";
+import AppRealtimeBridge from "../lib/realtime/AppRealtimeBridge.jsx";
 import SidebarLangSwitch from "./SidebarLangSwitch.jsx";
 import SidebarFlyoutSubmenu from "./SidebarFlyoutSubmenu.jsx";
 import { dismissAllPortalTooltips } from "./PortalTooltip.jsx";
@@ -1243,6 +1244,7 @@ export default function AuthenticatedLayout() {
   return (
     <AuthSessionProvider value={sessionContextValue}>
     <>
+      <AppRealtimeBridge />
       {!chromelessPaymentHistory ? (
       <>
       <div

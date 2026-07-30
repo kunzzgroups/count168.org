@@ -164,6 +164,9 @@ try {
         exit;
     }
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$companyId], 'accounts', 'create_currency');
+
     jsonOut(true, 'OK', ['id' => $created['id'], 'code' => $created['code']]);
 } catch (PDOException $e) {
     error_log('create_currency_api: ' . $e->getMessage());

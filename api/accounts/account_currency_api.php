@@ -373,6 +373,8 @@ try {
                 exit;
             }
             dbAddAccountCurrency($pdo, $account_id, $currency_id);
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies([$permCompanyId], 'accounts', 'add_currency');
             jsonResponse(true, '货币添加成功', ['account_id' => $account_id, 'currency_id' => $currency_id]);
             exit;
         }
@@ -412,6 +414,8 @@ try {
                 jsonResponse(false, '关联不存在', null, 400);
                 exit;
             }
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies([$permCompanyId], 'accounts', 'remove_currency');
             jsonResponse(true, '货币移除成功');
             exit;
         }

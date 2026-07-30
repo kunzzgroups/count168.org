@@ -111,6 +111,8 @@ try {
     try {
         updateProcessedAmounts($pdo, $records, $total_amount);
         $pdo->commit();
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([(int) $company_id], 'maintenance', 'capture_update');
         jsonResponse(true, '数据更新成功', null);
     } catch (Exception $e) {
         $pdo->rollBack();

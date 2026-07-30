@@ -1983,6 +1983,10 @@ try {
     // 入账成功后立刻清理 Transaction List 缓存，避免 Resend 后短时间显示旧账单。
     clearTransactionSearchCache();
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$company_id], 'processes', 'post_to_transaction');
+    realtime_publish_companies([$company_id], 'ledger', 'post_to_transaction');
+
     if ($createdCount === 0 && $skippedFutureMonthlyDueCount > 0) {
         jsonResponse(true, "未到应付日，暂不生成交易记录（Resend 除外）。", [
             'created_count' => 0,

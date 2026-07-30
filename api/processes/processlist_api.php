@@ -774,6 +774,8 @@ function updateProcess() {
             }
             
             $pdo->commit();
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies([$currentCompanyId], 'processes', 'update_process');
             jsonResponse(true, 'Process updated successfully!', null);
         } catch (Exception $e) {
             // 回滚事务
@@ -1237,6 +1239,8 @@ function updateBankProcess() {
                 $ins->execute([$currentCompanyId, $country, $bank]);
             } catch (Exception $e) { /* ignore */ }
         }
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$currentCompanyId], 'processes', 'update_bank_process');
         jsonResponse(true, 'Process updated successfully!', null);
     } catch (Exception $e) {
         error_log("updateBankProcess: " . $e->getMessage());
@@ -1396,6 +1400,8 @@ function addCountry() {
         $stmt = $pdo->prepare("INSERT IGNORE INTO company_countries (company_id, country) VALUES (?, ?)");
         $stmt->execute([$companyId, $country]);
         $currency = ensureCompanyCurrencyCode($pdo, $companyId, $country);
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$companyId], 'processes', 'add_country');
         jsonResponse(true, 'Saved', $currency);
     } catch (Exception $e) {
         error_log("addCountry: " . $e->getMessage());
@@ -1444,6 +1450,8 @@ function removeCountry() {
         }
 
         $currencyResult = deleteCompanyCurrencyCode($pdo, $companyId, $country);
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$companyId], 'processes', 'remove_country');
         jsonResponse(true, 'Removed', [
             'deleted' => $companyCountriesDeleted,
             'currency_id' => $currencyResult['id'],
@@ -1483,6 +1491,8 @@ function removeBank() {
         }
         $stmt = $pdo->prepare("DELETE FROM country_bank WHERE company_id = ? AND country = ? AND bank = ?");
         $stmt->execute([$companyId, $country, $bank]);
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$companyId], 'processes', 'remove_bank');
         jsonResponse(true, 'Removed', ['deleted' => (int) $stmt->rowCount()]);
     } catch (Exception $e) {
         error_log("removeBank: " . $e->getMessage());
@@ -1548,6 +1558,8 @@ function saveCountryBanks() {
             $stmt = $pdo->prepare("INSERT IGNORE INTO country_bank (company_id, country, bank) VALUES (?, ?, ?)");
             $stmt->execute([$companyId, $country, $bank]);
         }
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$companyId], 'processes', 'save_country_banks');
         jsonResponse(true, 'Saved', null);
     } catch (Exception $e) {
         error_log("saveCountryBanks: " . $e->getMessage());
@@ -1642,6 +1654,8 @@ function saveSelectedCountries() {
             }
             $pdo->commit();
             ensureCompanyCurrencyCodes($pdo, $companyId, $countries);
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies([$companyId], 'processes', 'save_selected_countries');
             jsonResponse(true, 'Saved', null);
         } catch (Exception $e) {
             $pdo->rollBack();
@@ -1758,6 +1772,8 @@ function saveSelectedBanks() {
                 }
             }
             $pdo->commit();
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies([$companyId], 'processes', 'save_selected_banks');
             jsonResponse(true, 'Saved', null);
         } catch (Exception $e) {
             $pdo->rollBack();

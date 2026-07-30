@@ -899,6 +899,9 @@ function dcSummaryApiHandleSubmit(): void
                 // Commit transaction
                 $pdo->commit();
 
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([$companyId], 'datacapture', 'summary_submit');
+
                 // Company scope: write submitted_processes in same request as data_captures (avoids second POST + scope drift).
                 if (!$isBatchAppend && $userId) {
                     $submittedResult = dcSaveSubmittedProcessRecord(

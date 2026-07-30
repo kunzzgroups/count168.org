@@ -344,6 +344,9 @@ try {
 
     $pdo->commit();
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([(int) $company_id], 'maintenance', 'capture_delete');
+
     jsonResponse(true, "已删除 {$totalDeleted} 条明细记录", ['deleted' => $totalDeleted]);
 } catch (PDOException $e) {
     if (isset($pdo) && $pdo && $pdo->inTransaction()) {

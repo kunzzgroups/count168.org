@@ -304,6 +304,9 @@ try {
         throw new Exception('数据库更新错误: ' . ($err[2] ?? '未知错误'));
     }
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$company_id], 'accounts', 'update');
+
     jsonResponse(true, 'Account updated successfully', null);
 } catch (Exception $e) {
     jsonResponse(false, $e->getMessage(), null, 400);

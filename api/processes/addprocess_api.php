@@ -141,6 +141,8 @@ try {
         $id = insertBankProcess($pdo, $params);
         ensureCountryBank($pdo, $companyId, $country, $bank);
         $data = ['created_processes' => [['id' => $id, 'process_id' => $name, 'description_id' => null]]];
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$companyId], 'processes', 'add_bank');
         jsonResponse(true, 'Bank process added successfully', $data);
         exit;
     }
@@ -157,6 +159,8 @@ try {
             exit;
         }
         $descriptionId = insertDescription($pdo, $companyId, $descriptionName);
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$companyId], 'processes', 'add_description');
         jsonResponse(true, 'Description added successfully', ['description_id' => $descriptionId]);
         exit;
     }
@@ -182,6 +186,8 @@ try {
             exit;
         }
         deleteDescription($pdo, $descriptionId, $companyId);
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$companyId], 'processes', 'delete_description');
         jsonResponse(true, 'Description deleted successfully', null);
         exit;
     }
@@ -320,6 +326,10 @@ try {
             'source_templates_found' => count($sourceTemplates),
             'errors' => $errors
         ];
+        if (!$allSkipped) {
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies([$companyId], 'processes', 'add');
+        }
         jsonResponse(!$allSkipped, $message, $data);
         exit;
     }
