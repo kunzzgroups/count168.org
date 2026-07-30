@@ -685,16 +685,25 @@ body.transaction-page {
 }
 /* Win/Loss 明细表：仅行布局改为 CSS Grid，视觉样式保持原设计 */
 .member-winloss-table-x-scroll {
-    overflow-x: hidden;
+    overflow-x: auto;
     width: 100%;
     min-width: 0;
     max-width: 100%;
 }
 .member-winloss-table.transaction-table {
+    --member-wl-grid-cols:
+        10rem
+        minmax(0, 1.2fr)
+        minmax(0, 0.5fr)
+        minmax(0, 0.85fr)
+        minmax(0, 0.85fr)
+        minmax(0, 1.05fr)
+        minmax(0, 2.8fr)
+        minmax(0, 1.5fr);
     display: block;
     width: 100%;
-    max-width: 100%;
-    min-width: 0;
+    max-width: none;
+    min-width: 56rem;
     table-layout: fixed;
     border-collapse: separate;
     border-spacing: 0;
@@ -709,30 +718,23 @@ body.transaction-page {
     display: block;
     width: 100%;
 }
-/* Date：7.2rem 下限可放下 DD/MM/YYYY + padding；其余贴近原 table 列比 */
+/* Date 固定 10rem（DD/MM/YYYY+padding）；thead/tbody/tfoot 共用同一模板，避免错位 */
 .member-winloss-table thead tr,
 .member-winloss-table tbody tr,
 .member-winloss-table tfoot tr {
     display: grid;
-    grid-template-columns:
-        minmax(7.2rem, 0.95fr)
-        minmax(0, 1.35fr)
-        minmax(0, 0.55fr)
-        minmax(0, 0.9fr)
-        minmax(0, 0.9fr)
-        minmax(0, 1.05fr)
-        minmax(0, 2.65fr)
-        minmax(0, 1.7fr);
+    grid-template-columns: var(--member-wl-grid-cols);
     width: 100%;
     align-items: stretch;
+    justify-items: stretch;
 }
 .member-winloss-table .transaction-table-header th,
 .member-winloss-table .transaction-table-row td {
     display: flex;
     align-items: center;
-    width: auto;
-    min-width: 0;
-    max-width: none;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
     box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -820,7 +822,6 @@ body.transaction-page {
 .member-winloss-table .transaction-table-row td.transaction-history-col-date {
     padding-inline: 6px !important;
     justify-content: flex-start;
-    min-width: 7.2rem;
     overflow: hidden;
     text-overflow: clip;
 }
@@ -3198,19 +3199,16 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
         font-size: 11px;
     }
 
-    /* 中屏：Date 仍保下限，避免把年份裁掉 */
-    .member-winloss-table thead tr,
-    .member-winloss-table tbody tr,
-    .member-winloss-table tfoot tr {
-        grid-template-columns:
-            minmax(7.2rem, 1fr)
-            minmax(0, 1.3fr)
-            minmax(0, 0.55fr)
-            minmax(0, 0.9fr)
-            minmax(0, 0.9fr)
+    .member-winloss-table.transaction-table {
+        --member-wl-grid-cols:
+            10rem
+            minmax(0, 1.15fr)
+            minmax(0, 0.5fr)
+            minmax(0, 0.85fr)
+            minmax(0, 0.85fr)
             minmax(0, 1.05fr)
-            minmax(0, 2.6fr)
-            minmax(0, 1.6fr);
+            minmax(0, 2.7fr)
+            minmax(0, 1.4fr);
     }
 }
 
@@ -3371,22 +3369,17 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
 
     .member-winloss-table.transaction-table {
         width: 100%;
-        min-width: 880px;
+        min-width: 56rem;
         max-width: none;
-    }
-
-    .member-winloss-table thead tr,
-    .member-winloss-table tbody tr,
-    .member-winloss-table tfoot tr {
-        grid-template-columns:
-            minmax(7.2rem, 1fr)
-            minmax(0, 1.3fr)
-            minmax(0, 0.55fr)
-            minmax(0, 0.9fr)
-            minmax(0, 0.9fr)
+        --member-wl-grid-cols:
+            10rem
+            minmax(0, 1.15fr)
+            minmax(0, 0.5fr)
+            minmax(0, 0.85fr)
+            minmax(0, 0.85fr)
             minmax(0, 1.05fr)
-            minmax(0, 2.55fr)
-            minmax(0, 1.55fr);
+            minmax(0, 2.6fr)
+            minmax(0, 1.35fr);
     }
 
     .member-winloss-table .transaction-table-header th,
@@ -3394,10 +3387,6 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
         min-height: 20px;
         padding: 4px 6px;
         font-size: 11px;
-    }
-
-    .member-winloss-table .transaction-history-col-date {
-        min-width: 7.2rem;
     }
 
     .member-winloss-table .transaction-history-col-remark {
