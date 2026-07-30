@@ -3234,11 +3234,27 @@ body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-f
 }
 
 /*
- * Middle-Man：Account 加宽；Rate-Mul / Fee / PT-Fee / Amount 收窄
+ * Middle-Man：与 Account 行共用三列栅格（To | From | Reverse），
+ * Select Account 对齐 To Account；其余四字段占满 From+Reverse 区域。
  */
+body.transaction-page .transaction-add-section .rate-fields .transaction-account-inputs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--tx-add-reverse-col);
+    gap: 5px;
+    align-items: stretch;
+    width: 100%;
+}
+
+body.transaction-page .transaction-add-section .rate-fields .transaction-account-inputs > .custom-select-wrapper {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    flex: none;
+}
+
 body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-mm {
     display: grid;
-    grid-template-columns: minmax(0, 2.36fr) repeat(4, minmax(0, 0.70fr));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--tx-add-reverse-col);
     gap: 5px;
     align-items: stretch;
     flex: 1 1 auto;
@@ -3250,11 +3266,14 @@ body.transaction-page .transaction-add-section .rate-fields .rate-mm-to-wrap {
     display: flex;
     min-width: 0;
     align-self: stretch;
+    grid-column: 1;
 }
 
 body.transaction-page .transaction-add-section .rate-fields .rate-mm-to-wrap > .custom-select-wrapper {
     flex: 1 1 auto;
     display: flex;
+    width: 100%;
+    max-width: none;
     min-width: 0;
     align-self: stretch;
 }
@@ -3265,9 +3284,20 @@ body.transaction-page .transaction-add-section .rate-fields .rate-mm-to-wrap .cu
     align-items: center;
 }
 
+body.transaction-page .transaction-add-section .rate-fields .rate-mm-rest {
+    grid-column: 2 / 4;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+    min-width: 0;
+    align-items: stretch;
+}
+
 body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-mm .transaction-input {
     box-sizing: border-box;
     align-self: stretch;
+    width: 100%;
+    min-width: 0;
 }
 
 body.transaction-page .transaction-add-section .rate-fields .rate-row-five-cols .transaction-select,
