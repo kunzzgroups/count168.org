@@ -1,6 +1,5 @@
 import {
   formatAmountForStore,
-  parseRateExpression,
   RATE_STORE_MAX_DECIMALS,
 } from "./transactionFormat.js";
 import MoneyDecimal from "../../../utils/money/moneyDecimal.js";
@@ -35,16 +34,73 @@ function parseSignedAmt(raw) {
   }
 }
 
-/** Rate-Mul factor: plain number or expression (`/0.1` → 10), same rules as exchange Rate. */
-function parseMiddlemanRateFactor(raw) {
-  const parsed = parseRateExpression(raw);
-  if (!parsed.valid) return MoneyDecimal.toDecimal("0", 0);
+/**
+ * Rate-Mul: plain signed number only (e.g. `0.1`, `-0.1`).
+ * Division/multiplication expressions (`/0.1`, `*2`) are rejected.
+ */
+export function parseMiddlemanRateSigned(raw) {
+  const cleaned = cleanAmt(raw);
+  const zero = MoneyDecimal.toDecimal("0", 0);
+  if (!cleaned) return { valid: false, value: zero };
+  if (/[*/÷]/.test(cleaned)) return { valid: false, value: zero };
+  if (!/^[+-]?\d*\.?\d+$/.test(cleaned)) return { valid: false, value: zero };
+  if (cleaned === "." || cleaned === "-" || cleaned === "+" || cleaned === "-." || cleaned === "+.") {
+    return { valid: false, value: zero };
+  }
   try {
-    const dec = MoneyDecimal.toDecimal(parsed.value || "0", 0);
-    return dec.gt(0) ? dec : MoneyDecimal.toDecimal("0", 0);
+    return { valid: true, value: MoneyDecimal.toDecimal(cleaned, 0) };
   } catch {
+    return { valid: false, value: zero };
+  }
+}
+
+/** FX Rate `/1.71` → divisor Decimal; otherwise null (multiply / compound forms). */
+export function parseSimpleDivisionRateDivisor(raw) {
+  const normalized = String(raw ?? "")
+    .trim()
+    .replace(/÷/g, "/")
+    .replace(/\s+/g, "");
+  if (!/^\/\d*\.?\d+$/.test(normalized)) return null;
+  try {
+    const divisor = MoneyDecimal.toDecimal(normalized.slice(1), 0);
+    return divisor.gt(0) ? divisor : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Rate-Mul commission in second-currency units (full precision; caller stores at 6dp).
+ * - Positive Rate-Mul: from × mul
+ * - Negative Rate-Mul + FX `/divisor`: profit = from/(divisor−|mul|) − from/divisor
+ * - Negative Rate-Mul + multiply FX: ignored (0)
+ */
+export function computeRateMulCommission({ fromAmount, middlemanRate, exchangeRateRaw }) {
+  const fromDec = parsePositiveAmt(fromAmount);
+  const parsed = parseMiddlemanRateSigned(middlemanRate);
+  if (!parsed.valid || fromDec.lte(0) || parsed.value.isZero()) {
     return MoneyDecimal.toDecimal("0", 0);
   }
+  const mmr = parsed.value;
+  if (mmr.gt(0)) {
+    return fromDec.times(mmr);
+  }
+  const divisor = parseSimpleDivisionRateDivisor(exchangeRateRaw);
+  if (!divisor) return MoneyDecimal.toDecimal("0", 0);
+  const adjusted = divisor.minus(mmr.abs());
+  if (adjusted.lte(0)) return MoneyDecimal.toDecimal("0", 0);
+  const base = fromDec.div(divisor);
+  const alt = fromDec.div(adjusted);
+  return alt.minus(base);
+}
+
+/** Negative Rate-Mul with `/rate` requires adjusted divisor > 0. */
+export function isRateMulAdjustedDivisorValid(middlemanRate, exchangeRateRaw) {
+  const parsed = parseMiddlemanRateSigned(middlemanRate);
+  if (!parsed.valid || !parsed.value.lt(0)) return true;
+  const divisor = parseSimpleDivisionRateDivisor(exchangeRateRaw);
+  if (!divisor) return true; // multiply FX → ignore negative mul
+  return divisor.minus(parsed.value.abs()).gt(0);
 }
 
 /** RATE Service Fee remark / desc：charge {第二币种} {用户输入} Service Fees */
@@ -84,19 +140,20 @@ export function buildRatePlatformFeeRemark(currencyTo, platformFeeAmount) {
  * - PT-Fee > 0 → Fee + PT（正 PT 并入 Middle；From 另扣）
  * - PT-Fee < 0 → Fee − abs(PT)
  * Fee / Platform Fee are face values (no FX multiply).
+ * Pass `exchangeRateRaw` so negative Rate-Mul can use the division-rate profit path.
  */
 export function computeRateMiddlemanProfit({
   fromAmount,
   middlemanRate,
   feeAmount,
   platformFeeAmount,
+  exchangeRateRaw,
 }) {
-  const fromDec = parsePositiveAmt(fromAmount);
-  let rateMulDec = MoneyDecimal.toDecimal("0", 0);
-  const mmrDec = parseMiddlemanRateFactor(middlemanRate);
-  if (fromDec.gt(0) && mmrDec.gt(0)) {
-    rateMulDec = fromDec.times(mmrDec);
-  }
+  const rateMulDec = computeRateMulCommission({
+    fromAmount,
+    middlemanRate,
+    exchangeRateRaw,
+  });
   const feeDec = parsePositiveAmt(feeAmount);
   const platformSigned = parseSignedAmt(platformFeeAmount);
   const platformAbs = platformSigned.abs();
@@ -123,7 +180,7 @@ export function negativePlatformFeeCredit(platformFeeAmount) {
 
 /**
  * RATE submit payload aligned with `js/transaction.js` submitAction + `api/transactions/submit_api.php` expectations.
- * Amounts are truncated to 8dp for storage (no round-2). `formatRateAmount` is display-only elsewhere.
+ * Amounts are truncated to 6dp for storage (no round-2). `formatRateAmount` is display-only elsewhere.
  * `toGrossStr` is a fallback when rate/from cannot rebuild gross (e.g. missing rate).
  */
 export function buildRatePayload({
@@ -181,6 +238,7 @@ export function buildRatePayload({
     middlemanRate: rateMiddlemanRate,
     feeAmount: rateMiddlemanInputAmount,
     platformFeeAmount: rateMiddlemanPlatformFee,
+    exchangeRateRaw: rateExchangeRateRaw,
   });
   if (middleDec.isZero() && cleanAmt(rateMiddlemanAmount)) {
     try {
@@ -192,12 +250,12 @@ export function buildRatePayload({
 
   const platformInputDec = parseSignedAmt(rateMiddlemanPlatformFee);
 
-  // Rate-mul commission only (excludes fee / platform fee). Supports `/0.1` via parseRateExpression.
-  let rateMulDec = MoneyDecimal.toDecimal("0", 0);
-  const mmrDec = parseMiddlemanRateFactor(rateMiddlemanRate);
-  if (fromDec.gt(0) && mmrDec.gt(0)) {
-    rateMulDec = fromDec.times(mmrDec);
-  }
+  // Rate-mul commission only (excludes fee / platform fee).
+  const rateMulDec = computeRateMulCommission({
+    fromAmount: fromAmt,
+    middlemanRate: rateMiddlemanRate,
+    exchangeRateRaw: rateExchangeRateRaw,
+  });
 
   const fromCode = rateFromAccount?.account_id || "";
   const toCode = rateToAccount?.account_id || "";

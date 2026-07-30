@@ -15,7 +15,15 @@ import {
   RATE_STORE_MAX_DECIMALS,
   TX_STORE_MAX_DECIMALS,
 } from "../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike, collectSubmitFocusAccountIds, computeRateMiddlemanProfit, positivePlatformFeeDeduction } from "../lib/transactionSubmitHelpers.js";
+import {
+  buildRatePayload,
+  toNumberLike,
+  collectSubmitFocusAccountIds,
+  computeRateMiddlemanProfit,
+  positivePlatformFeeDeduction,
+  parseMiddlemanRateSigned,
+  isRateMulAdjustedDivisorValid,
+} from "../lib/transactionSubmitHelpers.js";
 import { submitTransaction, transactionQueryKeys } from "../lib/transactionApi.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveGridRowToAccountOption } from "../lib/transactionPaymentLogic.js";
@@ -265,12 +273,13 @@ export function useTransactionForm({
       }
     }
 
-    // MM profit: PT>0 → Fee+PT；PT<0 → Fee−|PT|
+    // MM profit: PT>0 → Fee+PT；PT<0 → Fee−|PT|；负 Rate-Mul 仅除法 Rate 生效
     const finalFeeDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
       feeAmount: rateMiddlemanInputAmount,
       platformFeeAmount: rateMiddlemanPlatformFee,
+      exchangeRateRaw: rateExchangeRateRaw,
     });
     let middleStr = "";
     if (!finalFeeDec.isZero()) {
@@ -285,11 +294,13 @@ export function useTransactionForm({
 
     // From preview: gross − (Rate-Mul + Service Fee) − positive PT only.
     // Negative PT: keep form amount (e.g. 300); History Fee +|PT| may make Balance 301.50.
+    // Calc uses full precision; formatRateAmount is display-only half-up 2.
     const toAmountDeductionDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
       feeAmount: rateMiddlemanInputAmount,
       platformFeeAmount: "0",
+      exchangeRateRaw: rateExchangeRateRaw,
     });
     const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
 
@@ -425,7 +436,11 @@ export function useTransactionForm({
         pushToast(m.pleaseEnterMiddleManRateOrFee, "error");
         return;
       }
-      if (hasMiddleRate && !parseRateExpression(mmrNorm).valid) {
+      if (hasMiddleRate && !parseMiddlemanRateSigned(mmrNorm).valid) {
+        pushToast(m.pleaseEnterMiddleManRate, "error");
+        return;
+      }
+      if (hasMiddleRate && !isRateMulAdjustedDivisorValid(mmrNorm, rateExchangeRateRaw)) {
         pushToast(m.pleaseEnterMiddleManRate, "error");
         return;
       }

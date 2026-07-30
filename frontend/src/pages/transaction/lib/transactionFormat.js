@@ -94,8 +94,8 @@ const RATE_MAX_DECIMALS = 8;
 const RATE_HISTORY_MAX_DECIMALS = 6;
 /** Non-RATE manual submit store scale (display still round-2). */
 export const TX_STORE_MAX_DECIMALS = 6;
-/** RATE amount store scale (display still round-2). */
-export const RATE_STORE_MAX_DECIMALS = 8;
+/** RATE amount store scale (display still half-up 2). Calc/submit use this precision. */
+export const RATE_STORE_MAX_DECIMALS = 6;
 
 /** Same as legacy `js/transaction.js` countDecimalPlaces (RATE token width checks). */
 export function countRateDecimalPlaces(value) {
@@ -117,7 +117,7 @@ function truncateDecimalString(value, scale) {
 }
 
 /**
- * Persist amounts without round-2. Truncates to `scale` (RATE=8, other=6).
+ * Persist amounts without round-2. Truncates to `scale` (RATE=6, other=6).
  * UI display should keep using formatRateAmount / half-up 2dp.
  */
 export function formatAmountForStore(value, scale = RATE_STORE_MAX_DECIMALS) {

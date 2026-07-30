@@ -103,10 +103,10 @@ function submitTrunc2($value): string
     return money_normalize($value ?? '0', 2);
 }
 
-/** 非 RATE 入库小数位上限（展示仍由前端 round 2）。 */
+/** 非 RATE 入库小数位上限（展示仍由前端 half-up 2）。 */
 const SUBMIT_STORE_SCALE_DEFAULT = 6;
-/** RATE 入库小数位上限（展示仍由前端 round 2）。 */
-const SUBMIT_STORE_SCALE_RATE = 8;
+/** RATE 入库小数位上限（展示仍由前端 half-up 2；算法/入库用 6 位精度）。 */
+const SUBMIT_STORE_SCALE_RATE = 6;
 
 /**
  * 交易入库金额按指定精度保存（截断/规范化，不做 round-2）。
@@ -121,7 +121,7 @@ function submitStoreAmount($value, int $scale = SUBMIT_STORE_SCALE_DEFAULT): str
 }
 
 /**
- * @deprecated RATE 入库已改为 submitStoreAmount(..., 8)；保留函数避免外部误用旧语义。
+ * @deprecated RATE 入库已改为 submitStoreAmount(..., 6)；保留函数避免外部误用旧语义。
  */
 function submitRateRound2($value): string
 {
@@ -262,7 +262,7 @@ try {
     $from_account_id = !empty($_POST['from_account_id']) ? (int)$_POST['from_account_id'] : null;
     $rawAmount = $_POST['amount'] ?? '0';
     submitEnsureNumericOrEmpty($rawAmount, 'Amount');
-    // RATE 金额以 rate_* 字段为准（最多 8 位）；非 RATE 入库最多 6 位。均不做 round-2。
+    // RATE 金额以 rate_* 字段为准（最多 6 位）；非 RATE 入库最多 6 位。均不做 round-2。
     $is_rate_amount = ($transaction_type === 'RATE');
     $amountStoreScale = $is_rate_amount ? SUBMIT_STORE_SCALE_RATE : SUBMIT_STORE_SCALE_DEFAULT;
     submitEnsureAmountMaxDecimals($rawAmount, $amountStoreScale, 'Amount');
