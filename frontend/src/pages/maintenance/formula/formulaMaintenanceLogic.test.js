@@ -33,3 +33,18 @@ test("source edit accepts a decimal above one", () => {
   assert.equal(changed.source_percent, "1.5");
   assert.equal(changed.formula, "123.456789 + 234.567892 * (1.5)");
 });
+
+test("source edit accepts a leading decimal point", () => {
+  const pointOnly = syncEditFormSourcePercent(editForm, ".");
+  assert.equal(pointOnly.source_percent, ".");
+
+  const changed = syncEditFormSourcePercent(pointOnly, ".5");
+  assert.equal(changed.source_percent, ".5");
+});
+
+test("source edit rejects text, operators, spaces, and multiple decimal points", () => {
+  for (const invalidValue of ["abc", "测试", "1a", "1+2", "-0.5", "1 2", "1.2.3"]) {
+    const changed = syncEditFormSourcePercent(editForm, invalidValue);
+    assert.strictEqual(changed, editForm);
+  }
+});

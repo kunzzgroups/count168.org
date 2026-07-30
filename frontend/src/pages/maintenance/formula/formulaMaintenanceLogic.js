@@ -246,6 +246,11 @@ export function syncEditFormSourcePercent(form, newSourcePercent) {
   // Keep the user's edit buffer intact. Values such as "", "0.", and "0.60"
   // are valid intermediate states and must not be normalized on every keypress.
   const sourceInput = newSourcePercent == null ? "" : String(newSourcePercent);
+  // Source accepts non-negative decimal numbers only. Reject invalid typing or
+  // pasted content while allowing intermediate states such as "." and "0.".
+  if (!/^(?:\d+(?:\.\d*)?|\.\d*)?$/.test(sourceInput)) {
+    return form;
+  }
   return {
     ...form,
     source_percent: sourceInput,
