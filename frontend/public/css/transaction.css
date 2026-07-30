@@ -3204,7 +3204,7 @@ body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-f
  */
 body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-mm {
     display: grid;
-    grid-template-columns: minmax(0, 2.3fr) repeat(4, minmax(0, 0.65fr));
+    grid-template-columns: minmax(0, 2.30fr) repeat(4, minmax(0, 0.70fr));
     gap: 5px;
     align-items: stretch;
     flex: 1 1 auto;
