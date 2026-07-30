@@ -876,6 +876,40 @@ body.dashboard-page.report-page .transaction-date-range-group .date-range-picker
     display: block;
 }
 
+/* AccountSelect portal：挂到 body，避免 RATE/Middle-Man 底部被卡片 overflow 裁切 */
+body.transaction-page .custom-select-dropdown.custom-select-dropdown-portal.transaction-account-select-portal,
+.custom-select-dropdown.custom-select-dropdown-portal.transaction-account-select-portal {
+    display: flex !important;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: #f6f6f6;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    max-height: min(300px, calc(100vh - 32px));
+    z-index: 10060;
+}
+
+body.transaction-page .custom-select-dropdown.transaction-account-select-portal .custom-select-search,
+.custom-select-dropdown.transaction-account-select-portal .custom-select-search {
+    flex-shrink: 0;
+    background: #f6f6f6;
+}
+
+body.transaction-page .custom-select-dropdown.transaction-account-select-portal .custom-select-search input,
+.custom-select-dropdown.transaction-account-select-portal .custom-select-search input {
+    background-color: #f2f2f2ad !important;
+}
+
+body.transaction-page .custom-select-dropdown.transaction-account-select-portal .custom-select-options,
+.custom-select-dropdown.transaction-account-select-portal .custom-select-options {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none !important;
+    overflow-y: auto;
+}
+
 .transaction-page .custom-select-search {
     padding: 8px;
     border-bottom: 1px solid #eee;
