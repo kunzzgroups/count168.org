@@ -85,6 +85,12 @@ export function consumeAccountListRouteCache(opts = {}) {
   return cached;
 }
 
+/** Drop all sidebar warm entries so remount cannot skip a stale paint-only boot. */
+export function clearAccountListRouteWarmCache() {
+  accountListRouteWarmCache.clear();
+  accountListRouteWarmInflight.clear();
+}
+
 /** Use sidebar warm cache, in-flight warm, or return null (page fetches). */
 export async function resolveAccountListRouteCache(opts = {}) {
   const cached = consumeAccountListRouteCache(opts);

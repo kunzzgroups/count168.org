@@ -6,6 +6,7 @@ import {
   getOwnershipCurrentMonthKey,
   isOwnershipHistoricalMonth,
 } from "./ownershipMonthHelpers.js";
+import { clearOwnerCompaniesCache } from "../../../utils/company/sharedCompanyFilter.js";
 import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
 import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 
@@ -59,7 +60,11 @@ export function useOwnershipPageShell() {
 
   const fetchCompanies = useCallback(
     async (monthKey = getOwnershipCurrentMonthKey(), { force = false } = {}) => {
-      if (force) invalidateOwnershipCompaniesCache(monthKey);
+      if (force) {
+        invalidateOwnershipCompaniesCache(monthKey);
+        // Join/ungroup also invalidates site-wide Group/Company filter cache.
+        clearOwnerCompaniesCache();
+      }
       const cached = !force ? peekOwnershipCompaniesCache(monthKey) : null;
       if (!cached) setLoadingList(true);
       try {

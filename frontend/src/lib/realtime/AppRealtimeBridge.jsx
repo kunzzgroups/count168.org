@@ -2,11 +2,15 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DASHBOARD_GROUP_FILTER_EVENT,
+  clearOwnerCompaniesCache,
   readPersistedDashboardGcFilter,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { transactionQueryKeys } from "../../pages/transaction/lib/transactionApi.js";
 import { notifyTransactionListInvalidated } from "../../pages/transaction/lib/transactionPaymentLogic.js";
 import { dataCaptureQueryKeys } from "../../pages/datacapture/lib/dataCaptureApi.js";
+import { clearAccountListRouteWarmCache } from "../../pages/account/accountRoutePrefetch.js";
+import { clearProcessListRouteWarmCaches } from "../../pages/processlist/processRoutePrefetch.js";
+import { clearAllOwnershipCompaniesCache } from "../../pages/ownership/ownershipRoutePrefetch.js";
 import { onRealtimeInvalidate, REALTIME_DOMAINS } from "./realtimeEvents.js";
 import { subscribeAppRealtime } from "./subscribeAppRealtime.js";
 
@@ -76,6 +80,7 @@ export default function AppRealtimeBridge() {
       }
 
       if (domain === REALTIME_DOMAINS.ACCOUNTS) {
+        clearAccountListRouteWarmCache();
         void queryClient.invalidateQueries({
           predicate: (q) => {
             const k = q.queryKey?.[0];
@@ -90,7 +95,14 @@ export default function AppRealtimeBridge() {
       }
 
       if (domain === REALTIME_DOMAINS.PROCESSES) {
+        clearProcessListRouteWarmCaches();
         void queryClient.invalidateQueries({ queryKey: dataCaptureQueryKeys.root() });
+        return;
+      }
+
+      if (domain === REALTIME_DOMAINS.OWNERSHIP) {
+        clearAllOwnershipCompaniesCache();
+        clearOwnerCompaniesCache();
         return;
       }
 
@@ -112,7 +124,7 @@ export default function AppRealtimeBridge() {
         return;
       }
 
-      // Ownership / maintenance / announcements / domain / app:
+      // Maintenance / announcements / domain / app:
       // pages listen via useRealtimeDomain or full refresh hooks.
     });
   }, [queryClient]);

@@ -38,6 +38,14 @@ export function consumeProcessListRouteCache(companyId, opts = {}) {
   return cached;
 }
 
+/** Drop Games + Bank process list warm caches (accounts/process realtime). */
+export function clearProcessListRouteWarmCaches() {
+  processListRouteWarmCache.clear();
+  processListRouteWarmInflight.clear();
+  bankProcessListRouteWarmCache.clear();
+  bankProcessListRouteWarmInflight.clear();
+}
+
 /** Use sidebar warm cache, in-flight warm, or fetch once. */
 export async function resolveProcessListRouteCache(companyId, opts = {}) {
   const cid = Number(companyId);

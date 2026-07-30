@@ -1309,7 +1309,9 @@ export function useBankProcessListPage() {
   useEffect(() => {
     if (!companyId || loading) return;
     if (skipNextBankFetchRef.current) {
+      // Warm paint already applied; still silent-refetch so remount cannot stick on stale sidebar warm.
       skipNextBankFetchRef.current = false;
+      void fetchRows({ silent: true });
       return;
     }
     if (skipCompanyFetchEffectRef.current) {

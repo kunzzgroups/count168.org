@@ -1775,12 +1775,11 @@ export default function AccountListPage() {
       return;
     }
     if (bootFetchedAccountsKeyRef.current === fetchKey) {
+      // Warm/boot may have painted; always silent-refetch so remount cannot stick on stale warm.
       bootFetchedAccountsKeyRef.current = null;
       lastAccountsFetchKeyRef.current = fetchKey;
-      const bootCacheHit = applyAccountListCache(gcScopeRef.current);
-      if (!bootCacheHit) {
-        void fetchAccounts(gcScopeRef.current, { silent: true, trustRequestScope: true });
-      }
+      applyAccountListCache(gcScopeRef.current);
+      void fetchAccounts(gcScopeRef.current, { silent: true, trustRequestScope: true });
       return;
     }
     postBootEmptyRetryRef.current = false;

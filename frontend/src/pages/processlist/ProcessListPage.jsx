@@ -791,7 +791,9 @@ export default function ProcessListPage() {
   useEffect(() => {
     if (loading || !activeCompanyId) return;
     if (skipNextFetchRef.current) {
+      // Warm paint already applied; still silent-refetch so remount cannot stick on stale sidebar warm.
       skipNextFetchRef.current = false;
+      void fetchRows({ companyId: activeCompanyId, silent: true });
       return;
     }
     if (skipCompanyFetchEffectRef.current) {
