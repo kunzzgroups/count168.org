@@ -2572,6 +2572,11 @@ function auto_renew_approve(PDO $pdo, int $requestId, array $input, array $sessi
     }
 
     $updated = auto_renew_get_request_row($pdo, $requestId);
+    require_once __DIR__ . '/ledger_realtime.php';
+    realtime_publish_companies([(int) $c168Pk], 'ledger', 'auto_renew_approve', [
+        'request_id' => (int) $requestId,
+        'transaction_id' => (int) ($updated['transaction_id'] ?? 0),
+    ]);
     return auto_renew_format_approval_row([
         'request_id' => $updated['id'],
         'entity_type' => $updated['entity_type'] ?? $entityType,
@@ -2709,6 +2714,10 @@ function auto_renew_delete(PDO $pdo, int $requestId, array $session, array $inpu
                 $pdo->commit();
             }
             payment_delete_clear_tx_search_cache();
+            require_once __DIR__ . '/ledger_realtime.php';
+            realtime_publish_companies([(int) $c168Pk], 'ledger', 'auto_renew_delete', [
+                'request_id' => (int) $requestId,
+            ]);
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) {
                 $pdo->rollBack();
