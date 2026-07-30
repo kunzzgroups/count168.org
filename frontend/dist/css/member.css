@@ -805,11 +805,12 @@ body.transaction-page {
     text-align: right;
     justify-content: flex-end;
 }
-/* 与原 table 一致：Total 行 Description / Remark 留白（非浅蓝底） */
+/* Total / 斑马纹：Description、Remark 与整行同色（勿单独刷白） */
 .member-winloss-table tfoot .transaction-table-row.transaction-summary-total td.transaction-history-col-description,
 .member-winloss-table tfoot .transaction-table-row.transaction-summary-total td.transaction-history-col-remark {
-    background-color: #fff !important;
-    font-weight: 600;
+    background-color: #eef4ff !important;
+    text-align: left;
+    justify-content: flex-start;
 }
 .member-winloss-table .member-winloss-empty-cell {
     grid-column: 1 / -1;
