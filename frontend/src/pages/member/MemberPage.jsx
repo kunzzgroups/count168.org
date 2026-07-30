@@ -742,73 +742,71 @@ export default function MemberPage() {
                 return (
                   <div className="member-currency-table-wrapper" key={currency}>
                     <h3 className="member-currency-table-title">{t("currencyTitle", { currency })}</h3>
-                    <div className="member-winloss-table-frame">
-                      <table className="transaction-table member-winloss-table member-winloss-table--by-currency member-winloss-table--grid">
-                        <colgroup>
-                          <col className="transaction-history-col-date" />
-                          <col className="transaction-history-col-product" />
-                          <col className="transaction-history-col-rate" />
-                          <col className="transaction-history-col-winloss" />
-                          <col className="transaction-history-col-crdr" />
-                          <col className="transaction-history-col-balance" />
-                          <col className="transaction-history-col-description" />
-                          <col className="transaction-history-col-remark" />
-                        </colgroup>
-                        <thead>
-                          <tr className="transaction-table-header">
-                            <th className="transaction-history-col-date">{t("colDate")}</th>
-                            <th className="transaction-history-col-product">{t("colIdProduct")}</th>
-                            <th className="transaction-history-col-rate">{t("colRate")}</th>
-                            <th className="transaction-history-col-winloss">{t("colWinLoss")}</th>
-                            <th className="transaction-history-col-crdr">{t("colCrDr")}</th>
-                            <th className="transaction-history-col-balance">{t("colBalance")}</th>
-                            <th className="transaction-history-col-description">{t("colDescription")}</th>
-                            <th className="transaction-history-col-remark">{t("colRemark")}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {rows.length === 0 ? (
-                            <tr className="transaction-table-row"><td colSpan={8} style={{ textAlign: "center" }}>{t("noData")}</td></tr>
-                          ) : (
-                            rows.map((row, idx) => (
-                              <tr className={`transaction-table-row ${row.row_type === "bf" ? "member-bf-row" : ""}`} key={`${currency}-${idx}`}>
-                                <td className="transaction-history-col-date">{row.date || "-"}</td>
-                                <td className="transaction-history-col-product">{row.is_bank_process_transaction ? row.card_owner || "-" : row.product || "-"}</td>
-                                <td className="transaction-history-col-rate">{row.rate || "-"}</td>
-                                <td className="transaction-history-col-winloss">
-                                  <MemberMoneyCell value={row.win_loss} formatMoney={formatPaymentHistoryMoney} />
-                                </td>
-                                <td className="transaction-history-col-crdr">
-                                  <MemberMoneyCell value={row.cr_dr} formatMoney={formatPaymentHistoryMoney} />
-                                </td>
-                                <td className="transaction-history-col-balance">
-                                  <MemberMoneyCell value={row.balance} formatMoney={formatPaymentHistoryMoney} />
-                                </td>
-                                <td className="transaction-history-col-description text-uppercase">{formatMemberRowDescription(lang, row)}</td>
-                                <td className="transaction-history-col-remark text-uppercase">{String(row.remark || row.sms || "-").toUpperCase()}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                        <tfoot>
-                          <tr className="transaction-table-row transaction-summary-total transaction-summary-total">
-                            <td className="transaction-summary-total-label" colSpan={3}>
-                              {t("totalRow", { currency })}
-                            </td>
-                            <td className="transaction-history-col-winloss">
-                              <MemberMoneyCell value={totalWinLoss.toString()} formatMoney={formatPaymentHistoryMoney} />
-                            </td>
-                            <td className="transaction-history-col-crdr">
-                              <MemberMoneyCell value={totalCrDr.toString()} formatMoney={formatPaymentHistoryMoney} />
-                            </td>
-                            <td className="transaction-history-col-balance">
-                              <MemberMoneyCell value={closingBalance.toString()} formatMoney={formatPaymentHistoryMoney} />
-                            </td>
-                            <td className="transaction-history-col-description" colSpan={2} />
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
+                    <table className="transaction-table member-winloss-table member-winloss-table--by-currency">
+                      <colgroup>
+                        <col className="transaction-history-col-date" />
+                        <col className="transaction-history-col-product" />
+                        <col className="transaction-history-col-rate" />
+                        <col className="transaction-history-col-winloss" />
+                        <col className="transaction-history-col-crdr" />
+                        <col className="transaction-history-col-balance" />
+                        <col className="transaction-history-col-description" />
+                        <col className="transaction-history-col-remark" />
+                      </colgroup>
+                      <thead>
+                        <tr className="transaction-table-header">
+                          <th className="transaction-history-col-date">{t("colDate")}</th>
+                          <th className="transaction-history-col-product">{t("colIdProduct")}</th>
+                          <th className="transaction-history-col-rate">{t("colRate")}</th>
+                          <th className="transaction-history-col-winloss">{t("colWinLoss")}</th>
+                          <th className="transaction-history-col-crdr">{t("colCrDr")}</th>
+                          <th className="transaction-history-col-balance">{t("colBalance")}</th>
+                          <th className="transaction-history-col-description">{t("colDescription")}</th>
+                          <th className="transaction-history-col-remark">{t("colRemark")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.length === 0 ? (
+                          <tr className="transaction-table-row"><td colSpan={8} style={{ textAlign: "center" }}>{t("noData")}</td></tr>
+                        ) : (
+                          rows.map((row, idx) => (
+                            <tr className={`transaction-table-row ${row.row_type === "bf" ? "member-bf-row" : ""}`} key={`${currency}-${idx}`}>
+                              <td className="transaction-history-col-date">{row.date || "-"}</td>
+                              <td className="transaction-history-col-product">{row.is_bank_process_transaction ? row.card_owner || "-" : row.product || "-"}</td>
+                              <td className="transaction-history-col-rate">{row.rate || "-"}</td>
+                              <td className="transaction-history-col-winloss">
+                                <MemberMoneyCell value={row.win_loss} formatMoney={formatPaymentHistoryMoney} />
+                              </td>
+                              <td className="transaction-history-col-crdr">
+                                <MemberMoneyCell value={row.cr_dr} formatMoney={formatPaymentHistoryMoney} />
+                              </td>
+                              <td className="transaction-history-col-balance">
+                                <MemberMoneyCell value={row.balance} formatMoney={formatPaymentHistoryMoney} />
+                              </td>
+                              <td className="transaction-history-col-description text-uppercase">{formatMemberRowDescription(lang, row)}</td>
+                              <td className="transaction-history-col-remark text-uppercase">{String(row.remark || row.sms || "-").toUpperCase()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                      <tfoot>
+                        <tr className="transaction-table-row transaction-summary-total transaction-summary-total">
+                          <td className="transaction-summary-total-label" colSpan={3}>
+                            {t("totalRow", { currency })}
+                          </td>
+                          <td className="transaction-history-col-winloss">
+                            <MemberMoneyCell value={totalWinLoss.toString()} formatMoney={formatPaymentHistoryMoney} />
+                          </td>
+                          <td className="transaction-history-col-crdr">
+                            <MemberMoneyCell value={totalCrDr.toString()} formatMoney={formatPaymentHistoryMoney} />
+                          </td>
+                          <td className="transaction-history-col-balance">
+                            <MemberMoneyCell value={closingBalance.toString()} formatMoney={formatPaymentHistoryMoney} />
+                          </td>
+                          <td className="transaction-history-col-description" colSpan={2} />
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 );
               })

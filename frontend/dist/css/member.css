@@ -683,27 +683,16 @@ body.transaction-page {
     background: #cbd5f5 !important;
     color: #1e1b4b !important;
 }
-/* Payment History 式 grid：外框圆角 + 表内 collapse 全格线 */
-.member-winloss-table-frame {
-    width: 100%;
-    min-width: 0;
-    max-width: 100%;
-    overflow-x: auto;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 10px;
-    box-sizing: border-box;
-}
 .member-winloss-table.transaction-table {
     width: 100%;
     max-width: 100%;
     min-width: 0;
     table-layout: fixed;
-    border-collapse: collapse;
+    border-collapse: separate;
     border-spacing: 0;
-    border: none;
-    border-radius: 0;
-    overflow: visible;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
     box-sizing: border-box;
 }
 .member-winloss-table .transaction-table-header th {
@@ -717,12 +706,6 @@ body.transaction-page {
     text-align: left;
     vertical-align: middle;
     white-space: nowrap;
-}
-.member-winloss-table.member-winloss-table--grid .transaction-table-header th {
-    border: 1px solid #1e3a5f;
-}
-.member-winloss-table.member-winloss-table--grid .transaction-table-row td {
-    border: 1px solid #e8eef5;
 }
 .member-winloss-table .transaction-table-header th.transaction-history-col-winloss,
 .member-winloss-table .transaction-table-header th.transaction-history-col-crdr,
@@ -3320,9 +3303,8 @@ body.member-winloss-page .member-wl-compact-matrix__amt-hd {
         scrollbar-gutter: stable;
     }
 
-    .member-winloss-table-frame {
-        overflow-x: auto;
-        overflow-y: visible;
+    .member-winloss-table.member-winloss-table--by-currency {
+        overflow: visible;
     }
 
     .member-winloss-table.transaction-table {
