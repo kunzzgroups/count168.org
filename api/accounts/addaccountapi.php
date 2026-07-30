@@ -488,8 +488,9 @@ try {
 
     validateCompanyAccess($pdo, $company_id, $group_scope_id);
 
-    $account_id = trim($_POST['account_id'] ?? '');
-    $name = trim($_POST['name'] ?? '');
+    // Canonical store: uppercase account codes/names (callers may send CSS-only "uppercase" visual values).
+    $account_id = strtoupper(trim($_POST['account_id'] ?? ''));
+    $name = strtoupper(trim($_POST['name'] ?? ''));
     $role = trim($_POST['role'] ?? '');
     $password = trim($_POST['password'] ?? '');
     $payment_alert = isset($_POST['payment_alert']) ? (int)$_POST['payment_alert'] : 0;
@@ -552,7 +553,7 @@ try {
 
     $alert_day = $alert_type;
     $alert_specific_date = $alert_start_date;
-    $remark = !empty($_POST['remark']) ? trim($_POST['remark']) : null;
+    $remark = !empty($_POST['remark']) ? strtoupper(trim($_POST['remark'])) : null;
 
     $lockKey = buildAccountCreateLockKey($company_id, $account_id);
     if (!acquireAccountCreateLock($pdo, $lockKey, 5)) {
@@ -633,6 +634,13 @@ try {
             updateUserAccountPermissionsForNewAccount($pdo, $users, $company_ids_to_link, $newAccountId, $account_id);
 
             $pdo->commit();
+
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies(
+                !empty($company_ids_to_link) ? $company_ids_to_link : [$company_id],
+                'accounts',
+                'add'
+            );
 
             jsonResponse(true, '账户创建成功！', [
                 'id' => $newAccountId,

@@ -103,10 +103,10 @@ function submitTrunc2($value): string
     return money_normalize($value ?? '0', 2);
 }
 
-/** 非 RATE 入库小数位上限（展示仍由前端 round 2）。 */
+/** 非 RATE 入库小数位上限（展示仍由前端 half-up 2）。 */
 const SUBMIT_STORE_SCALE_DEFAULT = 6;
-/** RATE 入库小数位上限（展示仍由前端 round 2）。 */
-const SUBMIT_STORE_SCALE_RATE = 8;
+/** RATE 入库小数位上限（展示仍由前端 half-up 2；算法/入库用 6 位精度）。 */
+const SUBMIT_STORE_SCALE_RATE = 6;
 
 /**
  * 交易入库金额按指定精度保存（截断/规范化，不做 round-2）。
@@ -121,7 +121,7 @@ function submitStoreAmount($value, int $scale = SUBMIT_STORE_SCALE_DEFAULT): str
 }
 
 /**
- * @deprecated RATE 入库已改为 submitStoreAmount(..., 8)；保留函数避免外部误用旧语义。
+ * @deprecated RATE 入库已改为 submitStoreAmount(..., 6)；保留函数避免外部误用旧语义。
  */
 function submitRateRound2($value): string
 {
@@ -262,7 +262,7 @@ try {
     $from_account_id = !empty($_POST['from_account_id']) ? (int)$_POST['from_account_id'] : null;
     $rawAmount = $_POST['amount'] ?? '0';
     submitEnsureNumericOrEmpty($rawAmount, 'Amount');
-    // RATE 金额以 rate_* 字段为准（最多 8 位）；非 RATE 入库最多 6 位。均不做 round-2。
+    // RATE 金额以 rate_* 字段为准（最多 6 位）；非 RATE 入库最多 6 位。均不做 round-2。
     $is_rate_amount = ($transaction_type === 'RATE');
     $amountStoreScale = $is_rate_amount ? SUBMIT_STORE_SCALE_RATE : SUBMIT_STORE_SCALE_DEFAULT;
     submitEnsureAmountMaxDecimals($rawAmount, $amountStoreScale, 'Amount');
@@ -528,11 +528,24 @@ try {
             }
 
             // Service Fee:
-            // - Desktop sends rate_service_fee_amount → insert RATE_FEE once on Select From (no sms remark).
-            // - Mobile / legacy (no rate_service_fee_amount) → sms remark only (unchanged).
+            // - 现行桌面：Fee 已含在 To/From 金额，默认**永不**写 From 的 RATE_FEE（避免旧缓存 JS 仍发 rate_service_fee_amount）。
+            // - 仅当显式 rate_write_from_service_fee=1 时才写 RATE_FEE（紧急回滚用）。
+            // - Mobile / legacy：无 skip 时仍可用 sms Remark。
             $rate_middleman_input_amount = !empty($_POST['rate_middleman_input_amount']) ? money_normalize($_POST['rate_middleman_input_amount']) : null;
             $rate_middleman_platform_fee = !empty($_POST['rate_middleman_platform_fee']) ? money_normalize($_POST['rate_middleman_platform_fee']) : null;
-            $rate_service_fee_amount = !empty($_POST['rate_service_fee_amount'])
+            $rate_skip_from_service_fee = !empty($_POST['rate_skip_from_service_fee'])
+                && (
+                    $_POST['rate_skip_from_service_fee'] === '1'
+                    || $_POST['rate_skip_from_service_fee'] === 1
+                    || $_POST['rate_skip_from_service_fee'] === true
+                );
+            $rate_write_from_service_fee = !empty($_POST['rate_write_from_service_fee'])
+                && (
+                    $_POST['rate_write_from_service_fee'] === '1'
+                    || $_POST['rate_write_from_service_fee'] === 1
+                    || $_POST['rate_write_from_service_fee'] === true
+                );
+            $rate_service_fee_amount = $rate_write_from_service_fee && !empty($_POST['rate_service_fee_amount'])
                 ? submitStoreAmount($_POST['rate_service_fee_amount'], SUBMIT_STORE_SCALE_RATE)
                 : null;
             $rate_service_fee_description = trim($_POST['rate_service_fee_description'] ?? '');
@@ -548,7 +561,12 @@ try {
                     }
                     $rate_service_fee_description = 'charge ' . $feeCurrency . ' ' . $feeDisplay . ' Service Fees';
                 }
-            } elseif ($rate_middleman_input_amount !== null && money_cmp($rate_middleman_input_amount, '0') > 0) {
+            } elseif (
+                !$rate_skip_from_service_fee
+                && !$rate_write_from_service_fee
+                && $rate_middleman_input_amount !== null
+                && money_cmp($rate_middleman_input_amount, '0') > 0
+            ) {
                 $feeCurrency = trim((string) $rate_to_currency);
                 if ($feeCurrency !== '') {
                     $feeDisplay = $rate_middleman_input_amount;
@@ -977,10 +995,10 @@ try {
                         $rate_transfer_to_description
                     ]);
 
-                    // Desktop Service Fee：独立 RATE_FEE（正数）挂 Select From；仅当 POST 带 rate_service_fee_amount。
-                    // From 腿金额已由前端扣掉 Service Fee，此处只写一次，避免双计。
+                    // Service Fee 分录：默认不写。仅显式 rate_write_from_service_fee=1 时插入（现行桌面不发该旗标）。
                     if (
-                        $rate_service_fee_amount !== null
+                        $rate_write_from_service_fee
+                        && $rate_service_fee_amount !== null
                         && money_cmp($rate_service_fee_amount, '0') > 0
                         && (int) $rate_transfer_to_account_id > 0
                     ) {
@@ -998,10 +1016,18 @@ try {
                     }
 
                     // Middle-man：第二币种 Win/Loss（如果存在）
-                    // 负 PT-Fee：不另开 RATE_PLATFORM_FEE（金额已含在 middleman profit），改挂 Remark。
-                    // 正 PT-Fee：已扣在 From 腿金额，不进 Middle；不再写 RATE_PLATFORM_FEE。
+                    // 正 PT：Middle = Fee+PT（前端已算好 middleman_amount）；不写 RATE_PLATFORM_FEE。
+                    // 负 PT：
+                    //   - 桌面 rate_platform_fee_from_credit=1 → From 上写正数 RATE_PLATFORM_FEE，无 Middle Remark
+                    //   - Mobile/旧路径 → Middle Remark（[[PFEE_REMARK]]）或 fallback 负数 Fee 挂 Middle
                     $platformFeeIsNegative =
                         $rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') < 0;
+                    $platformFeeFromCredit = !empty($_POST['rate_platform_fee_from_credit'])
+                        && (
+                            $_POST['rate_platform_fee_from_credit'] === '1'
+                            || $_POST['rate_platform_fee_from_credit'] === 1
+                            || $_POST['rate_platform_fee_from_credit'] === true
+                        );
                     $platformFeeRemarkText = $rate_platform_fee_description !== ''
                         ? $rate_platform_fee_description
                         : 'charge PlatForm Fee';
@@ -1011,7 +1037,8 @@ try {
                         $middleAmount = submitStoreAmount($rate_middleman_amount, SUBMIT_STORE_SCALE_RATE);
                         $middleCurrencyId = (int)$rate_middleman_currency_id ?: $myrCurrencyId;
                         $middleEntryDescription = $rate_middleman_description;
-                        if ($platformFeeIsNegative) {
+                        // Mobile/legacy remark path only（桌面负 PT 已改 From Fee 行）
+                        if ($platformFeeIsNegative && !$platformFeeFromCredit) {
                             $middleEntryDescription = rtrim((string) $rate_middleman_description)
                                 . "\n[[PFEE_REMARK]]"
                                 . $platformFeeRemarkText;
@@ -1029,9 +1056,20 @@ try {
                         $middlemanRowInserted = true;
                     }
 
-                    // 正 PT-Fee：永不写 RATE_PLATFORM_FEE（已体现在 From 扣减；不进 Middle）。
-                    // 负 PT-Fee：优先 Remark on MIDDLEMAN；若无 Middle-Man 行则 fallback 写 Fee 挂 Middle-Man。
-                    if ($platformFeeIsNegative && !$middlemanRowInserted && $rate_middleman_account_id) {
+                    // 桌面负 PT：Select From 上独立 Fee 行，金额为正数 +abs(PT)
+                    if ($platformFeeIsNegative && $platformFeeFromCredit && (int) $rate_transfer_to_account_id > 0) {
+                        $platformFeeLedgerAmount = money_abs($rate_platform_fee_amount);
+                        $entryStmt->execute([
+                            $main_transaction_id,
+                            $company_id,
+                            (int) $rate_transfer_to_account_id,
+                            $myrCurrencyId,
+                            submitStoreAmount($platformFeeLedgerAmount, SUBMIT_STORE_SCALE_RATE),
+                            'RATE_PLATFORM_FEE',
+                            $platformFeeRemarkText
+                        ]);
+                    } elseif ($platformFeeIsNegative && !$platformFeeFromCredit && !$middlemanRowInserted && $rate_middleman_account_id) {
+                        // Mobile/legacy fallback：无 Middle 行时仍写负数 Fee 挂 Middle-Man
                         $platformFeeLedgerAmount = money_mul(
                             money_abs($rate_platform_fee_amount),
                             '-1',

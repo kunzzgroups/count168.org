@@ -3755,6 +3755,9 @@ try {
 
                 $pdo->commit();
 
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([(int) $company_id], 'domain', 'create');
+
                 $owner = getOwnerWithCompanies($pdo, $owner_id);
                 echo json_encode([
                     'success' => true,
@@ -4031,6 +4034,9 @@ try {
                 $pdo->commit();
                 domain_api_clear_session_user_cache();
 
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([(int) $company_id], 'domain', 'update');
+
                 $owner = getOwnerWithCompanies($pdo, $id);
                 echo json_encode([
                     'success' => true,
@@ -4123,6 +4129,9 @@ try {
                 
                 $pdo->commit();
                 domain_api_clear_session_user_cache();
+
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([(int) $company_id], 'domain', 'delete');
                 
                 echo json_encode([
                     'success' => true,
@@ -4418,6 +4427,9 @@ try {
                     throw $e;
                 }
 
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([$saveCompanyPk], 'domain', 'save_company_share');
+
                 jsonResponse(true, 'Share settings saved', [
                     'fee_share_allocations' => $saveNormalized,
                     'domain_fee_payment_created' => false,
@@ -4482,6 +4494,8 @@ try {
                     }
                     throw $e;
                 }
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([(int) $company_id], 'domain', 'save_group_share');
                 jsonResponse(true, 'Share settings saved', [
                     'fee_share_allocations' => $saveNormalized,
                 ]);
@@ -4535,6 +4549,8 @@ try {
                     }
                     throw $e;
                 }
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([(int) $company_id], 'domain', 'save_group_tenant');
                 if ($applyCommission) {
                     $chargeStartDate = domainApiNormalizeFeeTransactionDate(
                         isset($data['startDate']) ? (string) $data['startDate'] : (
@@ -4633,6 +4649,8 @@ try {
                     $groupPeriodJson,
                     $unifiedPeriodJson,
                 ]);
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([(int) $company_id], 'domain', 'save_domain_fee');
                 jsonResponse(true, 'Saved successfully', [
                     'price' => $companyPrice !== null ? money_out($companyPrice) : null,
                     'group_price' => $groupPrice !== null ? money_out($groupPrice) : null,

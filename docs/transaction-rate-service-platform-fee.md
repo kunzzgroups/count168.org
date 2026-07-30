@@ -2,8 +2,8 @@
 
 > 范围：Transaction Payment（桌面 `/transaction` + mobile 同 API）在 **Type = RATE** 时，**Service Fee** 与 **Platform Fee** 的计算、提交、落库、Payment History 展示。
 >
-> 日期：2026-07-29  
-> 状态：与当前代码一致（桌面：独立 `RATE_FEE`；正 PT-Fee 只扣 From、不进 Middle；负 PT-Fee Remark-only；Mobile Service Fee 仍为 sms Remark）。
+> 日期：2026-07-30  
+> 状态：桌面 Rate-Mul 负数 / 禁 `/expr` / 入库 6 位；Mobile Rate-Mul 暂未同步。
 >
 > 完整 RATE 手册仍见 `docs/transaction-rate-manual-logic.md`；其中 §18「Platform Fee 仅 UI」**已过时**，以本文为准。
 
@@ -13,10 +13,10 @@
 
 | 类型 | 入库 | 展示 |
 |------|------|------|
-| 非 RATE | 最多 **6** 位小数（截断，不做 round-2） | 页面 round 2 仅供查看 |
-| RATE | 最多 **8** 位小数（截断，不做 round-2） | 页面 round 2 仅供查看 |
+| 非 RATE | 最多 **6** 位小数（截断，不做 round-2） | 页面 half-up 2 仅供查看 |
+| RATE | 最多 **6** 位小数（截断，不做 round-2） | 页面 half-up 2 仅供查看 |
 
-实现：`submitStoreAmount` + 前端 `formatAmountForStore`；RATE 不再调用旧的 `submitRateRound2` round-2。
+实现：`submitStoreAmount` + 前端 `formatAmountForStore`；算法用全精度 `MoneyDecimal`，入库截断 6 位；**禁止**用展示用的 2 位再去算/提交。
 
 ---
 
@@ -24,9 +24,10 @@
 
 | 项目 | 规则 |
 |------|------|
-| **Service Fee**（表单 Fee 输入） | **桌面**：独立 `RATE_FEE` 挂 Select From；From 腿扣 Fee；To 腿 = **全额 gross**（不扣 Fee）。**Mobile（暂未改）**：仍 sms Remark；To 仍可能为 gross − Fee。 |
-| **Platform Fee > 0** | **实时**从第二币种金额预览与 **From** 腿扣减；Middle-Man Amount = **仅 Fee**（+ Rate-Mul），**不加** PT；**不**写 `RATE_PLATFORM_FEE` 行。 |
-| **Platform Fee < 0** | From / To 金额**不变**；Middle-Man Amount = `Fee − abs(PT-Fee)`；**不**写独立 Fee 行，Remark 挂在 `RATE_MIDDLEMAN`（如 `charge MYR 1.5 PlatForm Fee`）。 |
+| **Service Fee** | **桌面**：From RATE 扣 Fee（如 310→300）；**不**在 From 写 `RATE_FEE`；To = gross（已含 Fee 口径）。发 `rate_skip_from_service_fee=1`。**Mobile**：仍 sms Remark。 |
+| **Platform Fee > 0** | From RATE 扣 PT；Middle = **`Fee + PT`**；不写 `RATE_PLATFORM_FEE`。To = gross。 |
+| **Platform Fee < 0** | **桌面**：From RATE 不动；Select From 另写 **正数** `RATE_PLATFORM_FEE`（+|PT|）；Middle = `Fee − \|PT\|`；无 Middle Remark。**Mobile**：仍 Remark-only。 |
+| **Rate-Mul（桌面）** | 仅允许**带符号纯数字**（禁 `/0.1` 等表达式）。正数：佣金 = 第一币种 × mul。负数：仅当 FX Rate 为 `/divisor` 时生效（见 §3.1）；若 Rate 为乘法 → **忽略**负数 mul。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man（及负 PT 的 Remark / fallback）。 |
 
 **为何桌面拆出 `RATE_FEE`：**  
@@ -44,7 +45,7 @@
 
 | UI | State / POST 相关 | 说明 |
 |----|-------------------|------|
-| Rate-Mul | `rateMiddlemanRate` / `rate_middleman_rate` | 乘数；佣金 = 第一币种金额 × 乘数 |
+| Rate-Mul | `rateMiddlemanRate` / `rate_middleman_rate` | 见 §3.1；**桌面**禁除法表达式 |
 | Fee | `rateMiddlemanInputAmount` / `rate_middleman_input_amount` | Service Fee 面值（第二币种，不乘汇率） |
 | Platform Fee | `rateMiddlemanPlatformFee` / `rate_middleman_platform_fee` | Platform Fee 面值（第二币种，可正可负） |
 | Amount | `rateMiddlemanAmount` / `rate_middleman_amount` | 只读：Middle-Man 利润 |
@@ -55,42 +56,57 @@
 
 **文件：** `frontend/src/pages/transaction/hooks/useTransactionForm.js`  
 **助手：** `frontend/src/pages/transaction/lib/transactionSubmitHelpers.js`  
-（mobile：`c168_mobile/frontend/src/lib/transactionSubmitHelpers.js` 同逻辑）
+（mobile：`c168_mobile/frontend/src/lib/transactionSubmitHelpers.js` **暂未同步** Rate-Mul 负数 / 禁 `/expr`）
 
-### 3.1 Middle-Man 利润
+### 3.1 Rate-Mul 佣金
 
 ```text
-rateMulCommission = fromAmount × middlemanRate   （>0 才算）
-PT > 0 : middlemanProfit = rateMulCommission + serviceFee     （正 PT 不进 Middle）
+正 Rate-Mul:
+  rateMulCommission = fromAmount × middlemanRate
+
+负 Rate-Mul + FX Rate = /divisor（例: 1750, /1.71, -0.1）:
+  base     = from / divisor          # 1750/1.71
+  alt      = from / (divisor−|mul|)  # 1750/1.61
+  rateMulCommission = alt − base     # Middle 利润
+  最终第二币种 From 净额 = base − rateMulCommission
+
+负 Rate-Mul + FX Rate 为乘法:
+  rateMulCommission = 0（忽略）
+```
+
+### 3.2 Middle-Man 利润
+
+```text
+PT > 0 : middlemanProfit = rateMulCommission + (serviceFee + PT)
 PT < 0 : middlemanProfit = rateMulCommission + (serviceFee − abs(PT))
 PT = 0 : middlemanProfit = rateMulCommission + serviceFee
 ```
 
-`computeRateMiddlemanProfit(...)`：Fee / Platform Fee **不做 FX 换算**。正 PT 只影响 From 扣减。
+`computeRateMiddlemanProfit(...)`：Fee / Platform Fee **不做 FX 换算**；需传 `exchangeRateRaw`。
 
-### 3.2 第二币种金额预览
-
-```text
-gross      = fromAmount × exchangeRate     （写入后端的毛额 / transfer 基数）
-displayAmt = gross − (Rate-Mul 佣金 + Service Fee) − max(PT, 0)
-```
-
-- **正 PT-Fee**：右侧金额实时变为 From 口径（例：`300 − 1.5 = 298.5`）。
-- **负 PT-Fee**：不扣预览金额（仍为 `gross − Rate-Mul − Service Fee`）。
-
-To 腿入库 = **全额 gross**（不扣 Service Fee / 正 PT）。正 PT 只改 From。表单右侧预览仍可按 From 口径显示（扣 Fee + 正 PT）。
-
-### 3.3 Transfer 金额（有第二组账户时）
+### 3.3 第二币种金额预览
 
 ```text
-transfer To 侧金额   = gross                         （桌面：不扣 Service Fee）
-transfer From 侧金额 = gross − rateMulCommission − Service Fee − max(PT, 0)   （桌面）
-+ RATE_FEE（正数，仅桌面发 rate_service_fee_amount）挂 Select From
+displayAmt = gross − (Rate-Mul + Service Fee) − max(PT, 0)
 ```
 
-- 正 PT：只扣 From 腿；**不**进 Middle；**不**另开 `RATE_PLATFORM_FEE`。
-- 负 PT：From/To 都不扣 PT；Middle = `Fee−|PT|`，Remark only。
-- **Mobile**：From 仍不因 Service Fee 再扣（Fee 在金额里 + sms Remark），不发 `rate_service_fee_*`。
+- 正 PT：表单显示扣后金额（如 298.50）。
+- 负 PT：表单仍显示 300（不预加）；History 可另有 Fee +1.5，Balance 到 301.50。
+- 展示 half-up 2；底层用全精度再扣。
+
+To 腿 = **全额 gross**。
+
+### 3.4 Transfer 金额（有第二组账户时）
+
+```text
+transfer To 侧金额   = gross
+transfer From 侧金额 = gross − rateMul − Service Fee − max(PT, 0)
++ RATE_PLATFORM_FEE（桌面负 PT：正数 +|PT| 挂 Select From；flag rate_platform_fee_from_credit=1）
+```
+
+- 正 PT：扣在 From RATE；Middle = Fee+PT；不写 PLATFORM_FEE。
+- 负 PT（桌面）：From RATE 不因 PT 变；Fee 行 +|PT|；Middle = Fee−|PT|。
+- **Mobile**：负 PT 仍 Remark / 旧 fallback；正 PT Middle 公式以 mobile helper 为准（暂未同步本次）。
 
 ---
 
@@ -138,8 +154,9 @@ POST RATE
 
 1. 金额优先 `rate_platform_fee_amount`，否则 `rate_middleman_platform_fee`
 2. 描述默认使用绝对值：`charge {币种} {abs(金额)} PlatForm Fee`
-3. 输入 `> 0`：**不**写 `RATE_PLATFORM_FEE`（From 金额已扣；Middle 不含正 PT）
-4. 输入 `< 0`：有 `RATE_MIDDLEMAN` 时**不**写 `RATE_PLATFORM_FEE`，Remark 写入该分录（`[[PFEE_REMARK]]`）；若无 Middle-Man 行则 fallback 仍写 `RATE_PLATFORM_FEE` 挂 Middle-Man
+3. 输入 `> 0`：**不**写 `RATE_PLATFORM_FEE`（From RATE 已扣；Middle = Fee+PT）
+4. 输入 `< 0` + 桌面 `rate_platform_fee_from_credit=1`：Select From 写 **正数** `RATE_PLATFORM_FEE`；**不**写 Middle Remark
+5. 输入 `< 0` 且无 from_credit（Mobile）：Middle Remark 或 fallback 负数 Fee 挂 Middle
 
 ---
 
@@ -255,6 +272,6 @@ Payment History
 2. **停写 Service Fee 独立分录**：不再 `INSERT RATE_FEE`；前端也不再发 `rate_service_fee_*`。  
 3. **Service Fee 仅 Remark**：主单 `sms` → 第二币种 From 腿 Remark。  
 4. **旧 `RATE_FEE` 行**：历史/搜索仍识别，仅兼容存量数据。  
-5. **正 PT-Fee**：只扣 From，**不**进 Middle；**不再**写 `RATE_PLATFORM_FEE`。  
-6. **负 PT-Fee**：From/To 不动；Middle=`Fee−|PT|`；Remark-only（无 Middle 行时 fallback Fee）。  
-7. **桌面 Service Fee**：独立 `RATE_FEE` + From 腿扣 Fee；不走 Remark。Mobile 暂未同步。
+5. **正 PT-Fee**：From RATE 扣 PT；Middle=`Fee+PT`；不写 `RATE_PLATFORM_FEE`。  
+6. **负 PT-Fee（桌面）**：From 独立正数 Fee 行；Middle=`Fee−|PT|`；无 Remark。Mobile 仍 Remark。  
+7. **桌面 Service Fee**：独立 `RATE_FEE` + From 腿扣 Fee；To = gross。Mobile 暂未同步。

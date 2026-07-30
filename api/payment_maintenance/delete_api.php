@@ -73,6 +73,9 @@ try {
     );
     $deleted = (int) ($result['deleted'] ?? 0);
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_scope($listScope, 'maintenance', 'payment_delete');
+
     jsonResponse(true, "已删除 {$deleted} 条记录", ['deleted' => $deleted]);
 } catch (Exception $e) {
     if (isset($pdo) && $pdo->inTransaction()) {

@@ -91,6 +91,10 @@ try {
 
     $newStatus = $current['status'] === 'active' ? 'inactive' : 'active';
     updateAccountStatus($pdo, $newStatus, $id);
+
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$permCompanyId], 'accounts', 'toggle_status');
+
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'success' => true,

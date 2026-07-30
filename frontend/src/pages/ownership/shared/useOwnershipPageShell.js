@@ -6,6 +6,8 @@ import {
   getOwnershipCurrentMonthKey,
   isOwnershipHistoricalMonth,
 } from "./ownershipMonthHelpers.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 
 export function useOwnershipPageShell() {
   const [lang, setLang] = useState(() => (localStorage.getItem("login_lang") === "zh" ? "zh" : "en"));
@@ -77,6 +79,10 @@ export function useOwnershipPageShell() {
   useEffect(() => {
     void fetchCompanies(selectedMonth);
   }, [fetchCompanies, selectedMonth]);
+
+  useRealtimeDomain(REALTIME_DOMAINS.OWNERSHIP, () => {
+    void fetchCompanies(selectedMonth, { force: true });
+  });
 
   return {
     lang,

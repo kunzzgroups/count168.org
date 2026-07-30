@@ -48,6 +48,8 @@ import { useSummaryOverlays } from "./hooks/useSummaryOverlays.js";
 import { fetchSummaryAccountList } from "./lib/summaryApi.js";
 import { saveSummaryTemplatePure } from "./formula/summarySaveTemplatePure.js";
 import { recalculateRowAmounts } from "./table/summaryRowAmount.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
 import { pushSummaryNotification } from "./lib/summaryNotify.js";
 
 import { spaPath } from "../../utils/routing/pageRoutes.js";
@@ -235,6 +237,14 @@ function DataCaptureSummaryPureInner() {
     setAccounts(accounts);
 
   }, [captureScope, setAccounts]);
+
+
+
+  useRealtimeDomain(REALTIME_DOMAINS.DATACAPTURE, () => {
+
+    void refreshAccountList();
+
+  }, { enabled: sessionReady && Boolean(captureScope) });
 
 
 

@@ -19,6 +19,8 @@ import {
   sanitizeCurrencySelection,
 } from "./memberPageHelpers.js";
 import { fetchAccountHistoryClosingBalance, mapBatchCurrencies, mapLinkedAccountsApiList, parseJsonResponse } from "./memberWinLossApi.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
 
 export function useMemberWinLoss({ showNotification, lang }) {
   const t = useCallback((key, params) => getMemberText(lang, key, params), [lang]);
@@ -805,6 +807,10 @@ export function useMemberWinLoss({ showNotification, lang }) {
   ]);
 
   performMemberSearchRef.current = performMemberSearch;
+
+  useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
+    void performMemberSearchRef.current?.();
+  }, { enabled: Boolean(viewAccountId && companyId && dateFrom && dateTo) });
 
   const initSession = useCallback((u, compId, from, to) => {
     const loginId = Number(u.member_login_account_id || u.user_id) || 0;

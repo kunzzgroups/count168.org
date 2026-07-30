@@ -104,6 +104,8 @@ if ($isDirectRequest) {
                     throw new Exception('账户2不属于当前范围');
                 }
                 linkAccountsUpsert($pdo, $account_id_1, $account_id_2, $company_id, $link_type, $source_account_id);
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([$company_id], 'accounts', 'link');
                 echo json_encode(['success' => true, 'message' => '账户关联成功', 'data' => null]);
                 break;
 
@@ -129,6 +131,8 @@ if ($isDirectRequest) {
                     throw new Exception('账户不属于当前范围');
                 }
                 unlinkAccounts($pdo, $account_id_1, $account_id_2, $company_id);
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([$company_id], 'accounts', 'unlink');
                 echo json_encode(['success' => true, 'message' => '账户关联已移除', 'data' => null]);
                 break;
 
@@ -188,6 +192,8 @@ if ($isDirectRequest) {
                     throw new Exception('账户不属于当前范围');
                 }
                 updateLinkType($pdo, $account_id_1, $account_id_2, $company_id, $link_type, $source_account_id);
+                require_once __DIR__ . '/../includes/realtime.php';
+                realtime_publish_companies([$company_id], 'accounts', 'update_link_type');
                 echo json_encode(['success' => true, 'message' => '连接类型更新成功', 'data' => null]);
                 break;
 

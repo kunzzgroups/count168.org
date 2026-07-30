@@ -75,6 +75,9 @@ try {
     $savedBy = isset($_SESSION['user_id']) ? (int) $_SESSION['user_id'] : null;
     ownership_history_snapshot_company_from_live_safe($pdo, $companyId, $savedBy);
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$companyId], 'ownership', 'remove');
+
     echo json_encode([
         'status' => 'success',
         'message' => 'Owner removed successfully',

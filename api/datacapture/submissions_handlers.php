@@ -359,6 +359,9 @@ function dcSaveSubmission(int $user_id): void
             return;
         }
 
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([(int) $company_id], 'datacapture', 'save_submission');
+
         echo json_encode([
             'success' => true,
             'submission_id' => $result['submission_id'],

@@ -6,7 +6,10 @@ import {
   buildTxListSessionKey,
 } from "../lib/transactionPaymentLogic.js";
 import { clearTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
-import { subscribeTransactionLedgerRealtime } from "../lib/transactionRealtime.js";
+import {
+  onRealtimeInvalidate,
+  REALTIME_DOMAINS,
+} from "../../../lib/realtime/realtimeEvents.js";
 import {
   transactionScopeApiParams,
   transactionScopeCacheCompanyKey,
@@ -162,22 +165,22 @@ export function useTransactionSync({
     runSearch,
   ]);
 
-  // Cross-device live sync: SSE ledger_changed → silent refresh (keeps submit-focus filter).
+  // Cross-device live sync via app SSE bus (AuthenticatedLayout) → silent refresh.
   useEffect(() => {
-    // Do not gate on `loading` — tearing SSE down on every data reload drops the live channel.
     if (forbidden) return;
     if (!transactionScopeIsReady(transactionScope)) return;
 
-    let unsubscribe = () => {};
     let waitId = null;
     let refreshInFlight = false;
+    let unsub = () => {};
+    let ready = Boolean(initialSearchDoneRef?.current);
 
     const refreshFromRealtime = () => {
+      if (!ready) return;
       if (document.visibilityState !== "visible") return;
       if (refreshInFlight) return;
       refreshInFlight = true;
       clearTxSearchCache();
-      // Invalidate sibling tabs (storage event) without same-tab TX_DATA_CHANGED double-fetch.
       try {
         localStorage.setItem(TX_LIST_INVALIDATE_LS_KEY, String(Date.now()));
       } catch {
@@ -192,7 +195,6 @@ export function useTransactionSync({
               silent: true,
             });
           } else {
-            // submit-focus: do not clear focus ids — presentation layer keeps the narrow list.
             await runSearchRef.current?.({
               silent: true,
               forceRefresh: true,
@@ -207,7 +209,6 @@ export function useTransactionSync({
                 : undefined,
             });
           }
-          // Manager+ Contra Inbox badge/list must update on PENDING submit / approve / reject.
           if (canApproveContraRef.current) {
             const scopeApi = transactionScopeApiParams(transactionScopeRef.current);
             await refreshContraInboxBadgeRef.current?.(scopeApi);
@@ -223,10 +224,9 @@ export function useTransactionSync({
     };
 
     const start = () => {
-      const scopeApi = transactionScopeApiParams(transactionScope);
-      unsubscribe = subscribeTransactionLedgerRealtime({
-        scopeApi,
-        onLedgerChanged: refreshFromRealtime,
+      ready = true;
+      unsub = onRealtimeInvalidate([REALTIME_DOMAINS.LEDGER], () => {
+        refreshFromRealtime();
       });
     };
 
@@ -243,7 +243,6 @@ export function useTransactionSync({
 
     const onVis = () => {
       if (document.visibilityState !== "visible") return;
-      // Ticket may have expired while backgrounded — reconnect by tearing down & remounting effect deps.
       refreshFromRealtime();
     };
     document.addEventListener("visibilitychange", onVis);
@@ -251,7 +250,7 @@ export function useTransactionSync({
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       if (waitId) clearInterval(waitId);
-      unsubscribe();
+      unsub();
     };
   }, [
     forbidden,

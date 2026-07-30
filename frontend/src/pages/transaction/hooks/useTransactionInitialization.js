@@ -106,7 +106,7 @@ export function useTransactionInitialization({
     const nextShowAll = false;
     const nextSel = defaultCode ? [defaultCode] : codes[0] ? [codes[0]] : [];
 
-    // Block cross-page sync from re-applying the previous company's currency.
+    // Block cross-page sync from re-applying the previous company currency.
     activeSearch.beginScopeCurrencyDefault?.();
     activeSearch.setShowAllCurrencies((prev) => (prev === nextShowAll ? prev : nextShowAll));
     activeSearch.setSelectedCurrencies((prev) => (sameCurrencySelection(prev, nextSel) ? prev : nextSel));

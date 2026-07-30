@@ -7,6 +7,8 @@ import { useAuthSession } from "../../../context/AuthSessionContext.jsx";
 import { notifyCompanySessionUpdated } from "../../../utils/company/companySessionEvents.js";
 import { syncCompanySessionApi } from "../../../utils/company/companySessionSync.js";
 import { ymdToDmy } from "../lib/dashboardDateUtils.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import {
   bindDashboardSessionCache,
   buildDashboardCacheKey,
@@ -44,6 +46,10 @@ import {
   warmFrankfurterRatesForCurrencies,
 } from "../../../utils/dashboard/frankfurterRates.js";
 import { DASHBOARD_API, DASHBOARD_BOOTSTRAP_API, DASHBOARD_PROFIT_COLOR, isDashboardHistoricalOwnershipMonth } from "../lib/dashboardConstants.js";
+import {
+  buildEmptyDashboardPayload,
+  companyCurrencyCacheState,
+} from "../lib/dashboardEmptyScope.js";
 import {
   buildChartRows,
   buildSkeletonChartRows,
@@ -1005,6 +1011,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const chartDailyInFlightRef = useRef("");
   const loadDashboardTriggerKeyRef = useRef("");
   const loadDashboardStructuralKeyRef = useRef("");
+  const loadDashboardRef = useRef(null);
   const ensureDeferredDashboardLoadsRef = useRef(null);
   /** Prevents synchronous DASHBOARD_GROUP_FILTER_EVENT ↔ sync re-entry stack overflow. */
   const syncGcFilterInFlightRef = useRef(false);
@@ -2137,8 +2144,20 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   );
 
   const applyCurrencyCodes = useCallback((codes, cid) => {
-    if (!codes.length) return;
     const effectiveCompanyId = cid ?? companyId;
+    if (!codes.length) {
+      const emptyCid =
+        effectiveCompanyId != null ? parseInt(effectiveCompanyId, 10) : Number.NaN;
+      if (Number.isFinite(emptyCid) && emptyCid > 0) {
+        currenciesByCompanyRef.current.set(emptyCid, []);
+      }
+      setCurrencies([]);
+      setCurrencyCode("");
+      window.setTimeout(() => {
+        void loadDashboardRef.current?.();
+      }, 0);
+      return;
+    }
     const orderCompanyId = resolveDashboardCurrencyOrderCompanyId({
       companyId: effectiveCompanyId != null ? parseInt(effectiveCompanyId, 10) : null,
       selectedGroup,
@@ -2434,9 +2453,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       if (isGroupOnlyScope && nextCode) {
         notifyDashboardCurrencyFilterChanged(nextCode, currencyScopeKey);
       }
-      if (singleCid && list.length) {
+      if (Number.isFinite(singleCid) && singleCid > 0) {
+        // Persist empty [] too — distinguishes "not loaded" vs "confirmed no currencies".
         currenciesByCompanyRef.current.set(singleCid, list);
-        persistDashboardCurrencyDisplayOrder(currencyDisplayOrderByCompanyRef, singleCid, list);
+        if (list.length) {
+          persistDashboardCurrencyDisplayOrder(currencyDisplayOrderByCompanyRef, singleCid, list);
+        }
       } else {
         writeDashboardGroupCurrencyCaches(currenciesByGroupRef.current, {
           groupKey,
@@ -2446,6 +2468,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         });
       }
       currencyScopeLoadedRef.current = { key: scopeKey, count: list.length };
+      // Empty currency settle does not always change React state — re-kick loadDashboard.
+      if (list.length === 0) {
+        window.setTimeout(() => {
+          void loadDashboardRef.current?.();
+        }, 0);
+      }
     };
 
     const deferGroupAllCurrencyNetworkRefresh = (refreshFn) => {
@@ -6219,8 +6247,23 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       displayScopeKeyRef.current,
       cacheKey
     );
+    const paintEmptyDashboardScope = () => {
+      const empty = buildEmptyDashboardPayload(dateFrom, dateTo);
+      setMultiCurrencyKpi(null);
+      setMultiCurrencyKpiPrev(null);
+      setDashboardData(empty);
+      dashboardDataRef.current = empty;
+      setDashboardDataPrev(null);
+      setDisplayScopeKey(cacheKey);
+      setEarningsByCurrency([]);
+      setEarningsByCurrencyPrev([]);
+      setEarningsByCurrencyLoading(false);
+      setDashboardCache(cacheKey, { current: empty, previous: null });
+      setLoading(false);
+    };
     // Company switch: wait until currency list is known before painting.
     // Avoids single-currency KPI/`full` then a second multi-currency earnings round-trip.
+    // Empty [] in the map means "confirmed no currencies" — paint zeros, do not spin forever.
     if (
       requirePieEarly &&
       !groupAllMode &&
@@ -6228,17 +6271,18 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       !(mergedSubsetIds && mergedSubsetIds.length > 1) &&
       !allCurrenciesActive
     ) {
-      const cid = parseInt(companyId, 10);
-      const cachedCodes =
-        Number.isFinite(cid) && cid > 0
-          ? currenciesByCompanyRef.current.get(cid)
-          : null;
-      // Prefer hydrated company list — do not bootstrap on a provisional single code.
-      if (!Array.isArray(cachedCodes) || cachedCodes.length === 0) {
+      const currencyState = companyCurrencyCacheState(currenciesByCompanyRef.current, companyId);
+      if (currencyState === "pending") {
         setLoading(true);
         return;
       }
+      if (currencyState === "empty") {
+        paintEmptyDashboardScope();
+        return;
+      }
+      const cachedCodes = currenciesByCompanyRef.current.get(parseInt(companyId, 10));
       if (
+        Array.isArray(cachedCodes) &&
         cachedCodes.length > 1 &&
         !(Array.isArray(codesForEarnings) && codesForEarnings.length > 1)
       ) {
@@ -6490,6 +6534,11 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       currenciesByCompanyRef,
     });
     if (needsDashboardFetch && scopeNeedsCurrency && !provisionalCurrency) {
+      const currencyState = companyCurrencyCacheState(currenciesByCompanyRef.current, companyId);
+      if (currencyState === "empty") {
+        paintEmptyDashboardScope();
+        return;
+      }
       setLoading(true);
       return;
     }
@@ -6535,7 +6584,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
               companyId,
               selectedGroup
             );
-            if (longRange || !dashboardPayloadNeedsChartDaily(currentPayload)) {
+            // `full` already includes chart series (possibly empty) — settle so zero-data
+            // companies do not wait forever on a deferred chart bootstrap.
+            if (
+              longRange ||
+              primaryBootstrapScope === "full" ||
+              !dashboardPayloadNeedsChartDaily(currentPayload)
+            ) {
               currentPayload = markDashboardChartSettled(currentPayload);
             }
           }
@@ -6689,9 +6744,21 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           }
 
           // Recompute readiness after fills (earningsCurrent may have updated).
-          const painted = paintBootstrap();
+          let painted = paintBootstrap();
+          // Empty ledger: chart series may still look "unsettled" — force settle once.
+          if (!painted && currentPayload && dashboardPayloadNeedsChartDaily(currentPayload)) {
+            currentPayload = markDashboardChartSettled(currentPayload);
+            painted = paintBootstrap();
+          }
           if (requirePie && !painted) {
             // Keep previous company UI — never swap KPI/chart ahead of complete pie.
+            // Single-currency first paint with a payload: exit skeleton (zeros OK).
+            if (!dashboardDataRef.current && currentPayload && !needsMultiCurrencyEarnings) {
+              currentPayload = markDashboardChartSettled(currentPayload);
+              if (paintBootstrap()) return;
+              paintEmptyDashboardScope();
+              return;
+            }
             setLoading(true);
             return;
           }
@@ -6973,6 +7040,11 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     ensureDeferredDashboardLoads,
     upgradeActiveScopeEarnings,
   ]);
+  loadDashboardRef.current = loadDashboard;
+
+  useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
+    void loadDashboard();
+  }, { enabled: gcBootstrapReady });
 
   const loadDashboardTriggerKey = useMemo(
     () =>

@@ -91,6 +91,9 @@ try {
 
     updateTransaction($pdo, $transaction_id, $amount, $description, $remark);
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$company_id], 'maintenance', 'payment_update');
+
     jsonResponse(true, '交易更新成功', [
         'transaction_id' => $transaction_id,
         'amount' => money_out($amount),

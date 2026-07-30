@@ -26,6 +26,8 @@ import {
   ensureMaintenanceDateRangePicker,
 } from "../../../utils/date/dateRangePicker.js";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import { isCapitalLettersOnly, sanitizeCapitalLettersOnly } from "../../../utils/input/sanitizeCapitalLettersOnly.js";
 import {
   mergeCurrencyCodesWithSavedOrder,
@@ -1399,6 +1401,15 @@ export function useBankProcessListPage() {
       }
     }
   }, [companyId]);
+
+  useRealtimeDomain(
+    [REALTIME_DOMAINS.PROCESSES, REALTIME_DOMAINS.ACCOUNTS],
+    () => {
+      if (!companyId) return;
+      void fetchRows({ silent: true, preservePage: true, preserveSelection: true });
+      void loadAccountingInbox({ silent: true });
+    },
+  );
 
   const handleBankStatusUpdated = useCallback(
     (row, target, opts = {}) => {

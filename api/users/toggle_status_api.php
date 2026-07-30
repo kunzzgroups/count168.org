@@ -491,6 +491,15 @@ try {
         $newStatus = $current['status'] === 'active' ? 'inactive' : 'active';
         updateUserStatus($pdo, $newStatus, $id);
     }
+
+    $publishIds = (isset($scopeCompanyIds) && is_array($scopeCompanyIds) && $scopeCompanyIds !== [])
+        ? $scopeCompanyIds
+        : array_values(array_filter([(int) ($_SESSION['company_id'] ?? 0)]));
+    if ($publishIds !== []) {
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies($publishIds, 'users', 'toggle_status');
+    }
+
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['success' => true, 'message' => '状态更新成功', 'data' => ['newStatus' => $newStatus], 'newStatus' => $newStatus], JSON_UNESCAPED_UNICODE);
     exit;

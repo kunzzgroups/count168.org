@@ -94,6 +94,8 @@ try {
         $stmt->execute($validIds);
         $totalDeleted = $stmt->rowCount();
         $pdo->commit();
+        require_once __DIR__ . '/../includes/realtime.php';
+        realtime_publish_companies([$company_id], 'maintenance', 'formula_delete');
         jsonResponse(true, "已删除 {$totalDeleted} 条记录", ['deleted' => $totalDeleted]);
     } catch (Exception $e) {
         $pdo->rollBack();

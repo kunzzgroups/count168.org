@@ -21,6 +21,8 @@ import { findOwnerCompanyById } from "../../utils/company/sharedCompanyFilter.js
 import { useGroupAnchorSessionSync } from "../../utils/company/useGroupAnchorSessionSync.js";
 import { isPartnershipAuditReadOnlyLocked } from "../../utils/audit/partnershipAuditReadOnly.js";
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
 import { isBankCategoryCompany, resolveBankOnlyCategoryHint } from "../bankprocesslist/lib/bankProcessHelpers.js";
 import "../../../public/css/processCSS.css";
 import "../../../public/css/description-input.css";
@@ -656,6 +658,12 @@ export default function ProcessListPage() {
       t,
     ],
   );
+
+  useRealtimeDomain(REALTIME_DOMAINS.PROCESSES, () => {
+    if (!companyId) return;
+    invalidateProcessListCompanyCache(processListCacheRef, companyId);
+    void fetchRows({ silent: true, force: true });
+  });
 
   const reloadDescriptions = async () => {
     if (!companyId) return;

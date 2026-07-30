@@ -633,6 +633,9 @@ try {
         );
     }
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$company_id], 'accounts', 'delete_currency');
+
     jsonResponse(true, 'Currency deleted successfully', null);
 } catch (PDOException $e) {
     error_log('DeleteCurrencyAPI - PDO: ' . $e->getMessage());

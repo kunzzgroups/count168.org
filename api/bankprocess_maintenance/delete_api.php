@@ -308,6 +308,9 @@ try {
 
     $pdo->commit();
 
+    require_once __DIR__ . '/../includes/realtime.php';
+    realtime_publish_companies([$company_id], 'maintenance', 'bankprocess_delete');
+
     foreach ($affectedBankProcessIds as $bpId) {
         bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $company_id, $bpId);
     }

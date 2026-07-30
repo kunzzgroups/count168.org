@@ -339,8 +339,15 @@ export function useSummaryAddAccount({
 
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => {
-        if (k === "alert_amount") fd.append(k, alertAmount);
-        else fd.append(k, v ?? "");
+        if (k === "alert_amount") {
+          fd.append(k, alertAmount);
+          return;
+        }
+        const raw = v ?? "";
+        // Align with AccountListPage: CSS text-transform is visual-only; normalize before POST.
+        const out =
+          k === "account_id" || k === "name" || k === "remark" ? toUpper(raw) : raw;
+        fd.append(k, out);
       });
       if (form.payment_alert === "0") {
         fd.set("alert_type", "");

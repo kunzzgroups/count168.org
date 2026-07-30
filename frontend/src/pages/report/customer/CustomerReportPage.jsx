@@ -47,6 +47,8 @@ import { getReportText, REPORT_I18N } from "../../../translateFile/pages/reportT
 import CustomerReportFilters from "./CustomerReportFilters.jsx";
 import CustomerReportTable from "./CustomerReportTable.jsx";
 import { reportToastMaintenanceVariant } from "../shared/reportAmountFormat.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import {
   buildReportSnapshotKey,
   getReportSnapshot,
@@ -484,6 +486,10 @@ export default function CustomerReportPage() {
       }
     }
   }, [reportScope, dateFrom, dateTo, reportParams, beginReportFetch, isReportFetchCurrent, t, notify]);
+
+  useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
+    void loadReport();
+  }, { enabled: customerReportScopeIsReady(reportScope) && currencyFilterReady });
 
   const persistCurrencyPrefs = useCallback((scope, currencies, showAll) => {
     const key = customerReportScopeCacheCompanyKey(scope);

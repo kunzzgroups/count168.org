@@ -304,6 +304,8 @@ try {
             }
 
             $pdo->commit();
+            require_once __DIR__ . '/../includes/realtime.php';
+            realtime_publish_companies([$company_id], 'accounts', 'bulk_currency');
             jsonResponse(true, '批量修改成功');
         } catch (Exception $e) {
             $pdo->rollBack();

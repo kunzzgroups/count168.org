@@ -2144,6 +2144,18 @@ try {
                 } catch (Throwable $postCommitReadError) {
                     error_log("Create user post-commit read error: " . $postCommitReadError->getMessage());
                 }
+
+                require_once __DIR__ . '/../includes/realtime.php';
+                $publishIds = array_values(array_filter(array_map('intval', is_array($company_ids ?? null) ? $company_ids : [])));
+                if ($publishIds === [] && !empty($scope_company_id)) {
+                    $publishIds = [(int) $scope_company_id];
+                }
+                if ($publishIds === [] && (int) $current_company_id > 0) {
+                    $publishIds = [(int) $current_company_id];
+                }
+                if ($publishIds !== []) {
+                    realtime_publish_companies($publishIds, 'users', 'create');
+                }
                 
                 sendResponse(true, 'User created successfully', $newUser);
             } catch (PDOException $e) {
@@ -2262,6 +2274,11 @@ try {
                     ");
                     $stmt->execute([$input['id'], $scope_company_id]);
                     $updatedOwner = $stmt->fetch(PDO::FETCH_ASSOC);
+
+                    require_once __DIR__ . '/../includes/realtime.php';
+                    if ((int) $scope_company_id > 0) {
+                        realtime_publish_companies([(int) $scope_company_id], 'users', 'update');
+                    }
                     
                     sendResponse(true, 'Owner updated successfully', $updatedOwner);
                 } else {
@@ -2581,6 +2598,18 @@ try {
                     $responseData = array_merge((array)$responseData, ['will_lose_access' => $will_lose_access]);
                 } else {
                     $responseData = ['will_lose_access' => $will_lose_access];
+                }
+
+                require_once __DIR__ . '/../includes/realtime.php';
+                $publishIds = array_values(array_filter(array_map('intval', is_array($validatedScopeCompanyIds ?? null) ? $validatedScopeCompanyIds : [])));
+                if ($publishIds === [] && !empty($scope_company_id)) {
+                    $publishIds = [(int) $scope_company_id];
+                }
+                if ($publishIds === [] && (int) $current_company_id > 0) {
+                    $publishIds = [(int) $current_company_id];
+                }
+                if ($publishIds !== []) {
+                    realtime_publish_companies($publishIds, 'users', 'update');
                 }
                 
                 sendResponse(true, $message, $responseData);
