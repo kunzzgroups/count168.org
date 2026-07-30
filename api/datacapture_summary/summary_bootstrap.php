@@ -62,7 +62,9 @@ function dcSummaryApiInitScope(): void
     }
 
     $groupIdForAccess = dcNormalizeGroupId($scopeParams['group_id'] ?? '');
-    if (!checkReportGamesAccess($pdo, $company_id, $groupIdForAccess !== '' ? $groupIdForAccess : null)) {
+    // Align with Data Capture: Bank and Games companies can both open Summary.
+    // Category is resolved dynamically via maintenance access (not Games-only).
+    if (!checkReportMaintenanceAccess($pdo, $company_id, $groupIdForAccess !== '' ? $groupIdForAccess : null)) {
         http_response_code(403);
         echo json_encode(['success' => false, 'message' => 'Unauthorized permission category', 'data' => null]);
         exit;

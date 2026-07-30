@@ -219,9 +219,9 @@ if ($company_id <= 0) {
     exit;
 }
 
-if (!checkReportGamesAccess($pdo, $company_id, $groupId)) {
+if (!checkReportMaintenanceAccess($pdo, $company_id, $groupId)) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Unauthorized category permission (Games required)']);
+    echo json_encode(['success' => false, 'error' => 'Unauthorized category permission (Games or Bank required)']);
     exit;
 }
 
