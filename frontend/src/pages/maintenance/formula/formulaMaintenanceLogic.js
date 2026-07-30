@@ -243,11 +243,13 @@ export function createFormulaEditFormFromRow(row) {
 /** Source 列变更：同步更新 Formula 编辑框里的 * (source) 后缀。 */
 export function syncEditFormSourcePercent(form, newSourcePercent) {
   const base = normalizeMaintenanceFormulaInput(form.formula);
-  const source = formatSourcePercent(newSourcePercent);
+  // Keep the user's edit buffer intact. Values such as "", "0.", and "0.60"
+  // are valid intermediate states and must not be normalized on every keypress.
+  const sourceInput = newSourcePercent == null ? "" : String(newSourcePercent);
   return {
     ...form,
-    source_percent: source,
-    formula: buildEditFormFormulaDisplay(base, source),
+    source_percent: sourceInput,
+    formula: buildEditFormFormulaDisplay(base, sourceInput),
   };
 }
 
