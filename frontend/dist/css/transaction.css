@@ -3200,11 +3200,11 @@ body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-f
 }
 
 /*
- * Middle-Man：五欄同等寬（Account / Rate multiplier / Fee / Platform Fee / Amount）
+ * Middle-Man：Account 加宽；Rate-Mul / Fee / PT-Fee / Amount 收窄
  */
 body.transaction-page .transaction-add-section .rate-fields .rate-row.rate-row-mm {
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 2.0fr) repeat(4, minmax(0, 0.80fr));
     gap: 5px;
     align-items: stretch;
     flex: 1 1 auto;
