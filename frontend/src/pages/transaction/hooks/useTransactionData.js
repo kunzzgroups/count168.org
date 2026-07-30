@@ -47,6 +47,8 @@ import {
 } from "../lib/transactionScope.js";
 import { useGroupAnchorSessionSync } from "../../../utils/company/useGroupAnchorSessionSync.js";
 import { buildTransactionCompanyStripRows } from "../lib/transactionCompanyStrip.js";
+import { useRealtimeDomain } from "../../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../../lib/realtime/realtimeEvents.js";
 import {
   applyTransactionBootPersistence,
   buildTransactionBootSnapshot,
@@ -72,6 +74,8 @@ export function useTransactionData({
   const [currencyOptions, setCurrencyOptions] = useState([]);
   /** scopeKey + rows updated atomically — restore never sees stale rows for a new company. */
   const [currencyScopeBundle, setCurrencyScopeBundle] = useState({ scopeKey: null, rows: [] });
+  /** Bumped on accounts realtime so To/From options refetch into local state. */
+  const [accountsRealtimeNonce, setAccountsRealtimeNonce] = useState(0);
   const filterSnapshotRef = useRef(null);
   const scopeSwitchSeqRef = useRef(0);
   const scopeCacheKeyRef = useRef("");
@@ -333,10 +337,12 @@ export function useTransactionData({
       filterSnapshotRef.current?.snapCompanies ||
       [];
     const orderCompanyId = resolveTransactionCurrencyOrderCompanyId(transactionScope, snapCompanies);
+    const forceFresh = accountsRealtimeNonce > 0;
     (async () => {
       const fetchScopeAccountsAndCurrencies = async () => {
         let accData = [];
         let curRows = [];
+        const accountsStaleTime = forceFresh ? 0 : 60_000;
         if (transactionScope.mode === "aggregate" && transactionScope.mergeCompanyIds?.length) {
           const ids = transactionScope.mergeCompanyIds;
           const [accResults, curResults] = await Promise.all([
@@ -345,7 +351,7 @@ export function useTransactionData({
                 queryClient.fetchQuery({
                   queryKey: transactionQueryKeys.accounts(`${scopeCacheKey}:${cid}`),
                   queryFn: ({ signal }) => getAccounts({ companyId: cid, signal }),
-                  staleTime: 60_000,
+                  staleTime: accountsStaleTime,
                 }),
               ),
             ),
@@ -354,7 +360,7 @@ export function useTransactionData({
                 queryClient.fetchQuery({
                   queryKey: transactionQueryKeys.companyCurrencies(`${scopeCacheKey}:${cid}`),
                   queryFn: ({ signal }) => getCompanyCurrencies({ companyId: cid, signal }),
-                  staleTime: 60_000,
+                  staleTime: accountsStaleTime,
                 }),
               ),
             ),
@@ -390,7 +396,7 @@ export function useTransactionData({
                 queryClient.fetchQuery({
                   queryKey: transactionQueryKeys.accounts(`${scopeCacheKey}:group:${gid}`),
                   queryFn: ({ signal }) => getAccounts({ groupId: gid, signal }),
-                  staleTime: 60_000,
+                  staleTime: accountsStaleTime,
                 }),
               ),
             ),
@@ -399,7 +405,7 @@ export function useTransactionData({
                 queryClient.fetchQuery({
                   queryKey: transactionQueryKeys.companyCurrencies(`${scopeCacheKey}:${cid}`),
                   queryFn: ({ signal }) => getCompanyCurrencies({ companyId: cid, signal }),
-                  staleTime: 60_000,
+                  staleTime: accountsStaleTime,
                 }),
               ),
             ),
@@ -425,13 +431,13 @@ export function useTransactionData({
             queryClient.fetchQuery({
               queryKey: transactionQueryKeys.accounts(scopeCacheKey),
               queryFn: ({ signal }) => getAccounts({ ...scopeApi, signal }),
-              staleTime: 60_000,
+              staleTime: accountsStaleTime,
               gcTime: 10 * 60_000,
             }),
             queryClient.fetchQuery({
               queryKey: transactionQueryKeys.companyCurrencies(scopeCacheKey),
               queryFn: ({ signal }) => getCompanyCurrencies({ ...scopeApi, signal }),
-              staleTime: 60_000,
+              staleTime: accountsStaleTime,
               gcTime: 10 * 60_000,
             }),
           ]);
@@ -485,7 +491,25 @@ export function useTransactionData({
     return () => {
       cancelled = true;
     };
-  }, [loading, forbidden, scopeCacheKey, todayDmy, queryClient, transactionScope, authScopeKey]);
+  }, [loading, forbidden, scopeCacheKey, todayDmy, queryClient, transactionScope, authScopeKey, accountsRealtimeNonce]);
+
+  useRealtimeDomain(
+    REALTIME_DOMAINS.ACCOUNTS,
+    () => {
+      void queryClient.removeQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return (
+            k === "tx-accounts" ||
+            k === "tx-company-currencies" ||
+            k === "tx-scope-account-currencies"
+          );
+        },
+      });
+      setAccountsRealtimeNonce((n) => n + 1);
+    },
+    { enabled: !forbidden && Boolean(transactionScope) },
+  );
 
   useEffect(() => {
     if (!filterSnapshot) return;
