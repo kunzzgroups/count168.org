@@ -258,6 +258,46 @@ export function syncEditFormSourcePercent(form, newSourcePercent) {
   };
 }
 
+function formulaLetters(value) {
+  return String(value ?? "").match(/[A-Za-z]/g) ?? [];
+}
+
+function isLetterSequenceSubset(candidateLetters, previousLetters) {
+  let previousIndex = 0;
+  for (const letter of candidateLetters) {
+    while (previousIndex < previousLetters.length && previousLetters[previousIndex] !== letter) {
+      previousIndex += 1;
+    }
+    if (previousIndex >= previousLetters.length) return false;
+    previousIndex += 1;
+  }
+  return true;
+}
+
+/** Formula edit: permit numeric/operators/reference syntax, but no newly typed letters. */
+export function syncEditFormFormulaInput(form, newFormula) {
+  const formulaInput = newFormula == null ? "" : String(newFormula);
+  if (!/^[0-9A-Za-z.$+\-*/()[\],\s]*$/.test(formulaInput)) {
+    return form;
+  }
+
+  const previousLetters = formulaLetters(form.formula);
+  const candidateLetters = formulaLetters(formulaInput);
+  if (!isLetterSequenceSubset(candidateLetters, previousLetters)) {
+    return form;
+  }
+
+  return { ...form, formula: formulaInput };
+}
+
+/** Description edit: alphabetic input is stored in uppercase. */
+export function syncEditFormDescriptionInput(form, newDescription) {
+  return {
+    ...form,
+    description: String(newDescription ?? "").toUpperCase(),
+  };
+}
+
 export function patchFormulaRowAfterSave(row, { id, editForm, accountLabel, serverData }) {
   if (!formulaRowIdsMatch(row.id, id)) return row;
   const source = formatSourcePercent(editForm.source_percent ?? row.source ?? "1");

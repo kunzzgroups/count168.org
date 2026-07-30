@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { syncEditFormSourcePercent } from "./formulaMaintenanceLogic.js";
+import {
+  syncEditFormDescriptionInput,
+  syncEditFormFormulaInput,
+  syncEditFormSourcePercent,
+} from "./formulaMaintenanceLogic.js";
 
 const editForm = {
   source_percent: "1",
@@ -47,4 +51,28 @@ test("source edit rejects text, operators, spaces, and multiple decimal points",
     const changed = syncEditFormSourcePercent(editForm, invalidValue);
     assert.strictEqual(changed, editForm);
   }
+});
+
+test("formula edit permits numeric operations and reference symbols", () => {
+  const form = { ...editForm, formula: "$2 + [AAAA, 2]" };
+  const changed = syncEditFormFormulaInput(form, "$2 + [AAAA, 2] * (1.5)");
+
+  assert.equal(changed.formula, "$2 + [AAAA, 2] * (1.5)");
+});
+
+test("formula edit preserves existing reference letters but rejects new letters", () => {
+  const form = { ...editForm, formula: "$2 + [AAAA, 2]" };
+
+  assert.strictEqual(syncEditFormFormulaInput(form, "$2 + [AAAA, 2]B"), form);
+  assert.strictEqual(syncEditFormFormulaInput(form, "$2 + [AAAA, 2]测试"), form);
+  assert.equal(syncEditFormFormulaInput(form, "$2 + [AAA, 2]").formula, "$2 + [AAA, 2]");
+});
+
+test("description edit converts letters to uppercase", () => {
+  const changed = syncEditFormDescriptionInput(
+    { ...editForm, description: "" },
+    "test 1 - abc",
+  );
+
+  assert.equal(changed.description, "TEST 1 - ABC");
 });
