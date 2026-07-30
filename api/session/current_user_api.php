@@ -161,8 +161,9 @@ if ($companyId && $pdo instanceof PDO) {
         if ($hasC168AutoRenewAccess) {
             require_once __DIR__ . '/../includes/auto_renew.php';
             try {
-                auto_renew_ensure_request_table($pdo);
-                $pendingAutoRenewCount = auto_renew_count_pending($pdo);
+                // Do not call auto_renew_ensure_request_table / sync_window here:
+                // Hostinger metadata locks from ALTER/SHOW freeze the whole site.
+                $pendingAutoRenewCount = auto_renew_count_pending_fast($pdo);
             } catch (Throwable $e) {
                 error_log('current_user_api pending_auto_renew_count: ' . $e->getMessage());
             }
