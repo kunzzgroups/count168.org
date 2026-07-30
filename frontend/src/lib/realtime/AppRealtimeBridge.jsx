@@ -44,13 +44,20 @@ export default function AppRealtimeBridge() {
     });
     ctlRef.current = ctl;
 
+    let filterTimer = null;
     const onFilter = () => {
-      ctl.reconnect();
+      // Dashboard/company session sync can fire this many times in one paint.
+      if (filterTimer) clearTimeout(filterTimer);
+      filterTimer = setTimeout(() => {
+        filterTimer = null;
+        ctl.reconnect();
+      }, 300);
     };
     window.addEventListener(DASHBOARD_GROUP_FILTER_EVENT, onFilter);
 
     return () => {
       window.removeEventListener(DASHBOARD_GROUP_FILTER_EVENT, onFilter);
+      if (filterTimer) clearTimeout(filterTimer);
       ctl.stop();
       ctlRef.current = null;
     };

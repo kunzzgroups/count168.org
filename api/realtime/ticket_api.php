@@ -70,7 +70,9 @@ try {
         exit;
     }
 
-    $expiresAt = time() + 120;
+    // Long-lived enough that EventSource blips can reconnect without minting a new
+    // ticket every time; channel access is still HMAC-scoped (not a session cookie).
+    $expiresAt = time() + 6 * 3600;
     $payload = [
         'exp' => $expiresAt,
         'channels' => $channels,

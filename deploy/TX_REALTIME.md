@@ -59,4 +59,9 @@ powershell -ExecutionPolicy Bypass -File deploy\winscp-deploy-ec2.ps1
 
 `includes/config.local.php` 的 `$tx_realtime_secret` 须与 `services/tx-realtime/.env` 一致。
 
-排障：`/realtime/health` 的 `clients` ≥ 已登录开着 SPA 的浏览器数；access log 应有 `/realtime/sse`。
+排障：
+
+- `/realtime/health` 的 `clients` ≥ 已登录开着 SPA 的浏览器数
+- Network 里 `/realtime/sse` 应长期 **pending**（不是红叉）。红叉常见原因：ticket 过期后浏览器用同一 URL 重试；前端已改为 `onerror` 立刻关连并重新领票
+- ticket 有效期 6h；公司切换会 debounce 后按 scope 重连（scope 未变且已 OPEN 则跳过）
+- Cloudflare：勿对 `/realtime/*` 开缓存；Rocket Loader 若干扰可对站点关闭

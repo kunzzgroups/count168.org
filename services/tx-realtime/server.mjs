@@ -223,13 +223,14 @@ const server = http.createServer(async (req, res) => {
     writeSse(res, "ready", { channels: verified.channels, uid: verified.uid });
 
     addClient(verified.channels, res);
+    // Cloudflare / proxies idle-cut long streams; keep under ~20s.
     const heartbeat = setInterval(() => {
       try {
         res.write(": ping\n\n");
       } catch {
         clearInterval(heartbeat);
       }
-    }, 25000);
+    }, 15000);
 
     req.on("close", () => {
       clearInterval(heartbeat);
