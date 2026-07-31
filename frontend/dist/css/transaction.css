@@ -2741,7 +2741,7 @@ body.transaction-page .transaction-header-left {
 /* Account 列宽度 - 更宽 */
 .transaction-table th:first-child,
 .transaction-table td:first-child {
-    width: 8%;
+    width: 20%;
     min-width: 150px;
 }
 
