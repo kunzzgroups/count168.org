@@ -61,6 +61,10 @@ if (!function_exists('fx_rates_partition_quotes')) {
     {
         $quotes = fx_rates_normalize_quotes($baseCode, $quoteCodes);
         $excludedSet = array_fill_keys(fx_rates_excluded_codes(), true);
+        // Crypto/custom base cannot be a Frankfurter `base=` — skip upstream entirely.
+        if ($baseCode !== '' && isset($excludedSet[$baseCode])) {
+            return ['quotes' => $quotes, 'apiQuotes' => [], 'excluded' => $quotes];
+        }
         $apiQuotes = [];
         $excluded = [];
         foreach ($quotes as $q) {

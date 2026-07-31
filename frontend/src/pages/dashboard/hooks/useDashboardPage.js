@@ -6923,30 +6923,29 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             );
           }
 
-          // Warm FX in parallel so converted pie % is ready on atomic paint.
+          // Warm FX off the critical path — never block KPI/chart/pie paint on rates
+          // (USDT/crypto base used to 422/502 and stall atomic paint).
           if (needsMultiCurrencyEarnings) {
-            panelTasks.push(
-              (async () => {
-                try {
-                  const rateBase = String(
-                    currencyCodeRef.current || provisionalCurrency || ""
-                  ).trim().toUpperCase();
-                  const pieCodes = codesForEarnings || currenciesRef.current;
-                  if (!rateBase || !Array.isArray(pieCodes) || pieCodes.length <= 1) return;
-                  const rateDate = resolveFrankfurterDate(dateTo);
-                  const cachedFx = peekFrankfurterRatesCache(rateBase, pieCodes, rateDate);
-                  if (
-                    cachedFx &&
-                    isFrankfurterRatesPayloadComplete(rateBase, pieCodes, cachedFx)
-                  ) {
-                    return;
-                  }
-                  await fetchFrankfurterRates(rateBase, pieCodes, rateDate);
-                } catch {
-                  /* FX optional — pie can show native until rates arrive */
+            void (async () => {
+              try {
+                const rateBase = String(
+                  currencyCodeRef.current || provisionalCurrency || ""
+                ).trim().toUpperCase();
+                const pieCodes = codesForEarnings || currenciesRef.current;
+                if (!rateBase || !Array.isArray(pieCodes) || pieCodes.length <= 1) return;
+                const rateDate = resolveFrankfurterDate(dateTo);
+                const cachedFx = peekFrankfurterRatesCache(rateBase, pieCodes, rateDate);
+                if (
+                  cachedFx &&
+                  isFrankfurterRatesPayloadComplete(rateBase, pieCodes, cachedFx)
+                ) {
+                  return;
                 }
-              })()
-            );
+                await fetchFrankfurterRates(rateBase, pieCodes, rateDate);
+              } catch {
+                /* FX optional — pie can show native until rates arrive */
+              }
+            })();
           }
 
           if (panelTasks.length) {

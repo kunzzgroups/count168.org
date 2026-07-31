@@ -72,6 +72,10 @@ export function isFrankfurterExcludedCode(code) {
 /** Split quotes into Frankfurter API candidates vs locally excluded codes (e.g. USDT). */
 function partitionFrankfurterQuotes(baseCode, quoteCodes) {
   const quotes = normalizeFrankfurterQuotes(baseCode, quoteCodes);
+  // Crypto/custom base cannot be a Frankfurter `base=` — skip network entirely.
+  if (isFrankfurterExcludedCode(baseCode)) {
+    return { quotes, apiQuotes: [], excluded: [...quotes] };
+  }
   const apiQuotes = [];
   const excluded = [];
   for (const quote of quotes) {
@@ -172,6 +176,22 @@ export async function fetchFrankfurterRates(base, quoteCodes, dateYmd = null) {
 
   if (!quotes.length) {
     return { rates: { [baseCode]: 1 }, date: dateYmd, unsupported: [] };
+  }
+
+  // USDT/etc. as display base: no Frankfurter/system FX — return immediately so
+  // dashboard atomic paint is not blocked by 422/502 retries.
+  if (isFrankfurterExcludedCode(baseCode) || !apiQuotes.length) {
+    return {
+      rates: { [baseCode]: 1 },
+      date: dateYmd,
+      unsupported: mergeFrankfurterUnsupported(
+        preExcluded.length ? preExcluded : quotes,
+        apiQuotes,
+        baseCode,
+        quoteCodes,
+        { [baseCode]: 1 }
+      ),
+    };
   }
 
   const key = cacheKey(baseCode, quotes, dateYmd);
