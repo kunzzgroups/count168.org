@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   DASHBOARD_GROUP_FILTER_EVENT,
   clearOwnerCompaniesCache,
+  readAccessibleGroupIds,
   readPersistedDashboardGcFilter,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { transactionQueryKeys } from "../../pages/transaction/lib/transactionApi.js";
@@ -18,21 +19,32 @@ import { clearAllAutoRenewListCache } from "../../pages/autorenew/autoRenewRoute
 import { onRealtimeInvalidate, REALTIME_DOMAINS } from "./realtimeEvents.js";
 import { subscribeAppRealtime } from "./subscribeAppRealtime.js";
 
+/** Fallback when accessible_group_ids not hydrated yet (never usernames like JK). */
+const REALTIME_FALLBACK_GROUP_CODES = new Set(["AP", "IG"]);
+
+/** Only emit known accessible group codes (never usernames like JK). */
+function resolveRealtimeViewGroup(selectedGroup) {
+  const g = selectedGroup ? String(selectedGroup).trim().toUpperCase() : "";
+  if (!g || !/^[A-Z0-9]{1,8}$/.test(g)) return "";
+  const accessible = readAccessibleGroupIds();
+  if (accessible.length > 0) {
+    return accessible.includes(g) ? g : "";
+  }
+  return REALTIME_FALLBACK_GROUP_CODES.has(g) ? g : "";
+}
+
 function scopeParamsFromFilter() {
   const filter = readPersistedDashboardGcFilter() || {};
   const companyId =
     filter.companyId != null && filter.companyId !== ""
       ? Number(filter.companyId)
       : null;
-  const viewGroup = filter.selectedGroup
-    ? String(filter.selectedGroup).trim().toUpperCase()
-    : "";
-  const groupOnly =
-    (companyId == null || !Number.isFinite(companyId) || companyId <= 0) &&
-    Boolean(viewGroup);
+  const viewGroup = resolveRealtimeViewGroup(filter.selectedGroup);
+  const hasCompany = Number.isFinite(companyId) && companyId > 0;
+  const groupOnly = !hasCompany && Boolean(viewGroup);
 
   return {
-    companyId: groupOnly ? undefined : companyId > 0 ? companyId : undefined,
+    companyId: groupOnly ? undefined : hasCompany ? companyId : undefined,
     viewGroup: viewGroup || undefined,
     groupId: viewGroup || undefined,
     groupAggregate: groupOnly ? true : undefined,

@@ -30,13 +30,7 @@ try {
 
     $cfg = realtime_config();
     if (!$cfg['enabled']) {
-        api_success([
-            'enabled' => false,
-            'ticket' => null,
-            'channels' => [],
-            'sse_path' => '/realtime/sse',
-            'expires_at' => null,
-        ], 'Realtime disabled');
+        api_success(realtime_ticket_disabled_payload(), 'Realtime disabled');
         exit;
     }
 
@@ -60,13 +54,7 @@ try {
 
     $channels = realtime_channels_from_scope($listScope);
     if ($channels === []) {
-        api_success([
-            'enabled' => false,
-            'ticket' => null,
-            'channels' => [],
-            'sse_path' => '/realtime/sse',
-            'expires_at' => null,
-        ], 'No realtime channels for scope');
+        api_success(realtime_ticket_disabled_payload(), 'No realtime channels for scope');
         exit;
     }
 
@@ -89,8 +77,16 @@ try {
         'expires_at' => $expiresAt,
     ]);
 } catch (InvalidArgumentException $e) {
+    if (realtime_ticket_is_scope_access_error($e)) {
+        api_success(realtime_ticket_disabled_payload(), $e->getMessage());
+        exit;
+    }
     api_error($e->getMessage(), 400);
 } catch (Throwable $e) {
     error_log('realtime/ticket_api: ' . $e->getMessage());
+    if (realtime_ticket_is_scope_access_error($e)) {
+        api_success(realtime_ticket_disabled_payload(), $e->getMessage());
+        exit;
+    }
     api_error($e->getMessage() ?: 'Failed to issue realtime ticket', 500);
 }
