@@ -4935,13 +4935,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
       /**
        * One HTTP: server runs per-company packs in-process; FE still owns mergeGroupData.
-       * earnings-only pie fills: prefer FE-parallel per-company kpi/earnings captures —
-       * PHP group_all foreach is serial and was wrongly used with scope=full before the
-       * earningsOnly forward fix (see loadMergedDashboard).
+       * For 2+ companies prefer FE-parallel packs — PHP group_all foreach is serial
+       * (wall ≈ Σ companies) and was the main Company All first-paint stall.
+       * earnings-only pie fills already used FE-parallel for the same reason.
        */
       const tryGroupAllBootstrap = async () => {
         if (!ids.length || ids.length > 40) return null;
-        if (earningsOnly && ids.length >= 2) {
+        if (ids.length >= 2) {
           return null;
         }
         // Heterogeneous view_group (Groups All) — keep parallel per-company fetches.
@@ -5207,23 +5207,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         if (selectedGroup) {
           // Must forward earningsOnly — otherwise pie/secondary currencies hit
           // bootstrap_scope=full (chart) per company instead of light earnings packs.
-          const merged = await fetchGroupAllMergedDashboard(rangeFrom, rangeTo, currencyOverride, {
+          // Do not await group-ledger enrich on the critical path — paint subsidiary
+          // merge first; loadDashboard schedules enrich after atomic paint.
+          return fetchGroupAllMergedDashboard(rangeFrom, rangeTo, currencyOverride, {
             groupKey: selectedGroup,
             useActiveScopeAbort: mergeAbort,
             earningsOnly,
           });
-          if (earningsOnly) return merged;
-          if (!canAccessGroupLedgerForGroup(meRef.current, selectedGroup, companies)) {
-            return merged;
-          }
-          return enrichGroupAllMergedDashboard(
-            merged,
-            rangeFrom,
-            rangeTo,
-            currencyOverride,
-            selectedGroup,
-            mergeAbort
-          );
         }
       }
 
@@ -5297,7 +5287,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       companies,
       fetchGroupDashboardPayload,
       fetchGroupAllMergedDashboard,
-      enrichGroupAllMergedDashboard,
       fetchMergedCompanyDashboards,
       i18n.failedToLoadDashboard,
       me,
@@ -6493,12 +6482,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           if (gen !== dashboardFetchGenRef.current) return false;
           if (dashboardEarningsRowsComplete(rows, multiCurrencyCodes)) {
             earningsCached = rows;
-          } else if (requirePie) {
+          } else if (requirePie && !groupAllMode) {
             setLoading(true);
             return false;
           }
         } catch {
-          if (requirePie) {
+          if (requirePie && !groupAllMode) {
             setLoading(true);
             return false;
           }
@@ -6993,61 +6982,32 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         }
         if (gen !== dashboardFetchGenRef.current) return;
 
-        const requirePie = dashboardRequiresPieAtomicPaint(
-          displayScopeKeyRef.current,
-          cacheKey
-        );
         const codesForPie = codesForEarnings || currenciesRef.current;
         let bootEarnings = current?._group_all_earnings_by_currency;
-        const pieReady =
-          !needsMultiCurrencyEarnings ||
-          (Array.isArray(bootEarnings) &&
+        // Prefer cache synthesize for pie when available (non-blocking).
+        if (
+          needsMultiCurrencyEarnings &&
+          !(
+            Array.isArray(bootEarnings) &&
             bootEarnings.length > 1 &&
-            dashboardEarningsRowsComplete(bootEarnings, codesForPie));
-
-        // Scope swap: do not paint KPI/chart ahead of multi-currency pie.
-        if (requirePie && needsMultiCurrencyEarnings && !pieReady) {
+            dashboardEarningsRowsComplete(bootEarnings, codesForPie)
+          )
+        ) {
           const synthesized = tryBuildGroupAllDashboardFromCompanyCaches();
           if (
             synthesized?.earnings?.length > 1 &&
             dashboardEarningsRowsComplete(synthesized.earnings, codesForPie)
           ) {
             bootEarnings = synthesized.earnings;
-          } else {
-            try {
-              // Parallel per-currency group-all packs (no currencies= serial fan-out).
-              if (current) dashboardDataRef.current = current;
-              const earnGen = earningsFetchGenRef.current;
-              const rows = await fetchGroupAllEarningsRowsForRange(
-                dateFrom,
-                dateTo,
-                earnGen,
-                codesForPie
-              );
-              if (gen !== dashboardFetchGenRef.current) return;
-              if (
-                Array.isArray(rows) &&
-                rows.length > 1 &&
-                dashboardEarningsRowsComplete(rows, codesForPie)
-              ) {
-                bootEarnings = rows;
-              }
-            } catch {
-              /* keep prior UI */
-            }
-          }
-          if (
-            !(
-              Array.isArray(bootEarnings) &&
-              bootEarnings.length > 1 &&
-              dashboardEarningsRowsComplete(bootEarnings, codesForPie)
-            )
-          ) {
-            setLoading(true);
-            return;
           }
         }
+        const pieReady =
+          !needsMultiCurrencyEarnings ||
+          (Array.isArray(bootEarnings) &&
+            bootEarnings.length > 1 &&
+            dashboardEarningsRowsComplete(bootEarnings, codesForPie));
 
+        // Company All: paint KPI/chart as soon as primary merge is ready; fill pie in background.
         setDashboardData(current);
         dashboardDataRef.current = current;
         setDisplayScopeKey(cacheKey);
@@ -7060,9 +7020,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         if (
           groupAllMode &&
           needsMultiCurrencyEarnings &&
-          Array.isArray(bootEarnings) &&
-          bootEarnings.length > 1 &&
-          dashboardEarningsRowsComplete(bootEarnings, codesForPie)
+          pieReady &&
+          Array.isArray(bootEarnings)
         ) {
           setEarningsByCurrency(bootEarnings);
           setEarningsByCurrencyPrev([]);
@@ -7081,7 +7040,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             setDashboardData(current);
             dashboardDataRef.current = current;
           }
-        } else if (groupAllMode && needsMultiCurrencyEarnings && !warmedGroupAll?.earnings?.length) {
+        } else if (groupAllMode && needsMultiCurrencyEarnings) {
           const codes = codesForPie;
           const primary = currencyCode;
           const primaryMetrics = computeCurrencyMetricsFromPayload(current);
@@ -7094,8 +7053,34 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             )
           );
           setEarningsByCurrencyLoading(true);
-          // Prefer cache synthesize for pie — never kick off N×currency merges.
+          // Background pie fill — do not block first paint on N×currency merges.
           void upgradeActiveScopeEarnings();
+        }
+
+        // Group-ledger ownership enrich after paint (was on critical path before).
+        if (
+          groupAllMode &&
+          selectedGroup &&
+          canAccessGroupLedgerForGroup(meRef.current, selectedGroup, companies)
+        ) {
+          const enrichBase = current;
+          const enrichScopeKey = cacheKey;
+          void enrichGroupAllMergedDashboard(
+            enrichBase,
+            dateFrom,
+            dateTo,
+            currencyCode,
+            selectedGroup,
+            true
+          ).then((enriched) => {
+            if (gen !== dashboardFetchGenRef.current) return;
+            if (resolveDashboardScopeKey() !== enrichScopeKey) return;
+            if (!enriched || enriched === enrichBase) return;
+            const stamped = stampDashboardPayloadRange(enriched, dateFrom, dateTo);
+            setDashboardData(stamped);
+            dashboardDataRef.current = stamped;
+            patchDashboardCache(enrichScopeKey, { current: stamped });
+          });
         }
 
         if (cachePatch.previous) {
@@ -7212,7 +7197,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     upgradeActiveScopeEarnings,
     loadEarningsParallelForAtomicPaint,
     computeCurrencyMetricsFromPayload,
-    fetchGroupAllEarningsRowsForRange,
+    enrichGroupAllMergedDashboard,
+    resolveDashboardScopeKey,
   ]);
   loadDashboardRef.current = loadDashboard;
 
