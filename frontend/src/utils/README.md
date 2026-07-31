@@ -13,7 +13,7 @@
 | `maintenance/` | `maintenanceStylesheets.js` | Maintenance sub-page CSS swap |
 | `capture/` | `dataCaptureRoundStorage.js` | Clear capture `localStorage` keys (layout nav) |
 | `audit/` | `partnershipAuditReadOnly.js` | Partnership audit read-only lock |
-| `input/` | `sanitizeCapitalLettersOnly.js` | Bank/country name input |
+| `input/` | `sanitizeCapitalLettersOnly.js` | Bank/country name input (A–Z + spaces) |
 
 ## Import examples
 
