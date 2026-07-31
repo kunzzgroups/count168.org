@@ -638,8 +638,8 @@ function dashboardPayloadNeedsChartDaily(data) {
 }
 
 /**
- * Any painted→target scope change (company / date / group / All):
- * KPI + trend + pie must swap in one frame — never paint cards/chart ahead of pie.
+ * True when painted scope ≠ target (company / date / group / All).
+ * Used to prefer cache completeness; no longer blocks progressive first paint.
  */
 function dashboardRequiresPieAtomicPaint(displayKey, targetKey) {
   if (!targetKey) return false;
@@ -3739,14 +3739,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       const multiCodes = Array.isArray(codes) && codes.length > 1 ? codes : null;
       // Never paint KPI/trend without settled chart series.
       if (dashboardPayloadNeedsChartDaily(cached.current)) return false;
-      // Date-range change (This Year): wait for complete pie — one atomic swap.
-      const requirePie = dashboardRequiresPieAtomicPaint(displayScopeKeyRef.current, key);
-      if (multiCodes && requirePie) {
-        const readyEarnings =
-          getCompleteCachedEarnings(cached, multiCodes) ||
-          (cacheEntryHasFullEarnings(cached, multiCodes) ? cached.earnings : null);
-        if (!readyEarnings) return false;
-      }
 
       setDashboardData(cached.current);
       dashboardDataRef.current = cached.current;
@@ -6261,9 +6253,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       setDashboardCache(cacheKey, { current: empty, previous: null });
       setLoading(false);
     };
-    // Company switch: wait until currency list is known before painting.
-    // Avoids single-currency KPI/`full` then a second multi-currency earnings round-trip.
+    // Company switch: wait only while currency list is still unknown.
     // Empty [] in the map means "confirmed no currencies" — paint zeros, do not spin forever.
+    // Do not block on pie codes — KPI/chart can paint first; earnings fill after.
     if (
       requirePieEarly &&
       !groupAllMode &&
@@ -6280,31 +6272,21 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         paintEmptyDashboardScope();
         return;
       }
-      const cachedCodes = currenciesByCompanyRef.current.get(parseInt(companyId, 10));
-      if (
-        Array.isArray(cachedCodes) &&
-        cachedCodes.length > 1 &&
-        !(Array.isArray(codesForEarnings) && codesForEarnings.length > 1)
-      ) {
-        setLoading(true);
-        return;
-      }
     }
 
-    /** Paint cache when chart (and on date-change, pie) are ready — freeze prior UI until then. */
+    /** Paint cache when chart series are ready; pie upgrades in the background. */
     const materializeCachedDashboard = async (entry) => {
       if (!entry?.current) return false;
       let currentCached = entry.current;
       let previousCached = entry.previous ?? null;
       let earningsCached = getCompleteCachedEarnings(entry, multiCurrencyCodes);
-      const requirePie = dashboardRequiresPieAtomicPaint(
-        displayScopeKeyRef.current,
-        cacheKey
-      );
 
       if (dashboardPayloadNeedsChartDaily(currentCached)) {
         try {
-          const chartBoot = await loadDashboardViaBootstrap({ scope: "chart" });
+          const chartBoot = await loadDashboardViaBootstrap({
+            scope: "chart",
+            currencyCodesOverride: [],
+          });
           if (gen !== dashboardFetchGenRef.current) return false;
           const withDaily = chartBoot?.current?.daily_data
             ? { ...currentCached, daily_data: chartBoot.current.daily_data }
@@ -6320,44 +6302,25 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       }
 
       if (needsMultiCurrencyEarnings && !earningsCached) {
-        if (requirePie) {
+        void (async () => {
           try {
             const earnBoot = await loadDashboardViaBootstrap({
               scope: "earnings",
               currencyCodesOverride: multiCurrencyCodes,
             });
-            if (gen !== dashboardFetchGenRef.current) return false;
+            if (gen !== dashboardFetchGenRef.current) return;
             if (Array.isArray(earnBoot?.earningsCurrent) && earnBoot.earningsCurrent.length > 1) {
-              earningsCached = earnBoot.earningsCurrent;
-            }
-          } catch {
-            /* fall through */
-          }
-          if (!earningsCached) {
-            setLoading(true);
-            return false;
-          }
-        } else {
-          void (async () => {
-            try {
-              const earnBoot = await loadDashboardViaBootstrap({
-                scope: "earnings",
-                currencyCodesOverride: multiCurrencyCodes,
-              });
-              if (gen !== dashboardFetchGenRef.current) return;
-              if (Array.isArray(earnBoot?.earningsCurrent) && earnBoot.earningsCurrent.length > 1) {
-                setEarningsByCurrency(earnBoot.earningsCurrent);
-                setEarningsByCurrencyPrev(earnBoot.earningsPrevious ?? []);
-                setEarningsByCurrencyLoading(false);
-                patchDashboardCache(cacheKey, { earnings: earnBoot.earningsCurrent });
-              } else {
-                void upgradeActiveScopeEarnings();
-              }
-            } catch {
+              setEarningsByCurrency(earnBoot.earningsCurrent);
+              setEarningsByCurrencyPrev(earnBoot.earningsPrevious ?? []);
+              setEarningsByCurrencyLoading(false);
+              patchDashboardCache(cacheKey, { earnings: earnBoot.earningsCurrent });
+            } else {
               void upgradeActiveScopeEarnings();
             }
-          })();
-        }
+          } catch {
+            void upgradeActiveScopeEarnings();
+          }
+        })();
       }
 
       if (!previousCached && !allCurrenciesActive) {
@@ -6556,20 +6519,18 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
       if (canUseDashboardBootstrap) {
         try {
-          // Long range / any scope swap: prefer `full` so KPI+chart+earnings arrive together.
+          // Progressive paint: kpi (+ chart fill) first — never wait on multi-currency pie.
           const longRange = shouldAggregateChartByMonth(dateFrom, dateTo);
-          const requirePie = dashboardRequiresPieAtomicPaint(
+          const scopeChanged = dashboardRequiresPieAtomicPaint(
             displayScopeKeyRef.current,
             cacheKey
           );
-          const primaryBootstrapScope = longRange || requirePie ? "full" : "kpi";
+          const primaryBootstrapScope = longRange ? "full" : "kpi";
           const boot = await loadDashboardViaBootstrap({
             scope: primaryBootstrapScope,
             currencyOverride: provisionalCurrency || undefined,
-            currencyCodesOverride:
-              needsMultiCurrencyEarnings
-                ? codesForEarnings || currenciesRef.current
-                : undefined,
+            // Empty array skips currencies= fan-out on the critical path.
+            currencyCodesOverride: [],
           });
           if (gen !== dashboardFetchGenRef.current) return;
 
@@ -6597,15 +6558,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
           const paintBootstrap = () => {
             if (!currentPayload || dashboardPayloadNeedsChartDaily(currentPayload)) return false;
-            const pieReady =
-              !needsMultiCurrencyEarnings ||
-              (Array.isArray(earningsCurrent) &&
-                earningsCurrent.length > 1 &&
-                dashboardEarningsRowsComplete(
-                  earningsCurrent,
-                  codesForEarnings || currenciesRef.current
-                ));
-            if (requirePie && needsMultiCurrencyEarnings && !pieReady) return false;
 
             current = currentPayload;
             setMultiCurrencyKpi(null);
@@ -6633,7 +6585,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                 resolveDashboardScopeKey
               );
             } else if (needsMultiCurrencyEarnings) {
-              // Should not paint partial pie on scope swap (gated above).
               const primary = currencyCodeRef.current;
               const metrics = computeCurrencyMetricsFromPayload(current);
               setEarningsByCurrency(
@@ -6655,14 +6606,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             return true;
           };
 
-          // Only paint early when already on this scope (same-key refresh).
-          if (!requirePie) {
-            paintBootstrap();
-          }
+          // Paint as soon as KPI (+ settled chart) is ready — exit skeleton early.
+          paintBootstrap();
 
           const panelTasks = [];
 
-          // MoM previous is optional for atomic paint — never block KPI/trend/pie on it.
+          // MoM previous is optional — never block KPI/trend/pie on it.
           const fillPrevious = async () => {
             try {
               const prevBoot = await loadDashboardViaBootstrap({ scope: "previous" });
@@ -6676,7 +6625,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             }
           };
           if (!previousPayload) {
-            if (requirePie) {
+            if (scopeChanged) {
               void fillPrevious();
             } else {
               panelTasks.push(fillPrevious);
@@ -6687,7 +6636,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             panelTasks.push(
               (async () => {
                 try {
-                  const chartBoot = await loadDashboardViaBootstrap({ scope: "chart" });
+                  const chartBoot = await loadDashboardViaBootstrap({
+                    scope: "chart",
+                    currencyCodesOverride: [],
+                  });
                   if (gen !== dashboardFetchGenRef.current) return;
                   const withDaily = chartBoot?.current?.daily_data
                     ? { ...currentPayload, daily_data: chartBoot.current.daily_data }
@@ -6695,10 +6647,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                   currentPayload = markDashboardChartSettled(
                     applyDashboardPayloadAdjustments(withDaily, companyId, selectedGroup)
                   );
-                  if (!requirePie) paintBootstrap();
+                  paintBootstrap();
                 } catch {
                   currentPayload = markDashboardChartSettled(currentPayload);
-                  if (!requirePie) paintBootstrap();
+                  paintBootstrap();
                 }
               })()
             );
@@ -6719,17 +6671,15 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                   if (Array.isArray(earnBoot?.earningsCurrent) && earnBoot.earningsCurrent.length > 1) {
                     earningsCurrent = earnBoot.earningsCurrent;
                     earningsPrevious = earnBoot.earningsPrevious ?? null;
-                    if (!requirePie) {
-                      setEarningsByCurrency(earningsCurrent);
-                      setEarningsByCurrencyPrev(earningsPrevious ?? []);
-                      setEarningsByCurrencyLoading(false);
-                      patchDashboardCache(cacheKey, { earnings: earningsCurrent });
-                      mirrorDashboardEarningsAcrossCurrencies(
-                        earningsCurrent,
-                        codesForEarnings || currenciesRef.current,
-                        resolveDashboardScopeKey
-                      );
-                    }
+                    setEarningsByCurrency(earningsCurrent);
+                    setEarningsByCurrencyPrev(earningsPrevious ?? []);
+                    setEarningsByCurrencyLoading(false);
+                    patchDashboardCache(cacheKey, { earnings: earningsCurrent });
+                    mirrorDashboardEarningsAcrossCurrencies(
+                      earningsCurrent,
+                      codesForEarnings || currenciesRef.current,
+                      resolveDashboardScopeKey
+                    );
                   }
                 } catch {
                   /* Pie fills later if needed */
@@ -6750,16 +6700,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             currentPayload = markDashboardChartSettled(currentPayload);
             painted = paintBootstrap();
           }
-          if (requirePie && !painted) {
-            // Keep previous company UI — never swap KPI/chart ahead of complete pie.
-            // Single-currency first paint with a payload: exit skeleton (zeros OK).
-            if (!dashboardDataRef.current && currentPayload && !needsMultiCurrencyEarnings) {
-              currentPayload = markDashboardChartSettled(currentPayload);
-              if (paintBootstrap()) return;
-              paintEmptyDashboardScope();
-              return;
-            }
-            setLoading(true);
+          if (!painted && currentPayload) {
+            currentPayload = markDashboardChartSettled(currentPayload);
+            if (paintBootstrap()) return;
+            paintEmptyDashboardScope();
             return;
           }
           return;
@@ -6826,55 +6770,24 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         }
         if (gen !== dashboardFetchGenRef.current) return;
 
-        const requirePie = dashboardRequiresPieAtomicPaint(
-          displayScopeKeyRef.current,
-          cacheKey
-        );
         const codesForPie = codesForEarnings || currenciesRef.current;
         let bootEarnings = current?._group_all_earnings_by_currency;
-        const pieReady =
-          !needsMultiCurrencyEarnings ||
-          (Array.isArray(bootEarnings) &&
+        if (
+          needsMultiCurrencyEarnings &&
+          !(
+            Array.isArray(bootEarnings) &&
             bootEarnings.length > 1 &&
-            dashboardEarningsRowsComplete(bootEarnings, codesForPie));
-
-        // Scope swap: do not paint KPI/chart ahead of multi-currency pie.
-        if (requirePie && needsMultiCurrencyEarnings && !pieReady) {
+            dashboardEarningsRowsComplete(bootEarnings, codesForPie)
+          )
+        ) {
           const synthesized = tryBuildGroupAllDashboardFromCompanyCaches();
           if (
             synthesized?.earnings?.length > 1 &&
             dashboardEarningsRowsComplete(synthesized.earnings, codesForPie)
           ) {
             bootEarnings = synthesized.earnings;
-          } else {
-            try {
-              const earnPack = await loadMergedDashboard(dateFrom, dateTo, currencyCode, {
-                earningsOnly: true,
-              });
-              if (gen !== dashboardFetchGenRef.current) return;
-              const fromPack = earnPack?._group_all_earnings_by_currency;
-              if (
-                Array.isArray(fromPack) &&
-                fromPack.length > 1 &&
-                dashboardEarningsRowsComplete(fromPack, codesForPie)
-              ) {
-                bootEarnings = fromPack;
-              }
-            } catch {
-              /* keep prior UI */
-            }
           }
-          if (
-            !(
-              Array.isArray(bootEarnings) &&
-              bootEarnings.length > 1 &&
-              dashboardEarningsRowsComplete(bootEarnings, codesForPie)
-            )
-          ) {
-            // Keep previous painted UI until Company All pie is complete.
-            setLoading(true);
-            return;
-          }
+          // Pie may still be incomplete — paint KPI/chart now; earnings fill after.
         }
 
         setDashboardData(current);
