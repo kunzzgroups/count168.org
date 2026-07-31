@@ -177,8 +177,9 @@ export default function FormulaMaintenancePage() {
         companyId,
         groupsAllMode,
         groupAllMode,
+        me,
       }),
-    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode],
+    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, me],
   );
 
   const formulaScopeKey = useMemo(

@@ -41,6 +41,7 @@
 | 8 | Ownership：空 Group / Group login 双轨 | ✅ |
 | 9 | Transaction：Group / Company 双账本对齐 | ✅ |
 | 10 | Report：Group / Company 双账本（Customer / Domain） | ✅ |
+| 11 | Maintenance：Group / Company 双账本对齐 | ✅ |
 
 ## 3b. Phase 7 产品约定
 
@@ -81,6 +82,17 @@
 | Company pill | 子公司 ledger；与 Group 账本互不混入 |
 | Customer / Domain | 共用 `resolveReportDualTenantCaptureScope`；FE groupIds 含 Domain/登录 Group |
 
+## 3f. Phase 11 Maintenance 约定
+
+| 项 | 约定 |
+|---|---|
+| Group-only boot | Group 登录默认 Group ledger（`company_id=null`）；与 Formula/Capture/Payment/Transaction Maint 对齐 `isMaintenanceGroupOnlyBoot` |
+| Company pill | 子公司 ledger；`report_scope` + ledger filter 禁止混入 Group 行 |
+| Formula | `formulaMaintenanceBuildTemplateLedgerFilter` 仅 `scope_type=group`；空 Group 可写（无 anchor） |
+| Capture / Txn Maint | Group 请求 `unset(company_id)`；dual-tenant 纯 Group 不因 `company_id=0` 短路空列表 |
+| Payment | API 已用 `tx_resolve_transaction_list_scope`；FE boot 对齐 Group-only |
+| Bankprocess | **无 Group ledger**（数据为 Bank 子公司）；Group 登录可进页再选 Bank 子公司（勿因 `company_has_bank=false` 踢出） |
+
 ## 4. 验收清单
 
 ### Company 回归
@@ -101,6 +113,8 @@
 - [ ] Transaction → Group-only：空/有子公司均可进页；CONTRA/RATE 写入 `scope_type=group`
 - [ ] Transaction → Company pill：只见子公司账本；与 Group 列表互不混入
 - [ ] Transaction → Currency order：纯 Group 可拖拽保存（`group_id` / `g:{id}`）
+- [ ] Maintenance → Formula/Capture/Payment/Txn：Group-only 与 Company pill 账本不混；空 Group 可搜/删（dual-tenant）
+- [ ] Maintenance → Bankprocess：Group 登录可进页；选 Bank 子公司后可搜（无 Group ledger）
 
 ### 迁移脚本（发版 / site）
 

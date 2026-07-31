@@ -213,8 +213,9 @@ export default function TransactionMaintenancePage() {
         companyId,
         groupsAllMode,
         groupAllMode,
+        me,
       }),
-    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode],
+    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, me],
   );
 
   const transactionScopeKey = useMemo(
