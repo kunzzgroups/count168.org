@@ -304,6 +304,12 @@ function dashboard_bootstrap_build_pack(
                 continue;
             }
 
+            // Prefetch warm: primary currency only — secondary pie fills on live load / earnings scope.
+            // Avoids O(companies × currencies) capture storms contending with first paint.
+            if ($isPrefetch && $bootstrapScope === 'full') {
+                continue;
+            }
+
             $curParams = $baseParams;
             $curParams['currency'] = $code;
             $curJson = dashboard_bootstrap_capture_scoped($curParams, 'earnings');

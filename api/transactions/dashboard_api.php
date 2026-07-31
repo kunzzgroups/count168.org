@@ -1672,7 +1672,10 @@ function dashboardComputeSubsidiaryEarningsTotal(
             if ($filterCurrencyCode !== null && trim($filterCurrencyCode) !== '') {
                 $captureParams['currency'] = $filterCurrencyCode;
             }
-            // Full company dashboard (incl. EXPENSES) — never kpi_only; group Profit = Σ company Earnings.
+            // Parent kpi_only: skip daily GROUP BY on each subsidiary capture (chart path still full).
+            if ($kpiOnly) {
+                $captureParams['kpi_only'] = '1';
+            }
 
             $cap = dashboard_api_capture($captureParams);
             if (empty($cap['success']) || !is_array($cap['data'] ?? null)) {

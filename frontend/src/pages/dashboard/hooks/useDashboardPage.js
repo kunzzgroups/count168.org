@@ -4162,7 +4162,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           }
         }
         if (cur) q.set("currency", cur);
-        if (codes?.length > 1) q.set("currencies", sortCurrencyCodesForBootstrap(codes).join(","));
+        // Prefetch: primary currency only (bootstrap skips secondary earnings when prefetch=1).
         if (scope === "chart" && longRange) q.set("chart_monthly", "1");
         return q;
       };
@@ -4190,6 +4190,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       try {
         // Prefer one `full` pack so Company All → company clicks hit atomic-ready cache
         // (kpi→chart→earnings fan-out was 3× HTTP and starved UI).
+        // Multi-currency pie is filled by live load / earnings scope — not prefetch fan-out.
         const primaryScope =
           longRange || (Array.isArray(codes) && codes.length > 1) ? "full" : "kpi";
         const primaryData = await fetchPrefetchScope(primaryScope);
@@ -4388,9 +4389,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       } else {
         return;
       }
-      if (codes.length > 1) {
-        q.set("currencies", sortCurrencyCodesForBootstrap(codes).join(","));
-      }
+      // Prefetch KPI for the target currency only — do not fan-out `currencies=`
+      // (live load / earnings scope still request the full pie pack).
       const requestKey = q.toString();
       if (dashboardPrefetchFailedRef.current.has(requestKey)) return;
 
@@ -7552,6 +7552,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         return;
       }
       const codes = currenciesRef.current;
+      // Active scope already has a complete multi-currency pie — skip sibling KPI warm storms.
+      const activeKey = resolveDashboardScopeKey();
+      if (
+        activeKey &&
+        cacheEntryHasFullEarnings(getDashboardCache(activeKey), codes)
+      ) {
+        return;
+      }
       let idx = 0;
       const parallel = groupAllMode ? 1 : 2;
       const gapMs = groupAllMode ? 400 : 150;
@@ -7597,6 +7605,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     selectedGroup,
     groupAllMode,
     prefetchActiveScopeCurrency,
+    resolveDashboardScopeKey,
+    cacheEntryHasFullEarnings,
   ]);
 
   const kpiCompareLabel = i18n.thanLastMonth;
