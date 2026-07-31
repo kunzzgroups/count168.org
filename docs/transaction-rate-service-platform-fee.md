@@ -27,7 +27,7 @@
 | **Service Fee** | **桌面**：From RATE 扣 Fee（如 310→300）；**不**在 From 写 `RATE_FEE`；To = gross（已含 Fee 口径）。发 `rate_skip_from_service_fee=1`。**Mobile**：仍 sms Remark。 |
 | **Platform Fee > 0** | From RATE 扣 PT；Middle = **`Fee + PT`**；不写 `RATE_PLATFORM_FEE`。To = gross。 |
 | **Platform Fee < 0** | **桌面**：From RATE 不动；Select From 另写 **正数** `RATE_PLATFORM_FEE`（+|PT|）；Middle = `Fee − \|PT\|`；无 Middle Remark。**Mobile**：仍 Remark-only。 |
-| **Rate-Mul（桌面）** | 仅允许**带符号纯数字**（禁 `/0.1` 等表达式）。正数：佣金 = 第一币种 × mul。负数：仅当 FX Rate 为 `/divisor` 时生效（见 §3.1；`|mul|=divisor` 为拿完）；若 Rate 为乘法 → **忽略**负数 mul。 |
+| **Rate-Mul（桌面）** | 仅允许**带符号纯数字**（禁 `/0.1` 等表达式）。正数：佣金 = 第一币种 × mul。负数：仅当 FX Rate 为 `/divisor` 时生效（见 §3.1 互补价差；`|mul|=divisor` 拿完）；若 Rate 为乘法 → **忽略**负数 mul。 |
 | **前提** | 第二组账户（Transfer To / From）都选了，才会写 transfer 腿、Middle-Man（及负 PT 的 Remark / fallback）。 |
 
 **为何桌面拆出 `RATE_FEE`：**  
@@ -64,15 +64,16 @@
 正 Rate-Mul:
   rateMulCommission = fromAmount × middlemanRate
 
-负 Rate-Mul + FX Rate = /divisor（例: 1750, /1.71, -0.1）:
-  base     = from / divisor          # 1750/1.71
-  |mul| < divisor:
-    alt      = from / (divisor−|mul|)  # 1750/1.61
-    rateMulCommission = alt − base     # Middle 利润
-  |mul| = divisor（例: /1.55, -1.55）:
-    rateMulCommission = base           # 拿完：与正 mul=Rate 对称
-  |mul| > divisor:
-    非法（提交校验报错）
+负 Rate-Mul + FX Rate = /divisor（互补价差；例: 1000, /1.55）:
+  base = from / divisor
+  ε    = min(|mul|, divisor−|mul|)
+  edge = from/(divisor−ε) − from/divisor
+  |mul| ≤ divisor/2:  rateMulCommission = edge
+                      # 与旧价差相同；|mul|=divisor/2 时 edge=base（拿完）
+  |mul| > divisor/2:  rateMulCommission = base − edge
+                      # 例 -0.1 → MM 44.49；-1.45 → MM 600.67（对调）
+  |mul| = divisor:    rateMulCommission = base（拿完）
+  |mul| > divisor:    非法（提交校验报错）
   最终第二币种 From 净额 = base − rateMulCommission
 
 负 Rate-Mul + FX Rate 为乘法:
