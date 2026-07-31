@@ -132,6 +132,24 @@ function auto_renew_can_edit(array $session, ?PDO $pdo = null): bool
     return in_array($role, c168AutoRenewAllowedRoles(), true);
 }
 
+/**
+ * Resolve transaction actor columns for the current session.
+ * Owner login stores owner.id in session.user_id — must NOT write that into
+ * transactions.created_by (FK → user.id). Mirror submit_api / domain_api.
+ *
+ * @return array{0: ?int, 1: ?int} [createdByUser, createdByOwner]
+ */
+function auto_renew_resolve_actor_ids(array $session): array
+{
+    $userType = strtolower(trim((string) ($session['user_type'] ?? '')));
+    if ($userType === 'owner') {
+        $ownerId = (int) ($session['owner_id'] ?? $session['user_id'] ?? 0);
+        return [null, $ownerId > 0 ? $ownerId : null];
+    }
+    $userId = (int) ($session['user_id'] ?? 0);
+    return [$userId > 0 ? $userId : null, null];
+}
+
 function auto_renew_page_access(PDO $pdo, array $session): bool
 {
     $role = strtolower(trim((string) ($session['role'] ?? '')));
@@ -2480,8 +2498,7 @@ function auto_renew_approve(PDO $pdo, int $requestId, array $input, array $sessi
     }
 
     $processedBy = (string) ($session['login_id'] ?? 'system');
-    $createdByUser = isset($session['user_id']) ? (int) $session['user_id'] : null;
-    $createdByOwner = isset($session['owner_id']) ? (int) $session['owner_id'] : null;
+    [$createdByUser, $createdByOwner] = auto_renew_resolve_actor_ids($session);
     $companyCode = (string) ($row['company_code'] ?? '');
     $snapshot = (string) ($row['expiration_snapshot'] ?? '');
 
@@ -2564,6 +2581,12 @@ function auto_renew_approve(PDO $pdo, int $requestId, array $input, array $sessi
         }
 
         $pdo->commit();
+    } catch (PDOException $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        error_log('auto_renew_approve PDO: ' . $e->getMessage());
+        throw new RuntimeException('Failed to create renewal payment');
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
