@@ -602,21 +602,38 @@ export default function AuthenticatedLayout() {
         if (!shouldRefreshExpiryFromSession(json.data, filterNow)) return null;
         applyLoginScopeToSessionStorageIfNeeded(json.data);
 
-        // Prefer owner-company row / session-switch cache over payload when a subsidiary
-        // is selected — Group login historically returned fixed Games and re-showed Report.
+        // Pure Group: always Games identity for sidebar (ignore stale PHP subsidiary session).
+        if (filterNow.groupOnly && filterNow.selectedGroup) {
+          const groupGambling = resolveGroupOnlySidebarGambling(filterNow.selectedGroup);
+          const groupExp = resolveSidebarExpirationForFilter({
+            selectedGroup: filterNow.selectedGroup,
+            companyId: null,
+          });
+          setMe((prev) => {
+            if (!prev) return prev;
+            return patchMeFromCompanyContext(prev, {
+              companyId: null,
+              companyCode: filterNow.selectedGroup,
+              hasBank: false,
+              forceGroupGamesCategory: true,
+              hasGambling: groupGambling != null ? groupGambling : true,
+              expirationDate: groupExp !== undefined ? groupExp : null,
+            });
+          });
+          setSidebarGcTick((n) => n + 1);
+          return json.data;
+        }
+
+        // Subsidiary selected: prefer owner-company row / session-switch cache over payload
+        // (Group login historically returned fixed Games and re-showed Report on Bank companies).
         const filterCompanyId =
           filterNow.companyId != null && filterNow.companyId !== ""
             ? Number(filterNow.companyId)
             : null;
-        const sessionCompanyId = Number(json.data.company_id);
         const categoryCompanyId =
-          Number.isFinite(filterCompanyId) && filterCompanyId > 0
-            ? filterCompanyId
-            : Number.isFinite(sessionCompanyId) && sessionCompanyId > 0
-              ? sessionCompanyId
-              : null;
+          Number.isFinite(filterCompanyId) && filterCompanyId > 0 ? filterCompanyId : null;
         let categoryOverride = null;
-        if (!filterNow.groupOnly && categoryCompanyId != null) {
+        if (categoryCompanyId != null) {
           const row = findOwnerCompanyById(categoryCompanyId);
           categoryOverride =
             resolveCompanyCategoryFlags(row) ?? categoryFlagsFromSession(null, categoryCompanyId);
@@ -630,12 +647,14 @@ export default function AuthenticatedLayout() {
             ? Boolean(categoryOverride.hasBank)
             : Boolean(json.data.company_has_bank);
 
-        rememberCompanySessionFlags({
-          company_id: json.data.company_id,
-          company_code: json.data.company_code,
-          has_gambling: hasGambling,
-          has_bank: hasBank,
-        });
+        if (categoryCompanyId != null) {
+          rememberCompanySessionFlags({
+            company_id: categoryCompanyId,
+            company_code: json.data.company_code,
+            has_gambling: hasGambling,
+            has_bank: hasBank,
+          });
+        }
         const sessionMe =
           categoryOverride != null
             ? {
@@ -650,23 +669,6 @@ export default function AuthenticatedLayout() {
           if (!prev) return sessionMe;
           if (shouldApplySessionToSidebar(json.data, filterNow)) {
             appliedSessionToSidebar = true;
-            if (filterNow.groupOnly && filterNow.selectedGroup) {
-              const groupGambling = resolveGroupOnlySidebarGambling(filterNow.selectedGroup);
-              return patchMeFromCompanyContext(prev, {
-                companyId: null,
-                companyCode: filterNow.selectedGroup,
-                hasBank: false,
-                ...(groupGambling != null
-                  ? { hasGambling: groupGambling }
-                  : prev.company_has_gambling != null
-                    ? { hasGambling: Boolean(prev.company_has_gambling) }
-                    : {}),
-                expirationDate: resolveSidebarExpirationForFilter({
-                  selectedGroup: filterNow.selectedGroup,
-                  companyId: null,
-                }),
-              });
-            }
             return sessionMe;
           }
           return {
@@ -767,6 +769,7 @@ export default function AuthenticatedLayout() {
           // Group tenant contract: always Games identity; never Bank category.
           patch.hasBank = false;
           patch.hasGambling = true;
+          patch.forceGroupGamesCategory = true;
         } else {
           if (resolved.hasGambling != null) patch.hasGambling = Boolean(resolved.hasGambling);
           else if (groupFlags) patch.hasGambling = groupFlags.hasGambling;

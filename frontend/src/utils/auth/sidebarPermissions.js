@@ -1,6 +1,11 @@
 /** Sidebar / maintenance access rules for authenticated staff (non-member). */
 
 import { canAccessC168AutoRenew, canAccessC168DomainPages } from "../company/loginScope.js";
+import {
+  companyMatchesBankOnlyPillScope,
+  resolveCompanyCategoryFlags,
+} from "../company/companyCategoryFlags.js";
+import { findOwnerCompanyById, readPersistedDashboardGcFilter } from "../company/sharedCompanyFilter.js";
 import { spaPath } from "../routing/pageRoutes.js";
 
 export function normRole(role) {
@@ -65,12 +70,32 @@ export function canAccessDashboard(me) {
 }
 
 /**
- * Sidebar Report: Games category, pure Group (fixed Games), or C168.
- * Hidden for Bank-only companies after Group → Bank switch.
+ * Sidebar Report: visible for pure Group, Games companies, and C168.
+ * Hidden only when the active filter company is Bank-only (e.g. C2).
+ * Prefer persisted GC filter over stale session `me` after Group ↔ Bank switches.
  */
 export function canShowReportInSidebar(me) {
   if (!me) return false;
   if (!canAccessPermission(me, "report")) return false;
+
+  const filter = readPersistedDashboardGcFilter();
+  if (filter.groupOnly && filter.selectedGroup) return true;
+
+  const cid =
+    filter.companyId != null && filter.companyId !== "" ? Number(filter.companyId) : Number.NaN;
+  if (Number.isFinite(cid) && cid > 0) {
+    const row = findOwnerCompanyById(cid);
+    if (row && companyMatchesBankOnlyPillScope(row)) return false;
+    const flags = resolveCompanyCategoryFlags(row);
+    if (flags?.hasGambling) return true;
+    const code = String(row?.company_id || me.company_code || "")
+      .trim()
+      .toUpperCase();
+    if (code === "C168") return true;
+    // Known subsidiary with neither Games nor C168 → hide (Bank / empty).
+    if (flags) return false;
+  }
+
   if (me.company_has_gambling) return true;
   const code = String(me.company_code || "").trim().toUpperCase();
   return code === "C168" || Boolean(me.is_current_company_c168);
