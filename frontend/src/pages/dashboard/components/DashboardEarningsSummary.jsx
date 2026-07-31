@@ -49,8 +49,11 @@ export function DashboardEarningsSummary({
   const isCompanyBreakdownView = earningsPanelView === "netProfitFor";
 
   const earningsPieSlices = useMemo(() => {
-    return buildEarningsPieSlices(panelCurrencyRows, { useConverted: useConvertedEarnings });
-  }, [panelCurrencyRows, useConvertedEarnings]);
+    return buildEarningsPieSlices(panelCurrencyRows, {
+      useConverted: useConvertedEarnings,
+      baseCode: currencyCode,
+    });
+  }, [panelCurrencyRows, useConvertedEarnings, currencyCode]);
 
   const earningsShareByCode = useMemo(() => {
     return buildEarningsShareByCode(panelCurrencyRows, currencyCode, {
@@ -83,7 +86,10 @@ export function DashboardEarningsSummary({
   const summaryPieReady =
     earningsPanelStable && earningsPieSlices.length > 0 && !summaryEarningsLoading;
 
-  const pieCenterPct = Number(pieCenterMetrics.pct) || 0;
+  const pieCenterPct =
+    pieCenterMetrics.pct == null || pieCenterMetrics.pct === ""
+      ? null
+      : Number(pieCenterMetrics.pct);
   useEffect(() => {
     setHoveredPieSector(null);
   }, [currencyCode, earningsPanelView]);
@@ -313,7 +319,11 @@ export function DashboardEarningsSummary({
                 earningsPieSlices.length > 0 &&
                 !hoveredPieTooltip && (
                 <div className="dashboard-summary-pie-center" aria-hidden="true">
-                  <span className="dashboard-summary-pie-center-pct">{pieCenterPct.toFixed(1)}%</span>
+                  <span className="dashboard-summary-pie-center-pct">
+                    {pieCenterPct != null && Number.isFinite(pieCenterPct)
+                      ? `${pieCenterPct.toFixed(1)}%`
+                      : "—"}
+                  </span>
                   <span className="dashboard-summary-pie-center-code">{pieCenterMetrics.code}</span>
                   <span className="dashboard-summary-pie-center-caption">{i18n.shareOfTotal}</span>
                 </div>
