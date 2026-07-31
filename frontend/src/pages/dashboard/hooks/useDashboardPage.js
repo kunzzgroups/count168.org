@@ -706,11 +706,20 @@ const CROSS_GROUP_COMPANY_WARM_DELAY_MS = 2000;
 /** Parallel kpi bootstrap requests when filling multi-currency earnings sidebar. */
 /** Parallel secondary-currency earnings captures (FE fans out; avoids PHP serial foreach). */
 const EARNINGS_KPI_PARALLEL_BATCH = 4;
+/** Company All pie: more parallel light earnings packs (each is kpi_only, not full chart). */
+const EARNINGS_KPI_PARALLEL_BATCH_GROUP_ALL = 6;
 /** Defer trend-chart daily fetch so MoM previous can use DB first (skip for month-bucket ranges). */
 const CHART_DAILY_DEFER_MS = 250;
-/** Sibling currency warm — start soon after settle so early currency clicks hit cache. */
+/** Sibling currency warm — start after settle so early currency clicks hit cache. */
 const CURRENCY_PREFETCH_DELAY_MS = 1200;
-const CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS = 600;
+/** Long date ranges: slightly sooner once painted (single-company packs are lighter). */
+const CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS = 900;
+/**
+ * Company All sibling-currency warm uses heavy group_all packs — wait longer so a
+ * quick date change (本月→今年) is not starved by stale-range full bootstraps.
+ */
+const CURRENCY_PREFETCH_DELAY_GROUP_ALL_MS = 2800;
+const CURRENCY_PREFETCH_DELAY_GROUP_ALL_LONG_RANGE_MS = 4200;
 /** After Company All settles, warm picker companies (behind currency warm). */
 /** After Company All atomic paint — keep low so sibling warm does not fight first paint. */
 const COMPANY_ALL_COMPANY_WARM_DELAY_MS = 2800;
@@ -4303,6 +4312,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       /**
        * Company All: warm sibling currencies via the same group_all full pack used by live load.
        * Without this, every currency click waits on a cold ~3s full bootstrap (atomic paint held).
+       * Guard dates — stale-range warms from a prior 本月 load must not race 今年 first paint.
        */
       if (
         groupAllMode &&
@@ -4314,6 +4324,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         if (typeof fetchGroupAll !== "function") return;
         const failKey = `group_all|${selectedGroup}|${rangeFrom}|${rangeTo}|${code}`;
         if (dashboardPrefetchFailedRef.current.has(failKey)) return;
+        if (
+          rangeFrom !== dateFromRef.current ||
+          rangeTo !== dateToRef.current
+        ) {
+          return;
+        }
         try {
           let merged = await fetchGroupAll(rangeFrom, rangeTo, code, {
             groupKey: selectedGroup,
@@ -4321,6 +4337,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           });
           if (!merged) {
             dashboardPrefetchFailedRef.current.add(failKey);
+            return;
+          }
+          if (
+            rangeFrom !== dateFromRef.current ||
+            rangeTo !== dateToRef.current
+          ) {
             return;
           }
           const enrich = enrichGroupAllMergedDashboardRef.current;
@@ -4336,6 +4358,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
               selectedGroup,
               false
             );
+          }
+          if (
+            rangeFrom !== dateFromRef.current ||
+            rangeTo !== dateToRef.current
+          ) {
+            return;
           }
           if (resolveDashboardScopeKey({ currencyCode: code, showAllCurrencies: false }) !== scopeKey) {
             return;
@@ -4880,9 +4908,17 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         .map((c) => parseInt(c.id, 10))
         .filter((id) => Number.isFinite(id) && id > 0);
 
-      /** One HTTP: server runs per-company packs in-process; FE still owns mergeGroupData. */
+      /**
+       * One HTTP: server runs per-company packs in-process; FE still owns mergeGroupData.
+       * earnings-only pie fills: prefer FE-parallel per-company kpi/earnings captures —
+       * PHP group_all foreach is serial and was wrongly used with scope=full before the
+       * earningsOnly forward fix (see loadMergedDashboard).
+       */
       const tryGroupAllBootstrap = async () => {
         if (!ids.length || ids.length > 40) return null;
+        if (earningsOnly && ids.length >= 2) {
+          return null;
+        }
         // Heterogeneous view_group (Groups All) — keep parallel per-company fetches.
         const sameViewGroup = accessible.every((c) => {
           const vg = resolveViewGroupForCompany(c, viewGroupFallback ?? selectedGroup);
@@ -5144,9 +5180,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           });
         }
         if (selectedGroup) {
+          // Must forward earningsOnly — otherwise pie/secondary currencies hit
+          // bootstrap_scope=full (chart) per company instead of light earnings packs.
           const merged = await fetchGroupAllMergedDashboard(rangeFrom, rangeTo, currencyOverride, {
             groupKey: selectedGroup,
             useActiveScopeAbort: mergeAbort,
+            earningsOnly,
           });
           if (earningsOnly) return merged;
           if (!canAccessGroupLedgerForGroup(meRef.current, selectedGroup, companies)) {
@@ -5393,7 +5432,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       if (otherCodes.length) {
         const settled = await runTasksInBatches(
           otherCodes,
-          EARNINGS_KPI_PARALLEL_BATCH,
+          groupAllMode
+            ? EARNINGS_KPI_PARALLEL_BATCH_GROUP_ALL
+            : EARNINGS_KPI_PARALLEL_BATCH,
           (code) => resolveCodeEarnings(code)
         );
         for (const row of settled) {
@@ -5405,6 +5446,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       return rows;
     },
     [
+      groupAllMode,
       tryBuildGroupAllDashboardFromCompanyCaches,
       buildCurrencyRowFromPayload,
       fetchSingleCurrencyEarnings,
@@ -7699,13 +7741,15 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       drain();
     };
 
-    const timer = window.setTimeout(
-      run,
-      // Company All full packs are heavy — start sibling currency warm sooner after settle.
-      groupAllMode || shouldAggregateChartByMonth(dateFrom, dateTo)
+    const longRange = shouldAggregateChartByMonth(dateFrom, dateTo);
+    const prefetchDelayMs = groupAllMode
+      ? longRange
+        ? CURRENCY_PREFETCH_DELAY_GROUP_ALL_LONG_RANGE_MS
+        : CURRENCY_PREFETCH_DELAY_GROUP_ALL_MS
+      : longRange
         ? CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS
-        : CURRENCY_PREFETCH_DELAY_MS
-    );
+        : CURRENCY_PREFETCH_DELAY_MS;
+    const timer = window.setTimeout(run, prefetchDelayMs);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
