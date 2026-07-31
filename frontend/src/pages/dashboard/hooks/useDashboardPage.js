@@ -1023,6 +1023,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const currenciesRef = useRef(currencies);
   currenciesRef.current = currencies;
   earningsByCurrencyRef.current = earningsByCurrency;
+  const exchangeRatesRef = useRef(exchangeRates);
+  exchangeRatesRef.current = exchangeRates;
   const currencyPrefetchFailedRef = useRef(new Set());
   const currencyPrefetchDeniedCompanyRef = useRef(new Set());
   const currencyPrefetchDeniedGroupRef = useRef(new Set());
@@ -5982,8 +5984,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   useEffect(() => {
     const rateBase =
       showAllCurrencies && canShowAllCurrencies ? conversionBaseCurrency : currencyCode;
+    // Frankfurter quotes depend on base + quote set + date — not company.
+    // Including companyId re-fetched on every pill switch and toggled loading,
+    // which collapsed the pie to base-only and jumped the hero total.
     const rateScopeKey = [
-      companyId ?? "",
       rateBase ?? "",
       [...currencies].sort().join(","),
       dateTo ?? "",
@@ -6018,13 +6022,23 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         scopeKey: rateScopeKey,
       });
       setExchangeRatesError("");
+      // Keep conversion on while background-filling missing quotes.
       setExchangeRatesLoading(!cachedComplete);
     } else if (displayScopeKeyRef.current) {
       /**
-       * Currency/company swap still painting previous scope: do not blank rates.
+       * Currency swap still painting previous scope: do not blank rates.
        * Wiping here made pie % / hero jump before KPI atomic paint landed.
+       * Only mark loading when current rates cannot serve the new quote set.
        */
-      setExchangeRatesLoading(true);
+      const stillUsable = frankfurterRatesPartiallyUsable(
+        rateBase,
+        currencies,
+        exchangeRatesRef.current?.rates || {}
+      );
+      if (stillUsable) {
+        setExchangeRates((prev) => ({ ...prev, scopeKey: rateScopeKey }));
+      }
+      setExchangeRatesLoading(!stillUsable);
       setExchangeRatesError("");
     } else {
       setExchangeRates({ rates: { [rateBase]: 1 }, date: null, unsupported: [], scopeKey: "" });
@@ -6077,7 +6091,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       cancelled = true;
     };
   }, [
-    companyId,
     currencyCode,
     currencies,
     dateTo,
@@ -8167,7 +8180,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const useConvertedEarnings = useMemo(
     () =>
       summaryCurrencies.length > 1 &&
-      !summaryExchangeRatesLoading &&
       frankfurterRatesPartiallyUsable(
         summaryCurrencyCode || displayCurrencyCode,
         summaryCurrencies,
@@ -8177,7 +8189,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       summaryCurrencies.length,
       summaryCurrencyCode,
       displayCurrencyCode,
-      summaryExchangeRatesLoading,
       summaryExchangeRates.rates,
     ]
   );
@@ -8299,13 +8310,21 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       return panelCurrencyRows.reduce((sum, row) => sum + (parseFloat(row.netProfit) || 0), 0);
     }
     const earningTab = earningsPanelView === "earning";
-    if (currencies.length > 1 && useConvertedEarnings && convertedPanelTotal != null) {
+    // Use painted summary currency count — live `currencies` can shrink mid company-switch
+    // and briefly fall through to native KPI while the converted total is still frozen.
+    if (summaryCurrencies.length > 1 && useConvertedEarnings && convertedPanelTotal != null) {
       return convertedPanelTotal;
     }
     if (showAllCurrencies && canShowAllCurrencies && multiCurrencyKpi) {
       return earningTab ? multiCurrencyKpi.earnings : multiCurrencyKpi.netProfit;
     }
-    if (showAllCurrencies && canShowAllCurrencies && currencies.length > 1 && useConvertedEarnings && convertedPanelTotal != null) {
+    if (
+      showAllCurrencies &&
+      canShowAllCurrencies &&
+      summaryCurrencies.length > 1 &&
+      useConvertedEarnings &&
+      convertedPanelTotal != null
+    ) {
       return convertedPanelTotal;
     }
     return earningTab ? kpi.earnings : kpi.netProfit;
@@ -8314,7 +8333,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     showAllCurrencies,
     canShowAllCurrencies,
     multiCurrencyKpi,
-    currencies.length,
+    summaryCurrencies.length,
     useConvertedEarnings,
     convertedPanelTotal,
     kpi.netProfit,
@@ -8337,20 +8356,18 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   }, [showEarningPanelTab, showNetProfitForTab, earningsPanelView]);
 
   /**
-   * Pie remount key — must stay on painted scope while pending.
+   * Pie remount key — currency/date only (not company).
+   * Company id here remounted the donut on every pill switch → empty-ring flash.
    * Live currency here remounts the pie before KPI cards swap (broken atomic paint).
    */
   const exchangeRateScopeKey = useMemo(
     () =>
       [
-        summaryCompanyId ?? companyId ?? "",
         summaryCurrencyCode || displayCurrencyCode || "",
         [...(summaryCurrencies.length ? summaryCurrencies : currencies)].sort().join(","),
         summaryDateTo || dateTo || "",
       ].join("|"),
     [
-      summaryCompanyId,
-      companyId,
       summaryCurrencyCode,
       displayCurrencyCode,
       summaryCurrencies,
@@ -8414,19 +8431,20 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     summaryScopeLoading ||
     (!scopeDataPending &&
       summaryCurrencies.length > 1 &&
-      (summaryExchangeRatesLoading ||
-        earningsByCurrencyLoading ||
+      (earningsByCurrencyLoading ||
         !allCurrencyEarningsReady ||
+        (!useConvertedEarnings && summaryExchangeRatesLoading) ||
         (showAllCurrencies &&
           canShowAllCurrencies &&
           useConvertedEarnings &&
           convertedPanelTotal == null)));
+  // FX background refresh must not mark the panel unstable when quotes are already usable.
   const earningsPanelStable =
     summaryCurrencies.length <= 1 ||
     scopeDataPending ||
     (allCurrencyEarningsReady &&
       !earningsByCurrencyLoading &&
-      !summaryExchangeRatesLoading);
+      (useConvertedEarnings || !summaryExchangeRatesLoading));
   /**
    * True when KPI + chart (+ multi-currency earnings) are ready for the active scope.
    * Used for compare badges / panel stability — do not blank the layout while waiting.
