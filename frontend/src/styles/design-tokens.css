@@ -383,10 +383,10 @@
   --color-danger-soft-fg: #fca5a5;
   --color-focus-ring: #6366f1;
   --color-focus-ring-soft: #a5b4fc;
-  --color-focus-ring-checkbox: #5c6bc0;
-  /* 控件勾选强调色：与全站常用深蓝 checkbox（#1a237e）一致，不再用紫色 */
-  --color-control-accent: #1a237e;
-  --color-control-accent-border: #151d66;
+  --color-focus-ring-checkbox: #93c5fd;
+  /* 控件勾选强调色：与 Domain 页 company-assign / 主题蓝 checkbox 一致 */
+  --color-control-accent: var(--color-primary);
+  --color-control-accent-border: var(--color-primary-strong);
   --color-text-inverse: #ffffff;
   --color-text-inverse-soft: rgba(255, 255, 255, 0.85);
   --shadow-btn-primary: 0 2px 8px rgba(13, 96, 255, 0.28);

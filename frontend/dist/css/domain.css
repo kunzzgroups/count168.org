@@ -1037,7 +1037,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-assign-ref-label {
     cursor: pointer !important;
 }
 
-/* 深蓝选中 + 白勾（与全站 checkbox / 主题深色一致） */
+/* 主题蓝选中 + 白勾（与 Domain 页其它 checkbox accent-color 一致） */
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-assign-ref-checkbox {
     appearance: none !important;
     -webkit-appearance: none !important;
@@ -1057,7 +1057,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-assign-ref-checkbox {
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-assign-ref-checkbox:checked {
     background-color: var(--color-control-accent) !important;
-    border-color: var(--color-control-accent) !important;
+    border-color: var(--color-control-accent-border) !important;
     /* Bootstrap Icons check2，官方 16×16 字框，勾在视图中自然居中 */
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%23ffffff' d='M12.736 3.97a.733.733 0 0 1 1.047 0c.286.289.29.756.01 1.05L7.88 12.01a.733.733 0 0 1-1.065.02L3.217 8.384a.757.757 0 0 1 0-1.06.733.733 0 0 1 1.047 0l3.052 3.093 5.4-6.425a.747.747 0 0 1 1.05-.019z'/%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important;
