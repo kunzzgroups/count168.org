@@ -72,11 +72,9 @@ export function parseSimpleDivisionRateDivisor(raw) {
 /**
  * Rate-Mul commission in second-currency units (full precision; caller stores at 6dp).
  * - Positive Rate-Mul: from × mul
- * - Negative Rate-Mul + FX `/divisor` (complementary spread):
- *   - ε = min(|mul|, divisor−|mul|)
- *   - edge = from/(divisor−ε) − from/divisor
- *   - |mul| ≤ divisor/2 → profit = edge（与旧价差公式相同；中点 = 拿完 base）
- *   - |mul| > divisor/2 → profit = base − edge（与「剩余点数」对调）
+ * - Negative Rate-Mul + FX `/divisor` (money-changer linear cap):
+ *   - edge = from/(divisor−|mul|) − from/divisor
+ *   - profit = min(edge, base) where base = from/divisor
  *   - |mul| = divisor → take-all: profit = base
  *   - |mul| > divisor → 0 (caller rejects via isRateMulAdjustedDivisorValid)
  * - Negative Rate-Mul + multiply FX: ignored (0)
@@ -96,15 +94,13 @@ export function computeRateMulCommission({ fromAmount, middlemanRate, exchangeRa
   const absMul = mmr.abs();
   const remain = divisor.minus(absMul);
   const base = fromDec.div(divisor);
-  // |mul| === divisor → Middle-Man takes entire converted amount (mirror of positive mul = rate).
+  // |mul| === divisor → Middle-Man takes entire converted amount.
   if (remain.isZero()) return base;
   if (remain.lt(0)) return MoneyDecimal.toDecimal("0", 0);
 
-  // Complementary: keep legacy spread on the small side; swap when |mul| > divisor/2.
-  const eps = absMul.lte(remain) ? absMul : remain;
-  const edge = fromDec.div(divisor.minus(eps)).minus(base);
-  if (absMul.lte(divisor.div(2))) return edge;
-  return base.minus(edge);
+  // Linear cap: worsen divisor by |mul|; never exceed converted base (no midpoint swap).
+  const edge = fromDec.div(divisor.minus(absMul)).minus(base);
+  return edge.gt(base) ? base : edge;
 }
 
 /** Negative Rate-Mul with `/rate`: adjusted divisor must be ≥ 0 (|mul| ≤ divisor). */
