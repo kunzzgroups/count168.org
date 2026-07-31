@@ -66,14 +66,15 @@ export function useOwnershipPageShell() {
         clearOwnerCompaniesCache();
       }
       const cached = !force ? peekOwnershipCompaniesCache(monthKey) : null;
-      if (!cached) setLoadingList(true);
+      // Cold start only — force/realtime refreshes must not wipe the list into a full-page spinner.
+      if (!cached && !force) setLoadingList(true);
       try {
         const json = await prefetchOwnershipCompanies(monthKey, { force });
         if (isApiSuccess(json)) setAllCompanies(json.data || []);
         else showToast(getApiMessage(json, "Failed to load companies"), "error");
         setReadOnlyMode(false);
       } catch {
-        if (!cached) showToast("Server error", "error");
+        if (!cached && !force) showToast("Server error", "error");
       } finally {
         setLoadingList(false);
       }

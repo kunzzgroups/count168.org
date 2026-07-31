@@ -5,6 +5,7 @@ import { notifyCompanySessionUpdated } from "../../../utils/company/companySessi
 import { ensureCrossPageCompanySelection } from "../../../utils/company/companySessionSync.js";
 import { fetchOwnerCompaniesAll } from "../../../utils/company/sharedCompanyFilter.js";
 import { spaPath } from "../../../utils/routing/pageRoutes.js";
+import { prefetchRouteModule } from "../../../utils/routing/routePrefetch.js";
 import { replaceBrowserPathOnly } from "../../../utils/routing/privateBrowserUrl.js";
 import {
   buildDashboardSidebarNotifyOptions,
@@ -57,8 +58,7 @@ import {
   isBankResendDayStartBackendErrorMessage,
   notifyTransactionDataChanged,
   bankProcessStatusTargetPatch,
-  isBankCategoryCompany,
-  resolveBankOnlyCategoryHint,
+  resolveIsBankOnlyCompanyAsync,
   parseProfitSharingToRows,
   serializeProfitSharingRows,
   calcBankNetProfitDisplay,
@@ -88,9 +88,9 @@ import {
 } from "../../processlist/processListHelpers.js";
 import {
   prefetchBankProcessListPayload,
-  prefetchGamesProcessListPayload,
   resolveBankProcessListRouteCache,
   warmBankProcessListRouteCache,
+  warmProcessListRouteCache,
 } from "../../processlist/processRoutePrefetch.js";
 
 function resolveBankProcessListCacheKey(companyId, search) {
@@ -857,7 +857,9 @@ export function useBankProcessListPage() {
               setCurrencyPillDisplayOrder(null);
             }
           } else {
+            // Cross-route switch arrived before warm finished — silent hydrate, no Failed toast.
             setTableLoading(true);
+            skipNextBankFetchRef.current = true;
           }
           const prefetchedRow = prefetchedCompanies.find((c) => Number(c.id) === prefetchCompanyId);
           const prefBootGroup = resolveInitialSelectedGroupFromSession(prefetchedCompanies, prefetchedRow);
@@ -895,13 +897,14 @@ export function useBankProcessListPage() {
         const currentCompanyRow =
           effectiveNum != null ? cs.find((c) => Number(c.id) === Number(effectiveNum)) : null;
         if (currentCompanyRow?.company_id) {
-          const bankOnlyHint = resolveBankOnlyCategoryHint(sessionUser, effectiveNum);
-          const bankCategory =
-            bankOnlyHint !== null
-              ? bankOnlyHint
-              : await isBankCategoryCompany(currentCompanyRow.company_id, buildApiUrl);
+          const bankCategory = await resolveIsBankOnlyCompanyAsync(
+            currentCompanyRow,
+            sessionUser,
+            buildApiUrl,
+          );
           if (!bankCategory) {
-            const warm = await prefetchGamesProcessListPayload(effectiveNum);
+            warmProcessListRouteCache(effectiveNum);
+            prefetchRouteModule(spaPath("process-list"));
             navigate(spaPath("process-list"), {
               replace: true,
               state: {
@@ -909,8 +912,6 @@ export function useBankProcessListPage() {
                   companyId: effectiveNum,
                   companies: cs,
                   groupFilterKind: "follow",
-                  rows: warm.rows,
-                  meta: warm.meta,
                 },
               },
             });
@@ -983,8 +984,12 @@ export function useBankProcessListPage() {
     const cid = Number(targetCompanyId ?? companyId);
     if (!Number.isFinite(cid) || cid <= 0) return;
     try {
+      const curQs = new URLSearchParams({
+        company_id: String(cid),
+        subsidiary_accounts_only: "1",
+      });
       const [curRes, ordJson] = await Promise.all([
-        fetch(buildApiUrl(`api/transactions/get_company_currencies_api.php?company_id=${cid}`), {
+        fetch(buildApiUrl(`api/transactions/get_company_currencies_api.php?${curQs}`), {
           credentials: "include",
         }),
         getUserCurrencyOrder({ companyId: cid }).catch(() => null),
@@ -994,7 +999,7 @@ export function useBankProcessListPage() {
         setCurrencyListOrdered([]);
         return;
       }
-      const codes = curJson.data.map((r) => String(r.code).toUpperCase());
+      const codes = curJson.data.map((r) => String(r.code || "").toUpperCase()).filter(Boolean);
       const savedOrder = resolveSavedCurrencyOrder(cid, ordJson?.data?.order);
       const ordered = mergeCurrencyCodesWithSavedOrder(codes, savedOrder);
       persistCurrencyDisplayOrder(cid, ordered);
@@ -1281,7 +1286,7 @@ export function useBankProcessListPage() {
       const ac = new AbortController();
       listAbortRef.current = ac;
       try {
-        const slice = await prefetchBankProcessListPayload(cid, { search });
+        const slice = await prefetchBankProcessListPayload(cid, { search, signal: ac.signal });
         if (ac.signal.aborted || fetchGen !== listFetchGenRef.current) return;
         if (Number(companyIdRef.current) !== cid) return;
         if (!slice.rows) {
@@ -1332,9 +1337,28 @@ export function useBankProcessListPage() {
   useEffect(() => {
     if (!companyId || loading) return;
     if (skipNextBankFetchRef.current) {
-      // Warm paint already applied; still silent-refetch so remount cannot stick on stale sidebar warm.
+      // Prefer module warm / in-flight from cross-route switch; silent so races never toast.
       skipNextBankFetchRef.current = false;
-      void fetchRows({ silent: true });
+      void (async () => {
+        const cid = Number(companyId);
+        if (applyBankProcessListCache(cid)) {
+          void fetchRows({ companyId: cid, silent: true });
+          return;
+        }
+        const slice = await resolveBankProcessListRouteCache(cid, { search });
+        if (Number(companyIdRef.current) !== cid) return;
+        if (Array.isArray(slice?.rows)) {
+          const cacheKey = resolveBankProcessListCacheKey(cid, search);
+          bankProcessListCacheRef.current.set(cacheKey, {
+            rows: slice.rows,
+            currencyCodes: slice.currencyCodes,
+          });
+          applyBankProcessListCache(cid);
+          void fetchRows({ companyId: cid, silent: true });
+          return;
+        }
+        await fetchRows({ companyId: cid, silent: true });
+      })();
       return;
     }
     if (skipCompanyFetchEffectRef.current) {
@@ -1523,16 +1547,16 @@ export function useBankProcessListPage() {
       suppressCrossPageSyncRef.current = true;
       try {
         const sessionCompanyId = authMe?.company_id != null ? Number(authMe.company_id) : null;
-        const bankCategoryPromise = isBankCategoryCompany(c.company_id, buildApiUrl);
         if (backgroundRefresh) {
           void fetchRows({ companyId: nextId, silent: true, preservePage: true, preserveSelection: true });
         }
         if (accountingOpen) void loadAccountingInbox({ silent: true });
 
         try {
-          const bankCategory = await bankCategoryPromise;
+          const bankCategory = await resolveIsBankOnlyCompanyAsync(c, authMe, buildApiUrl);
           if (!bankCategory) {
-            const warm = await prefetchGamesProcessListPayload(nextId);
+            warmProcessListRouteCache(nextId);
+            prefetchRouteModule(spaPath("process-list"));
             navigate(spaPath("process-list"), {
               replace: true,
               state: {
@@ -1540,9 +1564,6 @@ export function useBankProcessListPage() {
                   companyId: nextId,
                   companies,
                   groupFilterKind: "follow",
-                  rows: warm.rows,
-                  meta: warm.meta,
-                  currencyCodes: warm.currencyCodes,
                 },
               },
             });
@@ -2331,11 +2352,11 @@ export function useBankProcessListPage() {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
-  const baseCurrencyPills = useMemo(() => {
-    if (!currencyListOrdered.length) return [];
-    const extra = rowCountryCodes.filter((c) => !currencyListOrdered.includes(c));
-    return extra.length ? [...currencyListOrdered, ...extra] : currencyListOrdered;
-  }, [currencyListOrdered, rowCountryCodes]);
+  // Pills = company currencies only (not row Country extras — deleted codes must not reappear).
+  const baseCurrencyPills = useMemo(
+    () => (Array.isArray(currencyListOrdered) ? currencyListOrdered : []),
+    [currencyListOrdered],
+  );
 
   const currencyPillCodes = useMemo(
     () => currencyPillDisplayOrder ?? baseCurrencyPills,

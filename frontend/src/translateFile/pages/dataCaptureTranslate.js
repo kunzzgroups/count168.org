@@ -143,7 +143,7 @@ export const DATA_CAPTURE_I18N = {
     remark: "备注",
     enterWordsToRemove: "",
     enterRemark: "输入备注",
-    removeWordHelp: "多个词用逗号 (,) 分隔。仅匹配完整相同词时，在前面加 =。",
+    removeWordHelp: "多个词请用逗号（,）分隔；若要精确匹配单个词，请在词前加上 =。",
     removeWordChipRemove: "移除",
     submittedProcesses: "已提交流程",
     noProcessesSubmitted: "该日期暂无已提交流程",

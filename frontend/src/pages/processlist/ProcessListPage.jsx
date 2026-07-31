@@ -24,7 +24,8 @@ import { isPartnershipAuditReadOnlyLocked } from "../../utils/audit/partnershipA
 import { buildApiUrl } from "../../utils/core/apiUrl.js";
 import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
 import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
-import { isBankCategoryCompany, resolveBankOnlyCategoryHint } from "../bankprocesslist/lib/bankProcessHelpers.js";
+import { resolveIsBankOnlyCompanyAsync } from "../bankprocesslist/lib/bankProcessHelpers.js";
+import { prefetchRouteModule } from "../../utils/routing/routePrefetch.js";
 import "../../../public/css/processCSS.css";
 import "../../../public/css/description-input.css";
 import "../../../public/css/processlist.css";
@@ -55,8 +56,8 @@ import {
 } from "./processListHelpers.js";
 import {
   fetchGamesProcessListSlice,
-  prefetchBankProcessListPayload,
   resolveProcessListRouteCache,
+  warmBankProcessListRouteCache,
   warmProcessListRouteCache,
 } from "./processRoutePrefetch.js";
 import ProcessTable from "./components/ProcessTable.jsx";
@@ -331,6 +332,9 @@ export default function ProcessListPage() {
           setDescriptions(Array.isArray(prefetchedMeta.descriptions) ? prefetchedMeta.descriptions : []);
           setDays(Array.isArray(prefetchedMeta.days) ? prefetchedMeta.days : []);
           setExistingProcesses(Array.isArray(prefetchedMeta.existingProcesses) ? prefetchedMeta.existingProcesses : []);
+          if (resolvedCompanyId != null && !Array.isArray(prefetchedMeta.currencies)) {
+            void loadFormMeta(resolvedCompanyId);
+          }
 
           if (processListCacheHasEntry(routePrefetch) && resolvedCompanyId != null) {
             const prefRows = normalizeRows(routePrefetch.rows);
@@ -351,6 +355,10 @@ export default function ProcessListPage() {
             });
           } else if (ungroupedBoot && resolvedCompanyId == null) {
             setRows([]);
+            skipNextFetchRef.current = true;
+          } else {
+            // Cross-route switch arrived before warm finished — silent hydrate, no Failed toast.
+            setAwaitingRows(true);
             skipNextFetchRef.current = true;
           }
           if (!ungroupedBoot) setSelectedGroup(prefBootGroup);
@@ -399,13 +407,14 @@ export default function ProcessListPage() {
 
         const currentCompanyRow = cs.find((c) => Number(c.id) === Number(effectiveCompany));
         if (currentCompanyRow?.company_id) {
-          const bankOnlyHint = resolveBankOnlyCategoryHint(layoutMe, effectiveCompany);
-          const bankCategory =
-            bankOnlyHint !== null
-              ? bankOnlyHint
-              : await isBankCategoryCompany(currentCompanyRow.company_id, buildApiUrl);
+          const bankCategory = await resolveIsBankOnlyCompanyAsync(
+            currentCompanyRow,
+            layoutMe,
+            buildApiUrl,
+          );
           if (bankCategory) {
-            const warm = await prefetchBankProcessListPayload(effectiveCompany);
+            warmBankProcessListRouteCache(effectiveCompany);
+            prefetchRouteModule(spaPath("bank-process-list"));
             navigate(spaPath("bank-process-list"), {
               replace: true,
               state: {
@@ -413,8 +422,6 @@ export default function ProcessListPage() {
                   companyId: effectiveCompany,
                   companies: cs,
                   groupFilterKind: "follow",
-                  rows: warm.rows,
-                  currencyCodes: warm.currencyCodes,
                 },
               },
             });
@@ -804,9 +811,41 @@ export default function ProcessListPage() {
   useEffect(() => {
     if (loading || !activeCompanyId) return;
     if (skipNextFetchRef.current) {
-      // Warm paint already applied; still silent-refetch so remount cannot stick on stale sidebar warm.
+      // Prefer module warm / in-flight from cross-route switch; silent so races never toast.
       skipNextFetchRef.current = false;
-      void fetchRows({ companyId: activeCompanyId, silent: true });
+      void (async () => {
+        const cid = Number(activeCompanyId);
+        if (applyProcessListCache(cid)) {
+          setAwaitingRows(false);
+          void fetchRows({ companyId: cid, silent: true });
+          return;
+        }
+        const slice = await resolveProcessListRouteCache(cid, {
+          search: debouncedSearch,
+          showActive,
+          showInactive,
+          showAll,
+        });
+        if (Number(activeCompanyIdRef.current) !== cid) return;
+        if (processListCacheHasEntry(slice)) {
+          const cacheKey = resolveProcessListCacheKey(
+            cid,
+            debouncedSearch,
+            showInactive,
+            showAll,
+            showActive,
+          );
+          processListCacheRef.current.set(cacheKey, {
+            rows: slice.rows,
+            currencyCodes: slice.currencyCodes,
+          });
+          setRows(slice.rows);
+          setAwaitingRows(false);
+          void fetchRows({ companyId: cid, silent: true });
+          return;
+        }
+        await fetchRows({ companyId: cid, silent: true });
+      })();
       return;
     }
     if (skipCompanyFetchEffectRef.current) {
@@ -819,7 +858,17 @@ export default function ProcessListPage() {
         await fetchRows({ companyId: activeCompanyId, silent: rowsRef.current.length > 0 });
       }
     })();
-  }, [loading, activeCompanyId, debouncedSearch, showActive, showInactive, showAll, fetchRows, hydrateProcessListCompanyCache]);
+  }, [
+    loading,
+    activeCompanyId,
+    debouncedSearch,
+    showActive,
+    showInactive,
+    showAll,
+    fetchRows,
+    hydrateProcessListCompanyCache,
+    applyProcessListCache,
+  ]);
 
   useEffect(() => {
     if (loading) return;
@@ -975,13 +1024,15 @@ export default function ProcessListPage() {
         const sessionCompanyId =
           sessionMeFromLayout?.company_id != null ? Number(sessionMeFromLayout.company_id) : null;
 
-        const bankCategoryPromise = isBankCategoryCompany(company.company_id, buildApiUrl);
-        void loadFormMeta(nextId);
-
         try {
-          const bankCategory = await bankCategoryPromise;
+          const bankCategory = await resolveIsBankOnlyCompanyAsync(
+            company,
+            sessionMeFromLayout,
+            buildApiUrl,
+          );
           if (bankCategory) {
-            const warm = await prefetchBankProcessListPayload(nextId);
+            warmBankProcessListRouteCache(nextId);
+            prefetchRouteModule(spaPath("bank-process-list"));
             navigate(spaPath("bank-process-list"), {
               replace: true,
               state: {
@@ -989,8 +1040,6 @@ export default function ProcessListPage() {
                   companyId: nextId,
                   companies,
                   groupFilterKind: "follow",
-                  rows: warm.rows,
-                  currencyCodes: warm.currencyCodes,
                 },
               },
             });
@@ -999,6 +1048,8 @@ export default function ProcessListPage() {
         } catch {
           /* fall through to session sync */
         }
+
+        void loadFormMeta(nextId);
 
         const runFetch = async () => {
           await hydrateProcessListCompanyCache(nextId);

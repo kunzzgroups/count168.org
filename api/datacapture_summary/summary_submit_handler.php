@@ -158,22 +158,46 @@ function dcSummaryApiHandleSubmit(): void
                 ? dcCaptureScopeInsertValues($capture_scope_ctx)
                 : ['company_id' => $companyId, 'scope_type' => null, 'scope_id' => null];
             $useCaptureScopeColumns = !empty($capture_scope_ctx['dual_tenant']);
+
+            // Try to resolve/ensure numeric process.id for group payroll process code (SALARY/BONUS/COMMISSION/PROFIT)
+            if ($submitProcessId <= 0 && $submitProcessCode !== '') {
+                $ensuredPid = dcEnsureProcessIdByCode(
+                    $pdo,
+                    (int) $processCompanyId > 0 ? (int) $processCompanyId : (int) $companyId,
+                    $submitProcessCode,
+                    (bool) $capture_scope_group,
+                    $groupCodeSubmit,
+                    !empty($data['currencyId']) ? (int) $data['currencyId'] : null
+                );
+                if ($ensuredPid !== null && $ensuredPid > 0) {
+                    $submitProcessId = $ensuredPid;
+                    $data['processId'] = $ensuredPid;
+                }
+            }
+
+            // Pure group-only capture: frontend sets groupOnlyCapture=true and sends processCode (not processId).
+            // This applies even when the group has an anchor company (processCompanyId > 0).
+            // We must NOT require processId in this case.
+            $frontendGroupOnlyCapture = !empty($data['groupOnlyCapture']);
             $pureGroupProcessCodeSubmit = $capture_scope_group
-                && $processCompanyId <= 0
                 && $submitProcessId <= 0
-                && dcIsGroupPayrollProcessCode($submitProcessCode);
+                && dcIsGroupPayrollProcessCode($submitProcessCode)
+                && ($frontendGroupOnlyCapture || $processCompanyId <= 0);
 
             if ($pureGroupProcessCodeSubmit) {
                 $data['processId'] = null;
                 $data['processCode'] = $submitProcessCode;
                 // Ensure process_code column exists for pure-group captures.
                 try {
+                    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
                     if ($pdo->query("SHOW COLUMNS FROM data_captures LIKE 'process_code'")->rowCount() === 0) {
                         $pdo->exec("ALTER TABLE data_captures ADD COLUMN process_code VARCHAR(50) NULL AFTER process_id");
                     }
                     $pdo->exec('ALTER TABLE data_captures MODIFY COLUMN process_id INT NULL');
                     $pdo->exec('ALTER TABLE data_captures MODIFY COLUMN company_id INT UNSIGNED NULL');
+                    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
                 } catch (Throwable $schemaEx) {
+                    try { $pdo->exec('SET FOREIGN_KEY_CHECKS = 1'); } catch (Throwable $e) {}
                     error_log('summary_submit pure-group schema: ' . $schemaEx->getMessage());
                 }
             } else {
@@ -240,12 +264,13 @@ function dcSummaryApiHandleSubmit(): void
                     // Idempotency: same submitRequestId within scope → return existing capture
                     if ($hasSubmitRequestIdCol && $submitRequestId !== '') {
                         if ($useCaptureScopeColumns) {
+                            // Use COALESCE for NULL-safe process_id comparison (NULL = NULL is never TRUE in SQL)
                             $idempotentStmt = $pdo->prepare("
                                 SELECT id FROM data_captures
                                 WHERE scope_type = :scope_type
                                   AND scope_id = :scope_id
                                   AND capture_date = :capture_date
-                                  AND process_id = :process_id
+                                  AND COALESCE(process_id, -1) = COALESCE(:process_id, -1)
                                   AND currency_id = :currency_id
                                   AND submit_request_id = :submit_request_id
                                 LIMIT 1
@@ -263,7 +288,7 @@ function dcSummaryApiHandleSubmit(): void
                                 SELECT id FROM data_captures
                                 WHERE company_id = :company_id
                                   AND capture_date = :capture_date
-                                  AND process_id = :process_id
+                                  AND COALESCE(process_id, -1) = COALESCE(:process_id, -1)
                                   AND currency_id = :currency_id
                                   AND submit_request_id = :submit_request_id
                                 LIMIT 1
@@ -292,8 +317,10 @@ function dcSummaryApiHandleSubmit(): void
 
                     // Insert main capture record (first batch)
                     try {
+                        // For group-only captures: use anchor company_id if available (groups with subsidiaries),
+                        // or null for truly empty groups (no anchor). This prevents NOT NULL violations.
                         $insertCompanyId = $pureGroupProcessCodeSubmit
-                            ? null
+                            ? ($scopeInsert['company_id'] > 0 ? $scopeInsert['company_id'] : null)
                             : ((int) ($scopeInsert['company_id'] ?? $companyId) ?: null);
                         $insertProcessId = $pureGroupProcessCodeSubmit ? null : $data['processId'];
                         $insertProcessCode = $pureGroupProcessCodeSubmit
@@ -417,7 +444,7 @@ function dcSummaryApiHandleSubmit(): void
                                     WHERE scope_type = :scope_type
                                       AND scope_id = :scope_id
                                       AND capture_date = :capture_date
-                                      AND process_id = :process_id
+                                      AND COALESCE(process_id, -1) = COALESCE(:process_id, -1)
                                       AND currency_id = :currency_id
                                       AND submit_request_id = :submit_request_id
                                     LIMIT 1
@@ -435,7 +462,7 @@ function dcSummaryApiHandleSubmit(): void
                                     SELECT id FROM data_captures
                                     WHERE company_id = :company_id
                                       AND capture_date = :capture_date
-                                      AND process_id = :process_id
+                                      AND COALESCE(process_id, -1) = COALESCE(:process_id, -1)
                                       AND currency_id = :currency_id
                                       AND submit_request_id = :submit_request_id
                                     LIMIT 1
@@ -469,13 +496,14 @@ function dcSummaryApiHandleSubmit(): void
                 } else {
                     // Verify capture exists and belongs to same process/date/currency/company
                     if ($useCaptureScopeColumns) {
+                        // NULL-safe process_id comparison for group-only captures
                         $stmt = $pdo->prepare("
                             SELECT id FROM data_captures 
                             WHERE id = :capture_id 
                               AND scope_type = :scope_type
                               AND scope_id = :scope_id
                               AND capture_date = :capture_date 
-                              AND process_id = :process_id 
+                              AND COALESCE(process_id, -1) = COALESCE(:process_id, -1)
                               AND currency_id = :currency_id
                         ");
                         $stmt->execute([
@@ -492,7 +520,7 @@ function dcSummaryApiHandleSubmit(): void
                             WHERE id = :capture_id 
                               AND company_id = :company_id
                               AND capture_date = :capture_date 
-                              AND process_id = :process_id 
+                              AND COALESCE(process_id, -1) = COALESCE(:process_id, -1)
                               AND currency_id = :currency_id
                         ");
                         $stmt->execute([

@@ -192,7 +192,8 @@ export function applyOwnershipRowFieldUpdate(row, field, val, accounts, allRows,
         : parseFloat(val);
     if (isNaN(p)) p = 0;
     p = Math.max(0, Math.min(100, p));
-    if (Array.isArray(allRows) && rowIdx >= 0 && !isExternalPartnerRow(row)) {
+    // Link Partner shares the same 100% pool as regular ownership rows.
+    if (Array.isArray(allRows) && rowIdx >= 0) {
       p = Math.min(p, maxAllowedOwnershipPct(allRows, rowIdx));
     }
     r.percentage = Math.round(p * 100) / 100;

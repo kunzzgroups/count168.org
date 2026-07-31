@@ -292,11 +292,10 @@ export function companyToDomainPayloadEntry(c) {
 export function createEmptyGroup(groupCode) {
   const code = String(groupCode || "").trim().toUpperCase();
   const today = new Date().toISOString().split("T")[0];
-  const exp = calculateExpirationDate("1month", today);
   return {
     group_code: code,
-    expiration_date: exp,
-    originalExpirationDate: exp,
+    expiration_date: null,
+    originalExpirationDate: null,
     startDate: today,
     selectedPeriod: null,
     isExtending: false,
@@ -367,6 +366,32 @@ export function normalizeDomainStartDateYmd(raw) {
     return "";
   }
   return parseDdMmYyyyToYmd(s) || "";
+}
+
+/**
+ * Non-C168 companies/groups must have an expiration date before domain Confirm.
+ * @returns {{ id: string, kind: 'company'|'group' }|null}
+ */
+export function findMissingExpirationDate(companies, groups) {
+  const cos = Array.isArray(companies) ? companies : [];
+  for (const c of cos) {
+    const id = String(c?.company_id ?? "").trim().toUpperCase();
+    if (!id || id === "C168") continue;
+    const exp = c?.expiration_date;
+    if (exp == null || String(exp).trim() === "") {
+      return { id, kind: "company" };
+    }
+  }
+  const gs = Array.isArray(groups) ? groups : [];
+  for (const g of gs) {
+    const id = String(g?.group_code ?? "").trim().toUpperCase();
+    if (!id || id === "C168") continue;
+    const exp = g?.expiration_date;
+    if (exp == null || String(exp).trim() === "") {
+      return { id, kind: "group" };
+    }
+  }
+  return null;
 }
 
 /**

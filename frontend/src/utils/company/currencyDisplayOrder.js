@@ -1,12 +1,18 @@
-/** Apply saved user order; unknown codes append after ordered ones. */
+/** Apply saved user order; unknown codes append after ordered ones. Always unique by code. */
 export function mergeCurrencyCodesWithSavedOrder(baseCodes, savedOrder) {
   if (!Array.isArray(baseCodes) || !baseCodes.length) return [];
-  const codes = baseCodes.map((c) => String(c).trim().toUpperCase()).filter(Boolean);
+  const codes = [
+    ...new Set(baseCodes.map((c) => String(c).trim().toUpperCase()).filter(Boolean)),
+  ];
   if (!Array.isArray(savedOrder) || !savedOrder.length) return codes;
   const set = new Set(codes);
-  const ordered = savedOrder
-    .map((c) => String(c).trim().toUpperCase())
-    .filter((c) => set.has(c));
+  const ordered = [
+    ...new Set(
+      savedOrder
+        .map((c) => String(c).trim().toUpperCase())
+        .filter((c) => set.has(c)),
+    ),
+  ];
   const rest = codes.filter((c) => !ordered.includes(c));
   return [...ordered, ...rest];
 }

@@ -232,7 +232,7 @@ export const PROCESS_LIST_I18N = {
     dtsCreated: "创建时间：",
     removeWords: "移除词",
     enterWordsToRemove: "",
-    removeWordsHelp: "多个词用逗号 (,) 分隔。仅匹配完整相同词时，在前面加 =。",
+    removeWordsHelp: "多个词请用逗号（,）分隔；若要精确匹配单个词，请在词前加上 =。",
     removeWordChipRemove: "移除",
     allDay: "全天",
     replaceFrom: "替换来源",

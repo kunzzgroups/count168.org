@@ -1939,21 +1939,19 @@ export function resolveCompanyWhenPickingAllGroups(companies, currentCompanyId, 
 }
 
 /**
- * When closing an active GroupID pill: keep the current company if it is independent,
- * otherwise activate the first independent company in picker order.
+ * When closing an active GroupID pill:
+ * 1) keep the currently selected company when possible (incl. subsidiary under that group);
+ * 2) else first independent company in picker order.
  */
 export function resolveCompanyWhenClosingGroup(companies, currentCompanyId, groupIds = null) {
   const gids = groupIds?.length ? groupIds : sortedUniqueGroupIds(companies);
-  const independents = independentCompaniesForPicker(companies, gids);
-  if (!independents.length) return null;
+  const list = Array.isArray(companies) ? companies : [];
   const cid = currentCompanyId != null ? Number(currentCompanyId) : Number.NaN;
   if (Number.isFinite(cid) && cid > 0) {
-    const currentRow = (companies || []).find((c) => Number(c.id) === cid);
-    if (currentRow && companyRowIsIndependent(currentRow, gids)) {
-      const inPicker = independents.find((c) => Number(c.id) === cid);
-      if (inPicker) return inPicker;
-    }
+    const currentRow = list.find((c) => Number(c.id) === cid);
+    if (currentRow) return currentRow;
   }
+  const independents = independentCompaniesForPicker(list, gids);
   return independents[0] ?? null;
 }
 

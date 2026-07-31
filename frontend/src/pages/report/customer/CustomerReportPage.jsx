@@ -2,6 +2,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { spaPath } from "../../../utils/routing/pageRoutes.js";
+import { canShowReportInSidebar } from "../../../utils/auth/sidebarPermissions.js";
 import {
   getCachedOwnerCompanies,
   DASHBOARD_GROUP_FILTER_KEY,
@@ -209,10 +210,7 @@ export default function CustomerReportPage() {
     pageBootOnceRef.current = true;
 
     const u = me;
-    const perms = Array.isArray(u.permissions) ? u.permissions : [];
-    const hasFull = perms.length === 0;
-    const canReport = hasFull || perms.includes("report");
-    if (!canReport || !u.company_has_gambling) {
+    if (!canShowReportInSidebar(u)) {
       navigate(spaPath("dashboard"), { replace: true });
       return;
     }
@@ -317,12 +315,13 @@ export default function CustomerReportPage() {
       const comp = companies.find(c => Number(c.id) === Number(compId));
       const perms = await fetchCompanyPermissions(comp?.company_id || "");
       if (isBankOnlyCategoryCompany(perms)) {
-        window.location.assign(new URL(spaPath("process-list"), window.location.origin).href);
+        // Bank-only companies use Bank Process UI, not Games process-list.
+        navigate(spaPath("bank-process-list"), { replace: true });
       }
     } catch (err) {
       console.error("Bank only check error:", err);
     }
-  }, [companies]);
+  }, [companies, navigate]);
 
   const handleClearCompany = useCallback(
     (groupForScope) => {

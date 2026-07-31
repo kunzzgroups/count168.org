@@ -437,21 +437,44 @@ function maintenanceBuildCaptureWhere(
     $ledgerDc = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dc', 'data_captures');
     $ledgerDcd = dcBuildCaptureLedgerFilter($pdo, $scopeCtx, 'dcd', 'data_capture_details');
     $processCompanyId = dcCaptureProcessCompanyId($scopeCtx);
+    $isPureGroupScope = !empty($scopeCtx['is_group_scope']) && !empty($scopeCtx['dual_tenant']);
 
-    $conditions = ['dc.capture_date BETWEEN ? AND ?', 'p.company_id = ?'];
+    $conditions = ['dc.capture_date BETWEEN ? AND ?'];
     $params = array_merge(
         dcCaptureLedgerBindParams($ledgerDc),
         dcCaptureLedgerBindParams($ledgerDcd),
-        [$date_from_db, $date_to_db, $processCompanyId]
+        [$date_from_db, $date_to_db]
     );
 
+    if (!$isPureGroupScope) {
+        $conditions[] = 'p.company_id = ?';
+        $params[] = $processCompanyId;
+    }
+
     if ($process) {
-        $conditions[] = 'p.process_id = ?';
-        $params[] = $process;
+        $hasProcessCodeCol = false;
+        try {
+            $hasProcessCodeCol = $pdo->query("SHOW COLUMNS FROM data_captures LIKE 'process_code'")->rowCount() > 0;
+        } catch (Throwable $e) {}
+        if ($hasProcessCodeCol) {
+            $conditions[] = '(p.process_id = ? OR UPPER(TRIM(dc.process_code)) = UPPER(TRIM(?)))';
+            $params[] = $process;
+            $params[] = $process;
+        } else {
+            $conditions[] = 'p.process_id = ?';
+            $params[] = $process;
+        }
+    }
+
+    $effectiveScopeProcessFilter = $scopeProcessFilter;
+    if ($isPureGroupScope && $scopeProcessFilter !== '') {
+        $innerFilter = trim((string) $scopeProcessFilter);
+        $innerFilter = preg_replace('/^\s*AND\s+/i', '', $innerFilter);
+        $effectiveScopeProcessFilter = " AND (dc.process_id IS NULL OR ({$innerFilter}))";
     }
 
     $whereSql = 'WHERE 1=1 ' . $ledgerDc['sql'] . $ledgerDcd['sql']
-        . ' AND ' . implode(' AND ', $conditions) . $scopeProcessFilter;
+        . ' AND ' . implode(' AND ', $conditions) . $effectiveScopeProcessFilter;
 
     return ['where_sql' => $whereSql, 'params' => $params];
 }
@@ -479,6 +502,17 @@ function maintenanceBuildCaptureUnionBranch(
     $captureWhereSql = $built['where_sql'];
     $captureParams = $built['params'];
     $rateExpressionSelect = maintenanceRateExpressionSelectSql($pdo, true);
+    $isPureGroupScope = !empty($scopeCtx['is_group_scope']) && !empty($scopeCtx['dual_tenant']);
+    $processJoinType = $isPureGroupScope ? 'LEFT JOIN' : 'INNER JOIN';
+
+    $hasProcessCodeCol = false;
+    try {
+        $hasProcessCodeCol = $pdo->query("SHOW COLUMNS FROM data_captures LIKE 'process_code'")->rowCount() > 0;
+    } catch (Throwable $e) {}
+
+    $processLabelExpr = $hasProcessCodeCol
+        ? 'COALESCE(p.process_id, dc.process_code)'
+        : 'p.process_id';
 
     $sql = "
         SELECT
@@ -486,7 +520,7 @@ function maintenanceBuildCaptureUnionBranch(
             NULL AS transaction_id,
             dc.id AS capture_id,
             dcd.id AS capture_detail_id,
-            " . maintenanceUnionTextExpr('p.process_id') . " AS process_id,
+            " . maintenanceUnionTextExpr($processLabelExpr) . " AS process_id,
             " . maintenanceDataCaptureAccountIdExpr('a', 'dcd') . " AS account_id,
             " . maintenanceUnionNullTextCol() . " AS from_account,
             " . maintenanceUnionTextExpr("COALESCE(d.name, dcd.description_main, dcd.description_sub, dcd.columns_value, 'Data Capture')") . " AS description,
@@ -513,7 +547,7 @@ function maintenanceBuildCaptureUnionBranch(
             " . maintenanceUnionTextExpr('dcd.columns_value') . " AS columns_value
         FROM data_capture_details dcd
         INNER JOIN data_captures dc ON dcd.capture_id = dc.id
-        INNER JOIN process p ON dc.process_id = p.id
+        {$processJoinType} process p ON dc.process_id = p.id
         " . maintenanceDataCaptureAccountJoinSql('dcd', 'a') . "
         LEFT JOIN currency c ON dcd.currency_id = c.id
         LEFT JOIN description d ON p.description_id = d.id

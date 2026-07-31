@@ -30,6 +30,7 @@ import {
   canAccessFullMaintenance,
   canAccessLimitedMaintenance,
   canAccessPermission,
+  canShowReportInSidebar,
   resolveDefaultLandingPath,
   showMaintenanceInSidebar,
 } from "../utils/auth/sidebarPermissions.js";
@@ -600,35 +601,75 @@ export default function AuthenticatedLayout() {
         if (!dashboardGcFiltersEqual(filterAtStart, filterNow)) return null;
         if (!shouldRefreshExpiryFromSession(json.data, filterNow)) return null;
         applyLoginScopeToSessionStorageIfNeeded(json.data);
-        rememberCompanySessionFlags({
-          company_id: json.data.company_id,
-          company_code: json.data.company_code,
-          has_gambling: json.data.company_has_gambling,
-          has_bank: json.data.company_has_bank,
-        });
+
+        // Pure Group: always Games identity for sidebar (ignore stale PHP subsidiary session).
+        if (filterNow.groupOnly && filterNow.selectedGroup) {
+          const groupGambling = resolveGroupOnlySidebarGambling(filterNow.selectedGroup);
+          const groupExp = resolveSidebarExpirationForFilter({
+            selectedGroup: filterNow.selectedGroup,
+            companyId: null,
+          });
+          setMe((prev) => {
+            if (!prev) return prev;
+            return patchMeFromCompanyContext(prev, {
+              companyId: null,
+              companyCode: filterNow.selectedGroup,
+              hasBank: false,
+              forceGroupGamesCategory: true,
+              hasGambling: groupGambling != null ? groupGambling : true,
+              expirationDate: groupExp !== undefined ? groupExp : null,
+            });
+          });
+          setSidebarGcTick((n) => n + 1);
+          return json.data;
+        }
+
+        // Subsidiary selected: prefer owner-company row / session-switch cache over payload
+        // (Group login historically returned fixed Games and re-showed Report on Bank companies).
+        const filterCompanyId =
+          filterNow.companyId != null && filterNow.companyId !== ""
+            ? Number(filterNow.companyId)
+            : null;
+        const categoryCompanyId =
+          Number.isFinite(filterCompanyId) && filterCompanyId > 0 ? filterCompanyId : null;
+        let categoryOverride = null;
+        if (categoryCompanyId != null) {
+          const row = findOwnerCompanyById(categoryCompanyId);
+          categoryOverride =
+            resolveCompanyCategoryFlags(row) ?? categoryFlagsFromSession(null, categoryCompanyId);
+        }
+        const hasGambling =
+          categoryOverride != null
+            ? Boolean(categoryOverride.hasGambling)
+            : Boolean(json.data.company_has_gambling);
+        const hasBank =
+          categoryOverride != null
+            ? Boolean(categoryOverride.hasBank)
+            : Boolean(json.data.company_has_bank);
+
+        if (categoryCompanyId != null) {
+          rememberCompanySessionFlags({
+            company_id: categoryCompanyId,
+            company_code: json.data.company_code,
+            has_gambling: hasGambling,
+            has_bank: hasBank,
+          });
+        }
+        const sessionMe =
+          categoryOverride != null
+            ? {
+                ...json.data,
+                company_has_gambling: hasGambling,
+                company_has_bank: hasBank,
+              }
+            : json.data;
+
         let appliedSessionToSidebar = false;
         setMe((prev) => {
-          if (!prev) return json.data;
+          if (!prev) return sessionMe;
           if (shouldApplySessionToSidebar(json.data, filterNow)) {
             appliedSessionToSidebar = true;
-            if (filterNow.groupOnly && filterNow.selectedGroup) {
-              const groupGambling = resolveGroupOnlySidebarGambling(filterNow.selectedGroup);
-              return patchMeFromCompanyContext(prev, {
-                companyId: null,
-                companyCode: filterNow.selectedGroup,
-                hasBank: false,
-                ...(groupGambling != null
-                  ? { hasGambling: groupGambling }
-                  : prev.company_has_gambling != null
-                    ? { hasGambling: Boolean(prev.company_has_gambling) }
-                    : {}),
-                expirationDate: resolveSidebarExpirationForFilter({
-                  selectedGroup: filterNow.selectedGroup,
-                  companyId: null,
-                }),
-              });
-            }
-            return json.data;
+            return sessionMe;
           }
           return {
             ...prev,
@@ -642,7 +683,7 @@ export default function AuthenticatedLayout() {
         if (appliedSessionToSidebar) {
           setSidebarGcTick((n) => n + 1);
         }
-        return json.data;
+        return sessionMe;
       }
     } catch {
       /* ignore */
@@ -728,6 +769,7 @@ export default function AuthenticatedLayout() {
           // Group tenant contract: always Games identity; never Bank category.
           patch.hasBank = false;
           patch.hasGambling = true;
+          patch.forceGroupGamesCategory = true;
         } else {
           if (resolved.hasGambling != null) patch.hasGambling = Boolean(resolved.hasGambling);
           else if (groupFlags) patch.hasGambling = groupFlags.hasGambling;
@@ -1151,6 +1193,10 @@ export default function AuthenticatedLayout() {
   const showFullMaintenanceMenu = canAccessFullMaintenance(me);
   const showLimitedMaintenanceMenu = canAccessLimitedMaintenance(me);
   const showMaintenanceMenu = showMaintenanceInSidebar(me);
+  const showCaptureMaintenance = useMemo(() => {
+    void sidebarGcTick;
+    return canAccessCaptureMaintenance(me);
+  }, [me, sidebarGcTick]);
   const showBankprocessMaintenance = useMemo(() => {
     void sidebarGcTick;
     return shouldShowBankprocessMaintenanceInSidebar(me);
@@ -1471,7 +1517,7 @@ export default function AuthenticatedLayout() {
               </SidebarNavTip>
             </div>
           )}
-          {canAccess("report") && me?.company_has_gambling && (
+          {canShowReportInSidebar(me) && (
             <div className="informationmenu-section">
               <div className="menu-item-wrapper" onMouseLeave={scheduleCloseHoverSubmenu}>
                 <SidebarNavTip label={i18n.sidebarReport} enabled={sidebarIconOnly} placement="top">
@@ -1555,8 +1601,7 @@ export default function AuthenticatedLayout() {
                   }}
                   onMouseLeave={scheduleCloseHoverSubmenu}
                 >
-                    {(showFullMaintenanceMenu || (showLimitedMaintenanceMenu && me?.company_has_bank)) &&
-                      (me?.company_has_gambling || me?.company_has_bank) && (
+                    {showCaptureMaintenance && (
                       <a
                         {...sidebarSubmenuLinkProps("/capture-maintenance", goTo)}
                         className={`submenu-item ${pageKey === "capture-maintenance" ? "current-page" : ""}`}

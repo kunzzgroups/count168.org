@@ -69,7 +69,7 @@ function fetchFormulaListRaw(
                 dct.enable_source_percent,
                 dct.last_source_value,
                 dct.description,
-                p.process_id AS process_code,
+                COALESCE(p.process_id, dct.process_id) AS process_code,
                 p.description_id,
                 d.name AS description_name,
                 " . formulaMaintenanceSqlProcessOnGroupEntityFlag('p') . " AS process_on_group_entity,
@@ -215,7 +215,9 @@ try {
     $scopeProcessSql = (string) $scopeCtx['scope_process_sql'];
 
     if ($formula_scope_group) {
-        if ($companyId <= 0) {
+        $groupPk = (int) ($scopeCtx['group_scope_id'] ?? $scopeCtx['scope_id'] ?? 0);
+        // Dual-tenant pure Group: company_id may be 0; ledger uses scope_id.
+        if ($companyId <= 0 && (empty($scopeCtx['dual_tenant']) || $groupPk <= 0)) {
             jsonResponse(true, 'success', ['list' => [], 'total' => 0]);
             exit;
         }
