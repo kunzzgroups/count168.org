@@ -561,12 +561,12 @@
     display: inline !important;
 }
 
-/* Bank Selection Modal — dual column + footer (matches Country Selection layout) */
+/* Bank Selection Modal — dual column + footer (size matches Country Selection) */
 .process-page .modal-content.bank-selection-modal,
 .modal-content.bank-selection-modal {
-    width: min(56.25rem, 94vw);
-    max-width: 56.25rem;
-    max-height: min(90vh, 640px);
+    width: min(85rem, 96vw);
+    max-width: 85rem;
+    max-height: min(92vh, 720px);
     display: flex;
     flex-direction: column;
     overflow: hidden !important;
@@ -576,7 +576,7 @@
 .bank-selection-modal-header.modal-header {
     flex: 0 0 auto;
     position: relative;
-    padding: 14px 40px 12px 18px;
+    padding: 18px 48px 16px 24px;
     border-bottom: 1px solid #e5e7eb;
     background: #fff;
 }
@@ -602,19 +602,19 @@
     align-items: stretch !important;
     flex: 1 1 auto;
     min-height: 0;
-    padding: 14px 18px 16px;
+    padding: 20px 28px 24px;
     overflow: hidden;
 }
 
 .bank-selection-container {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    column-gap: 1.25rem;
+    column-gap: 2rem;
     align-items: stretch;
     flex: 1 1 auto;
     min-height: 0;
-    height: min(52vh, 420px);
-    max-height: min(52vh, 420px);
+    height: min(58vh, 480px);
+    max-height: min(58vh, 480px);
 }
 
 #bankSelectionModal .available-banks-section {
@@ -874,8 +874,8 @@
     flex-direction: row;
     justify-content: flex-end;
     align-items: center;
-    gap: 10px;
-    padding: 12px 18px 14px;
+    gap: 12px;
+    padding: 16px 28px 18px;
     border-top: 1px solid #e5e7eb;
     background: #fff;
 }
@@ -912,19 +912,26 @@
 @media (max-width: 720px) {
     .bank-selection-container {
         grid-template-columns: 1fr;
+        height: auto;
         max-height: none;
         row-gap: 1rem;
     }
 
-    .available-banks-section {
+    #bankSelectionModal .available-banks-section {
         border-right: none;
         padding-right: 0;
         border-bottom: 1px solid #e8ecf1;
         padding-bottom: 12px;
     }
 
-    .selected-banks-section {
+    #bankSelectionModal .selected-banks-section {
         padding-left: 0;
+    }
+
+    #bankSelectionModal #existingBanks.bank-list,
+    #bankSelectionModal .selected-banks-list {
+        min-height: 200px !important;
+        height: 200px !important;
     }
 }
 
