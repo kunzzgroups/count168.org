@@ -1,3 +1,7 @@
+import { buildApiUrl } from "../core/apiUrl.js";
+
+/** System FX API (DB-cached). Upstream Frankfurter is server-side + client fallback. */
+const SYSTEM_FX_API = "api/fx/fx_rates_api.php";
 const FRANKFURTER_API = "https://api.frankfurter.dev/v2/rates";
 const CACHE_TTL_MS = 60 * 60 * 1000;
 const SESSION_CACHE_PREFIX = "frankfurter_rates_v1:";
@@ -325,6 +329,41 @@ function parseFrankfurterRateRows(baseCode, quotes, rows, dateYmd) {
   };
 }
 
+/** Normalize system / Frankfurter JSON into a row list. */
+function extractFxRateRows(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return null;
+  if (Array.isArray(payload.rows)) return payload.rows;
+  if (Array.isArray(payload.rates) && payload.rates[0]?.quote != null) return payload.rates;
+  if (Array.isArray(payload.data)) return payload.data;
+  if (payload.data && typeof payload.data === "object") {
+    if (Array.isArray(payload.data.rows)) return payload.data.rows;
+    if (Array.isArray(payload.data.rates) && payload.data.rates[0]?.quote != null) {
+      return payload.data.rates;
+    }
+    if (Array.isArray(payload.data.data)) return payload.data.data;
+  }
+  return null;
+}
+
+function extractFxUnsupported(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  if (Array.isArray(payload.unsupported)) return payload.unsupported;
+  if (payload.data && Array.isArray(payload.data.unsupported)) return payload.data.unsupported;
+  return null;
+}
+
+async function fetchFxRowsFromUrl(url, { credentials } = {}) {
+  const res = await fetch(url, {
+    credentials: credentials || "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(`FX HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 async function fetchFrankfurterRatesOnce(baseCode, quotes, dateYmd) {
   if (!quotes.length) {
     return { rates: { [baseCode]: 1 }, date: dateYmd, unsupported: [] };
@@ -333,17 +372,31 @@ async function fetchFrankfurterRatesOnce(baseCode, quotes, dateYmd) {
   const params = new URLSearchParams({ base: baseCode, quotes: quotes.join(",") });
   if (dateYmd) params.set("date", dateYmd);
 
-  const res = await fetch(`${FRANKFURTER_API}?${params}`);
-  if (!res.ok) {
-    throw new Error(`Frankfurter HTTP ${res.status}`);
+  let payload = null;
+  try {
+    payload = await fetchFxRowsFromUrl(`${buildApiUrl(SYSTEM_FX_API)}?${params}`, {
+      credentials: "include",
+    });
+  } catch {
+    // Rollout / outage: fall back to public Frankfurter once.
+    payload = await fetchFxRowsFromUrl(`${FRANKFURTER_API}?${params}`);
   }
 
-  const rows = await res.json();
+  const rows = extractFxRateRows(payload);
   if (!Array.isArray(rows)) {
-    throw new Error("Frankfurter invalid response");
+    throw new Error("FX invalid response");
   }
 
-  return parseFrankfurterRateRows(baseCode, quotes, rows, dateYmd);
+  const parsed = parseFrankfurterRateRows(baseCode, quotes, rows, dateYmd);
+  const apiUnsupported = extractFxUnsupported(payload);
+  if (apiUnsupported?.length) {
+    const merged = new Set([
+      ...(parsed.unsupported || []),
+      ...apiUnsupported.map((c) => String(c || "").trim().toUpperCase()).filter(Boolean),
+    ]);
+    return { ...parsed, unsupported: [...merged] };
+  }
+  return parsed;
 }
 
 /**
