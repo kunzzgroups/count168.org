@@ -289,12 +289,13 @@ export default function DomainReportPage() {
       const comp = companies.find(c => Number(c.id) === Number(compId));
       const perms = await fetchCompanyPermissions(comp?.company_id || "");
       if (isBankOnlyCategoryCompany(perms)) {
-        window.location.assign(new URL(spaPath("process-list"), window.location.origin).href);
+        // Bank-only companies use Bank Process UI, not Games process-list.
+        navigate(spaPath("bank-process-list"), { replace: true });
       }
     } catch (err) {
       console.error("Bank only check error:", err);
     }
-  }, [companies]);
+  }, [companies, navigate]);
 
   const handleClearCompany = useCallback(
     (groupForScope) => {
