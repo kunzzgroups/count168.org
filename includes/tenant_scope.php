@@ -691,18 +691,51 @@ function tenant_create_currency(PDO $pdo, string $code, array $ctx): array
             }
             throw $e;
         }
-    } else {
-        $stmt = $pdo->prepare('SELECT id FROM currency WHERE code = ? AND company_id = ?');
-        $stmt->execute([$code, $companyId]);
-        if ($stmt->fetchColumn()) {
-            throw new Exception('Currency ' . $code . ' already exists');
+
+        // Capture before any follow-up queries can reset PDO::lastInsertId().
+        $newId = (int) $pdo->lastInsertId();
+        if ($newId <= 0) {
+            $findStmt = $pdo->prepare("
+                SELECT id FROM currency
+                WHERE scope_type = 'group' AND scope_id = ? AND UPPER(TRIM(code)) = ?
+                ORDER BY id DESC
+                LIMIT 1
+            ");
+            $findStmt->execute([$groupPk, $code]);
+            $newId = (int) ($findStmt->fetchColumn() ?: 0);
         }
-        $stmt = $pdo->prepare('INSERT INTO currency (code, company_id) VALUES (?, ?)');
-        $stmt->execute([$code, $companyId]);
-        tenant_sync_company_currency_to_parent_groups($pdo, $companyId, $code);
+        if ($newId <= 0) {
+            throw new Exception('Currency created but id unresolved');
+        }
+
+        return ['id' => $newId, 'code' => $code];
     }
 
-    return ['id' => (int) $pdo->lastInsertId(), 'code' => $code];
+    $stmt = $pdo->prepare('SELECT id FROM currency WHERE code = ? AND company_id = ?');
+    $stmt->execute([$code, $companyId]);
+    if ($stmt->fetchColumn()) {
+        throw new Exception('Currency ' . $code . ' already exists');
+    }
+    $stmt = $pdo->prepare('INSERT INTO currency (code, company_id) VALUES (?, ?)');
+    $stmt->execute([$code, $companyId]);
+
+    // Must read lastInsertId before group sync (recursive create / duplicate-key
+    // recovery can zero the connection's last insert id).
+    $newId = (int) $pdo->lastInsertId();
+    if ($newId <= 0) {
+        $findStmt = $pdo->prepare(
+            'SELECT id FROM currency WHERE code = ? AND company_id = ? ORDER BY id DESC LIMIT 1'
+        );
+        $findStmt->execute([$code, $companyId]);
+        $newId = (int) ($findStmt->fetchColumn() ?: 0);
+    }
+    if ($newId <= 0) {
+        throw new Exception('Currency created but id unresolved');
+    }
+
+    tenant_sync_company_currency_to_parent_groups($pdo, $companyId, $code);
+
+    return ['id' => $newId, 'code' => $code];
 }
 
 /**

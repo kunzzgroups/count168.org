@@ -2247,7 +2247,8 @@ export default function AccountListPage() {
     appendAccountScopeParams(fd);
     if (!isEditMode && !groupOnlyAccountMode && companyId) {
       fd.set("company_id", String(companyId));
-      if (selectedCurrencyIds.length) fd.set("currency_ids", JSON.stringify(selectedCurrencyIds));
+      const validCurrencyIds = selectedCurrencyIds.map(Number).filter((id) => Number.isFinite(id) && id > 0);
+      if (validCurrencyIds.length) fd.set("currency_ids", JSON.stringify(validCurrencyIds));
     }
     try {
       const ep = isEditMode ? "api/accounts/update_api.php" : "api/accounts/addaccountapi.php";
@@ -2255,8 +2256,9 @@ export default function AccountListPage() {
       const json = await res.json();
       if (!json.success) return notifyApi(json.message, "saveFailed", "danger");
       let postSaveCurrencyError = null;
-      if (!isEditMode && json?.data?.id && selectedCurrencyIds.length) {
-        for (const cid of selectedCurrencyIds) {
+      const validCurrencyIds = selectedCurrencyIds.map(Number).filter((id) => Number.isFinite(id) && id > 0);
+      if (!isEditMode && json?.data?.id && validCurrencyIds.length) {
+        for (const cid of validCurrencyIds) {
           const currencyRes = await fetch(accountCurrencyApiUrl("add_currency"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2271,8 +2273,8 @@ export default function AccountListPage() {
         }
       }
       if (isEditMode && form.id) {
-        const before = new Set(initialEditCurrencyIds.map(Number));
-        const after = new Set(selectedCurrencyIds.map(Number));
+        const before = new Set(initialEditCurrencyIds.map(Number).filter((id) => id > 0));
+        const after = new Set(validCurrencyIds);
         const toAdd = [...after].filter((id) => !before.has(id));
         const toRemove = [...before].filter((id) => !after.has(id));
         for (const cid of toAdd) {
@@ -2339,9 +2341,16 @@ export default function AccountListPage() {
       const res = await fetch(buildApiUrl("api/accounts/create_currency_api.php"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), credentials: "include" });
       const json = await res.json();
       if (json.success) {
-        const newId = Number(json.data.id);
+        const newId = Number(json.data?.id);
+        const idValid = Number.isFinite(newId) && newId > 0;
         if (currencySettingOpen) {
           await loadSelectionMeta(null, false, { forcePageLedgerScope: true, selectCode: code });
+        } else if (!idValid) {
+          // API returned id=0 (stale lastInsertId): reload list and select by code.
+          await loadSelectionMeta(isEditMode && form.id ? form.id : null, isEditMode, {
+            selectCode: code,
+            ledgerScope: modalLedgerScopeRef.current ?? modalLedgerScope,
+          });
         } else {
           setCurrencies((prev) => [...prev, { id: newId, code: json.data.code, is_linked: false }]);
           setSelectedCurrencyIds((prev) => (prev.map(Number).includes(newId) ? prev : [...prev, newId]));

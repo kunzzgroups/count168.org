@@ -520,7 +520,29 @@ export function useBankProcessListPage() {
       });
       const json = await res.json();
       if (!json.success || !json.data) return notify(apiMsg(json, "failedCreateCurrency"), "danger");
-      setAccountModalCurrencies((prev) => [...prev, { id: json.data.id, code: json.data.code, is_linked: false }]);
+      const newId = Number(json.data.id);
+      if (!Number.isFinite(newId) || newId <= 0) {
+        // Avoid appending currency_id=0; refresh currency pills only (do not reset selection).
+        const accountId = accountModalIsEditMode && accountModalForm.id ? accountModalForm.id : null;
+        const currencyParams = new URLSearchParams({ action: "get_available_currencies" });
+        if (accountId) currencyParams.set("account_id", String(accountId));
+        if (targetCompany) currencyParams.set("company_id", String(targetCompany));
+        const curRes = await fetch(
+          buildApiUrl(`api/accounts/account_currency_api.php?${currencyParams}`),
+          { credentials: "include" },
+        );
+        const curJ = await curRes.json();
+        if (curJ.success && Array.isArray(curJ.data)) {
+          setAccountModalCurrencies(
+            curJ.data.map((c) => ({ id: c.id, code: c.code, is_linked: !!c.is_linked })),
+          );
+        }
+      } else {
+        setAccountModalCurrencies((prev) => [
+          ...prev,
+          { id: newId, code: json.data.code, is_linked: false },
+        ]);
+      }
       setAccountModalCurrencyInput("");
       notify(t("currencyCreated", { code }), "success");
     } catch {

@@ -295,7 +295,10 @@ export function useSummaryAddAccount({
           emitNotify(apiMsg(json, "createFailed"), "danger");
           return;
         }
-        setCurrencies((prev) => [...prev, { id: json.data.id, code: json.data.code, is_linked: false }]);
+        const newId = Number(json.data.id);
+        if (Number.isFinite(newId) && newId > 0) {
+          setCurrencies((prev) => [...prev, { id: newId, code: json.data.code, is_linked: false }]);
+        }
         setCurrencyInput("");
       } catch {
         emitNotify(t("createFailed"), "danger");
