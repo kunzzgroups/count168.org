@@ -1193,6 +1193,10 @@ export default function AuthenticatedLayout() {
   const showFullMaintenanceMenu = canAccessFullMaintenance(me);
   const showLimitedMaintenanceMenu = canAccessLimitedMaintenance(me);
   const showMaintenanceMenu = showMaintenanceInSidebar(me);
+  const showCaptureMaintenance = useMemo(() => {
+    void sidebarGcTick;
+    return canAccessCaptureMaintenance(me);
+  }, [me, sidebarGcTick]);
   const showBankprocessMaintenance = useMemo(() => {
     void sidebarGcTick;
     return shouldShowBankprocessMaintenanceInSidebar(me);
@@ -1597,8 +1601,7 @@ export default function AuthenticatedLayout() {
                   }}
                   onMouseLeave={scheduleCloseHoverSubmenu}
                 >
-                    {(showFullMaintenanceMenu || (showLimitedMaintenanceMenu && me?.company_has_bank)) &&
-                      (me?.company_has_gambling || me?.company_has_bank) && (
+                    {showCaptureMaintenance && (
                       <a
                         {...sidebarSubmenuLinkProps("/capture-maintenance", goTo)}
                         className={`submenu-item ${pageKey === "capture-maintenance" ? "current-page" : ""}`}

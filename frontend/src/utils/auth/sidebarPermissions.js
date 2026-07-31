@@ -59,10 +59,26 @@ export function canAccessTransactionFormulaMaintenance(me) {
   return canAccessFullMaintenance(me) || canAccessLimitedMaintenance(me);
 }
 
-/** Capture maintenance: full Maintenance, or limited path when session company has Bank. */
+/**
+ * Capture maintenance: full Maintenance, or limited path when the *active filter*
+ * company is Bank. Pure Group / group-only is Games identity — never show Capture.
+ */
 export function canAccessCaptureMaintenance(me) {
   if (canAccessFullMaintenance(me)) return true;
-  return canAccessLimitedMaintenance(me) && Boolean(me?.company_has_bank);
+  if (!canAccessLimitedMaintenance(me)) return false;
+
+  const filter = readPersistedDashboardGcFilter();
+  if (filter.groupOnly && filter.selectedGroup) return false;
+
+  const cid =
+    filter.companyId != null && filter.companyId !== "" ? Number(filter.companyId) : Number.NaN;
+  if (Number.isFinite(cid) && cid > 0) {
+    const row = findOwnerCompanyById(cid);
+    const flags = resolveCompanyCategoryFlags(row);
+    if (flags) return Boolean(flags.hasBank);
+  }
+
+  return Boolean(me?.company_has_bank);
 }
 
 export function canAccessDashboard(me) {
