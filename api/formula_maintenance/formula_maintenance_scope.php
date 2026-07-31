@@ -184,7 +184,7 @@ function formulaMaintenanceSqlProcessIdInList(array $ids, string $processAlias =
     $a = preg_replace('/[^a-zA-Z0-9_]/', '', $processAlias) ?: 'p';
     $safe = array_values(array_unique(array_filter(array_map('intval', $ids), static fn (int $id): bool => $id > 0)));
     if ($safe === []) {
-        return ' AND 1=0 ';
+        return '';
     }
 
     return ' AND ' . $a . '.id IN (' . implode(',', $safe) . ') ';
@@ -735,12 +735,14 @@ function formulaMaintenanceSqlTemplateProcessJoin(
 ): string {
     $class = formulaMaintenanceClassifyPayrollProcessIds($pdo, $companyId);
     $pool = $isGroupScope ? $class['group'] : $class['subsidiary'];
-    $poolInSql = '0';
-    if ($pool !== []) {
-        $poolInSql = implode(',', array_map('intval', $pool));
-    }
+    $poolInSql = $pool !== [] ? implode(',', array_map('intval', $pool)) : '';
 
-    $join = "INNER JOIN process p ON p.company_id = dct.company_id
+    $companyMatch = $isGroupScope ? '1=1' : 'p.company_id = dct.company_id';
+    $poolMatch = ($isGroupScope && $poolInSql === '')
+        ? "UPPER(TRIM(p.process_id)) IN (" . dcSqlQuotedGroupPayrollProcessCodes() . ")"
+        : ($poolInSql !== '' ? "p.id IN ({$poolInSql})" : '1=1');
+
+    $join = "LEFT JOIN process p ON {$companyMatch}
         AND (
             (dct.process_id REGEXP '^[0-9]+$' AND p.id = CAST(dct.process_id AS UNSIGNED))
             OR (
@@ -748,7 +750,7 @@ function formulaMaintenanceSqlTemplateProcessJoin(
                 AND UPPER(TRIM(dct.process_id)) = UPPER(TRIM(p.process_id))
                 AND (
                     UPPER(TRIM(dct.process_id)) NOT IN (" . dcSqlQuotedGroupPayrollProcessCodes() . ")
-                    OR p.id IN ({$poolInSql})
+                    OR {$poolMatch}
                 )
             )
         )";
@@ -760,15 +762,17 @@ function formulaMaintenanceSqlTemplateProcessJoin(
             (int) $processIdFilter,
             $isGroupScope
         );
-        $idList = implode(',', array_map('intval', $relatedIds));
+        if (!empty($relatedIds)) {
+            $idList = implode(',', array_map('intval', $relatedIds));
 
-        return $join . " AND (
-            (dct.process_id REGEXP '^[0-9]+$' AND CAST(dct.process_id AS UNSIGNED) IN ({$idList}))
-            OR (
-                dct.process_id NOT REGEXP '^[0-9]+$'
-                AND p.id IN ({$idList})
-            )
-        )";
+            return $join . " AND (
+                (dct.process_id REGEXP '^[0-9]+$' AND CAST(dct.process_id AS UNSIGNED) IN ({$idList}))
+                OR (
+                    dct.process_id NOT REGEXP '^[0-9]+$'
+                    AND (p.id IN ({$idList}) OR p.id IS NULL)
+                )
+            )";
+        }
     }
 
     return $join;

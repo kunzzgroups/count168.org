@@ -69,7 +69,7 @@ function fetchFormulaListRaw(
                 dct.enable_source_percent,
                 dct.last_source_value,
                 dct.description,
-                p.process_id AS process_code,
+                COALESCE(p.process_id, dct.process_id) AS process_code,
                 p.description_id,
                 d.name AS description_name,
                 " . formulaMaintenanceSqlProcessOnGroupEntityFlag('p') . " AS process_on_group_entity,
