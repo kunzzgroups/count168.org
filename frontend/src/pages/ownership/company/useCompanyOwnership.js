@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildApiUrl } from "../../../utils/core/apiUrl.js";
+import { useOptionalAuthSession } from "../../../context/AuthSessionContext.jsx";
+import { getLoginIdentifier, isGroupLogin } from "../../../utils/company/loginScope.js";
 import { getApiMessage, isApiConflict, isApiSuccess, ownershipSubsidiariesInGroup, rebuildGroupIds } from "../shared/ownershipHelpers.js";
 import { formatOwnershipSavedAt } from "../shared/ownershipMonthHelpers.js";
 import {
@@ -32,6 +34,9 @@ export function useCompanyOwnership(shell) {
     setHistoryBanner,
     lang,
   } = shell;
+
+  const auth = useOptionalAuthSession();
+  const sessionMe = auth?.me ?? null;
 
   const viewOnlyMode = readOnlyMode;
   const adminLocked = readOnlyMode || isHistoricalView;
@@ -150,8 +155,16 @@ export function useCompanyOwnership(shell) {
     if (groupFilter !== null) return;
     const independent = allCompanies.filter((c) => !c.group_id);
     if (independent.length > 0 || allGroupIds.length === 0) return;
+    // Group login: prefer the logged-in group (Phase 7 Group-only default).
+    if (isGroupLogin(sessionMe)) {
+      const loginG = getLoginIdentifier(sessionMe);
+      if (loginG && allGroupIds.includes(loginG)) {
+        setGroupFilter(loginG);
+        return;
+      }
+    }
     setGroupFilter(allGroupIds[0]);
-  }, [groupFilter, allCompanies, allGroupIds]);
+  }, [groupFilter, allCompanies, allGroupIds, sessionMe]);
 
   // After ungroup empties a group, groupFilter may point at a removed group id → blank list
   useEffect(() => {

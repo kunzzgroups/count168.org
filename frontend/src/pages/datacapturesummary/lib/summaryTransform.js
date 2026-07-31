@@ -74,16 +74,31 @@ export function parseSummaryProcessMeta(processData) {
   }
 
   const processCodeRaw = processData.processCode ?? processData.process_code ?? "";
-  const processCode =
-    typeof processCodeRaw === "string" && processCodeRaw.trim() !== "" ? processCodeRaw.trim() : null;
+  let processCode =
+    typeof processCodeRaw === "string" && processCodeRaw.trim() !== ""
+      ? processCodeRaw.trim().toUpperCase()
+      : null;
 
   const rawProcess =
     processData.process ?? processData.processId ?? processData.process_id ?? null;
   const parsed = rawProcess != null ? Number.parseInt(String(rawProcess), 10) : Number.NaN;
   const processId = Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 
+  if (
+    !processCode &&
+    rawProcess != null &&
+    typeof rawProcess === "string" &&
+    !Number.isFinite(Number(rawProcess))
+  ) {
+    processCode = String(rawProcess).trim().toUpperCase() || null;
+  }
+
   const normalized = { ...processData };
   if (processId != null) normalized.process = processId;
+  if (processCode) {
+    normalized.processCode = processCode;
+    if (processId == null) normalized.process = processCode;
+  }
 
   return { processId, processCode, processData: normalized };
 }

@@ -107,8 +107,21 @@ function dcSummaryApiHandleSubmit(): void
             }
         
             // Validate required fields
-            if (!isset($data['captureDate']) || !isset($data['processId']) || !isset($data['currencyId'])) {
-                throw new Exception('Missing required fields: captureDate, processId, or currencyId');
+            $submitProcessId = isset($data['processId']) && is_numeric($data['processId'])
+                ? (int) $data['processId']
+                : 0;
+            $submitProcessCode = strtoupper(trim((string) ($data['processCode'] ?? $data['processName'] ?? '')));
+            if ($submitProcessId <= 0 && isset($data['processId']) && is_string($data['processId'])) {
+                $maybeCode = strtoupper(trim((string) $data['processId']));
+                if (dcIsGroupPayrollProcessCode($maybeCode)) {
+                    $submitProcessCode = $maybeCode;
+                }
+            }
+            if (!isset($data['captureDate']) || !isset($data['currencyId'])) {
+                throw new Exception('Missing required fields: captureDate or currencyId');
+            }
+            if ($submitProcessId <= 0 && $submitProcessCode === '') {
+                throw new Exception('Missing required fields: processId or processCode');
             }
         
             if (!isset($data['summaryRows']) || !is_array($data['summaryRows']) || count($data['summaryRows']) === 0) {
@@ -145,13 +158,36 @@ function dcSummaryApiHandleSubmit(): void
                 ? dcCaptureScopeInsertValues($capture_scope_ctx)
                 : ['company_id' => $companyId, 'scope_type' => null, 'scope_id' => null];
             $useCaptureScopeColumns = !empty($capture_scope_ctx['dual_tenant']);
+            $pureGroupProcessCodeSubmit = $capture_scope_group
+                && $processCompanyId <= 0
+                && $submitProcessId <= 0
+                && dcIsGroupPayrollProcessCode($submitProcessCode);
 
-            dcAssertProcessIdInCaptureScope(
-                $pdo,
-                (int) $data['processId'],
-                (int) $processCompanyId,
-                (bool) $capture_scope_group
-            );
+            if ($pureGroupProcessCodeSubmit) {
+                $data['processId'] = null;
+                $data['processCode'] = $submitProcessCode;
+                // Ensure process_code column exists for pure-group captures.
+                try {
+                    if ($pdo->query("SHOW COLUMNS FROM data_captures LIKE 'process_code'")->rowCount() === 0) {
+                        $pdo->exec("ALTER TABLE data_captures ADD COLUMN process_code VARCHAR(50) NULL AFTER process_id");
+                    }
+                    $pdo->exec('ALTER TABLE data_captures MODIFY COLUMN process_id INT NULL');
+                    $pdo->exec('ALTER TABLE data_captures MODIFY COLUMN company_id INT UNSIGNED NULL');
+                } catch (Throwable $schemaEx) {
+                    error_log('summary_submit pure-group schema: ' . $schemaEx->getMessage());
+                }
+            } else {
+                if ($submitProcessId <= 0) {
+                    throw new Exception('Missing required fields: processId');
+                }
+                $data['processId'] = $submitProcessId;
+                dcAssertProcessIdInCaptureScope(
+                    $pdo,
+                    $submitProcessId,
+                    (int) $processCompanyId,
+                    (bool) $capture_scope_group
+                );
+            }
 
             // 方案 A：忽略 immediateAck，始终同步写入成功后再响应（禁止“假成功”）
             if (!empty($data['immediateAck'])) {
@@ -256,23 +292,67 @@ function dcSummaryApiHandleSubmit(): void
 
                     // Insert main capture record (first batch)
                     try {
+                        $insertCompanyId = $pureGroupProcessCodeSubmit
+                            ? null
+                            : ((int) ($scopeInsert['company_id'] ?? $companyId) ?: null);
+                        $insertProcessId = $pureGroupProcessCodeSubmit ? null : $data['processId'];
+                        $insertProcessCode = $pureGroupProcessCodeSubmit
+                            ? $submitProcessCode
+                            : (isset($data['processCode']) ? strtoupper(trim((string) $data['processCode'])) : null);
+                        $hasProcessCodeCol = $pdo->query("SHOW COLUMNS FROM data_captures LIKE 'process_code'")->rowCount() > 0;
+
                         if ($useCaptureScopeColumns) {
-                            if ($hasSubmitRequestIdCol) {
+                            if ($hasSubmitRequestIdCol && $hasProcessCodeCol) {
                                 $stmt = $pdo->prepare("
-                                    INSERT INTO data_captures (company_id, scope_type, scope_id, capture_date, process_id, currency_id, created_by, user_type, remark, submit_request_id) 
-                                    VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark, :submit_request_id)
+                                    INSERT INTO data_captures (company_id, scope_type, scope_id, capture_date, process_id, process_code, currency_id, created_by, user_type, remark, submit_request_id)
+                                    VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :process_code, :currency_id, :created_by, :user_type, :remark, :submit_request_id)
                                 ");
                                 $stmt->execute([
-                                    ':company_id' => (int) ($scopeInsert['company_id'] ?? $companyId),
+                                    ':company_id' => $insertCompanyId,
                                     ':scope_type' => $scopeInsert['scope_type'],
                                     ':scope_id' => $scopeInsert['scope_id'],
                                     ':capture_date' => $data['captureDate'],
-                                    ':process_id' => $data['processId'],
+                                    ':process_id' => $insertProcessId,
+                                    ':process_code' => $insertProcessCode !== '' ? $insertProcessCode : null,
                                     ':currency_id' => $data['currencyId'],
                                     ':created_by' => $userId,
                                     ':user_type' => $user_type,
                                     ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
                                     ':submit_request_id' => $submitRequestId !== '' ? $submitRequestId : null,
+                                ]);
+                            } elseif ($hasSubmitRequestIdCol) {
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO data_captures (company_id, scope_type, scope_id, capture_date, process_id, currency_id, created_by, user_type, remark, submit_request_id) 
+                                    VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark, :submit_request_id)
+                                ");
+                                $stmt->execute([
+                                    ':company_id' => $insertCompanyId ?? (int) ($scopeInsert['company_id'] ?? $companyId),
+                                    ':scope_type' => $scopeInsert['scope_type'],
+                                    ':scope_id' => $scopeInsert['scope_id'],
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $insertProcessId ?? $data['processId'],
+                                    ':currency_id' => $data['currencyId'],
+                                    ':created_by' => $userId,
+                                    ':user_type' => $user_type,
+                                    ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
+                                    ':submit_request_id' => $submitRequestId !== '' ? $submitRequestId : null,
+                                ]);
+                            } elseif ($hasProcessCodeCol) {
+                                $stmt = $pdo->prepare("
+                                    INSERT INTO data_captures (company_id, scope_type, scope_id, capture_date, process_id, process_code, currency_id, created_by, user_type, remark)
+                                    VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :process_code, :currency_id, :created_by, :user_type, :remark)
+                                ");
+                                $stmt->execute([
+                                    ':company_id' => $insertCompanyId,
+                                    ':scope_type' => $scopeInsert['scope_type'],
+                                    ':scope_id' => $scopeInsert['scope_id'],
+                                    ':capture_date' => $data['captureDate'],
+                                    ':process_id' => $insertProcessId,
+                                    ':process_code' => $insertProcessCode !== '' ? $insertProcessCode : null,
+                                    ':currency_id' => $data['currencyId'],
+                                    ':created_by' => $userId,
+                                    ':user_type' => $user_type,
+                                    ':remark' => isset($data['remark']) && !empty($data['remark']) ? $data['remark'] : null,
                                 ]);
                             } else {
                                 $stmt = $pdo->prepare("
@@ -280,11 +360,11 @@ function dcSummaryApiHandleSubmit(): void
                                     VALUES (:company_id, :scope_type, :scope_id, :capture_date, :process_id, :currency_id, :created_by, :user_type, :remark)
                                 ");
                                 $stmt->execute([
-                                    ':company_id' => (int) ($scopeInsert['company_id'] ?? $companyId),
+                                    ':company_id' => $insertCompanyId ?? (int) ($scopeInsert['company_id'] ?? $companyId),
                                     ':scope_type' => $scopeInsert['scope_type'],
                                     ':scope_id' => $scopeInsert['scope_id'],
                                     ':capture_date' => $data['captureDate'],
-                                    ':process_id' => $data['processId'],
+                                    ':process_id' => $insertProcessId ?? $data['processId'],
                                     ':currency_id' => $data['currencyId'],
                                     ':created_by' => $userId,
                                     ':user_type' => $user_type,
@@ -908,7 +988,7 @@ function dcSummaryApiHandleSubmit(): void
                         $pdo,
                         (int) $userId,
                         $user_type,
-                        (int) $data['processId'],
+                        (int) ($data['processId'] ?? 0),
                         (string) $data['captureDate'],
                         is_array($capture_scope_ctx) ? $capture_scope_ctx : [],
                         $companyId,

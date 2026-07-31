@@ -231,8 +231,28 @@ function ownership_history_resolve_group_owner_id(PDO $pdo, string $groupId): in
 
     $stmt = $pdo->prepare('SELECT DISTINCT owner_id FROM company WHERE UPPER(TRIM(group_id)) = UPPER(TRIM(?)) LIMIT 1');
     $stmt->execute([$groupId]);
+    $ownerId = (int) $stmt->fetchColumn();
+    if ($ownerId > 0) {
+        return $ownerId;
+    }
 
-    return (int) $stmt->fetchColumn();
+    // Empty Group (no subsidiaries / no ownership rows yet): resolve from groups table.
+    try {
+        if ($pdo->query("SHOW TABLES LIKE 'groups'")->rowCount() > 0) {
+            $gStmt = $pdo->prepare(
+                'SELECT owner_id FROM `groups` WHERE UPPER(TRIM(group_code)) = UPPER(TRIM(?)) LIMIT 1'
+            );
+            $gStmt->execute([$groupId]);
+            $ownerId = (int) $gStmt->fetchColumn();
+            if ($ownerId > 0) {
+                return $ownerId;
+            }
+        }
+    } catch (Throwable $e) {
+        // fall through
+    }
+
+    return 0;
 }
 
 /** Snapshot current calendar month for one group from live rows (does not touch other months). */

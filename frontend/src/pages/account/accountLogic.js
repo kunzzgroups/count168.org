@@ -104,9 +104,14 @@ const ACCOUNT_MODAL_FALLBACK_ROLES = ["PARTNER", "DEBTOR"];
 
 export function getAccountModalOrderedRoles(roles) {
   const merged = [...(roles || [])];
-  ACCOUNT_MODAL_FALLBACK_ROLES.forEach((role) => {
-    if (!merged.some((r) => toUpper(r) === role)) merged.push(role);
-  });
+  if (merged.length === 0) {
+    // Empty group / roles API miss — still offer full account role list for the modal.
+    ROLE_PRIORITY.forEach((role) => merged.push(role));
+  } else {
+    ACCOUNT_MODAL_FALLBACK_ROLES.forEach((role) => {
+      if (!merged.some((r) => toUpper(r) === role)) merged.push(role);
+    });
+  }
   return getOrderedRoles(merged);
 }
 

@@ -671,8 +671,11 @@ export default function AccountListPage() {
       }
       const res = await fetch(url.toString(), { credentials: "include" });
       const json = await res.json();
-      if (json?.success && Array.isArray(json?.data?.roles)) {
+      if (json?.success && Array.isArray(json?.data?.roles) && json.data.roles.length) {
         setRoles(json.data.roles);
+      } else {
+        // Keep prior roles; modal uses ROLE_PRIORITY fallback when still empty.
+        setRoles((prev) => (Array.isArray(prev) && prev.length ? prev : []));
       }
     } catch {
       /* roles are optional for list; modal refetch on open */
@@ -2120,7 +2123,7 @@ export default function AccountListPage() {
     } catch { /* silent */ }
   };
 
-  const openAdd = () => {
+  const openAdd = async () => {
     if (accountMutationsBlocked) {
       notify(t("readOnlyActionBlocked"), "danger");
       return;
@@ -2132,10 +2135,13 @@ export default function AccountListPage() {
     setHiddenCurrencyIds([]);
     syncModalLedgerScope(null);
     setAddModalOpen(true);
-    if (!groupOnlyAccountMode && companyId) {
+    if (groupOnlyAccountMode && selectedGroup) {
+      const groupCode = String(selectedGroup).trim().toUpperCase();
+      setSelectedCompanyIds(groupCode ? [groupCode] : []);
+    } else if (!groupOnlyAccountMode && companyId) {
       setSelectedCompanyIds([String(companyId)]);
     }
-    void loadRoles({ companyId, groupId: selectedGroup });
+    await loadRoles({ companyId, groupId: selectedGroup });
     loadSelectionMeta(null, false);
   };
 
@@ -2853,10 +2859,19 @@ export default function AccountListPage() {
         return;
       }
       const linkScopeCompanyId = Number(refJson?.data?.company_id) || Number(linkScope.company_id) || 0;
-      if (!Number.isFinite(linkScopeCompanyId) || linkScopeCompanyId <= 0) {
+      const isGroupLinkScope =
+        Boolean(linkScope.group_only) || String(refJson?.data?.scope_mode || "") === "group";
+      if (
+        !isGroupLinkScope &&
+        (!Number.isFinite(linkScopeCompanyId) || linkScopeCompanyId <= 0)
+      ) {
         notify(t("pleaseSelectCompanyFirst"), "danger");
         return;
       }
+      const linkMutationBase = {
+        ...linkScope,
+        ...(linkScopeCompanyId > 0 ? { company_id: linkScopeCompanyId } : {}),
+      };
       const typesMap = refJson?.data?.link_types_map || {};
       const currentTypeIds = new Set(
         (Array.isArray(refJson?.data?.accounts) ? refJson.data.accounts : [])
@@ -2874,8 +2889,7 @@ export default function AccountListPage() {
           body: JSON.stringify({
             account_id_1: Number(linkingAccountId),
             account_id_2: Number(linkedId),
-            company_id: linkScopeCompanyId,
-            ...linkScope,
+            ...linkMutationBase,
           }),
           credentials: "include",
         });
@@ -2887,8 +2901,7 @@ export default function AccountListPage() {
           body: JSON.stringify({
             account_id_1: Number(linkingAccountId),
             account_id_2: Number(linkedId),
-            company_id: linkScopeCompanyId,
-            ...linkScope,
+            ...linkMutationBase,
             link_type: linkType,
             source_account_id: linkType === "unidirectional" ? Number(linkingAccountId) : null,
           }),
@@ -2903,8 +2916,7 @@ export default function AccountListPage() {
             body: JSON.stringify({
               account_id_1: Number(linkingAccountId),
               account_id_2: Number(linkedId),
-              company_id: linkScopeCompanyId,
-              ...linkScope,
+              ...linkMutationBase,
               link_type: linkType,
               source_account_id: linkType === "unidirectional" ? Number(linkingAccountId) : null,
             }),

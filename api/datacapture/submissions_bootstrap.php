@@ -64,13 +64,20 @@ function dcSubmissionsApiInit(): array
     }
 
     if (!$company_id) {
-        http_response_code(401);
-        echo json_encode(['success' => false, 'error' => '缺少公司信息']);
-        exit;
+        // Phase 3: group dual-tenant scope may have company_id=0 (empty group)
+        $isPureGroup = !empty($capture_scope_ctx['is_group_scope'])
+            && !empty($capture_scope_ctx['dual_tenant'])
+            && (int) ($capture_scope_ctx['group_scope_id'] ?? $capture_scope_ctx['scope_id'] ?? 0) > 0;
+        if (!$isPureGroup) {
+            http_response_code(401);
+            echo json_encode(['success' => false, 'error' => '缺少公司信息']);
+            exit;
+        }
+        $company_id = 0;
     }
 
     $groupIdForAccess = dcNormalizeGroupId($scopeParams['group_id'] ?? '');
-    if (!checkReportMaintenanceAccess($pdo, $company_id, $groupIdForAccess !== '' ? $groupIdForAccess : null)) {
+    if (!checkReportMaintenanceAccess($pdo, (int) $company_id, $groupIdForAccess !== '' ? $groupIdForAccess : null)) {
         http_response_code(403);
         echo json_encode(['success' => false, 'error' => 'Unauthorized category permission (Games or Bank required)']);
         exit;

@@ -546,18 +546,22 @@ function DataCapturePageContent() {
             navigate(DATA_CAPTURE_HOME_PATH, { replace: true });
             return;
           }
-          if (sessionMeta?.captureSelectedGroup) {
-            persistDashboardGroupFilter(sessionMeta.captureSelectedGroup);
+          const bootGroup =
+            (sessionMeta?.captureSelectedGroup &&
+              String(sessionMeta.captureSelectedGroup).trim().toUpperCase()) ||
+            resolveInitialSelectedGroupFromSession(raw, null, u) ||
+            (String(u?.login_scope || "").toLowerCase() === "group" && u?.login_identifier
+              ? String(u.login_identifier).trim().toUpperCase()
+              : null) ||
+            (queryGroup ? String(queryGroup).trim().toUpperCase() : null);
+          if (bootGroup) {
+            persistDashboardGroupFilter(bootGroup);
           }
           persistDashboardGroupOnlyMode(true);
           persistDashboardSelectedCompany(null);
           setCompanies(raw);
           setCompanyId(null);
-          setSelectedGroup(
-            (sessionMeta?.captureSelectedGroup &&
-              String(sessionMeta.captureSelectedGroup).trim().toUpperCase()) ||
-              resolveInitialSelectedGroupFromSession(raw, null)
-          );
+          setSelectedGroup(bootGroup);
           return;
         }
 
@@ -615,7 +619,7 @@ function DataCapturePageContent() {
               return normalized;
             }
           }
-          return resolveInitialSelectedGroupFromSession(raw, rowForPick);
+          return resolveInitialSelectedGroupFromSession(raw, rowForPick, u);
         })();
 
         setCompanies(raw);

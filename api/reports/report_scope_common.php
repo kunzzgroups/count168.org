@@ -110,6 +110,21 @@ function checkReportGamesAccess(PDO $pdo, int $companyId, ?string $groupId): boo
 /** Games or Bank — used by maintenance / data-capture scope APIs. */
 function checkReportMaintenanceAccess(PDO $pdo, int $companyId, ?string $groupId): bool
 {
+    // Phase 2/3: pure group tenant (no company anchor) — fixed Games category
+    if ($companyId <= 0) {
+        $g = (string) ($groupId ?? '');
+        if (
+            $g !== ''
+            && function_exists('gt_v2_enabled')
+            && gt_v2_enabled()
+            && function_exists('gt_v2_group_category_access_ok')
+        ) {
+            require_once __DIR__ . '/../../includes/group_tenant_v2.php';
+            return gt_v2_group_category_access_ok($pdo, $g);
+        }
+        return false;
+    }
+
     if (checkCompanyCategoryPermission($pdo, $companyId, 'Games')) {
         return true;
     }
