@@ -72,7 +72,10 @@ export function parseSimpleDivisionRateDivisor(raw) {
 /**
  * Rate-Mul commission in second-currency units (full precision; caller stores at 6dp).
  * - Positive Rate-Mul: from × mul
- * - Negative Rate-Mul + FX `/divisor`: profit = from/(divisor−|mul|) − from/divisor
+ * - Negative Rate-Mul + FX `/divisor`:
+ *   - |mul| < divisor → profit = from/(divisor−|mul|) − from/divisor
+ *   - |mul| = divisor → take-all: profit = from/divisor (entire base)
+ *   - |mul| > divisor → 0 (caller rejects via isRateMulAdjustedDivisorValid)
  * - Negative Rate-Mul + multiply FX: ignored (0)
  */
 export function computeRateMulCommission({ fromAmount, middlemanRate, exchangeRateRaw }) {
@@ -88,19 +91,21 @@ export function computeRateMulCommission({ fromAmount, middlemanRate, exchangeRa
   const divisor = parseSimpleDivisionRateDivisor(exchangeRateRaw);
   if (!divisor) return MoneyDecimal.toDecimal("0", 0);
   const adjusted = divisor.minus(mmr.abs());
-  if (adjusted.lte(0)) return MoneyDecimal.toDecimal("0", 0);
   const base = fromDec.div(divisor);
+  // |mul| === divisor → Middle-Man takes entire converted amount (mirror of positive mul = rate).
+  if (adjusted.isZero()) return base;
+  if (adjusted.lt(0)) return MoneyDecimal.toDecimal("0", 0);
   const alt = fromDec.div(adjusted);
   return alt.minus(base);
 }
 
-/** Negative Rate-Mul with `/rate` requires adjusted divisor > 0. */
+/** Negative Rate-Mul with `/rate`: adjusted divisor must be ≥ 0 (|mul| ≤ divisor). */
 export function isRateMulAdjustedDivisorValid(middlemanRate, exchangeRateRaw) {
   const parsed = parseMiddlemanRateSigned(middlemanRate);
   if (!parsed.valid || !parsed.value.lt(0)) return true;
   const divisor = parseSimpleDivisionRateDivisor(exchangeRateRaw);
   if (!divisor) return true; // multiply FX → ignore negative mul
-  return divisor.minus(parsed.value.abs()).gt(0);
+  return divisor.minus(parsed.value.abs()).gte(0);
 }
 
 /** RATE Service Fee remark / desc：charge {第二币种} {用户输入} Service Fees */
