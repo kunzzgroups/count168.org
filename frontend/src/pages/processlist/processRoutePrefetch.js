@@ -8,8 +8,8 @@ const processListRouteWarmInflight = new Map();
 const bankProcessListRouteWarmCache = new Map();
 const bankProcessListRouteWarmInflight = new Map();
 
-function processListRouteCacheKey(companyId, { search = "", showInactive = false, showAll = false } = {}) {
-  return `${Number(companyId)}|${String(search || "").trim()}|${showInactive ? 1 : 0}|${showAll ? 1 : 0}`;
+function processListRouteCacheKey(companyId, { search = "", showActive = false, showInactive = false, showAll = false } = {}) {
+  return `${Number(companyId)}|${String(search || "").trim()}|${showActive ? 1 : 0}|${showInactive ? 1 : 0}|${showAll ? 1 : 0}`;
 }
 
 /** Sidebar hover / idle warm — consumed on ProcessListPage boot. */
@@ -70,7 +70,7 @@ export async function resolveProcessListRouteCache(companyId, opts = {}) {
 /** Games process list row + currency pill payload (company switch cache / hover warm). */
 export async function fetchGamesProcessListSlice(
   companyId,
-  { search = "", showInactive = false, showAll = false, signal } = {},
+  { search = "", showActive = false, showInactive = false, showAll = false, signal } = {},
 ) {
   const cid = Number(companyId);
   if (!Number.isFinite(cid) || cid <= 0) {
@@ -82,6 +82,7 @@ export async function fetchGamesProcessListSlice(
   listUrl.searchParams.set("company_id", String(cid));
   const q = String(search || "").trim();
   if (q) listUrl.searchParams.set("search", q);
+  if (showActive) listUrl.searchParams.set("showActive", "1");
   if (showInactive) listUrl.searchParams.set("showInactive", "1");
   if (showAll) listUrl.searchParams.set("showAll", "1");
 

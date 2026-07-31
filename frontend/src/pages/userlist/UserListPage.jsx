@@ -229,6 +229,7 @@ export default function UserListPage() {
   const [companyId, setCompanyId] = useState(null);
   const [usersRaw, setUsersRaw] = useState([]);
   const [search, setSearch] = useState("");
+  const [showActive, setShowActive] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [sortColumn, setSortColumn] = useState("loginId");
@@ -336,13 +337,14 @@ export default function UserListPage() {
   const filteredSorted = useMemo(() => {
     const f = applyUserFilters(usersRaw, {
       search,
+      showActive,
       showInactive,
       showAll,
       viewerRole: currentUserRole,
       viewerUserId: currentUserId,
     });
     return sortUsers(f, sortColumn, sortDirection);
-  }, [usersRaw, search, showInactive, showAll, currentUserRole, currentUserId, sortColumn, sortDirection]);
+  }, [usersRaw, search, showActive, showInactive, showAll, currentUserRole, currentUserId, sortColumn, sortDirection]);
 
   const canCreateUser = useMemo(() => getAvailableRolesForCreation(currentUserRole).length > 0, [currentUserRole]);
   const userMutationsBlocked = useMemo(() => isPartnershipAuditReadOnlyLocked(me), [me]);
@@ -366,6 +368,7 @@ export default function UserListPage() {
     remeasureDeps: [
       filteredSorted.length,
       showAll,
+      showActive,
       showInactive,
       search,
       lang,
@@ -696,6 +699,7 @@ export default function UserListPage() {
         setCompanyId(groupOnlyBoot ? null : effectiveNum);
         setSelectedGroup(bootGroup);
         setSearch(String(url.searchParams.get("search") || ""));
+        setShowActive(url.searchParams.get("showActive") === "1");
         setShowInactive(url.searchParams.get("showInactive") === "1");
         setShowAll(url.searchParams.get("showAll") === "1");
 
@@ -2394,36 +2398,51 @@ export default function UserListPage() {
                   />
                 </div>
                 <div className="userlist-filter-chips" role="group">
-                  <button
-                    type="button"
-                    className={`user-filter-chip${showInactive ? " is-selected" : ""}`}
-                    aria-pressed={showInactive}
-                    onClick={() => setShowInactive((prev) => !prev)}
-                  >
-                    <span className="user-filter-chip__dot" aria-hidden>
-                      {showInactive ? (
-                        <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 12l4 4 8-8" />
-                        </svg>
-                      ) : null}
-                    </span>
-                    <span className="user-filter-chip__label">{t("showInactive")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`user-filter-chip${showAll ? " is-selected" : ""}`}
-                    aria-pressed={showAll}
-                    onClick={() => setShowAll((prev) => !prev)}
-                  >
-                    <span className="user-filter-chip__dot" aria-hidden>
-                      {showAll ? (
-                        <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 12l4 4 8-8" />
-                        </svg>
-                      ) : null}
-                    </span>
-                    <span className="user-filter-chip__label">{t("showAll")}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className={`user-filter-chip${showAll ? " is-selected" : ""}`}
+                      aria-pressed={showAll}
+                      onClick={() => setShowAll((prev) => !prev)}
+                    >
+                      <span className="user-filter-chip__dot" aria-hidden>
+                        {showAll ? (
+                          <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 12l4 4 8-8" />
+                          </svg>
+                        ) : null}
+                      </span>
+                      <span className="user-filter-chip__label">{t("showAll")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`user-filter-chip${showActive ? " is-selected" : ""}`}
+                      aria-pressed={showActive}
+                      onClick={() => setShowActive((prev) => !prev)}
+                    >
+                      <span className="user-filter-chip__dot" aria-hidden>
+                        {showActive ? (
+                          <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 12l4 4 8-8" />
+                          </svg>
+                        ) : null}
+                      </span>
+                      <span className="user-filter-chip__label">{t("showActive")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`user-filter-chip${showInactive ? " is-selected" : ""}`}
+                      aria-pressed={showInactive}
+                      onClick={() => setShowInactive((prev) => !prev)}
+                    >
+                      <span className="user-filter-chip__dot" aria-hidden>
+                        {showInactive ? (
+                          <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 12l4 4 8-8" />
+                          </svg>
+                        ) : null}
+                      </span>
+                      <span className="user-filter-chip__label">{t("showInactive")}</span>
+                    </button>
                 </div>
               </div>
               <div className="user-toolbar-actions-right">

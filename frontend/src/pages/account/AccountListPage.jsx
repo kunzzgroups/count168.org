@@ -111,14 +111,13 @@ import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { useAutoListPageSize } from "../../hooks/useAutoListPageSize.js";
 import { PAGE_SIZE_MAX, PAGE_SIZE_MIN } from "../../constants/listPageSize.js";
 
-function resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll) {
-  return `${scopeKey}|${String(searchTerm || "").trim()}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
+function resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll, showActive = false) {
+  return `${scopeKey}|${String(searchTerm || "").trim()}|${showActive ? "1" : "0"}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
 }
 
-function accountRowVisibleAfterStatusChange(newStatus, { showInactive, showAll }) {
+function accountRowVisibleAfterStatusChange(newStatus, { showActive = false, showInactive = false } = {}) {
   const status = String(newStatus || "").toLowerCase();
-  if (showAll && showInactive) return status === "inactive";
-  if (showAll) return status === "active";
+  if (showActive && showInactive) return status === "active" || status === "inactive";
   if (showInactive) return status === "inactive";
   return status === "active";
 }
@@ -215,6 +214,7 @@ export default function AccountListPage() {
 
   // -- Filters --
   const [searchTerm, setSearchTerm] = useState("");
+  const [showActive, setShowActive] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [sortColumn, setSortColumn] = useState("account");
@@ -291,10 +291,10 @@ export default function AccountListPage() {
   const bootForUserRef = useRef(null);
   const onSwitchCompanyRef = useRef(null);
   const gcScopeRef = useRef({});
-  const listFiltersRef = useRef({ showInactive: false, showAll: false, searchTerm: "" });
+  const listFiltersRef = useRef({ showActive: false, showInactive: false, showAll: false, searchTerm: "" });
   const listPaginationScopeRef = useRef("");
   const accountsLenRef = useRef(0);
-  listFiltersRef.current = { showInactive, showAll, searchTerm };
+  listFiltersRef.current = { showActive, showInactive, showAll, searchTerm };
   accountsLenRef.current = accounts.length;
 
   const accountModalCurrencies = useMemo(() => {
@@ -382,9 +382,9 @@ export default function AccountListPage() {
         isListScopeReady: ready,
         groupOnlyMode: useGroupOnly,
       });
-      lastAccountsFetchKeyRef.current = buildAccountsFetchKey(scopeKey, searchTerm, showInactive, showAll);
+      lastAccountsFetchKeyRef.current = buildAccountsFetchKey(scopeKey, searchTerm, showInactive, showAll, showActive);
     },
-    [searchTerm, showInactive, showAll, resolveGroupOnlyFetch],
+    [searchTerm, showActive, showInactive, showAll, resolveGroupOnlyFetch],
   );
 
   const resolveListPaginationScopeKey = useCallback(
@@ -444,6 +444,7 @@ export default function AccountListPage() {
   const matchesLiveListFilters = useCallback((requested) => {
     const live = listFiltersRef.current;
     return (
+      live.showActive === requested.showActive &&
       live.showInactive === requested.showInactive &&
       live.showAll === requested.showAll &&
       String(live.searchTerm || "").trim() === String(requested.searchTerm || "").trim()
@@ -464,14 +465,14 @@ export default function AccountListPage() {
       } = scope;
       if (!ready) return;
 
-      const requestedFilters = { showInactive, showAll, searchTerm };
+      const requestedFilters = { showActive, showInactive, showAll, searchTerm };
       const useGroupOnly = groupOnly ?? resolveGroupOnlyFetch(scope);
       const scopeKey = resolveAccountScopeKey({
         companyId: cid,
         selectedGroup: sg,
         groupOnly: useGroupOnly,
       });
-      const cacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll);
+      const cacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll, showActive);
 
       listFetchAbortRef.current?.abort();
       const ac = new AbortController();
@@ -506,6 +507,7 @@ export default function AccountListPage() {
         if (cid) {
           const listUrl = buildAccountsUrl(cid, searchTerm, showInactive, showAll, {
             groupId: sg || null,
+            showActive,
           });
           const res = await fetch(listUrl.toString(), {
             credentials: "include",
@@ -520,6 +522,7 @@ export default function AccountListPage() {
           const merged = await fetchMergedAccounts({
             companyIds: mergeIds,
             searchTerm,
+            showActive,
             showInactive,
             showAll,
             signal: ac.signal,
@@ -532,6 +535,7 @@ export default function AccountListPage() {
           const merged = await fetchMergedAccounts({
             groupIds: groupIdsForGroupsAllAggregate(companies, gids),
             searchTerm,
+            showActive,
             showInactive,
             showAll,
             signal: ac.signal,
@@ -542,7 +546,7 @@ export default function AccountListPage() {
           nextAccounts = merged.accounts;
         } else if (useGroupOnly && sg) {
           const res = await fetch(
-            buildGroupAccountsUrl(sg, searchTerm, showInactive, showAll, { groupOnly: true }).toString(),
+            buildGroupAccountsUrl(sg, searchTerm, showInactive, showAll, { groupOnly: true, showActive }).toString(),
             { credentials: "include", signal: ac.signal },
           );
           const json = await res.json();
@@ -568,7 +572,7 @@ export default function AccountListPage() {
         if (!silent) notifyApi(e?.message, "failedToLoadAccounts", "danger");
       }
     },
-    [companies, searchTerm, showInactive, showAll, applyAccountListResult, notifyApi, resolveGroupOnlyFetch, matchesLiveListFilters],
+    [companies, searchTerm, showActive, showInactive, showAll, applyAccountListResult, notifyApi, resolveGroupOnlyFetch, matchesLiveListFilters],
   );
 
   const applyAccountListCache = useCallback(
@@ -585,7 +589,7 @@ export default function AccountListPage() {
         selectedGroup: sg,
         groupOnly: useGroupOnly,
       });
-      const cacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll);
+      const cacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll, showActive);
       const cached = accountListCacheRef.current.get(cacheKey);
       if (!cached) return false;
       setAccounts((prev) =>
@@ -593,7 +597,7 @@ export default function AccountListPage() {
       );
       return true;
     },
-    [searchTerm, showInactive, showAll, resolveGroupOnlyFetch],
+    [searchTerm, showActive, showInactive, showAll, resolveGroupOnlyFetch],
   );
 
   const applyCacheOrClearAccounts = useCallback(
@@ -617,11 +621,12 @@ export default function AccountListPage() {
         selectedGroup: sg,
         groupOnly: useGroupOnly,
       });
-      const listCacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll);
+      const listCacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll, showActive);
       const routeWarm = consumeAccountListRouteCache({
         companyId: cid,
         groupId: sg,
         search: searchTerm,
+        showActive,
         showInactive,
         showAll,
       });
@@ -634,7 +639,7 @@ export default function AccountListPage() {
       }
       return applyAccountListCache(gcScope, { groupOnly: useGroupOnly });
     },
-    [applyAccountListCache, resolveGroupOnlyFetch, resetPaginationForGcScope, searchTerm, showInactive, showAll],
+    [applyAccountListCache, resolveGroupOnlyFetch, resetPaginationForGcScope, searchTerm, showActive, showInactive, showAll],
   );
 
   const invalidateAccountListCacheForScope = useCallback(
@@ -646,10 +651,10 @@ export default function AccountListPage() {
         selectedGroup: sg,
         groupOnly: useGroupOnly,
       });
-      const cacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll);
+      const cacheKey = resolveAccountListCacheKey(scopeKey, searchTerm, showInactive, showAll, showActive);
       accountListCacheRef.current.delete(cacheKey);
     },
-    [searchTerm, showInactive, showAll, resolveGroupOnlyFetch],
+    [searchTerm, showActive, showInactive, showAll, resolveGroupOnlyFetch],
   );
 
   const loadRoles = useCallback(async ({ companyId: cid = null, groupId = null } = {}) => {
@@ -772,6 +777,7 @@ export default function AccountListPage() {
         }
 
         const initialSearchTerm = toUpper(url.searchParams.get("search") || "");
+        const initialShowActive = url.searchParams.get("showActive") === "1";
         const initialShowInactive = url.searchParams.get("showInactive") === "1";
         const initialShowAll = url.searchParams.get("showAll") === "1";
 
@@ -863,6 +869,7 @@ export default function AccountListPage() {
         setCompanyId(resolvedCompanyId);
         setSelectedGroup(bootGroup);
         setSearchTerm(initialSearchTerm);
+        setShowActive(initialShowActive);
         setShowInactive(initialShowInactive);
         setShowAll(initialShowAll);
         skipInitialGcSyncRef.current = true;
@@ -904,10 +911,10 @@ export default function AccountListPage() {
               : null
           : null;
         const listCacheKey = scopeKey
-          ? resolveAccountListCacheKey(scopeKey, initialSearchTerm, initialShowInactive, initialShowAll)
+          ? resolveAccountListCacheKey(scopeKey, initialSearchTerm, initialShowInactive, initialShowAll, initialShowActive)
           : null;
         const fetchKey = scopeKey
-          ? buildAccountsFetchKey(scopeKey, initialSearchTerm, initialShowInactive, initialShowAll)
+          ? buildAccountsFetchKey(scopeKey, initialSearchTerm, initialShowInactive, initialShowAll, initialShowActive)
           : null;
 
         const warmed = scopeKey
@@ -915,6 +922,7 @@ export default function AccountListPage() {
               companyId: groupOnlyBoot ? null : resolvedCompanyId,
               groupId: groupOnlyBoot ? bootGroup : null,
               search: initialSearchTerm,
+              showActive: initialShowActive,
               showInactive: initialShowInactive,
               showAll: initialShowAll,
             })
@@ -1068,7 +1076,7 @@ export default function AccountListPage() {
         selectedGroup: vg,
         groupOnly: false,
       });
-      const fetchKey = buildAccountsFetchKey(scopeKey, searchTerm, showInactive, showAll);
+      const fetchKey = buildAccountsFetchKey(scopeKey, searchTerm, showInactive, showAll, showActive);
       bootFetchedAccountsKeyRef.current = fetchKey;
 
       const fetchScope = {
@@ -1108,6 +1116,7 @@ export default function AccountListPage() {
       notify,
       notifyApi,
       searchTerm,
+      showActive,
       showInactive,
       showAll,
       selectedGroup,
@@ -1439,11 +1448,12 @@ export default function AccountListPage() {
         companyId: cid,
         groupId: gid,
         search: searchTerm,
+        showActive,
         showInactive,
         showAll,
       });
     },
-    [searchTerm, showInactive, showAll, selectedGroup],
+    [searchTerm, showActive, showInactive, showAll, selectedGroup],
   );
 
   const onPickCompanyPill = useCallback(
@@ -1704,7 +1714,7 @@ export default function AccountListPage() {
 
   useLayoutEffect(() => {
     if (bootLoading) return;
-    const filterKey = `${String(searchTerm || "").trim()}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
+    const filterKey = `${String(searchTerm || "").trim()}|${showActive ? "1" : "0"}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
     const combined = `${accountsListFetchScopeKey}|${filterKey}`;
     if (!accountsListFetchScopeKey) return;
     if (combined === listPaginationScopeRef.current) return;
@@ -1714,6 +1724,7 @@ export default function AccountListPage() {
     bootLoading,
     accountsListFetchScopeKey,
     searchTerm,
+    showActive,
     showInactive,
     showAll,
     resetAccountListPagination,
@@ -1776,7 +1787,7 @@ export default function AccountListPage() {
 
   useEffect(() => {
     bootFetchedAccountsKeyRef.current = null;
-  }, [showInactive, showAll, searchTerm]);
+  }, [showActive, showInactive, showAll, searchTerm]);
 
   useEffect(() => {
     if (!accountsListFetchScopeKey) return;
@@ -1785,6 +1796,7 @@ export default function AccountListPage() {
       searchTerm,
       showInactive,
       showAll,
+      showActive,
     );
     if (skipCompanyFetchEffectRef.current) {
       skipCompanyFetchEffectRef.current = false;
@@ -1806,7 +1818,7 @@ export default function AccountListPage() {
     }
     void fetchAccounts(scope, { silent: true });
     const settleRetryTimer = window.setTimeout(() => {
-      if (!matchesLiveListFilters({ showInactive, showAll, searchTerm })) return;
+      if (!matchesLiveListFilters({ showActive, showInactive, showAll, searchTerm })) return;
       if (accountsLenRef.current > 0) return;
       void fetchAccounts(gcScopeRef.current, { silent: true, trustRequestScope: true });
     }, 320);
@@ -1814,6 +1826,7 @@ export default function AccountListPage() {
   }, [
     accountsListFetchScopeKey,
     searchTerm,
+    showActive,
     showInactive,
     showAll,
     fetchAccounts,
@@ -1890,6 +1903,7 @@ export default function AccountListPage() {
     remeasureDeps: [
       filteredForMode.length,
       showAll,
+      showActive,
       showInactive,
       searchTerm,
       lang,
@@ -1965,8 +1979,8 @@ export default function AccountListPage() {
   );
 
   useEffect(() => {
-    if (!showInactive && !showAll) setSelectedDeleteIds(new Set());
-  }, [showInactive, showAll]);
+    if (!showInactive) setSelectedDeleteIds(new Set());
+  }, [showInactive]);
 
   const togglePaymentAlert = async (id) => {
     if (accountMutationsBlocked) {
@@ -2000,7 +2014,7 @@ export default function AccountListPage() {
         setAccounts((prev) => {
           const updated = prev.map((a) => (Number(a.id) === Number(id) ? { ...a, status: next } : a));
           const visible = updated.filter((a) =>
-            accountRowVisibleAfterStatusChange(a.status, { showInactive, showAll }),
+            accountRowVisibleAfterStatusChange(a.status, { showActive, showInactive }),
           );
           return visible;
         });
@@ -2996,36 +3010,51 @@ export default function AccountListPage() {
                   />
                 </div>
                 <div className="userlist-filter-chips" role="group">
-                  <button
-                    type="button"
-                    className={`user-filter-chip${showInactive ? " is-selected" : ""}`}
-                    aria-pressed={showInactive}
-                    onClick={() => setShowInactive((prev) => !prev)}
-                  >
-                    <span className="user-filter-chip__dot" aria-hidden>
-                      {showInactive ? (
-                        <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 12l4 4 8-8" />
-                        </svg>
-                      ) : null}
-                    </span>
-                    <span className="user-filter-chip__label">{t("showInactive")}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className={`user-filter-chip${showAll ? " is-selected" : ""}`}
-                    aria-pressed={showAll}
-                    onClick={() => setShowAll((prev) => !prev)}
-                  >
-                    <span className="user-filter-chip__dot" aria-hidden>
-                      {showAll ? (
-                        <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 12l4 4 8-8" />
-                        </svg>
-                      ) : null}
-                    </span>
-                    <span className="user-filter-chip__label">{t("showAll")}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className={`user-filter-chip${showAll ? " is-selected" : ""}`}
+                      aria-pressed={showAll}
+                      onClick={() => setShowAll((prev) => !prev)}
+                    >
+                      <span className="user-filter-chip__dot" aria-hidden>
+                        {showAll ? (
+                          <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 12l4 4 8-8" />
+                          </svg>
+                        ) : null}
+                      </span>
+                      <span className="user-filter-chip__label">{t("showAll")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`user-filter-chip${showActive ? " is-selected" : ""}`}
+                      aria-pressed={showActive}
+                      onClick={() => setShowActive((prev) => !prev)}
+                    >
+                      <span className="user-filter-chip__dot" aria-hidden>
+                        {showActive ? (
+                          <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 12l4 4 8-8" />
+                          </svg>
+                        ) : null}
+                      </span>
+                      <span className="user-filter-chip__label">{t("showActive")}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`user-filter-chip${showInactive ? " is-selected" : ""}`}
+                      aria-pressed={showInactive}
+                      onClick={() => setShowInactive((prev) => !prev)}
+                    >
+                      <span className="user-filter-chip__dot" aria-hidden>
+                        {showInactive ? (
+                          <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M6 12l4 4 8-8" />
+                          </svg>
+                        ) : null}
+                      </span>
+                      <span className="user-filter-chip__label">{t("showInactive")}</span>
+                    </button>
                 </div>
                 </div>
                 <div className="user-toolbar-actions-right" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>

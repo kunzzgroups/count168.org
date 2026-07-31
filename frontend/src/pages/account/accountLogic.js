@@ -130,26 +130,28 @@ export function isVirtualGroupLinkCompanyRow(c) {
   return ls != null && String(ls).trim() !== "";
 }
 
-export function buildAccountsFetchKey(companyId, searchTerm, showInactive, showAll) {
-  return `${companyId || ""}|${String(searchTerm || "").trim()}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
+export function buildAccountsFetchKey(companyId, searchTerm, showInactive, showAll, showActive = false) {
+  return `${companyId || ""}|${String(searchTerm || "").trim()}|${showActive ? "1" : "0"}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
 }
 
-export function buildAccountsUrl(companyId, searchTerm, showInactive, showAll, { groupId = null } = {}) {
+export function buildAccountsUrl(companyId, searchTerm, showInactive, showAll, { groupId = null, showActive = false } = {}) {
   const url = new URL(buildApiUrl("api/accounts/accountlistapi.php"));
   url.searchParams.set("company_id", String(companyId));
   const gid = groupId ? String(groupId).trim().toUpperCase() : "";
   if (gid) url.searchParams.set("group_id", gid);
   if (String(searchTerm || "").trim()) url.searchParams.set("search", String(searchTerm || "").trim());
+  if (showActive) url.searchParams.set("showActive", "1");
   if (showInactive) url.searchParams.set("showInactive", "1");
   if (showAll) url.searchParams.set("showAll", "1");
   return url;
 }
 
-export function buildGroupAccountsUrl(groupId, searchTerm, showInactive, showAll, { groupOnly = true } = {}) {
+export function buildGroupAccountsUrl(groupId, searchTerm, showInactive, showAll, { groupOnly = true, showActive = false } = {}) {
   const url = new URL(buildApiUrl("api/accounts/accountlistapi.php"));
   url.searchParams.set("group_id", String(groupId));
   if (groupOnly) url.searchParams.set("group_only", "1");
   if (String(searchTerm || "").trim()) url.searchParams.set("search", String(searchTerm || "").trim());
+  if (showActive) url.searchParams.set("showActive", "1");
   if (showInactive) url.searchParams.set("showInactive", "1");
   if (showAll) url.searchParams.set("showAll", "1");
   return url;
@@ -173,6 +175,7 @@ export async function fetchMergedAccounts({
   companyIds = [],
   groupIds = [],
   searchTerm = "",
+  showActive = false,
   showInactive = false,
   showAll = false,
   signal = undefined,
@@ -180,7 +183,7 @@ export async function fetchMergedAccounts({
   const tasks = [];
   for (const cid of companyIds) {
     tasks.push(
-      fetch(buildAccountsUrl(cid, searchTerm, showInactive, showAll).toString(), {
+      fetch(buildAccountsUrl(cid, searchTerm, showInactive, showAll, { showActive }).toString(), {
         credentials: "include",
         signal,
       }).then((r) => r.json()),
@@ -188,7 +191,7 @@ export async function fetchMergedAccounts({
   }
   for (const gid of groupIds) {
     tasks.push(
-      fetch(buildGroupAccountsUrl(gid, searchTerm, showInactive, showAll).toString(), {
+      fetch(buildGroupAccountsUrl(gid, searchTerm, showInactive, showAll, { showActive }).toString(), {
         credentials: "include",
         signal,
       }).then((r) => r.json()),

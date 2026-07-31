@@ -296,20 +296,20 @@ export function formatLastLogin(raw) {
 }
 
 /**
- * Status visibility after toggle — aligned with processlist / account list:
- * - default: active (paginated)
- * - showInactive: inactive (paginated)
- * - showAll: active + inactive (no pagination)
- * - showAll + showInactive: active + inactive
+ * Status visibility after toggle — aligned with bank process / account / process list:
+ * - default / showActive: active
+ * - showInactive: inactive
+ * - showActive + showInactive: both
+ * - showAll: pagination only (does not change status bucket)
  */
-export function userRowVisibleAfterStatusChange(newStatus, { showInactive, showAll }) {
-  if (showAll) return true;
+export function userRowVisibleAfterStatusChange(newStatus, { showActive = false, showInactive = false } = {}) {
   const status = normRole(newStatus);
+  if (showActive && showInactive) return status === "active" || status === "inactive";
   if (showInactive) return status === "inactive";
   return status === "active";
 }
 
-export function applyUserFilters(users, { search, showInactive, showAll, viewerRole, viewerUserId = null }) {
+export function applyUserFilters(users, { search, showActive = false, showInactive = false, showAll: _showAll, viewerRole, viewerUserId = null }) {
   const vr = normRole(viewerRole);
   let rows = users.map((u) => ({ ...u }));
   if (vr !== "owner") {
@@ -324,7 +324,7 @@ export function applyUserFilters(users, { search, showInactive, showAll, viewerR
   if (q) {
     rows = rows.filter((u) => `${u.login_id || ""} ${u.name || ""} ${u.email || ""}`.toLowerCase().includes(q));
   }
-  if (showAll) {
+  if (showActive && showInactive) {
     return rows;
   }
   if (showInactive) {

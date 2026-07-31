@@ -351,6 +351,7 @@ function getProcesses() {
         $targetCompanyId = $requested_company_id;
         
         $searchTerm = $_GET['search'] ?? '';
+        $showActive = isset($_GET['showActive']) && $_GET['showActive'] == '1';
         $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] == '1';
         $showOfficial = isset($_GET['showOfficial']) && $_GET['showOfficial'] == '1';
         $showEInvoice = isset($_GET['showEInvoice']) && $_GET['showEInvoice'] == '1';
@@ -402,15 +403,12 @@ function getProcesses() {
             $params[] = "%$searchTerm%";
         }
         
-        // 根据 showAll / showInactive 过滤状态：
-        // - 默认 / 仅分页：active
-        // - showInactive：inactive（分页）
-        // - showAll：全部 active（不分页由前端控制）
-        // - showAll + showInactive：全部 inactive
-        if ($showAll && $showInactive) {
-            $conditions[] = "p.status = 'inactive'";
-        } elseif ($showAll) {
-            $conditions[] = "p.status = 'active'";
+        // 状态筛选（showAll 只影响前端分页，不参与 SQL）：
+        // - 默认 / showActive：active
+        // - showInactive：inactive
+        // - showActive + showInactive：active OR inactive
+        if ($showActive && $showInactive) {
+            $conditions[] = "p.status IN ('active','inactive')";
         } elseif ($showInactive) {
             $conditions[] = "p.status = 'inactive'";
         } else {
