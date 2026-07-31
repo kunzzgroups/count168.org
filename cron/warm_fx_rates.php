@@ -2,8 +2,8 @@
 /**
  * Prefetch latest FX rates into fx_daily_rates (Frankfurter → DB).
  *
- * Suggested Hostinger cron (hourly):
- *   php /path/to/cron/warm_fx_rates.php
+ * Suggested EC2 cron (hourly, Amazon Linux):
+ *   0 * * * * /usr/bin/php /var/www/count168/cron/warm_fx_rates.php >> /home/ec2-user/logs/warm_fx_rates.log 2>&1
  */
 if (php_sapi_name() !== 'cli') {
     http_response_code(403);
