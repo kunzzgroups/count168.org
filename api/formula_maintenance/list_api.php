@@ -215,7 +215,9 @@ try {
     $scopeProcessSql = (string) $scopeCtx['scope_process_sql'];
 
     if ($formula_scope_group) {
-        if ($companyId <= 0) {
+        $groupPk = (int) ($scopeCtx['group_scope_id'] ?? $scopeCtx['scope_id'] ?? 0);
+        // Dual-tenant pure Group: company_id may be 0; ledger uses scope_id.
+        if ($companyId <= 0 && (empty($scopeCtx['dual_tenant']) || $groupPk <= 0)) {
             jsonResponse(true, 'success', ['list' => [], 'total' => 0]);
             exit;
         }

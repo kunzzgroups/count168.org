@@ -1,22 +1,39 @@
 <?php
 /**
- * Promote Group payroll formula templates (SALARY/BONUS/COMMISSION/PROFIT)
- * that were written as company ledger onto group ledger (scope_type=group).
- *
- * For each group: process.company_id on group entity OR group anchor,
- * templates still company-scoped → set scope_type=group, scope_id=groups.id.
- *
+ * Run formula template group-scope migrate against site DB via local tunnel :13306.
  * Usage:
- *   php scripts/_migrate_formula_templates_group_scope.php
- *   php scripts/_migrate_formula_templates_group_scope.php --dry-run
+ *   php scripts/_run_migrate_formula_templates_site.php --dry-run
+ *   php scripts/_run_migrate_formula_templates_site.php
  */
 
-require_once __DIR__ . '/../includes/config.php';
+$dryRun = in_array('--dry-run', $argv ?? [], true);
+
+$host = '127.0.0.1';
+$port = 13306;
+$dbname = 'u857194726_c168site';
+$dbuser = 'admin';
+$dbpass = 'C168_site';
+
+try {
+    $pdo = new PDO(
+        "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4;connect_timeout=10",
+        $dbuser,
+        $dbpass,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_TIMEOUT => 30]
+    );
+    $pdo->exec("SET time_zone = '+08:00'");
+} catch (Throwable $e) {
+    fwrite(STDERR, 'CONNECT FAILED: ' . $e->getMessage() . PHP_EOL);
+    fwrite(STDERR, "Hint: ensure SSH tunnel to site MySQL is up on 127.0.0.1:13306\n");
+    exit(1);
+}
+
+// Provide $pdo for shared includes without loading config.local (XAMPP).
+$GLOBALS['pdo'] = $pdo;
+
 require_once __DIR__ . '/../includes/tenant_scope.php';
 require_once __DIR__ . '/../includes/group_company_access.php';
 require_once __DIR__ . '/../api/transactions/transaction_scope.php';
-
-$dryRun = in_array('--dry-run', $argv ?? [], true);
 
 echo 'pdo_db=' . $pdo->query('SELECT DATABASE()')->fetchColumn() . PHP_EOL;
 echo 'dry_run=' . ($dryRun ? '1' : '0') . PHP_EOL;
@@ -69,7 +86,6 @@ foreach ($groups as $gRow) {
         $companyIds[$anchorId] = true;
     }
 
-    // Also: processes whose currency is already on this group ledger.
     $curProc = $pdo->prepare("
         SELECT DISTINCT p.company_id
         FROM process p
@@ -113,7 +129,6 @@ foreach ($groups as $gRow) {
 echo 'updated=' . $updated . ' skipped=' . $skipped . PHP_EOL;
 echo 'by_group=' . json_encode($byGroup, JSON_UNESCAPED_UNICODE) . PHP_EOL;
 
-// Backfill process_id NULL on group-ledger templates → group's SALARY process.id
 $orphans = $pdo->query("
     SELECT dct.id AS template_id, dct.scope_id AS group_pk, dct.company_id
     FROM data_capture_templates dct

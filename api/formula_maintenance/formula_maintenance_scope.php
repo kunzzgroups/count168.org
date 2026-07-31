@@ -194,12 +194,17 @@ function formulaMaintenanceBuildScopeProcessSql(PDO $pdo, int $companyId, bool $
 {
     $class = formulaMaintenanceClassifyPayrollProcessIds($pdo, $companyId);
     if ($isGroupScope) {
-        $sql = dcSqlGroupProcessFilter('p');
+        // Group ledger templates may have been saved with process_id NULL (Summary path).
+        // Still show them: match payroll process join OR orphan null process_id on group ledger.
+        $parts = [
+            "UPPER(TRIM(COALESCE(p.process_id, ''))) IN (" . dcSqlQuotedGroupPayrollProcessCodes() . ")",
+            '(dct.process_id IS NULL OR dct.process_id = 0)',
+        ];
         if ($class['group'] !== []) {
-            $sql .= formulaMaintenanceSqlProcessIdInList($class['group'], 'p');
+            $parts[] = 'p.id IN (' . implode(',', array_map('intval', $class['group'])) . ')';
         }
 
-        return $sql;
+        return ' AND (' . implode(' OR ', $parts) . ') ';
     }
 
     // Subsidiary company (e.g. C168): allow SALARY/BONUS — template ledger filter splits group vs company rows.

@@ -1413,8 +1413,21 @@ function dcAssertUserCanAccessCompany(PDO $pdo, int $companyId, ?string $viewGro
 
 function dcAssertProcessIdInCaptureScope(PDO $pdo, int $processId, int $companyId, bool $groupScope): void
 {
-    if ($processId <= 0 || $companyId <= 0) {
+    if ($processId <= 0) {
         throw new Exception('Invalid process for scope');
+    }
+    // Pure Group: company_id may be 0 — validate payroll code only.
+    if ($companyId <= 0) {
+        if (!$groupScope) {
+            throw new Exception('Invalid process for scope');
+        }
+        $stmt = $pdo->prepare('SELECT UPPER(TRIM(process_id)) FROM process WHERE id = ? LIMIT 1');
+        $stmt->execute([$processId]);
+        $code = strtoupper(trim((string) ($stmt->fetchColumn() ?: '')));
+        if ($code === '' || !dcIsGroupPayrollProcessCode($code)) {
+            throw new Exception('Invalid process for group scope');
+        }
+        return;
     }
     $stmt = $pdo->prepare('SELECT UPPER(TRIM(process_id)) FROM process WHERE id = ? AND company_id = ? LIMIT 1');
     $stmt->execute([$processId, $companyId]);
