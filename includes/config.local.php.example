@@ -1,11 +1,13 @@
 <?php
 /**
- * EC2 / 本地覆盖数据库（复制为 config.local.php，已在 .gitignore）
+ * Org 本地/服务器覆盖（复制为 config.local.php，已在 .gitignore）
  *
  *   cp includes/config.local.php.example includes/config.local.php
+ *
+ * 本仓库应对 c168_org，不要写成 test 的 u857194726_count_site / c168site。
  */
 $host = '127.0.0.1';
-$dbname = 'u857194726_c168site';
+$dbname = 'c168_org';
 $dbuser = 'admin';
 $dbpass = 'C168_site';
 
