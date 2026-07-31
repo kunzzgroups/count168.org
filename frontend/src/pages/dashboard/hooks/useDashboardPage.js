@@ -712,7 +712,9 @@ const CHART_DAILY_DEFER_MS = 250;
 const CURRENCY_PREFETCH_DELAY_MS = 1200;
 const CURRENCY_PREFETCH_DELAY_LONG_RANGE_MS = 600;
 /** After Company All settles, warm picker companies (behind currency warm). */
-const COMPANY_ALL_COMPANY_WARM_DELAY_MS = 1800;
+/** After Company All atomic paint — keep low so sibling warm does not fight first paint. */
+const COMPANY_ALL_COMPANY_WARM_DELAY_MS = 2800;
+const COMPANY_ALL_COMPANY_WARM_DELAY_LONG_RANGE_MS = 4500;
 /** After picking a company, warm siblings quickly so cold CX/RS/VG feel hot. */
 const COMPANY_SWITCH_PREFETCH_DELAY_MS = 250;
 
@@ -4897,10 +4899,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           bootstrap_scope: earningsOnly ? "earnings" : "full",
         });
         if (cur) q.set("currency", cur);
+        // Never pass currencies= on group_all: PHP would serially capture every
+        // secondary currency for every company in one HTTP (5×9 ≈ 45 captures).
+        // Multi-currency pie is filled by FE-parallel single-currency packs instead.
         const codes = currenciesRef.current;
-        if (Array.isArray(codes) && codes.length > 1) {
-          q.set("currencies", sortCurrencyCodesForBootstrap(codes).join(","));
-        }
         if (!earningsOnly && shouldAggregateChartByMonth(rangeFrom, rangeTo)) {
           q.set("chart_monthly", "1");
         }
@@ -6935,17 +6937,22 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             bootEarnings = synthesized.earnings;
           } else {
             try {
-              const earnPack = await loadMergedDashboard(dateFrom, dateTo, currencyCode, {
-                earningsOnly: true,
-              });
+              // Parallel per-currency group-all packs (no currencies= serial fan-out).
+              if (current) dashboardDataRef.current = current;
+              const earnGen = earningsFetchGenRef.current;
+              const rows = await fetchGroupAllEarningsRowsForRange(
+                dateFrom,
+                dateTo,
+                earnGen,
+                codesForPie
+              );
               if (gen !== dashboardFetchGenRef.current) return;
-              const fromPack = earnPack?._group_all_earnings_by_currency;
               if (
-                Array.isArray(fromPack) &&
-                fromPack.length > 1 &&
-                dashboardEarningsRowsComplete(fromPack, codesForPie)
+                Array.isArray(rows) &&
+                rows.length > 1 &&
+                dashboardEarningsRowsComplete(rows, codesForPie)
               ) {
-                bootEarnings = fromPack;
+                bootEarnings = rows;
               }
             } catch {
               /* keep prior UI */
@@ -7127,6 +7134,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     upgradeActiveScopeEarnings,
     loadEarningsParallelForAtomicPaint,
     computeCurrencyMetricsFromPayload,
+    fetchGroupAllEarningsRowsForRange,
   ]);
   loadDashboardRef.current = loadDashboard;
 
@@ -7321,14 +7329,18 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     const run = () => {
       if (cancelled || interactionGen !== scopeInteractionGenRef.current) return;
       if (String(currencyCodeRef.current || "").trim().toUpperCase() !== warmCurrency) return;
-      if (
-        !dashboardDataRef.current ||
-        dashboardBootstrapInFlightRef.current ||
-        dashboardFetchInFlightScopeRef.current
-      ) {
+      // Only warm siblings after Company All has atomically painted (KPI+chart+pie).
+      const paintedReady =
+        dashboardDataRef.current &&
+        displayScopeKeyRef.current &&
+        displayScopeKeyRef.current === dashboardScopeKey &&
+        !dashboardBootstrapInFlightRef.current &&
+        !dashboardFetchInFlightScopeRef.current &&
+        !earningsByCurrencyLoading;
+      if (!paintedReady) {
         waitRounds += 1;
         if (waitRounds >= PREFETCH_WAIT_MAX_ROUNDS) return;
-        window.setTimeout(run, 700);
+        window.setTimeout(run, 800);
         return;
       }
       const rows = companiesForCompanyPicker(companies, activeGroup, groupIds);
@@ -7350,14 +7362,17 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         if (!batch.length) return;
         void Promise.allSettled(batch.map((fn) => fn())).then(() => {
           if (idx < tasks.length && !cancelled) {
-            window.setTimeout(drain, 350);
+            window.setTimeout(drain, 400);
           }
         });
       };
       drain();
     };
 
-    const timer = window.setTimeout(run, COMPANY_ALL_COMPANY_WARM_DELAY_MS);
+    const warmDelay = shouldAggregateChartByMonth(dateFrom, dateTo)
+      ? COMPANY_ALL_COMPANY_WARM_DELAY_LONG_RANGE_MS
+      : COMPANY_ALL_COMPANY_WARM_DELAY_MS;
+    const timer = window.setTimeout(run, warmDelay);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -7373,6 +7388,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     currencyCode,
     groupIds,
     companies,
+    dashboardScopeKey,
+    earningsByCurrencyLoading,
     shouldPrefetchCompanyScope,
   ]);
 

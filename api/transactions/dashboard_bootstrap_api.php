@@ -12,6 +12,7 @@
  * - full skips secondary earnings.previous (primary MoM reuses KPI previous payload when filled).
  * - prefetch=1 uses the same slim full path (no previous) so company warm stays cheap.
  * - Live pie prefers FE-parallel per-currency earnings (avoids this file's serial currencies= loop).
+ * - group_all live packs should omit currencies=; FE fills pie via parallel single-currency calls.
  *
  * Company All (group_all=1 + company_ids=…):
  * - One HTTP runs per-company packs in-process (same capture rules); FE still mergeGroupData.
