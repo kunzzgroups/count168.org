@@ -83,10 +83,10 @@ export function mergeEditorAccounts(pickerAccounts, rows) {
 }
 
 /**
- * After link-partner reload: server rows are authoritative for persisted + new partners;
- * keep local unconfirmed draft rows (no ownership_id).
- * Do not use isExternalPartnerRow here — selecting a main-owner account sets role=OWNER
- * client-side, which would incorrectly drop that draft.
+ * After link-partner reload: keep unconfirmed drafts and place partners after accounts.
+ * Order: persisted non-partner rows → local drafts → partner rows.
+ * Draft detection must not use isExternalPartnerRow — selecting a main-owner account
+ * sets role=OWNER client-side and would incorrectly drop that draft.
  */
 export function mergeServerRowsPreservingDrafts(localRows, serverRows) {
   const server = Array.isArray(serverRows) ? serverRows : [];
@@ -104,7 +104,9 @@ export function mergeServerRowsPreservingDrafts(localRows, serverRows) {
     if (aid && serverAccountIds.has(aid)) return false;
     return true;
   });
-  return [...server, ...drafts];
+  const serverNonPartners = server.filter((r) => !isExternalPartnerRow(r));
+  const serverPartners = server.filter((r) => isExternalPartnerRow(r));
+  return [...serverNonPartners, ...drafts, ...serverPartners];
 }
 
 /** Dropdown options: hide external partners unless already selected on this row. */
