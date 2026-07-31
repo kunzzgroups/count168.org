@@ -6,7 +6,10 @@ import {
   readPersistedDashboardGcFilter,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { transactionQueryKeys } from "../../pages/transaction/lib/transactionApi.js";
-import { notifyTransactionListInvalidated } from "../../pages/transaction/lib/transactionPaymentLogic.js";
+import {
+  notifyTransactionListInvalidated,
+  TX_DATA_CHANGED_EVENT,
+} from "../../pages/transaction/lib/transactionPaymentLogic.js";
 import { dataCaptureQueryKeys } from "../../pages/datacapture/lib/dataCaptureApi.js";
 import { clearAccountListRouteWarmCache } from "../../pages/account/accountRoutePrefetch.js";
 import { clearProcessListRouteWarmCaches } from "../../pages/processlist/processRoutePrefetch.js";
@@ -68,6 +71,23 @@ export default function AppRealtimeBridge() {
       ctlRef.current = null;
     };
   }, []);
+
+  // Same-tab writers (maintenance delete, process post, etc.) call notifyTransactionListInvalidated
+  // while Transaction may be unmounted — drop RQ search cache so remount cannot paint stale rows.
+  useEffect(() => {
+    const dropLedgerQueryCaches = () => {
+      void queryClient.invalidateQueries({
+        queryKey: transactionQueryKeys.searchRoot(),
+        refetchType: "none",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: transactionQueryKeys.contraInboxRoot(),
+        refetchType: "none",
+      });
+    };
+    window.addEventListener(TX_DATA_CHANGED_EVENT, dropLedgerQueryCaches);
+    return () => window.removeEventListener(TX_DATA_CHANGED_EVENT, dropLedgerQueryCaches);
+  }, [queryClient]);
 
   useEffect(() => {
     return onRealtimeInvalidate("*", (detail) => {

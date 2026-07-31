@@ -13,6 +13,7 @@ import {
   searchBankprocessMaintenance,
   toggleBankprocessMaintenanceBatchSelection,
 } from "../../lib/maintenanceApi.js";
+import { notifyTransactionListInvalidated } from "../../lib/transactionPaymentLogic.js";
 import {
   maintenanceScopeIsReady,
   maintenanceScopeKey,
@@ -193,6 +194,7 @@ export default function MaintenanceBankprocessPage() {
     try {
       const ids = [...selectedIds];
       await deleteBankprocessMaintenanceRecords({ transactionIds: ids });
+      notifyTransactionListInvalidated("mobile_bankprocess_maintenance_delete");
       s.notify(getMaintenanceText(lang, "deleteSuccess", { n: ids.length }), "success");
       setConfirmOpen(false);
       await loadList();
