@@ -396,19 +396,21 @@ function dashboardEnsureGroupRowForCode(PDO $pdo, string $groupCode): void
     }
     try {
         $stmt = $pdo->prepare("
-            INSERT INTO `groups` (`group_code`, `group_name`, `owner_id`)
+            INSERT INTO `groups` (`group_code`, `group_name`, `owner_id`, `permissions`)
             SELECT DISTINCT
                 UPPER(TRIM(c.group_id)),
                 UPPER(TRIM(c.group_id)),
-                c.owner_id
+                c.owner_id,
+                ?
             FROM company c
             WHERE UPPER(TRIM(c.group_id)) = ?
               AND TRIM(COALESCE(c.group_id, '')) <> ''
             LIMIT 1
             ON DUPLICATE KEY UPDATE
-                `owner_id` = COALESCE(`groups`.`owner_id`, VALUES(`owner_id`))
+                `owner_id` = COALESCE(`groups`.`owner_id`, VALUES(`owner_id`)),
+                `permissions` = COALESCE(`groups`.`permissions`, VALUES(`permissions`))
         ");
-        $stmt->execute([$g]);
+        $stmt->execute(['["Games"]', $g]);
     } catch (Throwable $e) {
         error_log('dashboardEnsureGroupRowForCode(' . $g . '): ' . $e->getMessage());
     }

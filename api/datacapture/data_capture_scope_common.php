@@ -5,6 +5,7 @@
 
 require_once __DIR__ . '/../reports/report_scope_common.php';
 require_once __DIR__ . '/../../includes/tenant_scope.php';
+require_once __DIR__ . '/../../includes/group_tenant_v2.php';
 require_once __DIR__ . '/../includes/process_modified_by.php';
 
 function dcNormalizeGroupId(?string $groupId): string
@@ -233,13 +234,11 @@ function dcFinalizeDualTenantCaptureScope(PDO $pdo, array $scopeResolved, array 
             if ($groupPk <= 0) {
                 throw new Exception('无效的 group_id');
             }
-            if ($anchorId <= 0) {
-                throw new Exception('缺少公司信息');
-            }
-
+            // Phase 3: pure group tenant may have no company anchor (empty group).
+            // Dual-tenant rows use scope_type=group + scope_id; company_id may be 0.
             return [
-                'company_id' => $anchorId,
-                'anchor_company_id' => $anchorId,
+                'company_id' => $anchorId > 0 ? $anchorId : 0,
+                'anchor_company_id' => $anchorId > 0 ? $anchorId : 0,
                 'is_group_scope' => true,
                 'scope_type' => 'group',
                 'scope_id' => $groupPk,
@@ -250,6 +249,7 @@ function dcFinalizeDualTenantCaptureScope(PDO $pdo, array $scopeResolved, array 
                 'scope_company_sql_deleted' => '',
                 'dual_tenant' => true,
                 'submitted_dual_tenant' => $submittedDualTenant,
+                'pure_group_tenant' => $anchorId <= 0,
             ];
         }
 
@@ -567,6 +567,23 @@ function dcFirstCurrencyIdInGroup(PDO $pdo, string $groupId): ?int
     if ($g === '') {
         return null;
     }
+
+    // Pure / empty group: currencies live on scope_type=group (company_id may be NULL).
+    if (function_exists('tenant_load_group_tenant_currency_map') || is_file(__DIR__ . '/../../includes/tenant_scope.php')) {
+        require_once __DIR__ . '/../../includes/tenant_scope.php';
+        if (function_exists('tenant_load_group_tenant_currency_map')) {
+            $map = tenant_load_group_tenant_currency_map($pdo, $g);
+            if (is_array($map) && $map !== []) {
+                $ids = array_keys($map);
+                sort($ids, SORT_NUMERIC);
+                $id = (int) ($ids[0] ?? 0);
+                if ($id > 0) {
+                    return $id;
+                }
+            }
+        }
+    }
+
     $stmt = $pdo->prepare("
         SELECT cur.id
         FROM currency cur
@@ -644,7 +661,8 @@ function dcGroupProcessEnsureLastError(): string
 }
 
 /**
- * Currency from the capture form must belong to the group entity or a subsidiary in the group.
+ * Currency from the capture form must belong to the group ledger, group entity, or a subsidiary.
+ * Pure / empty groups: accept scope_type=group rows (company_id may be NULL).
  */
 function dcValidatePreferredCurrencyId(
     PDO $pdo,
@@ -652,19 +670,41 @@ function dcValidatePreferredCurrencyId(
     int $entityCompanyId,
     string $groupId
 ): bool {
-    if ($currencyId <= 0 || $entityCompanyId <= 0) {
+    if ($currencyId <= 0) {
         return false;
     }
+    $g = dcNormalizeGroupId($groupId);
+
+    // Group-tenant currency map (scope_type=group), including empty groups with no company anchor.
+    if ($g !== '') {
+        if (function_exists('tenant_load_group_tenant_currency_map') || is_file(__DIR__ . '/../../includes/tenant_scope.php')) {
+            require_once __DIR__ . '/../../includes/tenant_scope.php';
+            if (function_exists('tenant_load_group_tenant_currency_map')) {
+                $map = tenant_load_group_tenant_currency_map($pdo, $g);
+                if (is_array($map) && isset($map[$currencyId])) {
+                    return true;
+                }
+            }
+        }
+    }
+
+    if ($entityCompanyId <= 0) {
+        return false;
+    }
+
     $stmt = $pdo->prepare('SELECT company_id FROM currency WHERE id = ? LIMIT 1');
     $stmt->execute([$currencyId]);
-    $curCompanyId = (int) ($stmt->fetchColumn() ?: 0);
+    $rawCompany = $stmt->fetchColumn();
+    if ($rawCompany === false || $rawCompany === null || $rawCompany === '') {
+        return false;
+    }
+    $curCompanyId = (int) $rawCompany;
     if ($curCompanyId <= 0) {
         return false;
     }
     if ($curCompanyId === $entityCompanyId) {
         return true;
     }
-    $g = dcNormalizeGroupId($groupId);
     if ($g === '') {
         return false;
     }
@@ -1137,7 +1177,21 @@ function dcEnsureProcessIdByCode(
  */
 function dcAssertUserCanAccessCompany(PDO $pdo, int $companyId, ?string $viewGroup = null): void
 {
+    $vg = dcNormalizeGroupId($viewGroup ?? '');
+
+    // Phase 3: group ledger with no company anchor — authorize via group tenant contract
     if ($companyId <= 0) {
+        if (
+            $vg !== ''
+            && function_exists('gt_v2_enabled')
+            && gt_v2_enabled()
+            && function_exists('gt_v2_group_category_access_ok')
+            && gt_v2_group_category_access_ok($pdo, $vg)
+            && function_exists('gc_session_can_access_group_ledger')
+            && gc_session_can_access_group_ledger($pdo, $vg)
+        ) {
+            return;
+        }
         throw new Exception('缺少公司信息');
     }
 
@@ -1146,7 +1200,6 @@ function dcAssertUserCanAccessCompany(PDO $pdo, int $companyId, ?string $viewGro
         throw new Exception('用户未登录');
     }
 
-    $vg = dcNormalizeGroupId($viewGroup ?? '');
     $sessionCompanyId = isset($_SESSION['company_id']) ? (int) $_SESSION['company_id'] : 0;
     if ($sessionCompanyId > 0 && $sessionCompanyId === $companyId) {
         return;

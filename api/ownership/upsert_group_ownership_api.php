@@ -8,6 +8,7 @@
  */
 require_once '../../includes/session_check.php';
 require_once '../../includes/config.php';
+require_once '../../includes/group_company_access.php';
 require_once '../includes/money_decimal.php';
 require_once '../includes/ownership_history.php';
 
@@ -30,6 +31,13 @@ $percentage = money_normalize($data['percentage'] ?? 0, 2);
 
 if (!$group_id || !$raw_id) {
     echo json_encode(['status' => 'error', 'message' => 'Missing group_id or account_id']);
+    exit();
+}
+
+try {
+    gc_assert_group_ledger_access($pdo, $group_id);
+} catch (Throwable $e) {
+    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
     exit();
 }
 

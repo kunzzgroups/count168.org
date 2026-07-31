@@ -66,6 +66,17 @@ function dcGetSubmissionsByCaptureDate(int $user_id): void
         $ledgerDc = dcSubmittedLedgerFilter('dc', 'data_captures');
 
         if (!$currentCompanyId) {
+            $isPureGroupScope = !empty($capture_scope_ctx['is_group_scope'])
+                && (
+                    (int) ($capture_scope_ctx['group_scope_id'] ?? 0) > 0
+                    || (int) ($capture_scope_ctx['scope_id'] ?? 0) > 0
+                    || !empty($capture_scope_ctx['pure_group_tenant'])
+                );
+            if ($isPureGroupScope) {
+                // Empty group: fixed payroll codes only — no process.company_id rows to join yet.
+                echo json_encode(['success' => true, 'data' => []]);
+                return;
+            }
             echo json_encode(['success' => false, 'error' => 'User company_id not found']);
             return;
         }

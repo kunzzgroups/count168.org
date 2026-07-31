@@ -724,15 +724,9 @@ export default function AuthenticatedLayout() {
           ? resolveGroupCategoryFlagsForSidebar(resolved.selectedGroup, { includeBank })
           : null;
         if (resolved.groupOnly) {
+          // Group tenant contract: always Games identity; never Bank category.
           patch.hasBank = false;
-          if (resolved.hasGambling != null) {
-            patch.hasGambling = Boolean(resolved.hasGambling);
-          } else if (groupFlags) {
-            patch.hasGambling = groupFlags.hasGambling;
-          } else if (resolved.selectedGroup) {
-            const groupGambling = resolveGroupOnlySidebarGambling(resolved.selectedGroup);
-            if (groupGambling != null) patch.hasGambling = groupGambling;
-          }
+          patch.hasGambling = true;
         } else {
           if (resolved.hasGambling != null) patch.hasGambling = Boolean(resolved.hasGambling);
           else if (groupFlags) patch.hasGambling = groupFlags.hasGambling;

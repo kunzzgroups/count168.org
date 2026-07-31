@@ -28,6 +28,7 @@ import {
   notifyDashboardGroupFilterChanged,
   pickDefaultCompanyForGroup,
   pickDefaultSubsidiaryForGroup,
+  findOwnerGroupByCode,
   resolveCompanyWhenClosingGroup,
   resolveCompanyPickWhenSwitchingGroup,
   resolveBootCompanyId,
@@ -118,7 +119,7 @@ function buildModalCompanyList(raw) {
   });
 }
 
-/** Group login add/edit user: one row per accessible group (AP, IG). Prefer group-entity id; fallback to any company in group for checkbox id. */
+/** Group login add/edit user: one row per accessible group (AP, IG). Prefer group-entity id; empty group uses synthetic negative id from groups.id. */
 function buildModalGroupOptions(companies, me) {
   const gids = resolveVisibleGroupIds(sortedUniqueGroupIds(companies), me, companies);
   const out = [];
@@ -132,8 +133,19 @@ function buildModalGroupOptions(companies, me) {
       pickDefaultCompanyForGroup(companies, g, { me, groupEntityOnly: true }) ||
       pickDefaultCompanyForGroup(companies, g, { me, nativeOnly: true }) ||
       pickDefaultCompanyForGroup(companies, g, { me });
-    const id = entity?.id != null ? Number(entity.id) : Number.NaN;
-    if (!Number.isFinite(id) || id <= 0) continue;
+    let id = entity?.id != null ? Number(entity.id) : Number.NaN;
+    if (!Number.isFinite(id) || id <= 0) {
+      // Phase 4: empty group — synthetic id so dual-tenant picker can select group_codes.
+      const cached = findOwnerGroupByCode(g);
+      const pk =
+        cached?.id != null && Number(cached.id) > 0
+          ? Number(cached.id)
+          : me?.login_identifier && String(me.login_identifier).toUpperCase() === g && Number(me?.login_group_scope_id) > 0
+            ? Number(me.login_group_scope_id)
+            : 0;
+      if (pk <= 0) continue;
+      id = -Math.abs(pk);
+    }
     seen.add(g);
     out.push({
       id,
@@ -174,7 +186,7 @@ function resolveGroupEntityIdsFromCodes(modalGroupCompanies, groupCodes) {
     const code = String(row?.group_id || row?.company_id || "").trim().toUpperCase();
     if (wanted.has(code)) ids.push(Number(row.id));
   }
-  return ids.filter((id) => Number.isFinite(id) && id > 0);
+  return ids.filter((id) => Number.isFinite(id) && id !== 0);
 }
 
 function resolveGroupIdFromEntityCompanyId(companies, entityCompanyId) {
@@ -1737,9 +1749,12 @@ export default function UserListPage() {
         : `company_id=${cid}`;
       const request = Promise.all([
         fetch(buildApiUrl(`api/accounts/accountlistapi.php?${accountQuery}`), { credentials: "include" }),
-        fetch(buildApiUrl(`api/processes/processlist_api.php?company_id=${cid}&showAll=1`), { credentials: "include" }),
+        cid != null && Number(cid) > 0
+          ? fetch(buildApiUrl(`api/processes/processlist_api.php?company_id=${cid}&showAll=1`), { credentials: "include" })
+          : Promise.resolve(null),
       ]).then(async ([accRes, procRes]) => {
-        const accJ = await accRes.json(); const procJ = await procRes.json();
+        const accJ = await accRes.json();
+        const procJ = procRes ? await procRes.json() : { data: [] };
         const accs = (accJ?.data?.accounts || []).filter((a) => String(a.status || "").toLowerCase() === "active").map((a) => ({ id: a.id, account_id: a.account_id, name: String(a.name || "").trim() }));
         const procs = (Array.isArray(procJ?.data) ? procJ.data : []).filter((p) => String(p.status || "").toLowerCase() === "active").map((p) => ({ id: p.id, process_id: p.process_name || p.process_id || "", description: p.description_name || p.description || "" }));
         return { accounts: accs, processes: procs };
@@ -1819,16 +1834,25 @@ export default function UserListPage() {
         return next;
       } catch { return cached || null; }
     }
-    const request = fetch(buildApiUrl("api/users/userlist_api.php"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ action: "get", id }),
-    }).then(async (res) => {
-      const json = await res.json();
-      if (!json.success || !json.data) throw new Error(json.message || "Load user failed");
-      return json.data;
-    });
+    const request = (() => {
+      const body = { action: "get", id: Number(id) };
+      if (groupOnlyUserList && selectedGroup) {
+        body.group_id = String(selectedGroup).trim().toUpperCase();
+        body.group_only = 1;
+      } else if (companyId != null && Number(companyId) > 0) {
+        body.company_id = Number(companyId);
+      }
+      return fetch(buildApiUrl("api/users/userlist_api.php"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(body),
+      }).then(async (res) => {
+        const json = await res.json();
+        if (!json.success || !json.data) throw new Error(json.message || "Load user failed");
+        return json.data;
+      });
+    })();
     editUserDetailPendingRef.current.set(cacheKey, request);
     try {
       const next = await request;
@@ -1840,7 +1864,7 @@ export default function UserListPage() {
     } finally {
       editUserDetailPendingRef.current.delete(cacheKey);
     }
-  }, [markEditReady]);
+  }, [markEditReady, groupOnlyUserList, selectedGroup, companyId]);
 
   const applyEditDetail = useCallback((row, detail, accList, procList) => {
     let perms = []; try { perms = detail.permissions ? JSON.parse(detail.permissions) : []; } catch { perms = []; }
@@ -1912,8 +1936,16 @@ export default function UserListPage() {
       notify(t("readOnlyActionBlocked"), "danger");
       return;
     }
-    if (!mutationScopeCompanyId) return;
-    const modalCacheKey = resolveModalAccessCacheKey(mutationScopeCompanyId, groupOnlyUserList, selectedGroup);
+    const canMutate = userListHasMutationScope(mutationScopeCompanyId, {
+      groupOnly: groupOnlyUserList,
+      selectedGroup,
+    });
+    if (!canMutate) return;
+    const modalCacheKey = resolveModalAccessCacheKey(
+      mutationScopeCompanyId ?? `group:${String(selectedGroup || "").trim().toUpperCase()}`,
+      groupOnlyUserList,
+      selectedGroup,
+    );
     const hadAccessCache = modalAccessCacheRef.current.has(modalCacheKey);
     if (!hadAccessCache) {
       await fetchModalAccountsProcesses(mutationScopeCompanyId);
@@ -2006,9 +2038,17 @@ export default function UserListPage() {
       notify(t("readOnlyActionBlocked"), "danger");
       return;
     }
-    if (!scopeCompanyId) return;
+    const canMutate = userListHasMutationScope(scopeCompanyId, {
+      groupOnly: groupOnlyUserList,
+      selectedGroup,
+    });
+    if (!canMutate) return;
     if (row.is_owner_shadow && currentUserRole !== "owner") { notify(t("onlyOwnerCanEditOwner"), "danger"); return; }
-    const modalCacheKey = resolveModalAccessCacheKey(scopeCompanyId, groupOnlyUserList, selectedGroup);
+    const modalCacheKey = resolveModalAccessCacheKey(
+      scopeCompanyId ?? `group:${String(selectedGroup || "").trim().toUpperCase()}`,
+      groupOnlyUserList,
+      selectedGroup,
+    );
     const cachedDetail = editUserDetailCacheRef.current.get(String(row.id));
     const loadSeq = ++modalLoadSeqRef.current;
     const cachedAccess = modalAccessCacheRef.current.get(modalCacheKey) || { accounts: modalAccounts, processes: modalProcesses };
@@ -2021,7 +2061,10 @@ export default function UserListPage() {
       applyEditDetail(row, cachedDetail, cachedAccess.accounts, cachedAccess.processes);
     }
     setModalOpen(true);
-    void Promise.all([fetchModalAccountsProcesses(scopeCompanyId, true), fetchEditUserDetail(row.id, true)]).then(([access, detail]) => {
+    void Promise.all([
+      fetchModalAccountsProcesses(scopeCompanyId, true),
+      fetchEditUserDetail(row.id, true),
+    ]).then(([access, detail]) => {
       if (loadSeq !== modalLoadSeqRef.current || !detail) return;
       applyEditDetail(row, detail, access.accounts, access.processes);
     });
@@ -2041,9 +2084,11 @@ export default function UserListPage() {
       fd.append("id", String(row.id));
       const useGroupScopeForToggle = groupOnlyUserList && !!selectedGroup;
       const toggleCompanyId = useGroupScopeForToggle ? scopeCompanyId : (groupOnlyUserList ? scopeCompanyId : companyId);
-      if (toggleCompanyId != null) fd.append("company_id", String(toggleCompanyId));
-      if (useGroupScopeForToggle) {
-        fd.append("group_id", selectedGroup);
+      if (toggleCompanyId != null && Number(toggleCompanyId) > 0) {
+        fd.append("company_id", String(toggleCompanyId));
+      }
+      if (useGroupScopeForToggle || (isGroupLogin(me) && selectedGroup && !(toggleCompanyId > 0))) {
+        fd.append("group_id", selectedGroup || getLoginIdentifier(me) || "");
         fd.append("group_only", "1");
       }
       const res = await fetch(buildApiUrl("api/users/toggle_status_api.php"), { method: "POST", body: fd, credentials: "include" });
@@ -2318,7 +2363,14 @@ export default function UserListPage() {
                   type="button"
                   className="btn btn-add"
                   onClick={openAdd}
-                  disabled={bootLoading || userMutationsBlocked || !userListHasMutationScope(mutationScopeCompanyId)}
+                  disabled={
+                    bootLoading ||
+                    userMutationsBlocked ||
+                    !userListHasMutationScope(mutationScopeCompanyId, {
+                      groupOnly: groupOnlyUserList,
+                      selectedGroup,
+                    })
+                  }
                 >
                   <svg className="btn-add__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />

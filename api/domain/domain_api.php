@@ -912,6 +912,31 @@ function feeShareAllocationsToJson(?array $normalized): ?string {
 }
 
 /**
+ * Encode company.permissions for INSERT/UPDATE.
+ * Empty/null → ["Games"] so Process List / Data Capture category checks pass.
+ */
+function domainApiEncodeCompanyPermissions($permissions): string
+{
+    $valid = ['Games', 'Bank', 'Loan', 'Rate', 'Money'];
+    if (is_array($permissions) && $permissions !== []) {
+        $filtered = [];
+        foreach ($permissions as $p) {
+            $p = trim((string) $p);
+            if ($p === 'Gambling') {
+                $p = 'Games';
+            }
+            if (in_array($p, $valid, true) && !in_array($p, $filtered, true)) {
+                $filtered[] = $p;
+            }
+        }
+        if ($filtered !== []) {
+            return json_encode($filtered);
+        }
+    }
+    return json_encode(['Games']);
+}
+
+/**
  * 读取某来源公司 Share% 中的 Profit 目标账号（必须是 C168 下 role=profit）。
  */
 function resolveShareProfitTargetAccountId(PDO $pdo, string $sourceCompanyCode): ?int
@@ -2930,7 +2955,7 @@ function domainApiNormalizeCompaniesPayload($companies): array {
         $out[] = [
             'company_id' => strtoupper($cid),
             'expiration_date' => null,
-            'permissions' => [],
+            'permissions' => ['Games'],
             'group_id' => null,
             'fee_share_allocations' => null,
         ];
@@ -3715,7 +3740,7 @@ try {
                             continue;
                         }
                         $expiration_date = !empty($company['expiration_date']) ? $company['expiration_date'] : null;
-                        $permissions = (isset($company['permissions']) && is_array($company['permissions'])) ? json_encode($company['permissions']) : null;
+                        $permissions = domainApiEncodeCompanyPermissions($company['permissions'] ?? null);
                         $group_id = !empty($company['group_id']) ? strtoupper(trim((string) $company['group_id'])) : null;
                         $fee_share_json = feeShareAllocationsToJson(normalizeFeeShareAllocationsInput($company['fee_share_allocations'] ?? null));
                         $detachedPk = domainApiFindDetachedCompanyPk($pdo, $company_id);
@@ -3960,7 +3985,7 @@ try {
                     $reattach = $pdo->prepare("UPDATE company SET owner_id = ?, expiration_date = ?, permissions = ?, group_id = ?, fee_share_allocations = ? WHERE id = ? AND owner_id IS NULL");
 
                     foreach ($companies_to_add as $company_data) {
-                        $permissions_json = !empty($company_data['permissions']) && is_array($company_data['permissions']) ? json_encode($company_data['permissions']) : null;
+                        $permissions_json = domainApiEncodeCompanyPermissions($company_data['permissions'] ?? null);
                         $fee_share_json = feeShareAllocationsToJson(normalizeFeeShareAllocationsInput($company_data['fee_share_allocations'] ?? null));
                         $detachedPk = domainApiFindDetachedCompanyPk($pdo, $company_data['company_id']);
                         if ($detachedPk !== null) {
@@ -4015,7 +4040,7 @@ try {
                         foreach ($existing_companies as $existing) {
                             $existing_key = strtoupper(trim((string) ($existing['company_id'] ?? '')));
                             if ($existing_key === $new_company['key']) {
-                                $permissions_json = !empty($new_company['permissions']) && is_array($new_company['permissions']) ? json_encode($new_company['permissions']) : null;
+                                $permissions_json = domainApiEncodeCompanyPermissions($new_company['permissions'] ?? null);
                                 $fee_share_json = feeShareAllocationsToJson(normalizeFeeShareAllocationsInput($new_company['fee_share_allocations'] ?? null));
                                 $updateStmt = $pdo->prepare("UPDATE company SET expiration_date = ?, permissions = ?, group_id = ?, fee_share_allocations = ? WHERE id = ?");
                                 $updateStmt->execute([$new_company['expiration_date'], $permissions_json, $new_company['group_id'], $fee_share_json, $existing['id']]);
@@ -4540,8 +4565,8 @@ try {
                 $feeJson = feeShareAllocationsToJson($saveNormalized);
                 $pdo->beginTransaction();
                 try {
-                    $up = $pdo->prepare('UPDATE `groups` SET expiration_date = ?, fee_share_allocations = ? WHERE id = ?');
-                    $up->execute([$expDate, $feeJson, (int) $groupRow['id']]);
+                    $up = $pdo->prepare('UPDATE `groups` SET expiration_date = ?, fee_share_allocations = ?, permissions = ? WHERE id = ?');
+                    $up->execute([$expDate, $feeJson, domainApiFixedGamesPermissionsJson(), (int) $groupRow['id']]);
                     $pdo->commit();
                 } catch (Exception $e) {
                     if ($pdo->inTransaction()) {
@@ -4566,7 +4591,7 @@ try {
                         'expiration_date' => $expDate,
                         'selectedPeriod' => $data['selectedPeriod'] ?? $data['period'] ?? null,
                         'startDate' => $chargeStartDate,
-                        'permissions' => [],
+                        'permissions' => ['Games'],
                         'fee_share_allocations' => $saveNormalized,
                         'apply_commission_payments_on_domain_save' => true,
                     ]], $hasC168Context, $canUseC168DomainActions);

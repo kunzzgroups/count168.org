@@ -499,9 +499,12 @@ export function shouldLoadUserListData({
   return false;
 }
 
-/** Whether Add / list mutations have a resolvable company or group ledger scope. */
-export function userListHasMutationScope(scopeCompanyId) {
-  return scopeCompanyId != null && Number(scopeCompanyId) > 0;
+/** Whether Add / list mutations have a resolvable company or pure group ledger scope. */
+export function userListHasMutationScope(scopeCompanyId, { groupOnly = false, selectedGroup = null } = {}) {
+  if (scopeCompanyId != null && Number(scopeCompanyId) > 0) return true;
+  // Phase 4: empty group (no company anchor) still allows Add User when group-only.
+  if (groupOnly && String(selectedGroup || "").trim() !== "") return true;
+  return false;
 }
 
 /**
@@ -528,6 +531,10 @@ export function resolveUserListMutationScopeCompanyId({
   if (groupOnlyUserList && anchorCompanyId != null) {
     const id = Number(anchorCompanyId);
     return Number.isFinite(id) && id > 0 ? id : null;
+  }
+  // Phase 4: group-only without anchor — signal mutation via null company + groupOnly flag at call site.
+  if (groupOnlyUserList && selectedGroup) {
+    return null;
   }
   const cid = companyId != null ? Number(companyId) : Number.NaN;
   if (Number.isFinite(cid) && cid > 0) {
