@@ -849,12 +849,42 @@ function dcRemapTemplateProductFieldsForTargetCode(array $templateRow, string $t
     return $templateRow;
 }
 
+/**
+ * Promote company-ledger templates on a process to group ledger (idempotent).
+ * Returns number of rows updated.
+ */
+function dcPromoteProcessTemplatesToGroupLedger(PDO $pdo, int $processId, int $groupScopeId): int
+{
+    if ($processId <= 0 || $groupScopeId <= 0) {
+        return 0;
+    }
+    if (!tenant_table_has_scope_columns($pdo, 'data_capture_templates')) {
+        return 0;
+    }
+    $promote = $pdo->prepare("
+        UPDATE data_capture_templates
+        SET scope_type = 'group', scope_id = ?
+        WHERE process_id = ?
+          AND (COALESCE(scope_type, '') = '' OR scope_type = 'company')
+    ");
+    $promote->execute([$groupScopeId, $processId]);
+
+    return (int) $promote->rowCount();
+}
+
+/**
+ * Clone templates onto a process. When $groupScopeId > 0 (dual-tenant), stamp
+ * scope_type=group / scope_id=groups.id so Formula Maintenance Group-only can see them.
+ *
+ * @param int $groupScopeId groups.id for group ledger; 0 = company ledger
+ */
 function dcCopyTemplatesToProcess(
     PDO $pdo,
     int $companyId,
     int $targetProcessId,
     int $sourceProcessId,
-    ?string $targetProcessCode = null
+    ?string $targetProcessCode = null,
+    int $groupScopeId = 0
 ): void {
     if ($targetProcessId <= 0 || $sourceProcessId <= 0) {
         return;
@@ -864,31 +894,79 @@ function dcCopyTemplatesToProcess(
         $codeStmt->execute([$targetProcessId]);
         $targetProcessCode = (string) ($codeStmt->fetchColumn() ?: '');
     }
-    $stmt = $pdo->prepare('SELECT COUNT(*) FROM data_capture_templates WHERE process_id = ? AND company_id = ?');
-    $stmt->execute([$targetProcessId, $companyId]);
-    if ((int) $stmt->fetchColumn() > 0) {
-        return;
+
+    $hasDual = tenant_table_has_scope_columns($pdo, 'data_capture_templates');
+    $asGroupLedger = $hasDual && $groupScopeId > 0;
+
+    if ($asGroupLedger) {
+        $stmt = $pdo->prepare("
+            SELECT COUNT(*) FROM data_capture_templates
+            WHERE process_id = ?
+              AND scope_type = 'group'
+              AND scope_id = ?
+        ");
+        $stmt->execute([$targetProcessId, $groupScopeId]);
+        if ((int) $stmt->fetchColumn() > 0) {
+            return;
+        }
+        // Legacy ensure wrote company-ledger rows on this process — promote in place.
+        if (dcPromoteProcessTemplatesToGroupLedger($pdo, $targetProcessId, $groupScopeId) > 0) {
+            return;
+        }
+    } else {
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM data_capture_templates WHERE process_id = ? AND company_id = ?');
+        $stmt->execute([$targetProcessId, $companyId]);
+        if ((int) $stmt->fetchColumn() > 0) {
+            return;
+        }
     }
+
     $src = $pdo->prepare('SELECT * FROM data_capture_templates WHERE process_id = ? LIMIT 500');
     $src->execute([$sourceProcessId]);
     $templates = $src->fetchAll(PDO::FETCH_ASSOC);
     if (empty($templates)) {
         return;
     }
-    $sql = 'INSERT INTO data_capture_templates (
-        company_id, process_id, data_capture_id, row_index, sub_order,
-        id_product, product_type, formula_variant, parent_id_product,
-        template_key, description, account_id, account_display, currency_id, currency_display,
-        source_columns, formula_operators, source_percent, enable_source_percent,
-        input_method, enable_input_method, batch_selection, columns_display, formula_display,
-        last_source_value, last_processed_amount, updated_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())';
+
+    if ($asGroupLedger) {
+        $sql = 'INSERT INTO data_capture_templates (
+            company_id, scope_type, scope_id, process_id, data_capture_id, row_index, sub_order,
+            id_product, product_type, formula_variant, parent_id_product,
+            template_key, description, account_id, account_display, currency_id, currency_display,
+            source_columns, formula_operators, source_percent, enable_source_percent,
+            input_method, enable_input_method, batch_selection, columns_display, formula_display,
+            last_source_value, last_processed_amount, updated_at, created_at
+        ) VALUES (?, \'group\', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())';
+    } elseif ($hasDual) {
+        $sql = 'INSERT INTO data_capture_templates (
+            company_id, scope_type, scope_id, process_id, data_capture_id, row_index, sub_order,
+            id_product, product_type, formula_variant, parent_id_product,
+            template_key, description, account_id, account_display, currency_id, currency_display,
+            source_columns, formula_operators, source_percent, enable_source_percent,
+            input_method, enable_input_method, batch_selection, columns_display, formula_display,
+            last_source_value, last_processed_amount, updated_at, created_at
+        ) VALUES (?, \'company\', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())';
+    } else {
+        $sql = 'INSERT INTO data_capture_templates (
+            company_id, process_id, data_capture_id, row_index, sub_order,
+            id_product, product_type, formula_variant, parent_id_product,
+            template_key, description, account_id, account_display, currency_id, currency_display,
+            source_columns, formula_operators, source_percent, enable_source_percent,
+            input_method, enable_input_method, batch_selection, columns_display, formula_display,
+            last_source_value, last_processed_amount, updated_at, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())';
+    }
     $ins = $pdo->prepare($sql);
     foreach ($templates as $t) {
         $t = dcRemapTemplateProductFieldsForTargetCode($t, (string) $targetProcessCode);
         try {
-            $ins->execute([
-                $companyId,
+            $base = [$companyId];
+            if ($asGroupLedger) {
+                $base[] = $groupScopeId;
+            } elseif ($hasDual) {
+                $base[] = $companyId > 0 ? $companyId : null;
+            }
+            $ins->execute(array_merge($base, [
                 $targetProcessId,
                 $t['data_capture_id'] ?? null,
                 $t['row_index'] ?? null,
@@ -914,7 +992,7 @@ function dcCopyTemplatesToProcess(
                 $t['formula_display'] ?? null,
                 $t['last_source_value'] ?? null,
                 $t['last_processed_amount'] ?? null,
-            ]);
+            ]));
         } catch (Exception $e) {
             error_log('dcCopyTemplatesToProcess: ' . $e->getMessage());
         }
@@ -925,12 +1003,17 @@ function dcCopyTemplatesToProcess(
  * Create SALARY/BONUS on group entity when missing.
  * Uses form currency when provided; clones days/templates from subsidiary or entity SALARY.
  */
+/**
+ * @param bool $asGroupLedger true = stamp templates scope_type=group (Group DC);
+ *                            false = company payroll channel (C168 / bank-only)
+ */
 function dcCreateGroupProcessByCode(
     PDO $pdo,
     int $companyId,
     string $processCode,
     ?string $groupId = null,
-    ?int $preferredCurrencyId = null
+    ?int $preferredCurrencyId = null,
+    bool $asGroupLedger = true
 ): ?int {
     dcSetGroupProcessEnsureError('');
 
@@ -942,6 +1025,11 @@ function dcCreateGroupProcessByCode(
     $g = dcNormalizeGroupId($groupId ?? '');
     if ($g === '') {
         $g = dcCompanyGroupId($pdo, $companyId);
+    }
+
+    $groupScopeId = 0;
+    if ($asGroupLedger && $g !== '') {
+        $groupScopeId = (int) gc_resolve_group_pk_by_code($pdo, $g);
     }
 
     $template = dcResolveGroupProcessTemplateRow($pdo, $companyId, $g, $code);
@@ -1021,7 +1109,14 @@ function dcCreateGroupProcessByCode(
         dcInsertProcessDays($pdo, $newId, $dayIds);
 
         if (!empty($template['id'])) {
-            dcCopyTemplatesToProcess($pdo, $companyId, $newId, (int) $template['id'], $code);
+            dcCopyTemplatesToProcess(
+                $pdo,
+                $companyId,
+                $newId,
+                (int) $template['id'],
+                $code,
+                $asGroupLedger ? $groupScopeId : 0
+            );
         }
 
         $pdo->commit();
@@ -1153,6 +1248,36 @@ function dcEnsureProcessIdByCode(
     $existing = dcResolveProcessIdByCode($pdo, $companyId, $processCode, $groupScope);
     if ($existing !== null) {
         dcFixGroupPayrollProcessDescription($pdo, $existing);
+        if ($groupScope) {
+            $g = dcNormalizeGroupId($groupId ?? '');
+            if ($g === '') {
+                $g = dcCompanyGroupId($pdo, $companyId);
+            }
+            $groupPk = $g !== '' ? (int) gc_resolve_group_pk_by_code($pdo, $g) : 0;
+            if ($groupPk > 0) {
+                dcPromoteProcessTemplatesToGroupLedger($pdo, $existing, $groupPk);
+                // Process existed but never got group-ledger templates — clone from sibling/source.
+                $hasGroupTpl = $pdo->prepare("
+                    SELECT COUNT(*) FROM data_capture_templates
+                    WHERE process_id = ? AND scope_type = 'group' AND scope_id = ?
+                ");
+                $hasGroupTpl->execute([$existing, $groupPk]);
+                if ((int) $hasGroupTpl->fetchColumn() === 0) {
+                    $template = dcResolveGroupProcessTemplateRow($pdo, $companyId, $g, $processCode);
+                    $srcId = isset($template['id']) ? (int) $template['id'] : 0;
+                    if ($srcId > 0 && $srcId !== $existing) {
+                        dcCopyTemplatesToProcess(
+                            $pdo,
+                            $companyId,
+                            $existing,
+                            $srcId,
+                            strtoupper(trim($processCode)),
+                            $groupPk
+                        );
+                    }
+                }
+            }
+        }
         return $existing;
     }
 
@@ -1164,7 +1289,14 @@ function dcEnsureProcessIdByCode(
         return null;
     }
 
-    return dcCreateGroupProcessByCode($pdo, $companyId, $processCode, $groupId, $preferredCurrencyId);
+    return dcCreateGroupProcessByCode(
+        $pdo,
+        $companyId,
+        $processCode,
+        $groupId,
+        $preferredCurrencyId,
+        $groupScope
+    );
 }
 
 /**

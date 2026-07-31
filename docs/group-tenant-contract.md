@@ -88,7 +88,7 @@
 |---|---|
 | Group-only boot | Group 登录默认 Group ledger（`company_id=null`）；与 Formula/Capture/Payment/Transaction Maint 对齐 `isMaintenanceGroupOnlyBoot` |
 | Company pill | 子公司 ledger；`report_scope` + ledger filter 禁止混入 Group 行 |
-| Formula | `formulaMaintenanceBuildTemplateLedgerFilter` 仅 `scope_type=group`；空 Group 可写（无 anchor） |
+| Formula | `formulaMaintenanceBuildTemplateLedgerFilter` 仅 `scope_type=group`；空 Group 可写（无 anchor）；Group ensure process 复制公式必须写 `scope_type=group`（`dcCopyTemplatesToProcess`）；历史错账本用 `scripts/_migrate_formula_templates_group_scope.php` promote |
 | Capture / Txn Maint | Group 请求 `unset(company_id)`；dual-tenant 纯 Group 不因 `company_id=0` 短路空列表 |
 | Payment | API 已用 `tx_resolve_transaction_list_scope`；FE boot 对齐 Group-only |
 | Bankprocess | **无 Group ledger**（数据为 Bank 子公司）；Group 登录可进页再选 Bank 子公司（勿因 `company_has_bank=false` 踢出） |
@@ -115,11 +115,13 @@
 - [ ] Transaction → Currency order：纯 Group 可拖拽保存（`group_id` / `g:{id}`）
 - [ ] Maintenance → Formula/Capture/Payment/Txn：Group-only 与 Company pill 账本不混；空 Group 可搜/删（dual-tenant）
 - [ ] Maintenance → Bankprocess：Group 登录可进页；选 Bank 子公司后可搜（无 Group ledger）
+- [ ] Maintenance → Formula Group-only：纯 Group ensure 后的 SALARY 公式可见（需跑 promote 脚本清历史）
 
 ### 迁移脚本（发版 / site）
 
 ```bash
 php scripts/_migrate_groups_permissions_games.php
+php scripts/_migrate_formula_templates_group_scope.php
 # 另见 database/migrations/20260731_*.sql 与 scripts/_migrate_account_link_scope.php 等
 # 确认 pdo_db 指向目标库（本地 easycount / 发版 site）
 ```
