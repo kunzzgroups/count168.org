@@ -7,6 +7,7 @@ import { spaPath } from "../../utils/routing/pageRoutes.js";
 import {
   companiesInGroupList,
   companyBelongsToGroup,
+  DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
   dedupeOwnerCompaniesByCode,
   filterCompaniesWithDisplayId,
   isExplicitCompanySelection,
@@ -262,6 +263,7 @@ function DataCapturePageContent() {
     enableGroupAnchorSession: false,
     autoPickCompanyWhenEmpty: false,
     broadcastFilterToLayout: false,
+    closeActiveGroupOnReselect: true,
     me,
   });
 
@@ -853,11 +855,16 @@ function DataCapturePageContent() {
       const id = Number(comp?.id);
       if (!id) return;
       const gid = comp.group_id ? String(comp.group_id).toUpperCase().trim() : null;
+      const groupFilterOptOut =
+        typeof sessionStorage !== "undefined" &&
+        sessionStorage.getItem(DASHBOARD_GROUP_FILTER_OPT_OUT_KEY) === "1";
       form.clearProcessSelection?.();
       setCompanySwitchInFlight(true);
       flushSync(() => {
         setCompanyId(id);
-        if (gid) setSelectedGroup(gid);
+        // Closing Group sets opt-out — do not re-apply company.group_id as selected Group.
+        if (groupFilterOptOut) setSelectedGroup(null);
+        else if (gid) setSelectedGroup(gid);
       });
     },
     [form.clearProcessSelection]

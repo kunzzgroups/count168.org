@@ -45,9 +45,8 @@ export function useGcFilterWithAllModes({
   forceAllowGroupOnly = false,
   broadcastFilterToLayout = true,
   clearCompanyOnActiveGroupReselect = undefined,
-  allowActiveGroupDeselect = false,
-  requireCompanyWithGroup = false,
-  resolveCompanyOnGroupClose = null,
+  /** Re-click active Group closes it and picks a company (Data Capture / Transaction). */
+  closeActiveGroupOnReselect = false,
   allowClearCompany: allowClearCompanyOverride = undefined,
 }) {
   const [groupsAllMode, setGroupsAllMode] = useState(false);
@@ -72,9 +71,7 @@ export function useGcFilterWithAllModes({
     broadcastFilterToLayout,
     clearCompanyOnActiveGroupReselect:
       clearCompanyOnActiveGroupReselect ?? !forceAllowGroupOnly,
-    allowActiveGroupDeselect,
-    requireCompanyWithGroup,
-    resolveCompanyOnGroupClose,
+    closeActiveGroupOnReselect,
     allowClearCompany: allowClearCompanyOverride,
   });
 

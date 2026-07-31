@@ -796,18 +796,8 @@ export function useTransactionData({
       const g = String(gid || "").trim().toUpperCase();
       if (!g) return;
 
-      // Re-click active group:
-      // - subsidiary selected + may use group ledger → clear company (Group-only)
-      // - already Group-only → no-op (keep Group pill)
-      // - cannot use group ledger → close group, keep independent company
+      // Re-click active group: close Group and keep/pick a company (not stuck in group-only).
       if (g === snap.selectedGroup && !snap.groupsAllMode) {
-        if (snap.companyId != null && canUseGroupOnlyMode(u, g)) {
-          await applyGroupOnlySelection(snap, g);
-          return;
-        }
-        if (snap.companyId == null && canUseGroupOnlyMode(u, g)) {
-          return;
-        }
         await deselectGroupKeepCompany(snap);
         return;
       }
