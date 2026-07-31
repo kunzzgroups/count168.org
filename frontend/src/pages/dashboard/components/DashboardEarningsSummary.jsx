@@ -47,28 +47,31 @@ export function DashboardEarningsSummary({
   });
   const [hoveredPieSector, setHoveredPieSector] = useState(null);
   const isCompanyBreakdownView = earningsPanelView === "netProfitFor";
+  // Company rows use company_id as `code` — never apply FX base filtering / conversion.
+  const pieUseConverted = !isCompanyBreakdownView && useConvertedEarnings;
+  const pieBaseCode = isCompanyBreakdownView ? "" : currencyCode;
 
   const earningsPieSlices = useMemo(() => {
     return buildEarningsPieSlices(panelCurrencyRows, {
-      useConverted: useConvertedEarnings,
-      baseCode: currencyCode,
+      useConverted: pieUseConverted,
+      baseCode: pieBaseCode,
     });
-  }, [panelCurrencyRows, useConvertedEarnings, currencyCode]);
+  }, [panelCurrencyRows, pieUseConverted, pieBaseCode]);
 
   const earningsShareByCode = useMemo(() => {
-    return buildEarningsShareByCode(panelCurrencyRows, currencyCode, {
-      useConverted: useConvertedEarnings,
+    return buildEarningsShareByCode(panelCurrencyRows, pieBaseCode, {
+      useConverted: pieUseConverted,
     });
-  }, [panelCurrencyRows, currencyCode, useConvertedEarnings]);
+  }, [panelCurrencyRows, pieBaseCode, pieUseConverted]);
 
   const pieCenterMetrics = useMemo(() => {
     const centerCode = isCompanyBreakdownView
       ? panelCurrencyRows?.[0]?.code || currencyCode
       : currencyCode;
     return computePieCenterMetrics(panelCurrencyRows, centerCode, {
-      useConverted: useConvertedEarnings,
+      useConverted: pieUseConverted,
     });
-  }, [panelCurrencyRows, currencyCode, useConvertedEarnings, isCompanyBreakdownView]);
+  }, [panelCurrencyRows, currencyCode, pieUseConverted, isCompanyBreakdownView]);
 
   const currencyPieFillByCode = useMemo(() => {
     const map = {};
@@ -169,11 +172,13 @@ export function DashboardEarningsSummary({
           row,
           currencyCode,
           exchangeRates.rates,
-          useConvertedEarnings
+          pieUseConverted
         )
       : { primary: slice?.earnings ?? null, native: slice?.originalEarnings ?? null };
     const sharePct = row ? computeCurrencySharePct(row, earningsShareByCode) : null;
-    const unitRateLabel = formatFrankfurterUnitRate(slice?.code, currencyCode, exchangeRates.rates);
+    const unitRateLabel = isCompanyBreakdownView
+      ? null
+      : formatFrankfurterUnitRate(slice?.code, currencyCode, exchangeRates.rates);
     return {
       slice,
       displayAmount: amounts.primary,
@@ -189,7 +194,8 @@ export function DashboardEarningsSummary({
     hoveredPieSector,
     panelCurrencyRows,
     earningsShareByCode,
-    useConvertedEarnings,
+    pieUseConverted,
+    isCompanyBreakdownView,
     currencyCode,
     exchangeRates.rates,
     pieShellLayout,
@@ -385,7 +391,7 @@ export function DashboardEarningsSummary({
                 row,
                 currencyCode,
                 exchangeRates.rates,
-                useConvertedEarnings
+                pieUseConverted
               );
               const unitRateLabel = earningsBreakdownShowsRate
                 ? formatFrankfurterUnitRate(row.code, currencyCode, exchangeRates.rates)

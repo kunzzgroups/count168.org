@@ -35,11 +35,12 @@ export function buildEarningsPieSlices(rows, { useConverted = false, baseCode = 
   const sourceRows = (() => {
     // Without FX conversion, native multi-currency amounts are not comparable —
     // only the display-base slice belongs on the pie (e.g. USDT base).
+    // Skip when base is absent from rows (company-breakdown codes ≠ currency base).
     if (!useConverted && base) {
       const codes = new Set(
         (rows || []).map((row) => String(row.code || "").toUpperCase()).filter(Boolean)
       );
-      if (codes.size > 1) {
+      if (codes.size > 1 && codes.has(base)) {
         return (rows || []).filter((row) => String(row.code || "").toUpperCase() === base);
       }
     }
@@ -154,7 +155,8 @@ export function buildEarningsShareByCode(rows, baseCode, { useConverted = false 
   }
 
   const codes = Object.keys(shareByCode).filter(Boolean);
-  if (!useConverted && base && codes.length > 1) {
+  // Same guard as pie slices: only collapse to base-100% when base is a real row code.
+  if (!useConverted && base && codes.length > 1 && codes.includes(base)) {
     const baseAmount = resolveRowShareAmount(
       (rows || []).find((row) => String(row.code || "").toUpperCase() === base),
       false
