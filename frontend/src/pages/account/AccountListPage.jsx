@@ -257,8 +257,21 @@ export default function AccountListPage() {
   }, []);
   const [settingCurrencyIds, setSettingCurrencyIds] = useState(() => new Set());
   const [settingLinked, setSettingLinked] = useState(new Set());
+  /** Per selected currency: account ids linked at last load (for save diff / unlink). */
+  const [settingInitialByCurrency, setSettingInitialByCurrency] = useState(() => new Map());
   const [settingSearch, setSettingSearch] = useState("");
   const [settingRole, setSettingRole] = useState("");
+  const settingCurrencyIdsKey = useMemo(
+    () => [...settingCurrencyIds].map(Number).filter((id) => id > 0).sort((a, b) => a - b).join(","),
+    [settingCurrencyIds],
+  );
+  const settingInitialAccountCount = useMemo(() => {
+    const union = new Set();
+    settingInitialByCurrency.forEach((ids) => {
+      ids.forEach((id) => union.add(id));
+    });
+    return union.size;
+  }, [settingInitialByCurrency]);
 
   const toastTimerRef = useRef(null);
   const bootFetchedAccountsKeyRef = useRef(null);
@@ -2126,6 +2139,12 @@ export default function AccountListPage() {
     loadSelectionMeta(null, false);
   };
 
+  const clearCurrencySettingSelection = useCallback(() => {
+    setSettingCurrencyIds(new Set());
+    setSettingLinked(new Set());
+    setSettingInitialByCurrency(new Map());
+  }, []);
+
   const openCurrencySetting = () => {
     if (accountMutationsBlocked) {
       notify(t("readOnlyActionBlocked"), "danger");
@@ -2133,7 +2152,7 @@ export default function AccountListPage() {
     }
     if (!hasAccountMutationScope) return;
     syncModalLedgerScope(null);
-    setSettingLinked(new Set());
+    clearCurrencySettingSelection();
     setCurrencySettingOpen(true);
     void loadSelectionMeta(null, false, { forcePageLedgerScope: true });
   };
@@ -2354,6 +2373,28 @@ export default function AccountListPage() {
     [appendModalCurrencyScopeParams, isEditMode, form.id],
   );
 
+  const fetchLinkedAccountIdsByCurrency = useCallback(
+    async (currencyId, scopeOverride = undefined) => {
+      const params = new URLSearchParams({
+        action: "get_linked_accounts_by_currency",
+        currency_id: String(currencyId),
+      });
+      if (scopeOverride) {
+        applyTenantLedgerToParams(params, scopeOverride);
+      } else {
+        appendCurrencyScopeParams(params);
+      }
+      const res = await fetch(
+        buildApiUrl(`api/accounts/bulk_account_currency_api.php?${params.toString()}`),
+        { method: "POST", credentials: "include" },
+      );
+      const json = await res.json();
+      if (!json.success) return [];
+      return (json.data?.linked_account_ids || []).map(Number).filter((id) => id > 0);
+    },
+    [appendCurrencyScopeParams],
+  );
+
   const fetchAccountsUsingCurrency = async (currencyId, scopeOverride = undefined) => {
     try {
       const params = new URLSearchParams({
@@ -2392,6 +2433,50 @@ export default function AccountListPage() {
     }
   };
 
+  /** When currency pills change, reload linked accounts (union) for checkbox回显. */
+  useEffect(() => {
+    if (!currencySettingOpen) return undefined;
+    const currencyIds = settingCurrencyIdsKey
+      ? settingCurrencyIdsKey.split(",").map(Number).filter((id) => id > 0)
+      : [];
+    if (!currencyIds.length) {
+      setSettingLinked(new Set());
+      setSettingInitialByCurrency(new Map());
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const entries = await Promise.all(
+          currencyIds.map(async (currencyId) => {
+            const ids = await fetchLinkedAccountIdsByCurrency(currencyId, pageLedgerScope);
+            return [currencyId, new Set(ids)];
+          }),
+        );
+        if (cancelled) return;
+        const nextInitial = new Map(entries);
+        const union = new Set();
+        nextInitial.forEach((ids) => {
+          ids.forEach((id) => union.add(id));
+        });
+        setSettingInitialByCurrency(nextInitial);
+        setSettingLinked(union);
+      } catch {
+        if (!cancelled) notify(t("loadLinksFailed"), "danger");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    currencySettingOpen,
+    settingCurrencyIdsKey,
+    fetchLinkedAccountIdsByCurrency,
+    pageLedgerScope,
+    notify,
+    t,
+  ]);
+
   const handleCurrencyDeleteBlocked = async (currencyId, json, msg) => {
     const editingAccountId = isEditMode ? Number(form.id) : 0;
     let accountsInUse = Array.isArray(json?.data?.accounts_in_use) ? json.data.accounts_in_use : [];
@@ -2417,6 +2502,12 @@ export default function AccountListPage() {
     setSettingCurrencyIds((prev) => {
       if (!prev.has(id)) return prev;
       const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setSettingInitialByCurrency((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Map(prev);
       next.delete(id);
       return next;
     });
@@ -2613,12 +2704,26 @@ export default function AccountListPage() {
     const currencyIds = [...settingCurrencyIds]
       .map(Number)
       .filter((id) => id > 0 && currencies.some((c) => Number(c.id) === id));
-    const linkedAccountIds = [...settingLinked].map(Number).filter((id) => id > 0);
     if (!currencyIds.length) {
       notify(t("pleaseSelectCurrencyFirst"), "danger");
       return;
     }
-    if (!linkedAccountIds.length) {
+    const updates = currencyIds.map((currencyId) => {
+      const initial = settingInitialByCurrency.get(currencyId) || new Set();
+      const linked = [];
+      const unlinked = [];
+      accounts.forEach((a) => {
+        const id = Number(a.id);
+        if (!(id > 0)) return;
+        const was = initial.has(id);
+        const now = settingLinked.has(id);
+        if (now && !was) linked.push(id);
+        if (!now && was) unlinked.push(id);
+      });
+      return { currencyId, linked, unlinked };
+    });
+    const changed = updates.filter((u) => u.linked.length > 0 || u.unlinked.length > 0);
+    if (!changed.length) {
       notify(t("pleaseSelectAccountFirst"), "danger");
       return;
     }
@@ -2626,21 +2731,21 @@ export default function AccountListPage() {
       const params = new URLSearchParams({ action: "bulk_update" });
       appendCurrencyScopeParams(params);
       const url = buildApiUrl(`api/accounts/bulk_account_currency_api.php?${params.toString()}`);
-      for (const currencyId of currencyIds) {
+      for (const { currencyId, linked, unlinked } of changed) {
         const res = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             currency_id: currencyId,
-            linked_account_ids: linkedAccountIds,
-            unlinked_account_ids: [],
+            linked_account_ids: linked,
+            unlinked_account_ids: unlinked,
           }),
           credentials: "include",
         });
         const json = await res.json();
         if (!res.ok || !json.success) return notifyApi(json.message, "saveFailed", "danger");
       }
-      setSettingLinked(new Set());
+      clearCurrencySettingSelection();
       setCurrencySettingOpen(false);
       notify(t("currencySettingsSaved"));
       refreshAccountList();
@@ -3099,7 +3204,31 @@ export default function AccountListPage() {
         onClose={() => setForceCurrencyDeletePrompt(null)}
         t={t}
       />
-      <CurrencySettingModal open={currencySettingOpen} onClose={() => setCurrencySettingOpen(false)} currencies={currencies} settingCurrencyIds={settingCurrencyIds} setSettingCurrencyIds={setSettingCurrencyIds} settingLinked={settingLinked} setSettingLinked={setSettingLinked} settingSearch={settingSearch} setSettingSearch={setSettingSearch} settingRole={settingRole} setSettingRole={setSettingRole} onSave={saveCurrencySetting} accounts={accounts} roles={roles} currencyInput={currencyInput} setCurrencyInput={setCurrencyInput} onCreateCurrency={createCurrency} onRemoveCurrency={removeSettingCurrency} t={t} />
+      <CurrencySettingModal
+        open={currencySettingOpen}
+        onClose={() => {
+          clearCurrencySettingSelection();
+          setCurrencySettingOpen(false);
+        }}
+        currencies={currencies}
+        settingCurrencyIds={settingCurrencyIds}
+        setSettingCurrencyIds={setSettingCurrencyIds}
+        settingLinked={settingLinked}
+        setSettingLinked={setSettingLinked}
+        settingInitialAccountCount={settingInitialAccountCount}
+        settingSearch={settingSearch}
+        setSettingSearch={setSettingSearch}
+        settingRole={settingRole}
+        setSettingRole={setSettingRole}
+        onSave={saveCurrencySetting}
+        accounts={accounts}
+        roles={roles}
+        currencyInput={currencyInput}
+        setCurrencyInput={setCurrencyInput}
+        onCreateCurrency={createCurrency}
+        onRemoveCurrency={removeSettingCurrency}
+        t={t}
+      />
       <LinkAccountModal open={linkModalOpen} accounts={linkAccountsPool} currentAccountId={linkingAccountId} selectedIds={selectedLinkedIds} setSelectedIds={setSelectedLinkedIds} linkType={linkType} setLinkType={setLinkType} searchTerm={linkSearchTerm} setSearchTerm={setLinkSearchTerm} onSave={saveLinks} onClose={() => setLinkModalOpen(false)} t={t} />
     </>
   );

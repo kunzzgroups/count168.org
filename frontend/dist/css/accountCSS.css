@@ -3736,9 +3736,13 @@ body:not(.maintenance-page) .quick-select-dropdown-toggle .dropdown-item:hover {
 body > .account-modal,
 body > #linkAccountModal,
 body > #confirmDeleteModal,
-body > #currencySettingModal,
 body > #userModal.modal {
     z-index: 20050;
+}
+
+/* Currency Setting 全屏层须低于侧栏，避免裁切 current-page 伸出条 */
+body > #currencySettingModal.currency-fullscreen-modal {
+    z-index: 990;
 }
 
 body > #confirmModal.modal,
