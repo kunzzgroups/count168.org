@@ -60,25 +60,12 @@ export function canAccessTransactionFormulaMaintenance(me) {
 }
 
 /**
- * Capture maintenance: full Maintenance, or limited path when the *active filter*
- * company is Bank. Pure Group / group-only is Games identity — never show Capture.
+ * Capture maintenance: only when Maintenance permission is granted (full menu).
+ * Limited path (Supervisor and below without Maintenance) keeps Transaction + Formula only —
+ * never Capture, including Bank companies and Group ↔ company switches.
  */
 export function canAccessCaptureMaintenance(me) {
-  if (canAccessFullMaintenance(me)) return true;
-  if (!canAccessLimitedMaintenance(me)) return false;
-
-  const filter = readPersistedDashboardGcFilter();
-  if (filter.groupOnly && filter.selectedGroup) return false;
-
-  const cid =
-    filter.companyId != null && filter.companyId !== "" ? Number(filter.companyId) : Number.NaN;
-  if (Number.isFinite(cid) && cid > 0) {
-    const row = findOwnerCompanyById(cid);
-    const flags = resolveCompanyCategoryFlags(row);
-    if (flags) return Boolean(flags.hasBank);
-  }
-
-  return Boolean(me?.company_has_bank);
+  return canAccessFullMaintenance(me);
 }
 
 export function canAccessDashboard(me) {
