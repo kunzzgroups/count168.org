@@ -128,7 +128,15 @@ try {
 
     if ($hasExplicitScope) {
         $scopeResolved = resolveDataCaptureRequestScope($pdo, $scopeParams);
-        $scopeCtx = dcFinalizeCaptureMaintenanceScope($pdo, $scopeResolved, $scopeParams);
+        $finalizeParams = $scopeParams;
+        $scopeHint = strtolower(trim((string) ($scopeParams['report_scope'] ?? $scopeParams['capture_scope'] ?? '')));
+        if ($scopeHint === 'group' || !empty($scopeResolved['is_group_scope'])) {
+            unset($finalizeParams['company_id']);
+            if (!isset($finalizeParams['group_aggregate']) || trim((string) $finalizeParams['group_aggregate']) === '') {
+                $finalizeParams['group_aggregate'] = '1';
+            }
+        }
+        $scopeCtx = dcFinalizeCaptureMaintenanceScope($pdo, $scopeResolved, $finalizeParams);
         $company_id = (int) $scopeCtx['company_id'];
         $capture_scope_group = (bool) $scopeCtx['is_group_scope'];
         $scopeProcessFilter = (string) $scopeCtx['scope_process_sql'];
@@ -157,8 +165,9 @@ try {
     }
 
     if ($capture_scope_group) {
-        if ($company_id <= 0) {
-            throw new Exception('集团范围无效或未配置集团公司');
+        $groupPk = (int) ($scopeCtx['group_scope_id'] ?? $scopeCtx['scope_id'] ?? 0);
+        if ($groupPk <= 0 && $company_id <= 0) {
+            throw new Exception('集团范围无效');
         }
     } elseif ($company_id > 0 && dcCompanyIdIsGroupEntity($pdo, $company_id)) {
         throw new Exception('公司范围不能操作集团实体抓数记录');

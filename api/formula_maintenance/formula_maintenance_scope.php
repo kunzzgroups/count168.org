@@ -383,22 +383,15 @@ function formulaMaintenanceBuildTemplateLedgerFilter(PDO $pdo, array $scopeCtx, 
 
     if (!empty($scopeCtx['is_group_scope'])) {
         $groupPk = (int) ($scopeCtx['group_scope_id'] ?? $scopeCtx['scope_id'] ?? 0);
-        $anchorId = (int) dcCaptureProcessCompanyId($scopeCtx);
-        if ($groupPk <= 0 || $anchorId <= 0) {
+        // Align with dcBuildCaptureLedgerFilter: never OR company-ledger rows into group view.
+        // Empty Group (no anchor) is valid when dual-tenant scope_id = groups.id.
+        if ($groupPk <= 0) {
             return ['sql' => ' AND 1=0 ', 'params' => []];
         }
-        $legacy = formulaMaintenanceSqlTemplateGroupLedgerLegacy($a);
 
         return [
-            'sql' => " AND (
-                ({$a}.scope_type = 'group' AND {$a}.scope_id = ?)
-                OR (
-                    {$a}.scope_type = 'company'
-                    AND {$a}.company_id = ?
-                    AND ({$legacy})
-                )
-            ) ",
-            'params' => [$groupPk, $anchorId],
+            'sql' => " AND {$a}.scope_type = 'group' AND {$a}.scope_id = ? ",
+            'params' => [$groupPk],
         ];
     }
 

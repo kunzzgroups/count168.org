@@ -173,8 +173,9 @@ export default function CaptureMaintenancePage() {
         companyId,
         groupsAllMode,
         groupAllMode,
+        me,
       }),
-    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode],
+    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode, me],
   );
 
   const captureScopeKey = useMemo(

@@ -1065,7 +1065,15 @@ try {
 
     if ($hasExplicitScope) {
         $scopeResolved = resolveDataCaptureRequestScope($pdo, $scopeParams);
-        $scopeCtx = dcFinalizeCaptureMaintenanceScope($pdo, $scopeResolved, $scopeParams);
+        $finalizeParams = $scopeParams;
+        $scopeHint = strtolower(trim((string) ($scopeParams['report_scope'] ?? $scopeParams['capture_scope'] ?? '')));
+        if ($scopeHint === 'group' || !empty($scopeResolved['is_group_scope'])) {
+            unset($finalizeParams['company_id']);
+            if (!isset($finalizeParams['group_aggregate']) || trim((string) $finalizeParams['group_aggregate']) === '') {
+                $finalizeParams['group_aggregate'] = '1';
+            }
+        }
+        $scopeCtx = dcFinalizeCaptureMaintenanceScope($pdo, $scopeResolved, $finalizeParams);
         $company_id = (int) $scopeCtx['company_id'];
         $maintenance_scope_group = (bool) $scopeCtx['is_group_scope'];
         $scopeProcessFilter = (string) $scopeCtx['scope_process_sql'];
@@ -1152,18 +1160,22 @@ try {
     }
 
     if ($maintenance_scope_group && (int) $company_id <= 0) {
-        echo json_encode([
-            'success' => true,
-            'data' => [],
-            'pagination' => [
-                'page' => isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1,
-                'page_size' => isset($_GET['page_size']) ? (int) $_GET['page_size'] : 0,
-                'total' => 0,
-                'has_more' => false,
-                'next_cursor' => null,
-            ],
-        ], JSON_UNESCAPED_UNICODE);
-        return;
+        $groupPk = (int) ($scopeCtx['group_scope_id'] ?? $scopeCtx['scope_id'] ?? 0);
+        // Dual-tenant pure Group may have company_id=0; only short-circuit when scope_id missing.
+        if (empty($scopeCtx['dual_tenant']) || $groupPk <= 0) {
+            echo json_encode([
+                'success' => true,
+                'data' => [],
+                'pagination' => [
+                    'page' => isset($_GET['page']) ? max(1, (int) $_GET['page']) : 1,
+                    'page_size' => isset($_GET['page_size']) ? (int) $_GET['page_size'] : 0,
+                    'total' => 0,
+                    'has_more' => false,
+                    'next_cursor' => null,
+                ],
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
     }
     if (!$maintenance_scope_group && (int) $company_id > 0 && dcCompanyIdIsGroupEntity($pdo, (int) $company_id)) {
         echo json_encode([
