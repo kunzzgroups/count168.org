@@ -3842,7 +3842,11 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         });
         return;
       }
-      if (cacheEntry.earnings?.length > 1) {
+      const codesForPie = codes || currenciesRef.current;
+      if (
+        cacheEntry.earnings?.length > 1 &&
+        dashboardEarningsRowsComplete(cacheEntry.earnings, codesForPie)
+      ) {
         setEarningsByCurrency(cacheEntry.earnings);
         setEarningsByCurrencyPrev([]);
         setEarningsByCurrencyLoading(false);
@@ -5348,9 +5352,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     });
   }, []);
 
-  const scheduleIncompleteEarningsRetry = useCallback((delayMs = 150) => {
-    if (earningsIncompleteRetryRef.current >= EARNINGS_INCOMPLETE_RETRY_MAX) return;
-    earningsIncompleteRetryRef.current += 1;
+  /** Soft defer — does not burn EARNINGS_INCOMPLETE_RETRY_MAX (in-flight waits). */
+  const deferActiveScopeEarningsUpgrade = useCallback((delayMs = 200) => {
     if (earningsRetryTimerRef.current) {
       window.clearTimeout(earningsRetryTimerRef.current);
     }
@@ -5362,6 +5365,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       upgradeActiveScopeEarningsRef.current?.();
     }, delayMs);
   }, []);
+
+  const scheduleIncompleteEarningsRetry = useCallback((delayMs = 150) => {
+    if (earningsIncompleteRetryRef.current >= EARNINGS_INCOMPLETE_RETRY_MAX) return;
+    earningsIncompleteRetryRef.current += 1;
+    deferActiveScopeEarningsUpgrade(delayMs);
+  }, [deferActiveScopeEarningsUpgrade]);
 
   const fetchSingleCurrencyEarnings = useCallback(
     async (code, gen, { retries = 1 } = {}) => {
@@ -5962,11 +5971,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         return buildSeededEarningsRows(currencies, primary, primaryNetProfit, primaryEarnings);
       });
       setEarningsByCurrencyLoading(true);
+      deferActiveScopeEarningsUpgrade(120);
       return;
     }
     setEarningsByCurrency(currencies.map((code) => ({ code, netProfit: null, earnings: null })));
     setEarningsByCurrencyPrev([]);
     setEarningsByCurrencyLoading(true);
+    deferActiveScopeEarningsUpgrade(120);
   }, [
     currenciesScopeSig,
     currencies.length,
@@ -5979,6 +5990,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     computeCurrencyMetricsFromPayload,
     buildSeededEarningsRows,
     listCurrencyScopeKeys,
+    deferActiveScopeEarningsUpgrade,
   ]);
 
   useEffect(() => {
@@ -6272,10 +6284,20 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       return;
     }
     // Atomic first paint already fans out light earnings — do not start a second
-    // bootstrap currencies= serial pack (Group ledger / single-company pie).
-    if (dashboardBootstrapInFlightRef.current === cacheKey) return;
-    if (dashboardFetchInFlightScopeRef.current === cacheKey) return;
-    if (earningsParallelInFlightRef.current === cacheKey) return;
+    // pack while the same scope fetch/parallel job is still running. Defer (do not
+    // drop) so seeded MYR + "…" secondaries get filled after in-flight clears.
+    if (dashboardBootstrapInFlightRef.current === cacheKey) {
+      deferActiveScopeEarningsUpgrade(200);
+      return;
+    }
+    if (dashboardFetchInFlightScopeRef.current === cacheKey) {
+      deferActiveScopeEarningsUpgrade(200);
+      return;
+    }
+    if (earningsParallelInFlightRef.current === cacheKey) {
+      deferActiveScopeEarningsUpgrade(200);
+      return;
+    }
 
     const gen = ++earningsFetchGenRef.current;
 
@@ -6340,6 +6362,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     loadEarningsProgressive,
     resolveDashboardScopeKey,
     scheduleIncompleteEarningsRetry,
+    deferActiveScopeEarningsUpgrade,
     computeCurrencyMetricsFromPayload,
     tryBuildGroupAllDashboardFromCompanyCaches,
     buildSeededEarningsRows,
@@ -6595,6 +6618,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           )
         );
         setEarningsByCurrencyLoading(true);
+        deferActiveScopeEarningsUpgrade(120);
       } else {
         setEarningsByCurrencyLoading(false);
       }
@@ -7207,6 +7231,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         if (dashboardDataRef.current) {
           dashboardFetchFailedScopeRef.current = "";
           dashboardStaleRetryRef.current = { scopeKey: cacheKey, attempts: 0 };
+          // Fetch guard cleared — resume any pie fill that bounced off in-flight.
+          const codes = currenciesRef.current;
+          if (
+            codes.length > 1 &&
+            !dashboardEarningsRowsComplete(earningsByCurrencyRef.current, codes)
+          ) {
+            deferActiveScopeEarningsUpgrade(80);
+          }
         }
       } else if (
         !dashboardDataRef.current &&
@@ -7263,6 +7295,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     loadDashboardChartDaily,
     ensureDeferredDashboardLoads,
     upgradeActiveScopeEarnings,
+    deferActiveScopeEarningsUpgrade,
     loadEarningsParallelForAtomicPaint,
     computeCurrencyMetricsFromPayload,
     enrichGroupAllMergedDashboard,
