@@ -159,6 +159,22 @@ function dcSummaryApiHandleSubmit(): void
                 : ['company_id' => $companyId, 'scope_type' => null, 'scope_id' => null];
             $useCaptureScopeColumns = !empty($capture_scope_ctx['dual_tenant']);
 
+            // Try to resolve/ensure numeric process.id for group payroll process code (SALARY/BONUS/COMMISSION/PROFIT)
+            if ($submitProcessId <= 0 && $submitProcessCode !== '') {
+                $ensuredPid = dcEnsureProcessIdByCode(
+                    $pdo,
+                    (int) $processCompanyId > 0 ? (int) $processCompanyId : (int) $companyId,
+                    $submitProcessCode,
+                    (bool) $capture_scope_group,
+                    $groupCodeSubmit,
+                    !empty($data['currencyId']) ? (int) $data['currencyId'] : null
+                );
+                if ($ensuredPid !== null && $ensuredPid > 0) {
+                    $submitProcessId = $ensuredPid;
+                    $data['processId'] = $ensuredPid;
+                }
+            }
+
             // Pure group-only capture: frontend sets groupOnlyCapture=true and sends processCode (not processId).
             // This applies even when the group has an anchor company (processCompanyId > 0).
             // We must NOT require processId in this case.
@@ -173,12 +189,15 @@ function dcSummaryApiHandleSubmit(): void
                 $data['processCode'] = $submitProcessCode;
                 // Ensure process_code column exists for pure-group captures.
                 try {
+                    $pdo->exec('SET FOREIGN_KEY_CHECKS = 0');
                     if ($pdo->query("SHOW COLUMNS FROM data_captures LIKE 'process_code'")->rowCount() === 0) {
                         $pdo->exec("ALTER TABLE data_captures ADD COLUMN process_code VARCHAR(50) NULL AFTER process_id");
                     }
                     $pdo->exec('ALTER TABLE data_captures MODIFY COLUMN process_id INT NULL');
                     $pdo->exec('ALTER TABLE data_captures MODIFY COLUMN company_id INT UNSIGNED NULL');
+                    $pdo->exec('SET FOREIGN_KEY_CHECKS = 1');
                 } catch (Throwable $schemaEx) {
+                    try { $pdo->exec('SET FOREIGN_KEY_CHECKS = 1'); } catch (Throwable $e) {}
                     error_log('summary_submit pure-group schema: ' . $schemaEx->getMessage());
                 }
             } else {

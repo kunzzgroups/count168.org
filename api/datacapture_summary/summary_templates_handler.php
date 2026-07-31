@@ -22,6 +22,21 @@ function dcSummaryApiHandleSaveTemplate(): void
                 throw new Exception('Missing required fields: id_product or account_id');
             }
         
+            $rawProc = isset($row['process_id']) && $row['process_id'] !== '' ? $row['process_id'] : ($row['process_code'] ?? $row['processCode'] ?? null);
+            $resolvedTemplateProcessId = null;
+            if (is_numeric($rawProc)) {
+                $resolvedTemplateProcessId = (int) $rawProc;
+            } elseif (is_string($rawProc) && trim($rawProc) !== '') {
+                $resolvedTemplateProcessId = dcEnsureProcessIdByCode(
+                    $pdo,
+                    (int) $company_id,
+                    trim($rawProc),
+                    (bool) $capture_scope_group,
+                    $groupIdForAccess,
+                    !empty($row['currency_id']) ? (int) $row['currency_id'] : null
+                );
+            }
+
             // Prepare template payload
             $templatePayload = [
                 'product_type' => $row['product_type'] ?? 'main',
@@ -47,7 +62,7 @@ function dcSummaryApiHandleSaveTemplate(): void
                 'last_source_value' => $row['last_source_value'] ?? null,
                 'last_processed_amount' => isset($row['last_processed_amount']) ? $row['last_processed_amount'] : 0,
                 'template_key' => $row['template_key'] ?? null,
-                'process_id' => isset($row['process_id']) && is_numeric($row['process_id']) ? (int)$row['process_id'] : null,
+                'process_id' => $resolvedTemplateProcessId,
                 'data_capture_id' => isset($row['data_capture_id']) && !empty($row['data_capture_id']) ? (int)$row['data_capture_id'] : null,
                 // Preserve row position in summary table if provided
                 'row_index' => isset($row['row_index']) && $row['row_index'] !== null ? (int)$row['row_index'] : null,
