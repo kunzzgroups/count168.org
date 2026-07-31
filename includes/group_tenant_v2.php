@@ -35,6 +35,41 @@ function gt_v2_fixed_games_category_flags(): array
     ];
 }
 
+/**
+ * Active sidebar/session category while Group login has a company_id.
+ * Pure Group / group-entity → fixed Games; real subsidiary → that row's permissions
+ * (Bank-only must not keep Report / Games menus after company switch).
+ *
+ * @return array{has_gambling: bool, has_bank: bool, permissions: array<int, string>}
+ */
+function gt_v2_resolve_active_category_flags(PDO $pdo, int $companyId): array
+{
+    if ($companyId <= 0) {
+        return gt_v2_fixed_games_category_flags();
+    }
+    if (!function_exists('gc_resolve_company_category_flags') || !function_exists('gc_company_row_is_group_entity')) {
+        return gt_v2_fixed_games_category_flags();
+    }
+    try {
+        $stmt = $pdo->prepare('SELECT company_id, group_id FROM company WHERE id = ? LIMIT 1');
+        $stmt->execute([$companyId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (
+            !$row
+            || gc_company_row_is_group_entity(
+                isset($row['company_id']) ? (string) $row['company_id'] : '',
+                isset($row['group_id']) ? (string) $row['group_id'] : ''
+            )
+        ) {
+            return gt_v2_fixed_games_category_flags();
+        }
+        return gc_resolve_company_category_flags($pdo, $companyId);
+    } catch (Throwable $e) {
+        error_log('gt_v2_resolve_active_category_flags: ' . $e->getMessage());
+        return gt_v2_fixed_games_category_flags();
+    }
+}
+
 function gt_v2_normalize_group_code(?string $code): string
 {
     return gc_normalize_group_code($code ?? '');

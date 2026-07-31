@@ -65,6 +65,18 @@ export function canAccessDashboard(me) {
 }
 
 /**
+ * Sidebar Report: Games category, pure Group (fixed Games), or C168.
+ * Hidden for Bank-only companies after Group → Bank switch.
+ */
+export function canShowReportInSidebar(me) {
+  if (!me) return false;
+  if (!canAccessPermission(me, "report")) return false;
+  if (me.company_has_gambling) return true;
+  const code = String(me.company_code || "").trim().toUpperCase();
+  return code === "C168" || Boolean(me.is_current_company_c168);
+}
+
+/**
  * First SPA route after login — mirrors sidebar order in AuthenticatedLayout.
  * @returns {string|null} spaPath result, or null when no staff page is accessible
  */
@@ -89,7 +101,7 @@ export function resolveDefaultLandingPath(me) {
     return spaPath("datacapture");
   }
   if (canAccessPermission(me, "payment")) return spaPath("transaction");
-  if (canAccessPermission(me, "report") && me?.company_has_gambling) {
+  if (canShowReportInSidebar(me)) {
     return spaPath("customer-report");
   }
   if (canAccessFullMaintenance(me)) return spaPath("payment-maintenance");

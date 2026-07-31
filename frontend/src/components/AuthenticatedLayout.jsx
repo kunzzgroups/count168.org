@@ -30,6 +30,7 @@ import {
   canAccessFullMaintenance,
   canAccessLimitedMaintenance,
   canAccessPermission,
+  canShowReportInSidebar,
   resolveDefaultLandingPath,
   showMaintenanceInSidebar,
 } from "../utils/auth/sidebarPermissions.js";
@@ -600,15 +601,53 @@ export default function AuthenticatedLayout() {
         if (!dashboardGcFiltersEqual(filterAtStart, filterNow)) return null;
         if (!shouldRefreshExpiryFromSession(json.data, filterNow)) return null;
         applyLoginScopeToSessionStorageIfNeeded(json.data);
+
+        // Prefer owner-company row / session-switch cache over payload when a subsidiary
+        // is selected — Group login historically returned fixed Games and re-showed Report.
+        const filterCompanyId =
+          filterNow.companyId != null && filterNow.companyId !== ""
+            ? Number(filterNow.companyId)
+            : null;
+        const sessionCompanyId = Number(json.data.company_id);
+        const categoryCompanyId =
+          Number.isFinite(filterCompanyId) && filterCompanyId > 0
+            ? filterCompanyId
+            : Number.isFinite(sessionCompanyId) && sessionCompanyId > 0
+              ? sessionCompanyId
+              : null;
+        let categoryOverride = null;
+        if (!filterNow.groupOnly && categoryCompanyId != null) {
+          const row = findOwnerCompanyById(categoryCompanyId);
+          categoryOverride =
+            resolveCompanyCategoryFlags(row) ?? categoryFlagsFromSession(null, categoryCompanyId);
+        }
+        const hasGambling =
+          categoryOverride != null
+            ? Boolean(categoryOverride.hasGambling)
+            : Boolean(json.data.company_has_gambling);
+        const hasBank =
+          categoryOverride != null
+            ? Boolean(categoryOverride.hasBank)
+            : Boolean(json.data.company_has_bank);
+
         rememberCompanySessionFlags({
           company_id: json.data.company_id,
           company_code: json.data.company_code,
-          has_gambling: json.data.company_has_gambling,
-          has_bank: json.data.company_has_bank,
+          has_gambling: hasGambling,
+          has_bank: hasBank,
         });
+        const sessionMe =
+          categoryOverride != null
+            ? {
+                ...json.data,
+                company_has_gambling: hasGambling,
+                company_has_bank: hasBank,
+              }
+            : json.data;
+
         let appliedSessionToSidebar = false;
         setMe((prev) => {
-          if (!prev) return json.data;
+          if (!prev) return sessionMe;
           if (shouldApplySessionToSidebar(json.data, filterNow)) {
             appliedSessionToSidebar = true;
             if (filterNow.groupOnly && filterNow.selectedGroup) {
@@ -628,7 +667,7 @@ export default function AuthenticatedLayout() {
                 }),
               });
             }
-            return json.data;
+            return sessionMe;
           }
           return {
             ...prev,
@@ -642,7 +681,7 @@ export default function AuthenticatedLayout() {
         if (appliedSessionToSidebar) {
           setSidebarGcTick((n) => n + 1);
         }
-        return json.data;
+        return sessionMe;
       }
     } catch {
       /* ignore */
@@ -1471,7 +1510,7 @@ export default function AuthenticatedLayout() {
               </SidebarNavTip>
             </div>
           )}
-          {canAccess("report") && me?.company_has_gambling && (
+          {canShowReportInSidebar(me) && (
             <div className="informationmenu-section">
               <div className="menu-item-wrapper" onMouseLeave={scheduleCloseHoverSubmenu}>
                 <SidebarNavTip label={i18n.sidebarReport} enabled={sidebarIconOnly} placement="top">

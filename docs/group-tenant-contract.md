@@ -23,8 +23,9 @@
 | `login_scope` | `"group"` |
 | `login_identifier` | Group code（大写） |
 | `login_group_scope_id` | `groups.id` |
-| `company_id` | 可为 `null` / `0`（空 Group） |
-| Category flags | `company_has_gambling=true`, `company_has_bank=false`, `company_permissions=["Games"]` |
+| `company_id` | 可为 `null` / `0`（空 Group）；选中子公司后为该子公司 id |
+| Category flags（纯 Group / group-entity） | `company_has_gambling=true`, `company_has_bank=false`, `company_permissions=["Games"]` |
+| Category flags（已选真实子公司） | 跟该子公司 `company.permissions`（Bank-only → 无 Report；Games / C168 → 有 Report） |
 
 ## 3. 阶段状态
 

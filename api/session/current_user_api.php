@@ -178,14 +178,16 @@ if ($companyId && $pdo instanceof PDO) {
                 && (!isset($_SESSION['secondary_password_verified']) || $_SESSION['secondary_password_verified'] !== true);
         }
 
-        // Group login: category from contract (fixed Games), not subsidiary union
+        // Group login: fixed Games only for pure Group / group-entity.
+        // Real subsidiary (e.g. Bank C2) uses that company's category so sidebar Report hides.
         if (
             function_exists('gt_v2_enabled')
             && gt_v2_enabled()
             && function_exists('gc_is_group_login')
             && gc_is_group_login()
+            && function_exists('gt_v2_resolve_active_category_flags')
         ) {
-            $flags = gt_v2_fixed_games_category_flags();
+            $flags = gt_v2_resolve_active_category_flags($pdo, (int) $companyId);
         } else {
             $flags = gc_resolve_company_category_flags($pdo, (int) $companyId);
         }
