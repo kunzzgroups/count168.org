@@ -6281,10 +6281,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           setEarningsByCurrencyLoading(false);
         }
       }
-      setEarningsByCurrency(
-        buildSeededEarningsRows(codes, primary, primaryNetProfit, primaryEarnings)
-      );
-      setEarningsByCurrencyLoading(false);
       return;
     }
     // Atomic first paint already fans out light earnings — do not start a second

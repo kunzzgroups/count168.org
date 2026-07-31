@@ -2245,7 +2245,7 @@ try {
     }
 
     $today = date('Y-m-d');
-    //$today = '2026-07-31';
+    //$today = '2026-06-12';
 
     bmp_promoteExpiredNaturalMonthlySoftDismissals($pdo, $company_id, $today);
     if (isset($_GET['restore_dismissed']) && (string) $_GET['restore_dismissed'] === '1') {
