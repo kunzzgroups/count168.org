@@ -120,6 +120,15 @@ function buildModalCompanyList(raw) {
 }
 
 /** Group login add/edit user: one row per accessible group (AP, IG). Prefer group-entity id; empty group uses synthetic negative id from groups.id. */
+function syntheticEmptyGroupPickerId(groupCode, groupPk = 0) {
+  const pk = Number(groupPk);
+  if (Number.isFinite(pk) && pk > 0) return -Math.abs(pk);
+  const g = String(groupCode || "").trim().toUpperCase();
+  let h = 0;
+  for (let i = 0; i < g.length; i += 1) h = (h * 31 + g.charCodeAt(i)) | 0;
+  return -Math.abs(h || 1);
+}
+
 function buildModalGroupOptions(companies, me) {
   const gids = resolveVisibleGroupIds(sortedUniqueGroupIds(companies), me, companies);
   const out = [];
@@ -135,7 +144,9 @@ function buildModalGroupOptions(companies, me) {
       pickDefaultCompanyForGroup(companies, g, { me });
     let id = entity?.id != null ? Number(entity.id) : Number.NaN;
     if (!Number.isFinite(id) || id <= 0) {
-      // Phase 4: empty group — synthetic id so dual-tenant picker can select group_codes.
+      // Phase 4 / 8: empty group — synthetic id so picker can select group_codes.
+      // Prefer groups.id from cache / session; fall back to stable hash of group code
+      // so Add User still works when owner-groups cache is cold or session pk missing.
       const cached = findOwnerGroupByCode(g);
       const pk =
         cached?.id != null && Number(cached.id) > 0
@@ -143,8 +154,7 @@ function buildModalGroupOptions(companies, me) {
           : me?.login_identifier && String(me.login_identifier).toUpperCase() === g && Number(me?.login_group_scope_id) > 0
             ? Number(me.login_group_scope_id)
             : 0;
-      if (pk <= 0) continue;
-      id = -Math.abs(pk);
+      id = syntheticEmptyGroupPickerId(g, pk);
     }
     seen.add(g);
     out.push({
@@ -2196,7 +2206,8 @@ export default function UserListPage() {
       groupOnlyUserList &&
       (currentUserRole === "admin" || currentUserRole === "owner") &&
       !editingRow?.is_owner_shadow &&
-      selectedCompanyIds.length === 0
+      selectedCompanyIds.length === 0 &&
+      !String(selectedGroup || "").trim()
     ) {
       notify(t("groupNoneSelected"), "danger");
       return;
@@ -2224,7 +2235,8 @@ export default function UserListPage() {
     } else {
       const inferredGroupIdFromPicker = (() => {
         const selectedId = selectedCompanyIds[0] != null ? Number(selectedCompanyIds[0]) : Number.NaN;
-        if (!Number.isFinite(selectedId) || selectedId <= 0) return null;
+        // Synthetic empty-group picker ids are negative; still resolve via row.group_id.
+        if (!Number.isFinite(selectedId) || selectedId === 0) return null;
         const selectedOption = modalPickerCompanies.find((c) => Number(c.id) === selectedId);
         const gid = String(selectedOption?.group_id || "").trim().toUpperCase();
         return gid || null;
@@ -2235,6 +2247,7 @@ export default function UserListPage() {
         : [];
       if (forceGroup) {
         saveGroupId = String(selectedGroup || inferredGroupIdFromPicker || "").trim().toUpperCase();
+        if (!saveGroupCodes.length && saveGroupId) saveGroupCodes = [saveGroupId];
         payload.group_id = saveGroupId;
         payload.group_only = 1;
         payload.group_codes = saveGroupCodes;
