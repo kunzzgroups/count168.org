@@ -758,7 +758,7 @@ body.transaction-page {
 }
 /* 按币种分表：Date 收紧、Remark 加宽（合计 100%） */
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-date {
-    width: 5%;
+    width: 8%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-product {
     width: 16%;
@@ -775,11 +775,11 @@ body.transaction-page {
     width: 26%;
 }
 .member-winloss-table.member-winloss-table--by-currency col.transaction-history-col-remark {
-    width: 24%;
+    width: 21%;
 }
 .member-winloss-table .transaction-history-col-date {
     min-width: 0;
-    max-width: 5.6rem;
+    max-width: none;
     padding-inline: 6px !important;
 }
 .member-winloss-table .transaction-history-col-product {
