@@ -2,6 +2,7 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { flushSync } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { spaPath } from "../../../utils/routing/pageRoutes.js";
+import { canShowReportInSidebar } from "../../../utils/auth/sidebarPermissions.js";
 import {
   getCachedOwnerCompanies,
   DASHBOARD_GROUP_FILTER_KEY,
@@ -209,10 +210,7 @@ export default function CustomerReportPage() {
     pageBootOnceRef.current = true;
 
     const u = me;
-    const perms = Array.isArray(u.permissions) ? u.permissions : [];
-    const hasFull = perms.length === 0;
-    const canReport = hasFull || perms.includes("report");
-    if (!canReport || !u.company_has_gambling) {
+    if (!canShowReportInSidebar(u)) {
       navigate(spaPath("dashboard"), { replace: true });
       return;
     }
