@@ -188,7 +188,7 @@ export async function resolveBankProcessListRouteCache(companyId, opts = {}) {
 }
 
 /** Warm Bank Process List data before route swap (Games → Bank). */
-export async function prefetchBankProcessListPayload(companyId, { search = "" } = {}) {
+export async function prefetchBankProcessListPayload(companyId, { search = "", signal } = {}) {
   const cid = Number(companyId);
   if (!cid) return { rows: null, currencyCodes: null };
 
@@ -209,11 +209,13 @@ export async function prefetchBankProcessListPayload(companyId, { search = "" } 
   );
 
   try {
+    const fetchOpts = { credentials: "include", signal };
     const [listRes, curRes, ordRes] = await Promise.all([
-      fetch(listUrl.toString(), { credentials: "include" }),
-      fetch(curUrl, { credentials: "include" }),
-      fetch(ordUrl, { credentials: "include" }).catch(() => null),
+      fetch(listUrl.toString(), fetchOpts),
+      fetch(curUrl, fetchOpts),
+      fetch(ordUrl, fetchOpts).catch(() => null),
     ]);
+    if (signal?.aborted) return { rows: null, currencyCodes: null };
     const listJson = await listRes.json();
     const curJson = await curRes.json();
 
@@ -238,7 +240,10 @@ export async function prefetchBankProcessListPayload(companyId, { search = "" } 
     }
 
     return { rows, currencyCodes };
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError" || signal?.aborted) {
+      return { rows: null, currencyCodes: null };
+    }
     return { rows: null, currencyCodes: null };
   }
 }
