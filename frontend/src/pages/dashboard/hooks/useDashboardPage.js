@@ -6170,7 +6170,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
     if (!canUseBootstrap) {
       if (!groupAllMode || !dashboardDataRef.current) return;
-      // Company All: only fill pie from company-cache synthesize — never N×currency merges.
+      // Company All: prefer company-cache synthesize; cold miss → FE-parallel earnings packs.
       const synthesized = tryBuildGroupAllDashboardFromCompanyCaches({ codes });
       if (
         synthesized?.earnings?.length &&
@@ -6203,7 +6203,59 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       setEarningsByCurrency(
         buildSeededEarningsRows(codes, primary, primaryNetProfit, primaryEarnings)
       );
-      setEarningsByCurrencyLoading(false);
+      setEarningsByCurrencyLoading(true);
+      const earnGen = ++earningsFetchGenRef.current;
+      try {
+        const rows = await fetchGroupAllEarningsRowsForRange(
+          dateFromRef.current,
+          dateToRef.current,
+          earnGen,
+          codes
+        );
+        if (earnGen !== earningsFetchGenRef.current) return;
+        if (resolveDashboardScopeKey() !== cacheKey) return;
+        if (
+          Array.isArray(rows) &&
+          rows.length > 1 &&
+          dashboardEarningsRowsComplete(rows, codes, primary, primaryEarnings)
+        ) {
+          const normalized = normalizeEarningsRowsForDisplay(
+            rows,
+            primary,
+            primaryNetProfit,
+            primaryEarnings
+          );
+          setEarningsByCurrency(normalized);
+          setEarningsByCurrencyPrev([]);
+          patchDashboardCache(cacheKey, { earnings: normalized });
+          mirrorDashboardEarningsAcrossCurrencies(
+            normalized,
+            codes,
+            resolveDashboardScopeKey,
+            primary,
+            primaryEarnings
+          );
+        } else if (Array.isArray(rows) && rows.length > 1) {
+          const normalized = normalizeEarningsRowsForDisplay(
+            rows,
+            primary,
+            primaryNetProfit,
+            primaryEarnings
+          );
+          setEarningsByCurrency(normalized);
+          setEarningsByCurrencyPrev([]);
+          patchDashboardCache(cacheKey, { earnings: normalized });
+          scheduleIncompleteEarningsRetry(400);
+        }
+      } catch {
+        if (earnGen === earningsFetchGenRef.current) {
+          scheduleIncompleteEarningsRetry(400);
+        }
+      } finally {
+        if (earnGen === earningsFetchGenRef.current) {
+          setEarningsByCurrencyLoading(false);
+        }
+      }
       return;
     }
     // Atomic first paint already fans out light earnings — do not start a second
@@ -6278,6 +6330,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     computeCurrencyMetricsFromPayload,
     tryBuildGroupAllDashboardFromCompanyCaches,
     buildSeededEarningsRows,
+    fetchGroupAllEarningsRowsForRange,
     dateFrom,
     dateTo,
   ]);
@@ -6482,12 +6535,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           if (gen !== dashboardFetchGenRef.current) return false;
           if (dashboardEarningsRowsComplete(rows, multiCurrencyCodes)) {
             earningsCached = rows;
-          } else if (requirePie && !groupAllMode) {
+          } else if (requirePie) {
+            // Cache hit must stay atomic (incl. Company All) — avoid painting empty/zero
+            // KPI from incomplete cache before live merge lands.
             setLoading(true);
             return false;
           }
         } catch {
-          if (requirePie && !groupAllMode) {
+          if (requirePie) {
             setLoading(true);
             return false;
           }
@@ -7065,13 +7120,14 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         ) {
           const enrichBase = current;
           const enrichScopeKey = cacheKey;
+          // Prefetch-style abort=false — active-scope abort can silently skip ledger enrich.
           void enrichGroupAllMergedDashboard(
             enrichBase,
             dateFrom,
             dateTo,
             currencyCode,
             selectedGroup,
-            true
+            false
           ).then((enriched) => {
             if (gen !== dashboardFetchGenRef.current) return;
             if (resolveDashboardScopeKey() !== enrichScopeKey) return;
