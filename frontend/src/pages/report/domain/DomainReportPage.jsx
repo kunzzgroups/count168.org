@@ -17,6 +17,7 @@ import {
   resolveInitialSelectedGroupFromSession,
   sortedUniqueGroupIds,
   fetchOwnerCompaniesAll,
+  fetchOwnerGroupsAll,
 } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   resolveReportCompanyWhenClosingGroup,
@@ -194,6 +195,7 @@ export default function DomainReportPage() {
     (async () => {
       try {
         const rows = await fetchOwnerCompaniesAll({ me: u });
+        await fetchOwnerGroupsAll(u).catch(() => null);
         if (cancelled) return;
         setCompanies(rows);
 
@@ -377,16 +379,31 @@ export default function DomainReportPage() {
     preferredCompanyId: companyId,
   });
 
+  const scopeCompanyId = useMemo(() => {
+    if (companyId == null) return null;
+    const cid = Number(companyId);
+    if (!Number.isFinite(cid) || cid <= 0) return null;
+    if (!companyButtons.some((c) => Number(c.id) === cid)) return null;
+    return cid;
+  }, [companyId, companyButtons]);
+
+  useEffect(() => {
+    if (companyId == null) return;
+    if (scopeCompanyId != null) return;
+    handleClearCompany(selectedGroup);
+  }, [companyId, scopeCompanyId, selectedGroup, handleClearCompany]);
+
   const reportScope = useMemo(
     () =>
       resolveDomainReportScope({
         companies,
         selectedGroup,
-        companyId,
+        companyId: scopeCompanyId,
         groupsAllMode,
         groupAllMode,
+        me,
       }),
-    [companies, selectedGroup, companyId, groupsAllMode, groupAllMode],
+    [companies, selectedGroup, scopeCompanyId, groupsAllMode, groupAllMode, me],
   );
 
   const isGroupScope = domainReportUsesSalaryBonusProcesses(reportScope);
@@ -526,8 +543,8 @@ export default function DomainReportPage() {
     <div className="container">
       <div className="content">
         <DomainReportFilters
-          companyId={companyId}
-          highlightCompanyId={companyId}
+          companyId={scopeCompanyId}
+          highlightCompanyId={scopeCompanyId}
           onSwitchCompany={handlePickCompany}
           onClearCompany={handleClearCompany}
           allowClearCompany={allowClearCompany}

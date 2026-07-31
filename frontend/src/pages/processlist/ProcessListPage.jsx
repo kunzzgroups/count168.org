@@ -6,6 +6,7 @@ import { ensureCrossPageCompanySelection, syncCompanySessionApi } from "../../ut
 import { spaPath } from "../../utils/routing/pageRoutes.js";
 import { replaceBrowserPathOnly } from "../../utils/routing/privateBrowserUrl.js";
 import {
+  buildDashboardSidebarNotifyOptions,
   clearDashboardGroupFilterKeepCompany,
   notifyDashboardGroupFilterChanged,
   persistDashboardFilterState,
@@ -1112,9 +1113,11 @@ export default function ProcessListPage() {
 
       if (nextGroup) persistDashboardGroupFilter(nextGroup);
       persistDashboardFilterState(nextGroup, nextId);
-      notifyDashboardGroupFilterChanged(nextGroup, nextId, {
-        companyCode: c.company_id,
-      });
+      notifyDashboardGroupFilterChanged(
+        nextGroup,
+        nextId,
+        buildDashboardSidebarNotifyOptions(c, nextGroup),
+      );
 
       void onSwitchCompanyRef.current?.(c, { layoutSilent: true });
     },

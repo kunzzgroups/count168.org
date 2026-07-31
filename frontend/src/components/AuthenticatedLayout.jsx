@@ -59,6 +59,7 @@ import {
   stashDashboardFilterForNewTab,
 } from "../utils/company/sharedCompanyFilter.js";
 import { rememberCompanySessionFlags } from "../utils/company/companySessionFlagsCache.js";
+import { resolveCompanyCategoryFlags } from "../utils/company/companyCategoryFlags.js";
 import { categoryFlagsFromSession } from "../utils/company/sidebarCompanySwitch.js";
 import SidebarExpirationCountdown from "./SidebarExpirationCountdown.jsx";
 import SidebarMenuTooltip from "./SidebarMenuTooltip.jsx";
@@ -750,7 +751,7 @@ export default function AuthenticatedLayout() {
               hasGambling: Boolean(resolved.hasGambling),
               hasBank: Boolean(resolved.hasBank),
             }
-          : categoryFlagsFromSession(null, cid);
+          : categoryFlagsFromSession(null, cid) ?? resolveCompanyCategoryFlags(row);
       const expirationDate = resolveSidebarExpirationForFilter(resolved);
       applySidebarPatch({
         companyId: cid,

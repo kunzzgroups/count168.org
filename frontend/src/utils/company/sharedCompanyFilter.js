@@ -1225,6 +1225,8 @@ export function shouldHideSidebarProcess(pathname, me = null) {
 /**
  * Bankprocess maintenance is company-scoped — hidden in group-only dashboard filter (e.g. IG, no company).
  * Under group "Company All", show when any company in the group has bank permission.
+ * When a subsidiary is selected, prefer that company's Bank category flags over stale session `me`
+ * (Group login often keeps Games identity until session sync finishes).
  */
 export function shouldShowBankprocessMaintenanceInSidebar(me) {
   const filter = readPersistedDashboardGcFilter();
@@ -1233,6 +1235,13 @@ export function shouldShowBankprocessMaintenanceInSidebar(me) {
   if (filter.groupAllMode && sidebarGroup) {
     const flags = resolveGroupCategoryFlagsForSidebar(sidebarGroup, { includeBank: true });
     return Boolean(flags?.hasBank);
+  }
+  const cid =
+    filter.companyId != null && filter.companyId !== "" ? Number(filter.companyId) : Number.NaN;
+  if (Number.isFinite(cid) && cid > 0) {
+    const row = findOwnerCompanyById(cid);
+    const flags = resolveCompanyCategoryFlags(row);
+    if (flags) return Boolean(flags.hasBank);
   }
   return Boolean(me?.company_has_bank);
 }

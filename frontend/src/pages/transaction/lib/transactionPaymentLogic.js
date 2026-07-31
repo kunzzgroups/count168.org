@@ -550,15 +550,18 @@ export function dedupeCurrencyRowsByCode(rows) {
 /**
  * Apply saved API/global/local order to currency rows from get_company_currencies_api.
  */
-export function orderCurrencyRows(orderedData, orderData, explicitCompanyId = null) {
+export function orderCurrencyRows(orderedData, orderData, explicitOrderKey = null) {
   let ordered = dedupeCurrencyRowsByCode(orderedData);
   try {
-    const companyId =
-      explicitCompanyId != null && explicitCompanyId !== ""
-        ? Number(explicitCompanyId)
-        : orderData?.data?.company_id;
+    let orderKey = explicitOrderKey;
+    if (orderKey == null || orderKey === "") {
+      const cid = orderData?.data?.company_id;
+      const gid = orderData?.data?.group_id;
+      if (cid != null && Number(cid) > 0) orderKey = Number(cid);
+      else if (gid) orderKey = `g:${String(gid).trim().toUpperCase()}`;
+    }
     const savedOrder = resolveSavedCurrencyOrder(
-      companyId,
+      orderKey,
       orderData?.success ? orderData?.data?.order : null,
     );
     if (!savedOrder?.length) return ordered;

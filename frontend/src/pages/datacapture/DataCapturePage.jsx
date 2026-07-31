@@ -11,7 +11,6 @@ import {
   filterCompaniesWithDisplayId,
   isExplicitCompanySelection,
   normalizeOwnerCompanyRow,
-  isDashboardGroupOnlyMode,
   persistDashboardFilterState,
   persistDashboardGroupFilter,
   notifyDashboardGroupFilterChanged,
@@ -20,6 +19,7 @@ import {
   readDashboardSelectedCompanyId,
   readPersistedDashboardGcFilter,
   resolveBootCompanyId,
+  resolveGcFilterBootCompanyId,
   resolveInitialSelectedGroupFromSession,
   fetchOwnerCompaniesAll,
 } from "../../utils/company/sharedCompanyFilter.js";
@@ -524,20 +524,30 @@ function DataCapturePageContent() {
         const queryGroup = url.searchParams.get("group_id") || restoreBoot?.groupId || null;
         const sessionMeta = restoreFromUrl ? readCaptureSessionMeta() : null;
         const allowGroupOnly = canUseGroupOnlyMode(u);
-        const persistedGc = readPersistedDashboardGcFilter();
         const savedCompanyId = readDashboardSelectedCompanyId();
-        const groupOnlyBoot =
+        // Shared boot (same as Transaction/Dashboard): group-only only when flag
+        // is set AND no saved subsidiary — never wipe TT because of a stale flag.
+        const bootGc = resolveGcFilterBootCompanyId({
+          urlCompanyId: queryCompany,
+          sessionCompanyId: u.company_id,
+          defaultRowId: raw[0]?.id,
+        });
+        const explicitCaptureGroupOnly =
           allowGroupOnly &&
           !queryCompany &&
           (queryGroupOnly ||
             (sessionMeta?.groupOnlyCapture &&
               !sessionMeta?.groupPayrollCapture &&
               restoreFromUrl) ||
-            (submittedFromUrl && queryGroupOnly) ||
-            isDashboardGroupOnlyMode() ||
-            persistedGc.groupOnly ||
-            (canUseGroupOnlyMode(u) &&
-              (isDashboardGroupOnlyMode() || persistedGc.groupOnly || savedCompanyId == null)));
+            (submittedFromUrl && queryGroupOnly));
+        const groupOnlyBoot =
+          allowGroupOnly &&
+          !queryCompany &&
+          bootGc.companyId == null &&
+          (explicitCaptureGroupOnly ||
+            bootGc.groupOnly === true ||
+            // Group login with no subsidiary persisted → default Group ledger
+            (isGroupLogin(u) && savedCompanyId == null));
 
         if (cancelled) return;
 
@@ -553,7 +563,8 @@ function DataCapturePageContent() {
             (String(u?.login_scope || "").toLowerCase() === "group" && u?.login_identifier
               ? String(u.login_identifier).trim().toUpperCase()
               : null) ||
-            (queryGroup ? String(queryGroup).trim().toUpperCase() : null);
+            (queryGroup ? String(queryGroup).trim().toUpperCase() : null) ||
+            (bootGc.selectedGroup ? String(bootGc.selectedGroup).trim().toUpperCase() : null);
           if (bootGroup) {
             persistDashboardGroupFilter(bootGroup);
           }
@@ -575,6 +586,9 @@ function DataCapturePageContent() {
           sessionCompanyId: u.company_id,
           defaultRowId: raw[0]?.id,
         });
+        if (effectiveCompany == null && bootGc.companyId != null) {
+          effectiveCompany = Number(bootGc.companyId);
+        }
 
         if (queryCompany && effectiveCompany && Number(effectiveCompany) !== Number(u.company_id)) {
           try {
@@ -625,6 +639,11 @@ function DataCapturePageContent() {
         setCompanies(raw);
         setCompanyId(effectiveCompany);
         setSelectedGroup(initialGroup);
+        if (effectiveCompany != null) {
+          persistDashboardGroupOnlyMode(false);
+          persistDashboardSelectedCompany(effectiveCompany);
+          if (initialGroup) persistDashboardGroupFilter(initialGroup);
+        }
       } catch {
         if (!cancelled) navigate(spaPath("login"), { replace: true });
       } finally {
@@ -649,7 +668,8 @@ function DataCapturePageContent() {
 
   useEffect(() => {
     if (bootLoading || companies.length === 0) return;
-    if (isDashboardGroupOnlyMode()) {
+    // Honour combined filter (flag + no saved company), not a stale group_only key alone.
+    if (readPersistedDashboardGcFilter().groupOnly) {
       if (companyIdFromUrl) {
         navigate(spaPath("datacapture"), { replace: true });
       }

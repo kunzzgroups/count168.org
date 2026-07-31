@@ -7,6 +7,7 @@ import { fetchOwnerCompaniesAll } from "../../../utils/company/sharedCompanyFilt
 import { spaPath } from "../../../utils/routing/pageRoutes.js";
 import { replaceBrowserPathOnly } from "../../../utils/routing/privateBrowserUrl.js";
 import {
+  buildDashboardSidebarNotifyOptions,
   clearDashboardGroupFilterKeepCompany,
   notifyDashboardGroupFilterChanged,
   persistDashboardFilterState,
@@ -1630,7 +1631,11 @@ export function useBankProcessListPage() {
 
       if (nextGroup) persistDashboardGroupFilter(nextGroup);
       persistDashboardFilterState(nextGroup, nextId);
-      notifyDashboardGroupFilterChanged(nextGroup, nextId);
+      notifyDashboardGroupFilterChanged(
+        nextGroup,
+        nextId,
+        buildDashboardSidebarNotifyOptions(c, nextGroup),
+      );
 
       void onSwitchCompanyRef.current?.(c, { layoutSilent: true, backgroundRefresh: hadCache });
     },

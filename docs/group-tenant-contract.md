@@ -39,6 +39,8 @@
 | 6 | 验收堵漏（Currency / Account / DC / Link scope…） | ✅ |
 | 7 | 空 Group → 第一家真实子公司衔接 | ✅（P0 登录；KK+子公司 TT 筛选展示用户确认） |
 | 8 | Ownership：空 Group / Group login 双轨 | ✅ |
+| 9 | Transaction：Group / Company 双账本对齐 | ✅ |
+| 10 | Report：Group / Company 双账本（Customer / Domain） | ✅ |
 
 ## 3b. Phase 7 产品约定
 
@@ -61,6 +63,24 @@
 | Account Ownership | 子公司卡（如 TT）；默认筛到登录 Group |
 | 写 API | `gc_assert_group_ledger_access` / company access 护栏 |
 
+## 3d. Phase 9 Transaction 约定
+
+| 项 | 约定 |
+|---|---|
+| Group-only | `scope_type=group` + `groups.id`；请求不传 `company_id` |
+| Company pill | 子公司 ledger；与 Group 账本互不混入 |
+| 空 Group boot | 无子公司也可进 Transaction（不依赖 owner companies 非空） |
+| RATE / CONTRA | 账户与币种走 `tx_fetch_account_row` / `tx_resolve_currency_id_for_scope`；写行带 scope 列 |
+| Currency order | 纯 Group 用 `group_id` 键（`g:{groups.id}`），不强制 company_id |
+
+## 3e. Phase 10 Report 约定
+
+| 项 | 约定 |
+|---|---|
+| Group-only | Category 闸门走 `gt_v2_group_category_access_ok`（Games）；Win/Lose 用 `scope_type=group` |
+| Company pill | 子公司 ledger；与 Group 账本互不混入 |
+| Customer / Domain | 共用 `resolveReportDualTenantCaptureScope`；FE groupIds 含 Domain/登录 Group |
+
 ## 4. 验收清单
 
 ### Company 回归
@@ -78,6 +98,9 @@
 - [x] Domain 保存 Group 后 `groups.permissions` 为 `["Games"]`（含历史 NULL 回填：`scripts/_migrate_groups_permissions_games.php`）
 - [ ] Ownership → Group Earnings：空 Group / KK 可见；可加载 available accounts
 - [ ] Ownership → Account Ownership：KK+TT 可见子公司 TT 并展开
+- [ ] Transaction → Group-only：空/有子公司均可进页；CONTRA/RATE 写入 `scope_type=group`
+- [ ] Transaction → Company pill：只见子公司账本；与 Group 列表互不混入
+- [ ] Transaction → Currency order：纯 Group 可拖拽保存（`group_id` / `g:{id}`）
 
 ### 迁移脚本（发版 / site）
 
