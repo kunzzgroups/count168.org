@@ -59,6 +59,7 @@ import {
   stashDashboardFilterForNewTab,
 } from "../utils/company/sharedCompanyFilter.js";
 import { rememberCompanySessionFlags } from "../utils/company/companySessionFlagsCache.js";
+import { resolveCompanyCategoryFlags } from "../utils/company/companyCategoryFlags.js";
 import { categoryFlagsFromSession } from "../utils/company/sidebarCompanySwitch.js";
 import SidebarExpirationCountdown from "./SidebarExpirationCountdown.jsx";
 import SidebarMenuTooltip from "./SidebarMenuTooltip.jsx";
@@ -724,15 +725,9 @@ export default function AuthenticatedLayout() {
           ? resolveGroupCategoryFlagsForSidebar(resolved.selectedGroup, { includeBank })
           : null;
         if (resolved.groupOnly) {
+          // Group tenant contract: always Games identity; never Bank category.
           patch.hasBank = false;
-          if (resolved.hasGambling != null) {
-            patch.hasGambling = Boolean(resolved.hasGambling);
-          } else if (groupFlags) {
-            patch.hasGambling = groupFlags.hasGambling;
-          } else if (resolved.selectedGroup) {
-            const groupGambling = resolveGroupOnlySidebarGambling(resolved.selectedGroup);
-            if (groupGambling != null) patch.hasGambling = groupGambling;
-          }
+          patch.hasGambling = true;
         } else {
           if (resolved.hasGambling != null) patch.hasGambling = Boolean(resolved.hasGambling);
           else if (groupFlags) patch.hasGambling = groupFlags.hasGambling;
@@ -756,7 +751,7 @@ export default function AuthenticatedLayout() {
               hasGambling: Boolean(resolved.hasGambling),
               hasBank: Boolean(resolved.hasBank),
             }
-          : categoryFlagsFromSession(null, cid);
+          : categoryFlagsFromSession(null, cid) ?? resolveCompanyCategoryFlags(row);
       const expirationDate = resolveSidebarExpirationForFilter(resolved);
       applySidebarPatch({
         companyId: cid,

@@ -1,5 +1,10 @@
 import { memo, useLayoutEffect, useRef } from "react";
-import { toUpperDisplay, syncEditFormSourcePercent } from "../formulaMaintenanceLogic.js";
+import {
+  syncEditFormDescriptionInput,
+  syncEditFormFormulaInput,
+  syncEditFormSourcePercent,
+  toUpperDisplay,
+} from "../formulaMaintenanceLogic.js";
 import { assetUrl } from "../../../../utils/core/apiUrl.js";
 import MaintenanceEllipsisText from "../../shared/MaintenanceEllipsisText.jsx";
 
@@ -119,7 +124,7 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
             ref={formulaTextareaRef}
             className="formula-input formula-input-textarea"
             value={editForm.formula}
-            onChange={(e) => patchForm("formula", e.target.value)}
+            onChange={(e) => onEditFormChange((prev) => syncEditFormFormulaInput(prev, e.target.value))}
             rows={2}
           />
         ) : (
@@ -136,7 +141,7 @@ const FormulaVirtualDataRow = memo(function FormulaVirtualDataRow({
             type="text"
             className="description-input"
             value={editForm.description}
-            onChange={(e) => patchForm("description", e.target.value)}
+            onChange={(e) => onEditFormChange((prev) => syncEditFormDescriptionInput(prev, e.target.value))}
           />
         ) : (
           <MaintenanceEllipsisText

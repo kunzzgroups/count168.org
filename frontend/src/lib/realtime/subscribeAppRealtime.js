@@ -106,15 +106,19 @@ export function subscribeAppRealtime({ getScopeParams, onError } = {}) {
       if (closed || gen !== connectGen) return;
       const data = ticketRes?.data;
       if (!ticketRes?.success || !data?.enabled || !data?.ticket) {
+        const denyMsg = String(ticketRes?.message || ticketRes?.error || "enabled=false");
         if (!warnedDisabled) {
           warnedDisabled = true;
-          console.warn(
-            "[app-realtime] ticket disabled or failed:",
-            ticketRes?.message || ticketRes?.error || "enabled=false",
-          );
+          console.warn("[app-realtime] ticket disabled or failed:", denyMsg);
         }
+        // Scope/permission deny is sticky for this filter — back off hard (no Network 5xx storm).
+        const accessDenied = /无权|无权限|缺少公司|缺少 group|无效的 group|Group Ledger/i.test(
+          denyMsg
+        );
         attempt += 1;
-        scheduleReconnect(Math.min(60_000, 5_000 * attempt));
+        scheduleReconnect(
+          accessDenied ? Math.min(120_000, 30_000 * attempt) : Math.min(60_000, 5_000 * attempt)
+        );
         return;
       }
       warnedDisabled = false;

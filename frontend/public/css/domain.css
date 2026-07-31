@@ -720,8 +720,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .group-pill:focus-visible {
 }
 
 /*
- * Multiple Choice — 对齐图一：略醒目的蓝胶囊（仍小于内容区两行按钮）
- * Done — 对齐图二：暖色强调完成状态
+ * Multiple Choice — 主题蓝胶囊；Done — 绿色完成态
  */
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-multi-choice-btn {
     box-sizing: border-box !important;
@@ -753,7 +752,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-multi-choice-btn:focus-visib
     outline-offset: 3px !important;
 }
 
-/* 「Multiple Choice」：蓝渐变白字（对齐图一） */
+/* 「Multiple Choice」：主题蓝渐变白字 */
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-multi-choice-btn--off {
     color: var(--color-text-inverse) !important;
     border: none !important;
@@ -767,9 +766,9 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-multi-choice-btn--off:hover 
 
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-multi-choice-btn--on {
     color: var(--color-text-inverse) !important;
-    border: 1px solid rgba(0, 0, 0, 0.45) !important;
-    background: linear-gradient(180deg, #ffcd55 0%, #ffa01a 100%) !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18) !important;
+    border: 1px solid rgba(4, 120, 87, 0.45) !important;
+    background: linear-gradient(180deg, #34d399 0%, #059669 100%) !important;
+    box-shadow: 0 1px 4px rgba(5, 150, 105, 0.28) !important;
     gap: 6px !important;
 }
 
@@ -1038,7 +1037,7 @@ body.ec-auth-shell .domain-form-modal-backdrop .dfm-assign-ref-label {
     cursor: pointer !important;
 }
 
-/* 紫色选中 + 白勾（参考图二） */
+/* 主题蓝选中 + 白勾（与 Domain 页其它 checkbox accent-color 一致） */
 body.ec-auth-shell .domain-form-modal-backdrop .dfm-assign-ref-checkbox {
     appearance: none !important;
     -webkit-appearance: none !important;
@@ -3240,7 +3239,7 @@ body.auto-renew-page-body .company-settings-react-modal.modal-content .company-s
 
 .company-share-role-badge--it {
     background: var(--gradient-domain-banner-violet);
-    color: var(--color-control-accent-border);
+    color: #5b21b6;
     border: 1px solid var(--color-violet-border-soft);
 }
 

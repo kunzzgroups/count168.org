@@ -10,6 +10,7 @@ import {
   paymentRowKey,
   searchPaymentMaintenance,
 } from "../../lib/maintenanceApi.js";
+import { notifyTransactionListInvalidated } from "../../lib/transactionPaymentLogic.js";
 import {
   maintenanceScopeIsReady,
   maintenanceScopeKey,
@@ -145,6 +146,7 @@ export default function MaintenancePaymentPage() {
     try {
       const ids = [...selectedIds];
       await deletePaymentRecords({ scope, transactionIds: ids });
+      notifyTransactionListInvalidated("mobile_payment_maintenance_delete");
       s.notify(getMaintenanceText(lang, "deleteSuccess", { n: ids.length }), "success");
       setConfirmOpen(false);
       await loadList();

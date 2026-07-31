@@ -1,0 +1,21 @@
+[Unit]
+Description=count168 Transaction Payment SSE realtime hub
+After=network.target redis.service
+Wants=redis.service
+
+[Service]
+Type=simple
+User=ec2-user
+Group=ec2-user
+WorkingDirectory=/var/www/count168/services/tx-realtime
+EnvironmentFile=-/var/www/count168/services/tx-realtime/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node server.mjs
+Restart=on-failure
+RestartSec=3
+# Bind localhost only (Nginx proxies /realtime/)
+Environment=TX_REALTIME_HOST=127.0.0.1
+Environment=TX_REALTIME_PORT=3911
+
+[Install]
+WantedBy=multi-user.target

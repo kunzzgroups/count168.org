@@ -92,7 +92,7 @@ export function formatHistoryBalanceMoney(v) {
 
 const RATE_MAX_DECIMALS = 8;
 const RATE_HISTORY_MAX_DECIMALS = 6;
-/** Non-RATE manual submit store scale (display still round-2). */
+/** Non-RATE manual submit + bankProcess→Transaction store scale (display still half-up 2). */
 export const TX_STORE_MAX_DECIMALS = 6;
 /** RATE amount store scale (display still half-up 2). Calc/submit use this precision. */
 export const RATE_STORE_MAX_DECIMALS = 6;

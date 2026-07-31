@@ -91,9 +91,10 @@ export function useTransactionSync({
         queueRetry();
         return;
       }
-      // No currency selected → lists are intentionally empty; don't retry-spam.
+      // Currencies not ready yet — wait for selection (effect re-runs via deps).
+      // Do NOT mark handled here: that swallows pending invalidate on remount and
+      // lets the initial search reuse stale React Query / session data.
       if (!showAllCurrencies && selectedCurrencies.length === 0) {
-        markInvalidateHandled(invalidateTs);
         return;
       }
       if (refreshInFlight) return;

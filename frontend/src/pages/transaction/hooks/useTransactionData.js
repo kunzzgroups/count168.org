@@ -8,6 +8,7 @@ import { replaceBrowserPathOnly } from "../../../utils/routing/privateBrowserUrl
 import {
   filterCompaniesWithDisplayId,
   fetchOwnerCompaniesAll,
+  fetchOwnerGroupsAll,
   getCachedOwnerCompanies,
   clearDashboardGroupFilterKeepCompany,
   DASHBOARD_GROUP_FILTER_OPT_OUT_KEY,
@@ -43,7 +44,8 @@ import {
   resolveTransactionScope,
   transactionScopeApiParams,
   transactionScopeCacheKey,
-  resolveTransactionCurrencyOrderCompanyId,
+  resolveTransactionCurrencyOrderParams,
+  resolveTransactionCurrencyOrderCacheKey,
 } from "../lib/transactionScope.js";
 import { useGroupAnchorSessionSync } from "../../../utils/company/useGroupAnchorSessionSync.js";
 import { buildTransactionCompanyStripRows } from "../lib/transactionCompanyStrip.js";
@@ -53,6 +55,7 @@ import {
   applyTransactionBootPersistence,
   buildTransactionBootSnapshot,
   mergeOwnerCompaniesIntoSnapshot,
+  resolveTransactionSnapGroupIds,
 } from "../lib/transactionBootSnapshot.js";
 import {
   hydrateTransactionScopeMetadataFromCache,
@@ -188,7 +191,8 @@ export function useTransactionData({
       return;
     }
     const cached = getCachedOwnerCompanies();
-    if (!cached?.length) return;
+    // Empty Group: cache may be [] — still allow boot via group login scope.
+    if (cached == null) return;
     const queryCompany = new URL(window.location.href).searchParams.get("company_id");
     const bootSnap = buildTransactionBootSnapshot(u, cached, { queryCompany });
     if (!bootSnap) return;
@@ -227,6 +231,9 @@ export function useTransactionData({
 
         const rows = await fetchOwnerCompaniesAll({ me: u });
         if (cancelled) return;
+        // Warm Domain groups cache so snapGroupIds includes owner portfolio (empty Group KK).
+        await fetchOwnerGroupsAll(u).catch(() => null);
+        if (cancelled) return;
 
         const url = new URL(window.location.href);
         const queryCompany = url.searchParams.get("company_id");
@@ -240,9 +247,20 @@ export function useTransactionData({
         };
 
         if (filterSnapshotRef.current) {
-          const merged = mergeOwnerCompaniesIntoSnapshot(filterSnapshotRef.current, rows, u);
-          if (merged !== filterSnapshotRef.current) {
-            commitFilterSnapshot(merged);
+          let next = mergeOwnerCompaniesIntoSnapshot(filterSnapshotRef.current, rows, u);
+          const gids = resolveTransactionSnapGroupIds(rows, u);
+          const prevGids = filterSnapshotRef.current.snapGroupIds || [];
+          const groupsChanged =
+            gids.length !== prevGids.length || gids.some((g, i) => g !== prevGids[i]);
+          if (next !== filterSnapshotRef.current || groupsChanged) {
+            if (next === filterSnapshotRef.current) next = { ...filterSnapshotRef.current };
+            next.snapGroupIds = gids;
+            next.companyStripRows = buildTransactionCompanyStripRows(next, {
+              selectedGroup: next.selectedGroup,
+              companyId: next.companyId,
+              groupsAllMode: Boolean(next.groupsAllMode),
+            });
+            commitFilterSnapshot(next);
           }
           await syncUrlCompanySessionOnce();
         } else {
@@ -336,7 +354,8 @@ export function useTransactionData({
       filterSnapshotRef.current?.snapCompaniesAll ||
       filterSnapshotRef.current?.snapCompanies ||
       [];
-    const orderCompanyId = resolveTransactionCurrencyOrderCompanyId(transactionScope, snapCompanies);
+    const orderParams = resolveTransactionCurrencyOrderParams(transactionScope, snapCompanies);
+    const orderCacheKey = resolveTransactionCurrencyOrderCacheKey(transactionScope, snapCompanies);
     const forceFresh = accountsRealtimeNonce > 0;
     (async () => {
       const fetchScopeAccountsAndCurrencies = async () => {
@@ -454,10 +473,15 @@ export function useTransactionData({
           staleTime: 5 * 60_000,
           gcTime: 30 * 60_000,
         });
-        const orderPromise = orderCompanyId
+        const orderPromise = orderCacheKey
           ? queryClient.fetchQuery({
-              queryKey: [...transactionQueryKeys.userCurrencyOrder(), orderCompanyId],
-              queryFn: ({ signal }) => getUserCurrencyOrder({ companyId: orderCompanyId, signal }),
+              queryKey: [...transactionQueryKeys.userCurrencyOrder(), orderCacheKey],
+              queryFn: ({ signal }) =>
+                getUserCurrencyOrder({
+                  companyId: orderParams.companyId,
+                  groupId: orderParams.groupId,
+                  signal,
+                }),
               staleTime: 60_000,
               gcTime: 10 * 60_000,
             })
@@ -471,10 +495,10 @@ export function useTransactionData({
         setCategories(roles.map((r) => String(r).toUpperCase()));
 
         const { accData, curRows } = scope;
-        const ordered = orderCurrencyRows(curRows, ord, orderCompanyId);
+        const ordered = orderCurrencyRows(curRows, ord, orderCacheKey);
         const codes = ordered.map((x) => String(x.code || x.currency || "").toUpperCase().trim()).filter(Boolean);
-        if (orderCompanyId && codes.length) {
-          persistCurrencyDisplayOrder(orderCompanyId, codes);
+        if (orderCacheKey && codes.length) {
+          persistCurrencyDisplayOrder(orderCacheKey, codes);
         }
         setAccountOptions(accData);
         setCurrencyScopeBundle({ scopeKey: fetchScopeKey, rows: ordered });
@@ -772,8 +796,18 @@ export function useTransactionData({
       const g = String(gid || "").trim().toUpperCase();
       if (!g) return;
 
-      // Re-click active group: close group and show independent companies.
+      // Re-click active group:
+      // - subsidiary selected + may use group ledger → clear company (Group-only)
+      // - already Group-only → no-op (keep Group pill)
+      // - cannot use group ledger → close group, keep independent company
       if (g === snap.selectedGroup && !snap.groupsAllMode) {
+        if (snap.companyId != null && canUseGroupOnlyMode(u, g)) {
+          await applyGroupOnlySelection(snap, g);
+          return;
+        }
+        if (snap.companyId == null && canUseGroupOnlyMode(u, g)) {
+          return;
+        }
         await deselectGroupKeepCompany(snap);
         return;
       }

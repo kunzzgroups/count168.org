@@ -26,7 +26,10 @@ import {
 } from "../lib/transactionSubmitHelpers.js";
 import { submitTransaction, transactionQueryKeys } from "../lib/transactionApi.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
-import { resolveGridRowToAccountOption } from "../lib/transactionPaymentLogic.js";
+import {
+  notifyTransactionListInvalidated,
+  resolveGridRowToAccountOption,
+} from "../lib/transactionPaymentLogic.js";
 
 function sanitizeTransactionAmountInput(value) {
   const raw = String(value ?? "").replace(/,/g, "");
@@ -48,6 +51,8 @@ function sanitizeTransactionAmountInput(value) {
 
 /** Badge + list refresh must not block the Submit button after the POST succeeds. */
 function kickOffPostSubmitRefresh({ refreshContraInboxBadge, scopeApi, onAfterSuccessfulSubmit, focusOpts }) {
+  // Invalidate Dashboard / TX / Report client caches immediately (do not wait for SSE).
+  notifyTransactionListInvalidated("tx_submit");
   const tasks = [Promise.resolve(refreshContraInboxBadge?.(scopeApi))];
   if (focusOpts) {
     tasks.push(Promise.resolve(onAfterSuccessfulSubmit?.(focusOpts)));

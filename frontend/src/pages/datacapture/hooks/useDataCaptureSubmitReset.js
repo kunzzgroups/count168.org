@@ -27,6 +27,10 @@ import {
 } from "../lib/dataCaptureFormRules.js";
 import { fetchProcessDetail, fetchGroupProcessIdByCode } from "../lib/dataCaptureApi.js";
 import {
+  dataCaptureScopeLedgerCompanyId,
+  isPureGroupCaptureScope,
+} from "../lib/dataCaptureScope.js";
+import {
   applyConvertTableOnSubmitToGrid,
   convertTableFormatForSubmit,
 } from "../lib/dataCaptureConvertTableOnSubmit.js";
@@ -42,7 +46,6 @@ import { buildSpaPath } from "../../../utils/core/apiUrl.js";
 import { pushDataCaptureNotification } from "../lib/dataCaptureNotify.js";
 import { translateDataCaptureMessage } from "../../../translateFile/pages/dataCaptureTranslate.js";
 import { markSummaryFreshNavigation } from "../../datacapturesummary/lib/summaryStorage.js";
-import { dataCaptureScopeLedgerCompanyId } from "../lib/dataCaptureScope.js";
 import { prefetchRouteModule } from "../../../utils/routing/routePrefetch.js";
 import { prefetchSummaryPopulateData } from "../../datacapturesummary/lib/summaryPrefetch.js";
 import { useDataCaptureContext } from "../context/DataCaptureContext.jsx";
@@ -183,18 +186,23 @@ export function useDataCaptureSubmitReset({
           form.selectedProcess?.process_id ||
           processData.processCode ||
           String(processData.process || "").toUpperCase();
-        let numericId;
-        try {
-          numericId = await fetchGroupProcessIdByCode(captureScope, code, form.currencyId);
-        } catch (resolveErr) {
-          pushDataCaptureNotification(
-            resolveErr?.message || t("failedCaptureData"),
-            "danger"
-          );
-          return;
-        }
-        processData.process = numericId;
         processData.processCode = String(code).trim().toUpperCase();
+        // Pure / empty group: fixed payroll codes only — no process table row.
+        if (!isPureGroupCaptureScope(captureScope, processData)) {
+          let numericId;
+          try {
+            numericId = await fetchGroupProcessIdByCode(captureScope, code, form.currencyId);
+          } catch (resolveErr) {
+            pushDataCaptureNotification(
+              resolveErr?.message || t("failedCaptureData"),
+              "danger"
+            );
+            return;
+          }
+          processData.process = numericId;
+        } else {
+          processData.process = processData.processCode;
+        }
       }
 
       const capturedAfterConvert = convertTableFormatForSubmit(activeCaptureType, preConvertSnapshot);

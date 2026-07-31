@@ -327,6 +327,7 @@ try {
         $pdo->commit();
         require_once __DIR__ . '/../includes/realtime.php';
         realtime_publish_companies([$companyId], 'maintenance', 'formula_update');
+        realtime_publish_companies([$companyId], 'datacapture', 'formula_update');
         $respData = [
             'formula_display_paren' => $formulaDisplay,
             'formula_edit' => buildFormulaEditFromParts($formulaBase, $sp !== null ? $sp : '', $sp !== null ? $en : 0),

@@ -309,7 +309,11 @@ try {
     $pdo->commit();
 
     require_once __DIR__ . '/../includes/realtime.php';
+    require_once __DIR__ . '/../includes/ledger_realtime.php';
     realtime_publish_companies([$company_id], 'maintenance', 'bankprocess_delete');
+    realtime_publish_companies([$company_id], 'ledger', 'bankprocess_delete', [
+        'deleted' => $deleted,
+    ]);
 
     foreach ($affectedBankProcessIds as $bpId) {
         bmp_pruneStaleAccountingResendDailyGuardsForProcess($pdo, $company_id, $bpId);

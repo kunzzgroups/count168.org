@@ -76,5 +76,10 @@ cat <<EOF
    sudo certbot --nginx -d count168.site -d www.count168.site
 
 4) AWS 安全组：入站 80、443 已开放
+
+5) Transaction Payment 实时同步（可选，见 deploy/TX_REALTIME.md）
+   - Node SSE: services/tx-realtime + systemd tx-realtime.service
+   - PHP: includes/config.local.php 设置 \$tx_realtime_secret
+   - Nginx conf 已含 location ^~ /realtime/
 ========================================
 EOF

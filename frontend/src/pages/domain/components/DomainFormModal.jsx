@@ -246,7 +246,7 @@ export default function DomainFormModal({
       startDate: today,
       isExtending: false,
       group_id: selectedGroupId || null,
-      permissions: [],
+      permissions: ["Games"],
       fee_share_allocations: defaultFeeShareAllocations(),
     };
     ensureCompanyFeeShare(newCo);

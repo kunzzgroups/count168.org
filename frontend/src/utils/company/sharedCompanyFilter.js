@@ -927,70 +927,20 @@ function seedCompanySessionFlagsFromOwnerRows(rows) {
 
 /**
  * Sidebar Games/Bank flags for a group tab.
- * Aggregates gambling from group row / subsidiaries so Data Capture stays visible on IG.
- * Bank (bankprocess maintenance) is company-scoped — omit unless `includeBank` (Company "All").
+ * Phase 2 contract (docs/group-tenant-contract.md): Group category is fixed Games, never Bank.
+ * Does not union subsidiary company.permissions.
  *
  * @param {{ includeBank?: boolean }} [options]
  */
-export function resolveGroupCategoryFlagsForSidebar(groupCode, options = {}) {
-  const includeBank = options.includeBank === true;
+export function resolveGroupCategoryFlagsForSidebar(groupCode, _options = {}) {
   const g = String(groupCode ?? "")
     .trim()
     .toUpperCase();
   if (!g) return null;
-
-  if (ownerGroupsCache instanceof Map) {
-    const groupRow = ownerGroupsCache.get(g);
-    if (groupRow && Array.isArray(groupRow.permissions) && groupRow.permissions.length) {
-      const hasGambling = permissionsIncludeGames(groupRow.permissions);
-      const hasBank = includeBank && permissionsIncludeBank(groupRow.permissions);
-      if (hasGambling || hasBank) {
-        return { hasGambling, hasBank };
-      }
-    }
-  }
-
-  const companies = getCachedOwnerCompanies();
-  if (!companies?.length) return null;
-
-  let hasGambling = false;
-  let hasBank = false;
-
-  const anchor = pickGroupAnchorCompany(companies, g);
-  if (anchor?.id) {
-    const anchorFlags = peekCompanySessionFlags(Number(anchor.id));
-    if (anchorFlags) {
-      hasGambling = hasGambling || Boolean(anchorFlags.has_gambling);
-      if (includeBank) {
-        hasBank = hasBank || Boolean(anchorFlags.has_bank);
-      }
-    }
-  }
-
-  for (const row of companiesNativeInGroupList(companies, g)) {
-    const cid = Number(row.id);
-    if (!Number.isFinite(cid) || cid <= 0) continue;
-    const cached = peekCompanySessionFlags(cid);
-    if (cached) {
-      hasGambling = hasGambling || Boolean(cached.has_gambling);
-      if (includeBank) {
-        hasBank = hasBank || Boolean(cached.has_bank);
-      }
-      continue;
-    }
-    const fromRow = resolveCompanyCategoryFlagsFromRow(row);
-    if (fromRow) {
-      hasGambling = hasGambling || fromRow.hasGambling;
-      if (includeBank) {
-        hasBank = hasBank || fromRow.hasBank;
-      }
-    }
-  }
-
-  return { hasGambling, hasBank: includeBank ? hasBank : false };
+  return { hasGambling: true, hasBank: false };
 }
 
-/** Group-only sidebar: aggregate gambling from group row / subsidiaries; bank stays off. */
+/** Group-only sidebar: fixed Games; bank stays off. */
 export function resolveGroupOnlySidebarGambling(groupCode) {
   const flags = resolveGroupCategoryFlagsForSidebar(groupCode, { includeBank: false });
   if (!flags) return null;
@@ -1275,6 +1225,8 @@ export function shouldHideSidebarProcess(pathname, me = null) {
 /**
  * Bankprocess maintenance is company-scoped — hidden in group-only dashboard filter (e.g. IG, no company).
  * Under group "Company All", show when any company in the group has bank permission.
+ * When a subsidiary is selected, prefer that company's Bank category flags over stale session `me`
+ * (Group login often keeps Games identity until session sync finishes).
  */
 export function shouldShowBankprocessMaintenanceInSidebar(me) {
   const filter = readPersistedDashboardGcFilter();
@@ -1283,6 +1235,13 @@ export function shouldShowBankprocessMaintenanceInSidebar(me) {
   if (filter.groupAllMode && sidebarGroup) {
     const flags = resolveGroupCategoryFlagsForSidebar(sidebarGroup, { includeBank: true });
     return Boolean(flags?.hasBank);
+  }
+  const cid =
+    filter.companyId != null && filter.companyId !== "" ? Number(filter.companyId) : Number.NaN;
+  if (Number.isFinite(cid) && cid > 0) {
+    const row = findOwnerCompanyById(cid);
+    const flags = resolveCompanyCategoryFlags(row);
+    if (flags) return Boolean(flags.hasBank);
   }
   return Boolean(me?.company_has_bank);
 }
@@ -1600,6 +1559,12 @@ export function resolveInitialSelectedGroupFromSession(companies, currentCompany
   ) {
     selGroup = savedGroup;
   } else if (savedGroup && !groups.includes(savedGroup)) {
+    // Empty / pure group tenants have no company.group_id rows — keep filter when
+    // login scope or accessible_group_ids still authorize this group code.
+    const accessible = loginMe ? resolveAccessibleGroupIds(loginMe, companies) : [];
+    if (accessible.includes(savedGroup)) {
+      return savedGroup;
+    }
     sessionStorage.removeItem(DASHBOARD_GROUP_FILTER_KEY);
     sessionStorage.removeItem(DASHBOARD_GROUP_ONLY_KEY);
     sessionStorage.removeItem(DASHBOARD_SELECTED_COMPANY_KEY);

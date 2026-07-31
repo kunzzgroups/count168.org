@@ -1,7 +1,9 @@
 import { parseBalanceValue } from "./transactionFormat.js";
 import { MoneyDecimal } from "../../../utils/money/moneyDecimal.js";
 import { resolveSavedCurrencyOrder } from "../../../utils/company/currencyDisplayOrder.js";
+import { invalidateDashboardCachesForLedgerChange } from "../../../utils/dashboard/dashboardCache.js";
 import { clearTxSearchCache } from "../../../utils/transaction/transactionSearchCache.js";
+import { clearReportSnapshots } from "../../report/shared/reportPageSnapshotCache.js";
 
 export const TRANSACTION_CURRENCY_FILTER_KEY_PREFIX = "transaction_currency_filter_v1_";
 export const TX_LIST_SESSION_PREFIX = "count168_txlist_v1_";
@@ -9,8 +11,21 @@ export const TX_LIST_INVALIDATE_LS_KEY = "count168_tx_invalidate_ts";
 export const TX_LIST_INVALIDATE_HANDLED_KEY = "count168_tx_invalidate_handled";
 export const TX_DATA_CHANGED_EVENT = "tx-data-changed";
 
-/** Broadcast that transaction balances changed elsewhere (maintenance delete, process post, etc.). */
-export function notifyTransactionListInvalidated(source = "unknown") {
+/** Current ledger-list invalidate timestamp (0 if unset). Used by route warm to drop stale fills. */
+export function readTxListInvalidateTs() {
+  try {
+    const n = Number(localStorage.getItem(TX_LIST_INVALIDATE_LS_KEY) || 0);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Central ledger-client invalidate: Dashboard session caches, TX search Map,
+ * report remount snapshots, and tx-data-changed broadcast for mounted listeners.
+ */
+export function invalidateLedgerClientCaches(source = "unknown") {
   const ts = Date.now();
   try {
     localStorage.setItem(TX_LIST_INVALIDATE_LS_KEY, String(ts));
@@ -18,8 +33,15 @@ export function notifyTransactionListInvalidated(source = "unknown") {
     /* ignore */
   }
   clearTxSearchCache();
+  invalidateDashboardCachesForLedgerChange();
+  clearReportSnapshots();
   window.dispatchEvent(new CustomEvent(TX_DATA_CHANGED_EVENT, { detail: { ts, source } }));
   return ts;
+}
+
+/** Broadcast that transaction balances changed elsewhere (maintenance delete, process post, etc.). */
+export function notifyTransactionListInvalidated(source = "unknown") {
+  return invalidateLedgerClientCaches(source);
 }
 
 /** @param {string|null|undefined} role */
@@ -528,15 +550,18 @@ export function dedupeCurrencyRowsByCode(rows) {
 /**
  * Apply saved API/global/local order to currency rows from get_company_currencies_api.
  */
-export function orderCurrencyRows(orderedData, orderData, explicitCompanyId = null) {
+export function orderCurrencyRows(orderedData, orderData, explicitOrderKey = null) {
   let ordered = dedupeCurrencyRowsByCode(orderedData);
   try {
-    const companyId =
-      explicitCompanyId != null && explicitCompanyId !== ""
-        ? Number(explicitCompanyId)
-        : orderData?.data?.company_id;
+    let orderKey = explicitOrderKey;
+    if (orderKey == null || orderKey === "") {
+      const cid = orderData?.data?.company_id;
+      const gid = orderData?.data?.group_id;
+      if (cid != null && Number(cid) > 0) orderKey = Number(cid);
+      else if (gid) orderKey = `g:${String(gid).trim().toUpperCase()}`;
+    }
     const savedOrder = resolveSavedCurrencyOrder(
-      companyId,
+      orderKey,
       orderData?.success ? orderData?.data?.order : null,
     );
     if (!savedOrder?.length) return ordered;

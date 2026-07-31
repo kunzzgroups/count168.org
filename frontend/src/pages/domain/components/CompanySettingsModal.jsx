@@ -102,7 +102,7 @@ export default function CompanySettingsModal({
   });
   const [expDisplay, setExpDisplay] = useState(initCompany.expiration_date ? formatDate(initCompany.expiration_date) : t("notSet"));
   const [permissions, setPermissions] = useState(
-    isGroup ? [] : (Array.isArray(initCompany.permissions) ? initCompany.permissions : [])
+    isGroup ? ["Games"] : (Array.isArray(initCompany.permissions) ? initCompany.permissions : [])
   );
   const [chargeOnSave, setChargeOnSave] = useState(!!initCompany.apply_commission_payments_on_domain_save);
   const startDateHandlerRef = useRef(null);
@@ -414,7 +414,7 @@ export default function CompanySettingsModal({
         startDate,
         isExtending: company.isExtending,
         originalExpirationDate: company.originalExpirationDate,
-        permissions: [],
+        permissions: ["Games"],
         fee_share_allocations: cleanFsa,
         apply_commission_payments_on_domain_save: chargeOnSave,
       };

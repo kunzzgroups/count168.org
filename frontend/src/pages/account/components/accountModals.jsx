@@ -206,6 +206,7 @@ export function CurrencySettingModal({
   setSettingCurrencyIds,
   settingLinked,
   setSettingLinked,
+  settingInitialAccountCount = 0,
   settingSearch,
   setSettingSearch,
   settingRole,
@@ -270,7 +271,9 @@ export function CurrencySettingModal({
   );
   const hasSelectedCurrency = selectedCurrencyIdsInList.length > 0;
   const hasSelectedAccount = settingLinked.size > 0;
-  const canSave = hasSelectedCurrency && hasSelectedAccount;
+  /** Allow save when unlinking all existing accounts (linked empty but baseline > 0). */
+  const canSave =
+    hasSelectedCurrency && (hasSelectedAccount || Number(settingInitialAccountCount) > 0);
   const toggleSettingCurrency = (id) => {
     setSettingCurrencyIds((prev) => {
       const next = new Set(prev);
@@ -287,7 +290,7 @@ export function CurrencySettingModal({
   });
 
   return portalToDocumentBody(
-    <div id="currencySettingModal" className="currency-fullscreen-modal" style={{ display: "block", zIndex: accountModalOverlayZIndex }}>
+    <div id="currencySettingModal" className="currency-fullscreen-modal" style={{ display: "block" }}>
       <div className="currency-fullscreen-modal-content">
         <div className="currency-fullscreen-modal-header-bar">
           <h2>{t("currencySetting")}</h2>
@@ -502,7 +505,7 @@ export function CurrencySettingModal({
             title={
               !hasSelectedCurrency
                 ? t("pleaseSelectCurrencyFirst")
-                : !hasSelectedAccount
+                : !hasSelectedAccount && !(Number(settingInitialAccountCount) > 0)
                   ? t("pleaseSelectAccountFirst")
                   : undefined
             }

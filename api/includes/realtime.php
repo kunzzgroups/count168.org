@@ -6,6 +6,39 @@
  * Never throws to callers — business APIs must not fail because of realtime.
  */
 
+if (!function_exists('realtime_ticket_disabled_payload')) {
+    /**
+     * Soft-disable payload for ticket APIs (HTTP 200, no Network red-X).
+     *
+     * @return array{enabled: bool, ticket: null, channels: array, sse_path: string, expires_at: null}
+     */
+    function realtime_ticket_disabled_payload(): array
+    {
+        return [
+            'enabled' => false,
+            'ticket' => null,
+            'channels' => [],
+            'sse_path' => '/realtime/sse',
+            'expires_at' => null,
+        ];
+    }
+}
+
+if (!function_exists('realtime_ticket_is_scope_access_error')) {
+    /** True when scope/permission denial should soft-disable SSE instead of HTTP 5xx. */
+    function realtime_ticket_is_scope_access_error(Throwable $e): bool
+    {
+        $msg = $e->getMessage();
+        if ($msg === '') {
+            return false;
+        }
+        return (bool) preg_match(
+            '/无权|无权限|缺少公司|缺少 group|无效的 group|无效的 company|Group Ledger/iu',
+            $msg
+        );
+    }
+}
+
 if (!function_exists('realtime_config')) {
     /**
      * @return array{enabled: bool, publish_url: string, secret: string}

@@ -47,25 +47,31 @@ export function DashboardEarningsSummary({
   });
   const [hoveredPieSector, setHoveredPieSector] = useState(null);
   const isCompanyBreakdownView = earningsPanelView === "netProfitFor";
+  // Company rows use company_id as `code` — never apply FX base filtering / conversion.
+  const pieUseConverted = !isCompanyBreakdownView && useConvertedEarnings;
+  const pieBaseCode = isCompanyBreakdownView ? "" : currencyCode;
 
   const earningsPieSlices = useMemo(() => {
-    return buildEarningsPieSlices(panelCurrencyRows, { useConverted: useConvertedEarnings });
-  }, [panelCurrencyRows, useConvertedEarnings]);
+    return buildEarningsPieSlices(panelCurrencyRows, {
+      useConverted: pieUseConverted,
+      baseCode: pieBaseCode,
+    });
+  }, [panelCurrencyRows, pieUseConverted, pieBaseCode]);
 
   const earningsShareByCode = useMemo(() => {
-    return buildEarningsShareByCode(panelCurrencyRows, currencyCode, {
-      useConverted: useConvertedEarnings,
+    return buildEarningsShareByCode(panelCurrencyRows, pieBaseCode, {
+      useConverted: pieUseConverted,
     });
-  }, [panelCurrencyRows, currencyCode, useConvertedEarnings]);
+  }, [panelCurrencyRows, pieBaseCode, pieUseConverted]);
 
   const pieCenterMetrics = useMemo(() => {
     const centerCode = isCompanyBreakdownView
       ? panelCurrencyRows?.[0]?.code || currencyCode
       : currencyCode;
     return computePieCenterMetrics(panelCurrencyRows, centerCode, {
-      useConverted: useConvertedEarnings,
+      useConverted: pieUseConverted,
     });
-  }, [panelCurrencyRows, currencyCode, useConvertedEarnings, isCompanyBreakdownView]);
+  }, [panelCurrencyRows, currencyCode, pieUseConverted, isCompanyBreakdownView]);
 
   const currencyPieFillByCode = useMemo(() => {
     const map = {};
@@ -83,7 +89,10 @@ export function DashboardEarningsSummary({
   const summaryPieReady =
     earningsPanelStable && earningsPieSlices.length > 0 && !summaryEarningsLoading;
 
-  const pieCenterPct = Number(pieCenterMetrics.pct) || 0;
+  const pieCenterPct =
+    pieCenterMetrics.pct == null || pieCenterMetrics.pct === ""
+      ? null
+      : Number(pieCenterMetrics.pct);
   useEffect(() => {
     setHoveredPieSector(null);
   }, [currencyCode, earningsPanelView]);
@@ -163,11 +172,13 @@ export function DashboardEarningsSummary({
           row,
           currencyCode,
           exchangeRates.rates,
-          useConvertedEarnings
+          pieUseConverted
         )
       : { primary: slice?.earnings ?? null, native: slice?.originalEarnings ?? null };
     const sharePct = row ? computeCurrencySharePct(row, earningsShareByCode) : null;
-    const unitRateLabel = formatFrankfurterUnitRate(slice?.code, currencyCode, exchangeRates.rates);
+    const unitRateLabel = isCompanyBreakdownView
+      ? null
+      : formatFrankfurterUnitRate(slice?.code, currencyCode, exchangeRates.rates);
     return {
       slice,
       displayAmount: amounts.primary,
@@ -183,7 +194,8 @@ export function DashboardEarningsSummary({
     hoveredPieSector,
     panelCurrencyRows,
     earningsShareByCode,
-    useConvertedEarnings,
+    pieUseConverted,
+    isCompanyBreakdownView,
     currencyCode,
     exchangeRates.rates,
     pieShellLayout,
@@ -313,7 +325,11 @@ export function DashboardEarningsSummary({
                 earningsPieSlices.length > 0 &&
                 !hoveredPieTooltip && (
                 <div className="dashboard-summary-pie-center" aria-hidden="true">
-                  <span className="dashboard-summary-pie-center-pct">{pieCenterPct.toFixed(1)}%</span>
+                  <span className="dashboard-summary-pie-center-pct">
+                    {pieCenterPct != null && Number.isFinite(pieCenterPct)
+                      ? `${pieCenterPct.toFixed(1)}%`
+                      : "—"}
+                  </span>
                   <span className="dashboard-summary-pie-center-code">{pieCenterMetrics.code}</span>
                   <span className="dashboard-summary-pie-center-caption">{i18n.shareOfTotal}</span>
                 </div>
@@ -375,7 +391,7 @@ export function DashboardEarningsSummary({
                 row,
                 currencyCode,
                 exchangeRates.rates,
-                useConvertedEarnings
+                pieUseConverted
               );
               const unitRateLabel = earningsBreakdownShowsRate
                 ? formatFrankfurterUnitRate(row.code, currencyCode, exchangeRates.rates)

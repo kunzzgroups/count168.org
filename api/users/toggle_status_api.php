@@ -409,7 +409,7 @@ function updateOwnerStatus(PDO $pdo, string $newStatus, int $ownerId): void {
 }
 
 try {
-    if (!isset($_SESSION['company_id'])) {
+    if (!isset($_SESSION['user_id'])) {
         api_error('用户未登录或缺少公司信息', 401);
         exit;
     }
@@ -428,8 +428,13 @@ try {
 
     $postedCompanyId = (int) ($_POST['company_id'] ?? 0);
     $groupId = toggle_normalize_group_id($_POST['group_id'] ?? null);
+    if ($groupId === null && gc_is_group_login()) {
+        $groupId = toggle_normalize_group_id($_SESSION['login_identifier'] ?? null);
+    }
     $groupOnlyRequest = $groupId !== null && (
-        !empty($_POST['group_only']) || !empty($_POST['group_aggregate'])
+        !empty($_POST['group_only'])
+        || !empty($_POST['group_aggregate'])
+        || (gc_is_group_login() && $postedCompanyId <= 0)
     );
 
     $target = null;

@@ -10,9 +10,8 @@ $dbuser = 'admin';
 $dbpass = 'C168_site';
 
 // Transaction Payment realtime (SSE hub). Empty secret = disabled.
-// count168.org uses port 3912 (site .site uses 3911 — do not share).
 // Must match services/tx-realtime/.env TX_REALTIME_SECRET
 $tx_realtime_secret = '';
-$tx_realtime_publish_url = 'http://127.0.0.1:3912/publish';
+$tx_realtime_publish_url = 'http://127.0.0.1:3911/publish';
 // Optional explicit toggle; omit or null = enabled when secret is non-empty
 // $tx_realtime_enabled = true;

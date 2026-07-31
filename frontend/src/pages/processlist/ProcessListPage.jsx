@@ -6,6 +6,7 @@ import { ensureCrossPageCompanySelection, syncCompanySessionApi } from "../../ut
 import { spaPath } from "../../utils/routing/pageRoutes.js";
 import { replaceBrowserPathOnly } from "../../utils/routing/privateBrowserUrl.js";
 import {
+  buildDashboardSidebarNotifyOptions,
   clearDashboardGroupFilterKeepCompany,
   notifyDashboardGroupFilterChanged,
   persistDashboardFilterState,
@@ -78,14 +79,13 @@ function filterSearchInput(raw) {
     .toUpperCase();
 }
 
-function resolveProcessListCacheKey(companyId, debouncedSearch, showInactive, showAll) {
-  return `company:${Number(companyId)}|${String(debouncedSearch || "").trim()}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
+function resolveProcessListCacheKey(companyId, debouncedSearch, showInactive, showAll, showActive = false) {
+  return `company:${Number(companyId)}|${String(debouncedSearch || "").trim()}|${showActive ? "1" : "0"}|${showInactive ? "1" : "0"}|${showAll ? "1" : "0"}`;
 }
 
-function processRowVisibleAfterStatusChange(newStatus, { showInactive, showAll }) {
+function processRowVisibleAfterStatusChange(newStatus, { showActive = false, showInactive = false } = {}) {
   const status = String(newStatus || "").toLowerCase();
-  if (showAll && showInactive) return status === "inactive";
-  if (showAll) return status === "active";
+  if (showActive && showInactive) return status === "active" || status === "inactive";
   if (showInactive) return status === "inactive";
   return status === "active";
 }
@@ -123,6 +123,7 @@ export default function ProcessListPage() {
   const [groupFilterKind, setGroupFilterKind] = useState("follow");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [showActive, setShowActive] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [rows, setRows] = useState([]);
@@ -265,11 +266,13 @@ export default function ProcessListPage() {
         const layoutMe = sessionMeFromLayout;
         const currentUrl = new URL(window.location.href);
         const bootSearch = filterSearchInput(currentUrl.searchParams.get("search") || "");
+        const bootShowActive = currentUrl.searchParams.has("showActive");
         const bootShowInactive = currentUrl.searchParams.has("showInactive");
         const bootShowAll = currentUrl.searchParams.has("showAll");
         if (layoutMe?.company_id) {
           warmProcessListRouteCache(layoutMe.company_id, {
             search: bootSearch,
+            showActive: bootShowActive,
             showInactive: bootShowInactive,
             showAll: bootShowAll,
           });
@@ -318,8 +321,10 @@ export default function ProcessListPage() {
           setDebouncedSearch(normalizedSearch);
 
           const showAllChecked = currentUrl.searchParams.has("showAll");
+          const showActiveChecked = currentUrl.searchParams.has("showActive");
           const showInactiveChecked = currentUrl.searchParams.has("showInactive");
           setShowAll(showAllChecked);
+          setShowActive(showActiveChecked);
           setShowInactive(showInactiveChecked);
 
           setCurrencies(Array.isArray(prefetchedMeta.currencies) ? prefetchedMeta.currencies : []);
@@ -336,6 +341,7 @@ export default function ProcessListPage() {
               normalizedSearch,
               showInactiveChecked,
               showAllChecked,
+              showActiveChecked,
             );
             processListCacheRef.current.set(cacheKey, {
               rows: prefRows,
@@ -444,8 +450,10 @@ export default function ProcessListPage() {
         setDebouncedSearch(normalizedSearch);
 
         const showAllChecked = url.searchParams.has("showAll");
+        const showActiveChecked = url.searchParams.has("showActive");
         const showInactiveChecked = url.searchParams.has("showInactive");
         setShowAll(showAllChecked);
+        setShowActive(showActiveChecked);
         setShowInactive(showInactiveChecked);
 
         void loadFormMeta(effectiveCompany);
@@ -453,6 +461,7 @@ export default function ProcessListPage() {
         if (effectiveCompany != null) {
           const slice = await resolveProcessListRouteCache(effectiveCompany, {
             search: normalizedSearch,
+            showActive: showActiveChecked,
             showInactive: showInactiveChecked,
             showAll: showAllChecked,
           });
@@ -462,6 +471,7 @@ export default function ProcessListPage() {
               normalizedSearch,
               showInactiveChecked,
               showAllChecked,
+              showActiveChecked,
             );
             processListCacheRef.current.set(cacheKey, {
               rows: slice.rows,
@@ -509,7 +519,7 @@ export default function ProcessListPage() {
     (cid) => {
       const id = Number(cid);
       if (!Number.isFinite(id) || id <= 0) return false;
-      const cacheKey = resolveProcessListCacheKey(id, debouncedSearch, showInactive, showAll);
+      const cacheKey = resolveProcessListCacheKey(id, debouncedSearch, showInactive, showAll, showActive);
       const cached = processListCacheRef.current.get(cacheKey);
       if (!processListCacheHasEntry(cached)) return false;
       setRows((prev) =>
@@ -518,14 +528,14 @@ export default function ProcessListPage() {
       setAwaitingRows(false);
       return true;
     },
-    [debouncedSearch, showInactive, showAll],
+    [debouncedSearch, showActive, showInactive, showAll],
   );
 
   const warmProcessListCompanyCache = useCallback(
     (cid) => {
       const id = Number(cid);
       if (!Number.isFinite(id) || id <= 0) return null;
-      const cacheKey = resolveProcessListCacheKey(id, debouncedSearch, showInactive, showAll);
+      const cacheKey = resolveProcessListCacheKey(id, debouncedSearch, showInactive, showAll, showActive);
       if (processListCacheRef.current.has(cacheKey)) {
         return null;
       }
@@ -536,6 +546,7 @@ export default function ProcessListPage() {
         try {
           const slice = await fetchGamesProcessListSlice(id, {
             search: debouncedSearch,
+            showActive,
             showInactive,
             showAll,
           });
@@ -557,7 +568,7 @@ export default function ProcessListPage() {
       processListWarmInflightRef.current.set(cacheKey, promise);
       return promise;
     },
-    [debouncedSearch, showInactive, showAll],
+    [debouncedSearch, showActive, showInactive, showAll],
   );
 
   const hydrateProcessListCompanyCache = useCallback(
@@ -565,7 +576,7 @@ export default function ProcessListPage() {
       if (applyProcessListCache(cid)) return true;
       const id = Number(cid);
       if (!Number.isFinite(id) || id <= 0) return false;
-      const cacheKey = resolveProcessListCacheKey(id, debouncedSearch, showInactive, showAll);
+      const cacheKey = resolveProcessListCacheKey(id, debouncedSearch, showInactive, showAll, showActive);
       const inflight = processListWarmInflightRef.current.get(cacheKey);
       if (inflight) {
         try {
@@ -576,7 +587,7 @@ export default function ProcessListPage() {
       }
       return applyProcessListCache(cid);
     },
-    [applyProcessListCache, debouncedSearch, showInactive, showAll],
+    [applyProcessListCache, debouncedSearch, showActive, showInactive, showAll],
   );
 
   const fetchRows = useCallback(
@@ -597,6 +608,7 @@ export default function ProcessListPage() {
       try {
         const slice = await fetchGamesProcessListSlice(cid, {
           search: debouncedSearch,
+          showActive,
           showInactive,
           showAll,
           signal: ac.signal,
@@ -609,7 +621,7 @@ export default function ProcessListPage() {
         if (Number(activeCompanyIdRef.current) !== cid) return;
 
         const nextRows = slice.rows;
-        const cacheKey = resolveProcessListCacheKey(cid, debouncedSearch, showInactive, showAll);
+        const cacheKey = resolveProcessListCacheKey(cid, debouncedSearch, showInactive, showAll, showActive);
         processListCacheRef.current.set(cacheKey, {
           rows: nextRows,
           currencyCodes: slice.currencyCodes,
@@ -649,6 +661,7 @@ export default function ProcessListPage() {
     [
       companyId,
       debouncedSearch,
+      showActive,
       showInactive,
       showAll,
       notify,
@@ -791,7 +804,9 @@ export default function ProcessListPage() {
   useEffect(() => {
     if (loading || !activeCompanyId) return;
     if (skipNextFetchRef.current) {
+      // Warm paint already applied; still silent-refetch so remount cannot stick on stale sidebar warm.
       skipNextFetchRef.current = false;
+      void fetchRows({ companyId: activeCompanyId, silent: true });
       return;
     }
     if (skipCompanyFetchEffectRef.current) {
@@ -804,7 +819,7 @@ export default function ProcessListPage() {
         await fetchRows({ companyId: activeCompanyId, silent: rowsRef.current.length > 0 });
       }
     })();
-  }, [loading, activeCompanyId, debouncedSearch, showInactive, showAll, fetchRows, hydrateProcessListCompanyCache]);
+  }, [loading, activeCompanyId, debouncedSearch, showActive, showInactive, showAll, fetchRows, hydrateProcessListCompanyCache]);
 
   useEffect(() => {
     if (loading) return;
@@ -876,14 +891,17 @@ export default function ProcessListPage() {
     for (const c of companyButtons) {
       warmProcessListCompanyCache(c.id);
     }
-  }, [loading, companyButtons, warmProcessListCompanyCache, debouncedSearch, showInactive, showAll]);
+  }, [loading, companyButtons, warmProcessListCompanyCache, debouncedSearch, showActive, showInactive, showAll]);
 
   const sortedDisplayRows = useMemo(
     () => sortProcessTableRows(rows, sortColumn, sortDirection),
     [rows, sortColumn, sortDirection],
   );
 
-  const showSelectColumn = showInactive || showAll;
+  const showSelectColumn = showInactive;
+  useEffect(() => {
+    if (!showInactive) setSelectedIds(new Set());
+  }, [showInactive]);
   const pageSize = useAutoListPageSize({
     listRegionRef,
     enabled: !showAll,
@@ -896,6 +914,7 @@ export default function ProcessListPage() {
     remeasureDeps: [
       sortedDisplayRows.length,
       showAll,
+      showActive,
       showInactive,
       debouncedSearch,
       lang,
@@ -1094,9 +1113,11 @@ export default function ProcessListPage() {
 
       if (nextGroup) persistDashboardGroupFilter(nextGroup);
       persistDashboardFilterState(nextGroup, nextId);
-      notifyDashboardGroupFilterChanged(nextGroup, nextId, {
-        companyCode: c.company_id,
-      });
+      notifyDashboardGroupFilterChanged(
+        nextGroup,
+        nextId,
+        buildDashboardSidebarNotifyOptions(c, nextGroup),
+      );
 
       void onSwitchCompanyRef.current?.(c, { layoutSilent: true });
     },
@@ -1547,7 +1568,7 @@ export default function ProcessListPage() {
         return;
       }
 
-      const shouldShow = processRowVisibleAfterStatusChange(newStatus, { showInactive, showAll });
+      const shouldShow = processRowVisibleAfterStatusChange(newStatus, { showActive, showInactive });
 
       if (!shouldShow) {
         setRows((prev) => prev.filter((r) => Number(r.id) !== Number(row.id)));
@@ -1600,21 +1621,6 @@ export default function ProcessListPage() {
               <div className="userlist-filter-chips" role="group">
                 <button
                   type="button"
-                  className={`user-filter-chip${showInactive ? " is-selected" : ""}`}
-                  aria-pressed={showInactive}
-                  onClick={() => setShowInactive((prev) => !prev)}
-                >
-                  <span className="user-filter-chip__dot" aria-hidden>
-                    {showInactive ? (
-                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 12l4 4 8-8" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span className="user-filter-chip__label">{t("showInactive")}</span>
-                </button>
-                <button
-                  type="button"
                   className={`user-filter-chip${showAll ? " is-selected" : ""}`}
                   aria-pressed={showAll}
                   onClick={() => setShowAll((prev) => !prev)}
@@ -1628,7 +1634,37 @@ export default function ProcessListPage() {
                   </span>
                   <span className="user-filter-chip__label">{t("showAll")}</span>
                 </button>
-              </div>
+                <button
+                  type="button"
+                  className={`user-filter-chip${showActive ? " is-selected" : ""}`}
+                  aria-pressed={showActive}
+                  onClick={() => setShowActive((prev) => !prev)}
+                >
+                  <span className="user-filter-chip__dot" aria-hidden>
+                    {showActive ? (
+                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 12l4 4 8-8" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="user-filter-chip__label">{t("showActive")}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`user-filter-chip${showInactive ? " is-selected" : ""}`}
+                  aria-pressed={showInactive}
+                  onClick={() => setShowInactive((prev) => !prev)}
+                >
+                  <span className="user-filter-chip__dot" aria-hidden>
+                    {showInactive ? (
+                      <svg className="user-filter-chip__check" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 12l4 4 8-8" />
+                      </svg>
+                    ) : null}
+                  </span>
+                  <span className="user-filter-chip__label">{t("showInactive")}</span>
+                </button>
+                </div>
             </div>
             <div className="user-toolbar-actions-right" style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
               <button

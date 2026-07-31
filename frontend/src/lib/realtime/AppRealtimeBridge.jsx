@@ -2,12 +2,36 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   DASHBOARD_GROUP_FILTER_EVENT,
+  clearOwnerCompaniesCache,
+  readAccessibleGroupIds,
   readPersistedDashboardGcFilter,
 } from "../../utils/company/sharedCompanyFilter.js";
 import { transactionQueryKeys } from "../../pages/transaction/lib/transactionApi.js";
+import {
+  notifyTransactionListInvalidated,
+  TX_DATA_CHANGED_EVENT,
+} from "../../pages/transaction/lib/transactionPaymentLogic.js";
 import { dataCaptureQueryKeys } from "../../pages/datacapture/lib/dataCaptureApi.js";
+import { clearAccountListRouteWarmCache } from "../../pages/account/accountRoutePrefetch.js";
+import { clearProcessListRouteWarmCaches } from "../../pages/processlist/processRoutePrefetch.js";
+import { clearAllOwnershipCompaniesCache } from "../../pages/ownership/ownershipRoutePrefetch.js";
+import { clearAllAutoRenewListCache } from "../../pages/autorenew/autoRenewRoutePrefetch.js";
 import { onRealtimeInvalidate, REALTIME_DOMAINS } from "./realtimeEvents.js";
 import { subscribeAppRealtime } from "./subscribeAppRealtime.js";
+
+/** Fallback when accessible_group_ids not hydrated yet (never usernames like JK). */
+const REALTIME_FALLBACK_GROUP_CODES = new Set(["AP", "IG"]);
+
+/** Only emit known accessible group codes (never usernames like JK). */
+function resolveRealtimeViewGroup(selectedGroup) {
+  const g = selectedGroup ? String(selectedGroup).trim().toUpperCase() : "";
+  if (!g || !/^[A-Z0-9]{1,8}$/.test(g)) return "";
+  const accessible = readAccessibleGroupIds();
+  if (accessible.length > 0) {
+    return accessible.includes(g) ? g : "";
+  }
+  return REALTIME_FALLBACK_GROUP_CODES.has(g) ? g : "";
+}
 
 function scopeParamsFromFilter() {
   const filter = readPersistedDashboardGcFilter() || {};
@@ -15,15 +39,12 @@ function scopeParamsFromFilter() {
     filter.companyId != null && filter.companyId !== ""
       ? Number(filter.companyId)
       : null;
-  const viewGroup = filter.selectedGroup
-    ? String(filter.selectedGroup).trim().toUpperCase()
-    : "";
-  const groupOnly =
-    (companyId == null || !Number.isFinite(companyId) || companyId <= 0) &&
-    Boolean(viewGroup);
+  const viewGroup = resolveRealtimeViewGroup(filter.selectedGroup);
+  const hasCompany = Number.isFinite(companyId) && companyId > 0;
+  const groupOnly = !hasCompany && Boolean(viewGroup);
 
   return {
-    companyId: groupOnly ? undefined : companyId > 0 ? companyId : undefined,
+    companyId: groupOnly ? undefined : hasCompany ? companyId : undefined,
     viewGroup: viewGroup || undefined,
     groupId: viewGroup || undefined,
     groupAggregate: groupOnly ? true : undefined,
@@ -63,17 +84,37 @@ export default function AppRealtimeBridge() {
     };
   }, []);
 
+  // Same-tab writers (maintenance delete, process post, etc.) call notifyTransactionListInvalidated
+  // while Transaction may be unmounted — drop RQ search cache so remount cannot paint stale rows.
+  useEffect(() => {
+    const dropLedgerQueryCaches = () => {
+      void queryClient.invalidateQueries({
+        queryKey: transactionQueryKeys.searchRoot(),
+        refetchType: "none",
+      });
+      void queryClient.invalidateQueries({
+        queryKey: transactionQueryKeys.contraInboxRoot(),
+        refetchType: "none",
+      });
+    };
+    window.addEventListener(TX_DATA_CHANGED_EVENT, dropLedgerQueryCaches);
+    return () => window.removeEventListener(TX_DATA_CHANGED_EVENT, dropLedgerQueryCaches);
+  }, [queryClient]);
+
   useEffect(() => {
     return onRealtimeInvalidate("*", (detail) => {
       const domain = String(detail.domain || "");
 
       if (domain === REALTIME_DOMAINS.LEDGER || detail.type === "ledger_changed") {
+        clearAllAutoRenewListCache();
+        notifyTransactionListInvalidated("realtime_ledger");
         void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
         void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.contraInboxRoot() });
         return;
       }
 
       if (domain === REALTIME_DOMAINS.ACCOUNTS) {
+        clearAccountListRouteWarmCache();
         void queryClient.invalidateQueries({
           predicate: (q) => {
             const k = q.queryKey?.[0];
@@ -88,7 +129,14 @@ export default function AppRealtimeBridge() {
       }
 
       if (domain === REALTIME_DOMAINS.PROCESSES) {
+        clearProcessListRouteWarmCaches();
         void queryClient.invalidateQueries({ queryKey: dataCaptureQueryKeys.root() });
+        return;
+      }
+
+      if (domain === REALTIME_DOMAINS.OWNERSHIP) {
+        clearAllOwnershipCompaniesCache();
+        clearOwnerCompaniesCache();
         return;
       }
 
@@ -110,7 +158,7 @@ export default function AppRealtimeBridge() {
         return;
       }
 
-      // Ownership / maintenance / announcements / domain / app:
+      // Maintenance / announcements / domain / app:
       // pages listen via useRealtimeDomain or full refresh hooks.
     });
   }, [queryClient]);

@@ -7,6 +7,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../includes/money_decimal.php';
+
 /** 与 manual_inactive 相同：1+1/1+2/1+3 → N，其余 → 1 */
 function getManualInactiveMultiplierFromContract(?string $contract): int
 {
@@ -346,9 +348,9 @@ function prorateMonthlyAnniversaryPeriodLinear(
     $r = money_div((string) $useD, (string) $fullD, MONEY_CALC_SCALE);
 
     return [
-        'cost' => money_mul($cost, $r, 2),
-        'price' => money_mul($price, $r, 2),
-        'profit' => money_mul($profit, $r, 2),
+        'cost' => money_mul($cost, $r, MONEY_TX_STORE_SCALE),
+        'price' => money_mul($price, $r, MONEY_TX_STORE_SCALE),
+        'profit' => money_mul($profit, $r, MONEY_TX_STORE_SCALE),
         'ratio' => $r,
     ];
 }
@@ -403,9 +405,9 @@ function dailyAmountsForDayCount(string $cost, string $price, string $profit, in
 {
     $d = (string) max(1, $days);
     return [
-        'cost' => money_mul($cost, $d, 2),
-        'price' => money_mul($price, $d, 2),
-        'profit' => money_mul($profit, $d, 2),
+        'cost' => money_mul($cost, $d, MONEY_TX_STORE_SCALE),
+        'price' => money_mul($price, $d, MONEY_TX_STORE_SCALE),
+        'profit' => money_mul($profit, $d, MONEY_TX_STORE_SCALE),
     ];
 }
 

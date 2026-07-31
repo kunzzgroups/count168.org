@@ -12,6 +12,7 @@ import { formatDmy } from "./transactionFormat.js";
 import {
   orderCurrencyRows,
   pickTransactionDefaultCurrency,
+  readTxListInvalidateTs,
   sanitizeSearchApiData,
 } from "./transactionPaymentLogic.js";
 import {
@@ -19,7 +20,8 @@ import {
   transactionScopeApiParams,
   transactionScopeCacheCompanyKey,
   transactionScopeCacheKey,
-  resolveTransactionCurrencyOrderCompanyId,
+  resolveTransactionCurrencyOrderParams,
+  resolveTransactionCurrencyOrderCacheKey,
 } from "./transactionScope.js";
 
 const hoverWarmInflight = new Map();
@@ -73,8 +75,8 @@ function resolveDefaultSearchCurrencies(scope, snapCompanies = []) {
   if (String(scopeCacheCompanyKey || "").startsWith("group:")) {
     return { showAll: false, currencies: [] };
   }
-  const orderCompanyId = resolveTransactionCurrencyOrderCompanyId(scope, snapCompanies);
-  const order = resolveSavedCurrencyOrder(orderCompanyId, null) || [];
+  const orderCacheKey = resolveTransactionCurrencyOrderCacheKey(scope, snapCompanies);
+  const order = resolveSavedCurrencyOrder(orderCacheKey, null) || [];
   const code = pickTransactionDefaultCurrency(order.length ? order : ["MYR"]);
   return { showAll: false, currencies: code ? [code] : [] };
 }
@@ -127,15 +129,15 @@ export function hydrateTransactionScopeMetadataFromCache(queryClient, scope, sna
   const cur = queryClient.getQueryData(transactionQueryKeys.companyCurrencies(scopeCacheKey));
   if (!acc || !cur) return null;
 
-  const orderCompanyId = resolveTransactionCurrencyOrderCompanyId(scope, snapCompanies);
-  const ord = orderCompanyId
-    ? queryClient.getQueryData([...transactionQueryKeys.userCurrencyOrder(), orderCompanyId])
+  const orderCacheKey = resolveTransactionCurrencyOrderCacheKey(scope, snapCompanies);
+  const ord = orderCacheKey
+    ? queryClient.getQueryData([...transactionQueryKeys.userCurrencyOrder(), orderCacheKey])
     : null;
   const accData = Array.isArray(acc?.data) ? acc.data : [];
   const curRows = Array.isArray(cur?.data) ? cur.data : [];
   if (!accData.length && !curRows.length) return null;
 
-  const ordered = orderCurrencyRows(curRows, ord, orderCompanyId);
+  const ordered = orderCurrencyRows(curRows, ord, orderCacheKey);
   const codes = ordered
     .map((x) => String(x.code || x.currency || "").toUpperCase().trim())
     .filter(Boolean);
@@ -157,26 +159,21 @@ async function prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo, sna
   });
   if (!searchParams.dateFrom || !searchParams.dateTo) return;
 
-  if (queryClient) {
-    const body = await queryClient.fetchQuery({
-      queryKey: transactionQueryKeys.search(searchParams),
-      queryFn: ({ signal }) => searchTransactions({ ...searchParams, signal }),
-      staleTime: 5 * 60_000,
-      gcTime: 15 * 60_000,
-    });
-    if (body?.success && body?.data) {
-      setTxSearchCache(requestKey, sanitizeSearchApiData(body.data));
-    }
-    return;
-  }
+  // Capture before network — drop fill if ledger invalidate lands while we wait.
+  const invalidateTsAtStart = readTxListInvalidateTs();
 
-  const body = await searchTransactions(searchParams).catch(() => null);
-  if (body?.success && body?.data) {
-    setTxSearchCache(requestKey, sanitizeSearchApiData(body.data));
+  const body = await searchTransactions({ ...searchParams }).catch(() => null);
+  if (readTxListInvalidateTs() !== invalidateTsAtStart) return;
+  if (!body?.success || !body?.data) return;
+
+  const cleaned = sanitizeSearchApiData(body.data);
+  setTxSearchCache(requestKey, cleaned);
+  if (queryClient) {
+    queryClient.setQueryData(transactionQueryKeys.search(searchParams), body);
   }
 }
 
-async function prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderCompanyId) {
+async function prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderParams, orderCacheKey) {
   if (queryClient) {
     await Promise.all([
       queryClient.prefetchQuery({
@@ -191,10 +188,15 @@ async function prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderComp
         staleTime: 60_000,
         gcTime: 10 * 60_000,
       }),
-      orderCompanyId
+      orderCacheKey
         ? queryClient.prefetchQuery({
-            queryKey: [...transactionQueryKeys.userCurrencyOrder(), orderCompanyId],
-            queryFn: ({ signal }) => getUserCurrencyOrder({ companyId: orderCompanyId, signal }),
+            queryKey: [...transactionQueryKeys.userCurrencyOrder(), orderCacheKey],
+            queryFn: ({ signal }) =>
+              getUserCurrencyOrder({
+                companyId: orderParams?.companyId,
+                groupId: orderParams?.groupId,
+                signal,
+              }),
             staleTime: 60_000,
             gcTime: 10 * 60_000,
           })
@@ -206,8 +208,11 @@ async function prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderComp
   await Promise.all([
     getAccounts({ ...scopeApi }).catch(() => null),
     getCompanyCurrencies({ ...scopeApi }).catch(() => null),
-    orderCompanyId
-      ? getUserCurrencyOrder({ companyId: orderCompanyId }).catch(() => null)
+    orderCacheKey
+      ? getUserCurrencyOrder({
+          companyId: orderParams?.companyId,
+          groupId: orderParams?.groupId,
+        }).catch(() => null)
       : Promise.resolve(null),
   ]);
 }
@@ -224,12 +229,13 @@ export function prefetchTransactionScopeBundle(queryClient, { nextSnap, todayDmy
   const scopeKey = transactionScopeCacheKey(scope);
   const scopeApi = transactionScopeApiParams(scope);
   const companies = snapCompanies || nextSnap.snapCompaniesAll || nextSnap.snapCompanies || [];
-  const orderCompanyId = resolveTransactionCurrencyOrderCompanyId(scope, companies);
+  const orderParams = resolveTransactionCurrencyOrderParams(scope, companies);
+  const orderCacheKey = resolveTransactionCurrencyOrderCacheKey(scope, companies);
   const dateFrom = todayDmy || formatDmy(new Date());
   const dateTo = dateFrom;
 
   return Promise.all([
-    prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderCompanyId),
+    prefetchAccountsBundle(queryClient, scopeKey, scopeApi, orderParams, orderCacheKey),
     prefetchSearchIntoCache(queryClient, scope, dateFrom, dateTo, companies).catch(() => null),
   ]).catch(() => null);
 }

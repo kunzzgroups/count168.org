@@ -213,15 +213,25 @@ if ($company_id <= 0) {
     }
 }
 
+// Phase 3: empty group draft — allow company_id=0 when group category access OK
 if ($company_id <= 0) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Missing company scope for permission check']);
-    exit;
+    $pureGroupOk = function_exists('gt_v2_enabled')
+        && gt_v2_enabled()
+        && function_exists('gt_v2_group_category_access_ok')
+        && gt_v2_group_category_access_ok($pdo, $groupId)
+        && function_exists('gc_session_can_access_group_ledger')
+        && gc_session_can_access_group_ledger($pdo, $groupId);
+    if (!$pureGroupOk) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'error' => 'Missing company scope for permission check']);
+        exit;
+    }
+    $company_id = 0;
 }
 
-if (!checkReportGamesAccess($pdo, $company_id, $groupId)) {
+if (!checkReportMaintenanceAccess($pdo, $company_id, $groupId)) {
     http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'Unauthorized category permission (Games required)']);
+    echo json_encode(['success' => false, 'error' => 'Unauthorized category permission (Games or Bank required)']);
     exit;
 }
 

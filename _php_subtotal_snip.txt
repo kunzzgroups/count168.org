@@ -1,4 +1,0 @@
-                    console.log('Detected SUB TOTAL and GRAND TOTAL in same row with vertical data layout');
----
-                    console.log('SUB TOTAL row appears to be split. Collecting data from subsequent rows...');
----
