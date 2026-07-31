@@ -254,6 +254,7 @@ export function useDataCaptureSubmitReset({
         captureScope,
         companyId: dataCaptureScopeLedgerCompanyId(captureScope, processData),
         processId: processData.process,
+        processCode: processData.processCode || "",
         tableData: finalTableData,
       });
 

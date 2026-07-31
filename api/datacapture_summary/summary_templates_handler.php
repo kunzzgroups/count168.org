@@ -342,6 +342,7 @@ function dcSummaryApiHandleFetchTemplates(): void
         try {
             $ids = [];
             $processId = null;
+            $processCode = '';
             $captureId = null;
             $payload = [];
 
@@ -354,13 +355,21 @@ function dcSummaryApiHandleFetchTemplates(): void
                 if (isset($payload['idProducts']) && is_array($payload['idProducts'])) {
                     $ids = array_values(array_filter(array_map('trim', $payload['idProducts'])));
                 }
+                if (isset($payload['processCode']) || isset($payload['process_code'])) {
+                    $processCode = strtoupper(trim((string) ($payload['processCode'] ?? $payload['process_code'] ?? '')));
+                }
                 if (isset($payload['processId'])) {
-                    // processId should be process.id (int), not process.process_id (string)
+                    // processId should be process.id (int); pure Group may send "SALARY" as code.
                     $processIdValue = $payload['processId'];
                     if (is_numeric($processIdValue)) {
-                        $processId = (int)$processIdValue;
+                        $processId = (int) $processIdValue;
                     } elseif (is_string($processIdValue) && trim($processIdValue) !== '') {
-                        $processId = (int)trim($processIdValue);
+                        $raw = trim($processIdValue);
+                        if (ctype_digit($raw)) {
+                            $processId = (int) $raw;
+                        } elseif ($processCode === '' && dcIsGroupPayrollProcessCode($raw)) {
+                            $processCode = strtoupper($raw);
+                        }
                     }
                 }
                 if (isset($payload['captureId']) && $payload['captureId'] !== null && $payload['captureId'] !== '') {
@@ -376,13 +385,22 @@ function dcSummaryApiHandleFetchTemplates(): void
             }
 
             if ($processId === null && !empty($_GET['processId'])) {
-                // processId should be process.id (int)
                 $getProcessId = $_GET['processId'];
                 if (is_numeric($getProcessId)) {
-                    $processId = (int)$getProcessId;
+                    $processId = (int) $getProcessId;
                 } elseif (is_string($getProcessId) && trim($getProcessId) !== '') {
-                    $processId = (int)trim($getProcessId);
+                    $raw = trim($getProcessId);
+                    if (ctype_digit($raw)) {
+                        $processId = (int) $raw;
+                    } elseif ($processCode === '' && dcIsGroupPayrollProcessCode($raw)) {
+                        $processCode = strtoupper($raw);
+                    }
                 }
+            }
+            if ($processCode === '' && !empty($_GET['processCode'])) {
+                $processCode = strtoupper(trim((string) $_GET['processCode']));
+            } elseif ($processCode === '' && !empty($_GET['process_code'])) {
+                $processCode = strtoupper(trim((string) $_GET['process_code']));
             }
             if (!empty($_GET['captureId']) && is_numeric($_GET['captureId'])) {
                 $captureId = (int)$_GET['captureId'];
@@ -392,14 +410,47 @@ function dcSummaryApiHandleFetchTemplates(): void
                 throw new Exception('No id products provided');
             }
 
-            if ($processId === null) {
-                throw new Exception('Process ID is required');
-            }
-
             $processCompanyId = !empty($capture_scope_ctx)
                 ? dcCaptureProcessCompanyId($capture_scope_ctx)
                 : (int) $company_id;
-            dcAssertProcessIdInCaptureScope($pdo, (int) $processId, (int) $processCompanyId, (bool) $capture_scope_group);
+            $groupIdForEnsure = dcNormalizeGroupId(
+                $groupIdForAccess
+                    ?? ($scopeParams['view_group'] ?? $scopeParams['group_id'] ?? '')
+            );
+            // Pure Group: resolve anchor company so ensure/resolve can find process rows.
+            if ($processCompanyId <= 0 && !empty($capture_scope_group) && $groupIdForEnsure !== '') {
+                if (function_exists('gc_resolve_group_anchor_company_id')) {
+                    $processCompanyId = (int) gc_resolve_group_anchor_company_id($pdo, $groupIdForEnsure);
+                }
+                if ($processCompanyId <= 0 && function_exists('tx_resolve_group_entity_company_id')) {
+                    $processCompanyId = (int) tx_resolve_group_entity_company_id($pdo, $groupIdForEnsure);
+                }
+            }
+
+            if (($processId === null || $processId <= 0) && $processCode !== '') {
+                $ensured = dcEnsureProcessIdByCode(
+                    $pdo,
+                    (int) $processCompanyId,
+                    $processCode,
+                    (bool) $capture_scope_group,
+                    $groupIdForEnsure !== '' ? $groupIdForEnsure : null,
+                    null
+                );
+                if ($ensured !== null && $ensured > 0) {
+                    $processId = (int) $ensured;
+                }
+            }
+
+            if ($processId === null || $processId <= 0) {
+                throw new Exception('Process ID is required');
+            }
+
+            dcAssertProcessIdInCaptureScope(
+                $pdo,
+                (int) $processId,
+                (int) $processCompanyId,
+                (bool) $capture_scope_group
+            );
 
             // 在 Data Capture 选择的 Process 下设置的 formula 只在该 Process 显示；若该 Process 有 sync 到其他 Process 则同步显示
             // Summary 的 formula 仅来自 Maintenance（data_capture_templates）；Process 在 Maintenance 无记录则不显示 formula

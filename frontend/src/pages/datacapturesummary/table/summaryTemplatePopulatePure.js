@@ -7,6 +7,8 @@ import {
 } from "./summaryRowData.js";
 import { findMainRowForTemplate, findMainRowForSubTemplatePure } from "./summaryTemplateMatching.js";
 import { fetchSummaryTemplates } from "../lib/summaryApi.js";
+import { fetchGroupProcessIdByCode } from "../../datacapture/lib/dataCaptureApi.js";
+import { isGroupPayrollProcessId } from "../../datacapture/lib/dataCaptureGroupOnlyProcesses.js";
 import { normalizeSummaryIdProductText } from "../lib/summaryIdProductUtils.js";
 import { restoreRateValuesOnRows } from "../lib/summaryRefreshRestore.js";
 import {
@@ -149,19 +151,38 @@ export async function populateSummaryRowsPure({
   const { idProducts } = buildColumnAEntries(tableData);
   let rows = buildInitialSummaryRows(tableData);
 
-  if (processId == null || !idProducts.length) {
+  const code = String(processCode || "").trim().toUpperCase();
+  let effectiveProcessId =
+    processId != null && Number(processId) > 0 ? Number(processId) : null;
+
+  // Pure Group SALARY/etc.: session only has processCode — resolve numeric id before templates.
+  if (effectiveProcessId == null && isGroupPayrollProcessId(code) && captureScope) {
+    try {
+      effectiveProcessId = await fetchGroupProcessIdByCode(captureScope, code);
+    } catch {
+      /* PHP templates handler can still resolve via processCode */
+    }
+  }
+
+  if (!idProducts.length || (effectiveProcessId == null && !code && processId == null)) {
     return rows;
   }
 
+  const templateProcessId = effectiveProcessId ?? processId;
   const fetchTemplates =
     typeof loadTemplates === "function"
-      ? loadTemplates
+      ? () =>
+          loadTemplates({
+            processId: templateProcessId,
+            processCode: code,
+          })
       : () =>
           fetchSummaryTemplates({
             captureScope,
             companyId,
             idProducts,
-            processId,
+            processId: templateProcessId,
+            processCode: code,
             captureId,
           });
   const { templates, subsByParent } = await fetchTemplates();
