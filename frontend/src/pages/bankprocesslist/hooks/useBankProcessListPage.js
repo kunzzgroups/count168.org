@@ -983,8 +983,12 @@ export function useBankProcessListPage() {
     const cid = Number(targetCompanyId ?? companyId);
     if (!Number.isFinite(cid) || cid <= 0) return;
     try {
+      const curQs = new URLSearchParams({
+        company_id: String(cid),
+        subsidiary_accounts_only: "1",
+      });
       const [curRes, ordJson] = await Promise.all([
-        fetch(buildApiUrl(`api/transactions/get_company_currencies_api.php?company_id=${cid}`), {
+        fetch(buildApiUrl(`api/transactions/get_company_currencies_api.php?${curQs}`), {
           credentials: "include",
         }),
         getUserCurrencyOrder({ companyId: cid }).catch(() => null),
@@ -994,7 +998,7 @@ export function useBankProcessListPage() {
         setCurrencyListOrdered([]);
         return;
       }
-      const codes = curJson.data.map((r) => String(r.code).toUpperCase());
+      const codes = curJson.data.map((r) => String(r.code || "").toUpperCase()).filter(Boolean);
       const savedOrder = resolveSavedCurrencyOrder(cid, ordJson?.data?.order);
       const ordered = mergeCurrencyCodesWithSavedOrder(codes, savedOrder);
       persistCurrencyDisplayOrder(cid, ordered);
@@ -2331,11 +2335,11 @@ export function useBankProcessListPage() {
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
-  const baseCurrencyPills = useMemo(() => {
-    if (!currencyListOrdered.length) return [];
-    const extra = rowCountryCodes.filter((c) => !currencyListOrdered.includes(c));
-    return extra.length ? [...currencyListOrdered, ...extra] : currencyListOrdered;
-  }, [currencyListOrdered, rowCountryCodes]);
+  // Pills = company currencies only (not row Country extras — deleted codes must not reappear).
+  const baseCurrencyPills = useMemo(
+    () => (Array.isArray(currencyListOrdered) ? currencyListOrdered : []),
+    [currencyListOrdered],
+  );
 
   const currencyPillCodes = useMemo(
     () => currencyPillDisplayOrder ?? baseCurrencyPills,

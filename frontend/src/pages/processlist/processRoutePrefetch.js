@@ -86,7 +86,11 @@ export async function fetchGamesProcessListSlice(
   if (showInactive) listUrl.searchParams.set("showInactive", "1");
   if (showAll) listUrl.searchParams.set("showAll", "1");
 
-  const curUrl = buildApiUrl(`api/transactions/get_company_currencies_api.php?company_id=${cid}`);
+  const curQs = new URLSearchParams({
+    company_id: String(cid),
+    subsidiary_accounts_only: "1",
+  });
+  const curUrl = buildApiUrl(`api/transactions/get_company_currencies_api.php?${curQs}`);
   const ordUrl = buildApiUrl(
     `api/transactions/user_currency_order_api.php?company_id=${cid}&_t=${Date.now()}`,
   );
@@ -108,7 +112,7 @@ export async function fetchGamesProcessListSlice(
 
     let currencyCodes = null;
     if (curRes.ok && curJson?.success && Array.isArray(curJson.data)) {
-      const codes = curJson.data.map((r) => String(r.code).toUpperCase());
+      const codes = curJson.data.map((r) => String(r.code || "").toUpperCase()).filter(Boolean);
       let savedOrder = null;
       if (ordRes) {
         try {
@@ -195,7 +199,11 @@ export async function prefetchBankProcessListPayload(companyId, { search = "" } 
   const q = String(search || "").trim();
   if (q) listUrl.searchParams.set("search", q);
 
-  const curUrl = buildApiUrl(`api/transactions/get_company_currencies_api.php?company_id=${cid}`);
+  const curQs = new URLSearchParams({
+    company_id: String(cid),
+    subsidiary_accounts_only: "1",
+  });
+  const curUrl = buildApiUrl(`api/transactions/get_company_currencies_api.php?${curQs}`);
   const ordUrl = buildApiUrl(
     `api/transactions/user_currency_order_api.php?company_id=${cid}&_t=${Date.now()}`,
   );
@@ -216,7 +224,7 @@ export async function prefetchBankProcessListPayload(companyId, { search = "" } 
 
     let currencyCodes = null;
     if (curRes.ok && curJson?.success && Array.isArray(curJson.data)) {
-      const codes = curJson.data.map((r) => String(r.code).toUpperCase());
+      const codes = curJson.data.map((r) => String(r.code || "").toUpperCase()).filter(Boolean);
       let savedOrder = null;
       if (ordRes) {
         try {
