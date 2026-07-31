@@ -13,6 +13,7 @@ import {
   mapOwnerApiRows,
   accountsFromOwnerRows,
   mergeEditorAccounts,
+  mergeServerRowsPreservingDrafts,
   rowsToSavePayload,
   allocationRowsForSave,
 } from "../shared/ownershipRowHelpers.js";
@@ -159,7 +160,7 @@ export function useCompanyOwnership(shell) {
   }, [groupFilter, allGroupIds]);
 
   const loadCompanyState = useCallback(
-    async (cid, { force = false } = {}) => {
+    async (cid, { force = false, preserveDrafts = false } = {}) => {
       if (!force) {
         let cached = null;
         setCompanyStates((prev) => {
@@ -167,6 +168,14 @@ export function useCompanyOwnership(shell) {
           return prev;
         });
         if (cached) return cached;
+      }
+
+      let draftRows = null;
+      if (preserveDrafts) {
+        setCompanyStates((prev) => {
+          draftRows = prev[cid]?.rows || null;
+          return prev;
+        });
       }
 
       setLoadingCompanyId(cid);
@@ -195,7 +204,10 @@ export function useCompanyOwnership(shell) {
             is_main_owner: 0,
           });
         }
-        const rows = mapOwnerApiRows(oRes.status === "success" ? oRes.data : []);
+        let rows = mapOwnerApiRows(oRes.status === "success" ? oRes.data : []);
+        if (preserveDrafts && draftRows) {
+          rows = mergeServerRowsPreservingDrafts(draftRows, rows);
+        }
         const stateAccounts = mergeEditorAccounts(accounts, rows);
         const meta = oRes.meta || {};
         if (isHistoricalView) {
@@ -320,7 +332,7 @@ export function useCompanyOwnership(shell) {
         const json = await res.json();
         if (isApiSuccess(json)) {
           showToast(getApiMessage(json, "Partner linked successfully"), "success");
-          await loadCompanyState(cid, { force: true });
+          await loadCompanyState(cid, { force: true, preserveDrafts: true });
           return true;
         }
         if (isApiConflict(json)) {
