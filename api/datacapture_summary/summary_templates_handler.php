@@ -36,16 +36,10 @@ function dcSummaryApiHandleSaveTemplate(): void
                     !empty($row['currency_id']) ? (int) $row['currency_id'] : null
                 );
             } elseif (!empty($capture_scope_group)) {
-                // Group Summary save sometimes omits process_id — default ensure SALARY so
-                // Formula Maintenance can join/list the template.
-                $resolvedTemplateProcessId = dcEnsureProcessIdByCode(
-                    $pdo,
-                    (int) $company_id,
-                    'SALARY',
-                    true,
-                    $groupIdForAccess,
-                    !empty($row['currency_id']) ? (int) $row['currency_id'] : null
-                );
+                // Group Summary save must know which process (SALARY/COMMISSION/BONUS/PROFIT) the
+                // row belongs to — silently defaulting to SALARY here previously mis-filed
+                // COMMISSION/PROFIT formulas under the SALARY process (see Formula Maintenance bug).
+                throw new Exception('Missing process_id/process_code for group scope template save');
             }
 
             // Prepare template payload
@@ -138,6 +132,20 @@ function dcSummaryApiHandleSaveTemplate(): void
                     'data_capture_id' => isset($templatePayload['data_capture_id']) ? (int)$templatePayload['data_capture_id'] : null,
                 ];
                 syncFormulaToMultiUseProcesses($pdo, $processIdForSync, $syncTemplateData, $company_id);
+            }
+
+            require_once __DIR__ . '/../includes/realtime.php';
+            if (!empty($capture_scope_group)) {
+                $listScope = [
+                    'mode' => 'group',
+                    'company_id' => (int) $company_id,
+                    'group_scope_id' => (int) ($capture_scope_ctx['group_scope_id'] ?? $capture_scope_ctx['scope_id'] ?? 0),
+                ];
+                realtime_publish_scope($listScope, 'datacapture', 'save_template');
+                realtime_publish_scope($listScope, 'maintenance', 'formula_update');
+            } elseif ((int) $company_id > 0) {
+                realtime_publish_companies([(int) $company_id], 'datacapture', 'save_template');
+                realtime_publish_companies([(int) $company_id], 'maintenance', 'formula_update');
             }
         
             echo json_encode([
@@ -311,6 +319,19 @@ function dcSummaryApiHandleDeleteTemplate(): void
                     error_log("Deleted template by key+variant: product_type=$productType, template_key=$templateKey, formula_variant=$formulaVariant");
                 } else {
                     error_log("Deleted template by key: product_type=$productType, template_key=$templateKey");
+                }
+                require_once __DIR__ . '/../includes/realtime.php';
+                if (!empty($capture_scope_group)) {
+                    $listScope = [
+                        'mode' => 'group',
+                        'company_id' => (int) $companyId,
+                        'group_scope_id' => (int) ($capture_scope_ctx['group_scope_id'] ?? $capture_scope_ctx['scope_id'] ?? 0),
+                    ];
+                    realtime_publish_scope($listScope, 'datacapture', 'delete_template');
+                    realtime_publish_scope($listScope, 'maintenance', 'formula_delete');
+                } elseif ((int) $companyId > 0) {
+                    realtime_publish_companies([(int) $companyId], 'datacapture', 'delete_template');
+                    realtime_publish_companies([(int) $companyId], 'maintenance', 'formula_delete');
                 }
                 echo json_encode([
                     'success' => true,

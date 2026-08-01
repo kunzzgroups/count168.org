@@ -353,9 +353,31 @@ try {
 
     $pdo->commit();
 
+    require_once __DIR__ . '/../includes/payment_delete_shared.php';
+    payment_delete_clear_tx_search_cache();
+
+    // Align with payment_maintenance: TX Payment only refreshes on ledger_changed.
+    // Also publish group channel (tx:g:{id}) so Group ledger clients are not stuck on poll.
     require_once __DIR__ . '/../includes/realtime.php';
-    realtime_publish_companies([(int) $company_id], 'maintenance', 'capture_delete');
-    realtime_publish_companies([(int) $company_id], 'datacapture', 'capture_delete');
+    require_once __DIR__ . '/../includes/ledger_realtime.php';
+    $groupScopeId = (int) ($scopeCtx['group_scope_id'] ?? $scopeCtx['scope_id'] ?? 0);
+    if ($capture_scope_group && $groupScopeId <= 0) {
+        error_log('capture_maintenance/delete: group mode missing group_scope_id; falling back to company channel');
+    }
+    $listScope = [
+        'mode' => ($capture_scope_group && $groupScopeId > 0) ? 'group' : 'company',
+        'company_id' => (int) $company_id,
+        'group_scope_id' => $groupScopeId,
+    ];
+    if (realtime_channels_from_scope($listScope) === []) {
+        error_log('capture_maintenance/delete: empty realtime channels company_id=' . (int) $company_id
+            . ' group_scope_id=' . $groupScopeId);
+    }
+    realtime_publish_scope($listScope, 'maintenance', 'capture_delete');
+    realtime_publish_scope($listScope, 'datacapture', 'capture_delete');
+    tx_ledger_realtime_publish_scope($listScope, 'capture_delete', [
+        'deleted' => (int) $totalDeleted,
+    ]);
 
     jsonResponse(true, "已删除 {$totalDeleted} 条明细记录", ['deleted' => $totalDeleted]);
 } catch (PDOException $e) {

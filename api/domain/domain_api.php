@@ -3781,7 +3781,14 @@ try {
                 $pdo->commit();
 
                 require_once __DIR__ . '/../includes/realtime.php';
+                require_once __DIR__ . '/../includes/ledger_realtime.php';
                 realtime_publish_companies([(int) $company_id], 'domain', 'create');
+                // Domain list fee writes transactions — TX/Dashboard need ledger_changed.
+                tx_ledger_realtime_publish_scope([
+                    'mode' => 'company',
+                    'company_id' => (int) $company_id,
+                    'group_scope_id' => 0,
+                ], 'domain_fee_create');
 
                 $owner = getOwnerWithCompanies($pdo, $owner_id);
                 echo json_encode([
@@ -4060,7 +4067,13 @@ try {
                 domain_api_clear_session_user_cache();
 
                 require_once __DIR__ . '/../includes/realtime.php';
+                require_once __DIR__ . '/../includes/ledger_realtime.php';
                 realtime_publish_companies([(int) $company_id], 'domain', 'update');
+                tx_ledger_realtime_publish_scope([
+                    'mode' => 'company',
+                    'company_id' => (int) $company_id,
+                    'group_scope_id' => 0,
+                ], 'domain_fee_update');
 
                 $owner = getOwnerWithCompanies($pdo, $id);
                 echo json_encode([
@@ -4356,6 +4369,14 @@ try {
                     // 旧调用方式兼容：未传 expiration_date 时只更新权限
                     $stmt = $pdo->prepare("UPDATE company SET permissions = ? WHERE company_id = ?");
                     $stmt->execute([$permissions_json, strtoupper($company_id)]);
+                }
+
+                require_once __DIR__ . '/../includes/realtime.php';
+                $permPkStmt = $pdo->prepare('SELECT id FROM company WHERE UPPER(TRIM(company_id)) = ? LIMIT 1');
+                $permPkStmt->execute([strtoupper(trim((string) $company_id))]);
+                $permCompanyPk = (int) ($permPkStmt->fetchColumn() ?: 0);
+                if ($permCompanyPk > 0) {
+                    realtime_publish_companies([$permCompanyPk], 'domain', 'update_company_permissions');
                 }
 
                 echo json_encode([

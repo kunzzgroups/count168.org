@@ -104,6 +104,7 @@ export default function AppRealtimeBridge() {
   useEffect(() => {
     return onRealtimeInvalidate("*", (detail) => {
       const domain = String(detail.domain || "");
+      const source = String(detail.source || "");
 
       if (domain === REALTIME_DOMAINS.LEDGER || detail.type === "ledger_changed") {
         clearAllAutoRenewListCache();
@@ -140,11 +141,36 @@ export default function AppRealtimeBridge() {
         return;
       }
 
+      const invalidateLedgerCaches = (tag) => {
+        clearAllAutoRenewListCache();
+        notifyTransactionListInvalidated(tag);
+        void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.searchRoot() });
+        void queryClient.invalidateQueries({ queryKey: transactionQueryKeys.contraInboxRoot() });
+      };
+
+      /** Maintenance / capture writes that change balances — belt if ledger publish missed. */
+      const LEDGER_TOUCHING_SOURCES = new Set([
+        "capture_delete",
+        "capture_update",
+        "payment_delete",
+        "payment_update",
+        "bankprocess_delete",
+        "transaction_delete",
+        "post_to_transaction",
+        "restore",
+        "domain_fee_create",
+        "domain_fee_update",
+        "summary_submit",
+      ]);
+
       if (domain === REALTIME_DOMAINS.DATACAPTURE) {
         void queryClient.invalidateQueries({ queryKey: dataCaptureQueryKeys.root() });
         void queryClient.invalidateQueries({
           predicate: (q) => q.queryKey?.[0] === "summary",
         });
+        if (LEDGER_TOUCHING_SOURCES.has(source)) {
+          invalidateLedgerCaches(`realtime_${source}`);
+        }
         return;
       }
 
@@ -158,8 +184,21 @@ export default function AppRealtimeBridge() {
         return;
       }
 
-      // Maintenance / announcements / domain / app:
-      // pages listen via useRealtimeDomain or full refresh hooks.
+      if (domain === REALTIME_DOMAINS.MAINTENANCE) {
+        if (LEDGER_TOUCHING_SOURCES.has(source)) {
+          invalidateLedgerCaches(`realtime_${source}`);
+        }
+        return;
+      }
+
+      if (domain === REALTIME_DOMAINS.DOMAIN) {
+        if (LEDGER_TOUCHING_SOURCES.has(source) || /fee/.test(source)) {
+          invalidateLedgerCaches(`realtime_${source || "domain"}`);
+        }
+        return;
+      }
+
+      // Announcements / app: pages listen via useRealtimeDomain.
     });
   }, [queryClient]);
 
