@@ -220,6 +220,32 @@ function resolveUserListCacheKey(activeCompanyId, groupOnlyUserList, selectedGro
   return `company:${String(activeCompanyId || "")}`;
 }
 
+/** Survives SPA remount (Acc/Process route-warm pattern) — avoids empty→fill flash when switching back. */
+const userListModuleCache = new Map();
+const userListModuleFetchPending = new Map();
+
+function readUserListBootScopeFromSession() {
+  try {
+    const persisted = readPersistedDashboardGcFilter();
+    const groupOnly = Boolean(persisted?.groupOnly || isDashboardGroupOnlyMode());
+    const selectedGroup = persisted?.selectedGroup || null;
+    const companyId = groupOnly ? null : (persisted?.companyId ?? readDashboardSelectedCompanyId());
+    const cid =
+      companyId != null && Number.isFinite(Number(companyId)) && Number(companyId) > 0
+        ? Number(companyId)
+        : null;
+    return { companyId: cid, selectedGroup, groupOnly };
+  } catch {
+    return { companyId: null, selectedGroup: null, groupOnly: false };
+  }
+}
+
+function peekUserListModuleCache(companyId, groupOnly, selectedGroup) {
+  const key = resolveUserListCacheKey(companyId, groupOnly, selectedGroup, false, false, false);
+  const rows = userListModuleCache.get(key);
+  return Array.isArray(rows) ? rows : null;
+}
+
 function resolveModalAccessCacheKey(scopeCompanyId, groupOnlyUserList, selectedGroup) {
   const normalizedGroupId = String(selectedGroup || "").trim().toUpperCase();
   const useGroupScopedAccounts = groupOnlyUserList && normalizedGroupId !== "";
@@ -236,15 +262,18 @@ export default function UserListPage() {
   const t = useCallback((key, params) => getUserListText(lang, key, params), [lang]);
   const [bootLoading, setBootLoading] = useState(true);
   const [companies, setCompanies] = useState([]);
-  const [companyId, setCompanyId] = useState(null);
-  const [usersRaw, setUsersRaw] = useState([]);
+  const [companyId, setCompanyId] = useState(() => readUserListBootScopeFromSession().companyId);
+  const [usersRaw, setUsersRaw] = useState(() => {
+    const scope = readUserListBootScopeFromSession();
+    return peekUserListModuleCache(scope.companyId, scope.groupOnly, scope.selectedGroup) || [];
+  });
   const [search, setSearch] = useState("");
   const [showActive, setShowActive] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [sortColumn, setSortColumn] = useState("loginId");
   const [sortDirection, setSortDirection] = useState("asc");
-  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [selectedGroup, setSelectedGroup] = useState(() => readUserListBootScopeFromSession().selectedGroup);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDeleteIds, setSelectedDeleteIds] = useState(new Set());
   const [selectAllUsers, setSelectAllUsers] = useState(false);
@@ -257,17 +286,32 @@ export default function UserListPage() {
   const listFetchGenRef = useRef(0);
   const companySwitchGenRef = useRef(0);
   const skipCompanyFetchEffectRef = useRef(false);
-  const bootFetchedUsersKeyRef = useRef(null);
-  const userListCacheRef = useRef(new Map());
-  const userListFetchPendingRef = useRef(new Map());
-  const userListScopeRef = useRef({
-    companyId: null,
-    selectedGroup: null,
-    groupOnlyUserList: false,
-    aggregateUserList: false,
-    groupsAllMode: false,
-    groupAllMode: false,
-  });
+  const bootFetchedUsersKeyRef = useRef((() => {
+    const scope = readUserListBootScopeFromSession();
+    if (!peekUserListModuleCache(scope.companyId, scope.groupOnly, scope.selectedGroup)) return null;
+    return resolveUserListCacheKey(
+      scope.companyId,
+      scope.groupOnly,
+      scope.selectedGroup,
+      false,
+      false,
+      false,
+    );
+  })());
+  const fetchUsersRef = useRef(null);
+  const userListCacheRef = useRef(userListModuleCache);
+  const userListFetchPendingRef = useRef(userListModuleFetchPending);
+  const userListScopeRef = useRef((() => {
+    const scope = readUserListBootScopeFromSession();
+    return {
+      companyId: scope.companyId,
+      selectedGroup: scope.selectedGroup,
+      groupOnlyUserList: scope.groupOnly,
+      aggregateUserList: false,
+      groupsAllMode: false,
+      groupAllMode: false,
+    };
+  })());
   const modalCompaniesCacheRef = useRef([]);
   const modalAccessCacheRef = useRef(new Map());
   const modalAccessPendingRef = useRef(new Map());
@@ -466,7 +510,7 @@ export default function UserListPage() {
     document.body.classList.add("user-page");
     return () => {
       document.body.classList.remove("user-page", "user-page--show-all", "bg");
-      document.body.classList.add("dashboard-page");
+      // document.body.classList.add("dashboard-page");
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
@@ -706,15 +750,47 @@ export default function UserListPage() {
           if (pick?.id != null) effectiveNum = Number(pick.id);
         }
 
-        setCompanyId(groupOnlyBoot ? null : effectiveNum);
+        const bootCompanyId = groupOnlyBoot ? null : effectiveNum;
+        const bootGroupOnly = Boolean(groupOnlyBoot && bootGroup);
+        setCompanyId(bootCompanyId);
         setSelectedGroup(bootGroup);
         setSearch(String(url.searchParams.get("search") || ""));
         setShowActive(url.searchParams.get("showActive") === "1");
         setShowInactive(url.searchParams.get("showInactive") === "1");
         setShowAll(url.searchParams.get("showAll") === "1");
 
+        // Acc standard: sync scope + await list before opening boot (avoid empty→fill flash).
+        userListScopeRef.current = {
+          companyId: bootCompanyId,
+          selectedGroup: bootGroup,
+          groupOnlyUserList: bootGroupOnly,
+          aggregateUserList: false,
+          groupsAllMode: false,
+          groupAllMode: false,
+        };
+        if (!cancelled && (bootGroupOnly || bootCompanyId != null) && fetchUsersRef.current) {
+          const bootCacheKey = resolveUserListCacheKey(
+            bootCompanyId,
+            bootGroupOnly,
+            bootGroup,
+            false,
+            false,
+            false,
+          );
+          try {
+            await fetchUsersRef.current(bootCompanyId, {
+              silent: true,
+              groupOnly: bootGroupOnly,
+              selectedGroup: bootGroup,
+            });
+            if (!cancelled) bootFetchedUsersKeyRef.current = bootCacheKey;
+          } catch {
+            /* boot list is best-effort; post-boot effect can retry */
+          }
+        }
+
         const syncCompanyId =
-          effectiveNum != null && Number.isFinite(Number(effectiveNum)) ? Number(effectiveNum) : null;
+          bootCompanyId != null && Number.isFinite(Number(bootCompanyId)) ? Number(bootCompanyId) : null;
         if (syncCompanyId != null && syncCompanyId !== Number(me.company_id)) {
           void (async () => {
             try {
@@ -737,7 +813,6 @@ export default function UserListPage() {
     })();
     return () => {
       cancelled = true;
-      bootInitializedRef.current = false;
     };
   }, [sessionReady, me, navigate]);
 
@@ -1092,6 +1167,7 @@ export default function UserListPage() {
     groupAllMode,
     applyUserListResult,
   ]);
+  fetchUsersRef.current = fetchUsers;
 
   useRealtimeDomain(REALTIME_DOMAINS.USERS, () => {
     void fetchUsers(null, { silent: true });
@@ -2374,14 +2450,13 @@ export default function UserListPage() {
         <div className="content">
           <div className="action-buttons-container">
             <div className="action-buttons" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <div className="action-controls-row user-toolbar-primary" style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                 {canCreateUser ? (
                 <button
                   type="button"
                   className="btn btn-add"
                   onClick={openAdd}
                   disabled={
-                    bootLoading ||
                     userMutationsBlocked ||
                     !userListHasMutationScope(mutationScopeCompanyId, {
                       groupOnly: groupOnlyUserList,
