@@ -115,7 +115,7 @@ export function computeRateMulCommission({ fromAmount, middlemanRate, exchangeRa
   const baseRate = parseRateExpression(exchangeRateRaw);
   if (!baseRate.valid) return MoneyDecimal.toDecimal("0", 0);
   const baseRateDec = MoneyDecimal.toDecimal(baseRate.value, 0);
-  const rateDiff = parsed.value.minus(baseRateDec);
+  const rateDiff = baseRateDec.minus(parsed.value);
   return fromDec.times(rateDiff);
 }
 
