@@ -15,6 +15,16 @@ import { DASHBOARD_EARNINGS_PIE_MIN_ANGLE } from "../lib/dashboardConstants.js";
 import { formatCurrency, formatI18nTemplate } from "../lib/dashboardFormat.js";
 import { EarningsPieSectorTooltip } from "./EarningsPieSectorTooltip.jsx";
 
+/**
+ * Minimum visible beat between KPI/chart appearing and the Currency card following —
+ * without this, a scope with few currencies can resolve its own data so fast (now that
+ * the fetch starts almost alongside KPI/chart instead of after) that it would reveal in
+ * the same tick as KPI/chart, which reads as "popped in together" rather than in order.
+ * Doubles as slack for the earnings-by-currency fetch itself: a longer gap means more
+ * scopes land already-fully-loaded by the time this timer opens the gate.
+ */
+const CURRENCY_CARD_MIN_GAP_AFTER_KPI_MS = 900;
+
 export function DashboardEarningsSummary({
   i18n,
   currencyCode,
@@ -36,6 +46,7 @@ export function DashboardEarningsSummary({
   showNetProfitForTab = false,
   earningsPanelView = "currency",
   onEarningsPanelViewChange,
+  kpiChartReady = true,
 }) {
   const pieAreaRef = useRef(null);
   const pieShellRef = useRef(null);
@@ -97,22 +108,42 @@ export function DashboardEarningsSummary({
     setHoveredPieSector(null);
   }, [currencyCode, earningsPanelView]);
 
-  const isRowAmountLoading = useCallback(
-    (code) => {
-      if (currencies.length <= 1) return summaryEarningsLoading;
-      const row = panelCurrencyRows.find((r) => r.code === code);
-      return row?.earnings == null;
-    },
-    [currencies.length, panelCurrencyRows, summaryEarningsLoading]
-  );
+  // Holds `kpiChartReady` back by a fixed minimum beat so the Currency card never
+  // reveals in the same tick as KPI/chart, even when its own data was already sitting
+  // ready (the atomic-paint fetch now starts almost alongside KPI/chart, so this can
+  // genuinely happen). Snaps back to false immediately when KPI/chart go pending again
+  // — only the reveal itself is paced, same rule as the reveal animation's own timing.
+  const [kpiChartReadyPaced, setKpiChartReadyPaced] = useState(false);
+  useEffect(() => {
+    if (!kpiChartReady) {
+      setKpiChartReadyPaced(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      setKpiChartReadyPaced(true);
+    }, CURRENCY_CARD_MIN_GAP_AFTER_KPI_MS);
+    return () => window.clearTimeout(timer);
+  }, [kpiChartReady]);
 
-  const isRowRateLoading = useCallback(() => {
-    if (currencies.length <= 1) return false;
-    return (
-      exchangeRatesLoading ||
-      (exchangeRateScopeKey && exchangeRates.scopeKey !== exchangeRateScopeKey)
-    );
-  }, [currencies.length, exchangeRatesLoading, exchangeRates.scopeKey, exchangeRateScopeKey]);
+  const showMultiCurrencyBreakdown = currencies.length > 1;
+
+  // Card-level readiness gate — hide only while the first multi-currency paint is
+  // still pending. Do NOT require every currency row to be non-null: after a date
+  // filter on Group+Company All, secondary currencies can stay null (or retries
+  // exhaust) while KPI/chart already painted — requiring `every` left the card at
+  // opacity 0 forever. Missing cells already render as "—".
+  // FX rates are intentionally NOT part of this gate (fire-and-forget off the
+  // critical path in useDashboardPage.js).
+  // `kpiChartReadyPaced` pins this card to a fixed reveal order (never before, never
+  // simultaneous with KPI/chart), even when its own data resolves first — otherwise
+  // the reveal order/timing flips depending on how many currencies this scope has.
+  const currencyCardReady =
+    kpiChartReadyPaced &&
+    (showMultiCurrencyBreakdown
+      ? !earningsByCurrencyLoading &&
+        panelCurrencyRows.length > 0 &&
+        panelCurrencyRows.some((row) => row.earnings != null)
+      : !summaryEarningsLoading);
 
   useLayoutEffect(() => {
     const wrap = pieAreaRef.current;
@@ -201,7 +232,6 @@ export function DashboardEarningsSummary({
     pieShellLayout,
   ]);
 
-  const showMultiCurrencyBreakdown = currencies.length > 1;
   const isStackedLayout = true;
   const isCompactTable = !showMultiCurrencyBreakdown;
 
@@ -277,7 +307,11 @@ export function DashboardEarningsSummary({
           isStackedLayout ? " is-compact-breakdown" : ""
         }${showMultiCurrencyBreakdown ? " is-multi-currency-layout" : ""}`}
       >
-        <div className="dashboard-summary-top-row">
+        <div
+          className={`dashboard-summary-top-row dashboard-summary-reveal${
+            currencyCardReady ? " is-revealed" : ""
+          }`}
+        >
           {summaryViewTabs}
           {summaryHero}
           <div
@@ -290,7 +324,11 @@ export function DashboardEarningsSummary({
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
                   <Pie
-                    key={exchangeRateScopeKey || "pie"}
+                    // Keyed on view + base currency only — NOT on the FX-rate scope key.
+                    // Rates load independently of earnings and can land after the reveal
+                    // animation already started; keying on them forced a remount (a visible
+                    // flash) the moment they arrived instead of a smooth in-place update.
+                    key={`${earningsPanelView}-${currencyCode || "pie"}`}
                     data={
                       earningsPieSlices.length
                         ? earningsPieSlices
@@ -320,10 +358,7 @@ export function DashboardEarningsSummary({
                   </Pie>
                 </PieChart>
               </ResponsiveContainer>
-              {!summaryEarningsLoading &&
-                earningsPanelStable &&
-                earningsPieSlices.length > 0 &&
-                !hoveredPieTooltip && (
+              {earningsPanelStable && earningsPieSlices.length > 0 && !hoveredPieTooltip && (
                 <div className="dashboard-summary-pie-center" aria-hidden="true">
                   <span className="dashboard-summary-pie-center-pct">
                     {pieCenterPct != null && Number.isFinite(pieCenterPct)
@@ -361,11 +396,11 @@ export function DashboardEarningsSummary({
           </div>
         </div>
         <div
-          className={`dashboard-summary-currency-list${
+          className={`dashboard-summary-currency-list dashboard-summary-reveal${
             showMultiCurrencyBreakdown ? " is-multi-currency" : ""
           }${isCompactTable ? " is-compact-breakdown" : ""}${
             earningsBreakdownShowsRate ? " is-with-original" : ""
-          }`}
+          }${currencyCardReady ? " is-revealed" : ""}`}
           aria-label={i18n.currencyBreakdown}
         >
           <div className="dashboard-summary-currency-list-head" aria-hidden="true">
@@ -384,8 +419,6 @@ export function DashboardEarningsSummary({
           </div>
           <div className="dashboard-summary-currency-list-body" role="list">
             {panelCurrencyRows.map((row, index) => {
-              const rowAmountLoading = isRowAmountLoading(row.code);
-              const rowRateLoading = isRowRateLoading();
               const sharePct = computeCurrencySharePct(row, earningsShareByCode);
               const { primary, native } = resolveEarningsRowDisplayAmounts(
                 row,
@@ -435,11 +468,7 @@ export function DashboardEarningsSummary({
                   </div>
                   <div className="dashboard-summary-currency-amount-col">
                     <span className="dashboard-summary-currency-amount">
-                      {rowAmountLoading
-                        ? "…"
-                        : primary != null
-                          ? formatCurrency(primary)
-                          : "—"}
+                      {primary != null ? formatCurrency(primary) : "—"}
                     </span>
                   </div>
                   {(earningsBreakdownShowsRate || isCompanyBreakdownView) && (
@@ -447,25 +476,21 @@ export function DashboardEarningsSummary({
                       <span className="dashboard-summary-currency-original">
                         {isCompanyBreakdownView
                           ? row.group || "—"
-                          : rowAmountLoading
-                            ? "…"
-                            : showOriginalAmount && native != null
-                              ? formatCurrency(native)
-                              : "—"}
+                          : showOriginalAmount && native != null
+                            ? formatCurrency(native)
+                            : "—"}
                       </span>
                     </div>
                   )}
                   {!isCompanyBreakdownView && (
                     <span className="dashboard-summary-currency-rate" title={unitRateTitle}>
-                      {rowRateLoading
-                        ? "…"
-                        : earningsBreakdownShowsRate
-                          ? unitRateLabel && unitRateLabel !== "—"
-                            ? unitRateLabel
-                            : "—"
-                          : sharePct != null
-                            ? `${Number(sharePct).toFixed(1)}%`
-                            : "—"}
+                      {earningsBreakdownShowsRate
+                        ? unitRateLabel && unitRateLabel !== "—"
+                          ? unitRateLabel
+                          : "—"
+                        : sharePct != null
+                          ? `${Number(sharePct).toFixed(1)}%`
+                          : "—"}
                     </span>
                   )}
                 </div>

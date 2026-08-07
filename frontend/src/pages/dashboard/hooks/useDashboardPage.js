@@ -692,22 +692,49 @@ const DASHBOARD_STALE_RETRY_MAX = 3;
 const EARNINGS_INCOMPLETE_RETRY_MAX = 5;
 const PREFETCH_WAIT_MAX_ROUNDS = 40;
 /** Coalesce rapid filter switches into one currency reload. */
-const LOAD_CURRENCIES_COALESCE_MS = 32;
+const LOAD_CURRENCIES_COALESCE_MS = 300;
 /** Defer session sync so dashboard fetch gets connection priority on company pick. */
-const COMPANY_SESSION_DEFER_MS = 500;
+const COMPANY_SESSION_DEFER_MS = 2000;
 /** Defer group-all currency refresh while dashboard merge is in flight. */
 const CURRENCY_REFRESH_DEFER_MS = 600;
 /** Parallel company dashboard fetches when merging Group/Company "All". */
-const MERGE_DASHBOARD_PARALLEL_BATCH = 12;
+const MERGE_DASHBOARD_PARALLEL_BATCH = 4;
 /** Idle delay before one-time session warm of picker companies (current currency only). */
 const SESSION_DASHBOARD_WARM_DELAY_MS = 600;
 /** Cross-group / independent company warm after active scope settles. */
 const CROSS_GROUP_COMPANY_WARM_DELAY_MS = 2000;
+/**
+ * Atomic-paint scope load: give the primary KPI/chart request a short head start on the
+ * connection/server before the Currency card's own per-currency fan-out follows — starting
+ * fully simultaneously competes with KPI/chart right when that matters most; starting only
+ * after KPI/chart fully resolves (the old behavior) makes the Currency card pay KPI/chart's
+ * time PLUS its own on top. This splits the difference.
+ */
+const EARNINGS_OTHERS_STAGGER_MS = 150;
 /** Parallel kpi bootstrap requests when filling multi-currency earnings sidebar. */
-/** Parallel secondary-currency earnings captures (FE fans out; avoids PHP serial foreach). */
-const EARNINGS_KPI_PARALLEL_BATCH = 4;
-/** Company All pie: more parallel light earnings packs (each is kpi_only, not full chart). */
-const EARNINGS_KPI_PARALLEL_BATCH_GROUP_ALL = 6;
+/** Parallel secondary-currency earnings captures (FE fans out; avoids PHP serial foreach).
+ * Raised from 4 → 12 so a normal scope's whole currency list fires as one wave instead of
+ * ceil(n/4) sequential batches — that stacked wait was the Currency card's 2-4s tail behind
+ * KPI/chart. 12 comfortably covers the live currency roster without going unbounded. */
+const EARNINGS_KPI_PARALLEL_BATCH = 12;
+/**
+ * Company All / Group All pie: each "one currency" request here is NOT light — under
+ * group_all, `loadMergedDashboard` routes through `fetchMergedCompanyDashboards`, which
+ * tries `tryGroupAllBootstrap` first: one HTTP call, but the server walks every company
+ * in the group *serially* (see that function's comment — this is the documented "main
+ * Company All first-paint stall").
+ *
+ * Tried lowering this to 3 assuming concurrent requests were contending for server
+ * capacity and slowing each other down — measured slower, not faster. `runTasksInBatches`
+ * batches are sequential (each batch fully awaited before the next starts), so a lower
+ * batch size trades "one wave, wait for the slowest" for "N/3 waves, wait for the sum of
+ * each wave's slowest" — and since each request's cost here is dominated by its own fixed
+ * per-company server-side loop (not by how many sibling requests are in flight), there was
+ * no per-request speedup to offset that added sequential cost. Back to firing (essentially)
+ * the whole currency list as one wave, same as the normal-scope batch — the real fix for
+ * this path is the backend serial-per-company loop itself, not frontend concurrency.
+ */
+const EARNINGS_KPI_PARALLEL_BATCH_GROUP_ALL = 12;
 /** Defer trend-chart daily fetch so MoM previous can use DB first (skip for month-bucket ranges). */
 const CHART_DAILY_DEFER_MS = 250;
 /** Sibling currency warm — start after settle so early currency clicks hit cache. */
@@ -2783,6 +2810,15 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
           if (codes.length) {
             commitCurrencyList(codes);
+            if (codes.length > 1) {
+              // On a cold load, loadDashboard() may already have run and computed
+              // needsMultiCurrencyEarnings=false because this currency list wasn't
+              // ready yet — that skips the Currency card's fetch entirely for that
+              // pass, with no other trigger left to start it. Re-check now that the
+              // list is in. Deferred so `currencies` state has actually re-rendered
+              // before upgradeActiveScopeEarnings reads it.
+              deferActiveScopeEarningsUpgrade(200);
+            }
           }
         } catch {
           /* Keep previous currency pills on transient errors. */
@@ -3090,6 +3126,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     resolveMergeCompanyList,
     me,
     companiesForPicker,
+    // deferActiveScopeEarningsUpgrade intentionally omitted: it's declared further
+    // down in this hook, so listing it here throws a TDZ error at render time
+    // ("Cannot access before initialization"). It's still called inside the async
+    // body below (safe — that only runs after the whole hook has finished
+    // executing for this render) and its own identity is stable (useCallback([])),
+    // so omitting it from this array doesn't cause a stale-closure bug either.
   ]);
 
   loadCurrenciesRef.current = loadCurrencies;
@@ -4316,7 +4358,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           const { res, json } = await fetchBootstrapHttpDeduped(
             bootstrapInflightRef.current,
             requestKey,
-            { credentials: "include" }
+            // Background sibling warm — never contend with the active scope's own
+            // fetches for the browser's limited concurrent-connection slots.
+            { credentials: "include", priority: "low" }
           );
           if (!res.ok || !json.success || !json.data) {
             if (!res.ok) dashboardPrefetchFailedRef.current.add(requestKey);
@@ -4558,7 +4602,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         const { res, json } = await fetchBootstrapHttpDeduped(
           bootstrapInflightRef.current,
           requestKey,
-          { credentials: "include" }
+          // Background sibling-currency warm — never contend with the active
+          // scope's own fetches for the browser's limited connection slots.
+          { credentials: "include", priority: "low" }
         );
         if (!res.ok || !json.success || !json.data?.current) {
           if (!res.ok) dashboardPrefetchFailedRef.current.add(requestKey);
@@ -4672,7 +4718,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         const { res, json } = await fetchBootstrapHttpDeduped(
           bootstrapInflightRef.current,
           requestKey,
-          { credentials: "include" }
+          // Background sibling-group warm — never contend with the active
+          // scope's own fetches for the browser's limited connection slots.
+          { credentials: "include", priority: "low" }
         );
         if (!res.ok || !json.success || !json.data?.current) {
           if (!res.ok) dashboardPrefetchFailedRef.current.add(requestKey);
@@ -5465,7 +5513,11 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   }, []);
 
   const scheduleIncompleteEarningsRetry = useCallback((delayMs = 150) => {
-    if (earningsIncompleteRetryRef.current >= EARNINGS_INCOMPLETE_RETRY_MAX) return;
+    if (earningsIncompleteRetryRef.current >= EARNINGS_INCOMPLETE_RETRY_MAX) {
+      // Stop hiding the Currency card after giving up on gap-fill.
+      setEarningsByCurrencyLoading(false);
+      return;
+    }
     earningsIncompleteRetryRef.current += 1;
     deferActiveScopeEarningsUpgrade(delayMs);
   }, [deferActiveScopeEarningsUpgrade]);
@@ -5713,33 +5765,32 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
    * Parallel secondary-currency earnings for atomic first paint.
    * Uses dashboardFetchGen (not earningsFetchGen) so scope-effect bumps cannot abort it.
    */
-  const loadEarningsParallelForAtomicPaint = useCallback(
-    async (dashboardGen, codes, primaryCode, primaryPayload, scopeKeyForGuard = "") => {
-      const list = sortCurrencyCodesForBootstrap(
-        Array.isArray(codes) ? codes : []
-      );
-      if (list.length <= 1) return [];
+  /**
+   * The actual N-request fan-out for every non-primary currency — split out of
+   * `loadEarningsParallelForAtomicPaint` so the atomic-paint scope load can kick this
+   * off a short beat after the primary KPI/chart request instead of only after it
+   * resolves. Doesn't need the primary payload at all (only the final row-merge does),
+   * so there's nothing here that actually requires waiting on `boot`.
+   */
+  const fetchEarningsOthersSettled = useCallback(
+    (dashboardGen, codes, primaryCode, scopeKeyForGuard = "") => {
+      const list = sortCurrencyCodesForBootstrap(Array.isArray(codes) ? codes : []);
+      const primary = String(primaryCode || "").trim().toUpperCase();
+      const others = list.filter((code) => String(code || "").trim().toUpperCase() !== primary);
+      if (others.length === 0) return Promise.resolve([]);
 
       const guardKey = scopeKeyForGuard || dashboardFetchInFlightScopeRef.current || "parallel";
       earningsParallelInFlightRef.current = guardKey;
 
-      const primary = String(primaryCode || "").trim().toUpperCase();
-      const primaryMetrics =
-        primaryPayload != null ? computeCurrencyMetricsFromPayload(primaryPayload) : null;
-      const primaryNetProfit = primaryMetrics?.netProfit ?? null;
-      const primaryEarnings = primaryMetrics?.earnings ?? null;
-      const others = list.filter(
-        (code) => String(code || "").trim().toUpperCase() !== primary
-      );
-
-      try {
-        const settled = await runTasksInBatches(
-          others,
-          groupAllMode
-            ? EARNINGS_KPI_PARALLEL_BATCH_GROUP_ALL
-            : EARNINGS_KPI_PARALLEL_BATCH,
-          async (code) => {
-            if (dashboardGen !== dashboardFetchGenRef.current) return null;
+      return runTasksInBatches(
+        others,
+        groupAllMode ? EARNINGS_KPI_PARALLEL_BATCH_GROUP_ALL : EARNINGS_KPI_PARALLEL_BATCH,
+        async (code) => {
+          if (dashboardGen !== dashboardFetchGenRef.current) return null;
+          // One quick same-request retry per currency — a lone transient failure
+          // (network blip, momentary backend hiccup) shouldn't mark this currency
+          // permanently missing and drag the whole batch's completeness check down.
+          for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
               const payload = await loadMergedDashboard(
                 dateFromRef.current,
@@ -5750,52 +5801,80 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
               if (dashboardGen !== dashboardFetchGenRef.current) return null;
               return buildCurrencyRowFromPayload(code, payload);
             } catch {
-              return { code, netProfit: null, earnings: null };
+              if (dashboardGen !== dashboardFetchGenRef.current) return null;
+              /* try once more before giving up */
             }
           }
-        );
-
-        if (dashboardGen !== dashboardFetchGenRef.current) return [];
-
-        const rows = buildSeededEarningsRows(
-          list,
-          primary,
-          primaryNetProfit,
-          primaryEarnings
-        ).map((row) => {
-          if (
-            String(row.code || "").trim().toUpperCase() === primary &&
-            primaryNetProfit != null
-          ) {
-            return row;
-          }
-          const hit = settled.find(
-            (entry) =>
-              entry &&
-              String(entry.code || "").toUpperCase() === String(row.code || "").toUpperCase()
-          );
-          return hit
-            ? {
-                code: row.code,
-                netProfit: hit.netProfit ?? row.netProfit,
-                earnings: hit.earnings ?? row.earnings,
-              }
-            : row;
-        });
-
-        return sanitizeDuplicateNonPrimaryEarnings(rows, primary, primaryEarnings);
-      } finally {
+          return { code, netProfit: null, earnings: null };
+        }
+      ).finally(() => {
         if (earningsParallelInFlightRef.current === guardKey) {
           earningsParallelInFlightRef.current = "";
         }
-      }
+      });
+    },
+    [groupAllMode, buildCurrencyRowFromPayload, loadMergedDashboard]
+  );
+
+  const loadEarningsParallelForAtomicPaint = useCallback(
+    async (
+      dashboardGen,
+      codes,
+      primaryCode,
+      primaryPayload,
+      scopeKeyForGuard = "",
+      othersSettledPromise = null
+    ) => {
+      const list = sortCurrencyCodesForBootstrap(
+        Array.isArray(codes) ? codes : []
+      );
+      if (list.length <= 1) return [];
+
+      const primary = String(primaryCode || "").trim().toUpperCase();
+      const primaryMetrics =
+        primaryPayload != null ? computeCurrencyMetricsFromPayload(primaryPayload) : null;
+      const primaryNetProfit = primaryMetrics?.netProfit ?? null;
+      const primaryEarnings = primaryMetrics?.earnings ?? null;
+
+      const settled = await (
+        othersSettledPromise ||
+        fetchEarningsOthersSettled(dashboardGen, codes, primaryCode, scopeKeyForGuard)
+      );
+
+      if (dashboardGen !== dashboardFetchGenRef.current) return [];
+
+      const rows = buildSeededEarningsRows(
+        list,
+        primary,
+        primaryNetProfit,
+        primaryEarnings
+      ).map((row) => {
+        if (
+          String(row.code || "").trim().toUpperCase() === primary &&
+          primaryNetProfit != null
+        ) {
+          return row;
+        }
+        const hit = (settled || []).find(
+          (entry) =>
+            entry &&
+            String(entry.code || "").toUpperCase() === String(row.code || "").toUpperCase()
+        );
+        return hit
+          ? {
+              code: row.code,
+              netProfit: hit.netProfit ?? row.netProfit,
+              earnings: hit.earnings ?? row.earnings,
+            }
+          : row;
+      });
+
+      return sanitizeDuplicateNonPrimaryEarnings(rows, primary, primaryEarnings);
     },
     [
-      groupAllMode,
       computeCurrencyMetricsFromPayload,
-      buildCurrencyRowFromPayload,
       buildSeededEarningsRows,
-      loadMergedDashboard,
+      fetchEarningsOthersSettled,
     ]
   );
 
@@ -5899,6 +5978,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       earningsScopeUpgradeRef.current = { scopeKey: upgradeKey, attempts: 1 };
     }
     earningsLoadInFlightRef.current = cacheKey;
+    let gen;
     try {
     const cached = getDashboardCache(cacheKey);
     const sharedEarnings = resolveScopeDashboardEarnings(currencies);
@@ -5915,7 +5995,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       !(mergedSubsetIds && mergedSubsetIds.length > 1) &&
       (companyId != null || groupAggregateMode);
 
-    const gen = ++earningsFetchGenRef.current;
+    gen = ++earningsFetchGenRef.current;
     if (!dashboardDataRef.current) {
       setEarningsByCurrency(currencies.map((code) => ({ code, earnings: null })));
       setEarningsByCurrencyPrev([]);
@@ -5925,10 +6005,16 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     if (canUseDashboardBootstrap && dashboardDataRef.current) {
       try {
         const rows = await loadEarningsProgressive(gen, { cacheKey });
-        if (gen !== earningsFetchGenRef.current) return;
+        if (gen !== earningsFetchGenRef.current) {
+          deferActiveScopeEarningsUpgrade(200);
+          return;
+        }
         if (dashboardEarningsRowsComplete(rows, currencies)) return;
       } catch {
-        if (gen !== earningsFetchGenRef.current) return;
+        if (gen !== earningsFetchGenRef.current) {
+          deferActiveScopeEarningsUpgrade(200);
+          return;
+        }
         /* fall back to bootstrap batch */
       }
     }
@@ -5936,7 +6022,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     setEarningsByCurrencyLoading(true);
 
     if (canUseDashboardBootstrap) {
-      if (dashboardBootstrapInFlightRef.current === cacheKey) return;
+      if (dashboardBootstrapInFlightRef.current === cacheKey) {
+        deferActiveScopeEarningsUpgrade(200);
+        return;
+      }
       try {
         // Prefer FE-parallel currency captures over one serial PHP currencies= fan-out.
         const rows = await loadEarningsParallelForAtomicPaint(
@@ -5945,7 +6034,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           currencyCodeRef.current,
           dashboardDataRef.current
         );
-        if (gen !== earningsFetchGenRef.current) return;
+        if (gen !== earningsFetchGenRef.current) {
+          deferActiveScopeEarningsUpgrade(200);
+          return;
+        }
         if (Array.isArray(rows) && rows.length > 1) {
           setEarningsByCurrency(rows);
           mirrorDashboardEarningsAcrossCurrencies(
@@ -5957,7 +6049,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         setEarningsByCurrencyLoading(false);
         return;
       } catch {
-        if (gen !== earningsFetchGenRef.current) return;
+        if (gen !== earningsFetchGenRef.current) {
+          deferActiveScopeEarningsUpgrade(200);
+          return;
+        }
         /* fall back to legacy per-currency fetch */
       }
     }
@@ -5966,7 +6061,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       ? () => fetchGroupAllEarningsRowsForRange(dateFrom, dateTo, gen, currencies)
       : () => fetchEarningsRowsForRange(dateFrom, dateTo, gen);
     const currentRows = await fetchCurrentRows();
-    if (gen !== earningsFetchGenRef.current) return;
+    if (gen !== earningsFetchGenRef.current) {
+      deferActiveScopeEarningsUpgrade(200);
+      return;
+    }
 
     setEarningsByCurrency(currentRows);
     setEarningsByCurrencyLoading(false);
@@ -5994,6 +6092,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       if (earningsLoadInFlightRef.current === cacheKey) {
         earningsLoadInFlightRef.current = "";
       }
+      // Safety net for the bail-outs above — none of them reset the loading flag
+      // themselves, so make sure it never stays stuck true once this attempt (if
+      // still current) is done, one way or another.
+      if (gen != null && gen === earningsFetchGenRef.current) {
+        setEarningsByCurrencyLoading(false);
+      }
     }
   }, [
     companyId,
@@ -6014,6 +6118,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     groupsAllMode,
     groupAllMode,
     mergedSubsetIds,
+    deferActiveScopeEarningsUpgrade,
   ]);
 
   /** Invalidate in-flight per-currency earnings when scope/date changes (not on currency list hydrate). */
@@ -6024,6 +6129,20 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     earningsScopeUpgradeRef.current = { scopeKey: "", attempts: 0 };
     dashboardFetchFailedScopeRef.current = "";
     dashboardStaleRetryRef.current = { scopeKey: "", attempts: 0 };
+    // Earnings rows are keyed by currency CODE, not by scope. Switching to a new
+    // date range while the currency set stays the same (the common case — the
+    // currency list follows the Group, not the date) left the previous scope's
+    // rows sitting in state. Every "is this complete?" check downstream — the
+    // thing that decides whether a fresh fetch is even needed — only checks
+    // whether each code has a non-null value, not whether that value belongs to
+    // the current scope, so it was reading those leftover rows as "already done"
+    // and skipping the fetch entirely. Clear them here, immediately, so nothing
+    // can be mistaken for current-scope data.
+    const codes = currenciesRef.current;
+    setEarningsByCurrency(
+      codes.length > 1 ? codes.map((code) => ({ code, earnings: null, netProfit: null })) : []
+    );
+    setEarningsByCurrencyPrev([]);
   }, [dateFrom, dateTo, companyId, selectedGroup, dashboardScopeKey]);
 
   /** Sync earnings rows when currency list or cache updates — do not abort parallel fetches on hydrate. */
@@ -6103,11 +6222,23 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       return;
     }
     if (dashboardDataRef.current) {
+      let keepVisible = false;
       setEarningsByCurrency((prev) => {
-        if (dashboardEarningsRowsComplete(prev, currencies, primary, primaryEarnings)) return prev;
+        if (dashboardEarningsRowsComplete(prev, currencies, primary, primaryEarnings)) {
+          keepVisible = true;
+          return prev;
+        }
+        // Keep a partial date-filter paint visible — reseeding would flash the card away.
+        if (
+          Array.isArray(prev) &&
+          prev.some((row) => row?.earnings != null || row?.netProfit != null)
+        ) {
+          keepVisible = true;
+          return prev;
+        }
         return buildSeededEarningsRows(currencies, primary, primaryNetProfit, primaryEarnings);
       });
-      setEarningsByCurrencyLoading(true);
+      setEarningsByCurrencyLoading(!keepVisible);
       deferActiveScopeEarningsUpgrade(120);
       return;
     }
@@ -6370,10 +6501,21 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         deferActiveScopeEarningsUpgrade(200);
         return;
       }
-      setEarningsByCurrency(
-        buildSeededEarningsRows(codes, primary, primaryNetProfit, primaryEarnings)
+      const existingRows = Array.isArray(earningsByCurrencyRef.current)
+        ? earningsByCurrencyRef.current
+        : [];
+      const hasPartialPaint = existingRows.some(
+        (row) => row?.earnings != null || row?.netProfit != null
       );
-      setEarningsByCurrencyLoading(true);
+      if (!hasPartialPaint) {
+        setEarningsByCurrency(
+          buildSeededEarningsRows(codes, primary, primaryNetProfit, primaryEarnings)
+        );
+        setEarningsByCurrencyLoading(true);
+      } else {
+        // Keep partial Currency card visible while gap-fill runs (date-filter path).
+        setEarningsByCurrencyLoading(false);
+      }
       earningsParallelInFlightRef.current = cacheKey;
       const earnGen = ++earningsFetchGenRef.current;
       try {
@@ -6383,8 +6525,19 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           earnGen,
           codes
         );
-        if (earnGen !== earningsFetchGenRef.current) return;
-        if (resolveDashboardScopeKey() !== cacheKey) return;
+        if (earnGen !== earningsFetchGenRef.current) {
+          // A newer attempt superseded this one — don't paint its (possibly stale)
+          // result, but still leave a follow-up check scheduled in case that newer
+          // attempt doesn't end up settling things either.
+          deferActiveScopeEarningsUpgrade(200);
+          return;
+        }
+        if (resolveDashboardScopeKey() !== cacheKey) {
+          // Scope moved on while this was in flight — re-check under whatever the
+          // live scope is now, rather than silently dropping this attempt.
+          deferActiveScopeEarningsUpgrade(200);
+          return;
+        }
         if (
           Array.isArray(rows) &&
           rows.length > 1 &&
@@ -6450,8 +6603,23 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
     const gen = ++earningsFetchGenRef.current;
 
+    // Gap-fill retry (e.g. one currency came back null on the first pass): if the card
+    // is already showing a usable partial paint, don't hide it again while this retry
+    // runs in the background — that snap-hide + later bloom-back-in is exactly the
+    // "flickers again after it's already fully shown" bug. Only show loading when there
+    // is nothing displayable yet. Mirrors the same guard already used in the group_all
+    // branch above (`hasPartialPaint`).
+    const existingEarningsRows = Array.isArray(earningsByCurrencyRef.current)
+      ? earningsByCurrencyRef.current
+      : [];
+    const hasPartialEarningsPaint = existingEarningsRows.some(
+      (row) => row?.earnings != null || row?.netProfit != null
+    );
+
     try {
-      setEarningsByCurrencyLoading(true);
+      if (!hasPartialEarningsPaint) {
+        setEarningsByCurrencyLoading(true);
+      }
       // FE-parallel kpi/earnings — never bootstrap_scope=earnings&currencies=… (PHP serial).
       const parallelRows = await loadEarningsParallelForAtomicPaint(
         dashboardFetchGenRef.current,
@@ -6945,12 +7113,54 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             cacheKey
           );
           const primaryBootstrapScope = longRange ? "full" : "kpi";
-          const boot = await loadDashboardViaBootstrap({
+          // Short ranges: fire chart alongside KPI instead of after it settles — same
+          // start time as the primary request, not a deferred follow-up. Long ranges
+          // already get chart bundled into "full" so there's nothing extra to start.
+          const chartBootPromise =
+            primaryBootstrapScope === "kpi"
+              ? loadDashboardViaBootstrap({ scope: "chart", currencyCodesOverride: [] }).catch(
+                  () => null
+                )
+              : null;
+          const bootPromise = loadDashboardViaBootstrap({
             scope: primaryBootstrapScope,
             currencyOverride: provisionalCurrency || undefined,
             // Empty array skips currencies= fan-out on the primary KPI/chart request.
             currencyCodesOverride: [],
           });
+
+          // Currency card: start its own per-currency fan-out a short beat after the
+          // primary request (not gated on it resolving) — lets the Currency card land
+          // close behind KPI/chart instead of always paying KPI/chart's time plus its
+          // own on top. The stagger gives the primary request first claim on the
+          // connection/server for that opening beat.
+          //
+          // Claim the in-flight guard NOW, not only once the timer fires — otherwise
+          // `paintBootstrap()`'s seed branch below (`void upgradeActiveScopeEarnings()`,
+          // which runs synchronously, no delay) checks the guard before this timer has
+          // set it, doesn't see anything in flight, and starts its own duplicate fetch.
+          // Both eventually resolve and paint — the second one lands after the card is
+          // already showing, snap-hides it back to loading, then blooms in again a beat
+          // later, which is the currency-card "flicker after it's already up" bug.
+          if (needsMultiCurrencyEarnings) {
+            earningsParallelInFlightRef.current = cacheKey;
+          }
+          const othersSettledPromise = needsMultiCurrencyEarnings
+            ? new Promise((resolve) => {
+                window.setTimeout(() => {
+                  resolve(
+                    fetchEarningsOthersSettled(
+                      gen,
+                      codesForEarnings || currenciesRef.current,
+                      currencyCodeRef.current || provisionalCurrency,
+                      cacheKey
+                    )
+                  );
+                }, EARNINGS_OTHERS_STAGGER_MS);
+              })
+            : null;
+
+          const boot = await bootPromise;
           if (gen !== dashboardFetchGenRef.current) return;
 
           let currentPayload = boot.current;
@@ -6978,13 +7188,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           const paintBootstrap = () => {
             if (!currentPayload || dashboardPayloadNeedsChartDaily(currentPayload)) return false;
             const pieCodes = codesForEarnings || currenciesRef.current;
-            const pieReady =
-              !needsMultiCurrencyEarnings ||
-              (Array.isArray(earningsCurrent) &&
-                earningsCurrent.length > 1 &&
-                dashboardEarningsRowsComplete(earningsCurrent, pieCodes));
-            if (requirePie && needsMultiCurrencyEarnings && !pieReady) return false;
-
+            // KPI/chart paint the instant their own data is ready — never wait on the
+            // Currency card's multi-currency earnings breakdown. When earnings aren't
+            // ready yet, this falls into the "seed placeholder rows, resolve in the
+            // background" branch below instead of blocking the whole paint.
             current = currentPayload;
             setMultiCurrencyKpi(null);
             setMultiCurrencyKpiPrev(null);
@@ -7028,10 +7235,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             return true;
           };
 
-          // Same-scope refresh: paint early. Scope swap waits for pie (gated in paintBootstrap).
-          if (!requirePie) {
-            paintBootstrap();
-          }
+          // Paint as early as possible — KPI/chart no longer wait on pie/earnings, so this
+          // succeeds on a scope swap too whenever chart data already came bundled (`full`).
+          paintBootstrap();
 
           const panelTasks = [];
 
@@ -7056,14 +7262,11 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             }
           }
 
-          if (dashboardPayloadNeedsChartDaily(currentPayload)) {
+          if (dashboardPayloadNeedsChartDaily(currentPayload) && chartBootPromise) {
             panelTasks.push(
               (async () => {
                 try {
-                  const chartBoot = await loadDashboardViaBootstrap({
-                    scope: "chart",
-                    currencyCodesOverride: [],
-                  });
+                  const chartBoot = await chartBootPromise;
                   if (gen !== dashboardFetchGenRef.current) return;
                   const withDaily = chartBoot?.current?.daily_data
                     ? { ...currentPayload, daily_data: chartBoot.current.daily_data }
@@ -7071,10 +7274,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                   currentPayload = markDashboardChartSettled(
                     applyDashboardPayloadAdjustments(withDaily, companyId, selectedGroup)
                   );
-                  if (!requirePie) paintBootstrap();
+                  paintBootstrap();
                 } catch {
                   currentPayload = markDashboardChartSettled(currentPayload);
-                  if (!requirePie) paintBootstrap();
+                  paintBootstrap();
                 }
               })()
             );
@@ -7092,7 +7295,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
                     codesForEarnings || currenciesRef.current,
                     currencyCodeRef.current || provisionalCurrency,
                     currentPayload,
-                    cacheKey
+                    cacheKey,
+                    othersSettledPromise
                   );
                   if (gen !== dashboardFetchGenRef.current) return;
                   if (Array.isArray(rows) && rows.length > 1) {
@@ -7153,7 +7357,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             painted = paintBootstrap();
           }
           if (requirePie && !painted) {
-            // Keep previous company UI — never swap KPI/chart ahead of complete pie.
+            // paintBootstrap() only fails here if chart data itself still isn't settled
+            // (pie/earnings no longer gate this) — keep the previous company UI until it is.
             // Single-currency first paint with a payload: exit skeleton (zeros OK).
             if (!dashboardDataRef.current && currentPayload && !needsMultiCurrencyEarnings) {
               currentPayload = markDashboardChartSettled(currentPayload);
@@ -7162,6 +7367,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
               return;
             }
             setLoading(true);
+            // Pie/earnings still incomplete after the parallel fan-out (e.g. one of several
+            // currency fetches failed) — always schedule a follow-up check here. Otherwise
+            // this dead-ends with nothing left watching to retry it.
+            deferActiveScopeEarningsUpgrade(200);
             return;
           }
           return;
@@ -7253,38 +7462,10 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
             bootEarnings.length > 1 &&
             dashboardEarningsRowsComplete(bootEarnings, codesForPie));
 
-        // Product: show only when KPI+chart+pie are complete — await pie before paint.
-        if (groupAllMode && needsMultiCurrencyEarnings && !pieReady && current) {
-          dashboardDataRef.current = current;
-          setEarningsByCurrencyLoading(true);
-          try {
-            const rows = await loadEarningsParallelForAtomicPaint(
-              gen,
-              codesForPie,
-              currencyCode,
-              current,
-              cacheKey
-            );
-            if (gen !== dashboardFetchGenRef.current) return;
-            if (
-              Array.isArray(rows) &&
-              rows.length > 1 &&
-              dashboardEarningsRowsComplete(rows, codesForPie)
-            ) {
-              bootEarnings = rows;
-              pieReady = true;
-            }
-          } catch {
-            /* pie remains incomplete — keep loading rather than paint a partial board */
-          }
-          if (gen !== dashboardFetchGenRef.current) return;
-          if (!pieReady) {
-            setLoading(true);
-            deferActiveScopeEarningsUpgrade(200);
-            return;
-          }
-        }
-
+        // Paint KPI/chart the instant their own payload is ready — never wait on the
+        // Currency card's pie/earnings breakdown (that used to hold up the whole page's
+        // skeleton: "never swap KPI/chart ahead of complete pie"). The Currency card
+        // resolves on its own below and reveals as one atomic unit whenever it lands.
         setDashboardData(current);
         dashboardDataRef.current = current;
         setDisplayScopeKey(cacheKey);
@@ -7294,28 +7475,79 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           current,
           previous: warmedGroupAll?.previous ?? cached?.previous ?? null,
         };
-        if (
-          groupAllMode &&
-          needsMultiCurrencyEarnings &&
-          pieReady &&
-          Array.isArray(bootEarnings)
-        ) {
-          setEarningsByCurrency(bootEarnings);
+
+        const applyEarningsPaint = (rows) => {
+          setEarningsByCurrency(rows);
           setEarningsByCurrencyPrev([]);
           setEarningsByCurrencyLoading(false);
-          cachePatch.earnings = bootEarnings;
-          mirrorDashboardEarningsAcrossCurrencies(
-            bootEarnings,
-            codesForPie,
-            resolveDashboardScopeKey
-          );
+          mirrorDashboardEarningsAcrossCurrencies(rows, codesForPie, resolveDashboardScopeKey);
+          const earningsCachePatch = { earnings: rows };
           // Drop ephemeral merge hint before caching the KPI payload.
           if (current && current._group_all_earnings_by_currency) {
             const { _group_all_earnings_by_currency: _drop, ...rest } = current;
             current = stampDashboardPayloadRange(rest, dateFrom, dateTo);
-            cachePatch.current = current;
+            earningsCachePatch.current = current;
             setDashboardData(current);
             dashboardDataRef.current = current;
+          }
+          patchDashboardCache(cacheKey, earningsCachePatch);
+        };
+
+        if (groupAllMode && needsMultiCurrencyEarnings) {
+          if (pieReady && Array.isArray(bootEarnings)) {
+            // Already have complete pie data (cache/synthesis) — paint together, now.
+            applyEarningsPaint(bootEarnings);
+            cachePatch.current = current;
+          } else {
+            // Currency card lags behind — resolve it independently so it never blocks
+            // the KPI/chart paint above. Seed primary so the reveal gate can pass once
+            // loading clears even if secondaries stay null after date-range fan-out.
+            const seedMetrics = computeCurrencyMetricsFromPayload(current);
+            setEarningsByCurrency(
+              buildSeededEarningsRows(
+                codesForPie,
+                currencyCode,
+                seedMetrics.netProfit,
+                seedMetrics.earnings
+              )
+            );
+            setEarningsByCurrencyLoading(true);
+            const earningsGen = gen;
+            (async () => {
+              let painted = false;
+              try {
+                const rows = await loadEarningsParallelForAtomicPaint(
+                  earningsGen,
+                  codesForPie,
+                  currencyCode,
+                  current,
+                  cacheKey
+                );
+                if (
+                  earningsGen === dashboardFetchGenRef.current &&
+                  Array.isArray(rows) &&
+                  rows.length > 1
+                ) {
+                  // Paint complete OR partial — waiting only for a full board left the
+                  // card opacity-0 after date filters when any secondary currency lagged.
+                  applyEarningsPaint(rows);
+                  painted = true;
+                  if (!dashboardEarningsRowsComplete(rows, codesForPie)) {
+                    deferActiveScopeEarningsUpgrade(200);
+                  }
+                }
+              } catch {
+                /* pie remains incomplete — retry below rather than leave loading stuck */
+              }
+              if (!painted) {
+                // Always reschedule, even if this attempt was superseded by a newer
+                // scope fetch — otherwise earningsByCurrencyLoading is left stuck true
+                // forever with nothing left watching to retry it. upgradeActiveScopeEarnings
+                // re-reads live state at call time, so it safely no-ops if a newer attempt
+                // already resolved things.
+                deferActiveScopeEarningsUpgrade(200);
+              }
+            })();
           }
         }
 
@@ -7468,6 +7700,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     upgradeActiveScopeEarnings,
     deferActiveScopeEarningsUpgrade,
     loadEarningsParallelForAtomicPaint,
+    fetchEarningsOthersSettled,
     buildSeededEarningsRows,
     computeCurrencyMetricsFromPayload,
     enrichGroupAllMergedDashboard,
@@ -7755,7 +7988,12 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       if (
         !dashboardDataRef.current ||
         dashboardBootstrapInFlightRef.current ||
-        dashboardFetchInFlightScopeRef.current
+        dashboardFetchInFlightScopeRef.current ||
+        // This is the broadest warm pass (every sibling group + company) — also wait
+        // out the active scope's own per-currency earnings fan-out, not just its main
+        // bootstrap call, so it never races the currency breakdown card for connections.
+        earningsByCurrencyLoading ||
+        earningsParallelInFlightRef.current
       ) {
         waitRounds += 1;
         if (waitRounds >= PREFETCH_WAIT_MAX_ROUNDS) return;
@@ -7797,7 +8035,9 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
       const drain = () => {
         if (cancelled || interactionGen !== scopeInteractionGenRef.current) return;
-        const batch = tasks.splice(0, 2);
+        // One at a time — this pass already covers every sibling group/company, so
+        // keep its footprint on shared PHP-FPM/DB capacity as small as possible.
+        const batch = tasks.splice(0, 1);
         if (!batch.length) return;
         void Promise.allSettled(batch.map((fn) => fn())).then(() => {
           if (tasks.length && !cancelled) {
@@ -7824,6 +8064,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     groupAllMode,
     groupIds,
     ledgerGroupIds,
+    earningsByCurrencyLoading,
     prefetchDashboardCompany,
     prefetchDashboardGroupLedger,
     shouldPrefetchCompanyScope,
@@ -7949,6 +8190,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       earningsScopeUpgradeRef.current.scopeKey === upgradeKey &&
       earningsScopeUpgradeRef.current.attempts >= EARNINGS_INCOMPLETE_RETRY_MAX
     ) {
+      // Retries exhausted — never leave the Currency card hidden behind loading.
+      setEarningsByCurrencyLoading(false);
       return undefined;
     }
 
@@ -8978,21 +9221,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         groupAllMode: false,
         mergedSubsetIds: null,
       });
-      if (gid && !groupsAllMode) {
-        window.setTimeout(() => {
-          if (switchGen !== companySwitchGenRef.current) return;
-          if (prefetchInteractionGen !== scopeInteractionGenRef.current) return;
-          for (const row of companiesForCompanyPicker(companies, gid, groupIds)) {
-            if (isVirtualGroupLinkCompanyRow(row)) continue;
-            if (companyRowIsGroupEntity(row, gid)) continue;
-            const rid = parseInt(row.id, 10);
-            if (!Number.isFinite(rid) || rid <= 0 || rid === id) continue;
-            if (!shouldPrefetchCompanyScope(rid, gid)) continue;
-            void prefetchDashboardCompany(row, gid);
-          }
-          void prefetchDashboardGroupAll(gid);
-        }, COMPANY_SWITCH_PREFETCH_DELAY_MS);
-      }
+      
       const sessionViewGroup = groupsAllMode ? null : (gid || null);
       window.setTimeout(() => {
         if (switchGen !== companySwitchGenRef.current) return;
@@ -9318,16 +9547,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     });
     notifyDashboardGroupFilterChanged(bootGroup, id);
     const bootRow = companies.find((co) => parseInt(co.id, 10) === id);
-    if (bootRow) {
-      const deferBootPrefetch = () => {
-        if (!dashboardDataRef.current || dashboardFetchInFlightScopeRef.current) {
-          window.setTimeout(deferBootPrefetch, 400);
-          return;
-        }
-        void prefetchDashboardCompany(bootRow, bootGroup);
-      };
-      window.setTimeout(deferBootPrefetch, 0);
-    }
     void syncCompanySession(id, bootGroup);
   }, [
     gcBootstrapReady,

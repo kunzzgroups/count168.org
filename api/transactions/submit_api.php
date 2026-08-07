@@ -557,12 +557,12 @@ try {
             $rate_middleman_account_id = !empty($_POST['rate_middleman_account_id']) ? (int)$_POST['rate_middleman_account_id'] : null;
             if (
                 $rate_platform_fee_amount !== null
-                && money_cmp($rate_platform_fee_amount, '0') > 0
+                && money_cmp($rate_platform_fee_amount, '0') !== 0
                 && !$rate_middleman_account_id
             ) {
                 throw new Exception('Platform Fee 必须选择 Middle-Man Account');
             }
-            if ($rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') > 0) {
+            if ($rate_platform_fee_amount !== null && money_cmp($rate_platform_fee_amount, '0') !== 0) {
                 $mm = tx_fetch_account_row($pdo, (int) $rate_middleman_account_id, $listScope);
                 if (!$mm) {
                     throw new Exception('Rate Middleman Account 不存在或不属于当前范围');
@@ -752,7 +752,7 @@ try {
                     $rate_transfer_to_description
                 ]);
                 
-                if ($rate_middleman_account_id && $rate_middleman_amount !== null && money_cmp($rate_middleman_amount, '0') > 0) {
+                if ($rate_middleman_account_id && $rate_middleman_amount !== null && money_cmp($rate_middleman_amount, '0') !== 0) {
                     if (!tx_fetch_account_row($pdo, (int) $rate_middleman_account_id, $listScope)) {
                         throw new Exception('Rate Middleman Account 不存在或不属于当前范围');
                     }
@@ -762,7 +762,7 @@ try {
                         'transaction_type' => 'RATE',
                         'account_id' => $rate_middleman_account_id,
                         'from_account_id' => null,
-                        'amount' => $rate_middleman_amount,
+                        'amount' => money_abs($rate_middleman_amount),
                         'transaction_date' => $transaction_date_db,
                         'description' => $rate_middleman_description,
                         'sms' => $sms,
@@ -951,7 +951,7 @@ try {
                         : 'charge PlatForm Fee';
 
                     $middlemanRowInserted = false;
-                    if ($rate_middleman_account_id && $rate_middleman_amount !== null && money_cmp($rate_middleman_amount, '0') > 0) {
+                    if ($rate_middleman_account_id && $rate_middleman_amount !== null && money_cmp($rate_middleman_amount, '0') !== 0) {
                         $middleAmount = submitStoreAmount($rate_middleman_amount, SUBMIT_STORE_SCALE_RATE);
                         $middleCurrencyId = (int)$rate_middleman_currency_id ?: $myrCurrencyId;
                         $middleEntryDescription = $rate_middleman_description;

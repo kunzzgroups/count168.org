@@ -3,8 +3,8 @@
    Desktop / laptop: design-tokens + global-13inch. Tablet: ≤1024. No phone UX.
    ========================================================================== */
 
-/* --- Tablet / narrow (≤1366)：布局锁死；字号/间距跟 Acc，不再单独压扁 --- */
-@media (max-width: 1366px) {
+/* --- Tablet / narrow (≤1550)：布局锁死；字号/间距跟 Acc，不再单独压扁 --- */
+@media (max-width: 1550px) {
   body.user-page .container {
     padding-right: clamp(12px, 1.5vw, 24px);
   }
@@ -100,8 +100,42 @@
     box-sizing: border-box;
   }
 
+  /*
+   * 窄屏列宽再分配：Role/Status 现在会安全省略号收缩，不再需要大量保留宽度；
+   * 把让出来的空间给 Email（信箱本来就比 Role/Status 更长更重要，避免被硬截断看不清）。
+   * 选择器必须至少匹配 global-13inch.css 的 body.ec-auth-shell.user-page .user-list-table
+   * （≤1440px 也会命中，且优先级是 3 个 class），否则在 1024–1440px 之间会被那条旧规则盖掉。
+   */
+  body.ec-auth-shell.user-page .user-list-table,
+  body.ec-auth-shell.lang-zh.user-page .user-list-table,
+  body.user-page .user-list-table,
+  body.lang-zh.user-page .user-list-table {
+    --user-list-grid-cols:
+      38px
+      minmax(100px, 1.2fr)
+      minmax(100px, 1.2fr)
+      minmax(200px, 1.9fr)
+      minmax(90px, 0.5fr)
+      minmax(64px, 0.45fr)
+      minmax(110px, 0.9fr)
+      minmax(84px, 1fr)
+      minmax(64px, 0.25fr);
+    --user-list-grid-cols-bulk:
+      38px
+      minmax(100px, 1.2fr)
+      minmax(100px, 1.2fr)
+      minmax(200px, 1.9fr)
+      minmax(90px, 0.5fr)
+      minmax(64px, 0.45fr)
+      minmax(110px, 0.9fr)
+      minmax(84px, 1fr)
+      minmax(60px, 0.23fr)
+      48px;
+  }
+
   body.user-page .user-list-table .user-list-row .card-item:nth-child(3),
-  body.user-page .user-list-table .user-list-row .card-item:nth-child(4) {
+  body.user-page .user-list-table .user-list-row .card-item:nth-child(4),
+  body.user-page .user-list-table .user-list-row .card-item:nth-child(6) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -168,7 +202,12 @@
     font-weight: 700 !important;
     padding: 0 8px !important;
     line-height: 1.1 !important;
-    min-width: max-content !important;
+    /* 窄屏防溢出压住下一列：收缩 + 省略号，而不是强制 max-content 撑出格外宽度 */
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex-shrink: 1 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     border-width: 1px !important;
     border-radius: 6px !important;
   }

@@ -8,7 +8,8 @@ import {
   shouldRestoreFromUrl,
   stripRestoreParamFromUrl,
 } from "../lib/dataCaptureStorage.js";
-import { isGroupOnlyProcessId, isGroupPayrollDraftProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
+import { isGroupOnlyProcessId } from "../lib/dataCaptureGroupOnlyProcesses.js";
+import { resolvePayrollDraftProcessKey } from "../lib/dataCaptureGamesPayrollProcesses.js";
 import {
   cancelAllScheduledServerDraftSaves,
   flushGroupOnlyTableDraftToServer,
@@ -67,6 +68,7 @@ function buildProcessCapturePayload(form, captureType, currencies, selectedDescr
     process: form.selectedProcess?.id,
     processName: form.selectedProcess?.displayText || "",
     processCode: form.selectedProcess?.process_id || "",
+    enableSaveDraft: Boolean(form.selectedProcess?.enable_save_draft),
     dataCaptureType: captureType,
     descriptions: getActiveDescriptions(form.descriptionDisplay, selectedDescriptions),
     currency: form.currencyId,
@@ -216,20 +218,17 @@ export function useDataCaptureSubmitReset({
       }
 
       const draftBucket = payrollDraftBucket || selectedGroup;
-      if (
-        groupPayrollUi &&
-        draftBucket &&
-        isGroupPayrollDraftProcessId(form.selectedProcess?.id)
-      ) {
+      const draftProcessKey = resolvePayrollDraftProcessKey(form.selectedProcess, groupPayrollUi);
+      if (draftBucket && draftProcessKey) {
         const draftPayload = {
           tableData: preConvertSnapshot,
           captureType: activeCaptureType,
         };
         const draftOptions = { captureScope, serverSync: payrollDraftServerSync };
-        saveGroupOnlyTableDraft(draftBucket, form.selectedProcess.id, form.currencyId, draftPayload, draftOptions);
+        saveGroupOnlyTableDraft(draftBucket, draftProcessKey, form.currencyId, draftPayload, draftOptions);
         await flushGroupOnlyTableDraftToServer(
           draftBucket,
-          form.selectedProcess.id,
+          draftProcessKey,
           form.currencyId,
           draftPayload,
           captureScope,
@@ -275,27 +274,25 @@ export function useDataCaptureSubmitReset({
 
   const reset = useCallback(() => {
     const draftBucket = payrollDraftBucket || selectedGroup;
-    const groupOnlyProcessId =
-      groupPayrollUi && draftBucket && isGroupPayrollDraftProcessId(form.selectedProcess?.id)
-        ? form.selectedProcess.id
-        : null;
+    const draftProcessKey = resolvePayrollDraftProcessKey(form.selectedProcess, groupPayrollUi);
+
+    if (draftBucket && draftProcessKey && form.currencyId) {
+      const activeCaptureType = getBridgeCaptureType(captureType || "1.Text");
+      const tableData = captureTableSnapshot(activeCaptureType, gridRef.current);
+      if (tableSnapshotHasData(tableData)) {
+        saveGroupOnlyTableDraft(
+          draftBucket,
+          draftProcessKey,
+          form.currencyId,
+          { tableData, captureType: activeCaptureType },
+          { captureScope, flush: true, serverSync: payrollDraftServerSync },
+        );
+      } else {
+        cancelAllScheduledServerDraftSaves();
+      }
+    }
 
     if (groupPayrollUi && draftBucket) {
-      if (groupOnlyProcessId && form.currencyId) {
-        const activeCaptureType = getBridgeCaptureType(captureType || "1.Text");
-        const tableData = captureTableSnapshot(activeCaptureType, gridRef.current);
-        if (tableSnapshotHasData(tableData)) {
-          saveGroupOnlyTableDraft(
-            draftBucket,
-            groupOnlyProcessId,
-            form.currencyId,
-            { tableData, captureType: activeCaptureType },
-            { captureScope, flush: true, serverSync: payrollDraftServerSync },
-          );
-        } else {
-          cancelAllScheduledServerDraftSaves();
-        }
-      }
       callDataCaptureRuntime("clearGroupOnlyProcessForTableReset");
     } else {
       callDataCaptureRuntime("reactFormReset");
@@ -327,7 +324,7 @@ export function useDataCaptureSubmitReset({
     selectedGroup,
     captureScope,
     captureType,
-    form.selectedProcess?.id,
+    form.selectedProcess,
     form.currencyId,
     clearSelectedDescriptions,
     gridRef,
