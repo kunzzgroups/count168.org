@@ -1,20 +1,17 @@
 <?php
 /**
- * Org 本地/服务器覆盖（复制为 config.local.php，已在 .gitignore）
+ * EC2 / 本地覆盖数据库（复制为 config.local.php，已在 .gitignore）
  *
  *   cp includes/config.local.php.example includes/config.local.php
- *
- * 本仓库应对 c168_org，不要写成 test 的 u857194726_count_site / c168site。
  */
 $host = '127.0.0.1';
-$dbname = 'c168_org';
+$dbname = 'u857194726_c168site';
 $dbuser = 'admin';
 $dbpass = 'C168_site';
 
 // Transaction Payment realtime (SSE hub). Empty secret = disabled.
 // Must match services/tx-realtime/.env TX_REALTIME_SECRET
-// Org EC2 uses port 3912 (site uses 3911) — do not copy site values.
 $tx_realtime_secret = '';
-$tx_realtime_publish_url = 'http://127.0.0.1:3912/publish';
+$tx_realtime_publish_url = 'http://127.0.0.1:3911/publish';
 // Optional explicit toggle; omit or null = enabled when secret is non-empty
 // $tx_realtime_enabled = true;

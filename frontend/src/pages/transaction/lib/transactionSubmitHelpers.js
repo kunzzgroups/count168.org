@@ -89,7 +89,7 @@ export function parseMiddlemanRateInput(raw) {
  * - "multiply" mode（Rate-Mul 输入纯正数）：
  *   - FX Rate 本身也是 `/divisor`：点数直接用，rateMulCommission = mul × 1000（独立玩法，不套用上面公式）
  *   - FX Rate 本身是乘法写法：Rate-Mul 当作「新汇率」，
- *     rateMulCommission = (mul − 原汇率) × fromAmount
+ *     rateMulCommission = (原汇率 − mul) × fromAmount（乘法与除法方向一致：输入越小，拿的越多）
  *     结果为负属于「倒贴」情形，仍允许；FX Rate 无法解析时：忽略（0）
  */
 export function computeRateMulCommission({ fromAmount, middlemanRate, exchangeRateRaw }) {

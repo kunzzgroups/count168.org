@@ -356,7 +356,7 @@
   font-size: clamp(28px, 9vw, 40px);
   font-weight: 700;
   line-height: 1;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -625,12 +625,13 @@
 
 .m-dash-card-badge {
   flex-shrink: 0;
-  border-radius: 0.5rem;
-  background: #f8fafc;
-  padding: 0.25rem 0.625rem;
-  font-size: var(--m-text-secondary);
+  border-radius: 999px;
+  background: rgba(118, 118, 128, 0.12);
+  padding: 0.2rem 0.55rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: var(--m-color-muted);
+  letter-spacing: -0.01em;
+  color: #636366;
 }
 
 .m-dash-card-empty {
@@ -820,6 +821,104 @@
   padding: 0.875rem 1.25rem;
 }
 
+/* Grouped earnings panel — one card, pie + list */
+.m-dash-earnings-panel {
+  overflow: hidden;
+}
+
+.m-dash-earnings-panel-top {
+  padding: 1rem 1.15rem 1.1rem;
+}
+
+.m-dash-earnings-panel--segmented .m-dash-earnings-panel-top {
+  padding-top: 0.85rem;
+}
+
+.m-dash-earnings-panel-footer {
+  border-top: 1px solid rgba(60, 60, 67, 0.08);
+  background: rgba(242, 242, 247, 0.45);
+}
+
+.m-dash-currency-list--embedded .m-dash-currency-rows > li + li {
+  border-top-color: rgba(60, 60, 67, 0.08);
+}
+
+.m-dash-currency-list--embedded .m-dash-currency-row {
+  padding: 0.8rem 1.15rem;
+}
+
+/* iOS segmented control */
+.m-dash-segment {
+  --seg-count: 2;
+  --seg-index: 0;
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--seg-count), minmax(0, 1fr));
+  align-items: stretch;
+  margin: 0 0 0.9rem;
+  padding: 2px;
+  height: 2rem;
+  border-radius: 9px;
+  background: rgba(118, 118, 128, 0.12);
+  box-shadow: inset 0 0.5px 0 rgba(0, 0, 0, 0.04);
+}
+
+.m-dash-segment-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--seg-count));
+  border-radius: 7px;
+  background: #fff;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.04),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  transform: translate3d(calc(var(--seg-index) * 100%), 0, 0);
+  transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+.m-dash-segment-btn {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0 0.2rem;
+  background: transparent;
+  color: #3a3a3c;
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  transition: color 160ms ease-out, opacity 100ms ease-out;
+}
+
+.m-dash-segment-btn.is-active {
+  color: #1c1c1e;
+  font-weight: 600;
+}
+
+.m-dash-segment-btn.is-pressed {
+  opacity: 0.55;
+}
+
+.m-dash-segment-label {
+  overflow: hidden;
+  max-width: 100%;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m-dash-segment-thumb {
+    transition: none;
+  }
+}
+
 .m-dash-currency-flag {
   display: grid;
   width: 2.5rem;
@@ -830,6 +929,14 @@
   background: #f8fafc;
   font-size: 1.125rem;
   outline: 1px solid var(--m-color-ring-soft);
+}
+
+.m-dash-currency-flag--company {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  outline: none;
 }
 
 .m-dash-currency-main {
@@ -917,6 +1024,8 @@
   font-size: 1.375rem;
   font-weight: 700;
   line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
   color: var(--m-color-text);
 }
 
@@ -973,4 +1082,66 @@
   font-size: var(--m-text-secondary);
   font-weight: 600;
   color: var(--m-color-label);
+}
+
+.m-dash-hero-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.m-dash-access-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.m-dash-access-box {
+  width: min(100%, 22rem);
+  border-radius: 1.25rem;
+  background: #fff;
+  padding: 1.5rem 1.25rem 1.25rem;
+  box-shadow: 0 1.25rem 2.5rem rgba(15, 23, 42, 0.18);
+  text-align: center;
+}
+
+.m-dash-access-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #d97706;
+  font-size: 1.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.m-dash-access-title {
+  margin: 0;
+  font-size: clamp(1.6rem, 0.3125vw + 1.2rem, 1.8rem);
+  font-weight: 800;
+  color: var(--m-color-text, #0f172a);
+}
+
+.m-dash-access-message {
+  margin: 0.625rem 0 1.25rem;
+  font-size: clamp(1.4rem, 0.3125vw + 1.0rem, 1.6rem);
+  line-height: 1.45;
+  color: var(--m-color-text-secondary, #475569);
+}
+
+.m-dash-access-btn {
+  width: 100%;
+  border: 0;
+  border-radius: 0.875rem;
+  padding: 0.85rem 1rem;
+  font-size: clamp(1.4rem, 0.3125vw + 1.0rem, 1.6rem);
+  font-weight: 700;
+  color: #fff;
+  background: #2563eb;
 }

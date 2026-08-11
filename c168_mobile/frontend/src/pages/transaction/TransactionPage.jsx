@@ -76,14 +76,21 @@ export default function TransactionPage() {
       const accountCurrency = account.currency ? String(account.currency).trim().toUpperCase() : "";
       const currency = rowCurrency || accountCurrency || "";
 
+      // Desktop: prefer balance_full for store precision; display still half-up 2.
+      const balAttr =
+        row?.balance_full != null && String(row.balance_full).trim() !== ""
+          ? row.balance_full
+          : row?.balance;
       let amount = "";
-      const balRaw = row?.balance;
-      const parsed = parseBalanceValue(String(balRaw ?? "").replace(/,/g, ""));
+      let amountFull = "";
+      const parsed = parseBalanceValue(String(balAttr ?? "").replace(/,/g, ""));
       if (parsed !== null) {
         try {
-          amount = MoneyDecimal.formatFixedHalfUp(MoneyDecimal.abs(String(balRaw)).toString(), 2);
+          amountFull = MoneyDecimal.abs(String(balAttr)).toString();
+          amount = MoneyDecimal.formatFixedHalfUp(amountFull, 2);
         } catch {
-          amount = MoneyDecimal.formatFixedHalfUp(String(Math.abs(parsed)), 2);
+          amountFull = String(Math.abs(parsed));
+          amount = MoneyDecimal.formatFixedHalfUp(amountFull, 2);
         }
       }
 
@@ -92,6 +99,7 @@ export default function TransactionPage() {
         side: side === "right" ? "right" : "left",
         account,
         amount,
+        amountFull,
         currency,
       });
       setAddOpen(true);
@@ -171,13 +179,15 @@ export default function TransactionPage() {
         <ToggleChip active={tx.showZeroBalance} onClick={() => tx.setShowZeroBalance(!tx.showZeroBalance)}>
           {tx.m.showZeroBalance}
         </ToggleChip>
-        {tx.typeSearchActive ? (
+        {tx.typeSearchActive || tx.submitFocusActive ? (
           <ToggleChip active onClick={() => tx.exitTypeSearch()}>
-            {tx.typeSearchFormType || tx.m.search}
+            {tx.typeSearchFormType || tx.m.search || tx.m.exitTypeSearchAndRefresh}
           </ToggleChip>
         ) : null}
       </div>
-      {tx.typeSearchActive ? <p className="m-tx-type-hint">{tx.m.pullToExitTypeSearch}</p> : null}
+      {tx.typeSearchActive || tx.submitFocusActive ? (
+        <p className="m-tx-type-hint">{tx.m.pullToExitTypeSearch}</p>
+      ) : null}
     </div>
   );
 
@@ -228,7 +238,7 @@ export default function TransactionPage() {
               tx.runTypeSearch(t);
               setAddOpen(false);
             }}
-            typeSearchActive={tx.typeSearchActive}
+            typeSearchActive={tx.listFocusActive || tx.typeSearchActive}
             onExitTypeSearch={tx.exitTypeSearch}
             prefill={addPrefill}
             onPrefillConsumed={() => setAddPrefill(null)}

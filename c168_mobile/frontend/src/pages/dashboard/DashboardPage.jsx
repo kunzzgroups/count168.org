@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import MobileShell from "../../components/layout/MobileShell.jsx";
 import { useMobileDashboard } from "../../hooks/useMobileDashboard.js";
+import CompanyAccessModal from "./CompanyAccessModal.jsx";
 import CurrencyDistributionCard from "./CurrencyDistributionCard.jsx";
 import CurrencyListCard from "./CurrencyListCard.jsx";
 import DashboardKpiCard from "./DashboardKpiCard.jsx";
 import DashboardTrendChart from "./DashboardTrendChart.jsx";
+import EarningsSegmentControl from "./EarningsSegmentControl.jsx";
 import FilterSheet from "./FilterSheet.jsx";
 import HeroSummaryCard from "./HeroSummaryCard.jsx";
 import ScopeBreadcrumb from "./ScopeBreadcrumb.jsx";
@@ -23,6 +25,7 @@ export default function DashboardPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [ratesHintDismissed, setRatesHintDismissed] = useState(false);
   const [heroMetric, setHeroMetric] = useState("net");
+  const handleHeroSelect = useCallback((variant) => setHeroMetric(variant), []);
   const ratesHint = dash.ratesWarning && !ratesHintDismissed ? dash.ratesWarning : "";
 
   useEffect(() => {
@@ -42,6 +45,21 @@ export default function DashboardPage() {
       .filter((_, i) => i % step === 0 || i === rows.length - 1)
       .map((r) => Number(r[dataKey]) || 0);
   }, [dash.chartRows, heroMetric]);
+
+  const earningsSegmentTabs = useMemo(() => {
+    if (!dash.showSummaryPanelTabs) return [];
+    const tabs = [{ id: "currency", label: i18n.earningsChartTab }];
+    if (dash.showNetProfitForTab) tabs.push({ id: "netProfitFor", label: i18n.netProfitChartTab });
+    if (dash.showEarningPanelTab) tabs.push({ id: "earning", label: i18n.earningChartTab });
+    return tabs;
+  }, [
+    dash.showSummaryPanelTabs,
+    dash.showNetProfitForTab,
+    dash.showEarningPanelTab,
+    i18n.earningsChartTab,
+    i18n.netProfitChartTab,
+    i18n.earningChartTab,
+  ]);
 
   if (blocked) return null;
 
@@ -133,6 +151,13 @@ export default function DashboardPage() {
       overlayOpen={filterOpen}
       overlay={<FilterSheet open={filterOpen} onClose={() => setFilterOpen(false)} dash={dash} />}
     >
+      <CompanyAccessModal
+        open={Boolean(dash.accessModal?.open)}
+        title={i18n.notice || "Notice"}
+        message={dash.accessModal?.message || ""}
+        confirmText={i18n.confirm || "Confirm"}
+        onClose={dash.closeAccessModal}
+      />
       <div className="m-dash-page">
         <div className="m-dash-glow" aria-hidden="true" />
 
@@ -193,14 +218,14 @@ export default function DashboardPage() {
                 <button type="button" className="m-dash-empty-action tap-scale" onClick={dash.retry}>
                   {i18n.retry || "Retry"}
                 </button>
-              ) : dash.activePreset !== "thisYear" ? (
+              ) : dash.activePreset !== "thisMonth" ? (
                 <button
                   type="button"
                   className="m-dash-empty-action tap-scale"
                   disabled={Boolean(refreshing)}
-                  onClick={() => dash.applyPreset("thisYear")}
+                  onClick={() => dash.applyPreset("thisMonth")}
                 >
-                  {refreshing ? i18n.loading : i18n.viewThisYear || i18n.thisYear}
+                  {refreshing ? i18n.loading : i18n.viewThisMonth || i18n.thisMonth}
                 </button>
               ) : refreshing ? (
                 <p className="m-dash-empty-loading">{i18n.loading}</p>
@@ -223,7 +248,7 @@ export default function DashboardPage() {
                   compareLabel={compareLabel}
                   loading={loading}
                   selected={heroMetric === card.variant}
-                  onSelect={() => setHeroMetric(card.variant)}
+                  onSelect={handleHeroSelect}
                 />
               ))}
             </div>
@@ -244,21 +269,50 @@ export default function DashboardPage() {
           <CurrencyDistributionCard
             i18n={i18n}
             currencyCode={dash.currency}
-            rows={dash.earningsCurrencyRows}
+            rows={dash.panelCurrencyRows}
             useConverted={dash.useConvertedEarnings}
             loading={loading}
-            note={dash.useConvertedEarnings ? i18n.multiCurrencyNote : ""}
-          />
-
-          <CurrencyListCard
-            i18n={i18n}
-            lang={dash.lang}
-            currencyCode={dash.currency}
-            rows={dash.earningsCurrencyRows}
-            exchangeRates={dash.exchangeRates}
-            exchangeRatesLoading={dash.exchangeRatesLoading}
-            useConverted={dash.useConvertedEarnings}
-            loading={loading}
+            note={
+              dash.earningsPanelView !== "netProfitFor" && dash.useConvertedEarnings
+                ? i18n.multiCurrencyNote
+                : ""
+            }
+            title={
+              dash.earningsPanelView === "earning"
+                ? i18n.earnings
+                : dash.earningsPanelView === "netProfitFor"
+                  ? i18n.netProfitCompanyCaption || i18n.netProfit
+                  : i18n.currencyDistribution
+            }
+            badgeLabel={
+              dash.earningsPanelView === "netProfitFor" ? i18n.companies || i18n.company : i18n.currency
+            }
+            isCompanyBreakdown={dash.earningsPanelView === "netProfitFor"}
+            tabs={
+              earningsSegmentTabs.length >= 2 ? (
+                <EarningsSegmentControl
+                  ariaLabel={i18n.statistics}
+                  tabs={earningsSegmentTabs}
+                  value={dash.earningsPanelView}
+                  onChange={dash.setEarningsPanelView}
+                />
+              ) : null
+            }
+            footer={
+              <CurrencyListCard
+                i18n={i18n}
+                lang={dash.lang}
+                currencyCode={dash.currency}
+                rows={dash.panelCurrencyRows}
+                exchangeRates={dash.exchangeRates}
+                exchangeRatesLoading={dash.exchangeRatesLoading}
+                useConverted={dash.useConvertedEarnings}
+                loading={loading}
+                embedded
+                hideTitle
+                isCompanyBreakdown={dash.earningsPanelView === "netProfitFor"}
+              />
+            }
           />
             </>
           )}

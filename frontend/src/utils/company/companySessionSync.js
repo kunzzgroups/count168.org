@@ -2,11 +2,52 @@ import { buildApiUrl } from "../core/apiUrl.js";
 import { notifyCompanySessionUpdated } from "./companySessionEvents.js";
 import { rememberCompanySessionFlags } from "./companySessionFlagsCache.js";
 import {
+  findOwnerCompanyById,
   notifyDashboardGroupFilterChanged,
   persistDashboardFilterState,
   persistDashboardGroupFilter,
   readDashboardSelectedCompanyId,
 } from "./sharedCompanyFilter.js";
+
+/**
+ * Resolve the C168 company PK that Domain / Announcement / Auto Renew APIs need.
+ * Prefers sessionStorage selection when that row is C168 (UI can lead PHP session).
+ * @param {object|null|undefined} me
+ * @returns {number|null}
+ */
+export function resolveC168DomainSessionTargetId(me) {
+  const persistedId = readDashboardSelectedCompanyId();
+  if (persistedId != null) {
+    const row = findOwnerCompanyById(persistedId);
+    if (String(row?.company_id || "").trim().toUpperCase() === "C168") {
+      return Number(persistedId);
+    }
+  }
+  if (!me) return null;
+  const code = String(me.company_code || "").trim().toUpperCase();
+  const id = Number(me.company_id);
+  if ((code === "C168" || Boolean(me.is_current_company_c168)) && Number.isFinite(id) && id > 0) {
+    return id;
+  }
+  return null;
+}
+
+/**
+ * Align PHP session to C168 before Domain-family APIs.
+ * Always await update_company_session — do not trust optimistic `me.company_id`
+ * (sidebar patches C168 before PHP finishes; short-circuit would still 403 list).
+ * Do NOT notifyCompanySessionUpdated here: that patches `me` → Domain useEffect
+ * re-runs → sync again → request storm (update_company_session + current_user + domain_api).
+ * @param {object|null|undefined} me
+ * @returns {Promise<boolean>}
+ */
+export async function ensureC168DomainApiSession(me) {
+  const targetId = resolveC168DomainSessionTargetId(me);
+  if (targetId == null) return false;
+
+  const json = await syncCompanySessionApi(targetId);
+  return Boolean(json?.success);
+}
 
 /** @type {Map<string, Promise<object>>} */
 const sessionSyncInflight = new Map();

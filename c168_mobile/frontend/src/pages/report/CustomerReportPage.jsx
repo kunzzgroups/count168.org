@@ -8,13 +8,16 @@ import {
   fetchCustomerReport,
   fetchReportCurrencies,
   formatReportAmount,
+  reportAmountAdd,
 } from "../../lib/reportApi.js";
 import {
   maintenanceScopeIsReady,
   maintenanceScopeKey,
 } from "../../lib/mobileMaintenanceScope.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
 import { reportText } from "../../translateFile/reportTranslate.js";
-import { canAccessReport } from "../../utils/mobilePermissions.js";
+import { canShowReportEntry } from "../../utils/mobilePermissions.js";
 import { ReportFilterBar, ReportFilterSheet } from "./ReportSheets.jsx";
 import "./report.css";
 
@@ -45,7 +48,7 @@ function CustomerTotalStrip({ i18n, totals }) {
 }
 
 export default function CustomerReportPage() {
-  const s = useMaintenanceSession({ canAccess: canAccessReport });
+  const s = useMaintenanceSession({ canAccess: canShowReportEntry });
   const i18n = useMemo(() => reportText(s.lang), [s.lang]);
   const { scope } = s;
 
@@ -69,10 +72,10 @@ export default function CustomerReportPage() {
   const scopeCacheKey = maintenanceScopeKey(scope);
 
   const loadList = useCallback(
-    async (signal) => {
+    async (signal, { soft = false } = {}) => {
       if (!scopeReady) return;
       const seq = ++seqRef.current;
-      setListLoading(true);
+      if (!soft) setListLoading(true);
       setListError("");
       try {
         const json = await fetchCustomerReport(
@@ -96,11 +99,13 @@ export default function CustomerReportPage() {
         );
       } catch (e) {
         if (e?.name === "AbortError" || seq !== seqRef.current) return;
-        setListError(e?.message || i18n.loadFailed);
-        setRows([]);
-        setTotals(null);
+        if (!soft) {
+          setListError(e?.message || i18n.loadFailed);
+          setRows([]);
+          setTotals(null);
+        }
       } finally {
-        if (seq === seqRef.current) setListLoading(false);
+        if (seq === seqRef.current && !soft) setListLoading(false);
       }
     },
     [
@@ -145,6 +150,14 @@ export default function CustomerReportPage() {
     return () => ac.abort();
   }, [s.me, scopeReady, scopeCacheKey, scope]);
 
+  useRealtimeDomain(
+    REALTIME_DOMAINS.LEDGER,
+    () => {
+      loadList(undefined, { soft: true });
+    },
+    { enabled: Boolean(s.me) && scopeReady },
+  );
+
   useEffect(() => {
     if (!s.me || !scopeReady) return undefined;
     const ac = new AbortController();
@@ -181,16 +194,31 @@ export default function CustomerReportPage() {
     return [...map.entries()];
   }, [displayRows]);
 
-  const scopeLabel = s.groupMode
-    ? s.selectedGroup || i18n.group
-    : String(s.selectedCompany?.company_id || "").toUpperCase() || i18n.company;
+  const multiCurrency = grouped.length > 1;
+  const currencySubtotals = useMemo(() => {
+    const out = new Map();
+    for (const [currency, items] of grouped) {
+      out.set(currency, {
+        win: items.reduce((acc, row) => reportAmountAdd(acc, row.win), "0"),
+        lose: items.reduce((acc, row) => reportAmountAdd(acc, row.lose), "0"),
+      });
+    }
+    return out;
+  }, [grouped]);
+
+  const scopeLabel = s.groupsAllMode
+    ? i18n.allGroups || `${i18n.all} Groups`
+    : s.groupMode
+      ? s.selectedGroup || i18n.group
+      : String(s.selectedCompany?.company_id || "").toUpperCase() || i18n.company;
 
   const applyWithBankGuard = useCallback(
     async (next) => {
       const scopeChanged =
         next.scope.mode !== scope?.mode ||
         String(next.scope.groupId ?? "") !== String(scope?.groupId ?? "") ||
-        Number(next.scope.companyId ?? 0) !== Number(scope?.companyId ?? 0);
+        Number(next.scope.companyId ?? 0) !== Number(scope?.companyId ?? 0) ||
+        Boolean(next.scope.mode === "groupsAll") !== Boolean(scope?.mode === "groupsAll");
 
       if (scopeChanged && next.scope.mode === "company" && next.scope.companyId) {
         const row = s.companies.find((c) => Number(c.id) === Number(next.scope.companyId));
@@ -202,11 +230,11 @@ export default function CustomerReportPage() {
       }
 
       if (scopeChanged) {
-        const ok = await s.applyScope(
-          next.scope.mode === "group"
-            ? { mode: "group", groupId: next.scope.groupId }
-            : { mode: "company", companyId: next.scope.companyId },
-        );
+        let draft;
+        if (next.scope.mode === "groupsAll") draft = { mode: "groupsAll" };
+        else if (next.scope.mode === "group") draft = { mode: "group", groupId: next.scope.groupId };
+        else draft = { mode: "company", companyId: next.scope.companyId, groupId: next.scope.groupId };
+        const ok = await s.applyScope(draft);
         if (!ok) return;
       }
       setDateFrom(next.dateFrom);
@@ -225,7 +253,7 @@ export default function CustomerReportPage() {
   );
 
   useEffect(() => {
-    if (!s.me || s.loading || s.groupMode || !s.selectedCompany) return undefined;
+    if (!s.me || s.loading || s.groupMode || s.groupsAllMode || !s.selectedCompany) return undefined;
     const code = String(s.selectedCompany.company_id || "").trim();
     if (!code) return undefined;
     let cancelled = false;
@@ -266,6 +294,7 @@ export default function CustomerReportPage() {
         dateFrom={dateFrom}
         dateTo={dateTo}
         groupMode={s.groupMode}
+        groupsAllMode={s.groupsAllMode}
         selectedGroup={s.selectedGroup}
         selectedCompany={s.selectedCompany}
         onOpen={() => setFilterOpen(true)}
@@ -278,7 +307,8 @@ export default function CustomerReportPage() {
           </span>
         ))}
       </div>
-      <CustomerTotalStrip i18n={i18n} totals={totals} />
+      {/* Single-currency: API totals OK. Multi-currency: per-block subtotals only (avoid mixed FX). */}
+      {!multiCurrency ? <CustomerTotalStrip i18n={i18n} totals={totals} /> : null}
     </div>
   );
 
@@ -306,6 +336,7 @@ export default function CustomerReportPage() {
           dateTo={dateTo}
           activePreset={activePreset}
           groupMode={s.groupMode}
+          groupsAllMode={s.groupsAllMode}
           selectedGroup={s.selectedGroup}
           companyId={s.companyId}
           companies={s.companies}
@@ -339,31 +370,45 @@ export default function CustomerReportPage() {
           </div>
         ) : (
           <div className="m-rpt-lines">
-            {grouped.map(([currency, items]) => (
-              <div key={currency} className="m-rpt-currency-block">
-                <div className="m-rpt-currency-head">{currency}</div>
-                {items.map((row, idx) => {
-                  const code = String(row.account_id || "").toUpperCase();
-                  const label = row.name ? `${code} (${row.name})` : code || i18n.account;
-                  return (
-                    <article
-                      key={`${row.account_id}|${row.currency}|${idx}`}
-                      className="m-rpt-line"
-                    >
-                      <div className="m-rpt-line-name">{label}</div>
-                      <div className="m-rpt-metric-row m-rpt-metric-row--2">
-                        <CustomerMetric
-                          label={i18n.win}
-                          value={row.win}
-                          tone="is-pos"
-                        />
-                        <CustomerMetric label={i18n.lose} value={row.lose} tone="is-neg" />
+            {grouped.map(([currency, items]) => {
+              const sub = currencySubtotals.get(currency);
+              return (
+                <div key={currency} className="m-rpt-currency-block">
+                  <div className="m-rpt-currency-head">{currency}</div>
+                  {items.map((row, idx) => {
+                    const code = String(row.account_id || "").toUpperCase();
+                    const label = row.name ? `${code} (${row.name})` : code || i18n.account;
+                    return (
+                      <article
+                        key={`${row.account_id}|${row.currency}|${idx}`}
+                        className="m-rpt-line"
+                      >
+                        <div className="m-rpt-line-name">{label}</div>
+                        <div className="m-rpt-metric-row m-rpt-metric-row--2">
+                          <CustomerMetric
+                            label={i18n.win}
+                            value={row.win}
+                            tone="is-pos"
+                          />
+                          <CustomerMetric label={i18n.lose} value={row.lose} tone="is-neg" />
+                        </div>
+                      </article>
+                    );
+                  })}
+                  {multiCurrency && sub ? (
+                    <div className="m-rpt-currency-subtotal">
+                      <div className="m-rpt-summary-label">
+                        {i18n.total} · {currency}
                       </div>
-                    </article>
-                  );
-                })}
-              </div>
-            ))}
+                      <div className="m-rpt-metric-row m-rpt-metric-row--2">
+                        <CustomerMetric label={i18n.win} value={sub.win} tone="is-pos" />
+                        <CustomerMetric label={i18n.lose} value={sub.lose} tone="is-neg" />
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

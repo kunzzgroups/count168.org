@@ -13,8 +13,10 @@ import {
   maintenanceScopeIsReady,
   maintenanceScopeKey,
 } from "../../lib/mobileMaintenanceScope.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
 import { reportText } from "../../translateFile/reportTranslate.js";
-import { canAccessReport } from "../../utils/mobilePermissions.js";
+import { canShowReportEntry } from "../../utils/mobilePermissions.js";
 import { ReportFilterBar, ReportFilterSheet } from "./ReportSheets.jsx";
 import "./report.css";
 
@@ -51,7 +53,7 @@ function DomainTotalStrip({ i18n, totals }) {
 }
 
 export default function DomainReportPage() {
-  const s = useMaintenanceSession({ canAccess: canAccessReport });
+  const s = useMaintenanceSession({ canAccess: canShowReportEntry });
   const i18n = useMemo(() => reportText(s.lang), [s.lang]);
   const { scope } = s;
 
@@ -70,13 +72,13 @@ export default function DomainReportPage() {
   const seqRef = useRef(0);
   const scopeReady = maintenanceScopeIsReady(scope);
   const scopeCacheKey = maintenanceScopeKey(scope);
-  const isGroupScope = scope?.mode === "group";
+  const isGroupScope = scope?.mode === "group" || scope?.mode === "groupsAll";
 
   const loadList = useCallback(
-    async (signal) => {
+    async (signal, { soft = false } = {}) => {
       if (!scopeReady) return;
       const seq = ++seqRef.current;
-      setListLoading(true);
+      if (!soft) setListLoading(true);
       setListError("");
       try {
         const json = await fetchDomainReport(
@@ -93,11 +95,13 @@ export default function DomainReportPage() {
         setTotals(json?.totals || null);
       } catch (e) {
         if (e?.name === "AbortError" || seq !== seqRef.current) return;
-        setListError(e?.message || i18n.loadFailed);
-        setRows([]);
-        setTotals(null);
+        if (!soft) {
+          setListError(e?.message || i18n.loadFailed);
+          setRows([]);
+          setTotals(null);
+        }
       } finally {
-        if (seq === seqRef.current) setListLoading(false);
+        if (seq === seqRef.current && !soft) setListLoading(false);
       }
     },
     [scope, scopeReady, dateFrom, dateTo, processId, i18n.loadFailed],
@@ -111,6 +115,14 @@ export default function DomainReportPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.me, scopeCacheKey, dateFrom, dateTo, processId]);
 
+  useRealtimeDomain(
+    REALTIME_DOMAINS.LEDGER,
+    () => {
+      loadList(undefined, { soft: true });
+    },
+    { enabled: Boolean(s.me) && scopeReady },
+  );
+
   const displayRows = useMemo(() => {
     const q = query.trim().toUpperCase();
     if (!q) return rows;
@@ -120,16 +132,19 @@ export default function DomainReportPage() {
     });
   }, [rows, query]);
 
-  const scopeLabel = s.groupMode
-    ? s.selectedGroup || i18n.group
-    : String(s.selectedCompany?.company_id || "").toUpperCase() || i18n.company;
+  const scopeLabel = s.groupsAllMode
+    ? i18n.allGroups || `${i18n.all} Groups`
+    : s.groupMode
+      ? s.selectedGroup || i18n.group
+      : String(s.selectedCompany?.company_id || "").toUpperCase() || i18n.company;
 
   const applyWithBankGuard = useCallback(
     async (next) => {
       const scopeChanged =
         next.scope.mode !== scope?.mode ||
         String(next.scope.groupId ?? "") !== String(scope?.groupId ?? "") ||
-        Number(next.scope.companyId ?? 0) !== Number(scope?.companyId ?? 0);
+        Number(next.scope.companyId ?? 0) !== Number(scope?.companyId ?? 0) ||
+        Boolean(next.scope.mode === "groupsAll") !== Boolean(scope?.mode === "groupsAll");
 
       if (scopeChanged && next.scope.mode === "company" && next.scope.companyId) {
         const row = s.companies.find((c) => Number(c.id) === Number(next.scope.companyId));
@@ -141,11 +156,11 @@ export default function DomainReportPage() {
       }
 
       if (scopeChanged) {
-        const ok = await s.applyScope(
-          next.scope.mode === "group"
-            ? { mode: "group", groupId: next.scope.groupId }
-            : { mode: "company", companyId: next.scope.companyId },
-        );
+        let draft;
+        if (next.scope.mode === "groupsAll") draft = { mode: "groupsAll" };
+        else if (next.scope.mode === "group") draft = { mode: "group", groupId: next.scope.groupId };
+        else draft = { mode: "company", companyId: next.scope.companyId, groupId: next.scope.groupId };
+        const ok = await s.applyScope(draft);
         if (!ok) return;
       }
       setDateFrom(next.dateFrom);
@@ -157,7 +172,7 @@ export default function DomainReportPage() {
   );
 
   useEffect(() => {
-    if (!s.me || s.loading || s.groupMode || !s.selectedCompany) return undefined;
+    if (!s.me || s.loading || s.groupMode || s.groupsAllMode || !s.selectedCompany) return undefined;
     const code = String(s.selectedCompany.company_id || "").trim();
     if (!code) return undefined;
     let cancelled = false;
@@ -198,6 +213,7 @@ export default function DomainReportPage() {
         dateFrom={dateFrom}
         dateTo={dateTo}
         groupMode={s.groupMode}
+        groupsAllMode={s.groupsAllMode}
         selectedGroup={s.selectedGroup}
         selectedCompany={s.selectedCompany}
         onOpen={() => setFilterOpen(true)}
@@ -230,6 +246,7 @@ export default function DomainReportPage() {
           dateTo={dateTo}
           activePreset={activePreset}
           groupMode={s.groupMode}
+          groupsAllMode={s.groupsAllMode}
           selectedGroup={s.selectedGroup}
           companyId={s.companyId}
           companies={s.companies}

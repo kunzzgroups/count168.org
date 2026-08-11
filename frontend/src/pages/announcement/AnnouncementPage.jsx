@@ -12,7 +12,8 @@ import { EditAnnouncementModal, EditMaintenanceModal } from "./components/Announ
 import { AnnouncementPanel, MaintenancePanel } from "./components/AnnouncementPanels.jsx";
 import PagePillTabSwitch from "../../components/PagePillTabSwitch.jsx";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
-import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
+import { canAccessC168DomainPages, isSystemMaintenanceItUser } from "../../utils/company/loginScope.js";
+import { ensureC168DomainApiSession } from "../../utils/company/companySessionSync.js";
 import {
   isRichTextEffectivelyEmpty,
   normalizeRichTextInput,
@@ -139,6 +140,11 @@ export default function AnnouncementPage() {
   );
 
   const loadMaintenanceMode = useCallback(async () => {
+    // mode_api is IT-allowlist only; skip probe for others to avoid expected 403 noise.
+    if (!isSystemMaintenanceItUser(me)) {
+      setCanManageMaintenanceMode(false);
+      return;
+    }
     try {
       const res = await fetch(buildApiUrl("api/maintenance/mode_api.php"), { credentials: "include" });
       const json = await res.json();
@@ -161,7 +167,7 @@ export default function AnnouncementPage() {
     } catch {
       setCanManageMaintenanceMode(false);
     }
-  }, []);
+  }, [me]);
 
   const toggleMaintenanceMode = useCallback(
     async (nextEnabled) => {
@@ -220,6 +226,13 @@ export default function AnnouncementPage() {
           navigate(spaPath("dashboard"), { replace: true });
           return;
         }
+        // Same race as Domain: UI may trust sessionStorage C168 before PHP session catches up.
+        const synced = await ensureC168DomainApiSession(me);
+        if (!synced) {
+          if (!cancelled) navigate(spaPath("dashboard"), { replace: true });
+          return;
+        }
+        if (cancelled) return;
         await Promise.all([loadAnnouncements(), loadMaintenance(), loadMaintenanceMode()]);
       } catch {
         if (!cancelled) navigate(spaPath("login"), { replace: true });

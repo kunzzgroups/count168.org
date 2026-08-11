@@ -8,14 +8,24 @@ import {
   resolveMobileGroupIds,
 } from "../lib/dashboardScope.js";
 import { fetchJson, assertApiOk } from "../lib/fetchJson.js";
+import { readLoginLang, writeLoginLang } from "../lib/loginLang.js";
 import { canUseGroupOnlyMode, filterCompaniesForUserScope } from "../lib/loginScope.js";
 import {
   accountScopeIsGroupOnly,
   accountScopePayload,
   accountScopeQuery,
+  groupIdsForGroupsAllAggregate,
+  mutationScopePayload,
+  normalizeAccountLedgerScope,
   resolveAccountScopeDraft,
 } from "../lib/mobileAccountScope.js";
 import { isPartnershipAuditReadOnlyLocked } from "../lib/partnershipAuditReadOnly.js";
+import {
+  buildMobileRealtimeScopeFromGc,
+  setMobileRealtimeScope,
+} from "../lib/realtime/mobileRealtimeScope.js";
+import { REALTIME_DOMAINS } from "../lib/realtime/realtimeEvents.js";
+import { useRealtimeDomain } from "../lib/realtime/useRealtimeDomain.js";
 import { accountText } from "../translateFile/accountTranslate.js";
 import { buildApiUrl } from "../utils/apiUrl.js";
 import { canAccessAccount, resolveMobileLandingPath } from "../utils/mobilePermissions.js";
@@ -61,7 +71,7 @@ async function readJson(url, options = {}) {
 
 export function useMobileAccount() {
   const navigate = useNavigate();
-  const [lang, setLangState] = useState(() => localStorage.getItem("login_lang") || "en");
+  const [lang, setLangState] = useState(() => readLoginLang());
   const i18n = useMemo(() => accountText(lang), [lang]);
   const [me, setMe] = useState(null);
   const [companies, setCompanies] = useState([]);
@@ -87,6 +97,10 @@ export function useMobileAccount() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formCurrencies, setFormCurrencies] = useState([]);
   const [initialFormCurrencies, setInitialFormCurrencies] = useState([]);
+  const [availableCompanies, setAvailableCompanies] = useState([]);
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState([]);
+  /** Edit-account ledger override (group ledger row under company page filter). */
+  const [modalLedgerScope, setModalLedgerScope] = useState(null);
   const [linkPool, setLinkPool] = useState([]);
   const [linkedIds, setLinkedIds] = useState(new Set());
   const [linkTypeMap, setLinkTypeMap] = useState({});
@@ -97,6 +111,7 @@ export function useMobileAccount() {
   const [saving, setSaving] = useState(false);
   const toastTimer = useRef(null);
   const listSeq = useRef(0);
+  const softReloadRef = useRef(false);
 
   const scope = useMemo(
     () => ({ companyId, selectedGroup, groupsAllMode, groupAllMode }),
@@ -122,9 +137,7 @@ export function useMobileAccount() {
   }, []);
 
   const setLang = useCallback((next) => {
-    const normalized = next === "zh" ? "zh" : "en";
-    localStorage.setItem("login_lang", normalized);
-    setLangState(normalized);
+    setLangState(writeLoginLang(next));
   }, []);
 
   useEffect(() => {
@@ -182,16 +195,37 @@ export function useMobileAccount() {
   const fetchRows = useCallback(
     async (signal) => {
       const filters = { search: debouncedSearch, showInactive };
+      // Groups All → per-group ledger URLs (desktop fetchMergedAccounts groupIds).
+      if (groupsAllMode) {
+        const gids = groupIdsForGroupsAllAggregate(companies, groupIds);
+        if (!gids.length) return [];
+        const lists = await Promise.all(
+          gids.map(async (gid) => {
+            const url = new URL(buildApiUrl("api/accounts/accountlistapi.php"));
+            accountScopeQuery(
+              {
+                companyId: null,
+                selectedGroup: gid,
+                groupsAllMode: false,
+                groupAllMode: false,
+              },
+              filters,
+            ).forEach((value, key) => url.searchParams.set(key, value));
+            const json = await readJson(url.toString(), { signal });
+            return Array.isArray(json?.data?.accounts) ? json.data.accounts : [];
+          }),
+        );
+        return mergeRows(lists);
+      }
       let targets = [scope];
-      if (groupsAllMode || groupAllMode) {
+      if (groupAllMode) {
         const rows = companies.filter((row) => {
           if (!(Number(row?.id) > 0)) return false;
-          if (groupsAllMode) return true;
           return upper(row?.group_id) === upper(selectedGroup);
         });
         targets = rows.map((row) => ({
           companyId: Number(row.id),
-          selectedGroup: groupAllMode ? selectedGroup : null,
+          selectedGroup: selectedGroup,
           groupsAllMode: false,
           groupAllMode: false,
         }));
@@ -211,6 +245,7 @@ export function useMobileAccount() {
       companies,
       debouncedSearch,
       groupAllMode,
+      groupIds,
       groupsAllMode,
       scope,
       selectedGroup,
@@ -221,15 +256,19 @@ export function useMobileAccount() {
   useEffect(() => {
     if (!me || (!Number(companyId) && !groupOnlyMode && !groupsAllMode && !groupAllMode)) return;
     const seq = ++listSeq.current;
+    const soft = softReloadRef.current;
+    softReloadRef.current = false;
     const ac = new AbortController();
-    setLoading(true);
+    if (!soft) setLoading(true);
     setError("");
     fetchRows(ac.signal)
       .then((rows) => {
         if (seq === listSeq.current) setAccounts(rows);
       })
       .catch((e) => {
-        if (e?.name !== "AbortError" && seq === listSeq.current) setError(e?.message || i18n.loadError);
+        if (e?.name !== "AbortError" && seq === listSeq.current && !soft) {
+          setError(e?.message || i18n.loadError);
+        }
       })
       .finally(() => {
         if (seq === listSeq.current) {
@@ -239,6 +278,33 @@ export function useMobileAccount() {
       });
     return () => ac.abort();
   }, [companyId, fetchRows, groupAllMode, groupOnlyMode, groupsAllMode, i18n.loadError, me, reloadNonce]);
+
+  // Publish GC scope for MobileRealtimeBridge SSE ticket.
+  useEffect(() => {
+    if (!me) return;
+    setMobileRealtimeScope(
+      buildMobileRealtimeScopeFromGc({
+        companyId,
+        selectedGroup,
+        groupsAllMode,
+        groupAllMode,
+      }),
+    );
+  }, [me, companyId, selectedGroup, groupsAllMode, groupAllMode]);
+
+  const accountRealtimeEnabled =
+    Number.isFinite(Number(companyId)) && Number(companyId) > 0
+      ? true
+      : Boolean(selectedGroup || groupsAllMode || groupAllMode);
+
+  useRealtimeDomain(
+    REALTIME_DOMAINS.ACCOUNTS,
+    () => {
+      softReloadRef.current = true;
+      setReloadNonce((value) => value + 1);
+    },
+    { enabled: accountRealtimeEnabled },
+  );
 
   const displayAccounts = useMemo(() => {
     const rows = [...accounts];
@@ -291,13 +357,17 @@ export function useMobileAccount() {
     [companies, companyId, i18n.loadError, notify],
   );
 
+  const activeMutationPayload = useCallback(
+    () => mutationScopePayload(scope, modalLedgerScope),
+    [scope, modalLedgerScope],
+  );
+
   const scopeFormData = useCallback(
     (fd) => {
-      const payload = accountScopePayload(scope);
-      Object.entries(payload).forEach(([key, value]) => fd.set(key, value));
+      Object.entries(activeMutationPayload()).forEach(([key, value]) => fd.set(key, value));
       return fd;
     },
-    [scope],
+    [activeMutationPayload],
   );
 
   const guarded = useCallback(
@@ -363,20 +433,28 @@ export function useMobileAccount() {
   );
 
   const loadRolesAndCurrencies = useCallback(
-    async (accountId = null) => {
+    async (accountId = null, ledgerOverride = modalLedgerScope) => {
+      const mutScope = mutationScopePayload(scope, ledgerOverride);
       const roleUrl = new URL(buildApiUrl("api/editdata/editdata_api.php"));
       const currencyUrl = new URL(buildApiUrl("api/accounts/account_currency_api.php"));
       currencyUrl.searchParams.set("action", "get_available_currencies");
       if (accountId) currencyUrl.searchParams.set("account_id", String(accountId));
       for (const url of [roleUrl, currencyUrl]) {
         const params = new URLSearchParams(url.search);
-        const payload = accountScopePayload(scope);
-        Object.entries(payload).forEach(([key, value]) => params.set(key, value));
+        Object.entries(mutScope).forEach(([key, value]) => params.set(key, value));
         url.search = params.toString();
       }
-      const [roleJson, currencyJson] = await Promise.all([
+      const companyUrl = new URL(buildApiUrl("api/accounts/account_company_api.php"));
+      companyUrl.searchParams.set("action", "get_available_companies");
+      if (accountId) companyUrl.searchParams.set("account_id", String(accountId));
+      Object.entries(mutScope).forEach(([key, value]) => companyUrl.searchParams.set(key, value));
+
+      const [roleJson, currencyJson, companyJson] = await Promise.all([
         readJson(roleUrl.toString()),
         readJson(currencyUrl.toString()),
+        groupOnlyMode
+          ? Promise.resolve({ data: [] })
+          : readJson(companyUrl.toString()).catch(() => ({ data: [] })),
       ]);
       setRoles(Array.isArray(roleJson?.data?.roles) ? roleJson.data.roles : []);
       const currencyRows = Array.isArray(currencyJson?.data) ? currencyJson.data : [];
@@ -384,16 +462,28 @@ export function useMobileAccount() {
       const selected = currencyRows.filter((row) => row.is_linked).map((row) => Number(row.id));
       setFormCurrencies(selected.length ? selected : currencyRows.slice(0, 1).map((row) => Number(row.id)));
       setInitialFormCurrencies(selected);
+
+      const companyRows = Array.isArray(companyJson?.data) ? companyJson.data : [];
+      setAvailableCompanies(companyRows);
+      const linked = companyRows.filter((row) => row.is_linked).map((row) => Number(row.id));
+      if (linked.length) {
+        setSelectedCompanyIds(linked);
+      } else if (Number(companyId) > 0) {
+        setSelectedCompanyIds([Number(companyId)]);
+      } else {
+        setSelectedCompanyIds([]);
+      }
     },
-    [scope],
+    [companyId, groupOnlyMode, modalLedgerScope, scope],
   );
 
   const openCreate = useCallback(async () => {
     if (!guarded(() => {})) return false;
     setDetail(null);
+    setModalLedgerScope(null);
     setForm({ ...EMPTY_FORM });
     try {
-      await loadRolesAndCurrencies();
+      await loadRolesAndCurrencies(null, null);
       return true;
     } catch (e) {
       notify(e?.message || i18n.loadError, "error");
@@ -409,12 +499,13 @@ export function useMobileAccount() {
         Object.entries(accountScopePayload(scope)).forEach(([key, value]) =>
           url.searchParams.set(key, value),
         );
-      const json = await readJson(url.toString());
-      // Never keep or surface the stored password hash from getaccount_api.
-      const row = { ...(json.data || {}) };
-      delete row.password;
-      setDetail(row);
-      return row;
+        const json = await readJson(url.toString());
+        // Never keep or surface the stored password hash from getaccount_api.
+        const row = { ...(json.data || {}) };
+        delete row.password;
+        setDetail(row);
+        setModalLedgerScope(normalizeAccountLedgerScope(row.ledger_scope));
+        return row;
       } catch (e) {
         notify(e?.message || i18n.detailError, "error");
         return null;
@@ -427,6 +518,8 @@ export function useMobileAccount() {
     if (!detail || !guarded(() => {})) return false;
     const row = await loadDetail(detail);
     if (!row) return false;
+    const ledger = normalizeAccountLedgerScope(row.ledger_scope);
+    setModalLedgerScope(ledger);
     setForm({
       id: row.id,
       account_id: upper(row.account_id),
@@ -440,7 +533,7 @@ export function useMobileAccount() {
       alert_amount: row.alert_amount || "",
     });
     try {
-      await loadRolesAndCurrencies(row.id);
+      await loadRolesAndCurrencies(row.id, ledger);
       return true;
     } catch (e) {
       notify(e?.message || i18n.loadError, "error");
@@ -456,19 +549,18 @@ export function useMobileAccount() {
         ...[...nextSet].filter((id) => !oldSet.has(id)).map((id) => ["add_currency", id]),
         ...[...oldSet].filter((id) => !nextSet.has(id)).map((id) => ["remove_currency", id]),
       ];
+      const mutScope = activeMutationPayload();
       for (const [action, currencyId] of actions) {
         const url = new URL(buildApiUrl("api/accounts/account_currency_api.php"));
         url.searchParams.set("action", action);
-        Object.entries(accountScopePayload(scope)).forEach(([key, value]) =>
-          url.searchParams.set(key, value),
-        );
+        Object.entries(mutScope).forEach(([key, value]) => url.searchParams.set(key, value));
         await readJson(url.toString(), {
           method: "POST",
           body: JSON.stringify({ account_id: Number(accountId), currency_id: Number(currencyId) }),
         });
       }
     },
-    [scope],
+    [activeMutationPayload],
   );
 
   const saveAccount = useCallback(async () => {
@@ -490,7 +582,13 @@ export function useMobileAccount() {
         else if (key === "account_id" || key === "name" || key === "remark") out = upper(out);
         fd.set(key, out);
       });
-      if (Number(companyId) > 0) {
+      const ids = selectedCompanyIds
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id) && id > 0);
+      if (!groupOnlyMode && ids.length) {
+        fd.set("company_ids", JSON.stringify(ids));
+        fd.set("company_id", String(ids[0]));
+      } else if (Number(companyId) > 0) {
         fd.set("company_id", String(companyId));
         fd.set("company_ids", JSON.stringify([Number(companyId)]));
       }
@@ -520,25 +618,28 @@ export function useMobileAccount() {
     companyId,
     form,
     formCurrencies,
+    groupOnlyMode,
     i18n,
     initialFormCurrencies,
     loadDetail,
     notify,
     scopeFormData,
+    selectedCompanyIds,
     syncAccountCurrencies,
   ]);
 
   const loadLinks = useCallback(async () => {
     if (!detail || !guarded(() => {})) return false;
     try {
+      const mutScope = activeMutationPayload();
       const listUrl = new URL(buildApiUrl("api/accounts/accountlistapi.php"));
-      accountScopeQuery(scope, { showAll: true }).forEach((value, key) =>
-        listUrl.searchParams.set(key, value),
-      );
+      const listParams = new URLSearchParams(mutScope);
+      listParams.set("showAll", "1");
+      listParams.forEach((value, key) => listUrl.searchParams.set(key, value));
       const linkedUrl = new URL(buildApiUrl("api/accounts/account_link_api.php"));
       linkedUrl.searchParams.set("action", "get_linked_accounts");
       linkedUrl.searchParams.set("account_id", String(detail.id));
-      Object.entries(accountScopePayload(scope)).forEach(([key, value]) =>
+      Object.entries(mutScope).forEach(([key, value]) =>
         linkedUrl.searchParams.set(key, value),
       );
       const [listJson, linkedJson] = await Promise.all([
@@ -564,7 +665,7 @@ export function useMobileAccount() {
       notify(e?.message || i18n.linkError, "error");
       return false;
     }
-  }, [companyId, detail, guarded, i18n.linkError, notify, scope]);
+  }, [activeMutationPayload, companyId, detail, guarded, i18n.linkError, notify]);
 
   useEffect(() => {
     setLinkedIds(
@@ -580,7 +681,7 @@ export function useMobileAccount() {
     if (!detail) return false;
     setSaving(true);
     try {
-      const scopeData = accountScopePayload(scope);
+      const scopeData = activeMutationPayload();
       const current = new Set(
         Object.entries(linkTypeMap)
           .filter(([, type]) => type === linkType)
@@ -613,6 +714,25 @@ export function useMobileAccount() {
           }),
         });
       }
+      // Membership unchanged but link type may have changed (desktop update_link_type).
+      if (!add.length && !remove.length && linkedIds.size > 0) {
+        for (const id of linkedIds) {
+          await readJson(
+            buildApiUrl("api/accounts/account_link_api.php?action=update_link_type"),
+            {
+              method: "POST",
+              body: JSON.stringify({
+                account_id_1: Number(detail.id),
+                account_id_2: id,
+                company_id: company,
+                ...scopeData,
+                link_type: linkType,
+                source_account_id: linkType === "unidirectional" ? Number(detail.id) : null,
+              }),
+            },
+          );
+        }
+      }
       notify(i18n.linkSuccess);
       return true;
     } catch (e) {
@@ -622,6 +742,7 @@ export function useMobileAccount() {
       setSaving(false);
     }
   }, [
+    activeMutationPayload,
     companyId,
     detail,
     i18n.linkError,
@@ -631,7 +752,6 @@ export function useMobileAccount() {
     linkCompanyId,
     linkedIds,
     notify,
-    scope,
     selectedCompany?.id,
   ]);
 
@@ -663,7 +783,7 @@ export function useMobileAccount() {
       const url = new URL(buildApiUrl("api/accounts/bulk_account_currency_api.php"));
       url.searchParams.set("action", "get_linked_accounts_by_currency");
       url.searchParams.set("currency_id", String(currencyId));
-      Object.entries(accountScopePayload(scope)).forEach(([key, value]) =>
+      Object.entries(activeMutationPayload()).forEach(([key, value]) =>
         url.searchParams.set(key, value),
       );
       const json = await readJson(url.toString(), { method: "POST" });
@@ -671,7 +791,7 @@ export function useMobileAccount() {
       setCurrencyLinked(ids);
       setCurrencyInitial(new Set(ids));
     },
-    [scope],
+    [activeMutationPayload],
   );
 
   const openCurrency = useCallback(async () => {
@@ -692,7 +812,7 @@ export function useMobileAccount() {
       try {
         const json = await readJson(buildApiUrl("api/accounts/create_currency_api.php"), {
           method: "POST",
-          body: JSON.stringify({ code: normalized, ...accountScopePayload(scope) }),
+          body: JSON.stringify({ code: normalized, ...activeMutationPayload() }),
         });
         const newId = Number(json?.data?.id);
         if (!Number.isFinite(newId) || newId <= 0) {
@@ -709,20 +829,19 @@ export function useMobileAccount() {
         return false;
       }
     },
-    [canMutate, i18n.currencyError, loadRolesAndCurrencies, notify, scope],
+    [activeMutationPayload, canMutate, i18n.currencyError, loadRolesAndCurrencies, notify],
   );
 
   const deleteCurrency = useCallback(
     async (currency) => {
       if (!currency?.id || !canMutate) return false;
       try {
+        const mutScope = activeMutationPayload();
         const url = new URL(buildApiUrl("api/accounts/delete_currency_api.php"));
-        Object.entries(accountScopePayload(scope)).forEach(([key, value]) =>
-          url.searchParams.set(key, value),
-        );
+        Object.entries(mutScope).forEach(([key, value]) => url.searchParams.set(key, value));
         await readJson(url.toString(), {
           method: "POST",
-          body: JSON.stringify({ id: Number(currency.id), ...accountScopePayload(scope) }),
+          body: JSON.stringify({ id: Number(currency.id), ...mutScope }),
         });
         setCurrencies((rows) => rows.filter((row) => Number(row.id) !== Number(currency.id)));
         return true;
@@ -731,7 +850,7 @@ export function useMobileAccount() {
         return false;
       }
     },
-    [canMutate, i18n.currencyError, notify, scope],
+    [activeMutationPayload, canMutate, i18n.currencyError, notify],
   );
 
   const saveCurrencyLinks = useCallback(
@@ -740,7 +859,7 @@ export function useMobileAccount() {
       try {
         const url = new URL(buildApiUrl("api/accounts/bulk_account_currency_api.php"));
         url.searchParams.set("action", "bulk_update");
-        Object.entries(accountScopePayload(scope)).forEach(([key, value]) =>
+        Object.entries(activeMutationPayload()).forEach(([key, value]) =>
           url.searchParams.set(key, value),
         );
         const linked = [...currencyLinked].filter((id) => !currencyInitial.has(id));
@@ -763,7 +882,14 @@ export function useMobileAccount() {
         setSaving(false);
       }
     },
-    [currencyInitial, currencyLinked, i18n.currencyError, i18n.currencySuccess, notify, scope],
+    [
+      activeMutationPayload,
+      currencyInitial,
+      currencyLinked,
+      i18n.currencyError,
+      i18n.currencySuccess,
+      notify,
+    ],
   );
 
   const logout = useCallback(async () => {
@@ -824,6 +950,10 @@ export function useMobileAccount() {
     currencies,
     formCurrencies,
     setFormCurrencies,
+    availableCompanies,
+    selectedCompanyIds,
+    setSelectedCompanyIds,
+    groupOnlyMode,
     openCreate,
     openEdit,
     saveAccount,

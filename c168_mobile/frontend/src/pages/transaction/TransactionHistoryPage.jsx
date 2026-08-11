@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { Navigate, useOutletContext, useSearchParams } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
 import MobileSubpageHeader from "../../components/layout/MobileSubpageHeader.jsx";
+import { useMobilePaymentHistoryProgressive } from "../../hooks/useMobilePaymentHistoryProgressive.js";
 import {
   formatHistoryBalanceMoney,
   formatHistoryMoney,
@@ -9,7 +10,6 @@ import {
   getHistoryRemark,
   toUpperDisplay,
 } from "../../lib/transactionFormat.js";
-import { getHistory } from "../../lib/transactionApi.js";
 import {
   paymentHistoryParamsReady,
   paymentHistoryScopeApiParams,
@@ -68,10 +68,6 @@ export default function TransactionHistoryPage() {
   const scopeApi = useMemo(() => paymentHistoryScopeApiParams(scope), [scope]);
   const paramsReady = paymentHistoryParamsReady(scope);
 
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [accountMeta, setAccountMeta] = useState(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [expandedKey, setExpandedKey] = useState(null);
 
@@ -86,41 +82,23 @@ export default function TransactionHistoryPage() {
     return { ...scope, companyId };
   }, [scope, tx.companyId, tx.selectedCompany]);
 
+  const {
+    rows,
+    accountMeta,
+    isInitialLoading: loading,
+    isLoadingMore,
+    errorMessage,
+  } = useMobilePaymentHistoryProgressive({
+    scope,
+    scopeApi,
+    enabled: paramsReady,
+  });
+
+  const error = errorMessage || "";
+
   useEffect(() => {
-    if (!paramsReady) return undefined;
-    const ac = new AbortController();
-    setLoading(true);
-    setError("");
     setExpandedKey(null);
-    (async () => {
-      try {
-        const data = await getHistory({
-          ...scopeApi,
-          accountId: scope.accountDbId,
-          dateFrom: scope.dateFrom,
-          dateTo: scope.dateTo,
-          currency: scope.currency,
-          virtualCompanyCode: scope.virtualCompanyCode,
-          pureTypeSearch: scope.pureTypeSearch,
-          signal: ac.signal,
-        });
-        if (ac.signal.aborted) return;
-        if (!data?.success) {
-          setError(data?.message || m.searchFailed);
-          setRows([]);
-          return;
-        }
-        setRows(Array.isArray(data.data) ? data.data : []);
-        setAccountMeta(data.account || null);
-      } catch (e) {
-        if (ac.signal.aborted || e?.name === "AbortError") return;
-        setError(e?.message || m.searchFailed);
-      } finally {
-        if (!ac.signal.aborted) setLoading(false);
-      }
-    })();
-    return () => ac.abort();
-  }, [paramsReady, scope, scopeApi, m.searchFailed]);
+  }, [scope.accountDbId, scope.dateFrom, scope.dateTo, scope.currency]);
 
   const title = useMemo(() => {
     const meta = accountMeta
@@ -212,6 +190,12 @@ export default function TransactionHistoryPage() {
         ) : (
           <div className="m-tx-hist-dense-wrap">
             <table className="m-tx-hist-dense-table">
+              <colgroup>
+                <col className="m-tx-hist-col--date" />
+                <col className="m-tx-hist-col--product" />
+                <col className="m-tx-hist-col--num" span={3} />
+                <col className="m-tx-hist-col--chev" />
+              </colgroup>
               <thead>
                 <tr>
                   <th scope="col" className="m-tx-hist-dense-th m-tx-hist-dense-th--date">
@@ -371,6 +355,9 @@ export default function TransactionHistoryPage() {
                 })}
               </tbody>
             </table>
+            {isLoadingMore ? (
+              <p className="m-tx-hist-loading m-tx-hist-loading--more">{m.loadingMoreHistory || m.loadingHistory}</p>
+            ) : null}
           </div>
         )}
       </div>

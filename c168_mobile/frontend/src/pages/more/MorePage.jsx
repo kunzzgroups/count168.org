@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
 import { fetchJson } from "../../lib/fetchJson.js";
+import { readLoginLang, writeLoginLang } from "../../lib/loginLang.js";
 import { MORE_I18N } from "../../translateFile/moreTranslate.js";
 import { buildApiUrl } from "../../utils/apiUrl.js";
-import { canAccessAdmin, canAccessMaintenance, canAccessReport } from "../../utils/mobilePermissions.js";
+import { canAccessC168DomainPages } from "../../lib/c168DomainAccess.js";
+import { canAccessAdmin, canAccessMaintenance, canShowReportEntry } from "../../utils/mobilePermissions.js";
 import { maintenanceText } from "../../translateFile/maintenanceTranslate.js";
 import "./more.css";
 
@@ -12,13 +14,11 @@ export default function MorePage() {
   const navigate = useNavigate();
   const [me, setMe] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [lang, setLangState] = useState(() => localStorage.getItem("login_lang") || "en");
+  const [lang, setLangState] = useState(() => readLoginLang());
   const i18n = useMemo(() => MORE_I18N[lang] || MORE_I18N.en, [lang]);
 
   const setLang = useCallback((next) => {
-    const normalized = next === "zh" ? "zh" : "en";
-    localStorage.setItem("login_lang", normalized);
-    setLangState(normalized);
+    setLangState(writeLoginLang(next));
   }, []);
 
   useEffect(() => {
@@ -70,12 +70,20 @@ export default function MorePage() {
       description: mt.maintenanceDescription,
     });
   }
-  if (canAccessReport(me)) {
+  if (canShowReportEntry(me)) {
     tools.push({
       to: "/report",
       icon: "fa-chart-column",
       title: i18n.report,
       description: i18n.reportDescription,
+    });
+  }
+  if (canAccessC168DomainPages(me)) {
+    tools.push({
+      to: "/more/domain",
+      icon: "fa-globe",
+      title: i18n.domain,
+      description: i18n.domainDescription,
     });
   }
 

@@ -25,6 +25,7 @@ import DomainFormModal from "./components/DomainFormModal.jsx";
 import { getDomainText } from "../../translateFile/pages/domainTranslate.js";
 import { useAuthSession } from "../../context/AuthSessionContext.jsx";
 import { canAccessC168DomainPages } from "../../utils/company/loginScope.js";
+import { ensureC168DomainApiSession } from "../../utils/company/companySessionSync.js";
 import { fetchOwnerCompaniesAll, readPersistedDashboardGcFilter } from "../../utils/company/sharedCompanyFilter.js";
 import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
 import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
@@ -103,8 +104,17 @@ export default function DomainPage() {
       .catch(() => {});
   }
 
+  const meRef = useRef(me);
+  meRef.current = me;
+
   const loadDomains = useCallback(async ({ silent = false } = {}) => {
     try {
+      // UI may already show C168 via sessionStorage while PHP session lags.
+      const synced = await ensureC168DomainApiSession(meRef.current);
+      if (!synced) {
+        if (!silent) setLoadError(getDomainText(lang, "failedToLoadDomainData"));
+        return;
+      }
       const r2 = await fetch(buildApiUrl("api/domain/domain_api.php"), {
         method: "POST",
         credentials: "include",
@@ -116,6 +126,7 @@ export default function DomainPage() {
         if (!silent) setLoadError(j2?.message || getDomainText(lang, "failedToLoadDomainData"));
         return;
       }
+      if (!silent) setLoadError("");
       setDomains(Array.isArray(j2?.data?.domains) ? j2.data.domains : []);
       refreshFeeSummary();
     } catch {
@@ -124,6 +135,7 @@ export default function DomainPage() {
   }, [lang]);
 
   // ── Initial data load (session from AuthenticatedLayout) ─────────────────────
+  const bootCompanyId = me?.company_id ?? null;
   useEffect(() => {
     if (!sessionReady || !me) return;
 
@@ -150,7 +162,10 @@ export default function DomainPage() {
     return () => {
       cancelled = true;
     };
-  }, [sessionReady, me, navigate, loadDomains, lang]);
+    // Do not depend on full `me` object identity — session patches used to retrigger
+    // this effect in a loop. Re-boot when sessionReady / active company id changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- me read from render with bootCompanyId
+  }, [sessionReady, bootCompanyId, navigate, loadDomains, lang]);
 
   useRealtimeDomain(REALTIME_DOMAINS.DOMAIN, () => {
     void loadDomains({ silent: true });

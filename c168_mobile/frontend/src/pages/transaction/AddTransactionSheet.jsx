@@ -11,7 +11,13 @@ import {
   RATE_STORE_MAX_DECIMALS,
   TX_STORE_MAX_DECIMALS,
 } from "../../lib/transactionFormat.js";
-import { buildRatePayload, toNumberLike, computeRateMiddlemanProfit, positivePlatformFeeDeduction } from "../../lib/transactionSubmitHelpers.js";
+import {
+  buildRatePayload,
+  toNumberLike,
+  computeRateMiddlemanProfit,
+  parseMiddlemanRateInput,
+  parsePositiveAmt,
+} from "../../lib/transactionSubmitHelpers.js";
 import { formatYmd, parseYmd, formatDisplayDate } from "../../lib/dashboardDateUtils.js";
 import "./add-transaction-sheet.css";
 
@@ -29,6 +35,17 @@ function sanitizeAmountInput(value) {
     unsigned = `${unsigned.slice(0, firstDotIdx + 1)}${unsigned.slice(firstDotIdx + 1).replace(/\./g, "")}`;
   }
   return hasLeadingMinus ? `-${unsigned}` : unsigned;
+}
+
+/** Desktop Fee: digits only, no minus. */
+function sanitizePositiveAmountInput(value) {
+  return sanitizeAmountInput(value).replace(/-/g, "");
+}
+
+/** Desktop PT-Fee: always show leading minus while typing (absolute subtract). */
+function sanitizePlatformFeeInput(value) {
+  const digits = sanitizePositiveAmountInput(value);
+  return digits ? `-${digits}` : "";
 }
 
 /**
@@ -114,6 +131,8 @@ export default function AddTransactionSheet({
   const [txFromAccount, setTxFromAccount] = useState(null);
   const [txCurrency, setTxCurrency] = useState("");
   const [txAmount, setTxAmount] = useState("");
+  /** Desktop `txFullAmount` — full precision from balance_full when prefilled. */
+  const [txFullAmount, setTxFullAmount] = useState("");
   const [txRemark, setTxRemark] = useState("");
   const [txConfirm, setTxConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -123,9 +142,13 @@ export default function AddTransactionSheet({
   const [rateCurrencyFrom, setRateCurrencyFrom] = useState("");
   const [rateCurrencyTo, setRateCurrencyTo] = useState("");
   const [rateCurrencyFromAmount, setRateCurrencyFromAmount] = useState("");
+  /** Desktop `rateFullAmount` — full precision from balance_full when prefilled. */
+  const [rateFullAmount, setRateFullAmount] = useState("");
   const [rateExchangeRateRaw, setRateExchangeRateRaw] = useState("");
   const [rateCurrencyToAmount, setRateCurrencyToAmount] = useState("");
   const [rateToAmountGrossStr, setRateToAmountGrossStr] = useState("");
+  /** Paired with desktop `rateFromAmountGrossStr` for primary Reverse. */
+  const [rateFromAmountGrossStr, setRateFromAmountGrossStr] = useState("");
   const [rateMiddlemanAccount, setRateMiddlemanAccount] = useState(null);
   const [rateMiddlemanRate, setRateMiddlemanRate] = useState("");
   const [rateMiddlemanAmount, setRateMiddlemanAmount] = useState("");
@@ -149,6 +172,7 @@ export default function AddTransactionSheet({
     setTxFromAccount(null);
     setTxCurrency("");
     setTxAmount("");
+    setTxFullAmount("");
     setTxRemark("");
     setTxConfirm(false);
     setRateToAccount(null);
@@ -156,9 +180,11 @@ export default function AddTransactionSheet({
     setRateCurrencyFrom("");
     setRateCurrencyTo("");
     setRateCurrencyFromAmount("");
+    setRateFullAmount("");
     setRateExchangeRateRaw("");
     setRateCurrencyToAmount("");
     setRateToAmountGrossStr("");
+    setRateFromAmountGrossStr("");
     setRateMiddlemanAccount(null);
     setRateMiddlemanRate("");
     setRateMiddlemanAmount("");
@@ -189,6 +215,11 @@ export default function AddTransactionSheet({
     const side = prefill.side === "right" ? "right" : "left";
     const fillTo = side === "right";
 
+    const amountFull =
+      prefill.amountFull != null && String(prefill.amountFull).trim() !== ""
+        ? String(prefill.amountFull).replace(/,/g, "").trim()
+        : "";
+
     if (txType === "RATE") {
       if (fillTo) {
         setRateToAccount(account);
@@ -198,11 +229,13 @@ export default function AddTransactionSheet({
         setRateTransferToAccount(account);
       }
       if (amount) setRateCurrencyFromAmount(amount);
+      setRateFullAmount(amountFull);
       if (currency) setRateCurrencyFrom(currency);
     } else {
       if (fillTo) setTxToAccount(account);
       else setTxFromAccount(account);
       if (amount) setTxAmount(amount);
+      setTxFullAmount(amountFull);
       if (currency) setTxCurrency(currency);
     }
 
@@ -226,13 +259,6 @@ export default function AddTransactionSheet({
   useEffect(() => {
     if (!isRate) return;
     const clean = (v) => String(v ?? "").replace(/,/g, "").trim();
-    let inputAmtDec = MoneyDecimal.toDecimal("0", 0);
-    try {
-      const inputStr = clean(rateMiddlemanInputAmount);
-      if (inputStr) inputAmtDec = MoneyDecimal.toDecimal(inputStr, 0);
-    } catch {
-      /* ignore */
-    }
     const parsed = parseRateExpression(rateExchangeRateRaw);
     let rateDec = MoneyDecimal.toDecimal("0", 0);
     if (parsed.valid) {
@@ -242,11 +268,14 @@ export default function AddTransactionSheet({
         /* ignore */
       }
     }
+
+    // Desktop parity: MM profit = Rate-Mul commission + (Fee − PT); Fee/PT face values ≥ 0.
     const finalFeeDec = computeRateMiddlemanProfit({
       fromAmount: rateCurrencyFromAmount,
       middlemanRate: rateMiddlemanRate,
       feeAmount: rateMiddlemanInputAmount,
       platformFeeAmount: rateMiddlemanPlatformFee,
+      exchangeRateRaw: rateExchangeRateRaw,
     });
     let middleStr = "";
     if (!finalFeeDec.isZero()) middleStr = formatRateAmount(finalFeeDec.toString());
@@ -258,14 +287,8 @@ export default function AddTransactionSheet({
     }
     setRateMiddlemanAmount(middleStr);
 
-    // Rate-Mul + Service Fee, then positive PT-Fee (From realtime). Negative PT does not change amount.
-    const toAmountDeductionDec = computeRateMiddlemanProfit({
-      fromAmount: rateCurrencyFromAmount,
-      middlemanRate: rateMiddlemanRate,
-      feeAmount: rateMiddlemanInputAmount,
-      platformFeeAmount: "0",
-    });
-    const positivePtDec = positivePlatformFeeDeduction(rateMiddlemanPlatformFee);
+    // Desktop: customer preview = gross − Service Fee only (Rate-Mul / PT do not change form amount).
+    const toAmountDeductionDec = parsePositiveAmt(rateMiddlemanInputAmount);
 
     try {
       const fromDec = MoneyDecimal.toDecimal(clean(rateCurrencyFromAmount) || "0", 0);
@@ -275,13 +298,9 @@ export default function AddTransactionSheet({
         return;
       }
       const baseGross = fromDec.times(rateDec);
-      let finalGrossForBackend = baseGross;
-      if (inputAmtDec.lt(0)) finalGrossForBackend = baseGross.plus(inputAmtDec);
-      const grossDisplayStr = formatRateAmount(finalGrossForBackend.toString());
-      setRateToAmountGrossStr(grossDisplayStr);
-      let displayVal = finalGrossForBackend;
+      setRateToAmountGrossStr(formatRateAmount(baseGross.toString()));
+      let displayVal = baseGross;
       if (!toAmountDeductionDec.isZero()) displayVal = displayVal.minus(toAmountDeductionDec);
-      if (positivePtDec.gt(0)) displayVal = displayVal.minus(positivePtDec);
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));
     } catch {
       setRateCurrencyToAmount("");
@@ -318,18 +337,22 @@ export default function AddTransactionSheet({
       const middleId = rateMiddlemanAccount?.id ? String(rateMiddlemanAccount.id) : "";
       const mmrNorm = String(rateMiddlemanRate ?? "").replace(/,/g, "").trim();
       const mmFeeNorm = String(rateMiddlemanInputAmount ?? "").replace(/,/g, "").trim();
+      const mmPlatNorm = String(rateMiddlemanPlatformFee ?? "").replace(/,/g, "").trim();
       const hasMiddleRate = mmrNorm !== "";
       const hasMiddleFee = mmFeeNorm !== "";
-      if ((hasMiddleRate || hasMiddleFee) && !middleId) {
+      const hasMiddlePlatFee = mmPlatNorm !== "";
+      const hasAnyMiddleParam = hasMiddleRate || hasMiddleFee || hasMiddlePlatFee;
+      if (hasAnyMiddleParam && !middleId) {
         return pushToast(m.pleaseSelectMiddleManAccount, "error");
       }
-      if (middleId && !hasMiddleRate && !hasMiddleFee) {
+      if (middleId && !hasAnyMiddleParam) {
         return pushToast(m.pleaseEnterMiddleManRateOrFee, "error");
       }
-      if (hasMiddleRate && !parseRateExpression(mmrNorm).valid) {
+      if (hasMiddleRate && !parseMiddlemanRateInput(mmrNorm).valid) {
         return pushToast(m.pleaseEnterMiddleManRate, "error");
       }
-      if (countRateDecimalPlaces(String(rateCurrencyFromAmount ?? "").replace(/,/g, "").trim()) > RATE_STORE_MAX_DECIMALS) {
+      const finalRateAmount = rateFullAmount || rateCurrencyFromAmount;
+      if (countRateDecimalPlaces(String(finalRateAmount ?? "").replace(/,/g, "").trim()) > RATE_STORE_MAX_DECIMALS) {
         return pushToast(m.rateAmountMaxDecimals, "error");
       }
 
@@ -338,7 +361,7 @@ export default function AddTransactionSheet({
         const { payload } = buildRatePayload({
           toId,
           fromId,
-          fromAmt: rateCurrencyFromAmount,
+          fromAmt: finalRateAmount,
           toGrossStr,
           rateDate,
           txRemark,
@@ -376,7 +399,8 @@ export default function AddTransactionSheet({
     }
     if (!txDate) return pushToast(m.pleaseSelectTransactionDate, "error");
 
-    const cleanedAmt = MoneyDecimal.cleanMoneyInput(txAmount);
+    const finalAmount = txFullAmount || txAmount;
+    const cleanedAmt = MoneyDecimal.cleanMoneyInput(finalAmount);
     if (cleanedAmt === "") {
       return pushToast(isAdjustment ? m.pleaseEnterNonZeroAdjustment : m.pleaseEnterValidAmount, "error");
     }
@@ -489,7 +513,7 @@ export default function AddTransactionSheet({
           {isSearchMode ? null : (
             <>
           <DateTapRow
-            label={m.transactionDate}
+            label={isRate ? m.date || m.rateTransactionDate : m.transactionDate}
             value={txDateYmd}
             disabled={mutationsBlocked}
             onChange={setTxDateYmd}
@@ -539,7 +563,10 @@ export default function AddTransactionSheet({
                   inputMode="decimal"
                   value={txAmount}
                   disabled={mutationsBlocked}
-                  onChange={(e) => setTxAmount(sanitizeAmountInput(e.target.value))}
+                  onChange={(e) => {
+                    setTxFullAmount("");
+                    setTxAmount(sanitizeAmountInput(e.target.value));
+                  }}
                   className="m-tx-form-input"
                 />
               </div>
@@ -577,7 +604,9 @@ export default function AddTransactionSheet({
                     const tmpAmt = rateCurrencyFromAmount;
                     setRateCurrencyFromAmount(rateCurrencyToAmount);
                     setRateCurrencyToAmount(tmpAmt);
-                    setRateToAmountGrossStr(tmpAmt ? String(tmpAmt).replace(/,/g, "") : "");
+                    const tmpGrossTo = rateToAmountGrossStr;
+                    setRateToAmountGrossStr(rateFromAmountGrossStr);
+                    setRateFromAmountGrossStr(tmpGrossTo);
                   }}
                   className="m-tx-form-btn m-tx-form-btn--outline tap-scale"
                 >
@@ -607,20 +636,27 @@ export default function AddTransactionSheet({
                     inputMode="decimal"
                     value={rateCurrencyFromAmount}
                     disabled={mutationsBlocked}
-                    onChange={(e) => setRateCurrencyFromAmount(sanitizeAmountInput(e.target.value))}
+                    onChange={(e) => {
+                      setRateFullAmount("");
+                      setRateCurrencyFromAmount(sanitizeAmountInput(e.target.value));
+                    }}
                     placeholder={m.amount}
                     className="m-tx-form-input"
                     aria-label={m.fromAccount}
                   />
                 </div>
+                {/* text keyboard so `/3.15` division rates work; amount preview follows desktop */}
                 <input
                   type="text"
-                  inputMode="decimal"
+                  inputMode="text"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={rateExchangeRateRaw}
                   disabled={mutationsBlocked}
                   onChange={(e) => setRateExchangeRateRaw(e.target.value)}
                   placeholder={m.rate}
-                  className="m-tx-form-input"
+                  className="m-tx-form-input m-tx-rate-rate-input"
                   aria-label={m.rate}
                 />
                 <div className="m-tx-form-grid-2">
@@ -645,31 +681,14 @@ export default function AddTransactionSheet({
                     readOnly
                     disabled={mutationsBlocked}
                     placeholder={m.amount}
-                    className="m-tx-form-input m-tx-form-input--readonly"
+                    className="m-tx-form-input m-tx-form-input--readonly m-tx-rate-amount-display"
                     aria-label={m.toAccount}
                   />
                 </div>
-                <button
-                  type="button"
-                  disabled={mutationsBlocked || !rateCurrencyToAmount}
-                  title={m.reverseAccounts}
-                  aria-label={m.reverseAccounts}
-                  onClick={() => {
-                    const tmpAmt = rateCurrencyFromAmount;
-                    setRateCurrencyFromAmount(rateCurrencyToAmount);
-                    setRateCurrencyToAmount(tmpAmt);
-                    setRateToAmountGrossStr(tmpAmt ? String(tmpAmt).replace(/,/g, "") : "");
-                  }}
-                  className="m-tx-form-btn m-tx-form-btn--outline tap-scale"
-                >
-                  {m.reverse}
-                </button>
               </div>
 
               <div className="m-tx-form-section">
-                <p className="m-tx-form-label m-tx-form-label--optional">
-                  {m.account} <span>({m.optional})</span>
-                </p>
+                <p className="m-tx-form-label">{m.account}</p>
                 <AccountPicker
                   label=""
                   placeholder={m.selectToAccount}
@@ -713,12 +732,15 @@ export default function AddTransactionSheet({
                 />
                 <input
                   type="text"
-                  inputMode="decimal"
+                  inputMode="text"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
                   value={rateMiddlemanRate}
                   disabled={mutationsBlocked}
                   onChange={(e) => setRateMiddlemanRate(e.target.value)}
                   placeholder={m.rateMultiplier}
-                  className="m-tx-form-input"
+                  className="m-tx-form-input m-tx-rate-rate-input"
                   aria-label={m.rateMultiplier}
                 />
                 <div className="m-tx-form-grid-2">
@@ -727,7 +749,10 @@ export default function AddTransactionSheet({
                     inputMode="decimal"
                     value={rateMiddlemanInputAmount}
                     disabled={mutationsBlocked}
-                    onChange={(e) => setRateMiddlemanInputAmount(sanitizeAmountInput(e.target.value))}
+                    onChange={(e) => setRateMiddlemanInputAmount(sanitizePositiveAmountInput(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key === "-" || e.key === "Subtract") e.preventDefault();
+                    }}
                     placeholder={m.fee}
                     className="m-tx-form-input"
                     aria-label={m.fee}
@@ -737,7 +762,7 @@ export default function AddTransactionSheet({
                     inputMode="decimal"
                     value={rateMiddlemanPlatformFee}
                     disabled={mutationsBlocked}
-                    onChange={(e) => setRateMiddlemanPlatformFee(sanitizeAmountInput(e.target.value))}
+                    onChange={(e) => setRateMiddlemanPlatformFee(sanitizePlatformFeeInput(e.target.value))}
                     placeholder={m.platformFee}
                     className="m-tx-form-input"
                     aria-label={m.platformFee}
@@ -750,7 +775,7 @@ export default function AddTransactionSheet({
                   readOnly
                   disabled={mutationsBlocked}
                   placeholder={m.amount}
-                  className="m-tx-form-input m-tx-form-input--readonly"
+                  className="m-tx-form-input m-tx-form-input--readonly m-tx-rate-amount-display"
                   aria-label={m.middleMan}
                 />
               </div>

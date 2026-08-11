@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchMobileCurrencyCodes } from "../lib/dashboardCurrencies.js";
 import {
-  defaultDashboardDateRange,
   formatRangeLabel,
   periodPresetRange,
+  todayYmd,
 } from "../lib/dashboardDateUtils.js";
 import {
   companiesForPicker as resolveCompaniesForPicker,
@@ -26,12 +26,18 @@ import {
   applyOptimisticSubmitBalancePatch,
   applySummaryWinLossDisplayTolerance,
   applyTransactionDisplayFilters,
+  applyTypeSearchAccountFilter,
   buildTransactionSearchQueryFilters,
   calculateTotals,
+  hasSubmitFocusByCurrency,
   mergeSearchApiDataList,
+  notifyTransactionListInvalidated,
   orderCurrencyRows,
   sanitizeSearchApiData,
   sortByRole,
+  TX_DATA_CHANGED_EVENT,
+  TX_LIST_INVALIDATE_HANDLED_KEY,
+  TX_LIST_INVALIDATE_LS_KEY,
 } from "../lib/transactionPaymentLogic.js";
 import {
   approveContra,
@@ -44,9 +50,11 @@ import {
   searchTransactions,
   submitTransaction,
   fetchTypeAccountSearch,
+  fetchTypeTransactionSearch,
 } from "../lib/transactionApi.js";
 import {
   buildOptimisticSubmitDeltas,
+  collectSubmitFocusAccountIds,
 } from "../lib/transactionSubmitHelpers.js";
 import { isPartnershipAuditReadOnlyLocked } from "../lib/partnershipAuditReadOnly.js";
 import { clearMobileTxListSnapshot, readMobileTxListSnapshot } from "../lib/mobileTxListSnapshot.js";
@@ -54,6 +62,13 @@ import { TRANSACTION_I18N, getTransactionText } from "../translateFile/transacti
 import { DASHBOARD_I18N } from "../translateFile/dashboardTranslate.js";
 import { canAccessTransaction, resolveMobileLandingPath } from "../utils/mobilePermissions.js";
 import { buildApiUrl } from "../utils/apiUrl.js";
+import { readLoginLang, writeLoginLang } from "../lib/loginLang.js";
+import {
+  buildMobileRealtimeScopeFromGc,
+  setMobileRealtimeScope,
+} from "../lib/realtime/mobileRealtimeScope.js";
+import { REALTIME_DOMAINS } from "../lib/realtime/realtimeEvents.js";
+import { useRealtimeDomain } from "../lib/realtime/useRealtimeDomain.js";
 
 const COMPANIES_API = "api/transactions/get_owner_companies_api.php";
 
@@ -62,17 +77,9 @@ function isManagerOrAbove(me) {
   return role === "manager" || role === "admin" || role === "owner";
 }
 
-function mergeDisplayRows(rawSearchData) {
-  if (!rawSearchData) return [];
-  const left = Array.isArray(rawSearchData.left_table) ? rawSearchData.left_table : [];
-  const right = Array.isArray(rawSearchData.right_table) ? rawSearchData.right_table : [];
-  return sortByRole([...left, ...right]);
-}
-
 export function useMobileTransaction({ listPaused = false } = {}) {
   const navigate = useNavigate();
-  const defaults = defaultDashboardDateRange();
-  const [lang, setLangState] = useState(() => localStorage.getItem("login_lang") || "en");
+  const [lang, setLangState] = useState(() => readLoginLang());
   const t = useMemo(() => getTransactionText.bind(null, lang), [lang]);
   const m = useMemo(() => TRANSACTION_I18N[lang] || TRANSACTION_I18N.en, [lang]);
   const i18n = useMemo(
@@ -84,9 +91,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   );
 
   const setLang = useCallback((next) => {
-    const normalized = next === "zh" ? "zh" : "en";
-    localStorage.setItem("login_lang", normalized);
-    setLangState(normalized);
+    setLangState(writeLoginLang(next));
   }, []);
 
   const [me, setMe] = useState(null);
@@ -96,11 +101,15 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   const [groupsAllMode, setGroupsAllMode] = useState(false);
   const [groupAllMode, setGroupAllMode] = useState(false);
   const [currency, setCurrency] = useState("MYR");
+  /** At least one currency required — never "ALL currencies". */
+  const [selectedCurrencies, setSelectedCurrencies] = useState(["MYR"]);
   const [currencies, setCurrencies] = useState(["MYR"]);
   const [currenciesReady, setCurrenciesReady] = useState(false);
-  const [dateFrom, setDateFrom] = useState(defaults.dateFrom);
-  const [dateTo, setDateTo] = useState(defaults.dateTo);
-  const [activePreset, setActivePreset] = useState("thisYear");
+  const filtersBeforeTypeSearchRef = useRef(null);
+  /** Desktop TX parity: Capture Date defaults to today (not This Year / This Month). */
+  const [dateFrom, setDateFrom] = useState(() => todayYmd());
+  const [dateTo, setDateTo] = useState(() => todayYmd());
+  const [activePreset, setActivePreset] = useState("today");
 
   const [showName, setShowName] = useState(false);
   const [showCaptureOnly, setShowCaptureOnly] = useState(false);
@@ -110,6 +119,9 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [typeSearchActive, setTypeSearchActive] = useState(false);
   const [typeSearchFormType, setTypeSearchFormType] = useState("");
+  /** Post-submit focused account ids by currency (desktop applySubmitFocusAndRefresh slim). */
+  const [submitFocusByCurrency, setSubmitFocusByCurrency] = useState({});
+  const [submitFocusRangeKey, setSubmitFocusRangeKey] = useState(null);
   const [contraInbox, setContraInbox] = useState({ open: false, items: [], loading: false });
 
   const [rawSearchData, setRawSearchData] = useState(null);
@@ -127,6 +139,8 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   const searchSeq = useRef(0);
   /** After restoring a list snapshot (Back from history), skip the next auto search once. */
   const skipNextSearchRef = useRef(false);
+  /** First Type Search entry: query all currencies today, then narrow to codes with activity. */
+  const typeSearchDiscoverCodesRef = useRef(null);
   /** Track Payment History pause so Back does not auto re-search. */
   const listPausedRef = useRef(listPaused);
   const rawSearchDataRef = useRef(rawSearchData);
@@ -176,14 +190,44 @@ export function useMobileTransaction({ listPaused = false } = {}) {
     window.setTimeout(() => setToast(null), 4000);
   }, []);
 
+  const captureRangeKey = `${dateFrom || ""}|${dateTo || ""}`;
+  const submitFocusActive =
+    hasSubmitFocusByCurrency(submitFocusByCurrency) && submitFocusRangeKey === captureRangeKey;
+  const listFocusActive = typeSearchActive || submitFocusActive;
+
   const displayRows = useMemo(() => {
-    const merged = mergeDisplayRows(rawSearchData);
+    let left = Array.isArray(rawSearchData?.left_table) ? rawSearchData.left_table : [];
+    let right = Array.isArray(rawSearchData?.right_table) ? rawSearchData.right_table : [];
+    if (submitFocusActive) {
+      const allIds = new Set();
+      for (const ids of Object.values(submitFocusByCurrency || {})) {
+        if (!Array.isArray(ids)) continue;
+        for (const id of ids) {
+          const n = Number(id);
+          if (Number.isFinite(n) && n > 0) allIds.add(n);
+        }
+      }
+      if (allIds.size > 0) {
+        const focused = applyTypeSearchAccountFilter(left, right, allIds);
+        left = focused.left;
+        right = focused.right;
+      }
+    }
+    const merged = sortByRole([...left, ...right]);
     return applyTransactionDisplayFilters(merged, {
-      showZero: showZeroBalance,
-      showPaymentOnly,
-      showWinLossOnly: showCaptureOnly,
+      showZero: listFocusActive ? true : showZeroBalance,
+      showPaymentOnly: listFocusActive ? false : showPaymentOnly,
+      showWinLossOnly: listFocusActive ? false : showCaptureOnly,
     });
-  }, [rawSearchData, showZeroBalance, showPaymentOnly, showCaptureOnly]);
+  }, [
+    rawSearchData,
+    showZeroBalance,
+    showPaymentOnly,
+    showCaptureOnly,
+    submitFocusActive,
+    submitFocusByCurrency,
+    listFocusActive,
+  ]);
 
   const totals = useMemo(() => {
     if (!displayRows.length) return rawSearchData?.totals?.summary || null;
@@ -193,9 +237,19 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   const dateRangeText = useMemo(() => formatRangeLabel(dateFrom, dateTo), [dateFrom, dateTo]);
 
   const currencyCodesForSearch = useMemo(() => {
-    if (!currency || currency === "ALL") return currencies.filter((c) => c !== "ALL");
-    return [currency];
-  }, [currency, currencies]);
+    const available = currencies.filter((c) => c && c !== "ALL");
+    const fallback = available[0] || "MYR";
+    const picked = selectedCurrencies
+      .map((c) => String(c || "").toUpperCase().trim())
+      .filter((c) => c && c !== "ALL" && (!available.length || available.includes(c)));
+    return picked.length ? picked : [fallback];
+  }, [selectedCurrencies, currencies]);
+
+  const currencyFilterLabel = useMemo(() => {
+    const codes = currencyCodesForSearch;
+    if (codes.length === 1) return codes[0];
+    return `${codes.length}`;
+  }, [currencyCodesForSearch]);
 
   const runSearch = useCallback(
     async (signal) => {
@@ -210,6 +264,12 @@ export function useMobileTransaction({ listPaused = false } = {}) {
           showCaptureOnly,
         });
 
+        const discoverCodes = typeSearchDiscoverCodesRef.current;
+        const codesForQuery =
+          Array.isArray(discoverCodes) && discoverCodes.length
+            ? discoverCodes
+            : currencyCodesForSearch;
+
         const paramsBase = {
           ...scopeApi,
           dateFrom,
@@ -217,59 +277,148 @@ export function useMobileTransaction({ listPaused = false } = {}) {
           showInactive: queryFilters.showInactiveForQuery,
           showCaptureOnly: queryFilters.showCaptureOnlyForQuery,
           hideZeroBalance: queryFilters.hideZeroBalanceForQuery,
-          currencyCodes: currencyCodesForSearch,
+          currencyCodes: codesForQuery,
           categories: selectedCategories,
           typeSearch: typeSearchActive,
           typeSearchFormType: typeSearchActive ? typeSearchFormType : undefined,
         };
 
-        if (typeSearchActive && typeSearchFormType) {
-          try {
-            const ids = await fetchTypeAccountSearch({
-              ...scopeApi,
-              // Same as desktop: Capture Date × all pure manual types (ignore form Type).
-              transactionType: "ALL",
-              signal,
-            });
-            if (signal?.aborted) return;
-            paramsBase.typeAccountIds = ids;
-            paramsBase.typeSearchFormType = "ALL";
-          } catch {
-            /* still run search without ids */
-          }
-        }
+        const PERIOD_TYPE_SEARCH_TYPES = new Set([
+          "CONTRA",
+          "PAYMENT",
+          "CLAIM",
+          "CLEAR",
+          "RATE",
+          "ADJUSTMENT",
+          "PROFIT",
+          "ALL",
+        ]);
+        const normalizedType = String(typeSearchFormType || "ALL").toUpperCase().trim();
+        const usePeriodTypeSearch =
+          typeSearchActive && PERIOD_TYPE_SEARCH_TYPES.has(normalizedType || "ALL");
+        const useTxnTypeSearch =
+          typeSearchActive && normalizedType && !PERIOD_TYPE_SEARCH_TYPES.has(normalizedType);
 
         let currentData = null;
-        if (transactionScope?.mode === "aggregate" && transactionScope.mergeCompanyIds?.length) {
-          const results = await Promise.all(
-            transactionScope.mergeCompanyIds.map((cid) =>
-              searchTransactions({
-                ...paramsBase,
-                companyId: cid,
-                viewGroup: scopeApi.viewGroup || undefined,
-                groupId: undefined,
-                signal,
-              }),
-            ),
-          );
+
+        if (useTxnTypeSearch) {
+          currentData = await fetchTypeTransactionSearch({
+            ...scopeApi,
+            transactionType: normalizedType,
+            currencyCodes: codesForQuery,
+            signal,
+          });
           if (seq !== searchSeq.current || signal?.aborted) return;
-          const payloads = results.filter((r) => r?.success && r?.data).map((r) => r.data);
-          if (!payloads.length) {
-            setRawSearchData({ left_table: [], right_table: [], totals: null });
+          if (!currentData) {
+            setSearchError(m.searchFailed);
             return;
           }
-          currentData = mergeSearchApiDataList(payloads);
         } else {
-          const result = await searchTransactions({ ...paramsBase, signal });
-          if (seq !== searchSeq.current || signal?.aborted) return;
-          if (!result?.success || !result?.data) {
-            setSearchError(result?.message || result?.error || m.searchFailed);
-            return;
+          if (usePeriodTypeSearch) {
+            try {
+              const ids = await fetchTypeAccountSearch({
+                ...scopeApi,
+                // Same as desktop: Capture Date × all pure manual types (ignore form Type).
+                transactionType: "ALL",
+                signal,
+              });
+              if (signal?.aborted) return;
+              paramsBase.typeAccountIds = ids;
+              paramsBase.typeSearchFormType = "ALL";
+            } catch {
+              /* still run search without ids */
+            }
           }
-          currentData = result.data;
+
+          if (transactionScope?.mode === "aggregate" && transactionScope.mergeCompanyIds?.length) {
+            const results = await Promise.all(
+              transactionScope.mergeCompanyIds.map((cid) =>
+                searchTransactions({
+                  ...paramsBase,
+                  companyId: cid,
+                  viewGroup: scopeApi.viewGroup || undefined,
+                  groupId: undefined,
+                  signal,
+                }),
+              ),
+            );
+            if (seq !== searchSeq.current || signal?.aborted) return;
+            const payloads = results.filter((r) => r?.success && r?.data).map((r) => r.data);
+            if (!payloads.length) {
+              setRawSearchData({ left_table: [], right_table: [], totals: null });
+              return;
+            }
+            currentData = mergeSearchApiDataList(payloads);
+          } else {
+            const result = await searchTransactions({ ...paramsBase, signal });
+            if (seq !== searchSeq.current || signal?.aborted) return;
+            if (!result?.success || !result?.data) {
+              setSearchError(result?.message || result?.error || m.searchFailed);
+              return;
+            }
+            currentData = result.data;
+          }
         }
 
-        setRawSearchData(sanitizeSearchApiData(currentData));
+        let cleaned = sanitizeSearchApiData(currentData);
+        if (typeSearchActive) {
+          const hasTypeSearchMovement = (row) => {
+            if (!row) return false;
+            if (Number(row?.has_crdr_transactions) === 1 || Number(row?.has_win_loss_transactions) === 1) {
+              return true;
+            }
+            if (Number(row?.has_contra_clear_period) === 1) return true;
+            const wl = parseFloat(String(row?.win_loss ?? "").replace(/,/g, "")) || 0;
+            const wlFull = parseFloat(String(row?.win_loss_full ?? "").replace(/,/g, "")) || 0;
+            if (Math.abs(wl) > 0.0001 || Math.abs(wlFull) > 0.0001) return true;
+            const crDr = parseFloat(String(row?.cr_dr ?? "").replace(/,/g, "")) || 0;
+            return Math.abs(crDr) > 0.0001;
+          };
+          cleaned = sanitizeSearchApiData({
+            ...cleaned,
+            left_table: (cleaned.left_table || []).filter(hasTypeSearchMovement),
+            right_table: (cleaned.right_table || []).filter(hasTypeSearchMovement),
+          });
+        }
+
+        // Desktop parity: first Type Search entry discovers currencies with activity today.
+        if (typeSearchDiscoverCodesRef.current) {
+          typeSearchDiscoverCodesRef.current = null;
+          const foundSet = new Set();
+          [...(cleaned.left_table || []), ...(cleaned.right_table || [])].forEach((row) => {
+            const cur = String(row?.currency || "").toUpperCase().trim();
+            if (cur) foundSet.add(cur);
+          });
+          const order = currencies
+            .map((c) => String(c || "").toUpperCase().trim())
+            .filter((c) => c && c !== "ALL");
+          let focusCurrencies = [...foundSet].sort((a, b) => {
+            const ia = order.indexOf(a);
+            const ib = order.indexOf(b);
+            if (ia === -1 && ib === -1) return a.localeCompare(b);
+            if (ia === -1) return 1;
+            if (ib === -1) return -1;
+            return ia - ib;
+          });
+          if (!focusCurrencies.length) {
+            focusCurrencies = [order[0] || "MYR"];
+          }
+          const focusSet = new Set(focusCurrencies);
+          cleaned = sanitizeSearchApiData({
+            ...cleaned,
+            left_table: (cleaned.left_table || []).filter((row) =>
+              focusSet.has(String(row?.currency || "").toUpperCase().trim()),
+            ),
+            right_table: (cleaned.right_table || []).filter((row) =>
+              focusSet.has(String(row?.currency || "").toUpperCase().trim()),
+            ),
+          });
+          skipNextSearchRef.current = true;
+          setSelectedCurrencies(focusCurrencies);
+          setCurrency(focusCurrencies[0]);
+        }
+
+        setRawSearchData(cleaned);
       } catch (e) {
         if (signal?.aborted || e?.name === "AbortError") return;
         setSearchError(e?.message || m.searchFailed);
@@ -287,6 +436,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
       showPaymentOnly,
       showCaptureOnly,
       currencyCodesForSearch,
+      currencies,
       selectedCategories,
       typeSearchActive,
       typeSearchFormType,
@@ -380,7 +530,16 @@ export function useMobileTransaction({ listPaused = false } = {}) {
           setSelectedGroup(snap.selectedGroup ? String(snap.selectedGroup) : null);
           setGroupsAllMode(Boolean(snap.groupsAllMode));
           setGroupAllMode(Boolean(snap.groupAllMode));
-          if (snap.currency) setCurrency(String(snap.currency));
+          if (Array.isArray(snap.selectedCurrencies)) {
+            const restored = snap.selectedCurrencies
+              .map((c) => String(c || "").toUpperCase())
+              .filter((c) => c && c !== "ALL");
+            if (restored.length) setSelectedCurrencies(restored);
+          }
+          if (snap.currency) {
+            const code = String(snap.currency).toUpperCase();
+            if (code && code !== "ALL") setCurrency(code);
+          }
           if (snap.dateFrom) setDateFrom(String(snap.dateFrom));
           if (snap.dateTo) setDateTo(String(snap.dateTo));
           if (snap.activePreset != null) setActivePreset(String(snap.activePreset));
@@ -441,8 +600,16 @@ export function useMobileTransaction({ listPaused = false } = {}) {
         });
         if (ac.signal.aborted) return;
         const next = codes.length ? codes : ["MYR"];
+        const fallback = next[0] || "MYR";
         setCurrencies(next);
-        setCurrency((prev) => (next.includes(prev) ? prev : next[0] || "MYR"));
+        setSelectedCurrencies((prev) => {
+          const kept = (prev || []).filter((c) => next.includes(c) && c !== "ALL");
+          return kept.length ? kept : [fallback];
+        });
+        setCurrency((prev) => {
+          if (prev && prev !== "ALL" && next.includes(prev)) return prev;
+          return fallback;
+        });
       } catch {
         if (!ac.signal.aborted) setCurrencies(["MYR"]);
       } finally {
@@ -493,6 +660,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
       groupsAllMode,
       groupAllMode,
       currency,
+      selectedCurrencies,
       dateFrom,
       dateTo,
       activePreset,
@@ -511,6 +679,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
       groupsAllMode,
       groupAllMode,
       currency,
+      selectedCurrencies,
       dateFrom,
       dateTo,
       activePreset,
@@ -586,7 +755,25 @@ export function useMobileTransaction({ listPaused = false } = {}) {
         setActivePreset("");
       }
 
-      if (draft.currency) setCurrency(draft.currency);
+      if (Array.isArray(draft.selectedCurrencies)) {
+        const next = draft.selectedCurrencies
+          .map((c) => String(c || "").toUpperCase().trim())
+          .filter((c) => c && c !== "ALL");
+        const fallback = currencies.filter((c) => c && c !== "ALL")[0] || "MYR";
+        const resolved = next.length ? next : [fallback];
+        setSelectedCurrencies(resolved);
+        setCurrency(resolved[0]);
+      } else if (draft.currency) {
+        const code = String(draft.currency).toUpperCase();
+        const fallback = currencies.filter((c) => c && c !== "ALL")[0] || "MYR";
+        if (!code || code === "ALL") {
+          setSelectedCurrencies([fallback]);
+          setCurrency(fallback);
+        } else {
+          setSelectedCurrencies([code]);
+          setCurrency(code);
+        }
+      }
       if (Array.isArray(draft.selectedCategories)) setSelectedCategories(draft.selectedCategories);
 
       if (draft.groupsAllMode) {
@@ -650,7 +837,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
         setReloadNonce((n) => n + 1);
       }
     },
-    [companies, companyId, me],
+    [companies, companyId, me, currencies],
   );
 
   const canUseGroupOnlyForGroup = useCallback(
@@ -675,19 +862,23 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   }, []);
 
   const resetFilters = useCallback(() => {
-    const d = defaultDashboardDateRange();
-    setDateFrom(d.dateFrom);
-    setDateTo(d.dateTo);
-    setActivePreset("thisYear");
+    const today = todayYmd();
+    const fallback = currencies.filter((c) => c && c !== "ALL")[0] || "MYR";
+    setDateFrom(today);
+    setDateTo(today);
+    setActivePreset("today");
     setShowName(false);
     setShowCaptureOnly(false);
     setShowPaymentOnly(false);
     setShowZeroBalance(false);
+    setSelectedCurrencies([fallback]);
+    setCurrency(fallback);
     setSelectedCategories([]);
     setTypeSearchActive(false);
     setTypeSearchFormType("");
+    filtersBeforeTypeSearchRef.current = null;
     setReloadNonce((n) => n + 1);
-  }, []);
+  }, [currencies]);
 
   const refreshContraInboxBadge = useCallback(
     async (api = scopeApi) => {
@@ -713,24 +904,312 @@ export function useMobileTransaction({ listPaused = false } = {}) {
     return undefined;
   }, [scopeReady, currenciesReady, reloadNonce, refreshContraInboxBadge]);
 
+  // Desktop parity: refresh list when maintenance (or other tabs) invalidates TX data.
+  useEffect(() => {
+    if (!scopeReady || listPaused) return undefined;
+
+    const readHandled = () => {
+      try {
+        return parseInt(sessionStorage.getItem(TX_LIST_INVALIDATE_HANDLED_KEY) || "0", 10) || 0;
+      } catch {
+        return 0;
+      }
+    };
+    const markHandled = (ts) => {
+      try {
+        sessionStorage.setItem(TX_LIST_INVALIDATE_HANDLED_KEY, String(ts));
+      } catch {
+        /* ignore */
+      }
+    };
+
+    let refreshInFlight = false;
+    let pendingRefresh = false;
+
+    const refreshFromInvalidate = () => {
+      const invalidateTs = parseInt(localStorage.getItem(TX_LIST_INVALIDATE_LS_KEY) || "0", 10) || 0;
+      const handledTs = readHandled();
+      if (!invalidateTs || invalidateTs <= handledTs) return;
+      if (refreshInFlight) {
+        pendingRefresh = true;
+        return;
+      }
+      refreshInFlight = true;
+      pendingRefresh = false;
+      setReloadNonce((n) => n + 1);
+      markHandled(invalidateTs);
+      refreshInFlight = false;
+      if (pendingRefresh) {
+        pendingRefresh = false;
+        refreshFromInvalidate();
+      }
+    };
+
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      refreshFromInvalidate();
+    };
+    const onStorage = (e) => {
+      if (!e || e.key !== TX_LIST_INVALIDATE_LS_KEY) return;
+      refreshFromInvalidate();
+    };
+
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("storage", onStorage);
+    window.addEventListener(TX_DATA_CHANGED_EVENT, refreshFromInvalidate);
+    refreshFromInvalidate();
+    const poll = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      refreshFromInvalidate();
+    }, 1000);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener(TX_DATA_CHANGED_EVENT, refreshFromInvalidate);
+      clearInterval(poll);
+    };
+  }, [scopeReady, listPaused]);
+
+  // Publish GC scope for MobileRealtimeBridge SSE ticket.
+  useEffect(() => {
+    setMobileRealtimeScope(
+      buildMobileRealtimeScopeFromGc({
+        companyId,
+        selectedGroup,
+        groupsAllMode,
+        groupAllMode,
+      }),
+    );
+  }, [companyId, selectedGroup, groupsAllMode, groupAllMode]);
+
+  // SSE LEDGER → silent list / contra badge refresh (bridge also notifies TX_DATA_CHANGED).
+  useRealtimeDomain(
+    REALTIME_DOMAINS.LEDGER,
+    () => {
+      if (listPaused) return;
+      setReloadNonce((n) => n + 1);
+    },
+    { enabled: scopeReady && !listPaused },
+  );
+
+  // Fallback when SSE is down: focus / visibility + slow poll.
+  useEffect(() => {
+    if (!scopeReady || listPaused) return undefined;
+    const softReload = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      setReloadNonce((n) => n + 1);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") softReload();
+    };
+    window.addEventListener("focus", softReload);
+    document.addEventListener("visibilitychange", onVisibility);
+    const timer = window.setInterval(softReload, 180_000);
+    return () => {
+      window.removeEventListener("focus", softReload);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.clearInterval(timer);
+    };
+  }, [scopeReady, listPaused]);
+
   const runTypeSearch = useCallback(
     (txType) => {
       const tType = String(txType || "").toUpperCase().trim();
       if (!tType) return;
+
+      // First entry: snapshot filters, clear to today (desktop parity).
+      if (!typeSearchActive) {
+        if (!filtersBeforeTypeSearchRef.current) {
+          filtersBeforeTypeSearchRef.current = {
+            selectedCategories: [...selectedCategories],
+            selectedCurrencies: [...selectedCurrencies],
+            currency,
+            dateFrom,
+            dateTo,
+            activePreset,
+            showName,
+            showPaymentOnly,
+            showCaptureOnly,
+            showZeroBalance,
+          };
+        }
+        const today = todayYmd();
+        const available = currencies.filter((c) => c && c !== "ALL");
+        typeSearchDiscoverCodesRef.current = available.length ? available : ["MYR"];
+        setDateFrom(today);
+        setDateTo(today);
+        setActivePreset("today");
+        setSelectedCategories([]);
+        // Keep prior currency chips until discover narrows; query uses discover ref.
+        setShowName(false);
+        setShowPaymentOnly(false);
+        setShowCaptureOnly(false);
+        setShowZeroBalance(false);
+      }
+
       setTypeSearchActive(true);
-      // List ignores form Type — always ALL (Capture Date × any pure manual type).
-      setTypeSearchFormType("ALL");
+      // Period types: list uses ALL (Capture Date × any pure manual type).
+      const PERIOD = new Set([
+        "CONTRA",
+        "PAYMENT",
+        "CLAIM",
+        "CLEAR",
+        "RATE",
+        "ADJUSTMENT",
+        "PROFIT",
+        "ALL",
+      ]);
+      setTypeSearchFormType(PERIOD.has(tType) ? "ALL" : tType);
       setReloadNonce((n) => n + 1);
     },
-    [],
+    [
+      typeSearchActive,
+      selectedCategories,
+      selectedCurrencies,
+      currency,
+      currencies,
+      dateFrom,
+      dateTo,
+      activePreset,
+      showName,
+      showPaymentOnly,
+      showCaptureOnly,
+      showZeroBalance,
+    ],
   );
 
   const exitTypeSearch = useCallback(() => {
     clearMobileTxListSnapshot();
+    typeSearchDiscoverCodesRef.current = null;
+    const snap = filtersBeforeTypeSearchRef.current;
+    filtersBeforeTypeSearchRef.current = null;
     setTypeSearchActive(false);
     setTypeSearchFormType("");
+    setSubmitFocusByCurrency({});
+    setSubmitFocusRangeKey(null);
+    if (snap) {
+      setSelectedCategories(Array.isArray(snap.selectedCategories) ? snap.selectedCategories : []);
+      {
+        const fallback = currencies.filter((c) => c && c !== "ALL")[0] || "MYR";
+        const restored = Array.isArray(snap.selectedCurrencies)
+          ? snap.selectedCurrencies
+              .map((c) => String(c || "").toUpperCase())
+              .filter((c) => c && c !== "ALL")
+          : [];
+        const next = restored.length ? restored : [fallback];
+        setSelectedCurrencies(next);
+        const snapCur = String(snap.currency || "").toUpperCase();
+        setCurrency(snapCur && snapCur !== "ALL" ? snapCur : next[0]);
+      }
+      if (snap.dateFrom) setDateFrom(snap.dateFrom);
+      if (snap.dateTo) setDateTo(snap.dateTo);
+      setActivePreset(snap.activePreset || "");
+      setShowName(Boolean(snap.showName));
+      setShowPaymentOnly(Boolean(snap.showPaymentOnly));
+      setShowCaptureOnly(Boolean(snap.showCaptureOnly));
+      setShowZeroBalance(Boolean(snap.showZeroBalance));
+    }
     setReloadNonce((n) => n + 1);
-  }, []);
+  }, [currencies]);
+
+  const applySubmitFocusAndRefresh = useCallback(
+    ({ accountIds, submitCurrency, transactionDate, amount, txType, toAccountId, fromAccountId } = {}) => {
+      const ids = [...new Set((accountIds || []).map((id) => Number(id)).filter((id) => id > 0))];
+      if (ids.length === 0) return;
+
+      const txDate = String(transactionDate || "").trim();
+      const currencyCodes = [
+        ...new Set(
+          (Array.isArray(submitCurrency) ? submitCurrency : [submitCurrency])
+            .map((c) => String(c || "").toUpperCase().trim())
+            .filter((c) => c && c !== "ALL"),
+        ),
+      ];
+
+      // Snapshot left filters once so Exit restores the pre-focus list (desktop Type Search session).
+      if (!filtersBeforeTypeSearchRef.current) {
+        filtersBeforeTypeSearchRef.current = {
+          selectedCategories: [...selectedCategories],
+          selectedCurrencies: [...selectedCurrencies],
+          currency,
+          dateFrom,
+          dateTo,
+          activePreset,
+          showName,
+          showPaymentOnly,
+          showCaptureOnly,
+          showZeroBalance,
+        };
+      }
+
+      if (txDate) {
+        setDateFrom(txDate);
+        setDateTo(txDate);
+        setActivePreset("");
+      }
+      setSelectedCategories([]);
+      setShowPaymentOnly(false);
+      setShowCaptureOnly(false);
+      setShowZeroBalance(true);
+      setTypeSearchActive(false);
+      setTypeSearchFormType("");
+
+      if (currencyCodes.length > 0) {
+        setSelectedCurrencies(currencyCodes);
+        setCurrency(currencyCodes[0]);
+      }
+
+      const rangeKey = txDate ? `${txDate}|${txDate}` : `${dateFrom}|${dateTo}`;
+      const didJumpCaptureDate = Boolean(txDate && (txDate !== dateFrom || txDate !== dateTo));
+      setSubmitFocusByCurrency((prev) => {
+        const base = !didJumpCaptureDate && submitFocusRangeKey === rangeKey ? { ...prev } : {};
+        const codes = currencyCodes.length ? currencyCodes : [String(currency || "MYR").toUpperCase()];
+        for (const code of codes) {
+          const existing = Array.isArray(base[code]) ? base[code] : [];
+          base[code] = [...new Set([...existing, ...ids])];
+        }
+        return base;
+      });
+      setSubmitFocusRangeKey(rangeKey);
+
+      // Skip optimistic patch when jumping dates — old-range rows are the wrong base.
+      const type = String(txType || "").toUpperCase();
+      const primaryCurrency = currencyCodes[0] || "";
+      if (!didJumpCaptureDate && type && type !== "RATE" && primaryCurrency) {
+        const deltas = buildOptimisticSubmitDeltas({
+          txType: type,
+          amount,
+          toAccountId,
+          fromAccountId,
+        });
+        if (deltas.length) {
+          setRawSearchData((prev) =>
+            applyOptimisticSubmitBalancePatch(prev, {
+              currency: primaryCurrency,
+              deltas,
+            }),
+          );
+        }
+      }
+
+      notifyTransactionListInvalidated("mobile_tx_submit_focus");
+      setReloadNonce((n) => n + 1);
+    },
+    [
+      selectedCategories,
+      selectedCurrencies,
+      currency,
+      dateFrom,
+      dateTo,
+      activePreset,
+      showName,
+      showPaymentOnly,
+      showCaptureOnly,
+      showZeroBalance,
+      submitFocusRangeKey,
+    ],
+  );
 
   const onApproveContra = useCallback(
     async (transactionId) => {
@@ -741,6 +1220,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
       const res = await approveContra({ transactionId, ...scopeApi });
       if (res?.success) {
         pushToast(res.message || m.approve, "success");
+        notifyTransactionListInvalidated("mobile_contra_approve");
         void refreshContraInboxBadge();
         setReloadNonce((n) => n + 1);
       } else {
@@ -759,6 +1239,7 @@ export function useMobileTransaction({ listPaused = false } = {}) {
       const res = await rejectContra({ transactionId, ...scopeApi });
       if (res?.success) {
         pushToast(res.message || m.reject, "success");
+        notifyTransactionListInvalidated("mobile_contra_reject");
         void refreshContraInboxBadge();
         setReloadNonce((n) => n + 1);
       } else {
@@ -769,13 +1250,13 @@ export function useMobileTransaction({ listPaused = false } = {}) {
   );
 
   const retry = useCallback(() => {
-    // Pull-to-refresh while in type search → exit to default list (same as Exit Search chip).
-    if (typeSearchActive) {
+    // Pull-to-refresh while in type/submit focus → exit to default list.
+    if (typeSearchActive || submitFocusActive) {
       exitTypeSearch();
       return;
     }
     setReloadNonce((n) => n + 1);
-  }, [typeSearchActive, exitTypeSearch]);
+  }, [typeSearchActive, submitFocusActive, exitTypeSearch]);
 
   const logout = useCallback(async () => {
     try {
@@ -822,26 +1303,35 @@ export function useMobileTransaction({ listPaused = false } = {}) {
           const txType = String(payload.transaction_type || "").toUpperCase();
           const toAccountId = payload.account_id;
           const fromAccountId = payload.from_account_id;
-          const submitCurrency = String(payload.currency || "").toUpperCase().trim();
+          const accountIds = collectSubmitFocusAccountIds({
+            txType,
+            toAccountId,
+            fromAccountId,
+            isAdjustment: txType === "ADJUSTMENT",
+            rateToAccountId: payload.rate_to_account_id || payload.account_id,
+            rateFromAccountId: payload.rate_from_account_id || payload.from_account_id,
+            rateTransferToAccountId: payload.rate_transfer_to_account_id || payload.rate_transfer_to_account,
+            rateTransferFromAccountId:
+              payload.rate_transfer_from_account_id || payload.rate_transfer_from_account,
+            rateMiddlemanAccountId: payload.rate_middleman_account_id,
+          });
+          const submitCurrency =
+            txType === "RATE"
+              ? [
+                  String(payload.rate_currency_from || "").toUpperCase().trim(),
+                  String(payload.rate_currency_to || "").toUpperCase().trim(),
+                ].filter(Boolean)
+              : String(payload.currency || "").toUpperCase().trim();
 
-          if (txType && txType !== "RATE" && submitCurrency) {
-            const deltas = buildOptimisticSubmitDeltas({
-              txType,
-              amount: payload.amount,
-              toAccountId,
-              fromAccountId,
-            });
-            if (deltas.length) {
-              setRawSearchData((prev) =>
-                applyOptimisticSubmitBalancePatch(prev, {
-                  currency: submitCurrency,
-                  deltas,
-                }),
-              );
-            }
-          }
-
-          setReloadNonce((n) => n + 1);
+          applySubmitFocusAndRefresh({
+            accountIds,
+            submitCurrency,
+            transactionDate: payload.transaction_date,
+            amount: payload.amount,
+            txType,
+            toAccountId,
+            fromAccountId,
+          });
           void refreshContraInboxBadge();
           return res;
         }
@@ -852,7 +1342,16 @@ export function useMobileTransaction({ listPaused = false } = {}) {
         return { success: false };
       }
     },
-    [scopeReady, scopeApi, transactionScope, mutationsBlocked, pushToast, m, refreshContraInboxBadge],
+    [
+      scopeReady,
+      scopeApi,
+      transactionScope,
+      mutationsBlocked,
+      pushToast,
+      m,
+      refreshContraInboxBadge,
+      applySubmitFocusAndRefresh,
+    ],
   );
 
   const orderCompanyId = useMemo(
@@ -882,8 +1381,10 @@ export function useMobileTransaction({ listPaused = false } = {}) {
     pickAllInGroup,
     applyFilters,
     canUseGroupOnlyForGroup,
-    currency,
+    currency: currencyFilterLabel,
     setCurrency,
+    selectedCurrencies,
+    setSelectedCurrencies,
     currencies,
     formCurrencies,
     dateFrom,
@@ -913,6 +1414,8 @@ export function useMobileTransaction({ listPaused = false } = {}) {
     },
     typeSearchActive,
     typeSearchFormType,
+    submitFocusActive,
+    listFocusActive,
     runTypeSearch,
     exitTypeSearch,
     contraInbox,

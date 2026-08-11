@@ -11,7 +11,54 @@ import {
   todayYmd,
 } from "../../lib/dashboardDateUtils.js";
 import { companiesForPicker as resolveCompaniesForPicker, pickCompany, resolveCompanyPickForGroup } from "../../lib/dashboardScope.js";
+import {
+  companyLoginCanUseGroupsAllLedger,
+  isCompanyLogin,
+  isGroupLogin,
+} from "../../lib/loginScope.js";
 import { dashboardLabel } from "../../translateFile/dashboardTranslate.js";
+
+/** Mirror useMobileDashboard.pickAllGroups for Filter draft. */
+function resolveGroupsAllDraft(dash, prev) {
+  const me = dash.me;
+  const companyGroupsAllLedger = companyLoginCanUseGroupsAllLedger(me);
+  const companyLoginGroupsAll =
+    isCompanyLogin(me) && !isGroupLogin(me) && !companyGroupsAllLedger;
+  let preserveCompanyId = null;
+  if (companyLoginGroupsAll) {
+    const fromDraft = prev?.companyId != null ? Number(prev.companyId) : NaN;
+    const fromDash = dash.companyId != null ? Number(dash.companyId) : NaN;
+    const fromMe = me?.company_id != null ? Number(me.company_id) : NaN;
+    if (Number.isFinite(fromDraft) && fromDraft > 0) preserveCompanyId = fromDraft;
+    else if (Number.isFinite(fromDash) && fromDash > 0) preserveCompanyId = fromDash;
+    else if (Number.isFinite(fromMe) && fromMe > 0) preserveCompanyId = fromMe;
+    else {
+      const first = resolveCompaniesForPicker(dash.companies, {
+        selectedGroup: null,
+        groupsAllMode: true,
+      })[0];
+      const firstId = first?.id != null ? Number(first.id) : NaN;
+      if (Number.isFinite(firstId) && firstId > 0) preserveCompanyId = firstId;
+    }
+  }
+  const useCompanyAllAggregate = companyLoginGroupsAll && !preserveCompanyId;
+  const groupLoginAllGroupsAggregate =
+    isGroupLogin(me) && !companyGroupsAllLedger && !useCompanyAllAggregate;
+  const nextGroupAllMode = companyGroupsAllLedger
+    ? false
+    : useCompanyAllAggregate || groupLoginAllGroupsAggregate;
+  const nextCompanyId = companyGroupsAllLedger
+    ? null
+    : companyLoginGroupsAll && !useCompanyAllAggregate
+      ? preserveCompanyId
+      : null;
+  return {
+    groupsAllMode: true,
+    groupAllMode: nextGroupAllMode,
+    selectedGroup: null,
+    companyId: nextCompanyId,
+  };
+}
 
 export function Pill({ active, disabled, onClick, block, tone = "blue", children }) {
   const activeMod =
@@ -96,6 +143,19 @@ function inRangeYmd(day, from, to) {
   return cmpYmd(day, lo) >= 0 && cmpYmd(day, hi) <= 0;
 }
 
+function resolveDraftCurrencies(dash) {
+  const fallback = String(dash.currencies?.[0] || "MYR").toUpperCase();
+  if (Array.isArray(dash.selectedCurrencies) && dash.selectedCurrencies.length) {
+    const picked = dash.selectedCurrencies
+      .map((c) => String(c || "").toUpperCase())
+      .filter((c) => c && c !== "ALL");
+    if (picked.length) return picked;
+  }
+  const code = String(dash.currency || "").toUpperCase();
+  if (!code || code === "ALL") return [fallback];
+  return [code];
+}
+
 function buildDraftFromDash(dash) {
   return {
     dateFrom: dash.dateFrom,
@@ -106,22 +166,30 @@ function buildDraftFromDash(dash) {
     groupAllMode: dash.groupAllMode,
     companyId: dash.companyId,
     currency: dash.currency,
+    selectedCurrencies: resolveDraftCurrencies(dash),
     selectedCategories: Array.isArray(dash.selectedCategories) ? [...dash.selectedCategories] : [],
   };
 }
 
 function buildDefaultDraft(dash) {
-  const range = periodPresetRange("thisYear") || defaultDashboardDateRange();
+  const txMode = Array.isArray(dash.categories);
+  // Transaction Capture Date → today; Dashboard matches first paint → This Month.
+  const preset = txMode ? "today" : "thisMonth";
+  const range = periodPresetRange(preset) || defaultDashboardDateRange();
   const fallback = pickCompany(dash.companies, dash.me?.company_id);
   return {
     dateFrom: range.dateFrom,
     dateTo: range.dateTo,
-    activePreset: "thisYear",
+    activePreset: preset,
     selectedGroup: null,
     groupsAllMode: false,
     groupAllMode: false,
     companyId: fallback?.id ?? null,
     currency: dash.currencies?.[0] || dash.currency || "MYR",
+    // Transaction: at least one currency (never ALL). Dashboard uses single `currency`.
+    selectedCurrencies: txMode
+      ? [String(dash.currencies?.[0] || dash.currency || "MYR").toUpperCase()]
+      : [],
     selectedCategories: [],
   };
 }
@@ -439,10 +507,7 @@ export default function FilterSheet({ open, onClose, dash }) {
                   onClick={() =>
                     setDraft((prev) => ({
                       ...prev,
-                      groupsAllMode: true,
-                      groupAllMode: false,
-                      selectedGroup: null,
-                      companyId: null,
+                      ...resolveGroupsAllDraft(dash, prev),
                     }))
                   }
                 >
@@ -469,21 +534,35 @@ export default function FilterSheet({ open, onClose, dash }) {
 
           <Section title={i18n.company}>
             <div className="m-filter-pill-wrap">
-              {(companiesForPicker.length > 1 || draft.selectedGroup) && (
+              {(companiesForPicker.length > 1 || draft.selectedGroup || draft.groupsAllMode) && (
                 <Pill
                   active={draft.groupAllMode}
-                  disabled={!draft.selectedGroup || draft.groupsAllMode}
+                  disabled={!draft.selectedGroup && !draft.groupsAllMode}
                   onClick={() =>
-                    setDraft((prev) => ({
-                      ...prev,
-                      groupAllMode: true,
-                      groupsAllMode: false,
-                      companyId:
-                        Number.isFinite(Number(prev.companyId)) && Number(prev.companyId) > 0
-                          ? prev.companyId
-                          : (resolveCompanyPickForGroup(dash.companies, prev.selectedGroup, prev.companyId)?.id ??
-                            null),
-                    }))
+                    setDraft((prev) => {
+                      // Desktop: Company All under Groups All keeps both flags.
+                      if (prev.groupsAllMode) {
+                        return {
+                          ...prev,
+                          groupAllMode: true,
+                          selectedGroup: null,
+                          companyId: null,
+                        };
+                      }
+                      return {
+                        ...prev,
+                        groupAllMode: true,
+                        groupsAllMode: false,
+                        companyId:
+                          Number.isFinite(Number(prev.companyId)) && Number(prev.companyId) > 0
+                            ? prev.companyId
+                            : (resolveCompanyPickForGroup(
+                                dash.companies,
+                                prev.selectedGroup,
+                                prev.companyId,
+                              )?.id ?? null),
+                      };
+                    })
                   }
                 >
                   {i18n.all}
@@ -523,15 +602,92 @@ export default function FilterSheet({ open, onClose, dash }) {
           {dash.currencies.length > 0 && (
             <Section title={i18n.currency}>
               <div className="m-filter-pill-scroll">
-                {dash.currencies.map((code) => (
-                  <Pill
-                    key={code}
-                    active={draft.currency === code}
-                    onClick={() => setDraft((prev) => ({ ...prev, currency: code }))}
-                  >
-                    {code}
-                  </Pill>
-                ))}
+                {Array.isArray(dash.categories) ? (
+                  <>
+                    {dash.currencies.map((code) => {
+                      const active = draft.selectedCurrencies.includes(code);
+                      return (
+                        <Pill
+                          key={code}
+                          active={active}
+                          onClick={() =>
+                            setDraft((prev) => {
+                              const set = new Set(prev.selectedCurrencies);
+                              if (set.has(code)) {
+                                if (set.size <= 1) return prev; // keep ≥1 currency
+                                set.delete(code);
+                              } else {
+                                set.add(code);
+                              }
+                              const next = [...set];
+                              return {
+                                ...prev,
+                                selectedCurrencies: next,
+                                currency: next[0] || code,
+                              };
+                            })
+                          }
+                        >
+                          {code}
+                        </Pill>
+                      );
+                    })}
+                  </>
+                ) : (
+                  dash.currencies.map((code) => (
+                    <Pill
+                      key={code}
+                      active={draft.currency === code}
+                      onClick={() => setDraft((prev) => ({ ...prev, currency: code }))}
+                    >
+                      {code}
+                    </Pill>
+                  ))
+                )}
+              </div>
+            </Section>
+          )}
+
+          {Array.isArray(dash.categories) && dash.categories.length > 0 && (
+            <Section title={dash.m?.category || i18n.category || "Category"}>
+              <div className="m-filter-pill-wrap">
+                <Pill
+                  active={draft.selectedCategories.length === 0}
+                  onClick={() => setDraft((prev) => ({ ...prev, selectedCategories: [] }))}
+                >
+                  {i18n.all}
+                </Pill>
+                {dash.categories.map((cat) => {
+                  const value =
+                    typeof cat === "string"
+                      ? cat.trim()
+                      : String(cat?.value ?? cat?.id ?? cat?.name ?? "").trim();
+                  const label =
+                    typeof cat === "string"
+                      ? value
+                      : String(cat?.label ?? cat?.name ?? value).trim() || value;
+                  if (!value) return null;
+                  const active = draft.selectedCategories.includes(value);
+                  return (
+                    <Pill
+                      key={value}
+                      active={active}
+                      onClick={() =>
+                        setDraft((prev) => {
+                          const has = prev.selectedCategories.includes(value);
+                          return {
+                            ...prev,
+                            selectedCategories: has
+                              ? prev.selectedCategories.filter((x) => x !== value)
+                              : [...prev.selectedCategories, value],
+                          };
+                        })
+                      }
+                    >
+                      {label}
+                    </Pill>
+                  );
+                })}
               </div>
             </Section>
           )}

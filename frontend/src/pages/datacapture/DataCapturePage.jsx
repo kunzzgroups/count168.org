@@ -63,7 +63,7 @@ import {
   getGroupOnlyProcessOptions,
   isGroupOnlyProcessId,
 } from "./lib/dataCaptureGroupOnlyProcesses.js";
-import { gamesPayrollDraftBucket } from "./lib/dataCaptureGamesPayrollProcesses.js";
+import { gamesPayrollDraftBucket, isGamesDraftEnabledProcess } from "./lib/dataCaptureGamesPayrollProcesses.js";
 import { resolveDataCaptureGridDimensions } from "./grid/dataCaptureGridMeta.js";
 import DataCaptureProcessSelect from "./components/DataCaptureProcessSelect.jsx";
 import SimpleSelect from "../../components/SimpleSelect.jsx";
@@ -1402,6 +1402,7 @@ function DataCapturePageContent() {
         formatGridReady={formatGridReady}
         hideCaptureTypeSelector={groupOnlyTable}
         groupOnlyTable={groupOnlyTable}
+        saveDataCaptureTableEnabled={isGamesDraftEnabledProcess(form.selectedProcess)}
         engineReady={scriptsReady}
         onCaptureTypeChange={handleCaptureTypeChange}
         submitDisabled={submitReset.submitDisabled || mutationsBlocked}

@@ -18,11 +18,13 @@ import {
 } from "./dataCaptureVerticalDumpDetect.js";
 import { tryReshapeC8WinLossPlainMatrix } from "./dataCaptureC8WinLossPasteHelper.js";
 import { tryReshapeAllGamesPlainMatrix } from "./dataCaptureAllGamesPasteHelper.js";
+import { tryReshapePdfTablePlainMatrix } from "./dataCapturePdfTablePasteHelper.js";
 import {
   plainTextLooksLikeAlignedTsv,
   sanitizePasteMatrix,
 } from "./dataCapturePasteMatrixSanitize.js";
 import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
+import { tryHandleAwcWinLossReportPaste } from "../vendors/dataCaptureAwcPaste.js";
 
 /**
  * Badge / summary chips like "Total win: 2,753.79" copy as one span —
@@ -124,6 +126,10 @@ export function parsePlainTextMatrix(pastedData) {
   // Scoped allGames (iview) helper — % tokens + Total(N) break shared vertical-dump.
   const allGames = tryReshapeAllGamesPlainMatrix(normalized);
   if (allGames?.length) return finalizePlainMatrix(allGames);
+
+  // Universal PDF table-row helper — multi-space / single-space collapsed invoice lines.
+  const pdfTable = tryReshapePdfTablePlainMatrix(normalized);
+  if (pdfTable?.length) return finalizePlainMatrix(pdfTable);
 
   const rawLines = normalized.split("\n");
   const nonEmptyLines = rawLines.filter((line) => line.trim() !== "");
@@ -303,6 +309,8 @@ export function handleTextModePaste(e, pastedData, anchorCell) {
   const htmlCandidate = resolveTextPasteHtml(rawHtmlCandidate) || rawHtmlCandidate;
   const wideHtmlRows = countWideHtmlTableRows(htmlCandidate || rawHtmlCandidate);
   const htmlNx1 = htmlTableLooksLikeVerticalNx1(htmlCandidate || rawHtmlCandidate);
+
+  if (tryHandleAwcWinLossReportPaste(html, pastedData, { anchorCell })) return true;
 
   // Match 2.FORMAT: prefer plain vertical-dump reshape whenever it yields a real
   // multi-col matrix. HTML-first only when it has a strictly fuller wide table

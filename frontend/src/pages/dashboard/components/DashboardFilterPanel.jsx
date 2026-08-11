@@ -1,4 +1,6 @@
-export function DashboardFilterPanel({
+import { memo } from "react";
+
+export const DashboardFilterPanel = memo(function DashboardFilterPanel({
   i18n,
   effectiveDateRangeText,
   groupIds,
@@ -22,7 +24,9 @@ export function DashboardFilterPanel({
   onCurrencyDropOn,
 }) {
   const showCompanyAll = companiesForPicker.length > 1;
-  const showCompanyRow = groupIds.length > 0 || companiesForPicker.length > 0;
+  // Never paint bare "Company:" label without pills (refresh mid-frame flicker).
+  const showCompanyRow = companiesForPicker.length > 0;
+  // Parent only mounts this panel when Date+Group+Company+Currency package is ready.
   const showPanel =
     groupIds.length > 0 || companiesForPicker.length > 0 || currencies.length > 0;
   const paintedGroupAll =
@@ -166,4 +170,4 @@ export function DashboardFilterPanel({
       )}
     </div>
   );
-}
+});
