@@ -16,6 +16,7 @@ import {
   plainMatrixLooksReliable,
   sanitizePasteMatrix,
 } from "./dataCapturePasteMatrixSanitize.js";
+import { ensureTotalRowCodeColumnGap } from "./dataCaptureTotalRowAlign.js";
 import { expandLabelColonMoneyCells } from "./dataCaptureTextPaste.js";
 
 function flattenFormatBodyMatrixToPlain(bodyMatrix) {
@@ -231,11 +232,17 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
       return false;
     }
 
-    const { headerRows, dataRows, maxCols } = structure;
+    const { headerRows, dataRows, maxCols, dispose } = structure;
+    let bodyMatrix;
+    try {
+      ensureGridFits(startRow, startCol, countFormatRequiredBodyRows(dataRows), maxCols);
 
-    ensureGridFits(startRow, startCol, countFormatRequiredBodyRows(dataRows), maxCols);
+      // Build patches while host is mounted so Excel class backgrounds resolve.
+      bodyMatrix = buildFormatBodyMatrix(dataRows, maxCols);
+    } finally {
+      dispose?.();
+    }
 
-    let bodyMatrix = buildFormatBodyMatrix(dataRows, maxCols);
     console.log(
       `Format: Applying ${bodyMatrix.length} body row(s) at row ${startRow} col ${startCol} (${dataRows.length} source data rows)`,
     );
@@ -273,10 +280,14 @@ export function parseAndFillHtmlTableForFormat(htmlString, options = {}) {
       );
     }
     bodyMatrix = sanitizePasteMatrix(expandLabelColonMoneyCells(bodyMatrix));
+    bodyMatrix = ensureTotalRowCodeColumnGap(bodyMatrix);
 
     // Grill: when plain TSV is reliable, HTML body must match its shape (reject → dual-source).
+    // 1.Text (skipPlainGrill) keeps HTML structure — plain often drops the empty
+    // code-column cell after TOTAL BALANCE and would force a left-shifted dual-source fill.
     const plainMatrix = options.plainMatrix;
     if (
+      !options.skipPlainGrill &&
       plainMatrixLooksReliable(plainMatrix) &&
       !matrixAlignsWithPlainSource(bodyMatrix, plainMatrix)
     ) {

@@ -20,6 +20,7 @@ import {
   plainTextLooksLikeAlignedTsv,
   sanitizePasteMatrix,
 } from "./dataCapturePasteMatrixSanitize.js";
+import { ensureTotalRowCodeColumnGap } from "./dataCaptureTotalRowAlign.js";
 import {
   applyDataMatrixToGrid,
   ensureGridFits,
@@ -47,13 +48,23 @@ function isEditableFormField(el) {
   return isGridPasteBlockedTarget(el);
 }
 
-function afterFormatPasteFilled(filled, area) {
+/**
+ * Post-fill bookkeeping.
+ * @param {boolean} filled
+ * @param {HTMLElement|null} area
+ * @param {{ formatShell?: boolean }} [options]
+ *   formatShell (default true): 2.Format UI — ready flag, preview cache, paste area.
+ *   Pass false when 1.Text reuses the Format fill core without touching Format shell state.
+ */
+function afterFormatPasteFilled(filled, area, { formatShell = true } = {}) {
   if (!filled) return false;
-  setFormatGridReady(true);
-  syncFormatPreviewFromDom();
-  if (area) area.innerHTML = "";
-  showFormatEditableGrid();
-  toggleFormatDisplay();
+  if (formatShell) {
+    setFormatGridReady(true);
+    syncFormatPreviewFromDom();
+    if (area) area.innerHTML = "";
+    showFormatEditableGrid();
+    toggleFormatDisplay();
+  }
   recomputeSubmitStateAfterPaste();
   return true;
 }
@@ -190,8 +201,9 @@ function resolveFormatPlainText(html, text) {
  */
 export function formatHtmlLooksLikeVerticalNx1(html) {
   if (!html || !/<table\b/i.test(html)) return false;
+  let structure = null;
   try {
-    const structure = parseFormatHtmlTableStructure(html);
+    structure = parseFormatHtmlTableStructure(html);
     if (!structure) return true;
     const { dataRows, maxCols } = structure;
     if (maxCols >= 2) return false;
@@ -199,13 +211,22 @@ export function formatHtmlLooksLikeVerticalNx1(html) {
   } catch {
     // Fail closed: prefer plain dual-source reshape over applying a bad HTML body.
     return true;
+  } finally {
+    structure?.dispose?.();
   }
 }
 
 /** Process HTML/TSV clipboard content into preview + editable grid. */
 export function processFormatTableHtml(
   html,
-  { area = null, startRow = null, startCol = null, anchorCell = null, plainMatrix = null } = {},
+  {
+    area = null,
+    startRow = null,
+    startCol = null,
+    anchorCell = null,
+    plainMatrix = null,
+    formatShell = true,
+  } = {},
 ) {
   if (!html) return false;
   const normalizedHtml = resolveNormalizedHtml(html) || html;
@@ -226,22 +247,42 @@ export function processFormatTableHtml(
     startCol: resolvedStartCol,
     plainMatrix,
   });
-  return afterFormatPasteFilled(filled, area);
+  return afterFormatPasteFilled(filled, area, { formatShell });
 }
 
-export function processFormatTsv(text, { area = null, startRow = null, startCol = null, anchorCell = null } = {}) {
+export function processFormatTsv(
+  text,
+  { area = null, startRow = null, startCol = null, anchorCell = null, formatShell = true } = {},
+) {
   if (!text || !text.includes("\t")) return false;
   const plainMatrix = parsePlainTextMatrix(text);
   const tableHtml = tsvToHtmlTable(text);
-  return processFormatTableHtml(tableHtml, { area, startRow, startCol, anchorCell, plainMatrix });
+  return processFormatTableHtml(tableHtml, {
+    area,
+    startRow,
+    startCol,
+    anchorCell,
+    plainMatrix,
+    formatShell,
+  });
 }
 
 /**
- * 2.Format dual-source: plain matrix owns structure; HTML supplies .positive / link colors.
+ * Dual-source fill: plain matrix owns structure; HTML supplies .positive / link colors.
  * Applies patches directly (no HTML table round-trip) so collapsed clipboard cannot win.
- * Format-only — does not touch 1.TEXT handlers.
+ * Shared by 2.Format and 1.Text (Text passes formatShell: false).
  */
-export function processFormatDualSource(html, text, { area = null, startRow = null, startCol = null, anchorCell = null } = {}) {
+export function processFormatDualSource(
+  html,
+  text,
+  {
+    area = null,
+    startRow = null,
+    startCol = null,
+    anchorCell = null,
+    formatShell = true,
+  } = {},
+) {
   if (!text?.trim()) return false;
   const matrix = parsePlainTextMatrix(text);
   if (!matrixLooksMultiColumn(matrix)) return false;
@@ -258,6 +299,8 @@ export function processFormatDualSource(html, text, { area = null, startRow = nu
     matrix.map((row) => (row || []).map((value) => ({ value: String(value ?? "") })));
   patches = splitStackedSubtotalGrandTotalRows(patches);
   patches = sanitizePasteMatrix(expandLabelColonMoneyCells(patches));
+  // Plain TSV may omit the blank under the code column on TOTAL BALANCE rows.
+  patches = ensureTotalRowCodeColumnGap(patches);
 
   if (formatBodyMatrixLooksCollapsed(patches, null)) {
     console.log("Format: Dual-source reshape still looks collapsed — abort");
@@ -280,17 +323,42 @@ export function processFormatDualSource(html, text, { area = null, startRow = nu
     "success",
   );
   console.log(`Format: Dual-source applied ${patches.length}x${patchedCols} directly (no HTML reparse)`);
-  return afterFormatPasteFilled(true, area);
+  return afterFormatPasteFilled(true, area, { formatShell });
 }
 
-/** 2.Format: mat-row plain vertical dump → reshape → HTML table fill. */
-export function processFormatPlainMatrix(text, { area = null, startRow = null, startCol = null, anchorCell = null, html = "" } = {}) {
+/** Plain vertical dump → reshape → HTML table fill (2.Format + 1.Text shared core). */
+export function processFormatPlainMatrix(
+  text,
+  {
+    area = null,
+    startRow = null,
+    startCol = null,
+    anchorCell = null,
+    html = "",
+    formatShell = true,
+  } = {},
+) {
   if (!text?.trim()) return false;
-  if (html) return processFormatDualSource(html, text, { area, startRow, startCol, anchorCell });
+  if (html) {
+    return processFormatDualSource(html, text, {
+      area,
+      startRow,
+      startCol,
+      anchorCell,
+      formatShell,
+    });
+  }
   const matrix = parsePlainTextMatrix(text);
   if (!matrixLooksMultiColumn(matrix)) return false;
   const tableHtml = plainMatrixToHtmlTable(matrix);
-  return processFormatTableHtml(tableHtml, { area, startRow, startCol, anchorCell, plainMatrix: matrix });
+  return processFormatTableHtml(tableHtml, {
+    area,
+    startRow,
+    startCol,
+    anchorCell,
+    plainMatrix: matrix,
+    formatShell,
+  });
 }
 
 function readClipboard(clipboard) {
@@ -316,14 +384,14 @@ function tryFormatHtmlFill(html, _options, htmlFillOpts) {
   return processFormatTableHtml(html, htmlFillOpts);
 }
 
-function tryProcessFormatClipboard(html, text, options) {
+function tryProcessFormatClipboard(html, text, options = {}) {
   if (
     tryHandleAwcWinLossReportPaste(html, text, {
       anchorCell: options?.anchorCell,
       startRowOverride: options?.startRow,
     })
   ) {
-    return afterFormatPasteFilled(true, options?.area);
+    return afterFormatPasteFilled(true, options?.area, options);
   }
 
   const plainText = resolveFormatPlainText(html, text);
@@ -334,11 +402,15 @@ function tryProcessFormatClipboard(html, text, options) {
   // vertical dump with sparse tabs (`87\\tAgent\\t`) — never treat as aligned TSV.
   const directIsAlignedTsv = plainTextLooksLikeAlignedTsv(text);
   const directMatrix = directIsAlignedTsv && text?.trim() ? parsePlainTextMatrix(text) : null;
+  // 1.Text reuses this pipeline with formatShell:false — prefer HTML cell structure
+  // (TOTAL BALANCE gap + per-cell colors) over plain-TSV grill → dual-source.
+  const skipPlainGrill = options?.formatShell === false || options?.skipPlainGrill === true;
   const htmlFillOpts = {
     ...options,
     plainMatrix: matrixLooksMultiColumn(directMatrix) ? directMatrix : null,
+    skipPlainGrill,
   };
-  const dualOpts = { ...options, plainMatrix };
+  const dualOpts = { ...options, plainMatrix, skipPlainGrill };
 
   // agent_period / N×1 dumps: plain reshape FIRST (avoids Fig1 col1 stack).
   // Wide statement HTML (OB / 16-col) stays on HTML path below.
@@ -394,6 +466,25 @@ function tryProcessFormatClipboard(html, text, options) {
     return processFormatPlainMatrix(plainText, { ...dualOpts, html: html || "" });
   }
   return false;
+}
+
+/**
+ * Shared Format clipboard fill (dual-source / HTML table / TSV).
+ * 1.Text passes `{ formatShell: false }` so preview / formatGridReady /
+ * #pasteAreaFormat are not touched, and `{ skipPlainGrill: true }` so HTML
+ * structure/styles are not rejected for dual-source. Same orchestration as
+ * 2.Format (normalize → HTML fill → dual-source fallback) — required for
+ * Material rows like REDIRECT2U that need the full Format pipeline.
+ */
+export function tryFillGridWithFormatClipboard(html, text, options = {}) {
+  if (options.formatShell === false) {
+    return tryProcessFormatClipboard(html, text, {
+      ...options,
+      formatShell: false,
+      skipPlainGrill: true,
+    });
+  }
+  return tryProcessFormatClipboard(html, text, options);
 }
 
 /** Paste handler for #pasteAreaFormat (direct paste into format area). */
