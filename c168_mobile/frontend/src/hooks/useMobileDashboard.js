@@ -40,7 +40,9 @@ import { loadMobileDashboardData, resolveMobileKpiOwnershipOpts } from "../lib/d
 import {
   computeDisplayConvertedAmount,
   fetchFrankfurterRates,
+  frankfurterRatesPartiallyUsable,
   resolveFrankfurterDate,
+  sumConvertedEarnings,
 } from "../lib/frankfurterRates.js";
 import { dashboardDataIsUsable } from "../lib/demoDashboard.js";
 import { assertApiOk, fetchJson } from "../lib/fetchJson.js";
@@ -73,6 +75,17 @@ function buildDashboardScopeKey({
     dateFrom || "",
     dateTo || "",
     String(currency || "").toUpperCase(),
+  ].join("|");
+}
+
+/** Group/Company/All modes only — used to force currency reset on scope switch. */
+function buildGcScopeIdentity({ companyId, selectedGroup, groupAllMode, groupsAllMode }) {
+  const cid = Number.isFinite(Number(companyId)) && Number(companyId) > 0 ? String(Number(companyId)) : "";
+  return [
+    cid,
+    String(selectedGroup || "").toUpperCase(),
+    groupAllMode ? "1" : "0",
+    groupsAllMode ? "1" : "0",
   ].join("|");
 }
 
@@ -155,6 +168,9 @@ export function useMobileDashboard() {
   const scopeAbortRef = useRef(null);
   /** Small in-memory bootstrap cache for snappier back-navigation (cap ~32). */
   const bootstrapCacheRef = useRef(new Map());
+  /** Desktop parity: after Group/Company switch, force first currency of new scope. */
+  const preferFirstCurrencyRef = useRef(false);
+  const gcScopeIdentityRef = useRef("");
 
   const groupIds = useMemo(() => resolveMobileGroupIds(companies, me), [companies, me]);
 
@@ -252,6 +268,17 @@ export function useMobileDashboard() {
     if (!companies.length || (!hasCompany && !groupOnly && !groupsAllMode && !groupAllMode)) {
       return undefined;
     }
+    const nextIdentity = buildGcScopeIdentity({
+      companyId,
+      selectedGroup,
+      groupAllMode,
+      groupsAllMode,
+    });
+    if (gcScopeIdentityRef.current && gcScopeIdentityRef.current !== nextIdentity) {
+      preferFirstCurrencyRef.current = true;
+    }
+    gcScopeIdentityRef.current = nextIdentity;
+
     const ac = new AbortController();
     // Soft refresh: don't flip currenciesReady false if we already have data (avoids full-page spinner flash).
     setCurrenciesReady((ready) => (ready ? ready : false));
@@ -268,7 +295,13 @@ export function useMobileDashboard() {
         if (ac.signal.aborted) return;
         const next = codes.length ? codes : ["MYR"];
         setCurrencies((prev) => (sameStringList(prev, next) ? prev : next));
-        setCurrency((prev) => (next.includes(prev) ? prev : next[0] || "MYR"));
+        setCurrency((prev) => {
+          if (preferFirstCurrencyRef.current) {
+            preferFirstCurrencyRef.current = false;
+            return next[0] || "MYR";
+          }
+          return next.includes(prev) ? prev : next[0] || "MYR";
+        });
       } catch (e) {
         if (ac.signal.aborted || e?.name === "AbortError") return;
         setCurrencies((prev) => (prev.length ? prev : ["MYR"]));
@@ -380,7 +413,13 @@ export function useMobileDashboard() {
     me,
   ]);
 
-  const useConvertedEarnings = currencies.length > 1;
+  const needsMultiCurrencyFx = currencies.length > 1;
+  const useConvertedEarnings = useMemo(
+    () =>
+      needsMultiCurrencyFx &&
+      frankfurterRatesPartiallyUsable(currency, currencies, exchangeRates?.rates || {}),
+    [needsMultiCurrencyFx, currencies, currency, exchangeRates?.rates],
+  );
   const scopeStale = Boolean(bootstrap) && loadedScopeKey && loadedScopeKey !== scopeKey;
   // Skeleton on cold start or when switching Group/Company (never paint wrong-scope totals).
   const initialLoading = loading || scopeStale || (!bootstrap && (bootstrapping || !currenciesReady));
@@ -388,7 +427,7 @@ export function useMobileDashboard() {
   const showLoading = initialLoading;
 
   useEffect(() => {
-    if (!useConvertedEarnings || !currency) {
+    if (!needsMultiCurrencyFx || !currency) {
       setExchangeRates({ rates: { [currency]: 1 }, date: null });
       setExchangeRatesLoading(false);
       setExchangeRatesError(false);
@@ -423,7 +462,7 @@ export function useMobileDashboard() {
     })();
 
     return () => ac.abort();
-  }, [currency, currencies, useConvertedEarnings, dateTo]);
+  }, [currency, currencies, needsMultiCurrencyFx, dateTo]);
 
   const kpiOwnershipOpts = useMemo(
     () =>
@@ -578,13 +617,33 @@ export function useMobileDashboard() {
     });
   }, [earningsCurrencyRows, earningsPanelView, useConvertedEarnings, bootstrap]);
 
-  // Hero must match KPI Net Profit (selected company/currency) — never sum FX rows.
+  // Desktop parity: multi-currency panel/hero total = FX-converted sum into display currency.
+  const convertedNetProfitTotal = useMemo(() => {
+    if (!useConvertedEarnings) return null;
+    const rows = earningsCurrencyRows.map((row) => ({
+      code: row.code,
+      earnings: row.netProfit,
+    }));
+    return sumConvertedEarnings(rows, currency, exchangeRates.rates).total;
+  }, [useConvertedEarnings, earningsCurrencyRows, currency, exchangeRates.rates]);
+
+  const convertedEarningsTotal = useMemo(() => {
+    if (!useConvertedEarnings) return null;
+    const rows = earningsCurrencyRows.map((row) => ({
+      code: row.code,
+      earnings: row.earnings,
+    }));
+    return sumConvertedEarnings(rows, currency, exchangeRates.rates).total;
+  }, [useConvertedEarnings, earningsCurrencyRows, currency, exchangeRates.rates]);
+
+  // Top blue hero stays single-currency; converted totals feed the pie panel only.
   const summaryValue = panelMetric ?? 0;
 
   const heroCompare = useMemo(() => kpi?.comparisons?.netProfit || null, [kpi?.comparisons?.netProfit]);
 
-  // Multi-currency note lives on the currency cards, not the Net Profit hero.
-  const showMultiCurrencyNote = false;
+  const showMultiCurrencyNote = Boolean(
+    useConvertedEarnings && convertedNetProfitTotal != null,
+  );
 
   const ratesWarning = useMemo(() => {
     if (earningsPanelView === "netProfitFor") return "";
@@ -857,7 +916,20 @@ export function useMobileDashboard() {
         setCustomDateRange(draft.dateFrom, draft.dateTo);
       }
 
-      if (draft.currency) setCurrency(draft.currency);
+      const nextIdentity = buildGcScopeIdentity({
+        companyId: draft.companyId,
+        selectedGroup: draft.selectedGroup,
+        groupAllMode: draft.groupAllMode,
+        groupsAllMode: draft.groupsAllMode,
+      });
+      const scopeChanged =
+        Boolean(gcScopeIdentityRef.current) && gcScopeIdentityRef.current !== nextIdentity;
+      if (scopeChanged) {
+        // Match desktop resetCurrencyForCompanySwitch — re-pick first currency for new scope.
+        preferFirstCurrencyRef.current = true;
+      } else if (draft.currency) {
+        setCurrency(String(draft.currency).toUpperCase());
+      }
 
       if (draft.groupsAllMode) {
         setGroupsAllMode(true);
@@ -1071,6 +1143,8 @@ export function useMobileDashboard() {
     ratesWarning,
     useConvertedEarnings,
     showMultiCurrencyNote,
+    convertedNetProfitTotal,
+    convertedEarningsTotal,
     heroCompare,
     dateFrom,
     dateTo,

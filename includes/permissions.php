@@ -30,6 +30,100 @@ function permissions_extract_account_ids($userAccountPermissions, bool $includeS
     return array_values(array_unique($ids));
 }
 
+/**
+ * Group-entity company PK for a subsidiary (or 0). Used when Acc/Process grants were saved
+ * on the group User List scope but the viewer opens a subsidiary ledger.
+ */
+function permissions_group_entity_company_id_for_company(PDO $pdo, int $companyId): int
+{
+    if ($companyId <= 0) {
+        return 0;
+    }
+    if (!function_exists('gc_resolve_legacy_group_entity_company_id')) {
+        $path = __DIR__ . '/group_scope_resolve.php';
+        if (is_file($path)) {
+            require_once $path;
+        }
+    }
+    if (!function_exists('gc_resolve_legacy_group_entity_company_id')) {
+        return 0;
+    }
+    try {
+        $stmt = $pdo->prepare('SELECT UPPER(TRIM(COALESCE(group_id, \'\'))) AS gid FROM company WHERE id = ? LIMIT 1');
+        $stmt->execute([$companyId]);
+        $gid = strtoupper(trim((string) ($stmt->fetchColumn() ?: '')));
+        if ($gid === '') {
+            return 0;
+        }
+        $entityId = (int) gc_resolve_legacy_group_entity_company_id($pdo, $gid);
+        if ($entityId <= 0 && function_exists('gc_resolve_group_anchor_company_id')) {
+            $entityId = (int) gc_resolve_group_anchor_company_id($pdo, $gid);
+        }
+        return ($entityId > 0 && $entityId !== $companyId) ? $entityId : 0;
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
+ * Load account_permissions JSON for user+company.
+ * null = unset (see all). If this company has no explicit row/null, fall back to group-entity grants.
+ *
+ * @return mixed null|array decoded whitelist (may be [])
+ */
+function permissions_load_account_permissions_decoded(PDO $pdo, int $userId, int $companyId)
+{
+    if ($userId <= 0 || $companyId <= 0) {
+        return null;
+    }
+    $stmt = $pdo->prepare('SELECT account_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?');
+    $stmt->execute([$userId, $companyId]);
+    $permission = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($permission && array_key_exists('account_permissions', $permission) && $permission['account_permissions'] !== null) {
+        $decoded = json_decode((string) $permission['account_permissions'], true);
+        return is_array($decoded) ? $decoded : [];
+    }
+    $entityId = permissions_group_entity_company_id_for_company($pdo, $companyId);
+    if ($entityId <= 0) {
+        return null;
+    }
+    $stmt->execute([$userId, $entityId]);
+    $permission = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($permission && array_key_exists('account_permissions', $permission) && $permission['account_permissions'] !== null) {
+        $decoded = json_decode((string) $permission['account_permissions'], true);
+        return is_array($decoded) ? $decoded : [];
+    }
+    return null;
+}
+
+/**
+ * @return mixed null|array
+ */
+function permissions_load_process_permissions_decoded(PDO $pdo, int $userId, int $companyId)
+{
+    if ($userId <= 0 || $companyId <= 0) {
+        return null;
+    }
+    $stmt = $pdo->prepare('SELECT process_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?');
+    $stmt->execute([$userId, $companyId]);
+    $permission = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($permission && array_key_exists('process_permissions', $permission) && $permission['process_permissions'] !== null) {
+        $decoded = json_decode((string) $permission['process_permissions'], true);
+        return is_array($decoded) ? $decoded : [];
+    }
+    $entityId = permissions_group_entity_company_id_for_company($pdo, $companyId);
+    if ($entityId <= 0) {
+        return null;
+    }
+    $stmt->execute([$userId, $entityId]);
+    $permission = $stmt->fetch(PDO::FETCH_ASSOC);
+    if ($permission && array_key_exists('process_permissions', $permission) && $permission['process_permissions'] !== null) {
+        $decoded = json_decode((string) $permission['process_permissions'], true);
+        return is_array($decoded) ? $decoded : [];
+    }
+    return null;
+}
+
 function getCurrentUserAccountPermissions($pdo) {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
@@ -70,7 +164,8 @@ function getCurrentUserAccountPermissions($pdo) {
 
 /**
  * Roles that bypass user_company_permissions.account_permissions whitelist (full ledger visibility).
- * Partnership / audit are read-only reviewers and must see the same accounts as owner.
+ * Only owner / member bypass. Partnership / audit follow the same whitelist as other roles
+ * (null = unset see-all; array = granted; superior revoke drops rows; self_hidden hides without revoke).
  */
 function permissions_user_sees_all_accounts(?string $role = null, ?string $userType = null): bool
 {
@@ -81,16 +176,11 @@ function permissions_user_sees_all_accounts(?string $role = null, ?string $userT
     $role = strtolower(trim((string) ($role ?? $_SESSION['role'] ?? '')));
     $userType = strtolower(trim((string) ($userType ?? $_SESSION['user_type'] ?? '')));
 
-    if ($role === 'owner' || $userType === 'member') {
-        return true;
-    }
-
-    return in_array($role, ['partnership', 'audit'], true);
+    return $role === 'owner' || $userType === 'member';
 }
 
 /**
- * Process visibility follows the same top-level read-only policy as accounts.
- * Keep Partnership/Audit aligned with owner-level read visibility.
+ * Process visibility follows the same policy as accounts (owner / member bypass only).
  */
 function permissions_user_sees_all_processes(?string $role = null, ?string $userType = null): bool
 {
@@ -132,21 +222,16 @@ function filterAccountsByPermissions($pdo, $baseQuery, $params = [], $permission
         $currentUserId = $user['id'];
     }
 
-    // 从 user_company_permissions 表获取当前公司下的账户权限
-    $stmt = $pdo->prepare("SELECT account_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?");
-    $stmt->execute([$currentUserId, $companyId]);
-    $permission = $stmt->fetch(PDO::FETCH_ASSOC);
+    // Company row, else group-entity grants (Owner group User List saves there).
+    $userAccountPermissions = permissions_load_account_permissions_decoded($pdo, (int) $currentUserId, (int) $companyId);
 
-    // 如果 user_company_permissions 表中没有记录，或者 account_permissions 是 null（未设置），默认可以看到所有账户
-    if (!$permission || $permission['account_permissions'] === null) {
+    // null = unset → see all
+    if ($userAccountPermissions === null) {
         return [$baseQuery, $params];
     }
 
-    // 解析 JSON 数据
-    $userAccountPermissions = json_decode($permission['account_permissions'], true);
-    
-    // 如果 account_permissions 是空数组 []（已设置但清空），用户看不到任何账户
-    if (empty($userAccountPermissions) || !is_array($userAccountPermissions)) {
+    // 空数组 []（已设置但清空）→ 看不到任何账户
+    if ($userAccountPermissions === []) {
         $hasWhere = stripos($baseQuery, ' WHERE ') !== false;
         if ($hasWhere) {
             $baseQuery .= " AND 1=0";
@@ -155,10 +240,10 @@ function filterAccountsByPermissions($pdo, $baseQuery, $params = [], $permission
         }
         return [$baseQuery, $params];
     }
-    
+
     // 可见 = 授权列表且未 self_hidden（自己关掉的仍留在授权里，可自行勾回）
     $accountIds = permissions_extract_account_ids($userAccountPermissions, false);
-    
+
     // 只有当有有效的账户 ID 时，才添加过滤条件
     if (!empty($accountIds)) {
         $placeholders = str_repeat('?,', count($accountIds) - 1) . '?';
@@ -225,7 +310,7 @@ function filterProcessesByPermissions($pdo, $baseQuery, $params = [], $permissio
         session_start();
     }
 
-    // 与 Account 权限过滤保持一致：owner/member/partnership/audit 直接看全量
+    // 与 Account 权限过滤保持一致：仅 owner/member 直接看全量；partnership/audit 走白名单
     if (permissions_user_sees_all_processes()) {
         return [$baseQuery, $params];
     }
@@ -255,21 +340,13 @@ function filterProcessesByPermissions($pdo, $baseQuery, $params = [], $permissio
         $currentUserId = $user['id'];
     }
 
-    // 从 user_company_permissions 表获取当前公司下的流程权限
-    $stmt = $pdo->prepare("SELECT process_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?");
-    $stmt->execute([$currentUserId, $companyId]);
-    $permission = $stmt->fetch(PDO::FETCH_ASSOC);
+    $userProcessPermissions = permissions_load_process_permissions_decoded($pdo, (int) $currentUserId, (int) $companyId);
 
-    // 如果 user_company_permissions 表中没有记录，或者 process_permissions 是 null（未设置），默认可以看到所有流程
-    if (!$permission || $permission['process_permissions'] === null) {
+    if ($userProcessPermissions === null) {
         return [$baseQuery, $params];
     }
 
-    // 解析 JSON 数据
-    $userProcessPermissions = json_decode($permission['process_permissions'], true);
-    
-    // 如果 process_permissions 是空数组 []（已设置但清空），用户看不到任何流程
-    if (empty($userProcessPermissions) || !is_array($userProcessPermissions)) {
+    if ($userProcessPermissions === []) {
         $hasWhere = stripos($baseQuery, ' WHERE ') !== false;
         if ($hasWhere) {
             $baseQuery .= " AND 1=0";
@@ -279,20 +356,15 @@ function filterProcessesByPermissions($pdo, $baseQuery, $params = [], $permissio
         return [$baseQuery, $params];
     }
 
-    // 如果 process_permissions 有值，只显示权限列表中的流程
-    $processIds = array_column($userProcessPermissions, 'id');
-    // 确保所有 ID 都是整数类型
-    $processIds = array_map('intval', $processIds);
-    $processIds = array_filter($processIds, function($id) { return $id > 0; }); // 过滤无效的 ID
-    $processIds = array_unique($processIds); // 去重
-    $processIds = array_values($processIds); // 重新索引数组
-    
+    // 可见 = 授权列表且未 self_hidden（自己关掉的仍留在授权里，可自行勾回）
+    $processIds = permissions_extract_account_ids($userProcessPermissions, false);
+
     if (!empty($processIds)) {
         $placeholders = str_repeat('?,', count($processIds) - 1) . '?';
-        
+
         // 检查是否已经有 WHERE 条件
         $hasWhere = stripos($baseQuery, ' WHERE ') !== false;
-        
+
         if ($hasWhere) {
             // 如果已经有 WHERE 条件，添加 AND 条件
             $baseQuery .= " AND p.id IN ($placeholders)";

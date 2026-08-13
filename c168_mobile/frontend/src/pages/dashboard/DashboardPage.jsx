@@ -79,8 +79,20 @@ export default function DashboardPage() {
 
   const heroCard = kpiCards.find((c) => c.variant === heroMetric) || kpiCards.find((c) => c.variant === "net");
   const heroLabel = heroCard?.label || i18n.netProfit;
+  // Hero / Overview KPI stay single-currency. Multi-currency converted total lives in pie panel.
   const heroValue = heroCard?.value ?? dash.summaryValue;
   const heroCompare = heroCard?.compare ?? dash.heroCompare;
+
+  const panelSummaryValue =
+    dash.earningsPanelView === "earning"
+      ? (dash.convertedEarningsTotal ?? kpi?.earnings ?? 0)
+      : dash.earningsPanelView === "netProfitFor"
+        ? (dash.panelCurrencyRows || []).reduce((sum, row) => sum + (parseFloat(row.netProfit) || 0), 0)
+        : (dash.convertedNetProfitTotal ?? kpi?.netProfit ?? dash.summaryValue ?? 0);
+  const panelConversionNote =
+    dash.earningsPanelView !== "netProfitFor" && dash.useConvertedEarnings
+      ? i18n.multiCurrencyNote
+      : "";
 
   const companyCode = String(dash.selectedCompany?.company_id || "").toUpperCase();
   const groupId = String(
@@ -197,7 +209,7 @@ export default function DashboardPage() {
             value={heroValue}
             compare={heroCompare}
             compareLabel={compareLabel}
-            multiCurrency={dash.showMultiCurrencyNote}
+            multiCurrency={false}
             loading={loading}
             empty={!loading && !dash.hasData}
             emptyLabel={false}
@@ -272,11 +284,15 @@ export default function DashboardPage() {
             rows={dash.panelCurrencyRows}
             useConverted={dash.useConvertedEarnings}
             loading={loading}
-            note={
-              dash.earningsPanelView !== "netProfitFor" && dash.useConvertedEarnings
-                ? i18n.multiCurrencyNote
-                : ""
+            summaryValue={panelSummaryValue}
+            summaryLabel={
+              dash.earningsPanelView === "earning"
+                ? i18n.earnings
+                : dash.earningsPanelView === "netProfitFor"
+                  ? i18n.netProfitCompanyCaption || i18n.netProfit
+                  : i18n.netProfit
             }
+            conversionNote={panelConversionNote}
             title={
               dash.earningsPanelView === "earning"
                 ? i18n.earnings

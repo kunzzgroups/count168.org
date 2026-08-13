@@ -1,11 +1,23 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 import {
   buildEarningsPieSlices,
   buildEarningsShareByCode,
   computePieCenterMetrics,
   getCurrencyColor,
 } from "../../lib/dashboardEarnings.js";
+import { formatCurrency } from "../../lib/dashboardFormat.js";
+
+function stripRechartsFocus(root) {
+  if (!root) return;
+  root.querySelectorAll(".recharts-wrapper, .recharts-surface, svg").forEach((node) => {
+    if (node.hasAttribute("tabindex")) node.removeAttribute("tabindex");
+    if (node instanceof HTMLElement || node instanceof SVGElement) {
+      node.style.outline = "none";
+      node.style.webkitTapHighlightColor = "transparent";
+    }
+  });
+}
 
 const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
   i18n,
@@ -13,13 +25,16 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
   rows,
   useConverted,
   loading,
-  note = "",
+  summaryValue = null,
+  summaryLabel = "",
+  conversionNote = "",
   title,
   badgeLabel,
   isCompanyBreakdown = false,
   tabs = null,
   footer = null,
 }) {
+  const pieHostRef = useRef(null);
   const pieUseConverted = !isCompanyBreakdown && useConverted;
   const pieBaseCode = isCompanyBreakdown ? "" : currencyCode;
   const slices = buildEarningsPieSlices(rows, {
@@ -40,14 +55,25 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
     .map((row, index) => ({
       code: String(row.code).toUpperCase(),
       color: getCurrencyColor(row.code, index),
-      pct: shareByCode[String(row.code).toUpperCase()] ?? 0,
+      pct: shareByCode[String(row.code).toUpperCase()],
     }))
-    .filter((item) => item.pct >= 0.05)
-    .sort((a, b) => b.pct - a.pct);
+    .filter((item) => item.pct != null && Number(item.pct) >= 0.05)
+    .sort((a, b) => Number(b.pct) - Number(a.pct));
 
   const empty = !loading && slices.length === 0;
   const headTitle = title || i18n.currencyDistribution;
   const headBadge = badgeLabel || i18n.currency;
+  const showSummary = summaryValue != null && !empty;
+  const caption = [summaryLabel || headTitle, currencyCode].filter(Boolean).join(" · ");
+
+  useEffect(() => {
+    const root = pieHostRef.current;
+    if (!root || loading || empty) return;
+    stripRechartsFocus(root);
+    const observer = new MutationObserver(() => stripRechartsFocus(root));
+    observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["tabindex"] });
+    return () => observer.disconnect();
+  }, [loading, empty, slices.length, isCompanyBreakdown, currencyCode]);
 
   return (
     <section
@@ -58,14 +84,26 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
       <div className="m-dash-earnings-panel-top">
         {tabs}
 
-        <div className="m-dash-card-head m-dash-card-head--spaced">
-          <h2 className="m-dash-card-title">{headTitle}</h2>
-          {legend.length > 0 && (
-            <span className="m-dash-card-badge">
-              {legend.length} {headBadge}
-            </span>
-          )}
-        </div>
+        {showSummary ? (
+          <div className="m-dash-panel-summary">
+            <p className="m-dash-panel-summary-caption">{caption}</p>
+            <p className="m-dash-panel-summary-value">
+              {loading ? <span className="m-dash-panel-summary-skeleton" /> : formatCurrency(summaryValue)}
+            </p>
+            {conversionNote ? (
+              <p className="m-dash-panel-summary-note">{conversionNote}</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="m-dash-card-head m-dash-card-head--spaced">
+            <h2 className="m-dash-card-title">{headTitle}</h2>
+            {legend.length > 0 && (
+              <span className="m-dash-card-badge">
+                {legend.length} {headBadge}
+              </span>
+            )}
+          </div>
+        )}
 
         {empty ? (
           <p className="m-dash-card-empty" style={{ height: "8.75rem" }}>
@@ -73,13 +111,19 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
           </p>
         ) : (
           <div className="m-dash-pie-wrap">
-            <div className="m-dash-pie-chart">
+            <div
+              ref={pieHostRef}
+              className="m-dash-pie-chart"
+              onMouseDown={(e) => {
+                e.preventDefault();
+              }}
+            >
               {loading ? (
                 <div className="m-dash-pie-skeleton" />
               ) : (
                 <>
                   <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 2, right: 2, bottom: 2, left: 2 }}>
+                    <PieChart margin={{ top: 2, right: 2, bottom: 2, left: 2 }} style={{ outline: "none" }}>
                       <Pie
                         key={isCompanyBreakdown ? "company" : "currency"}
                         data={slices.length ? slices : [{ code: "—", value: 1, fill: "#e2e8f0" }]}
@@ -92,6 +136,7 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
                         paddingAngle={slices.length > 3 ? 2 : 3}
                         stroke="#fff"
                         strokeWidth={2}
+                        activeShape={false}
                         isAnimationActive
                         label={false}
                       >
@@ -103,7 +148,9 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
                   </ResponsiveContainer>
                   {slices.length > 0 && (
                     <div className="m-dash-pie-center" aria-hidden="true">
-                      <span className="m-dash-pie-center-pct">{Number(center.pct).toFixed(1)}%</span>
+                      <span className="m-dash-pie-center-pct">
+                        {center.pct != null ? `${Number(center.pct).toFixed(1)}%` : "—"}
+                      </span>
                       <span className="m-dash-pie-center-code">{center.code}</span>
                     </div>
                   )}
@@ -125,7 +172,9 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
                       item.code
                     )}
                   </span>
-                  <span className="m-dash-pie-legend-pct">{loading ? "—" : `${item.pct.toFixed(1)}%`}</span>
+                  <span className="m-dash-pie-legend-pct">
+                    {loading ? "—" : `${Number(item.pct).toFixed(1)}%`}
+                  </span>
                 </li>
               ))}
               {!loading && legend.length === 0 && (
@@ -134,7 +183,6 @@ const CurrencyDistributionCard = memo(function CurrencyDistributionCard({
             </ul>
           </div>
         )}
-        {note && !empty ? <p className="m-dash-pie-note">{note}</p> : null}
       </div>
 
       {footer ? <div className="m-dash-earnings-panel-footer">{footer}</div> : null}

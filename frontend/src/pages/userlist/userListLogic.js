@@ -131,9 +131,9 @@ export function getUserEditFieldLocks(row, currentUserId, currentUserRole) {
   const isSame = !isSelf && curLevel === editLevel;
   const isLower = !isSelf && curLevel > editLevel;
   const canPickCompany = currentUserRole === "admin" || currentUserRole === "owner";
-  // Acc：自己可关不想看的；同级/上级锁定。Process：自己也锁（本轮只开 Acc）
+  // Acc / Process：自己可关不想看的；同级/上级锁定
   const accountLocked = isSame || isLower;
-  const processLocked = isSelf || isSame || isLower;
+  const processLocked = isSame || isLower;
   return {
     name: isSame || isLower,
     email: isSame || isLower,
@@ -170,6 +170,25 @@ export function mergeModalAccountsWithGranted(accList, grantedRows) {
       id,
       account_id: typeof row === "object" && row ? String(row.account_id || "") : "",
       name: typeof row === "object" && row ? String(row.name || "").trim() : "",
+    });
+  }
+  return [...byId.values()];
+}
+
+/**
+ * Ensure still-granted but self_hidden processes appear in the modal for re-check.
+ * @param {Array<{id?: number, process_id?: string, description?: string}>} procList
+ * @param {Array<{id?: number, process_id?: string, description?: string}|number>} grantedRows
+ */
+export function mergeModalProcessesWithGranted(procList, grantedRows) {
+  const byId = new Map((Array.isArray(procList) ? procList : []).map((p) => [Number(p.id), p]));
+  for (const row of Array.isArray(grantedRows) ? grantedRows : []) {
+    const id = Number(row?.id ?? row);
+    if (!(id > 0) || byId.has(id)) continue;
+    byId.set(id, {
+      id,
+      process_id: typeof row === "object" && row ? String(row.process_id || "") : "",
+      description: typeof row === "object" && row ? String(row.description || "").trim() : "",
     });
   }
   return [...byId.values()];
@@ -231,6 +250,31 @@ export function nextSelfAccountSelection(prevSelected, visibleIds, heldIds, mode
   }
   visible.forEach((id) => next.delete(id));
   return next;
+}
+
+/**
+ * Owner (sees-all) Select All on the modal → send null (DB unset = see-all).
+ * Avoids materializing huge grant JSON and matches product intent.
+ * Self / restricted editors always send compact id rows.
+ * @param {{ isSelf: boolean, editorSeesAll: boolean, selectedIds: Set<number>|Iterable<number>, modalRows: Array<{id?: number}> }} args
+ * @param {Array<{id: number, self_hidden?: boolean}>} compactRows
+ * @returns {Array<{id: number, self_hidden?: boolean}>|null}
+ */
+export function resolveSeeAllOrCompactPermissions({ isSelf, editorSeesAll, selectedIds, modalRows }, compactRows) {
+  if (isSelf || !editorSeesAll) return compactRows;
+  const selected = selectedIds instanceof Set ? selectedIds : new Set([...selectedIds].map(Number));
+  const selectedCount = [...selected].filter((id) => Number(id) > 0).length;
+  // Clear All / nothing checked → always persist [] (never SQL NULL see-all).
+  if (selectedCount === 0) {
+    return Array.isArray(compactRows) ? compactRows : [];
+  }
+  const modalIds = (Array.isArray(modalRows) ? modalRows : [])
+    .map((r) => Number(r?.id ?? r))
+    .filter((id) => id > 0);
+  if (modalIds.length > 0 && modalIds.every((id) => selected.has(id))) {
+    return null;
+  }
+  return compactRows;
 }
 
 /**

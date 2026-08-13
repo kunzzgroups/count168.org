@@ -7,9 +7,9 @@
 
 .m-admin-owner-tag {
   border-radius: var(--m-radius-pill);
-  background: rgba(109, 40, 217, 0.12);
+  background: var(--m-grad-brand);
   padding: 0.24rem 0.7rem;
-  color: #6d28d9;
+  color: #fff;
   font-size: var(--m-text-badge-ratio);
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -45,7 +45,7 @@
 
 .m-admin-btn--primary {
   border-color: var(--m-color-primary);
-  background: var(--m-color-primary);
+  background: var(--m-grad-brand);
   color: #fff;
 }
 
@@ -120,7 +120,7 @@
 
 .m-admin-belonging-chip {
   border-radius: var(--m-radius-pill);
-  background: rgba(47, 107, 246, 0.1);
+  background: rgba(13, 96, 255, 0.1);
   padding: 0.35rem 0.85rem;
   color: var(--m-color-primary);
   font-size: var(--m-text-sub-ratio);
@@ -128,8 +128,8 @@
 }
 
 .m-admin-belonging-chip.is-group {
-  background: rgba(109, 40, 217, 0.1);
-  color: #6d28d9;
+  background: var(--m-grad-brand);
+  color: #fff;
 }
 
 .m-admin-access-row {
@@ -227,8 +227,8 @@
 }
 
 .m-admin-picker-item.is-checked {
-  border-color: rgba(47, 107, 246, 0.5);
-  background: rgba(47, 107, 246, 0.06);
+  border-color: rgba(13, 96, 255, 0.5);
+  background: rgba(13, 96, 255, 0.06);
 }
 
 .m-admin-picker-item i {

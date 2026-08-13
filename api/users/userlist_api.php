@@ -119,6 +119,27 @@ function userlist_fill_account_perm_labels(PDO $pdo, array $mergedById): array
 }
 
 /**
+ * Compact JSON for DB storage: id (+ self_hidden only). Labels are filled on read/merge when needed.
+ * Keeps Select All / large whitelist payloads well under TEXT/MEDIUMTEXT limits.
+ */
+function userlist_encode_account_permissions_json(array $rows): string
+{
+    $compact = [];
+    foreach ($rows as $row) {
+        $id = is_array($row) ? (int) ($row['id'] ?? 0) : (int) $row;
+        if ($id <= 0) {
+            continue;
+        }
+        $item = ['id' => $id];
+        if (is_array($row) && !empty($row['self_hidden'])) {
+            $item['self_hidden'] = true;
+        }
+        $compact[] = $item;
+    }
+    return json_encode(array_values($compact), JSON_UNESCAPED_UNICODE);
+}
+
+/**
  * Editor's grantable account ids in a company. null = unrestricted (owner / partnership / audit / unset whitelist).
  *
  * @return int[]|null
@@ -183,7 +204,8 @@ function userlist_merge_account_permissions(
     array $submittedRows,
     ?array $grantableIds
 ): array {
-    // Submitted checkboxes never carry self_hidden; preserve it from existing when id stays granted.
+    // Submitted checkboxes mean "visible grant". Clear self_hidden so superior Select All /
+    // re-check restores visibility (self_hidden is only set by the self-hide shrink path).
     $submitted = userlist_normalize_account_perm_rows($submittedRows, false);
     $submittedById = [];
     foreach ($submitted as $row) {
@@ -204,11 +226,7 @@ function userlist_merge_account_permissions(
     }
 
     $applySubmittedRow = static function (int $id, array $row, array $existingById): array {
-        if (isset($existingById[$id]) && !empty($existingById[$id]['self_hidden'])) {
-            $row['self_hidden'] = true;
-        } else {
-            unset($row['self_hidden']);
-        }
+        unset($row['self_hidden']);
         if (($row['account_id'] ?? '') === '' && isset($existingById[$id]['account_id'])) {
             $row['account_id'] = (string) $existingById[$id]['account_id'];
         }
@@ -331,6 +349,252 @@ function userlist_shrink_account_permissions_for_self(
     }
     // Ignore submitted ids not in existing grant (superior-revoked).
     return userlist_fill_account_perm_labels($pdo, $out);
+}
+
+/**
+ * Normalize process_permissions rows to [{id, process_id, self_hidden?}, ...].
+ */
+function userlist_normalize_process_perm_rows($perms, bool $preserveSelfHidden = true): array
+{
+    if (!is_array($perms)) {
+        return [];
+    }
+    $byId = [];
+    foreach ($perms as $row) {
+        $id = is_array($row) ? (int) ($row['id'] ?? 0) : (int) $row;
+        if ($id <= 0) {
+            continue;
+        }
+        $processId = is_array($row) ? (string) ($row['process_id'] ?? '') : '';
+        $prev = $byId[$id] ?? ['id' => $id, 'process_id' => ''];
+        if ($processId !== '') {
+            $prev['process_id'] = $processId;
+        }
+        if ($preserveSelfHidden && is_array($row) && !empty($row['self_hidden'])) {
+            $prev['self_hidden'] = true;
+        }
+        $byId[$id] = $prev;
+    }
+    return array_values($byId);
+}
+
+/** @param array<int, array{id:int,process_id?:string,self_hidden?:bool}> $mergedById */
+function userlist_fill_process_perm_labels(PDO $pdo, array $mergedById): array
+{
+    $missing = [];
+    foreach ($mergedById as $id => $row) {
+        if (($row['process_id'] ?? '') === '') {
+            $missing[] = (int) $id;
+        }
+    }
+    if ($missing !== []) {
+        $ph = implode(',', array_fill(0, count($missing), '?'));
+        $stmt = $pdo->prepare("SELECT id, process_id FROM process WHERE id IN ($ph)");
+        $stmt->execute($missing);
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $proc) {
+            $pid = (int) ($proc['id'] ?? 0);
+            if ($pid > 0 && isset($mergedById[$pid]) && ($mergedById[$pid]['process_id'] ?? '') === '') {
+                $mergedById[$pid]['process_id'] = (string) ($proc['process_id'] ?? '');
+            }
+        }
+    }
+    ksort($mergedById);
+    return array_values($mergedById);
+}
+
+/** Compact process grant JSON for DB (id + self_hidden only). */
+function userlist_encode_process_permissions_json(array $rows): string
+{
+    $compact = [];
+    foreach ($rows as $row) {
+        $id = is_array($row) ? (int) ($row['id'] ?? 0) : (int) $row;
+        if ($id <= 0) {
+            continue;
+        }
+        $item = ['id' => $id];
+        if (is_array($row) && !empty($row['self_hidden'])) {
+            $item['self_hidden'] = true;
+        }
+        $compact[] = $item;
+    }
+    return json_encode(array_values($compact), JSON_UNESCAPED_UNICODE);
+}
+
+/**
+ * Editor's grantable process ids. null = unrestricted (sees-all roles / unset whitelist).
+ *
+ * @return int[]|null
+ */
+function userlist_editor_grantable_process_ids(PDO $pdo, int $companyId, int $editorUserId, string $editorRole): ?array
+{
+    if ($companyId <= 0 || $editorUserId <= 0) {
+        return [];
+    }
+    if (permissions_user_sees_all_processes($editorRole)) {
+        return null;
+    }
+    $stmt = $pdo->prepare('SELECT process_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?');
+    $stmt->execute([$editorUserId, $companyId]);
+    $permission = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$permission || $permission['process_permissions'] === null) {
+        return null;
+    }
+    $decoded = json_decode((string) $permission['process_permissions'], true);
+    if (!is_array($decoded) || $decoded === []) {
+        return [];
+    }
+    $ids = array_values(array_unique(array_filter(array_map(static function ($row): int {
+        return is_array($row) ? (int) ($row['id'] ?? 0) : (int) $row;
+    }, $decoded), static fn (int $id): bool => $id > 0)));
+    return $ids;
+}
+
+/** @return int[] */
+function userlist_company_process_ids(PDO $pdo, int $companyId): array
+{
+    if ($companyId <= 0) {
+        return [];
+    }
+    $stmt = $pdo->prepare("SELECT id FROM process WHERE company_id = ? AND status = 'active'");
+    $stmt->execute([$companyId]);
+    return array_values(array_unique(array_filter(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)), static fn (int $id): bool => $id > 0)));
+}
+
+/**
+ * Merge target process_permissions (same rules as account merge + self_hidden preserve).
+ *
+ * @param array|null $existingDecoded
+ * @param int[]|null $grantableIds
+ */
+function userlist_merge_process_permissions(
+    PDO $pdo,
+    int $companyId,
+    $existingDecoded,
+    array $submittedRows,
+    ?array $grantableIds
+): array {
+    $submitted = userlist_normalize_process_perm_rows($submittedRows, false);
+    $submittedById = [];
+    foreach ($submitted as $row) {
+        $submittedById[(int) $row['id']] = $row;
+    }
+
+    if ($existingDecoded === null) {
+        $existingIds = userlist_company_process_ids($pdo, $companyId);
+        $existingById = [];
+        foreach ($existingIds as $id) {
+            $existingById[$id] = ['id' => $id, 'process_id' => ''];
+        }
+    } else {
+        $existingById = [];
+        foreach (userlist_normalize_process_perm_rows($existingDecoded, true) as $row) {
+            $existingById[(int) $row['id']] = $row;
+        }
+    }
+
+    // Submitted checkboxes mean "visible grant". Clear self_hidden (mirror Acc merge).
+    $applySubmittedRow = static function (int $id, array $row, array $existingById): array {
+        unset($row['self_hidden']);
+        if (($row['process_id'] ?? '') === '' && isset($existingById[$id]['process_id'])) {
+            $row['process_id'] = (string) $existingById[$id]['process_id'];
+        }
+        return $row;
+    };
+
+    if ($grantableIds === null) {
+        $merged = [];
+        foreach ($submittedById as $id => $row) {
+            $merged[$id] = $applySubmittedRow((int) $id, $row, $existingById);
+        }
+        return userlist_fill_process_perm_labels($pdo, $merged);
+    }
+
+    $grantable = array_fill_keys(array_map('intval', $grantableIds), true);
+    $merged = [];
+    foreach ($existingById as $id => $row) {
+        if (!isset($grantable[$id])) {
+            $merged[$id] = $row;
+        }
+    }
+    foreach ($submittedById as $id => $row) {
+        if (isset($grantable[$id])) {
+            $merged[$id] = $applySubmittedRow((int) $id, $row, $existingById);
+        }
+    }
+
+    return userlist_fill_process_perm_labels($pdo, $merged);
+}
+
+/**
+ * Self-edit process: toggle self_hidden on granted rows (mirror Acc).
+ *
+ * @param array|null $existingDecoded
+ * @param int[]|null $grantableIds
+ */
+function userlist_shrink_process_permissions_for_self(
+    PDO $pdo,
+    int $companyId,
+    $existingDecoded,
+    array $submittedRows,
+    ?array $grantableIds
+): array {
+    $submitted = userlist_normalize_process_perm_rows($submittedRows, false);
+    $submittedById = [];
+    foreach ($submitted as $row) {
+        $submittedById[(int) $row['id']] = $row;
+    }
+
+    $ceilingIds = $grantableIds;
+    if ($ceilingIds === null) {
+        $ceilingIds = userlist_company_process_ids($pdo, $companyId);
+    }
+    $ceiling = array_fill_keys(array_map('intval', $ceilingIds), true);
+    $submittedById = array_filter(
+        $submittedById,
+        static fn (array $row): bool => isset($ceiling[(int) $row['id']])
+    );
+
+    if ($existingDecoded === null) {
+        $out = [];
+        foreach ($ceilingIds as $id) {
+            $id = (int) $id;
+            if ($id <= 0 || !isset($ceiling[$id])) {
+                continue;
+            }
+            $row = ['id' => $id, 'process_id' => ''];
+            if (isset($submittedById[$id])) {
+                if (($submittedById[$id]['process_id'] ?? '') !== '') {
+                    $row['process_id'] = (string) $submittedById[$id]['process_id'];
+                }
+            } else {
+                $row['self_hidden'] = true;
+            }
+            $out[$id] = $row;
+        }
+        return userlist_fill_process_perm_labels($pdo, $out);
+    }
+
+    $existingById = [];
+    foreach (userlist_normalize_process_perm_rows($existingDecoded, true) as $row) {
+        $existingById[(int) $row['id']] = $row;
+    }
+
+    $out = [];
+    foreach ($existingById as $id => $row) {
+        if (isset($submittedById[$id])) {
+            $next = $row;
+            unset($next['self_hidden']);
+            if (($submittedById[$id]['process_id'] ?? '') !== '') {
+                $next['process_id'] = (string) $submittedById[$id]['process_id'];
+            }
+            $out[$id] = $next;
+        } else {
+            $next = $row;
+            $next['self_hidden'] = true;
+            $out[$id] = $next;
+        }
+    }
+    return userlist_fill_process_perm_labels($pdo, $out);
 }
 
 /** Audit：manager 及以上可写 read_only；Partnership：仅 owner */
@@ -1596,6 +1860,198 @@ function userlist_company_ids_in_group_scope(array $accessibleCompanies, string 
     return array_values(array_unique($out));
 }
 
+/**
+ * Clear Acc/Process whitelist columns for every company row of a user.
+ * Used for Owner see-all (SQL NULL) so subsidiary leftovers cannot shadow entity grants.
+ */
+function userlist_clear_all_user_permission_columns(
+    PDO $pdo,
+    int $userId,
+    bool $clearAccount,
+    bool $clearProcess
+): void {
+    if ($userId <= 0 || (!$clearAccount && !$clearProcess)) {
+        return;
+    }
+    $sets = [];
+    if ($clearAccount) {
+        $sets[] = 'account_permissions = NULL';
+    }
+    if ($clearProcess) {
+        $sets[] = 'process_permissions = NULL';
+    }
+    $sql = 'UPDATE user_company_permissions SET ' . implode(', ', $sets)
+        . ', updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$userId]);
+}
+
+/**
+ * Owner Clear All → JSON [] on every company row (explicit empty whitelist).
+ * Must not use SQL NULL: NULL means see-all, and leftover NULL siblings would
+ * keep Partnership Acc/Process lists visible after a single-company [] write.
+ */
+function userlist_set_all_user_permission_columns_empty(
+    PDO $pdo,
+    int $userId,
+    bool $clearAccount,
+    bool $clearProcess
+): void {
+    if ($userId <= 0 || (!$clearAccount && !$clearProcess)) {
+        return;
+    }
+    $sets = [];
+    if ($clearAccount) {
+        $sets[] = "account_permissions = '[]'";
+    }
+    if ($clearProcess) {
+        $sets[] = "process_permissions = '[]'";
+    }
+    $sql = 'UPDATE user_company_permissions SET ' . implode(', ', $sets)
+        . ', updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$userId]);
+}
+
+/**
+ * Owner partial Acc/Process grant → same JSON on every company row.
+ * After Clear All, leftover [] on the group-entity row would otherwise win GET
+ * while the one-id write landed on a mixed-tenant subsidiary.
+ */
+function userlist_set_all_user_permission_columns_json(
+    PDO $pdo,
+    int $userId,
+    ?string $accountJson,
+    ?string $processJson
+): void {
+    if ($userId <= 0 || ($accountJson === null && $processJson === null)) {
+        return;
+    }
+    $sets = [];
+    $params = [];
+    if ($accountJson !== null) {
+        $sets[] = 'account_permissions = ?';
+        $params[] = $accountJson;
+    }
+    if ($processJson !== null) {
+        $sets[] = 'process_permissions = ?';
+        $params[] = $processJson;
+    }
+    $params[] = $userId;
+    $sql = 'UPDATE user_company_permissions SET ' . implode(', ', $sets)
+        . ', updated_at = CURRENT_TIMESTAMP WHERE user_id = ?';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+}
+
+/**
+ * Company ids that must receive Acc/Process permission realtime.
+ * Group User List writes the entity row, but Partnership clients subscribe to
+ * the subsidiary they are logged into — entity-only publish never reaches them.
+ *
+ * @param list<int> $validatedScopeCompanyIds
+ * @return list<int>
+ */
+function userlist_access_realtime_company_ids(
+    PDO $pdo,
+    int $targetUserId,
+    int $scopeCompanyId,
+    array $validatedScopeCompanyIds,
+    ?string $groupScope
+): array {
+    $ids = [];
+    foreach ($validatedScopeCompanyIds as $cid) {
+        $id = (int) $cid;
+        if ($id > 0) {
+            $ids[] = $id;
+        }
+    }
+    if ($scopeCompanyId > 0) {
+        $ids[] = $scopeCompanyId;
+    }
+    if ($targetUserId > 0) {
+        try {
+            $stmt = $pdo->prepare('SELECT DISTINCT company_id FROM user_company_permissions WHERE user_id = ?');
+            $stmt->execute([$targetUserId]);
+            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $cid) {
+                $id = (int) $cid;
+                if ($id > 0) {
+                    $ids[] = $id;
+                }
+            }
+        } catch (Throwable $e) {
+            // best-effort fan-out
+        }
+        foreach (userlist_fetch_user_subsidiary_company_ids($pdo, $targetUserId) as $cid) {
+            $id = (int) $cid;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+    }
+    if ($groupScope !== null) {
+        foreach (userlist_company_ids_in_group_scope(userlist_fetch_accessible_companies($pdo), $groupScope) as $cid) {
+            $id = (int) $cid;
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        $entityId = userlist_resolve_group_tenant_entity_company_id($pdo, $groupScope);
+        if ($entityId > 0) {
+            $ids[] = $entityId;
+        }
+    }
+
+    return array_values(array_unique($ids));
+}
+
+/**
+ * Group-only Acc/Process grants live on the group-entity company row.
+ * Non-null subsidiary rows (esp. stale []) shadow entity null/grants in
+ * permissions_load_*_decoded (fallback only when company column is SQL NULL).
+ * Clear sibling columns after a group-scoped write so load falls through.
+ */
+function userlist_clear_group_permission_shadows(
+    PDO $pdo,
+    int $userId,
+    int $keepCompanyId,
+    string $groupScope,
+    bool $clearAccount,
+    bool $clearProcess
+): void {
+    if ($userId <= 0 || (!$clearAccount && !$clearProcess)) {
+        return;
+    }
+    $g = userlist_normalize_group_id($groupScope);
+    if ($g === null) {
+        return;
+    }
+    $ids = userlist_company_ids_in_group_scope(userlist_fetch_accessible_companies($pdo), $g);
+    $entityId = userlist_resolve_group_tenant_entity_company_id($pdo, $g);
+    if ($entityId > 0) {
+        $ids[] = $entityId;
+    }
+    $ids = array_values(array_unique(array_filter(
+        array_map('intval', $ids),
+        static fn (int $id): bool => $id > 0 && $id !== $keepCompanyId
+    )));
+    if ($ids === []) {
+        return;
+    }
+    $sets = [];
+    if ($clearAccount) {
+        $sets[] = 'account_permissions = NULL';
+    }
+    if ($clearProcess) {
+        $sets[] = 'process_permissions = NULL';
+    }
+    $ph = implode(',', array_fill(0, count($ids), '?'));
+    $sql = 'UPDATE user_company_permissions SET ' . implode(', ', $sets)
+        . ', updated_at = CURRENT_TIMESTAMP WHERE user_id = ? AND company_id IN (' . $ph . ')';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute(array_merge([$userId], $ids));
+}
+
 function userlist_resolve_filter_company_ids(PDO $pdo, array $input): array
 {
     global $current_company_id;
@@ -2362,37 +2818,56 @@ try {
                 // 为新用户在所有关联的公司下初始化权限
                 // 如果提供了 account_permissions 或 process_permissions，则在当前公司下设置它们
                 // 其他公司则使用默认值（null，表示未设置，默认全部可见）
+                // null payload = explicit see-all (Owner Select All); [] = empty whitelist.
                 if (
                     (int) $scope_company_id > 0
-                    && (isset($input['account_permissions']) || isset($input['process_permissions']))
+                    && (array_key_exists('account_permissions', $input) || array_key_exists('process_permissions', $input))
                 ) {
                     $accountPerms = null;
                     $processPerms = null;
                     
-                    if (isset($input['account_permissions'])) {
-                        $editorUserIdCreate = (int) ($_SESSION['user_id'] ?? 0);
-                        $grantableIdsCreate = userlist_editor_grantable_account_ids(
-                            $pdo,
-                            (int) $scope_company_id,
-                            $editorUserIdCreate,
-                            (string) $current_user_role
-                        );
-                        // Create: no existing rows — merge with empty existing (= only submitted ∩ grantable)
-                        $mergedCreate = userlist_merge_account_permissions(
-                            $pdo,
-                            (int) $scope_company_id,
-                            [],
-                            is_array($input['account_permissions']) ? $input['account_permissions'] : [],
-                            $grantableIdsCreate
-                        );
-                        $accountPerms = json_encode(array_values($mergedCreate));
+                    if (array_key_exists('account_permissions', $input)) {
+                        if ($input['account_permissions'] === null) {
+                            $accountPerms = null;
+                        } else {
+                            $editorUserIdCreate = (int) ($_SESSION['user_id'] ?? 0);
+                            $grantableIdsCreate = userlist_editor_grantable_account_ids(
+                                $pdo,
+                                (int) $scope_company_id,
+                                $editorUserIdCreate,
+                                (string) $current_user_role
+                            );
+                            // Create: no existing rows — merge with empty existing (= only submitted ∩ grantable)
+                            $mergedCreate = userlist_merge_account_permissions(
+                                $pdo,
+                                (int) $scope_company_id,
+                                [],
+                                is_array($input['account_permissions']) ? $input['account_permissions'] : [],
+                                $grantableIdsCreate
+                            );
+                            $accountPerms = userlist_encode_account_permissions_json($mergedCreate);
+                        }
                     }
                     
-                    if (isset($input['process_permissions'])) {
-                        if (is_array($input['process_permissions']) && count($input['process_permissions']) > 0) {
-                            $processPerms = json_encode($input['process_permissions']);
+                    if (array_key_exists('process_permissions', $input)) {
+                        if ($input['process_permissions'] === null) {
+                            $processPerms = null;
                         } else {
-                            $processPerms = json_encode([]);
+                            $editorUserIdCreate = (int) ($_SESSION['user_id'] ?? 0);
+                            $grantableProcessIdsCreate = userlist_editor_grantable_process_ids(
+                                $pdo,
+                                (int) $scope_company_id,
+                                $editorUserIdCreate,
+                                (string) $current_user_role
+                            );
+                            $mergedProcessCreate = userlist_merge_process_permissions(
+                                $pdo,
+                                (int) $scope_company_id,
+                                [],
+                                is_array($input['process_permissions']) ? $input['process_permissions'] : [],
+                                $grantableProcessIdsCreate
+                            );
+                            $processPerms = userlist_encode_process_permissions_json($mergedProcessCreate);
                         }
                     }
                     
@@ -2814,12 +3289,17 @@ try {
                 // 只有当提供了 account_permissions 或 process_permissions 时才更新
                 $editorUserId = (int) ($_SESSION['user_id'] ?? 0);
                 $accountPermsUpdated = false;
-                $isSelfAccEdit = $editorUserId > 0 && $editorUserId === (int) $input['id'];
+                $processPermsUpdated = false;
+                $accountClearedWritten = false;
+                $processClearedWritten = false;
+                $accountReplicateAllRows = false;
+                $processReplicateAllRows = false;
+                $isSelfAccessEdit = $editorUserId > 0 && $editorUserId === (int) $input['id'];
                 // Must pass for BOTH DB role and assigned role — otherwise elevating role in the
-                // same request (e.g. supervisor → admin) would still allow account_permissions writes.
+                // same request (e.g. supervisor → admin) would still allow permission writes.
                 $originalRoleForAcc = (string) ($originalUser['role'] ?? '');
                 $assignedRoleForAcc = (string) ($input['role'] ?? $originalRoleForAcc);
-                $canEditTargetAcc =
+                $canEditTargetAccess =
                     userlist_can_edit_target_account_permissions(
                         $editorUserId,
                         (string) $current_user_role,
@@ -2832,84 +3312,221 @@ try {
                         (int) $input['id'],
                         $assignedRoleForAcc
                     );
-                // 同级/上级：忽略 Acc。自己：允许 shrink-only（见下方）。
-                if (isset($input['account_permissions']) && !$canEditTargetAcc && !$isSelfAccEdit) {
+                // 同级/上级：忽略 Acc/Process。自己：允许 self_hidden shrink（见下方）。
+                // Use array_key_exists so JSON null (Owner Select All → see-all) is not dropped by isset().
+                if (array_key_exists('account_permissions', $input) && !$canEditTargetAccess && !$isSelfAccessEdit) {
                     unset($input['account_permissions']);
                 }
-                // Process 仍不允许自己改
-                if ($isSelfAccEdit && isset($input['process_permissions'])) {
+                if (array_key_exists('process_permissions', $input) && !$canEditTargetAccess && !$isSelfAccessEdit) {
                     unset($input['process_permissions']);
                 }
 
-                if (isset($input['account_permissions']) || isset($input['process_permissions'])) {
+                if (array_key_exists('account_permissions', $input) || array_key_exists('process_permissions', $input)) {
                     // 准备权限值
                     $accountPerms = null;
                     $processPerms = null;
                     
-                    if (isset($input['account_permissions'])) {
-                        $existingDecoded = null;
-                        $existingIsNull = true;
-                        $permRead = $pdo->prepare('SELECT account_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?');
-                        $permRead->execute([(int) $input['id'], (int) $scope_company_id]);
-                        $permRow = $permRead->fetch(PDO::FETCH_ASSOC);
-                        if ($permRow && array_key_exists('account_permissions', $permRow) && $permRow['account_permissions'] !== null) {
-                            $existingIsNull = false;
-                            $decodedExisting = json_decode((string) $permRow['account_permissions'], true);
-                            $existingDecoded = is_array($decodedExisting) ? $decodedExisting : [];
-                        }
-                        $grantableIds = userlist_editor_grantable_account_ids(
-                            $pdo,
-                            (int) $scope_company_id,
-                            $editorUserId,
-                            (string) $current_user_role
+                    if (array_key_exists('account_permissions', $input)) {
+                        $submittedAccountEmpty = is_array($input['account_permissions'])
+                            && $input['account_permissions'] === [];
+                        $editorUnrestrictedAccounts = permissions_user_sees_all_accounts((string) $current_user_role);
+                        $wantAccountCleared = !$isSelfAccessEdit && $editorUnrestrictedAccounts && (
+                            $submittedAccountEmpty || !empty($input['account_permissions_cleared'])
                         );
-                        if ($isSelfAccEdit) {
-                            $mergedAccountRows = userlist_shrink_account_permissions_for_self(
+                        $wantAccountSeeAll = !$isSelfAccessEdit && !$wantAccountCleared && (
+                            $input['account_permissions'] === null
+                            || !empty($input['account_permissions_see_all'])
+                        );
+                        if ($wantAccountSeeAll) {
+                            // Owner Select All → unset see-all on every company row for this user.
+                            $accountPerms = null;
+                            $accountPermsUpdated = true;
+                        } elseif ($wantAccountCleared) {
+                            // Owner Clear All → explicit [] on every company row (not SQL NULL).
+                            $accountPerms = '[]';
+                            $accountPermsUpdated = true;
+                            $accountClearedWritten = true;
+                        } else {
+                            $existingDecoded = null;
+                            $existingIsNull = true;
+                            $permRead = $pdo->prepare('SELECT account_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?');
+                            $permRead->execute([(int) $input['id'], (int) $scope_company_id]);
+                            $permRow = $permRead->fetch(PDO::FETCH_ASSOC);
+                            if ($permRow && array_key_exists('account_permissions', $permRow) && $permRow['account_permissions'] !== null) {
+                                $existingIsNull = false;
+                                $decodedExisting = json_decode((string) $permRow['account_permissions'], true);
+                                $existingDecoded = is_array($decodedExisting) ? $decodedExisting : [];
+                            }
+                            $grantableIds = userlist_editor_grantable_account_ids(
                                 $pdo,
                                 (int) $scope_company_id,
-                                $existingIsNull ? null : $existingDecoded,
-                                is_array($input['account_permissions']) ? $input['account_permissions'] : [],
-                                $grantableIds
+                                $editorUserId,
+                                (string) $current_user_role
                             );
+                            if ($isSelfAccessEdit) {
+                                $mergedAccountRows = userlist_shrink_account_permissions_for_self(
+                                    $pdo,
+                                    (int) $scope_company_id,
+                                    $existingIsNull ? null : $existingDecoded,
+                                    is_array($input['account_permissions']) ? $input['account_permissions'] : [],
+                                    $grantableIds
+                                );
+                            } else {
+                                $mergedAccountRows = userlist_merge_account_permissions(
+                                    $pdo,
+                                    (int) $scope_company_id,
+                                    $existingIsNull ? null : $existingDecoded,
+                                    is_array($input['account_permissions']) ? $input['account_permissions'] : [],
+                                    $grantableIds
+                                );
+                            }
+                            $accountPerms = userlist_encode_account_permissions_json($mergedAccountRows);
+                            $accountPermsUpdated = true;
+                            if (!$isSelfAccessEdit && $editorUnrestrictedAccounts) {
+                                $accountReplicateAllRows = true;
+                            }
+                        }
+                    }
+                    
+                    if (array_key_exists('process_permissions', $input)) {
+                        $submittedProcessEmpty = is_array($input['process_permissions'])
+                            && $input['process_permissions'] === [];
+                        $editorUnrestrictedProcesses = permissions_user_sees_all_processes((string) $current_user_role);
+                        $wantProcessCleared = !$isSelfAccessEdit && $editorUnrestrictedProcesses && (
+                            $submittedProcessEmpty || !empty($input['process_permissions_cleared'])
+                        );
+                        $wantProcessSeeAll = !$isSelfAccessEdit && !$wantProcessCleared && (
+                            $input['process_permissions'] === null
+                            || !empty($input['process_permissions_see_all'])
+                        );
+                        if ($wantProcessSeeAll) {
+                            $processPerms = null;
+                            $processPermsUpdated = true;
+                        } elseif ($wantProcessCleared) {
+                            $processPerms = '[]';
+                            $processPermsUpdated = true;
+                            $processClearedWritten = true;
                         } else {
-                            $mergedAccountRows = userlist_merge_account_permissions(
+                            $existingProcDecoded = null;
+                            $existingProcIsNull = true;
+                            $procRead = $pdo->prepare('SELECT process_permissions FROM user_company_permissions WHERE user_id = ? AND company_id = ?');
+                            $procRead->execute([(int) $input['id'], (int) $scope_company_id]);
+                            $procRow = $procRead->fetch(PDO::FETCH_ASSOC);
+                            if ($procRow && array_key_exists('process_permissions', $procRow) && $procRow['process_permissions'] !== null) {
+                                $existingProcIsNull = false;
+                                $decodedProc = json_decode((string) $procRow['process_permissions'], true);
+                                $existingProcDecoded = is_array($decodedProc) ? $decodedProc : [];
+                            }
+                            $grantableProcessIds = userlist_editor_grantable_process_ids(
                                 $pdo,
                                 (int) $scope_company_id,
-                                $existingIsNull ? null : $existingDecoded,
-                                is_array($input['account_permissions']) ? $input['account_permissions'] : [],
-                                $grantableIds
+                                $editorUserId,
+                                (string) $current_user_role
                             );
+                            if ($isSelfAccessEdit) {
+                                $mergedProcessRows = userlist_shrink_process_permissions_for_self(
+                                    $pdo,
+                                    (int) $scope_company_id,
+                                    $existingProcIsNull ? null : $existingProcDecoded,
+                                    is_array($input['process_permissions']) ? $input['process_permissions'] : [],
+                                    $grantableProcessIds
+                                );
+                            } else {
+                                $mergedProcessRows = userlist_merge_process_permissions(
+                                    $pdo,
+                                    (int) $scope_company_id,
+                                    $existingProcIsNull ? null : $existingProcDecoded,
+                                    is_array($input['process_permissions']) ? $input['process_permissions'] : [],
+                                    $grantableProcessIds
+                                );
+                            }
+                            $processPerms = userlist_encode_process_permissions_json($mergedProcessRows);
+                            $processPermsUpdated = true;
+                            if (!$isSelfAccessEdit && $editorUnrestrictedProcesses) {
+                                $processReplicateAllRows = true;
+                            }
                         }
-                        $accountPerms = json_encode(array_values($mergedAccountRows));
-                        $accountPermsUpdated = true;
                     }
                     
-                    if (isset($input['process_permissions'])) {
-                        if (is_array($input['process_permissions']) && count($input['process_permissions']) > 0) {
-                            $processPerms = json_encode($input['process_permissions']);
-                        } else {
-                            // 空数组 [] 表示已设置但为空（不选任何流程）
-                            $processPerms = json_encode([]);
-                        }
+                    // Flag-driven UPDATE so SQL NULL (see-all) can be written; old IF(? IS NOT NULL) blocked it.
+                    if ((int) $scope_company_id > 0) {
+                        $stmt = $pdo->prepare("
+                            INSERT INTO user_company_permissions (user_id, company_id, account_permissions, process_permissions) 
+                            VALUES (?, ?, ?, ?)
+                            ON DUPLICATE KEY UPDATE 
+                                account_permissions = IF(? = 1, VALUES(account_permissions), account_permissions),
+                                process_permissions = IF(? = 1, VALUES(process_permissions), process_permissions),
+                                updated_at = CURRENT_TIMESTAMP
+                        ");
+                        $stmt->execute([
+                            $input['id'], 
+                            $scope_company_id, 
+                            $accountPerms, 
+                            $processPerms,
+                            $accountPermsUpdated ? 1 : 0,
+                            $processPermsUpdated ? 1 : 0,
+                        ]);
                     }
-                    
-                    // 使用 INSERT ... ON DUPLICATE KEY UPDATE 来更新或插入
-                    $stmt = $pdo->prepare("
-                        INSERT INTO user_company_permissions (user_id, company_id, account_permissions, process_permissions) 
-                        VALUES (?, ?, ?, ?)
-                        ON DUPLICATE KEY UPDATE 
-                            account_permissions = IF(? IS NOT NULL, VALUES(account_permissions), account_permissions),
-                            process_permissions = IF(? IS NOT NULL, VALUES(process_permissions), process_permissions),
-                            updated_at = CURRENT_TIMESTAMP
-                    ");
-                    $stmt->execute([
-                        $input['id'], 
-                        $scope_company_id, 
-                        $accountPerms, 
-                        $processPerms,
-                        $accountPerms, // 用于条件判断
-                        $processPerms  // 用于条件判断
-                    ]);
+                    // See-all: wipe every company row so stale domain whitelists cannot shadow.
+                    $accountSeeAllWritten = $accountPermsUpdated && $accountPerms === null
+                        && array_key_exists('account_permissions', $input)
+                        && empty($input['account_permissions_cleared'])
+                        && (
+                            $input['account_permissions'] === null
+                            || !empty($input['account_permissions_see_all'])
+                        );
+                    $processSeeAllWritten = $processPermsUpdated && $processPerms === null
+                        && array_key_exists('process_permissions', $input)
+                        && empty($input['process_permissions_cleared'])
+                        && (
+                            $input['process_permissions'] === null
+                            || !empty($input['process_permissions_see_all'])
+                        );
+                    if ($accountSeeAllWritten || $processSeeAllWritten) {
+                        userlist_clear_all_user_permission_columns(
+                            $pdo,
+                            (int) $input['id'],
+                            $accountSeeAllWritten,
+                            $processSeeAllWritten
+                        );
+                    }
+                    if ($accountClearedWritten || $processClearedWritten) {
+                        // Clear All: [] on every row. Do not NULL siblings (NULL = see-all).
+                        userlist_set_all_user_permission_columns_empty(
+                            $pdo,
+                            (int) $input['id'],
+                            $accountClearedWritten,
+                            $processClearedWritten
+                        );
+                    }
+                    if ($accountReplicateAllRows || $processReplicateAllRows) {
+                        // Owner checked a subset: copy that JSON onto every company row so
+                        // group GET (entity) and Partnership session (subsidiary) see the same grant.
+                        userlist_set_all_user_permission_columns_json(
+                            $pdo,
+                            (int) $input['id'],
+                            $accountReplicateAllRows ? $accountPerms : null,
+                            $processReplicateAllRows ? $processPerms : null
+                        );
+                    }
+                    $shadowAccount = $accountPermsUpdated && !$accountSeeAllWritten && !$accountClearedWritten && !$accountReplicateAllRows;
+                    $shadowProcess = $processPermsUpdated && !$processSeeAllWritten && !$processClearedWritten && !$processReplicateAllRows;
+                    if (
+                        $groupTenantWrite
+                        && $groupScope !== null
+                        && (int) $scope_company_id > 0
+                        && ($shadowAccount || $shadowProcess)
+                    ) {
+                        // Partial grant/revoke on group entity: clear subsidiary shadows only.
+                        userlist_clear_group_permission_shadows(
+                            $pdo,
+                            (int) $input['id'],
+                            (int) $scope_company_id,
+                            $groupScope,
+                            $shadowAccount,
+                            $shadowProcess
+                        );
+                    }
                 }
                 
                 // 提交事务
@@ -2963,24 +3580,32 @@ try {
 
                 require_once __DIR__ . '/../includes/realtime.php';
                 require_once __DIR__ . '/../includes/ledger_realtime.php';
-                $publishIds = array_values(array_filter(array_map('intval', is_array($validatedScopeCompanyIds ?? null) ? $validatedScopeCompanyIds : [])));
-                if ($publishIds === [] && !empty($scope_company_id)) {
-                    $publishIds = [(int) $scope_company_id];
-                }
+                $publishIds = userlist_access_realtime_company_ids(
+                    $pdo,
+                    (int) $input['id'],
+                    (int) $scope_company_id,
+                    is_array($validatedScopeCompanyIds ?? null) ? $validatedScopeCompanyIds : [],
+                    $groupScope
+                );
                 if ($publishIds === [] && (int) $current_company_id > 0) {
                     $publishIds = [(int) $current_company_id];
                 }
-                if ($publishIds !== []) {
-                    realtime_publish_companies($publishIds, 'users', 'update');
+                $groupPk = ($groupScope !== null) ? userlist_resolve_group_pk_by_code($pdo, $groupScope) : 0;
+                $publishChannels = realtime_channels_from_company_ids($publishIds);
+                if ($groupPk > 0) {
+                    $publishChannels[] = 'tx:g:' . $groupPk;
+                }
+                $publishChannels = realtime_append_user_channel($publishChannels, (int) $input['id']);
+                if ($publishChannels !== []) {
+                    realtime_publish($publishChannels, 'users', 'update');
                     // Acc 白名单变更：Account / Transaction 账号下拉 + 报表/流水全站立刻按新权限重拉
+                    // Must include subsidiary + group channels — entity-only never reaches Partnership SSE.
                     if (!empty($accountPermsUpdated)) {
-                        realtime_publish_companies($publishIds, 'accounts', 'user_account_permissions');
-                        foreach ($publishIds as $pubCompanyId) {
-                            tx_ledger_realtime_publish_scope(
-                                ['mode' => 'company', 'company_id' => (int) $pubCompanyId],
-                                'user_account_permissions'
-                            );
-                        }
+                        realtime_publish($publishChannels, 'accounts', 'user_account_permissions');
+                        realtime_publish($publishChannels, 'ledger', 'user_account_permissions');
+                    }
+                    if (!empty($processPermsUpdated)) {
+                        realtime_publish($publishChannels, 'processes', 'user_process_permissions');
                     }
                 }
                 
@@ -3435,9 +4060,15 @@ try {
                     $user['group_codes'] = userlist_fetch_user_group_codes($pdo, (int) $user['id']);
                     $user['company_ids'] = userlist_fetch_user_subsidiary_company_ids($pdo, (int) $user['id']);
                     
-                    // 从 user_company_permissions 表获取当前公司下的权限（如果存在）
+                    // Acc/Process: group_only edits are stored on the group-entity company.
+                    // Prefer that id over session company_id (subsidiary [] would otherwise shadow).
                     $permCompanyId = (int) $current_company_id;
-                    if ($permCompanyId <= 0 && $groupScopeForGet !== null) {
+                    if ($groupScopeForGet !== null && userlist_is_group_only_list_request($input)) {
+                        $entityPermId = userlist_resolve_group_tenant_entity_company_id($pdo, $groupScopeForGet);
+                        if ($entityPermId > 0) {
+                            $permCompanyId = $entityPermId;
+                        }
+                    } elseif ($permCompanyId <= 0 && $groupScopeForGet !== null) {
                         $permCompanyId = userlist_resolve_group_tenant_entity_company_id($pdo, $groupScopeForGet);
                     }
                     if ($permCompanyId > 0) {
