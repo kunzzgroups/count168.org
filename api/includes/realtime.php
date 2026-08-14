@@ -33,7 +33,7 @@ if (!function_exists('realtime_ticket_is_scope_access_error')) {
             return false;
         }
         return (bool) preg_match(
-            '/无权|无权限|缺少公司|缺少 group|缺少 company|无效的 group|无效的 company|Group Ledger|No permission|not allowed|用户未登录/iu',
+            '/无权|无权限|缺少公司|缺少 group|缺少 company|无效的 group|无效的 company|Group Ledger|No permission|用户未登录/iu',
             $msg
         );
     }
@@ -101,78 +101,6 @@ if (!function_exists('realtime_channels_from_company_ids')) {
         }
 
         return array_values(array_unique($channels));
-    }
-}
-
-if (!function_exists('realtime_user_channel')) {
-    /** Per-login invalidate channel — Acc/Process grants must reach the target user regardless of company filter. */
-    function realtime_user_channel(int $userId): string
-    {
-        return $userId > 0 ? ('tx:u:' . $userId) : '';
-    }
-}
-
-if (!function_exists('realtime_append_user_channel')) {
-    /**
-     * @param string[] $channels
-     * @return string[]
-     */
-    function realtime_append_user_channel(array $channels, int $userId): array
-    {
-        $ch = realtime_user_channel($userId);
-        if ($ch !== '') {
-            $channels[] = $ch;
-        }
-
-        return array_values(array_unique(array_filter(
-            array_map(static fn ($c) => trim((string) $c), $channels),
-            static fn ($c) => $c !== ''
-        )));
-    }
-}
-
-if (!function_exists('realtime_session_fallback_channels')) {
-    /**
-     * Channels the logged-in user may always subscribe to.
-     * Partnership dual-tenant tickets often fail company/group asserts while
-     * Acc/Process grant publishes still go to tx:u:{uid} — keep that channel.
-     *
-     * @return string[]
-     */
-    function realtime_session_fallback_channels(PDO $pdo, int $userId): array
-    {
-        $channels = [];
-        $cid = (int) ($_SESSION['company_id'] ?? 0);
-        if ($cid > 0) {
-            $channels[] = 'tx:c:' . $cid;
-        }
-        if (function_exists('gc_session_accessible_group_ids') && function_exists('gc_resolve_group_pk_by_code')) {
-            foreach (gc_session_accessible_group_ids() as $gid) {
-                $g = strtoupper(trim((string) $gid));
-                if ($g === '') {
-                    continue;
-                }
-                $pk = (int) gc_resolve_group_pk_by_code($pdo, $g);
-                if ($pk > 0) {
-                    $channels[] = 'tx:g:' . $pk;
-                }
-            }
-        } elseif (
-            function_exists('gc_is_group_login')
-            && gc_is_group_login()
-            && function_exists('gc_session_login_identifier')
-            && function_exists('gc_resolve_group_pk_by_code')
-        ) {
-            $g = strtoupper(trim((string) (gc_session_login_identifier() ?? '')));
-            if ($g !== '') {
-                $pk = (int) gc_resolve_group_pk_by_code($pdo, $g);
-                if ($pk > 0) {
-                    $channels[] = 'tx:g:' . $pk;
-                }
-            }
-        }
-
-        return realtime_append_user_channel($channels, $userId);
     }
 }
 
@@ -286,6 +214,7 @@ if (!function_exists('realtime_publish')) {
                     return;
                 }
                 $ok = false;
+                $transient = [CURLE_COULDNT_RESOLVE_HOST, CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEDOUT, CURLE_GOT_NOTHING, CURLE_SEND_ERROR, CURLE_RECV_ERROR];
                 for ($attempt = 0; $attempt < 2; $attempt++) {
                     curl_setopt_array($ch, [
                         CURLOPT_POST => true,
@@ -295,14 +224,18 @@ if (!function_exists('realtime_publish')) {
                         ],
                         CURLOPT_POSTFIELDS => $body,
                         CURLOPT_RETURNTRANSFER => true,
-                        CURLOPT_CONNECTTIMEOUT_MS => 600,
-                        CURLOPT_TIMEOUT_MS => 2000,
+                        CURLOPT_CONNECTTIMEOUT_MS => 400,
+                        CURLOPT_TIMEOUT_MS => 1000,
                     ]);
                     curl_exec($ch);
                     $errno = curl_errno($ch);
                     $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
                     if ($errno === 0 && $code >= 200 && $code < 300) {
                         $ok = true;
+                        break;
+                    }
+                    // 401/403 等不会因重试好转；只对超时/连不上再打一次
+                    if ($attempt === 0 && !in_array($errno, $transient, true)) {
                         break;
                     }
                 }

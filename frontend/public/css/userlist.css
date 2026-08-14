@@ -4032,7 +4032,7 @@ body.user-page .pagination-container {
     position: relative;
     grid-template-columns: none !important;
     grid-auto-rows: auto;
-    contain: content;
+    contain: layout;
 }
 
 #userModal .account-grid-virtual-spacer {
@@ -4050,6 +4050,7 @@ body.user-page .pagination-container {
     grid-template-columns: repeat(var(--user-modal-access-grid-cols), minmax(0, 1fr));
     gap: var(--user-modal-access-card-gap, 5px);
     align-content: start;
+    margin-bottom: var(--user-modal-access-card-gap, 5px);
 }
 
 #userModal .user-modal-select-card {
@@ -4085,7 +4086,7 @@ body.user-page .pagination-container {
     transition: none;
 }
 
-#userModal .user-modal-select-card:hover:not(.is-disabled) {
+#userModal .user-modal-select-card:hover:not(.is-disabled):not(.is-closed) {
     background-color: #e8eef5 !important;
     border-color: #94a3b8 !important;
 }
@@ -4162,6 +4163,24 @@ body.user-page .pagination-container {
 #userModal .user-modal-select-card.is-disabled {
     cursor: not-allowed;
     opacity: 0.55;
+}
+
+#userModal .user-modal-select-card.is-closed:not(.is-selected) {
+    background: var(--account-select-card-bg-closed, #e2e8f0);
+    border-style: dashed;
+    border-color: var(--account-select-card-border-closed, #94a3b8);
+    box-shadow: inset 3px 0 0 var(--account-select-card-border-closed, #94a3b8);
+}
+
+#userModal .user-modal-select-card.is-closed:not(.is-selected) .account-label,
+#userModal .user-modal-select-card.is-closed:not(.is-selected) .account-label.account-label--process,
+#userModal .user-modal-select-card.is-closed:not(.is-selected) .account-label-desc {
+    color: var(--account-select-label-closed, #64748b);
+}
+
+#userModal .user-modal-select-card.is-closed:not(.is-selected):hover:not(.is-disabled) {
+    background-color: #dbe3ec !important;
+    border-color: #64748b !important;
 }
 
 #userModal .user-modal-select-card input[type="checkbox"]:checked + .account-label {
