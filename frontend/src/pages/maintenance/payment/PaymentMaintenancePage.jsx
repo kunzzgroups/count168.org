@@ -29,7 +29,11 @@ import {
   resolveInitialSelectedGroupFromSession,
 } from "../../../utils/company/sharedCompanyFilter.js";
 import { useGroupAnchorSessionSync } from "../../../utils/company/useGroupAnchorSessionSync.js";
-import { fetchOwnerCompaniesAll } from "../../../utils/company/sharedCompanyFilter.js";
+import {
+  fetchOwnerCompaniesAll,
+  clearDashboardSelectedCurrency,
+} from "../../../utils/company/sharedCompanyFilter.js";
+import { useCrossPageCurrencySync } from "../../../utils/company/useCrossPageCurrencySync.js";
 import {
   resolvePaymentMaintenanceScope,
   paymentMaintenanceScopeCacheCompanyKey,
@@ -70,7 +74,10 @@ import {
   updateSessionCompany,
   isPaymentMaintenanceRowSelectable,
 } from "./paymentMaintenanceLogic.js";
-import { persistPaymentMaintenanceCurrencyOrder } from "../../../utils/company/currencyDisplayOrder.js";
+import {
+  persistCurrencyDisplayOrder,
+  persistUserCurrencyDisplayOrder,
+} from "../../../utils/company/currencyDisplayOrder.js";
 import { notifyTransactionListInvalidated } from "../../transaction/lib/transactionPaymentLogic.js";
 import { useLoginLang } from "../../../utils/i18n/useLoginLang.js";
 import { getMaintenanceText, MAINTENANCE_I18N } from "../../../translateFile/pages/maintenanceTranslate.js";
@@ -147,6 +154,8 @@ export default function PaymentMaintenancePage() {
   const onPrepareCompanySelectRef = useRef(() => {});
   const onClearCompanyRef = useRef(() => {});
   const sidebarSyncedCompanyIdRef = useRef(null);
+  /** True right after the user explicitly picks "All" currencies — tells useCrossPageCurrencySync not to re-apply a persisted/default currency. */
+  const userSelectedAllCurrencyRef = useRef(false);
 
   const {
     snapGroupIds,
@@ -571,7 +580,7 @@ export default function PaymentMaintenancePage() {
     return nextCurrency;
   }, []);
 
-  /** Local drag reorder — scoped to this company/group, never written to Dashboard's shared order. */
+  /** Local drag reorder — shared cross-page order (user-global + this scope), not a page-local key. */
   const handleCurrencyDropOn = useCallback(
     (e, targetCode) => {
       e.preventDefault();
@@ -585,15 +594,43 @@ export default function PaymentMaintenancePage() {
       const [moved] = next.splice(fromI, 1);
       next.splice(toI, 0, moved);
       setCurrencies(next);
+      const codes = next.map((row) => row?.code).filter(Boolean);
+      persistUserCurrencyDisplayOrder(codes);
       const orderKey = resolvePaymentMaintenanceCurrencyOrderKey(paymentScope);
       if (orderKey != null) {
-        persistPaymentMaintenanceCurrencyOrder(
-          orderKey,
-          next.map((row) => row?.code),
-        );
+        persistCurrencyDisplayOrder(orderKey, codes);
       }
     },
     [currencies, paymentScope],
+  );
+
+  // -- Cross-page currency selection sync (Dashboard / Transaction / Reports / etc.) --
+  const paymentCurrencyCodes = useMemo(
+    () => currencies.map((row) => row?.code).filter(Boolean),
+    [currencies],
+  );
+  const applyCrossPageCurrency = useCallback((code) => {
+    userSelectedAllCurrencyRef.current = false;
+    setSelectedCurrency(code);
+  }, []);
+  const { persistSelection: persistCrossPageCurrency } = useCrossPageCurrencySync({
+    enabled: paymentCurrencyCodes.length > 0 && paymentMaintenanceScopeIsReady(paymentScope),
+    companyId: paymentScope?.scopeCompanyId > 0 ? paymentScope.scopeCompanyId : null,
+    selectedGroup: paymentScope?.viewGroup ?? selectedGroup,
+    availableCodes: paymentCurrencyCodes,
+    currentCode: selectedCurrency || "",
+    onApplyCode: applyCrossPageCurrency,
+    respectEmptyRef: userSelectedAllCurrencyRef,
+  });
+
+  /** User clicked a currency pill: apply locally + broadcast so every page stays in sync. */
+  const handlePickCurrency = useCallback(
+    (code) => {
+      userSelectedAllCurrencyRef.current = false;
+      setSelectedCurrency(code);
+      persistCrossPageCurrency(code);
+    },
+    [persistCrossPageCurrency],
   );
 
   const handleClearCompany = useCallback(
@@ -709,7 +746,9 @@ export default function PaymentMaintenancePage() {
   followGroupRef.current = () => {};
 
   const handleCurrencySelectAll = useCallback(() => {
+    userSelectedAllCurrencyRef.current = true;
     setSelectedCurrency(null);
+    clearDashboardSelectedCurrency();
   }, []);
 
   const toggleSelect = useCallback((id) => {
@@ -789,7 +828,7 @@ export default function PaymentMaintenancePage() {
         groupAllMode={groupAllMode}
         currencies={currencies}
         selectedCurrency={selectedCurrency}
-        setSelectedCurrency={setSelectedCurrency}
+        setSelectedCurrency={handlePickCurrency}
         onCurrencySelectAll={handleCurrencySelectAll}
         onCurrencyDropOn={handleCurrencyDropOn}
         onDelete={handleDeleteClick}

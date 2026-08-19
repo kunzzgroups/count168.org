@@ -445,6 +445,23 @@ function isGroupsAllLedgerCurrencyScope({ groupsAllMode, groupAllMode, companyId
   return isGroupsAllLedgerDataScope({ groupsAllMode, groupAllMode, companyId, me });
 }
 
+/** Same shape as `buildScopeCurrencyKey` — used when companyId state has not committed yet. */
+function dashboardCurrencyListScopeKey({
+  selectedGroup,
+  companyId,
+  groupsAllMode,
+  groupAllMode,
+  mergedSubsetIds,
+}) {
+  return [
+    selectedGroup || "",
+    companyId ?? "",
+    groupsAllMode ? "1" : "0",
+    groupAllMode ? "1" : "0",
+    mergedSubsetIds?.join(",") ?? "",
+  ].join("|");
+}
+
 /** Stable signature so identical company lists do not retrigger prefetch/bootstrap effects. */
 function companiesListSignature(rows) {
   return (rows || [])
@@ -1146,6 +1163,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
   const loadCurrenciesCoalesceTimerRef = useRef(null);
   /** Skip redundant currency network reloads for the same filter scope. */
   const currencyScopeLoadedRef = useRef({ key: "", count: 0 });
+  /** Last scope key for which loadCurrencies/prime actually committed (incl. confirmed []). */
+  const [settledCurrencyScopeKey, setSettledCurrencyScopeKey] = useState("");
   const primeCurrenciesFromCacheRef = useRef(null);
   const skipNextCurrencyClickRef = useRef(false);
   /** After company pill change, next currency resolve picks the first pill (MYR). */
@@ -1212,13 +1231,13 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
   const buildScopeCurrencyKey = useCallback(
     () =>
-      [
-        selectedGroup || "",
-        companyId ?? "",
-        groupsAllMode ? "1" : "0",
-        groupAllMode ? "1" : "0",
-        mergedSubsetIds?.join(",") ?? "",
-      ].join("|"),
+      dashboardCurrencyListScopeKey({
+        selectedGroup,
+        companyId,
+        groupsAllMode,
+        groupAllMode,
+        mergedSubsetIds,
+      }),
     [selectedGroup, companyId, groupsAllMode, groupAllMode, mergedSubsetIds]
   );
 
@@ -1325,10 +1344,27 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       const cur = overrides.currencyCode !== undefined ? overrides.currencyCode : currencyCode;
       let effectiveCur = cur ? String(cur).trim().toUpperCase() : "";
       const list = currenciesRef.current.length ? currenciesRef.current : currencies;
-      if (!effectiveCur && gaMode && cid == null && list[0]) {
-        effectiveCur = String(list[0]).trim().toUpperCase();
+      /**
+       * Before `currencyCode` state settles (first paint after reload, or before the pill
+       * list has loaded), prefer the user's persisted per-scope currency over list[0] —
+       * otherwise cache priming paints whatever currency happens to be first (usually MYR)
+       * under the already-correct pill label, then jumps once currencyCode catches up.
+       */
+      const resolveUnsettledCur = (scopeCid, scopeGroup) => {
+        const persistScopeKey = buildDashboardCurrencyScopeKey({
+          companyId: scopeCid,
+          selectedGroup: scopeGroup,
+        });
+        const persisted = persistScopeKey
+          ? resolveCrossPageCurrencyPreference({ scopeKey: persistScopeKey, availableCodes: list })
+          : "";
+        if (persisted) return persisted;
+        return list[0] ? String(list[0]).trim().toUpperCase() : "";
+      };
+      if (!effectiveCur && gaMode && cid == null) {
+        effectiveCur = resolveUnsettledCur(null, selGroup);
       }
-      if (!effectiveCur && cid != null && list[0]) {
+      if (!effectiveCur && cid != null) {
         const row = companies.find((c) => parseInt(c.id, 10) === parseInt(cid, 10));
         const usesLedger =
           !gAll &&
@@ -1337,7 +1373,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           row &&
           companyRowIsGroupEntity(row, selGroup);
         if (!usesLedger) {
-          effectiveCur = String(list[0]).trim().toUpperCase();
+          effectiveCur = resolveUnsettledCur(cid, selGroup);
         }
       }
       const from = overrides.dateFrom ?? dateFrom;
@@ -1356,8 +1392,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         const row = companies.find((c) => parseInt(c.id, 10) === parseInt(cid, 10));
         return companyRowIsGroupEntity(row, selGroup);
       })();
-      if (!effectiveCur && cid == null && usesLedger && list[0]) {
-        effectiveCur = String(list[0]).trim().toUpperCase();
+      if (!effectiveCur && cid == null && usesLedger) {
+        effectiveCur = resolveUnsettledCur(null, selGroup);
       }
       const subScope = cid != null && !gAll && !gaMode && selGroup && !usesLedger;
 
@@ -2359,6 +2395,19 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
 
   const applyCurrencyCodes = useCallback((codes, cid) => {
     const effectiveCompanyId = cid ?? companyId;
+    const markSettled = (listLen) => {
+      const emptyCid =
+        effectiveCompanyId != null ? parseInt(effectiveCompanyId, 10) : Number.NaN;
+      const key = dashboardCurrencyListScopeKey({
+        selectedGroup,
+        companyId: Number.isFinite(emptyCid) && emptyCid > 0 ? emptyCid : null,
+        groupsAllMode,
+        groupAllMode,
+        mergedSubsetIds,
+      });
+      currencyScopeLoadedRef.current = { key, count: listLen };
+      setSettledCurrencyScopeKey(key);
+    };
     if (!codes.length) {
       const emptyCid =
         effectiveCompanyId != null ? parseInt(effectiveCompanyId, 10) : Number.NaN;
@@ -2367,6 +2416,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       }
       setCurrencies([]);
       setCurrencyCode("");
+      markSettled(0);
       window.setTimeout(() => {
         void loadDashboardRef.current?.();
       }, 0);
@@ -2418,6 +2468,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         persistDashboardCurrencyDisplayOrder(currencyDisplayOrderByCompanyRef, cid, ordered);
       }
     }
+    markSettled(ordered.length);
   }, [companyId, selectedGroup, groupsAllMode, groupAllMode, mergedSubsetIds, companies, me, companiesForPicker, resolveActiveCurrencyForScope]);
 
   /** Instant currency pills when switching group/company — uses in-memory cache from prior visits. */
@@ -2558,6 +2609,15 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
         userCurrencyDisplayOrderRef,
       );
       setCurrencies(list);
+      const primedListKey = dashboardCurrencyListScopeKey({
+        selectedGroup: groupKey,
+        companyId: Number.isFinite(singleCid) && singleCid > 0 ? singleCid : null,
+        groupsAllMode: gAll,
+        groupAllMode: gaMode,
+        mergedSubsetIds: scope.mergedSubsetIds,
+      });
+      currencyScopeLoadedRef.current = { key: primedListKey, count: list.length };
+      setSettledCurrencyScopeKey(primedListKey);
       const scopeKey = buildDashboardCurrencyScopeKey({
         companyId: Number.isFinite(singleCid) && singleCid > 0 ? singleCid : null,
         selectedGroup: groupKey,
@@ -2660,6 +2720,8 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       if (scopeCurrencyKeyRef.current !== scopeKey) return;
       const list = [...new Set(codes.map((c) => String(c).toUpperCase()).filter(Boolean))];
       setCurrencies(list);
+      currencyScopeLoadedRef.current = { key: scopeKey, count: list.length };
+      setSettledCurrencyScopeKey(scopeKey);
       const currencyScopeKey = buildDashboardCurrencyScopeKey({ companyId, selectedGroup });
       const isGroupOnlyScope = groupOnlyCurrencyScope;
       const isCompanyOnlyScope =
@@ -2693,7 +2755,6 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
           codes: list,
         });
       }
-      currencyScopeLoadedRef.current = { key: scopeKey, count: list.length };
       // Empty currency settle does not always change React state — re-kick loadDashboard.
       if (list.length === 0) {
         window.setTimeout(() => {
@@ -5218,7 +5279,26 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
       const tryGroupAllBootstrap = async () => {
         if (!ids.length || ids.length > 40) return null;
         if (ids.length >= 2) {
-          return null;
+          // Cold first paint stays FE-parallel — PHP group_all foreach is serial
+          // (wall ≈ Σ companies) and was the main Company All first-paint stall.
+          // Once every company's primary scope is warm (session cache populated =
+          // server dash_main_v1 APCu has answered it recently), one group_all batch
+          // answers ALL companies in a single HTTP instead of N round-trips, and each
+          // in-process capture hits APCu — the "All Company is slow on repeat views"
+          // path. Cold = parallel; warm = single batch.
+          const curKey = cur ? String(cur).trim().toUpperCase() : "";
+          const allWarm = ids.every((cid) => {
+            const key = buildDashboardCacheKey({
+              companyId: cid,
+              dateFrom: rangeFrom,
+              dateTo: rangeTo,
+              currencyCode: curKey,
+              selectedGroup: viewGroupHint,
+              groupAllMode: false,
+            });
+            return getDashboardCache(key)?.current != null;
+          });
+          if (!allWarm) return null;
         }
         // Heterogeneous view_group (Groups All) — keep parallel per-company fetches.
         const sameViewGroup = accessible.every((c) => {
@@ -10078,6 +10158,7 @@ export function useDashboardPage({ i18n, dateFrom, dateTo }) {
     displayCurrencies,
     displayFilterCurrencyCode,
     currencies,
+    currencyListSettled: settledCurrencyScopeKey === buildScopeCurrencyKey(),
     currencyCode: displayCurrencyCode,
     showAllCurrencies,
     canShowAllCurrencies,

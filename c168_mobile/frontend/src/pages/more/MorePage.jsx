@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import MobileShell from "../../components/layout/MobileShell.jsx";
+import MobileSubpageHeader from "../../components/layout/MobileSubpageHeader.jsx";
 import { fetchJson } from "../../lib/fetchJson.js";
 import { readLoginLang, writeLoginLang } from "../../lib/loginLang.js";
 import { MORE_I18N } from "../../translateFile/moreTranslate.js";
@@ -12,7 +13,13 @@ import {
   fetchOwnerCompaniesForDomain,
 } from "../../lib/c168DomainAccess.js";
 import { fetchAutoRenewPendingCount } from "../../lib/autoRenewApi.js";
-import { canAccessAdmin, canAccessMaintenance, canShowReportEntry } from "../../utils/mobilePermissions.js";
+import {
+  canAccessAdmin,
+  canAccessMaintenance,
+  canAccessOwnership,
+  canShowReportEntry,
+  resolveMobileMoreBackPath,
+} from "../../utils/mobilePermissions.js";
 import { maintenanceText } from "../../translateFile/maintenanceTranslate.js";
 import "./more.css";
 
@@ -71,6 +78,7 @@ export default function MorePage() {
 
   const companyCode = String(me?.company_code || me?.company_id || "").toUpperCase();
   const groupId = String(me?.login_group_id || me?.login_identifier || "").toUpperCase();
+  const backTo = resolveMobileMoreBackPath(me);
   const mt = maintenanceText(lang);
   const tools = [];
   if (canAccessAdmin(me)) {
@@ -79,6 +87,14 @@ export default function MorePage() {
       icon: "fa-user-gear",
       title: i18n.userManagement,
       description: i18n.userManagementDescription,
+    });
+  }
+  if (canAccessOwnership(me)) {
+    tools.push({
+      to: "/more/ownership",
+      icon: "fa-sitemap",
+      title: i18n.ownership,
+      description: i18n.ownershipDescription,
     });
   }
   if (canAccessMaintenance(me)) {
@@ -120,6 +136,12 @@ export default function MorePage() {
       badge: autoRenewPending > 0 ? autoRenewPending : null,
     });
   }
+  tools.push({
+    to: "/more/settings",
+    icon: "fa-gear",
+    title: i18n.settings,
+    description: i18n.settingsDescription,
+  });
 
   return (
     <MobileShell
@@ -131,18 +153,21 @@ export default function MorePage() {
       onRefresh={undefined}
       lang={lang}
       onLangChange={setLang}
+      stickyBar={
+        <MobileSubpageHeader
+          backTo={backTo}
+          backAriaLabel={i18n.back}
+          title={i18n.more}
+          subtitle={i18n.moreSubtitle}
+        />
+      }
     >
       <main className="m-more-page">
-        <header className="m-more-heading">
-          <p>{i18n.moreSubtitle}</p>
-          <h1>{i18n.more}</h1>
-        </header>
-
         {loading ? (
           <div className="m-more-state">
             <i className="fas fa-spinner fa-spin" aria-hidden="true" />
           </div>
-        ) : tools.length ? (
+        ) : (
           <div className="m-more-grid">
             {tools.map((tool) => (
               <Link key={tool.to} to={tool.to} className="m-more-card tap-scale">
@@ -164,11 +189,6 @@ export default function MorePage() {
                 </span>
               </Link>
             ))}
-          </div>
-        ) : (
-          <div className="m-more-state">
-            <i className="fas fa-box-open" aria-hidden="true" />
-            <p>{i18n.noTools}</p>
           </div>
         )}
       </main>

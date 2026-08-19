@@ -1265,7 +1265,12 @@ body.process-page.process-page--bank.process-page--bank-show-all .bank-process-l
     --bank-list-pill-height: 20px;
     --bank-list-header-row-height: clamp(40px, 2.8vw, 48px);
     --bank-list-cell-line-height: 1.1;
-    --bank-virtual-table-min-width: 1440px;
+    /* 原来在这之上还叠加了一个整表级别的固定 min-width（1440px，后改 1220px）作为"够不够宽"的判断标准，
+       但缩放到 90%/100% 时可用宽度会缩水，这个固定值不管调到多少都会在某个缩放比例下依然偏大而触发横向滚动。
+       现在去掉这层整表级别的硬下限，改为完全信任下面每一列自己的 minmax() 下限（含随窗口宽度切换的
+       ≤1699/1500/1439px 三档）——那才是真正决定"再窄就会挤变形"的边界，可用宽度只要能装下当前这一档
+       列的下限总和就不必滚动，装不下时横向滚动兜底依旧在（由 .bank-virtual-table-inner 的 grid 内容
+       溢出 .process-table-wrapper.bank-process-table-region 的 overflow-x: auto 触发，无需额外变量） */
     /* Country / Insurance / Customer 列设最小像素宽，保证表头英文标题+排序角标完整显示 */
     --bank-virtual-grid-columns:
         minmax(36px, 0.34fr) minmax(0, 0.62fr) minmax(max-content, 0.44fr)
@@ -1302,7 +1307,7 @@ body.process-page.process-page--bank.process-page--bank-show-all .bank-process-l
     min-height: 0;
     height: auto;
     width: 100%;
-    min-width: max(100%, var(--bank-virtual-table-min-width, 1440px));
+    min-width: 100%;
     max-width: none;
     overflow: visible;
     -webkit-overflow-scrolling: touch;
@@ -2028,6 +2033,27 @@ body.process-page.process-page--bank .bank-process-filter-measure {
     z-index: -1;
 }
 
+/* Hidden measurement clone must always report the "expanded" inline width,
+   regardless of whether .bank-process-toolbar-primary currently carries
+   --filter-collapsed. Its chips otherwise inherit the same
+   collapsed/expanded-scoped gap & padding rules as the real (visible) chips
+   (see the :not(--filter-collapsed) rules above and their <1699px
+   counterparts), which makes the measured width a function of the very
+   state it's used to decide — causing the ResizeObserver loop to toggle
+   collapsed/expanded forever at whichever viewport width straddles the
+   threshold between the two measured widths. */
+body.process-page.process-page--bank .bank-process-filter-measure .userlist-filter-chips--bank-process {
+    gap: clamp(4px, 0.4vw, 8px) !important;
+    padding-left: clamp(4px, 0.35vw, 8px) !important;
+    padding-right: clamp(4px, 0.35vw, 8px) !important;
+}
+
+@media (max-width: 1699px) {
+    body.process-page.process-page--bank .bank-process-filter-measure .userlist-filter-chips--bank-process {
+        gap: clamp(6px, 0.5vw, 10px) !important;
+    }
+}
+
 body.process-page.process-page--bank .action-buttons,
 body.process-page.process-page--bank .action-buttons-container,
 body.process-page.process-page--bank .bank-process-toolbar-main,
@@ -2263,10 +2289,20 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary
     top: auto;
     transform: none;
     flex: 0 0 auto;
-    width: clamp(14px, 1vw, 16px);
-    height: clamp(14px, 1vw, 16px);
+    width: clamp(16px, 1.15vw, 19px);
+    height: clamp(16px, 1.15vw, 19px);
     margin: 0 0 0 clamp(1px, 0.12vw, 2px);
-    font-size: clamp(12px, 0.85vw, 14px);
+    font-size: clamp(12px, 0.9vw, 15px);
+    /* 加一层浅底色让 × 更明显，不再是几乎看不见的浅灰字；clamp 尺寸缩放，小屏幕不受影响 */
+    background: rgba(100, 116, 139, 0.16);
+    border-radius: 50%;
+    color: #475569;
+}
+
+body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .process-list-date-clear:hover,
+body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .process-list-date-clear:hover {
+    background: rgba(100, 116, 139, 0.3);
+    color: #1e293b;
 }
 
 body.process-page.process-page--bank .bank-process-toolbar-primary .transaction-date-range-group .transaction-date-range-chevron,
@@ -2276,7 +2312,11 @@ body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary
     top: auto;
     transform: none;
     flex: 0 0 auto;
-    margin: 0 0 0 clamp(1px, 0.15vw, 2px);
+    /* Fixed px (not vw-scaled) so the × ↔ chevron gap stays identical at every
+       screen size instead of narrowing/widening with viewport width.
+       !important needed: the base .transaction-date-range-chevron rule sets
+       margin: 0 !important, which otherwise wins regardless of specificity. */
+    margin: 0 0 0 6px !important;
     pointer-events: none;
 }
 
@@ -2490,9 +2530,9 @@ body.ec-auth-shell.process-page.process-page--bank #calendar-popup.calendar-popu
 
     body.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded,
     body.ec-auth-shell.process-page.process-page--bank .bank-process-toolbar-primary .search-container.userlist-search-bar.bank-process-search-bar.is-expanded {
-        /* <1700px：展开后更长（明显一点，避免“看不出变化”） */
-        width: clamp(220px, 18vw, 320px) !important;
-        max-width: clamp(220px, 18vw, 320px) !important;
+        /* <1700px：展开后短一点，避免挤压其他 toolbar 控件 */
+        width: clamp(150px, 11vw, 210px) !important;
+        max-width: clamp(150px, 11vw, 210px) !important;
     }
 
     /* <1700px：展开后的 Search 更“细”，高度与 Date range 药丸对齐 */
@@ -9072,7 +9112,6 @@ html:has(body.process-page.process-page--bank:not(.process-page--bank-show-all))
 body.process-page.process-page--bank:not(.process-page--bank-show-all),
 body.dashboard-page.process-page.process-page--bank:not(.process-page--bank-show-all),
 body.ec-auth-shell.process-page.process-page--bank:not(.process-page--bank-show-all) {
-    --bank-virtual-table-min-width: 1440px;
     overflow-x: hidden !important;
     overflow-y: hidden !important;
     height: 100vh !important;
@@ -9106,7 +9145,7 @@ body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-pro
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-table {
-    min-width: max(100%, var(--bank-virtual-table-min-width, 1440px)) !important;
+    min-width: 100% !important;
 }
 
 body.process-page.process-page--bank:not(.process-page--bank-show-all) .bank-virtual-scroll-clip,

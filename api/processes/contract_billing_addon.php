@@ -187,6 +187,30 @@ function billingMonthlyFirstContractDueAfterPartialFirst(string $dayStartYmd): ?
 }
 
 /**
+ * 该应付日实际代表哪个自然月的账期（Y-n）。
+ * day_start 为每月 1 号时，第 2 期起应付日会提前 1 天落到上一自然月最后一天（如 8 月这期的应付日是 7/31）——
+ * 这是设计如此（提前一天出账），但它「实际代表」的仍是下一个自然月（7/31 代表 8 月），不是它自己表面所在的自然月（7 月）。
+ * 不这样换算的话，「今天所在月 vs 应付日所在月」的比对永远对不上，这笔账单会一直不出现，直到应付日本身也走到月底那天。
+ * day_start 非 1 号（或本身就是未偏移的首期）时不受影响，直接用应付日自己的自然月。
+ */
+function billingMonthlyChainedDueRepresentedYm(string $dueYmd, string $contractStartYmd): string
+{
+    try {
+        $due = new DateTimeImmutable($dueYmd);
+        if ($dueYmd !== $contractStartYmd) {
+            $contractStart = new DateTimeImmutable($contractStartYmd);
+            if ((int) $contractStart->format('j') === 1) {
+                return $due->modify('+1 day')->format('Y-n');
+            }
+        }
+
+        return $due->format('Y-n');
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
+/**
  * Monthly 先付链式：收集应付日锚点（Y-m-d），规则与 process_accounting_inbox_api::inboxCollectMonthlyPrepaidBillingAnchors 一致。
  *
  * @param callable(string,int,int,string):bool $shouldCollect ($dueYmd, $year, $month, $dueYm)
@@ -238,7 +262,7 @@ function billingCollectMonthlyChainedDueAnchors(
             break;
         }
 
-        $dueYm = $dueDt->format('Y-n');
+        $dueYm = billingMonthlyChainedDueRepresentedYm($due, $startDate);
         $dueMonthFirst = $dueDt->modify('first day of this month')->format('Y-m-d');
 
         if ($onlyAnchorYm !== null && $dueYm !== $onlyAnchorYm) {
@@ -290,6 +314,10 @@ function billingCollectMonthlyChainedDueAnchors(
 
         $y = (int) $dueDt->format('Y');
         $mo = (int) $dueDt->format('n');
+        if (preg_match('/^(\d{4})-(\d{1,2})$/', $dueYm, $mYm)) {
+            $y = (int) $mYm[1];
+            $mo = (int) $mYm[2];
+        }
 
         if (($today >= $due || $resendRelax) && $shouldCollect($due, $y, $mo, $dueYm)) {
             $anchors[] = $due;

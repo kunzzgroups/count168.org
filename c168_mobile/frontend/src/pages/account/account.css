@@ -130,8 +130,8 @@
   flex: 0 0 2.4rem;
   place-items: center;
   border-radius: 50%;
-  background: #e8efff;
-  color: #2959c7;
+  background: var(--m-color-primary-soft);
+  color: var(--m-color-primary-soft-text);
   font-size: var(--m-text-sub-ratio);
   font-weight: 800;
   text-transform: uppercase;
@@ -176,9 +176,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-top: 1px solid rgba(226, 232, 240, 0.75);
+  border-top: 1px solid var(--m-color-ring);
   padding: 0.45rem 0.75rem;
-  background: rgba(255, 255, 255, 0.76);
+  background: var(--m-color-overlay);
 }
 
 .m-account-card-alert,
@@ -202,13 +202,13 @@
 }
 
 .m-account-status.active {
-  background: #dcfce7;
-  color: #047857;
+  background: var(--m-color-success-soft);
+  color: var(--m-color-success-text);
 }
 
 .m-account-status.inactive {
-  background: #e2e8f0;
-  color: #64748b;
+  background: var(--m-color-ring);
+  color: var(--m-color-muted);
 }
 
 .m-account-switch {
@@ -217,7 +217,7 @@
   height: 1.1rem;
   align-items: center;
   border-radius: var(--m-radius-pill);
-  background: #cbd5e1;
+  background: var(--m-color-ring);
   padding: 0.12rem;
   transition: background 0.15s;
 }
@@ -226,7 +226,7 @@
   width: 0.86rem;
   height: 0.86rem;
   border-radius: 50%;
-  background: #fff;
+  background: var(--m-color-surface);
   transition: transform 0.15s;
 }
 
@@ -263,8 +263,8 @@
 }
 
 .m-account-toast {
-  background: #dcfce7;
-  color: #047857;
+  background: var(--m-color-success-soft);
+  color: var(--m-color-success-text);
 }
 
 .m-account-toast.error,
@@ -286,7 +286,7 @@
 
 .m-account-empty i {
   font-size: 2rem;
-  color: #cbd5e1;
+  color: var(--m-color-label);
 }
 
 .m-account-sheet-body {
@@ -299,7 +299,7 @@
 .m-account-sheet-footer {
   border-top: 1px solid var(--m-color-ring);
   padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
-  background: #fff;
+  background: var(--m-color-surface);
   font-size: var(--m-text-compact);
 }
 
@@ -323,7 +323,7 @@
 
 .m-account-secondary-btn {
   border: 1px solid var(--m-color-primary);
-  background: #fff;
+  background: var(--m-color-surface);
   color: var(--m-color-primary);
 }
 
@@ -387,9 +387,9 @@
 
 .m-account-sheet-hint {
   border-radius: var(--m-radius-card);
-  background: #eff6ff;
+  background: var(--m-color-primary-soft);
   padding: 0.7rem;
-  color: #3560b8;
+  color: var(--m-color-primary-soft-text);
   font-size: var(--m-text-sub-ratio);
 }
 
@@ -418,8 +418,8 @@
 }
 
 .m-account-role-badge {
-  background: #e8efff;
-  color: #2959c7;
+  background: var(--m-color-primary-soft);
+  color: var(--m-color-primary-soft-text);
 }
 
 .m-account-detail-list {
@@ -496,10 +496,10 @@
 .m-account-form-field select,
 .m-account-form-field textarea {
   width: 100%;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--m-color-ring);
   border-radius: 0.75rem;
   outline: 0;
-  background: #fff;
+  background: var(--m-color-surface);
   padding: 0.75rem;
   color: var(--m-color-text);
   font-size: 0.875rem;
@@ -509,7 +509,7 @@
 }
 
 .m-account-form-field select {
-  background: #f8fafc;
+  background: var(--m-color-surface-muted);
 }
 
 .m-account-form-field input:focus,
@@ -537,10 +537,18 @@
   margin: 0.75rem 0;
 }
 
+.m-account-currency-hint {
+  margin: 0 0 0.15rem;
+  color: var(--m-color-muted);
+  font-size: var(--m-text-sub-ratio);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
 .m-account-currency-create input {
   min-width: 0;
   flex: 1;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--m-color-ring);
   border-radius: 0.75rem;
   padding: 0.75rem;
   outline: 0;
@@ -550,7 +558,7 @@
 
 .m-account-currency-create button {
   border-radius: 0.75rem;
-  background: #e8efff;
+  background: var(--m-color-primary-soft);
   padding: 0.625rem 0.875rem;
   color: var(--m-color-primary);
   font-size: var(--m-text-secondary);
@@ -566,13 +574,29 @@
 .m-account-currency-tags > span {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.2rem;
   border-radius: var(--m-radius-pill);
   background: var(--m-color-surface-muted);
-  padding: 0.3rem 0.55rem;
+  padding: 0.15rem 0.2rem 0.15rem 0.15rem;
   color: var(--m-color-text-secondary);
   font-size: var(--m-text-sub-ratio);
   font-weight: 800;
+}
+
+.m-account-currency-tags > span.is-active {
+  background: rgba(13, 96, 255, 0.12);
+}
+
+.m-account-currency-pill {
+  border-radius: var(--m-radius-pill);
+  padding: 0.25rem 0.55rem;
+  color: var(--m-color-text-secondary);
+  font-size: inherit;
+  font-weight: 800;
+}
+
+.m-account-currency-pill.is-active {
+  color: var(--m-color-primary);
 }
 
 .m-account-currency-tags button {
@@ -581,12 +605,12 @@
 }
 
 .m-account-currency-tags button:disabled {
-  color: #cbd5e1;
+  color: var(--m-color-label);
 }
 
 .m-account-form-card {
   margin: 1rem 0;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--m-color-ring);
   border-radius: 0.75rem;
   padding: 0.75rem;
 }
@@ -613,7 +637,7 @@
 }
 
 .m-account-segment button.is-active {
-  background: #fff;
+  background: var(--m-color-surface);
   color: var(--m-color-primary);
   box-shadow: var(--m-shadow-card);
 }
@@ -621,6 +645,10 @@
 .m-account-check-list {
   display: grid;
   margin-top: 0.7rem;
+}
+
+.m-account-check-list label.is-disabled {
+  opacity: 0.45;
 }
 
 .m-account-check-list label {

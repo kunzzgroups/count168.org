@@ -57,3 +57,31 @@
   outline: 2px solid rgba(99, 196, 255, 0.85);
   outline-offset: 1px;
 }
+
+.mobile-lang-switch--light {
+  width: 7.6rem;
+  border: 1px solid var(--m-color-ring);
+  background: var(--m-color-surface-muted);
+  box-shadow: none;
+}
+
+.mobile-lang-switch--light .mobile-lang-switch__thumb {
+  box-shadow: 0 1px 4px rgba(13, 96, 255, 0.28);
+}
+
+.mobile-lang-switch--light .mobile-lang-switch__seg {
+  color: var(--m-color-muted);
+}
+
+.mobile-lang-switch--light .mobile-lang-switch__seg.is-active {
+  color: #fff;
+}
+
+.mobile-theme-switch .mobile-lang-switch__seg {
+  font-size: var(--m-text-micro);
+  letter-spacing: 0.01em;
+}
+
+.mobile-theme-switch[data-theme="dark"] .mobile-lang-switch__thumb {
+  transform: translateX(100%);
+}

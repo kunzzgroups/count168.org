@@ -420,7 +420,7 @@ body.dashboard-page {
 body.dashboard-page .dashboard-filter-panel.action-buttons-container {
     margin-top: var(--layout-page-first-block-mt);
     background: var(--color-surface, #ffffff);
-    border: 1px solid var(--color-border, #e5e7eb);
+    border: 0 solid var(--color-border, #e5e7eb);
     box-shadow: var(--shadow-card, 0 2px 8px rgba(0, 0, 0, 0.1));
     border-radius: 10px;
     backdrop-filter: none;
@@ -534,6 +534,24 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
     padding: 12px 20px 14px;
     border-top: 1px solid rgba(15, 23, 42, 0.06);
     background: transparent;
+}
+
+/* Pre-apply userlist.css's .user-gc-inline-label typography here too (dashboard.css loads
+ * eagerly via main.jsx → app-shell.css; userlist.css only loads as this route's lazy chunk).
+ * Without this, "Date Range/Group ID/Company/Currency" briefly paint at regular weight before
+ * the userlist.css chunk finishes loading, then snap to bold — a visible text flash/jump on
+ * every dashboard navigation. Keep in sync with body.dashboard-page .user-gc-inline-label in
+ * userlist.css; identical values so there is no second visual change once that chunk lands.
+ */
+body.dashboard-page .user-gc-inline-label {
+    justify-self: stretch;
+    width: 100%;
+    min-width: 0;
+    font-size: var(--text-base);
+    font-weight: var(--font-weight-bold);
+    color: #1f2937;
+    white-space: nowrap;
+    box-sizing: border-box;
 }
 
 /* 篩選列：併排觸發器 + 下拉（參考稿：藥丸摘要 + 雙欄 / 幣種網格） */
@@ -1087,6 +1105,19 @@ body.dashboard-page.transaction-page .dashboard-filter-panel .user-gc-inline-pan
 .dashboard-summary-hero-value .dashboard-amount-shimmer {
     width: 120px;
     height: 28px;
+}
+
+/* FX rates still loading: keep the previous painted amount but dim it (no shimmer
+   replacement — swapping the number for a shimmer and back read as flicker on slow
+   connections). The value updates in place when rates land / useConvertedEarnings flips. */
+.dashboard-amount-pending-fx {
+    opacity: 0.45;
+    transition: opacity 0.35s ease;
+}
+
+.dashboard-amount-pending-fx.dashboard-summary-hero-value-anim,
+.dashboard-summary-currency-amount.dashboard-amount-pending-fx {
+    opacity: 0.45;
 }
 
 @media (prefers-reduced-motion: reduce) {

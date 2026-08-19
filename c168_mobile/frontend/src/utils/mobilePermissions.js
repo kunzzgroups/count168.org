@@ -64,6 +64,13 @@ export function canAccessAdmin(me) {
   return canAccessPermission(me, "admin");
 }
 
+/** Ownership page — owner / partnership only, same as desktop sidebar. */
+export function canAccessOwnership(me) {
+  const role = normRole(me?.role);
+  if (role !== "owner" && role !== "partnership") return false;
+  return canAccessPermission(me, "ownership");
+}
+
 /** Full Maintenance: owner / unrestricted, or explicit "maintenance" permission. */
 export function canAccessFullMaintenance(me) {
   if (hasFullPermissions(me)) return true;
@@ -122,9 +129,30 @@ export function resolveMobileLandingPath(me) {
   return "/more";
 }
 
+/** More hub + pages opened from More — hide the tab bar. */
+export function isMobileMoreStackPath(pathname) {
+  const p = String(pathname || "");
+  return (
+    p === "/more" ||
+    p.startsWith("/more/") ||
+    p.startsWith("/report") ||
+    p.startsWith("/maintenance")
+  );
+}
+
+/** First bottom-nav tab besides More — used by the More back button. */
+export function resolveMobileMoreBackPath(me) {
+  if (!me) return "/dashboard";
+  const items = mobileNavItems(me).filter((item) => item.to !== "/more");
+  return items[0]?.to || "/dashboard";
+}
+
 export function mobileNavItems(me) {
   if (String(me?.user_type || "").toLowerCase() === "member") {
-    return [{ to: "/member", icon: "fa-chart-line", key: "winLoss" }];
+    return [
+      { to: "/member", icon: "fa-chart-line", key: "winLoss" },
+      { to: "/more", icon: "fa-ellipsis", key: "navMore" },
+    ];
   }
   const items = [];
   if (canAccessDashboard(me)) {

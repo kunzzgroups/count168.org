@@ -12,7 +12,7 @@
   align-items: center;
   gap: 0.85rem;
   border-radius: var(--m-radius-card-lg);
-  background: linear-gradient(120deg, #e8f0ff, #f4f8ff);
+  background: linear-gradient(120deg, var(--m-color-primary-soft), var(--m-color-surface-muted));
   padding: 1rem;
   margin-bottom: 1.1rem;
 }
@@ -24,7 +24,7 @@
   flex: 0 0 3rem;
   place-items: center;
   border-radius: 0.9rem;
-  background: #dbe7ff;
+  background: var(--m-color-primary-soft);
   color: var(--m-color-primary);
   font-size: 1.35rem;
 }
@@ -198,8 +198,8 @@
 }
 
 .m-rpt-chip.is-on {
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: var(--m-color-primary-border);
+  background: var(--m-color-primary-soft);
   color: var(--m-color-primary);
 }
 
@@ -212,9 +212,9 @@
 
 /* Domain: humane 2-line rows — process + labeled metrics, no horizontal scroll */
 .m-rpt-summary {
-  border: 1px solid #93c5fd;
+  border: 1px solid var(--m-color-primary-border);
   border-radius: var(--m-radius-card);
-  background: #eff6ff;
+  background: var(--m-color-primary-soft);
   padding: 0.55rem 0.65rem;
 }
 
@@ -270,13 +270,13 @@
   white-space: nowrap;
 }
 
-/* Match desktop domain/customer report: win/positive #172a9f, lose/negative #b91c1c */
+/* Win/positive and lose/negative follow theme tokens (readable in dark). */
 .m-rpt-metric.is-pos strong {
-  color: #172a9f;
+  color: var(--m-color-primary);
 }
 
 .m-rpt-metric.is-neg strong {
-  color: #b91c1c;
+  color: var(--m-color-danger);
 }
 
 .m-rpt-lines {
@@ -296,7 +296,7 @@
 }
 
 .m-rpt-line:nth-child(even) {
-  background: #f3faff;
+  background: var(--m-color-primary-soft);
 }
 
 .m-rpt-line:last-child {
@@ -326,25 +326,25 @@
 .m-rpt-error {
   margin-bottom: 0.75rem;
   border-radius: var(--m-radius-card);
-  background: #fef2f2;
+  background: var(--m-color-danger-soft);
   padding: 0.7rem 0.85rem;
-  color: #b91c1c;
+  color: var(--m-color-danger-text);
   font-size: var(--m-text-sub-ratio);
 }
 
 .m-rpt-toast {
   margin-bottom: 0.75rem;
   border-radius: var(--m-radius-card);
-  background: #ecfdf5;
+  background: var(--m-color-success-soft);
   padding: 0.7rem 0.85rem;
-  color: #047857;
+  color: var(--m-color-success-text);
   font-size: var(--m-text-sub-ratio);
   font-weight: 700;
 }
 
 .m-rpt-toast.is-error {
-  background: #fef2f2;
-  color: #b91c1c;
+  background: var(--m-color-danger-soft);
+  color: var(--m-color-danger-text);
 }
 
 .m-rpt-list {
@@ -417,9 +417,9 @@
 }
 
 .m-rpt-total-sticky {
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--m-color-primary-border);
   border-radius: var(--m-radius-card);
-  background: #eff6ff;
+  background: var(--m-color-primary-soft);
   padding: 0.55rem 0.7rem;
 }
 
@@ -438,9 +438,9 @@
 
 .m-rpt-total-bar {
   margin-top: 0.35rem;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--m-color-primary-border);
   border-radius: var(--m-radius-card-lg);
-  background: #eff6ff;
+  background: var(--m-color-primary-soft);
   padding: 0.85rem;
 }
 
@@ -465,11 +465,11 @@
 }
 
 .m-rpt-metrics strong.is-pos {
-  color: #172a9f;
+  color: var(--m-color-primary);
 }
 
 .m-rpt-metrics strong.is-neg {
-  color: #b91c1c;
+  color: var(--m-color-danger);
 }
 
 .m-rpt-currency-head {
@@ -485,7 +485,7 @@
   margin: 0;
   padding: 0.45rem 0.7rem 0.2rem;
   border-bottom: 1px solid rgb(148 163 184 / 18%);
-  background: #f8fafc;
+  background: var(--m-color-surface-muted);
 }
 
 .m-rpt-currency-block + .m-rpt-currency-block .m-rpt-currency-head {
@@ -499,7 +499,7 @@
 .m-rpt-currency-subtotal {
   padding: 0.55rem 0.7rem 0.7rem;
   border-top: 1px dashed rgb(148 163 184 / 35%);
-  background: #f8fafc;
+  background: var(--m-color-surface-muted);
 }
 
 .m-rpt-currency-block:last-child .m-rpt-line:last-child {
@@ -543,7 +543,7 @@
   height: 1.45rem;
   flex: 0 0 auto;
   border-radius: 999px;
-  background: #cbd5e1;
+  background: var(--m-color-label);
   transition: background 0.15s ease;
 }
 
@@ -555,7 +555,7 @@
   width: 1.15rem;
   height: 1.15rem;
   border-radius: 50%;
-  background: #fff;
+  background: var(--m-color-surface);
   box-shadow: 0 1px 2px rgb(15 23 42 / 18%);
   transition: transform 0.15s ease;
 }

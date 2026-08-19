@@ -435,13 +435,35 @@ function bmpIssueFlagIsLockingForTxn(?string $normalizedFlag): bool
     return in_array($normalizedFlag, ['official', 'e_invoice', 'block'], true);
 }
 
-/** 与 process_accounting_inbox_api::bmpRowUnlimitedWindow 一致（Feature 2） */
-function bmpRowUnlimitedWindowForTxn(?string $normalizedFlag, bool $hasDayEndMonthlyCapCol, array $row): bool
+/**
+ * 与 process_accounting_inbox_api::bmpRowUnlimitedWindow 一致（Feature 2）。
+ * 建档时合同已过期（旧记录事后补录，纯记录用途）：不适用本 Feature，维持「到期即停」旧行为。
+ * 调用方须传入未被 Resend 放宽过的真实建立日（不含 accounting_resend_relax_created_floor 的
+ * min(created, day_start) 调整），否则 Resend 会让本该被挡住的记录用途合同重新获得 unlimitedWindow。
+ * day_start/day_end 同理：fetchBankProcessesByIds() 已用 bmp_mergeResendScheduleIntoBankProcessRowForAccounting()
+ * 把 relax=1 的行的 day_start/day_end 覆盖成 Resend 弹窗填的锚点，此处若照读会拿 Resend 锚点算合同到期日，
+ * 一旦锚点在未来会导致「建立时已过期」判断失效。relax=1 时改用 merge 函数存下的原始值
+ * bank_process_stored_day_start/day_end/day_start_frequency。
+ */
+function bmpRowUnlimitedWindowForTxn(?string $normalizedFlag, bool $hasDayEndMonthlyCapCol, array $row, string $createdYmd): bool
 {
     if (bmpIssueFlagIsLockingForTxn($normalizedFlag)) {
         return false;
     }
-    return !txnDayEndMonthlyCapOn($hasDayEndMonthlyCapCol, $row);
+    if (txnDayEndMonthlyCapOn($hasDayEndMonthlyCapCol, $row)) {
+        return false;
+    }
+    $hadResendMerge = !empty($row['accounting_resend_relax_created_floor']);
+    $dayStart = $hadResendMerge ? ($row['bank_process_stored_day_start'] ?? null) : ($row['day_start'] ?? null);
+    $dayEnd = $hadResendMerge ? ($row['bank_process_stored_day_end'] ?? null) : ($row['day_end'] ?? null);
+    $frequency = $hadResendMerge
+        ? ($row['bank_process_stored_day_start_frequency'] ?? '1st_of_every_month')
+        : ($row['day_start_frequency'] ?? '1st_of_every_month');
+    $contractEndYmd = bmpRecurringBillingWindowEndYmdForTxn($dayStart, $row['contract'] ?? null, $dayEnd, $frequency);
+    if ($contractEndYmd !== null && $createdYmd > $contractEndYmd) {
+        return false;
+    }
+    return true;
 }
 
 /** 与 process_accounting_inbox_api::bmpRecurringBillingWindowEndYmd 一致 */
@@ -747,12 +769,13 @@ function inferOpenMonthlyBillingMonthYn(PDO $pdo, int $companyId, array $r, stri
     if ($processId <= 0) {
         return null;
     }
-    $createdYmd = txnCreatedYmdWithReactivationFloor($r, ymdFromNullableDateTime($r['dts_created'] ?? null, $today));
-    $createdYmd = bmp_inboxEffectiveCreatedYmd($createdYmd, $startDate, !empty($r['accounting_resend_relax_created_floor']));
+    $createdYmdRaw = txnCreatedYmdWithReactivationFloor($r, ymdFromNullableDateTime($r['dts_created'] ?? null, $today));
+    $createdYmd = bmp_inboxEffectiveCreatedYmd($createdYmdRaw, $startDate, !empty($r['accounting_resend_relax_created_floor']));
     $resendSinglePeriod = !empty($r['accounting_resend_single_period_from_schedule']);
     $hasDayEndMonthlyCapColForRow = array_key_exists('day_end_monthly_cap_enabled', $r);
     $normalizedFlagForRow = normalizeBankIssueFlagValueForTxn($r['issue_flag'] ?? null);
-    $unlimitedWindow = bmpRowUnlimitedWindowForTxn($normalizedFlagForRow, $hasDayEndMonthlyCapColForRow, $r);
+    // unlimitedWindow「是否记录用途合同」判断须用未被 Resend 放宽过的 $createdYmdRaw，见 bmpRowUnlimitedWindowForTxn 注释。
+    $unlimitedWindow = bmpRowUnlimitedWindowForTxn($normalizedFlagForRow, $hasDayEndMonthlyCapColForRow, $r, $createdYmdRaw);
 
     if ($frequency === '1st_of_every_month') {
         $resendRelax = !empty($r['accounting_resend_relax_created_floor']);
@@ -1421,8 +1444,9 @@ try {
             && !empty($p['bank_process_stored_day_start'])) {
             $relaxCreatedFloor = false;
         }
+        $createdYmdRaw = txnCreatedYmdWithReactivationFloor($p, ymdFromNullableDateTime($p['dts_created'] ?? null, $fallbackDate));
         $createdYmd = bmp_inboxEffectiveCreatedYmd(
-            txnCreatedYmdWithReactivationFloor($p, ymdFromNullableDateTime($p['dts_created'] ?? null, $fallbackDate)),
+            $createdYmdRaw,
             $dayStartYmd,
             $relaxCreatedFloor
         );
@@ -1473,7 +1497,8 @@ try {
             // 尾段概念不再适用，防止与继续出的整月账重复。仅两种会被 unlimitedWindow 影响的 frequency 生效。
             if (in_array($frequency, ['1st_of_every_month', 'monthly'], true)) {
                 $normalizedFlagTail = normalizeBankIssueFlagValueForTxn($p['issue_flag'] ?? null);
-                if (bmpRowUnlimitedWindowForTxn($normalizedFlagTail, $has_day_end_tail_switch_col, $p)) {
+                // unlimitedWindow「是否记录用途合同」判断须用未被 Resend 放宽过的 $createdYmdRaw。
+                if (bmpRowUnlimitedWindowForTxn($normalizedFlagTail, $has_day_end_tail_switch_col, $p, $createdYmdRaw)) {
                     continue;
                 }
             }
