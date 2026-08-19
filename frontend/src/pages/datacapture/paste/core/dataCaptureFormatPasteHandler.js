@@ -31,6 +31,8 @@ import {
 import { isGridPasteBlockedTarget } from "./dataCaptureClipboard.js";
 import { tryHandleAwcWinLossReportPaste } from "../vendors/dataCaptureAwcPaste.js";
 import { tryHandleGamingSoftInvoicePaste } from "./dataCaptureGamingSoftInvoicePasteHelper.js";
+import { tryHandleKing855WinLossPaste } from "./dataCaptureKing855WinLossPasteHelper.js";
+import { tryHandleWosWinLossDetailPaste } from "./dataCaptureWosWinLossDetailPasteHelper.js";
 import { showFormatEditableGrid, syncFormatPreviewFromDom } from "../../format/dataCaptureFormat.js";
 import { resolvePasteCell } from "./dataCaptureClipboard.js";
 import {
@@ -397,6 +399,24 @@ function tryProcessFormatClipboard(html, text, options = {}) {
 
   if (
     tryHandleGamingSoftInvoicePaste(html, text, {
+      anchorCell: options?.anchorCell,
+      startRowOverride: options?.startRow,
+    })
+  ) {
+    return afterFormatPasteFilled(true, options?.area, options);
+  }
+
+  if (
+    tryHandleKing855WinLossPaste(html, text, {
+      anchorCell: options?.anchorCell,
+      startRowOverride: options?.startRow,
+    })
+  ) {
+    return afterFormatPasteFilled(true, options?.area, options);
+  }
+
+  if (
+    tryHandleWosWinLossDetailPaste(html, text, {
       anchorCell: options?.anchorCell,
       startRowOverride: options?.startRow,
     })
