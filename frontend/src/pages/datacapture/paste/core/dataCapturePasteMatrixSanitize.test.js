@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { isVerticalDumpSummaryLabel } from "./dataCaptureVerticalDumpDetect.js";
-import { sanitizePasteMatrix } from "./dataCapturePasteMatrixSanitize.js";
-
+import {
+  sanitizePasteMatrix,
+  plainTextLooksLikeAlignedTsv,
+} from "./dataCapturePasteMatrixSanitize.js";
 /** Monkey King Win Loss: agent row + All Total with empty name/currency/type cells. */
 const MKING_AGENT = [
   "MKAPI735T",
@@ -64,4 +66,18 @@ test("sanitizePasteMatrix keeps OBET SPORT TOTAL = footer with empty name cell",
 test("isVerticalDumpSummaryLabel recognizes SPORT TOTAL =", () => {
   assert.equal(isVerticalDumpSummaryLabel("SPORT TOTAL ="), true);
   assert.equal(isVerticalDumpSummaryLabel("Sport Total"), true);
+});
+
+test("GamingSoft invoice EXTRA FEE width jump is not treated as aligned TSV", () => {
+  const rows = [];
+  for (let i = 1; i <= 20; i += 1) {
+    if (i === 10) {
+      rows.push(
+        `${i}\tEg:Evolution - JDCLUB9SGD\t\t\t\tR\t9.00\t(SGD) 18,474.21\t5,299.62\tEXTRA FEE\t2,187.90\t\t3.1874`,
+      );
+      continue;
+    }
+    rows.push(`${i}\tEg:Evolution - ACC${i}\t\t\t\tR\t7.00\t(MYR) 10.00\t1.25`);
+  }
+  assert.equal(plainTextLooksLikeAlignedTsv(rows.join("\n")), false);
 });

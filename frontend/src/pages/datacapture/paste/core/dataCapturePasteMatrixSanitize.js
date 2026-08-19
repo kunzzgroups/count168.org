@@ -184,7 +184,8 @@ export function plainTextLooksLikeAlignedTsv(text) {
   const widths = tabLines.map((line) => line.split("\t").length);
   const maxCols = Math.max(...widths);
   const minCols = Math.min(...widths);
-  return maxCols >= 2 && maxCols - minCols <= 2;
+  if (maxCols < 2) return false;
+  return maxCols - minCols <= 2;
 }
 
 /** Sanitized plain matrix is usable as the alignment source of truth. */
