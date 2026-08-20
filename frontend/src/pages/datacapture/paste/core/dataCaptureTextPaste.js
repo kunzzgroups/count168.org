@@ -33,10 +33,20 @@ import {
   tryHandleWosWinLossDetailPaste,
 } from "./dataCaptureWosWinLossDetailPasteHelper.js";
 import {
+  tryBuildCitibetAgentPtReportMatrix,
+  tryHandleCitibetAgentPtReportPaste,
+} from "./dataCaptureCitibetAgentPtReportPasteHelper.js";
+import {
+  alignFooterOnlySubGrandMatrix,
+  tryBuildFooterOnlySubGrandMatrix,
+  tryHandleFooterOnlySubGrandPaste,
+} from "./dataCaptureWinLoseFooterOnlyPasteHelper.js";
+import {
   plainTextLooksLikeAlignedTsv,
   sanitizePasteMatrix,
 } from "./dataCapturePasteMatrixSanitize.js";
 import { splitStackedSubtotalGrandTotalRows } from "./dataCaptureStackedTotalSplit.js";
+import { ensureTotalRowCodeColumnGap } from "./dataCaptureTotalRowAlign.js";
 import { tryHandleAwcWinLossReportPaste } from "../vendors/dataCaptureAwcPaste.js";
 
 /**
@@ -101,7 +111,7 @@ export function expandLabelColonMoneyCells(matrix) {
 }
 
 function finalizePlainMatrix(matrix) {
-  return sanitizePasteMatrix(expandLabelColonMoneyCells(matrix));
+  return ensureTotalRowCodeColumnGap(sanitizePasteMatrix(expandLabelColonMoneyCells(matrix)));
 }
 
 /**
@@ -123,6 +133,12 @@ export function parsePlainTextMatrix(pastedData) {
 
   const wosWinLoss = tryBuildWosWinLossDetailMatrix(normalized, "");
   if (wosWinLoss?.length) return finalizePlainMatrix(wosWinLoss);
+
+  const citibetAgentPt = tryBuildCitibetAgentPtReportMatrix(normalized, "");
+  if (citibetAgentPt?.length) return finalizePlainMatrix(citibetAgentPt);
+
+  const footerOnlySubGrand = tryBuildFooterOnlySubGrandMatrix(normalized, "");
+  if (footerOnlySubGrand?.length) return finalizePlainMatrix(footerOnlySubGrand);
 
   // Only real spreadsheet TSV uses the tab-row path (keeps empty cells 1:1).
   // Sparse tabs mixed into a one-field-per-line dump must fall through.
@@ -192,12 +208,10 @@ export function parsePlainTextMatrix(pastedData) {
     }
   }
 
+  // Keep leading/empty fields (spaces under table headers, indented "=").
+  // Do not trim cells — 1.TEXT ordinary reports must keep original spaces.
   const spacingSplitRows = nonEmptyLines.map((line) =>
-    line
-      .trim()
-      .split(/\s{2,}/)
-      .map((cell) => cell.trim())
-      .filter((cell) => cell !== ""),
+    line.replace(/\u00a0/g, " ").split(/\s{2,}/),
   );
   if (spacingSplitRows.length >= 2) {
     const maxCols = Math.max(...spacingSplitRows.map((row) => row.length));
@@ -221,7 +235,9 @@ export function parsePlainTextMatrix(pastedData) {
 /** 1.Text — Excel plain text paste, preserving the clipboard matrix as-is. */
 export function handleTextPlainPaste(e, pastedData, anchorCell) {
   // TEXT-only: unwind SUB TOTAL+GRAND TOTAL stacked in one label cell (helper not used by Format).
-  const dataMatrix = splitStackedSubtotalGrandTotalRows(parsePlainTextMatrix(pastedData));
+  const dataMatrix = alignFooterOnlySubGrandMatrix(
+    splitStackedSubtotalGrandTotalRows(parsePlainTextMatrix(pastedData)),
+  );
   if (!dataMatrix.length) return false;
 
   const { successCount, maxRows, maxCols: cols } = applyDataMatrixToGrid(dataMatrix, anchorCell, {
@@ -339,6 +355,8 @@ export function handleTextModePaste(e, pastedData, anchorCell) {
   if (tryHandleGamingSoftInvoicePaste(html, pastedData, { anchorCell })) return true;
   if (tryHandleKing855WinLossPaste(html, pastedData, { anchorCell })) return true;
   if (tryHandleWosWinLossDetailPaste(html, pastedData, { anchorCell })) return true;
+  if (tryHandleCitibetAgentPtReportPaste(html, pastedData, { anchorCell })) return true;
+  if (tryHandleFooterOnlySubGrandPaste(html, pastedData, { anchorCell })) return true;
 
   // Match 2.FORMAT: prefer plain vertical-dump reshape whenever it yields a real
   // multi-col matrix. HTML-first only when it has a strictly fuller wide table
