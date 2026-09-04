@@ -2756,7 +2756,7 @@ try {
                 $row['to_currency_code'] ?? null,
                 $markupRate,
                 $row['rate_from_amount'] ?? null,
-                $row['rate_transfer_from_account_id'] ?? null
+                $row['rate_transfer_from_account_code'] ?? null
             );
         } elseif (in_array($entryType, ['RATE_FEE', 'RATE_PLATFORM_FEE'], true)) {
             // Keep Fee / Platform Fee descriptions as stored (Charge … Service Fees / PlatForm Fee).
