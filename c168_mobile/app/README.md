@@ -69,6 +69,19 @@ npm run open:android     # 打开 Android Studio
 4. 按 `android/keystore.properties` 模板重建签名(或从旧机拷 `keystore/` 过去)
 5. `npm run build:apk`
 
+## 下载页(install-page/)
+
+成员统一入口:**https://count168.site/app/**(手机打开自动识别:iPhone 显示三步"添加到主屏幕"引导,Android 直接下 APK,微信内提示用浏览器打开,电脑显示二维码)。
+
+源码在 `install-page/index.html`,同目录 `logo.png`、`qr.png`(二维码指向下载页自身)。改完手动上传:
+
+```bash
+scp -i ~/.ssh/count168-ec2.pem install-page/index.html install-page/qr.png install-page/logo.png \
+  ec2-user@56.68.48.190:/var/www/count168/app/
+```
+
+发新版 APK 时:文件传到服务器 `/var/www/count168/app/` 后,同步更新本页的版本号和大小文案。
+
 ## 已做的定制
 
 - **返回键**:有网页历史 → 网页后退;无历史 → 退出 App(`MainActivity.java`)
