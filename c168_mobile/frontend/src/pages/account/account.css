@@ -154,6 +154,7 @@
    list dense. Scoped to the Account page; Admin/Domain lists stay single-column. */
 .m-account-page .m-account-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.28rem;
 }
 
 /* Compact single-line tile: code left, optional alert bell right. The whole
@@ -162,6 +163,12 @@
 .m-account-list .m-user-card {
   min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
+}
+
+/* Account page only — tighter tile height/padding so more accounts fit on screen. */
+.m-account-page .m-account-list .m-user-card {
+  min-height: 2.1rem;
+  padding: 0.28rem 0.6rem;
 }
 
 .m-account-list .m-account-tile--inactive strong {

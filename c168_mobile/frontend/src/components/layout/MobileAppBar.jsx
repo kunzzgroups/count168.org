@@ -32,8 +32,6 @@ export default function MobileAppBar({
   leftAction = null,
   theme = "light",
   onToggleTheme,
-  lang = "en",
-  onLangChange,
 }) {
   const navigate = useNavigate();
   const count = Number(notificationCount) || 0;
@@ -137,34 +135,6 @@ export default function MobileAppBar({
               <i className="fas fa-moon text-[16px]" aria-hidden="true" />
             )}
           </button>
-          <div
-            className="m-appbar-langseg"
-            role="group"
-            aria-label={i18n?.language || "Language"}
-          >
-            <span
-              className="m-appbar-langseg-thumb"
-              aria-hidden="true"
-              data-pos={lang === "zh" ? "right" : "left"}
-            />
-            <button
-              type="button"
-              aria-pressed={lang === "en"}
-              className={lang === "en" ? "is-active" : ""}
-              onClick={() => onLangChange?.("en")}
-            >
-              EN
-            </button>
-            <button
-              type="button"
-              aria-pressed={lang === "zh"}
-              className={lang === "zh" ? "is-active" : ""}
-              onClick={() => onLangChange?.("zh")}
-            >
-              中
-            </button>
-          </div>
-          <span className="m-appbar-divider" aria-hidden="true" />
           <button
             type="button"
             onClick={() => navigate("/more")}
