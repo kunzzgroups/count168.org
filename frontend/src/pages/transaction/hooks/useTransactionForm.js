@@ -20,7 +20,6 @@ import {
   toNumberLike,
   collectSubmitFocusAccountIds,
   computeRateMiddlemanProfit,
-  computeRateMulCommission,
   parseMiddlemanRateInput,
   parsePositiveAmt,
 } from "../lib/transactionSubmitHelpers.js";
@@ -291,14 +290,9 @@ export function useTransactionForm({
     }
     setRateMiddlemanAmount(middleStr);
 
-    // From preview mirrors the booked customer payout (buildRatePayload transferFromSide):
-    // gross − Rate-Mul commission（有 Middle-Man 且佣金为正时）− Service Fee。PT-Fee 不动表单金额，只落 PLATFORM_FEE 行。
+    // From preview: gross − Service Fee only. Rate-Mul 不再影响顾客金额（顾客固定拿 gross，
+    // Rate-Mul 产生的 commission 只体现在 Middle-Man Amount）。PT-Fee 同样不动 From/表单金额，只落 PLATFORM_FEE 行。
     // Calc uses full precision; formatRateAmount is display-only half-up 2.
-    const rateMulDec = computeRateMulCommission({
-      fromAmount: rateCurrencyFromAmount,
-      middlemanRate: rateMiddlemanRate,
-      exchangeRateRaw: rateExchangeRateRaw,
-    });
     const toAmountDeductionDec = parsePositiveAmt(rateMiddlemanInputAmount);
 
     try {
@@ -320,9 +314,6 @@ export function useTransactionForm({
       setRateToAmountGrossStr(grossDisplayStr);
 
       let displayVal = baseGross;
-      if (rateMulDec.gt(0)) {
-        displayVal = displayVal.minus(rateMulDec);
-      }
       if (!toAmountDeductionDec.isZero()) {
         displayVal = displayVal.minus(toAmountDeductionDec);
       }

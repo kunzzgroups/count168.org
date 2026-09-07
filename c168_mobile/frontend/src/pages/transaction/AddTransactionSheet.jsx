@@ -15,7 +15,6 @@ import {
   buildRatePayload,
   toNumberLike,
   computeRateMiddlemanProfit,
-  computeRateMulCommission,
   parseMiddlemanRateInput,
   parsePositiveAmt,
 } from "../../lib/transactionSubmitHelpers.js";
@@ -288,13 +287,7 @@ export default function AddTransactionSheet({
     }
     setRateMiddlemanAmount(middleStr);
 
-    // Desktop parity: preview mirrors the booked customer payout (buildRatePayload transferFromSide)
-    // = gross − Rate-Mul commission（有 Middle-Man 且佣金为正时）− Service Fee。PT-Fee 只落 PLATFORM_FEE 行。
-    const rateMulDec = computeRateMulCommission({
-      fromAmount: rateCurrencyFromAmount,
-      middlemanRate: rateMiddlemanRate,
-      exchangeRateRaw: rateExchangeRateRaw,
-    });
+    // Desktop: customer preview = gross − Service Fee only (Rate-Mul / PT do not change form amount).
     const toAmountDeductionDec = parsePositiveAmt(rateMiddlemanInputAmount);
 
     try {
@@ -307,7 +300,6 @@ export default function AddTransactionSheet({
       const baseGross = fromDec.times(rateDec);
       setRateToAmountGrossStr(formatRateAmount(baseGross.toString()));
       let displayVal = baseGross;
-      if (rateMulDec.gt(0)) displayVal = displayVal.minus(rateMulDec);
       if (!toAmountDeductionDec.isZero()) displayVal = displayVal.minus(toAmountDeductionDec);
       setRateCurrencyToAmount(formatRateAmount(displayVal.toString()));
     } catch {
