@@ -137,34 +137,10 @@ export function splitAccountRowsByBalance(rows) {
   return { left, right };
 }
 
-/** Desktop parity: overall TOTAL strip (both sides combined) shown above the side tabs. */
-function GrandTotalStrip({ totals, m }) {
-  if (!totals) return null;
-  const cells = [
-    { label: m.bfTable, value: totals.bf },
-    { label: m.winLossTableCompact, value: totals.win_loss },
-    { label: m.crDrTable, value: totals.cr_dr },
-    { label: m.balanceTableCompact, value: totals.balance },
-  ];
-  return (
-    <div className="m-tx-grand-total" aria-label={m.total || "Total"}>
-      {cells.map((cell) => (
-        <div key={cell.label} className="m-tx-grand-total-cell">
-          <span className="m-tx-grand-total-label">{cell.label}</span>
-          <span className={`m-tx-grand-total-value ${moneyToneClass(cell.value)}`}>
-            {formatTransactionGridMoneyHalfUp(cell.value)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export default function AccountBalanceTables({
   rows,
   showName,
   m,
-  grandTotals,
   onOpenHistory,
   onPickBalance,
 }) {
@@ -177,7 +153,6 @@ export default function AccountBalanceTables({
 
   return (
     <div className="m-tx-balance-root">
-      <GrandTotalStrip totals={grandTotals} m={m} />
       <div className="m-tx-side-tabs" role="tablist" aria-label={m.accountSideTabs || "Account balance sides"}>
         <button
           type="button"
