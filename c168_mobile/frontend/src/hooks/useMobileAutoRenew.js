@@ -15,6 +15,8 @@ import {
 import { normalizeDomainFeeSettingsFromApi } from "../lib/domainHelpers.js";
 import { fetchJson } from "../lib/fetchJson.js";
 import { useSyncedLoginLang, writeLoginLang } from "../lib/loginLang.js";
+import { useRealtimeDomain } from "../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../lib/realtime/realtimeEvents.js";
 import { autoRenewText, getAutoRenewText } from "../translateFile/autoRenewTranslate.js";
 import { buildApiUrl } from "../utils/apiUrl.js";
 
@@ -158,6 +160,12 @@ export function useMobileAutoRenew() {
     if (!me || blocked) return;
     void loadList({ silent: true });
   }, [entityTab, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Desktop parity: reload the list on ledger realtime events (AutoRenewPage useRealtimeDomain). */
+  useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
+    if (!me || blocked) return;
+    void loadList({ silent: true });
+  });
 
   const refresh = useCallback(async () => {
     setRefreshing(true);

@@ -188,6 +188,44 @@
   font-size: var(--m-text-compact);
 }
 
+/* Overall TOTAL strip (both sides combined) — desktop parity summary section */
+.m-tx-grand-total {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid var(--m-color-ring);
+  border-radius: 0.5rem;
+  background: var(--m-color-primary-soft);
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+}
+
+.m-tx-grand-total-cell {
+  display: grid;
+  gap: 0.1rem;
+  justify-items: center;
+  padding: 0.32rem 0.2rem;
+  border-right: 1px solid var(--m-color-ring);
+  min-width: 0;
+}
+
+.m-tx-grand-total-cell:last-child {
+  border-right: none;
+}
+
+.m-tx-grand-total-label {
+  font-size: 0.5625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--m-color-muted);
+}
+
+.m-tx-grand-total-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
 .m-tx-side-tabs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

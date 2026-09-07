@@ -12,6 +12,8 @@ import {
 } from "../../lib/maintenanceApi.js";
 import { notifyTransactionListInvalidated } from "../../lib/transactionPaymentLogic.js";
 import { formatRangeLabel } from "../../lib/dashboardDateUtils.js";
+import { useRealtimeDomain } from "../../lib/realtime/useRealtimeDomain.js";
+import { REALTIME_DOMAINS } from "../../lib/realtime/realtimeEvents.js";
 import {
   maintenanceScopeIsReady,
   maintenanceScopeKey,
@@ -143,6 +145,12 @@ export default function MaintenancePaymentPage() {
     return () => ac.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.me, scopeCacheKey, dateFrom, dateTo, transactionType]);
+
+  /* Desktop parity: reload the list on maintenance realtime events. */
+  useRealtimeDomain(REALTIME_DOMAINS.MAINTENANCE, () => {
+    if (!s.me || !scopeReady) return;
+    loadList();
+  });
 
   const displayRows = useMemo(() => {
     const q = query.trim().toUpperCase();

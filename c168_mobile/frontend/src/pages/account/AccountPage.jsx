@@ -6,6 +6,7 @@ import { getRoleClass } from "../../lib/transactionPaymentLogic.js";
 import {
   AccountFormSheet,
   AccountScopeSheet,
+  CurrencySettingSheet,
   LinkAccountSheet,
 } from "./AccountSheets.jsx";
 import "./account.css";
@@ -61,6 +62,7 @@ export default function AccountPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
+  const [currencyOpen, setCurrencyOpen] = useState(false);
 
   const companyCode = String(account.selectedCompany?.company_id || "").toUpperCase();
   const groupId = String(
@@ -137,6 +139,15 @@ export default function AccountPage() {
         >
           <i className="fas fa-arrow-down-wide-short" aria-hidden="true" /> {sortedLabel}
         </Chip>
+        {/* Desktop parity: toolbar Currency Setting bulk tool (bulk_account_currency_api) */}
+        <Chip
+          active={false}
+          onClick={async () => {
+            if (await account.openCurrency()) setCurrencyOpen(true);
+          }}
+        >
+          <i className="fas fa-coins" aria-hidden="true" /> {i18n.currencySetting}
+        </Chip>
       </div>
     </div>
   );
@@ -185,6 +196,11 @@ export default function AccountPage() {
           />
           <LinkAccountSheet open={linkOpen} onClose={() => setLinkOpen(false)} account={account} />
           <SortSheet open={sortOpen} onClose={() => setSortOpen(false)} account={account} />
+          <CurrencySettingSheet
+            open={currencyOpen}
+            onClose={() => setCurrencyOpen(false)}
+            account={account}
+          />
         </>
       }
     >

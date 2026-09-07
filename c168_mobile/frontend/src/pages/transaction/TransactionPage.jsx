@@ -286,6 +286,7 @@ export default function TransactionPage() {
               rows={tx.displayRows}
               showName={tx.showName}
               m={tx.m}
+              grandTotals={tx.totals}
               onOpenHistory={openHistory}
               onPickBalance={pickBalanceForForm}
             />
