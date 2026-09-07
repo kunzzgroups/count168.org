@@ -91,11 +91,11 @@ sudo bash deploy/ec2-amazon-linux-setup.sh
 
 **方式 A — 本机构建后上传（推荐）**
 
-本地：
+本地（必须用 `build:deploy`；普通 `npm run build` 的 postbuild 钩子会删掉新构建的哈希 bundle，部署后 index.html 引用 404 资源 → 白屏）：
 
 ```bash
 cd frontend
-npm run build
+npm run build:deploy
 ```
 
 用 WinSCP / FileZilla 把 `frontend/dist/` 整个目录上传到服务器 `/var/www/count168/frontend/dist/`。
@@ -106,7 +106,7 @@ npm run build
 sudo dnf install -y nodejs npm
 cd /var/www/count168/frontend
 npm ci
-npm run build
+npm run build:deploy
 ```
 
 ## 五、数据库
