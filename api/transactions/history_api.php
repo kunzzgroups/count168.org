@@ -2698,11 +2698,11 @@ try {
         $description = $row['entry_description'] ?: 'RATE';
         $platformFeeRemark = null;
 
-        // RATE 后缀：第一段（RATE_FIRST_FROM / RATE_FIRST_TO）恒显示原始汇率，不做任何换算。
-        // 第二段 FROM 侧（RATE_TRANSFER_FROM）：divide 模式换算显示净汇率（exchange_rate -
-        // middleman_rate，逻辑不变），multiply 模式恒显示原始汇率。
-        // 第二段 TO 侧（RATE_TRANSFER_TO）：divide 模式恒显示原始汇率（不变），multiply 模式
-        // 直接显示用户输入的 Rate-Mul 原始值（不做减法）。
+        // RATE 后缀：FROM 侧（RATE_FIRST_FROM 恒显示原始汇率；RATE_TRANSFER_FROM 的 divide 模式
+        // 换算显示净汇率 exchange_rate − middleman_rate，multiply 模式恒显示原始汇率）。
+        // TO 侧（RATE_FIRST_TO / RATE_TRANSFER_TO）：只要有 Middle-Man，就原样回显用户在 Rate-Mul
+        // 输入的值，不做任何再计算——multiply 模式直接显示该数字，divide 模式显示 "/{除数}"；
+        // 差价（原汇率 − Rate-Mul）算 Middle-Man 的利润，不计入 From/To 两个 account 之间的汇兑描述。
         $displayRateForSuffix = null;
         if ($entryType === 'RATE_TRANSFER_FROM') {
             $exchangeRate = $row['exchange_rate'] ?? null;
@@ -2715,11 +2715,13 @@ try {
                     $displayRateForSuffix = money_out($netRate, 6);
                 }
             }
-        } elseif ($entryType === 'RATE_TRANSFER_TO') {
+        } elseif (in_array($entryType, ['RATE_FIRST_TO', 'RATE_TRANSFER_TO'], true)) {
             $middlemanRate = $row['rate_middleman_rate'] ?? null;
             $isDivideMode = (bool) preg_match('/\(\s*\/[^)]*\)/', (string) ($row['rate_middleman_entry_description'] ?? ''));
-            if (!$isDivideMode && $middlemanRate !== null && $middlemanRate !== '') {
-                $displayRateForSuffix = money_out($middlemanRate, 6);
+            if ($middlemanRate !== null && $middlemanRate !== '') {
+                $displayRateForSuffix = $isDivideMode
+                    ? ('/' . money_out($middlemanRate, 6))
+                    : money_out($middlemanRate, 6);
             }
         }
 
