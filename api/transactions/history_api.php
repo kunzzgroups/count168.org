@@ -2698,24 +2698,18 @@ try {
         $description = $row['entry_description'] ?: 'RATE';
         $platformFeeRemark = null;
 
-        // RATE 后缀：FROM 侧（RATE_FIRST_FROM 恒显示原始汇率；RATE_TRANSFER_FROM 的 divide 模式
-        // 换算显示净汇率 exchange_rate − middleman_rate，multiply 模式恒显示原始汇率）。
-        // TO 侧（RATE_FIRST_TO / RATE_TRANSFER_TO）：只要有 Middle-Man，就原样回显用户在 Rate-Mul
-        // 输入的值，不做任何再计算——multiply 模式直接显示该数字，divide 模式显示 "/{除数}"；
-        // 差价（原汇率 − Rate-Mul）算 Middle-Man 的利润，不计入 From/To 两个 account 之间的汇兑描述。
+        // RATE 后缀：
+        // - 业务上的 From Account（付款方）：RATE_FIRST_FROM、RATE_TRANSFER_TO —— 注意
+        //   RATE_TRANSFER_TO 这个 entry_type 名字叫 TO，但账号实际绑定的是 UI 的
+        //   "Select From"（付款方），命名是反的（见 submit_api.php 对应注释）。
+        //   恒显示原始汇率，不做任何换算。
+        // - 业务上的 To Account（收款方）：RATE_FIRST_TO、RATE_TRANSFER_FROM —— 同理
+        //   RATE_TRANSFER_FROM 名字叫 FROM，账号实际绑定的是 UI 的 "Select To"（收款方）。
+        //   只要有 Middle-Man，就原样回显用户在 Rate-Mul 输入的值，不做任何再计算——
+        //   multiply 模式直接显示该数字，divide 模式显示 "/{除数}"；差价（原汇率 − Rate-Mul）
+        //   算 Middle-Man 的利润，不计入 From/To 两个 account 之间的汇兑描述。
         $displayRateForSuffix = null;
-        if ($entryType === 'RATE_TRANSFER_FROM') {
-            $exchangeRate = $row['exchange_rate'] ?? null;
-            $middlemanRate = $row['rate_middleman_rate'] ?? null;
-            $isDivideMode = (bool) preg_match('/\(\s*\/[^)]*\)/', (string) ($row['rate_middleman_entry_description'] ?? ''));
-            if ($isDivideMode && $exchangeRate !== null && $middlemanRate !== null) {
-                $netRate = money_sub($exchangeRate, $middlemanRate, 8);
-                if (money_cmp($netRate, '0') > 0) {
-                    // 保留最多 6 位小数，并去掉多余的 0
-                    $displayRateForSuffix = money_out($netRate, 6);
-                }
-            }
-        } elseif (in_array($entryType, ['RATE_FIRST_TO', 'RATE_TRANSFER_TO'], true)) {
+        if (in_array($entryType, ['RATE_FIRST_TO', 'RATE_TRANSFER_FROM'], true)) {
             $middlemanRate = $row['rate_middleman_rate'] ?? null;
             $isDivideMode = (bool) preg_match('/\(\s*\/[^)]*\)/', (string) ($row['rate_middleman_entry_description'] ?? ''));
             if ($middlemanRate !== null && $middlemanRate !== '') {
