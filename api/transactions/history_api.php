@@ -2698,21 +2698,21 @@ try {
         $description = $row['entry_description'] ?: 'RATE';
         $platformFeeRemark = null;
 
-        // RATE 后缀：
-        // - 业务上的 From Account（付款方）：RATE_FIRST_FROM、RATE_TRANSFER_TO —— 注意
-        //   RATE_TRANSFER_TO 这个 entry_type 名字叫 TO，但账号实际绑定的是 UI 的
-        //   "Select From"（付款方），命名是反的（见 submit_api.php 对应注释）。
-        //   恒显示原始汇率，不做任何换算。
-        // - 业务上的 To Account（收款方）：RATE_FIRST_TO、RATE_TRANSFER_FROM —— 同理
-        //   RATE_TRANSFER_FROM 名字叫 FROM，账号实际绑定的是 UI 的 "Select To"（收款方）。
-        //   只要有 Middle-Man，就原样回显用户在 Rate-Mul 输入的值，不做任何再计算——
-        //   multiply 模式直接显示该数字，divide 模式显示 "/{除数}"；差价（原汇率 − Rate-Mul）
-        //   算 Middle-Man 的利润，不计入 From/To 两个 account 之间的汇兑描述。
+        // RATE 后缀：业务上的 From Account（付款方）= RATE_FIRST_FROM、RATE_TRANSFER_TO；
+        // 业务上的 To Account（收款方）= RATE_FIRST_TO、RATE_TRANSFER_FROM —— 注意 RATE_TRANSFER_FROM/TO
+        // 这两个 entry_type 名字和账号绑定是反的（见 submit_api.php 对应注释）。
+        // 哪一边显示 Rate-Mul 取决于乘除模式，方向相反：
+        // - multiply 模式：To Account 显示 Rate-Mul（原样数字），From Account 显示原始汇率。
+        // - divide 模式：From Account 显示 Rate-Mul（原样 "/{除数}"），To Account 显示原始汇率。
+        // 差价（原汇率 − Rate-Mul）算 Middle-Man 的利润，不计入 From/To 两个 account 之间的汇兑描述，
+        // 所以未命中的一侧留空，交给 formatExchangeRateDescription 回退显示原始汇率。
         $displayRateForSuffix = null;
-        if (in_array($entryType, ['RATE_FIRST_TO', 'RATE_TRANSFER_FROM'], true)) {
+        if (in_array($entryType, ['RATE_FIRST_FROM', 'RATE_FIRST_TO', 'RATE_TRANSFER_FROM', 'RATE_TRANSFER_TO'], true)) {
             $middlemanRate = $row['rate_middleman_rate'] ?? null;
             $isDivideMode = (bool) preg_match('/\(\s*\/[^)]*\)/', (string) ($row['rate_middleman_entry_description'] ?? ''));
-            if ($middlemanRate !== null && $middlemanRate !== '') {
+            $isBusinessToAccount = in_array($entryType, ['RATE_FIRST_TO', 'RATE_TRANSFER_FROM'], true);
+            $showMiddlemanRateHere = $isDivideMode ? !$isBusinessToAccount : $isBusinessToAccount;
+            if ($showMiddlemanRateHere && $middlemanRate !== null && $middlemanRate !== '') {
                 $displayRateForSuffix = $isDivideMode
                     ? ('/' . money_out($middlemanRate, 6))
                     : money_out($middlemanRate, 6);
