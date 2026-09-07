@@ -85,8 +85,6 @@ function DomainCard({ domain, domainApi, onEdit, onLongPressSelect }) {
           </span>
           <span className="m-account-card-copy">
             <strong>{String(domain.owner_code || "").toUpperCase()}</strong>
-            <span>{String(domain.name || "").toUpperCase()}</span>
-            <small>{String(domain.email || "").toLowerCase()}</small>
           </span>
           {!selectMode ? <i className="fas fa-chevron-right" aria-hidden="true" /> : null}
         </button>
