@@ -5,6 +5,11 @@ import { useDirectScrollChrome } from "../../hooks/useDirectScrollChrome.js";
 import { useScrollIdleVisible } from "../../hooks/useScrollIdleVisible.js";
 import { isMobileMoreStackPath } from "../../utils/mobilePermissions.js";
 import {
+  notifySeenOwnerKey,
+  readNotifySeen,
+  saveNotifySeen,
+} from "../../lib/notifySeenStore.js";
+import {
   useSyncedLoginLang,
   writeLoginLang,
 } from "../../lib/loginLang.js";
@@ -18,22 +23,10 @@ import MobileNotifications, { fetchMobileAnnouncements } from "./MobileNotificat
 import PullRefreshIndicator from "./PullRefreshIndicator.jsx";
 import "./mobile-shell.css";
 
-/** Bell badge = announcements not yet seen. Seen ids live in module scope so
-    they survive in-app route changes but reset on every refresh / re-login —
-    the badge reappears, then clears once the panel has been opened. */
-let notifySeenIds = new Set();
-
-function markSeenIds(rows) {
-  let changed = false;
-  rows.forEach((row) => {
-    const id = Number(row?.id);
-    if (!Number.isNaN(id) && !notifySeenIds.has(id)) {
-      notifySeenIds.add(id);
-      changed = true;
-    }
-  });
-  return changed;
-}
+/** Bell badge = announcements not yet seen this session. Seen ids persist in
+    localStorage keyed by "<user>:<day>" — the badge reappears on the next
+    login / day (PWA webviews never reload, so a module-scope Set would keep
+    the badge hidden forever), and clears once the panel has been opened. */
 
 export default function MobileShell({
   children,
@@ -68,7 +61,9 @@ export default function MobileShell({
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [announcements, setAnnouncements] = useState([]);
   const [notifyLoading, setNotifyLoading] = useState(false);
-  const [seenIds, setSeenIds] = useState(() => notifySeenIds);
+  const [seenIds, setSeenIds] = useState(() => new Set());
+  const seenIdsRef = useRef(new Set());
+  const notifyOwnerKeyRef = useRef("");
   const [theme, setTheme] = useState(() => readLoginTheme());
   const [lang, setLang] = useSyncedLoginLang();
   const mainRef = useRef(null);
@@ -160,9 +155,38 @@ export default function MobileShell({
     paused: forceChrome,
   });
 
+  /* Seed seen ids for this login+day: an ownerKey mismatch (next day, other
+     user, fresh login after reset) starts empty so the badge reappears. */
+  useEffect(() => {
+    const ownerKey = me ? notifySeenOwnerKey(me.user_id ?? me.id) : "";
+    notifyOwnerKeyRef.current = ownerKey;
+    if (!ownerKey) {
+      seenIdsRef.current = new Set();
+      setSeenIds(seenIdsRef.current);
+      return;
+    }
+    const stored = readNotifySeen();
+    seenIdsRef.current = stored.ownerKey === ownerKey ? new Set(stored.ids) : new Set();
+    setSeenIds(seenIdsRef.current);
+  }, [me]);
+
   const markAnnouncementsSeen = useCallback((rows) => {
     if (!rows?.length) return;
-    if (markSeenIds(rows)) setSeenIds(new Set(notifySeenIds));
+    const ownerKey = notifyOwnerKeyRef.current;
+    if (!ownerKey) return;
+    const next = new Set(seenIdsRef.current);
+    let changed = false;
+    rows.forEach((row) => {
+      const id = Number(row?.id);
+      if (!Number.isNaN(id) && !next.has(id)) {
+        next.add(id);
+        changed = true;
+      }
+    });
+    if (!changed) return;
+    seenIdsRef.current = next;
+    setSeenIds(next);
+    saveNotifySeen(ownerKey, next);
   }, []);
 
   const openNotifications = () => {
