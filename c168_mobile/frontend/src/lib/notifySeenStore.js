@@ -1,9 +1,8 @@
-/** Bell-badge seen store — desktop-style "unseen announcements" that resets per
-    login and per day, so the badge reappears on the next session instead of
-    staying hidden forever (PWA/Capacitor webviews never reload the page).
-
-    Stored shape: { ownerKey: "<user_id>:<YYYY-MM-DD>", ids: number[] }.
-    ownerKey mismatch (new day / different user / fresh login) ⇒ seen resets. */
+/** Bell-badge seen store — date-gated "unseen announcements". Seen ids persist
+    in localStorage keyed "<user_id>:<YYYY-MM-DD>", so the badge is governed by
+    the day: seen today stays seen across re-logins on the same device; a new
+    day (or a different user) yields a fresh ownerKey and the badge reappears.
+    PWA/Capacitor webviews never reload the page, hence the persisted key. */
 
 const NOTIFY_SEEN_KEY = "m-notify-seen";
 
@@ -45,15 +44,5 @@ export function saveNotifySeen(ownerKey, ids) {
     );
   } catch {
     /* quota — badge simply resets next boot */
-  }
-}
-
-/** Called on successful login so every session starts with the badge visible. */
-export function resetNotifySeen() {
-  if (typeof localStorage === "undefined") return;
-  try {
-    localStorage.removeItem(NOTIFY_SEEN_KEY);
-  } catch {
-    /* ignore */
   }
 }
