@@ -4,7 +4,6 @@ import { LOGIN_I18N, localizeAuthApiMessage } from "../../translateFile/authTran
 import { readLoginLang, writeLoginLang } from "../../lib/loginLang.js";
 import { buildApiUrl } from "../../utils/apiUrl.js";
 import { resolveMobileLandingPath } from "../../utils/mobilePermissions.js";
-import { resetNotifySeen } from "../../lib/notifySeenStore.js";
 import { useAuthBackground } from "./useAuthBackground.js";
 import PasswordInput from "../../components/PasswordInput.jsx";
 import { extractPlainTextFromRichText } from "../../utils/content/richTextSanitizer.js";
@@ -342,8 +341,6 @@ export default function LoginPage() {
 
       if (data.status === "success" && data.redirect) {
         sessionStorage.removeItem(LOGIN_ASSET_RETRY_KEY);
-        /* Fresh login: the bell badge re-shows announcements for this session. */
-        resetNotifySeen();
         const redirect = String(data.redirect || "").trim();
         if (/owner[-_]secondary[-_]password/i.test(redirect) || redirect === "/owner-secondary-password") {
           navigate("/owner-secondary-password", { replace: true });
