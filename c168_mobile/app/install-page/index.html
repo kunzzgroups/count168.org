@@ -75,9 +75,15 @@
   <!-- Android -->
   <div class="card hidden" id="androidCard">
     <h2>Android 安装包</h2>
-    <p class="hint">版本 1.0 · 约 5.9 MB</p>
-    <a class="btn" href="EazyCount-v1.0.apk" download>⬇ 下载 APK 安装包</a>
-    <p class="note">下载完成后点开文件进行安装；若提示「未知来源 / 未知应用」，选择<b>允许</b>或<b>仍然安装</b>即可。安装后如无法收不到更新提示属正常，重新下载覆盖安装即可升级。</p>
+    <p class="hint">版本 1.0 · 完整文件约 5.9 MB</p>
+    <a class="btn" id="androidBtn" href="EazyCount-v1.0.apk" download>⬇ 下载 APK 安装包</a>
+    <p class="note" id="androidWechatNote" style="display:none">⚠ 你正在微信 / QQ 内打开，内置浏览器下载的 APK 会不完整。请先点右上角 <b>···</b> →「在浏览器中打开」，回到本页再下载。</p>
+    <p class="note">下载完成后点开文件进行安装；若提示「未知来源 / 未知应用」，选择<b>允许</b>或<b>仍然安装</b>即可。</p>
+    <p class="note"><b>下载不完整 / 安装提示「解析包出现问题」？</b><br />
+      ① 删除已下载的文件，用系统浏览器或 Chrome 重新下载；<br />
+      ② 下载时保持本页面在前台、网络稳定，等进度走完再打开；<br />
+      ③ 完整文件约 <b>5.9 MB</b>，明显小于这个数就是没下完，删掉重下。</p>
+    <p class="note">日后更新：重新打开本页下载新版，直接覆盖安装即可，无需卸载。</p>
   </div>
 
   <!-- iOS -->
@@ -123,6 +129,10 @@
       document.getElementById("iosCard").classList.remove("hidden");
     } else if (isAndroid) {
       document.getElementById("androidCard").classList.remove("hidden");
+      if (inWeChat) {
+        document.getElementById("androidBtn").style.display = "none";
+        document.getElementById("androidWechatNote").style.display = "block";
+      }
     } else {
       document.getElementById("desktopCard").classList.remove("hidden");
     }
