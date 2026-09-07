@@ -530,6 +530,25 @@ export function UserFormSheet({ open, onClose, admin }) {
                 hideLabel={i18n.hidePassword}
               />
             </label>
+            {admin.isC168Company || ownerShadow ? (
+              <label className="m-account-form-field">
+                <span>{i18n.secondaryPassword}</span>
+                <PasswordInput
+                  value={form.secondary_password}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      secondary_password: e.target.value.replace(/\D/g, "").slice(0, 6),
+                    }))
+                  }
+                  placeholder={i18n.secondaryPasswordPlaceholder}
+                  autoComplete="off"
+                  inputMode="numeric"
+                  showLabel={i18n.showPassword}
+                  hideLabel={i18n.hidePassword}
+                />
+              </label>
+            ) : null}
             <label className="m-account-form-field">
               <span>{i18n.name}</span>
               <input value={form.name} disabled={fieldLocks.name} onChange={set("name")} />

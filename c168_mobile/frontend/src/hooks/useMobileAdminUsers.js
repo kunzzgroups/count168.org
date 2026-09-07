@@ -52,6 +52,7 @@ const EMPTY_FORM = {
   email: "",
   role: "",
   password: "",
+  secondary_password: "",
   status: "active",
   read_only: true,
 };
@@ -158,6 +159,11 @@ export function useMobileAdminUsers() {
   const selectedCompany = useMemo(
     () => companies.find((row) => Number(row.id) === Number(companyId)) || null,
     [companies, companyId],
+  );
+  /** Desktop parity: secondary password only for C168 company scopes or owner-shadow rows. */
+  const isC168Company = useMemo(
+    () => String(selectedCompany?.company_id || "").toUpperCase() === "C168",
+    [selectedCompany],
   );
   const groupOnlyMode = accountScopeIsGroupOnly(scope);
   const mutationsBlocked = isPartnershipAuditReadOnlyLocked(me);
@@ -627,6 +633,14 @@ export function useMobileAdminUsers() {
       company_id: Number(companyId),
     };
     if (form.password.trim()) payload.password = form.password;
+    const allowSecondaryPassword = isC168Company || ownerShadow;
+    if (allowSecondaryPassword && form.secondary_password?.trim()) {
+      if (!/^\d{6}$/.test(form.secondary_password.trim())) {
+        notify(i18n.secondaryPasswordMustBe6Digits, "error");
+        return false;
+      }
+      payload.secondary_password = form.secondary_password.trim();
+    }
     if (showReadOnlyToggle) payload.read_only = form.read_only ? 1 : 0;
     const isAdminOrOwner = currentUserRole === "admin" || currentUserRole === "owner";
     if (useDualTenantPicker && !ownerShadow) {
@@ -711,6 +725,7 @@ export function useMobileAdminUsers() {
     groupsAllMode,
     groupAllMode,
     selectedCompany,
+    isC168Company,
     groupIds,
     companiesForPicker: companiesForPicker(companies, {
       selectedGroup,
