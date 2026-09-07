@@ -97,6 +97,14 @@ if (-not $SkipBuild) {
   } finally {
     Pop-Location
   }
+  Write-Host "==> c168_mobile frontend npm run build"
+  Push-Location (Join-Path $RepoRoot "c168_mobile\frontend")
+  try {
+    npm run build
+    if ($LASTEXITCODE -ne 0) { throw "c168_mobile frontend build failed ($LASTEXITCODE)" }
+  } finally {
+    Pop-Location
+  }
 } else {
   Write-Host "==> skip frontend build"
 }
@@ -113,8 +121,9 @@ $lines = @(
   "open sftp://${UserName}@${HostName}/ -privatekey=`"${KeyUnix}`" -hostkey=`"${HostKey}`"",
   "cd /var/www/count168",
   "lcd `"${RepoUnix}`"",
-  "call mkdir -p /var/www/count168/services/tx-realtime /var/www/count168/deploy /var/www/count168/api /var/www/count168/frontend/dist",
+  "call mkdir -p /var/www/count168/services/tx-realtime /var/www/count168/deploy /var/www/count168/api /var/www/count168/frontend/dist /var/www/count168/c168_mobile/frontend/dist",
   "synchronize remote -mirror -criteria=time,size `"${RepoUnix}/frontend/dist`" /var/www/count168/frontend/dist",
+  "synchronize remote -mirror -criteria=time,size `"${RepoUnix}/c168_mobile/frontend/dist`" /var/www/count168/c168_mobile/frontend/dist",
   "synchronize remote -mirror -criteria=time,size -filemask=`"|node_modules/;.env`" `"${RepoUnix}/services/tx-realtime`" /var/www/count168/services/tx-realtime",
   "synchronize remote -mirror -criteria=time,size `"${RepoUnix}/deploy`" /var/www/count168/deploy",
   "synchronize remote -mirror -criteria=time,size `"${RepoUnix}/api`" /var/www/count168/api"
