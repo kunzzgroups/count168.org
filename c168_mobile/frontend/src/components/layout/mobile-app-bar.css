@@ -19,10 +19,10 @@
 
 .m-appbar-btn {
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.25rem;
+  height: 2.25rem;
   place-items: center;
-  border-radius: 0.75rem;
+  border-radius: 0.625rem;
   color: #fff;
 }
 
@@ -30,7 +30,7 @@
 .m-appbar-right-group {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.125rem;
   min-width: 0;
 }
 
