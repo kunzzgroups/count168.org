@@ -417,14 +417,24 @@ export default function DomainReportPage() {
    * Frontend's group-only pre-check can wrongly allow entering a group ledger the session
    * isn't actually assigned to; when the backend rejects it, fall back to a reportable
    * subsidiary instead of leaving the page stuck in an unusable single-group state.
+   * On a cold page load `companies` may still be empty at the moment the request fails
+   * (nothing cached yet) — `groupLedgerDenied` remembers to retry once it arrives.
    */
-  const recoverFromGroupLedgerDenied = useCallback(() => {
+  const [groupLedgerDenied, setGroupLedgerDenied] = useState(false);
+
+  const tryRecoverFromGroupLedgerDenied = useCallback(() => {
     if (companyId != null) return false;
     const pick = resolveReportCompanyWhenClosingGroup(me, companies, companyId, groupIds);
     if (!pick?.id) return false;
+    setGroupLedgerDenied(false);
     onPrepareCompanySelect(pick);
     return true;
   }, [companyId, companies, me, groupIds, onPrepareCompanySelect]);
+
+  useEffect(() => {
+    if (!groupLedgerDenied || companyId != null || !companies.length) return;
+    tryRecoverFromGroupLedgerDenied();
+  }, [groupLedgerDenied, companies, companyId, tryRecoverFromGroupLedgerDenied]);
 
   const reportParams = useMemo(
     () => ({
@@ -456,8 +466,9 @@ export default function DomainReportPage() {
       setReportSnapshot(REPORT_PAGE_KEY, buildReportSnapshotKey(reportParams), data);
     } catch (err) {
       if (err?.name === "AbortError" || !isReportFetchCurrent(seq)) return;
-      if (isGroupLedgerDeniedError(err) && recoverFromGroupLedgerDenied()) {
-        return;
+      if (isGroupLedgerDeniedError(err)) {
+        if (tryRecoverFromGroupLedgerDenied()) return;
+        setGroupLedgerDenied(true);
       }
       const msg = err.message || t("loadReportFailed");
       setError(msg);
@@ -479,7 +490,7 @@ export default function DomainReportPage() {
     isReportFetchCurrent,
     t,
     notify,
-    recoverFromGroupLedgerDenied,
+    tryRecoverFromGroupLedgerDenied,
   ]);
 
   useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
