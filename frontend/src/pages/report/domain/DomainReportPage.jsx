@@ -218,8 +218,9 @@ export default function DomainReportPage() {
         const groupOnlyBoot = groupFilterOptOut
           ? false
           : resolveReportGroupOnlyBoot(u, bootGc, persistedGc, bootGroup);
-        let nextCompanyId =
-          companyId != null ? companyId : groupOnlyBoot ? null : bootGc.companyId;
+        // A saved company selection always wins over the group-only guess — group-only boot
+        // only applies when there is genuinely no company to restore.
+        let nextCompanyId = companyId != null ? companyId : bootGc.companyId;
         if (groupFilterOptOut && nextCompanyId == null) {
           const pick = resolveReportCompanyWhenClosingGroup(
             u,
@@ -229,7 +230,7 @@ export default function DomainReportPage() {
           );
           if (pick?.id != null) nextCompanyId = Number(pick.id);
         }
-        if (nextCompanyId == null && savedCompanyId != null && bootGroup && !groupOnlyBoot) {
+        if (nextCompanyId == null && savedCompanyId != null && bootGroup) {
           const inGroup = companiesInGroupList(rows, bootGroup).some(
             (c) => Number(c.id) === Number(savedCompanyId),
           );
