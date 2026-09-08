@@ -24,6 +24,7 @@ import {
   buildDashboardCurrencyScopeKey,
 } from "../../../utils/company/sharedCompanyFilter.js";
 import {
+  isGroupLedgerDeniedError,
   resolveReportCompanyWhenClosingGroup,
   resolveReportGroupOnlyBoot,
 } from "../shared/reportGcBoot.js";
@@ -479,6 +480,19 @@ export default function CustomerReportPage() {
     onApplyCode: applyCrossPageCurrency,
   });
 
+  /**
+   * Frontend's group-only pre-check can wrongly allow entering a group ledger the session
+   * isn't actually assigned to; when the backend rejects it, fall back to a reportable
+   * subsidiary instead of leaving the page stuck in an unusable single-group state.
+   */
+  const recoverFromGroupLedgerDenied = useCallback(() => {
+    if (companyId != null) return false;
+    const pick = resolveReportCompanyWhenClosingGroup(me, companies, companyId, groupIds);
+    if (!pick?.id) return false;
+    onPrepareCompanySelect(pick);
+    return true;
+  }, [companyId, companies, me, groupIds, onPrepareCompanySelect]);
+
   const reportParams = useMemo(
     () => ({
       accountId,
@@ -519,6 +533,9 @@ export default function CustomerReportPage() {
       setReportSnapshot(REPORT_PAGE_KEY, buildReportSnapshotKey(reportParams), data);
     } catch (err) {
       if (err?.name === "AbortError" || !isReportFetchCurrent(seq)) return;
+      if (isGroupLedgerDeniedError(err) && recoverFromGroupLedgerDenied()) {
+        return;
+      }
       const msg = err.message || t("loadReportFailed");
       setError(msg);
       notify(msg, "error");
@@ -530,7 +547,17 @@ export default function CustomerReportPage() {
         setReportSyncing(false);
       }
     }
-  }, [reportScope, dateFrom, dateTo, reportParams, beginReportFetch, isReportFetchCurrent, t, notify]);
+  }, [
+    reportScope,
+    dateFrom,
+    dateTo,
+    reportParams,
+    beginReportFetch,
+    isReportFetchCurrent,
+    t,
+    notify,
+    recoverFromGroupLedgerDenied,
+  ]);
 
   useRealtimeDomain(REALTIME_DOMAINS.LEDGER, () => {
     void loadReport();

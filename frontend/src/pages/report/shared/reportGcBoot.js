@@ -11,6 +11,15 @@ import {
   sortedUniqueGroupIds,
 } from "../../../utils/company/sharedCompanyFilter.js";
 
+/** Message thrown by report_scope_common.php / group_company_access.php when the session lacks group-ledger access. */
+const GROUP_LEDGER_DENIED_MESSAGE = "无权访问该 Group Ledger";
+
+/** True when a report fetch failed because the session was denied access to the requested group ledger. */
+export function isGroupLedgerDeniedError(err) {
+  const msg = err?.message;
+  return typeof msg === "string" && msg.includes(GROUP_LEDGER_DENIED_MESSAGE);
+}
+
 /** Report pages never boot into group-only when logged in as a company. */
 export function resolveReportGroupOnlyBoot(me, bootGc, persistedGc, bootGroup) {
   if (isCompanyLogin(me)) return false;
