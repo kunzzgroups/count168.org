@@ -815,10 +815,10 @@
 }
 
 .informationmenu-section-title:has(.section-arrow) {
-    grid-template-columns:
-        var(--sidebar-icon-size, 18px)
-        minmax(0, 1fr)
-        auto;
+    /* 0.92fr puts the arrow back at the legacy fixed text-track position
+       (mid-row, after the label column); the ~8% slack packs after it.
+       minmax(0, …) keeps ellipsis working when the label alone overflows. */
+    grid-template-columns: var(--sidebar-icon-size, 18px) minmax(0, 0.92fr) auto;
 }
 
 .informationmenu-section-title::before {
