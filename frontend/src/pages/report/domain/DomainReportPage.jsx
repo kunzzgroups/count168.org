@@ -316,16 +316,21 @@ export default function DomainReportPage() {
   const onPrepareCompanySelect = useCallback((c) => {
     const nextId = Number(c?.id);
     if (!nextId) return;
-    const groupForPersist = c?.group_id ? String(c.group_id).trim().toUpperCase() : null;
+    const fromRow = c?.group_id ? String(c.group_id).trim().toUpperCase() : "";
+    const fromSel = selectedGroup ? String(selectedGroup).trim().toUpperCase() : "";
+    const groupForPersist = fromRow || fromSel || null;
     persistDashboardFilterState(groupForPersist, nextId, { allowGroupOnly: false });
     persistDashboardGroupOnlyMode(false);
-    flushSync(() => setCompanyId(nextId));
+    flushSync(() => {
+      if (groupForPersist) setSelectedGroup(groupForPersist);
+      setCompanyId(nextId);
+    });
     if (reportDataRef.current != null) setReportSyncing(true);
     startTransition(() => {
       setProcessId("");
       setMetaReady(false);
     });
-  }, []);
+  }, [selectedGroup]);
 
   const onSwitchCompany = useCallback(
     async (c) => {
