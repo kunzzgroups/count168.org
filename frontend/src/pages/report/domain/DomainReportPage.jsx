@@ -22,6 +22,8 @@ import {
 } from "../../../utils/company/sharedCompanyFilter.js";
 import {
   isGroupLedgerDeniedError,
+  persistReportCompaniesCache,
+  readReportCompaniesCache,
   resolveReportCompanyWhenClosingGroup,
   resolveReportGroupOnlyBoot,
 } from "../shared/reportGcBoot.js";
@@ -71,7 +73,7 @@ const REPORT_PAGE_KEY = "domain";
 const REPORT_FETCH_DEBOUNCE_MS = 150;
 
 function resolveReportBootCompanyId() {
-  const cached = getCachedOwnerCompanies();
+  const cached = getCachedOwnerCompanies() || readReportCompaniesCache();
   const url = new URL(window.location.href);
   const queryCompany = url.searchParams.get("company_id");
   return resolveBootCompanyId({
@@ -87,7 +89,9 @@ export default function DomainReportPage() {
   const t = useCallback((key, params) => getReportText(lang, key, params), [lang]);
   const r = useMemo(() => REPORT_I18N[lang] || REPORT_I18N.en, [lang]);
 
-  const [companies, setCompanies] = useState(() => getCachedOwnerCompanies() || []);
+  const [companies, setCompanies] = useState(
+    () => getCachedOwnerCompanies() || readReportCompaniesCache() || [],
+  );
 
   const [companyId, setCompanyId] = useState(resolveReportBootCompanyId);
   const [selectedGroup, setSelectedGroup] = useState(() => {
@@ -197,6 +201,7 @@ export default function DomainReportPage() {
         await fetchOwnerGroupsAll(u).catch(() => null);
         if (cancelled) return;
         setCompanies(rows);
+        persistReportCompaniesCache(rows);
 
         const url = new URL(window.location.href);
         const queryCompany = url.searchParams.get("company_id");

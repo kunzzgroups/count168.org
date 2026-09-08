@@ -11,6 +11,39 @@ import {
   sortedUniqueGroupIds,
 } from "../../../utils/company/sharedCompanyFilter.js";
 
+/**
+ * Report-page-only sessionStorage cache of the owner company list, so a hard refresh can paint
+ * Group/Company pills immediately instead of waiting on `fetchOwnerCompaniesAll`. This mirrors
+ * `selectedGroup`'s own sync sessionStorage read — the boot fetch still runs afterward and
+ * overwrites both this cache and the live `companies` state, so data never goes stale beyond one
+ * refresh cycle. Scoped to report pages only — does not touch the shared `ownerCompaniesCache`
+ * used by Dashboard / Maintenance / Account / etc.
+ */
+const REPORT_COMPANIES_CACHE_KEY = "eazycount:report:companies_cache";
+
+export function readReportCompaniesCache() {
+  try {
+    const raw = sessionStorage.getItem(REPORT_COMPANIES_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export function persistReportCompaniesCache(rows) {
+  try {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      sessionStorage.removeItem(REPORT_COMPANIES_CACHE_KEY);
+      return;
+    }
+    sessionStorage.setItem(REPORT_COMPANIES_CACHE_KEY, JSON.stringify(rows));
+  } catch {
+    // sessionStorage unavailable/full — best-effort cache only, boot fetch still covers correctness.
+  }
+}
+
 /** Message thrown by report_scope_common.php / group_company_access.php when the session lacks group-ledger access. */
 const GROUP_LEDGER_DENIED_MESSAGE = "无权访问该 Group Ledger";
 
