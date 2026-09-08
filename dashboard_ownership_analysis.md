@@ -46,21 +46,90 @@ King855、PS38、Gamingsoft Invoice、WOS 等）**复制粘贴**过来的表格�
 测试文件（`.test.js`）就是针对上面这些函数，喂各种"畸形粘贴"样本（转置、错位、
 括号负数、千分位逗号等），断言解析出的矩阵/金额是否正确 —— 这就是"金额抓取的测试"。
 
-## 2. Dashboard 页面怎么把这些金额聚合出来
+## 2. Dashboard 页面怎么把这些金额聚合出来（更正版）
 
-抓取进来的交易数据，最终由后端 `api/transactions/dashboard_api.php`
-（约 4900 行，核心聚合逻辑）用 SQL 聚合成 KPI：
+> ⚠️ 更正：我第一版说"按 transaction_type 全局 SUM"是不准确的、说了个大概但漏了最关键的一层。
+> 真实机制是**先按 `account.role` 筛出这个角色名下的账户，再只对这批账户 ID 的交易求和**——
+> 这也是为什么"PROFIT 角色账户的交易总额"会正好等于 KPI Card 的 Profit 数字：因为 KPI 就是
+> 直接拿这批账户的 SUM 结果，不是先全表算再按公式拼出来的。
 
-- **Profit（本期盈亏）**：对 `transactions` 表按 `transaction_type` 做
-  `SUM(CASE WHEN ... THEN amount ELSE 0 END)`，例如：
-  - `WIN` 且描述是 `Process: %`（自动结算）→ `+amount`
-  - `LOSE` 且 `Process: %` → `-amount`
-  - `WIN`/`LOSE` 且是手动录入（`dashboardManualProfitDescSql`）→ 符号相反
-  - `RECEIVE/CLAIM/CONTRA/CLEAR/PAYMENT` → 计入应收应付方向
-  - `ADJUSTMENT` → 直接加总
-  （见 [api/transactions/dashboard_api.php:774](api/transactions/dashboard_api.php:774) 附近）
-- **Expenses**：另一组 `SUM(CASE ...)`，对 Cr/Dr、手续费等做符号处理。
-- 结果打包成 `period_total.profit` / `period_total.expenses` 返回给前端。
+后端 `api/transactions/dashboard_api.php` 主循环（约
+[dashboard_api.php:4038](api/transactions/dashboard_api.php:4038)）：
+
+```php
+$roles = $earningsOnly ? ['EXPENSES', 'PROFIT'] : ['CAPITAL', 'EXPENSES', 'PROFIT'];
+foreach ($roles as $role) {
+    // 第 1 步：按角色找账户
+    // 第 2 步：只 SUM 这批账户相关的交易
+}
+```
+
+### 2.1 Profit（角色 = PROFIT）
+- **第 1 步 — 找账户**：`dashboardRoleFilterSql('PROFIT')` 生成
+  `UPPER(TRIM(a.role)) = 'PROFIT'`，去 `account` 表（JOIN `account_company`）里筛出
+  这个公司下 `role = 'PROFIT'` 的账户，得到一组 `account_ids`
+  （[dashboard_api.php:4081-4098](api/transactions/dashboard_api.php:4081)）。
+- **第 2 步 — 只对这批账户求和**：所有 SQL 都带
+  `t.account_id IN ($account_ids)` 或 `t.from_account_id IN ($account_ids)`
+  （[dashboard_api.php:4196](api/transactions/dashboard_api.php:4196)、
+  [4221](api/transactions/dashboard_api.php:4221)），`CASE WHEN transaction_type = ...`
+  只是在"已经限定为 PROFIT 账户"的交易里，按业务语义决定金额的正负号
+  （WIN 自动结算 `+amount`、LOSE 自动结算 `-amount`、手动录入符号相反、
+  RATE/PAYMENT/RECEIVE/CONTRA/CLEAR 按应收应付方向处理等）。
+- 所以：**"PROFIT 角色账户的交易额总和" = KPI Card 的 Profit**，这个等式是成立的，
+  因为 KPI 本身就是这样算出来的，不是巧合。
+
+### 2.2 Expenses（角色 = EXPENSES）
+和 Profit 不是同一套查询模板，代码里明确写了注释
+"EXPENSES period uses search_api-aligned wl bundle only"：
+- **第 1 步 — 找账户**：`dashboardDiscoverExpenseAccounts()`
+  （[dashboard_api.php:2830](api/transactions/dashboard_api.php:2830)），用
+  `dashboardSqlExpensesRoleMatch()` 匹配 `UPPER(TRIM(a.role)) IN ('EXPENSES', 'EXPENSE')`
+  （注意兼容单复数两种历史写法），同样从 `account` 表按角色筛账户。EXPENSES 账户可能挂在
+  集团实体公司上而交易发生在子公司账本，所以 `dashboardResolveRoleScopeCompanyIds()`
+  还会把同集团的 group-entity 公司也纳入扫描范围。
+- **第 2 步 — 专用聚合函数**：不复用 Profit 那套 `SUM(CASE transaction_type...)`，而是
+  `dashboardExpensesBuildWinLossBundle()`（[dashboard_api.php:3044](api/transactions/dashboard_api.php:3044)，
+  处理 EXPENSES 账户下的 WIN/LOSE/ADJUSTMENT）+
+  `dashboardExpensesBuildCrDrBundle()`（[dashboard_api.php:3316](api/transactions/dashboard_api.php:3316)，
+  处理 PAYMENT/RECEIVE/CONTRA/CLEAR/CLAIM/RATE 类 Cr/Dr），两者都严格限定
+  `account_id IN (EXPENSES账户ID)`，逻辑上要和 Transaction List / search_api 的
+  `category=EXPENSES` 口径完全对齐（代码注释多处强调 "aligned with search_api" /
+  "aligned with Transaction List"）。
+- 所以 Expenses 抓的确实是 **EXPENSES 角色账户的交易总额**，只是用的是一套独立的、
+  更贴近 search_api 口径的构建函数，不是简单套用 Profit 的那套 CASE 模板。
+
+### 2.3 重要例外：CLEAR 类型交易不计入 PROFIT / EXPENSES 的 KPI
+
+Transaction List 页面把交易金额展示成 **Win/Loss 列** 和 **Cr/Dr 列** 两栏，Dashboard 的
+Profit（对 EXPENSES 同理）本质是这两栏这期间的总和——但有一个专门的例外：
+
+```php
+// dashboardShouldExcludeClearForRole()（dashboard_api.php:363）
+// - 对 CAPITAL：不排除（CLEAR 与 CONTRA 行为一致）
+// - 对 EXPENSES/PROFIT：排除 CLEAR（无论是 To 还是 From）
+```
+
+也就是说，`transaction_type = 'CLEAR'` 的交易，**Transaction List 页面正常显示**在 Cr/Dr 列
+（供对账用），但计算 PROFIT / EXPENSES 角色的 period_total 时，SQL 会带上
+`AND t.transaction_type <> 'CLEAR'`（见 [dashboard_api.php:4215](api/transactions/dashboard_api.php:4215)
+等多处 `.$clearFilter`），把 CLEAR 的金额从 KPI 里过滤掉。
+
+**实例**：某公司这期 Win/Loss = 71,253.36，Cr/Dr = -71,253.34（几乎完全对冲，
+Balance 只剩 0.02）——这个 Cr/Dr 基本全是 CLEAR 类型（批量核销/清账）。
+Dashboard Profit KPI 最终 = **71,253.36**，正好等于 Win/Loss 那列，"看起来像只抓了
+Win/Loss"，实际是 `Win/Loss + (Cr/Dr 中排除 CLEAR 后的剩余部分 ≈ 0)`——公式没变，
+只是这期 Cr/Dr 恰好全是被排除的 CLEAR，所以显示上等于纯 Win/Loss。
+
+对照之前 C168 那个例子（一笔 **CONTRA** 交易，1,680.00）：CONTRA **不在**排除名单里，
+所以正常计入 Profit；同样是 Cr/Dr 类型，CONTRA 会被算、CLEAR 不会被算——这是刻意的角色级过滤，
+不是漏抓。
+
+### 2.4 结果打包
+两个角色算出来的 `period_total`（以及 CAPITAL 角色，用于余额类展示）打包成
+`period_total.profit` / `period_total.expenses` 等字段返回给前端，前端
+`dashboardKpi.js` 再做 `netProfit = profit + (expenses>0 ? -expenses : expenses)`
+之类的展示层处理（见第 3 节）。
 
 前端 `frontend/src/pages/dashboard/lib/dashboardKpi.js`：
 - `netProfitFromDashboardPayload()` / `computeKpiMetrics()`：
@@ -120,15 +189,75 @@ Earnings = netProfit × 分成乘数
 子公司下钻场景（`subsidiaryGroupDrillDown`）逻辑更严格：必须
 `has_ownership_setup` 为真才算，且不允许 fallback 到"无配置=100%"，避免误算。
 
-## 4. 一句话总结
+## 4. KPI Card 全貌 + Earnings 分成实例（含 Ownership 页面截图对应关系）
+
+### 4.1 四张 KPI Card
+`DashboardKpiGrid.jsx` 固定渲染 Profit / Expenses / Net Profit 三张卡
+（[DashboardKpiGrid.jsx:9-35](frontend/src/pages/dashboard/components/DashboardKpiGrid.jsx:9)），
+第四张 **Earnings** 卡靠 `kpi.showEarnings` 控制是否渲染
+（[DashboardKpiGrid.jsx:36](frontend/src/pages/dashboard/components/DashboardKpiGrid.jsx:36)）。
+
+- `showEarnings` = `viewerHasEarningsConfig()`（[dashboardKpi.js:41](frontend/src/pages/dashboard/lib/dashboardKpi.js:41)），
+  判断的是"**当前登录账户本人**有没有被分配 ownership 配置"（直接持股 % > 0，或有集团分成链路），
+  **不是硬编码判断 session role === owner**。
+- 后端把 session 角色换算成 `owner_type`（[dashboard_api.php:1268](api/transactions/dashboard_api.php:1268)）：
+  `role/user_type = owner` → `owner_type='owner'`；`role ∈ {user, partnership, audit, member}`
+  （即 Partner 及以下）→ `owner_type='user'`，然后各自去查 `company_ownership` 里
+  `account_id = 自己`、`owner_type = 自己的类型` 这一行。
+- 所以实践中"只有 Owner 能看到 Earnings 卡"是**结果**（因为通常只有 Owner 账户会被分配持股），
+  但机制上是"看这个账户有没有被分配百分比"，理论上 Partner 账户如果也被分配了百分比，
+  一样会出现第四张卡。
+- **Profit / Expenses 没有 Game / Bank 区分**——整个 `dashboard_api.php` 里没有任何
+  "GAME" 相关的角色分支，PROFIT / EXPENSES 角色下不管挂的是什么类型的账户，都走同一套聚合逻辑。
+- **Net Profit = Profit − Expenses**（[dashboardKpi.js:258](frontend/src/pages/dashboard/lib/dashboardKpi.js:258)），
+  确认无误。
+- **Earnings = NetProfit × 分成乘数**（乘数算法见第 3.2 节）。
+
+### 4.2 Ownership 页面「Account Ownership」→ 三种典型配置，对 Earnings 卡的影响
+
+Ownership 页面的 "Account Ownership" tab，本质是往 `company_ownership` 表写行，
+`batch_save_owners_api.php` 按 `account_id` 前缀分流（[batch_save_owners_api.php:193](api/ownership/batch_save_owners_api.php:193)）：
+`G_xxx` → `owner_type='group'`（挂集团）；其余（真实账户）→ `owner_type='owner'/'user'/'account'`。
+
+**Dashboard 后端永远是"当前登录者查自己那一行"**
+（[dashboard_api.php:1448](api/transactions/dashboard_api.php:1448)：
+`WHERE company_id=? AND account_id=? AND owner_type=?`，`account_id`/`owner_type` 用的是
+*当前登录账户自己*），所以不同配置下，"谁登录看到多少"完全取决于查到的是哪一行：
+
+| 配置（Account Ownership 页面） | 写入 `company_ownership` | 谁登录看 Dashboard 会得到什么 |
+|---|---|---|
+| **单一真账户 100%**（如 `K (BOSS) - Main` 100%） | 1 行：`owner_type='owner', account_id=K, percentage=100` | **K** 登录：查到自己这行 `ownership_percentage=100` → 直接持股优先、跳过集团链路 → **Earnings = NetProfit × 100% = 全额**（例：NetProfit 3000 → K 看到 3000）。其他人没有行 → 查不到 → 不显示 Earnings 卡。 |
+| **多个真账户拆分**（如 `K(BOSS) 90%` + `JK(JK) 10%`） | 2 行，各自 `percentage` 不同 | **K** 登录：只查到 K 自己那行 90% → Earnings = 3000×90% = **2700**。**JK** 登录：只查到 JK 自己那行 10% → Earnings = 3000×10% = **300**。两人互相看不到对方的份额，也不会显示对方的百分比或加总——各自的 Dashboard 只反映自己那一行。总和碰巧等于 NetProfit（因为 Total Allocation 校验加起来 = 100%），但这是配置上凑出来的，不是系统自动合计。 |
+| **挂 Group（如 `Group: AP` 100%）** | 1 行：`owner_type='group', account_id=0, partner_group_id='AP', percentage=100` | 这行本身**不对应任何能登录的具体账户**，只代表"C168 利润池 100% 划给 AP 集团"（`group_equity_percentage=100`）。要看到具体账户能拿多少，还要看 **Group Earnings** tab 里 AP 集团下该账户配的 `group_account_percentage`（第二段乘法，见第 3.2 节第 4 条），例如 AP 下 X 账户配 60% → X 登录看到 Earnings = 3000×100%×60% = 1800。 |
+
+**要点**：真账户（非 Group）配置下没有"二次分配"这一层——**account_id 直接对应登录账户本人**，
+查到的百分比就是该账户 Dashboard Earnings 卡的最终乘数，公式就是单纯的
+`Earnings = NetProfit × 该账户在 company_ownership 里自己那一行的 percentage`。
+只有走 `Group: xxx` 这条路径时，才会多出"集团池子 → 集团内部再分"的两段乘法。
+
+此外，`read_only` 列（截图里 JK 那行的 "Read Only" 开关）只影响该账户在系统里的编辑权限
+（对应 `api/includes/partnership_audit_readonly.php`），**跟 Earnings 百分比计算无关**。
+
+## 5. 一句话总结
 
 - **金额抓取**：靠 `datacapture/paste/core` 下一批 `xxxPasteHelper.js`，用"关键字判定
   来源 + 正则识别金额 + 处理各种复制错位/转置" 的方式，把网页表格粘贴解析成结构化矩阵写入
   数据录入表；对应的 `.test.js` 专门测这些畸形粘贴样本的解析正确性。
 - **Dashboard 金额来源**：不是直接读 Data Capture 表，而是这些录入最终落到
-  `transactions`（及 `transaction_entry`）表，由 `dashboard_api.php` 用一堆
-  `SUM(CASE transaction_type ...)` SQL 按业务语义（WIN/LOSE/PAYMENT/…）加总出
-  `profit` / `expenses`。
+  `transactions`（及 `transaction_entry`）表；后端**先按 `account.role` 筛出
+  PROFIT / EXPENSES 各自名下的账户 ID，再只对这批账户的交易求和**——
+  Profit 卡片 = PROFIT 角色账户交易额总和，Expenses 卡片 = EXPENSES 角色账户交易额总和
+  （用的是各自独立的聚合函数，EXPENSES 那套特意对齐 search_api / Transaction List 口径）。
+- **例外**：`CLEAR` 类型交易在 Transaction List 正常显示（计入 Cr/Dr 列），但
+  PROFIT / EXPENSES 角色的 KPI 计算会专门排除 CLEAR（`dashboardShouldExcludeClearForRole`），
+  所以某期如果 Cr/Dr 几乎全是 CLEAR，Dashboard Profit 会"看起来"只等于 Win/Loss 那列，
+  其实是 `Win/Loss + 非CLEAR的Cr/Dr(≈0)`，公式没变，只是这期数据构成如此。
 - **Ownership 算法**：后端按"直接持股优先，其次集团链路（公司在集团股权% × 我在集团分成%），
   历史月份查 history 快照表"的规则读出比例；前端再按"group聚合 > link乘数 > 直接持股 >
   集团两段乘"的优先级把比例转成一个乘数，乘在 netProfit 上得到 Earnings。
+- **Earnings 卡的显隐**：不是按 session role 硬编码，而是"当前登录账户本人是否被分配了
+  ownership 配置"。
+- **真账户持股（非 Group）**：每个账户只查、只看得到 `company_ownership` 里**自己那一行**的
+  百分比，`Earnings = NetProfit × 自己那行的 percentage`，不会看到别人的份额、也不会自动合计。
+- **挂 Group 持股**：只是把利润池划给集团，集团内部还要靠 Group Earnings tab 的
+  `group_account_percentage` 做第二次分配，`Earnings = NetProfit × group_equity% × group_account%`。
