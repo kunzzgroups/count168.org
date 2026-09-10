@@ -3,4 +3,6 @@
     <color name="colorPrimary">#2563EB</color>
     <color name="colorPrimaryDark">#1D4ED8</color>
     <color name="colorAccent">#2563EB</color>
+    <!-- Matches the app's dark app-bar background (--m-appbar-bg in the web theme) -->
+    <color name="system_bars_backdrop">#001A2C</color>
 </resources>

@@ -13,6 +13,9 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- Area revealed behind the status/navigation bars once MainActivity pads
+             the WebView for edge-to-edge. Matches the app's dark app-bar color. -->
+        <item name="android:windowBackground">@color/system_bars_backdrop</item>
     </style>
 
 
