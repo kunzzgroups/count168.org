@@ -28,27 +28,53 @@
          whole screen, so bottom-fixed UI ends up behind the system nav bar and
          env(safe-area-inset-bottom) stays 0 in the WebView. Detect that case and
          lift bottom chrome by one nav-bar height (48px) via --m-inset-b.
-         Portrait only — in landscape the nav bar sits on the side. A shell that
-         already insets the WebView reports innerHeight < screen.height and gets
-         no lift, so this never double-pads a fixed build. */
+         iOS home-screen (standalone) PWAs letterbox the bottom instead: the
+         layout viewport stops above the home indicator while env(bottom) still
+         reports ~34px, double-padding bottom chrome. Measure that gap
+         (screen.height - innerHeight, standalone only) and cancel it via
+         --m-letterbox. Both vars are 0 in a normal browser tab. */
       (function () {
+        var probeEl = null;
+        var envBottom = function () {
+          try {
+            if (!probeEl) {
+              probeEl = document.createElement("div");
+              probeEl.style.cssText =
+                "position:fixed;visibility:hidden;pointer-events:none;height:env(safe-area-inset-bottom,0px);";
+              document.documentElement.appendChild(probeEl);
+            }
+            return probeEl.getBoundingClientRect().height || 0;
+          } catch (e) {
+            return 0;
+          }
+        };
         var update = function () {
           try {
             var cap = window.Capacitor;
             var native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+            var portrait = window.matchMedia("(orientation: portrait)").matches;
+            var standalone =
+              window.matchMedia("(display-mode: standalone)").matches ||
+              window.navigator.standalone === true;
             var fullBleed =
-              native &&
-              window.screen &&
-              window.screen.height - window.innerHeight < 8 &&
-              window.matchMedia("(orientation: portrait)").matches;
+              native && window.screen && window.screen.height - window.innerHeight < 8 && portrait;
             document.documentElement.style.setProperty(
               "--m-inset-b",
               fullBleed ? "48px" : "0px"
             );
+            var letterbox = 0;
+            if (standalone && window.screen && window.innerHeight) {
+              letterbox = Math.min(
+                120,
+                Math.max(0, window.screen.height - window.innerHeight - envBottom())
+              );
+            }
+            document.documentElement.style.setProperty("--m-letterbox", letterbox + "px");
           } catch (e) {}
         };
         update();
         window.addEventListener("resize", update);
+        window.addEventListener("orientationchange", update);
       })();
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
