@@ -23,6 +23,34 @@
         }
       } catch (e) {}
     </script>
+    <script>
+      /* Android shell (Capacitor) is edge-to-edge: the WebView viewport spans the
+         whole screen, so bottom-fixed UI ends up behind the system nav bar and
+         env(safe-area-inset-bottom) stays 0 in the WebView. Detect that case and
+         lift bottom chrome by one nav-bar height (48px) via --m-inset-b.
+         Portrait only — in landscape the nav bar sits on the side. A shell that
+         already insets the WebView reports innerHeight < screen.height and gets
+         no lift, so this never double-pads a fixed build. */
+      (function () {
+        var update = function () {
+          try {
+            var cap = window.Capacitor;
+            var native = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
+            var fullBleed =
+              native &&
+              window.screen &&
+              window.screen.height - window.innerHeight < 8 &&
+              window.matchMedia("(orientation: portrait)").matches;
+            document.documentElement.style.setProperty(
+              "--m-inset-b",
+              fullBleed ? "48px" : "0px"
+            );
+          } catch (e) {}
+        };
+        update();
+        window.addEventListener("resize", update);
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

@@ -400,7 +400,7 @@ html[data-theme="dark"] .m-mt-type-tag.is-teal { background: rgba(45, 212, 191, 
 .m-mt-actionbar {
   position: fixed;
   inset-inline: 0;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
+  bottom: calc(var(--m-safe-b) + 1rem);
   z-index: 55;
   display: flex;
   align-items: center;
