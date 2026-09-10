@@ -1,7 +1,8 @@
 {
   "name": "EazyCount",
   "short_name": "EazyCount",
-  "start_url": ".",
+  "start_url": "/c168_mobile/frontend/dist/",
+  "scope": "/c168_mobile/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#004ff9",
