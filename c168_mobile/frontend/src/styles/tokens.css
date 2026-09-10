@@ -97,14 +97,16 @@
   --m-page-max-width: 32rem;
   /* Android shell edge-to-edge lift — index.html sets --m-inset-b to 48px when
      the WebView viewport is full-bleed; --m-letterbox cancels iOS standalone
-     bottom letterboxing (viewport stops above the home indicator while env
-     still reports it). Both are 0 in a normal browser tab. */
+     bottom letterboxing; --m-safe-floor keeps 34px clear of the iPhone home
+     indicator when iOS standalone reports env(bottom)=0. All 0 in a browser. */
   --m-inset-b: 0px;
   --m-letterbox: 0px;
+  --m-safe-floor: 0px;
   --m-safe-b: max(
     0px,
     calc(env(safe-area-inset-bottom, 0px) - var(--m-letterbox, 0px)),
-    var(--m-inset-b, 0px)
+    var(--m-inset-b, 0px),
+    var(--m-safe-floor, 0px)
   );
   --m-shell-main-pad-bottom-nav: calc(var(--m-safe-b) + 88px);
   --m-shell-main-pad-bottom: calc(var(--m-safe-b) + 12px);
