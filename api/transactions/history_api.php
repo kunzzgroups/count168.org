@@ -2957,35 +2957,22 @@ try {
                     $isDivideMode = (bool) preg_match('/\(\s*\/[^)]*\)/', (string) ($event['rate_middleman_entry_description'] ?? ''));
 
                     $rateForSuffix = null;
-                    // divide 模式下 exchange_rate 存的是原汇率的倒数（"/1.7" 存成 "0.588235..."）；
-                    // 展示时需还原成 "/1.7" 这种原始除法表达式，而不是直接展示倒数小数。
+                    // divide 模式下需要与 admin/Payment History 一致，展示 Middle-Man 输入的原始除数
+                    // （如 "/1.71"），而不是 exchange_rate 存的倒数小数（如 "0.588235"）或净汇率计算值。
                     $rateForSuffixIsExpression = false;
                     if (!in_array($entryType, ['RATE_FIRST_FROM', 'RATE_FIRST_TO'], true)) {
-                        if ($entryType === 'RATE_TRANSFER_FROM' && $isDivideMode) {
-                            $displayNet = null;
-                            if ($exchangeRate !== null && $exchangeRate !== ''
-                                && $middlemanRate !== null && (string) $middlemanRate !== '') {
-                                $netRate = money_sub($exchangeRate, $middlemanRate, 8);
-                                if (money_cmp($netRate, '0') > 0) {
-                                    $displayNet = money_out($netRate, 6);
-                                }
-                            }
-                            if ($displayNet !== null && $displayNet !== '') {
-                                $rateForSuffix = $displayNet;
+                        if ($isDivideMode) {
+                            if ($middlemanRate !== null && (string) $middlemanRate !== '') {
+                                $rateForSuffix = '/' . money_out($middlemanRate, 6);
+                                $rateForSuffixIsExpression = true;
                             } elseif ($exchangeRate !== null && $exchangeRate !== '' && money_cmp($exchangeRate, '0') > 0) {
                                 $rateForSuffix = '/' . money_out(money_div('1', $exchangeRate, 8), 6);
                                 $rateForSuffixIsExpression = true;
                             }
-                        } elseif ($entryType === 'RATE_TRANSFER_TO' && !$isDivideMode) {
+                        } elseif ($entryType === 'RATE_TRANSFER_TO') {
                             $rateForSuffix = ($middlemanRate !== null && $middlemanRate !== '')
                                 ? money_out($middlemanRate, 6)
                                 : (($exchangeRate !== null && $exchangeRate !== '') ? $exchangeRate : null);
-                        } elseif ($isDivideMode) {
-                            // 其余除法模式分支（如 RATE_TRANSFER_TO）：还原为原始 "/除数" 展示，不展示倒数小数
-                            if ($exchangeRate !== null && $exchangeRate !== '' && money_cmp($exchangeRate, '0') > 0) {
-                                $rateForSuffix = '/' . money_out(money_div('1', $exchangeRate, 8), 6);
-                                $rateForSuffixIsExpression = true;
-                            }
                         } else {
                             // 其余情况（RATE_TRANSFER_FROM 乘法模式、RATE_FEE 等）：使用原始汇率
                             $rateForSuffix = ($exchangeRate !== null && $exchangeRate !== '') ? $exchangeRate : null;
