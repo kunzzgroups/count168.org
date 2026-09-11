@@ -128,6 +128,12 @@ if ! sudo -u nginx test -r "$FRONTEND_INDEX" 2>/dev/null; then
 fi
 grep -o 'index-[A-Za-z0-9_-]*\.js' "$FRONTEND_INDEX" | head -1 || true
 
+# 手机版下载页 → /app/（源在仓库 c168_mobile/app/install-page/，APK 不进 git；缺失时从同机 site 借）
+APP_PUBLISH="${APP_ROOT}/deploy/publish-app-page.sh"
+if [[ -f "$APP_PUBLISH" ]]; then
+  bash "$APP_PUBLISH" || echo "WARN: publish-app-page.sh failed (exit $?) — /app 下载页可能过期"
+fi
+
 RT_DEPLOY="${APP_ROOT}/deploy/deploy-realtime-org.sh"
 if [[ -f "$RT_DEPLOY" ]]; then
   sed -i 's/\r$//' "$RT_DEPLOY" 2>/dev/null || true
