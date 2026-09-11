@@ -2854,6 +2854,7 @@ try {
             'exchange_rate' => $row['exchange_rate'] ?? null,
             'rate_middleman_rate' => $row['rate_middleman_rate'] ?? null,
             'rate_middleman_entry_description' => $row['rate_middleman_entry_description'] ?? null,
+            'rate_markup_value' => $entryType === 'RATE_MIDDLEMAN' ? ($markupRate ?? null) : null,
             'entry_type' => $entryType
         ];
     }
@@ -2952,10 +2953,14 @@ try {
                 $entryType = $event['entry_type'] ?? '';
                 if ($entryType === 'RATE_MIDDLEMAN') {
                     // Middle-Man：显示 Markup (FROM amount > TO) Rate x
+                    // Rate 展示的是 Markup 差额（与 admin/Payment History 一致），不是 Rate-Mul 原始输入值。
                     $fromCode = $event['from_currency_code'] ?? null;
                     $toCode = $event['to_currency_code'] ?? null;
                     $fromAmount = $event['rate_from_amount'] ?? null;
-                    $middlemanRate = $event['rate_middleman_rate'] ?? null;
+                    $markupRateForDisplay = $event['rate_markup_value'] ?? null;
+                    if ($markupRateForDisplay === null || $markupRateForDisplay === '') {
+                        $markupRateForDisplay = $event['rate_middleman_rate'] ?? null;
+                    }
                     if ($fromCode && $toCode) {
                         $finalDescription = 'Markup (' . $fromCode;
                         if ($fromAmount !== null && $fromAmount !== '') {
@@ -2965,8 +2970,8 @@ try {
                             }
                         }
                         $finalDescription .= ' > ' . $toCode . ')';
-                        if ($middlemanRate !== null && $middlemanRate !== '') {
-                        $formattedRate = historyDisplayDecimal($middlemanRate, 6);
+                        if ($markupRateForDisplay !== null && $markupRateForDisplay !== '') {
+                        $formattedRate = historyDisplayDecimal($markupRateForDisplay, 6);
                             if ($formattedRate !== '') {
                                 $finalDescription .= ' Rate ' . $formattedRate;
                             }
