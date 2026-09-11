@@ -125,6 +125,19 @@ Win/Loss"，实际是 `Win/Loss + (Cr/Dr 中排除 CLEAR 后的剩余部分 ≈ 
 所以正常计入 Profit；同样是 Cr/Dr 类型，CONTRA 会被算、CLEAR 不会被算——这是刻意的角色级过滤，
 不是漏抓。
 
+**这条规则的来历（git 历史，非猜测）**：旧版一开始是**完全不排除 CLEAR** 的：
+```php
+// 旧版（4288bdea8 之前）
+// 与 Transaction List/search_api 口径对齐：不排除 CLEAR（EXPENSES 也要算入）
+return false;
+```
+CLEAR 当时跟 CONTRA/PAYMENT 一样正常计入 Profit/Expenses，结果导致一个 bug——commit
+`4288bdea8`（"profit amount will be include when during clear prob fixed"，2026-05-28）
+把 CLEAR 从 **PROFIT** 角色里排除掉；一周后 commit `8a3807ee2`（2026-06-03）又发现
+**EXPENSES** 角色也有同样问题，扩大排除范围到现在这个 `PROFIT || EXPENSES` 版本。
+**结论：这不是"旧版用别的机制处理了未结清部分"，而是旧版本身就是 bug，现在这条排除规则
+就是 bug 修复后的最终结果**，CAPITAL 角色则从头到尾都正常把 CLEAR 算进去。
+
 ### 2.4 结果打包
 两个角色算出来的 `period_total`（以及 CAPITAL 角色，用于余额类展示）打包成
 `period_total.profit` / `period_total.expenses` 等字段返回给前端，前端
@@ -238,7 +251,83 @@ Ownership 页面的 "Account Ownership" tab，本质是往 `company_ownership` �
 此外，`read_only` 列（截图里 JK 那行的 "Read Only" 开关）只影响该账户在系统里的编辑权限
 （对应 `api/includes/partnership_audit_readonly.php`），**跟 Earnings 百分比计算无关**。
 
-## 5. 一句话总结
+## 5. "Company: All"（同 Group 下多公司合并显示）怎么算
+
+`frontend/src/utils/dashboard/dashboardMerge.js` 的 `mergeGroupData()`
+（[dashboardMerge.js:93](frontend/src/utils/dashboard/dashboardMerge.js:93)）负责这个合并，
+逻辑很直白——**先按当前选中的 Currency，把该 Group（或 All Groups）下每家公司各自的
+`period_total.profit` / `period_total.expenses` 分别加总，最后统一相减一次**：
+
+```js
+dataList.forEach((d) => {
+  periodProfit   += parseFloat(d.period_total.profit   || 0);
+  periodExpenses += parseFloat(d.period_total.expenses || 0);
+});
+// 之后跟单公司视图一样丢进 computeKpiMetrics()：
+netProfit = periodProfit + (periodExpenses > 0 ? -periodExpenses : periodExpenses);
+```
+
+即：`NetProfit(All) = ΣProfit(各公司) − ΣExpenses(各公司)`，是"先分别加总两条线、
+最后减一次"，不是"每家公司先各自算出 NetProfit 再加总"（数学结果一致，只是实现顺序不同）。
+且这个合并是**按 Currency 分开做的**，不会跨币种直接相加；跨币种合并成一个数是另一条走
+FX 汇率转换的路径（Trend Chart 旁边那个 "Includes multi-currency conversion" 面板）。
+
+## 6. Group 自己的 Dashboard（选中 Group 本身作为 scope）怎么展示
+
+这是和第 5 节不同的场景——不是"把子公司数据合并展示"，而是**站在 Group 这个实体自己的
+Dashboard 视角**。Group 除了名下挂的子公司之外，它自己也是一个能记账的实体（比如集团层面
+的域名费等杂项支出，直接挂在 Group 自己账本上，跟任何子公司无关）。
+
+### 6.1 Profit 卡片：子公司 NetProfit 无条件全额加总
+```
+Group Profit = Σ 每家子公司自己的 NetProfit（子公司自己的 Profit − Expenses）
+```
+对应 `dashboardComputeSubsidiaryEarningsTotal()`（[dashboard_api.php:1656](api/transactions/dashboard_api.php:1656)）
+里的 `company_earning` 字段（[dashboard_api.php:1745](api/transactions/dashboard_api.php:1745)）——
+**这里是无条件加总的，不会先按"子公司在 Ownership 页面分给这个 Group 多少 %"打折扣**。
+也就是说不管 C168 分给 AP 是 100% 还是 30%，Group Profit 卡片上看到的都是 C168 的 NetProfit
+全额，不会因为只分 30% 就只算 30% 进来。前端对应
+`computeGroupAggregateProfit()` = `sumSubsidiaryCompanyEarnings()`（[dashboardKpi.js:85](frontend/src/pages/dashboard/lib/dashboardKpi.js:85)）。
+
+### 6.2 Expenses 卡片：只算 Group 自己账本的支出
+```
+Group Expenses = Group 自己账本这期间的支出（跟子公司无关）
+```
+子公司自己的 Expenses 已经在算它自己 NetProfit 时扣过一次了，这里不会重复扣。
+
+### 6.3 Net Profit：两块相加
+```
+Group NetProfit = (Σ 子公司 NetProfit) + Group 自己的 Expenses（负数）
+```
+对应 `computeGroupAggregateNetProfit()`（[dashboardKpi.js:112](frontend/src/pages/dashboard/lib/dashboardKpi.js:112)）。
+
+### 6.4 Earnings 卡片：这里才真正套用"分成 %"
+```
+Group Earnings = Group NetProfit × 我在这个 Group 里自己的分成%（Group Earnings tab 配置）
+```
+对应 `computeGroupAggregateEarningsAmount()`（[dashboardKpi.js:120](frontend/src/pages/dashboard/lib/dashboardKpi.js:120)），
+乘的是 `group_account_percentage`（"我在集团里能分到多少"），**不是**子公司给这个 Group 的
+股权 %（`group_equity_percentage`）。
+
+### 6.5 例子
+Group AP 下有 C168（本期 NetProfit 3000）、X（本期 NetProfit 1000）；Group AP 自己账本这期
+有 -200 支出（比如域名费）；我在 Group Earnings tab 里给自己配了 90%：
+
+| 卡片 | 数值 | 算法 |
+|---|---|---|
+| Profit | 4000 | 3000 + 1000（子公司全额加总，不看股权%） |
+| Expenses | -200 | Group 自己账本的支出 |
+| Net Profit | 3800 | 4000 − 200 |
+| Earnings | 3420 | 3800 × 90%（这里才乘我自己的分成%） |
+
+### 6.6 容易踩的认知坑
+Profit / Net Profit 这三张卡是"**假设 Group 拥有旗下每家子公司 100% 利润**"的
+集团整体规模展示，并没有套用每家子公司在 Ownership 页面配的股权百分比；
+**只有 Earnings 那张卡**才真正体现"我实际能分到的钱"。所以会出现 Profit/NetProfit
+数字很大、但 Earnings 小很多的反差——这不是算错了，是两组卡片代表的含义本来就不同：
+前三张答的是"这个集团整体盘子多大"，第四张答的是"我自己能拿多少"。
+
+## 7. 一句话总结
 
 - **金额抓取**：靠 `datacapture/paste/core` 下一批 `xxxPasteHelper.js`，用"关键字判定
   来源 + 正则识别金额 + 处理各种复制错位/转置" 的方式，把网页表格粘贴解析成结构化矩阵写入
@@ -261,3 +350,8 @@ Ownership 页面的 "Account Ownership" tab，本质是往 `company_ownership` �
   百分比，`Earnings = NetProfit × 自己那行的 percentage`，不会看到别人的份额、也不会自动合计。
 - **挂 Group 持股**：只是把利润池划给集团，集团内部还要靠 Group Earnings tab 的
   `group_account_percentage` 做第二次分配，`Earnings = NetProfit × group_equity% × group_account%`。
+- **Company: All（多公司合并）**：按 Currency 把各公司的 Profit/Expenses 分别加总，
+  最后统一相减一次得到 NetProfit（`ΣProfit − ΣExpenses`），不跨币种自动合并。
+- **Group 自己的 Dashboard**：Profit/NetProfit 卡片 = 旗下子公司 NetProfit **无条件全额**
+  加总 + Group 自己账本的 Expenses，**不套用**子公司分给 Group 的股权%；只有第 4 张
+  Earnings 卡才会乘上"我在这个 Group 里自己的分成%"，是唯一体现"我真正能拿多少"的数字。
