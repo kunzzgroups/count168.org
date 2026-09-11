@@ -120,9 +120,10 @@ if systemctl is-active --quiet nginx 2>/dev/null; then
 fi
 
 # 手机版下载页 → /app/（源在仓库 c168_mobile/app/install-page/，APK 不进 git）
+# 注意 APP_ROOT 未 export，必须显式传给子脚本，否则子脚本会退回默认的 /var/www/count168
 APP_PUBLISH="${APP_ROOT}/deploy/publish-app-page.sh"
 if [[ -f "$APP_PUBLISH" ]]; then
-  bash "$APP_PUBLISH" || echo "WARN: publish-app-page.sh failed (exit $?) — /app 下载页可能过期"
+  APP_ROOT="$APP_ROOT" bash "$APP_PUBLISH" || echo "WARN: publish-app-page.sh failed (exit $?) — /app 下载页可能过期"
 fi
 
 echo "==> Deploy OK at $(date -Iseconds)"
