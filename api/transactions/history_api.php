@@ -317,6 +317,25 @@ function stripTrailingRateSuffix(string $description): string
 }
 
 /**
+ * 从账户腿（RATE_FIRST_FROM/TO、RATE_TRANSFER_FROM/TO）的 description 里提取除法模式下
+ * 用户原始输入的除数文本（如 "Transaction from A1 (Rate: /1.7)" → "1.7"）。
+ * exchange_rate 列存的是该除数的倒数并被截断到 6 位小数，用它反推会有精度误差
+ * （如 1/0.588235 ≈ 1.70000085），MARKUP 相减时会跟 Rate-Mul 差 0.00000x，
+ * 因此优先用原始文本，避免二次取倒数造成的精度损失。
+ */
+function extractDivideRateDivisorText(?string $description): ?string
+{
+    if ($description === null || trim($description) === '') {
+        return null;
+    }
+    if (!preg_match('/\((?:Rate|RATE)\s*:\s*\/\s*([0-9]+(?:\.[0-9]+)?)\s*\)/i', $description, $m)) {
+        return null;
+    }
+    $value = trim($m[1]);
+    return $value !== '' ? $value : null;
+}
+
+/**
  * 将旧版 RATE 描述改为：
  * EXCH RATE {rate} {from} > {to} | TO/FROM {account}
  */
@@ -2651,7 +2670,13 @@ try {
                     u.name AS created_by_name,
                     o.owner_code AS created_by_owner_code,
                     o.name AS created_by_owner_name,
-                    em.description AS rate_middleman_entry_description
+                    em.description AS rate_middleman_entry_description,
+                    (SELECT eacc.description
+                       FROM transaction_entry eacc
+                      WHERE eacc.header_id = h.id
+                        AND eacc.entry_type IN ('RATE_FIRST_FROM', 'RATE_FIRST_TO', 'RATE_TRANSFER_FROM', 'RATE_TRANSFER_TO')
+                      ORDER BY eacc.id ASC
+                      LIMIT 1) AS rate_account_leg_description
                 FROM transaction_entry e
                 JOIN transactions h ON e.header_id = h.id
                 LEFT JOIN currency c ON e.currency_id = c.id
@@ -2737,8 +2762,13 @@ try {
             if ($markupRate !== null && $markupRate !== '' && $exchangeRateForMarkup !== null && $exchangeRateForMarkup !== '') {
                 $isDivideMode = (bool) preg_match('/\(\s*\/[^)]*\)/', $rawMiddleDesc);
                 if ($isDivideMode) {
-                    if (money_cmp($exchangeRateForMarkup, '0') > 0) {
+                    // 优先用账户腿 description 里保留的原始除数文本，避免对已截断到 6 位小数的
+                    // exchange_rate 二次取倒数造成的精度误差（如 1.71 − 1.70000085 ≠ 0.01）。
+                    $originalDivisor = extractDivideRateDivisorText($row['rate_account_leg_description'] ?? null);
+                    if ($originalDivisor === null && money_cmp($exchangeRateForMarkup, '0') > 0) {
                         $originalDivisor = money_div('1', $exchangeRateForMarkup, 8);
+                    }
+                    if ($originalDivisor !== null) {
                         $markupRate = money_sub($markupRate, $originalDivisor, 8);
                     }
                 } else {
