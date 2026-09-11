@@ -120,6 +120,12 @@ if systemctl is-active --quiet nginx 2>/dev/null; then
   sudo systemctl reload nginx
 fi
 
+# 手机版下载页 → /app/（源在仓库 c168_mobile/app/install-page/，APK 不进 git）
+APP_PUBLISH="${APP_ROOT}/deploy/publish-app-page.sh"
+if [[ -f "$APP_PUBLISH" ]]; then
+  bash "$APP_PUBLISH" || echo "WARN: publish-app-page.sh failed (exit $?) — /app 下载页可能过期"
+fi
+
 echo "==> Deploy OK at $(date -Iseconds)"
 FRONTEND_INDEX="${APP_ROOT}/frontend/dist/index.html"
 if [[ -f "$FRONTEND_INDEX" ]]; then

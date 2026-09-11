@@ -14,7 +14,9 @@ app/
 ├─ android/                # Cap add 生成的原生工程
 │  ├─ keystore.properties  # 签名参数(已 gitignore)
 │  └─ local.properties     # 本机 SDK 路径(已 gitignore,每台机器各写各的)
-└─ make-splash.mjs         # 用 sharp 生成白底居中 logo 启动图
+├─ install-page/           # 下载页源码(index.html + logo.png + qr.png + qr-org.png),随 deploy 自动发布到 /app/
+├─ make-splash.mjs         # 用 sharp 生成白底居中 logo 启动图
+└─ make-qr.mjs             # 生成下载页二维码 qr.png(count168.site) / qr-org.png(count168.org)
 ```
 
 ## 日常出包(二选一)
@@ -71,16 +73,56 @@ npm run open:android     # 打开 Android Studio
 
 ## 下载页(install-page/)
 
-成员统一入口:**https://count168.site/app/**(手机打开自动识别:iPhone 显示三步"添加到主屏幕"引导,Android 直接下 APK,微信内提示用浏览器打开,电脑显示二维码)。
+两个入口,同一份页面(源码只有一份,二维码按域名自动切换):
 
-源码在 `install-page/index.html`,同目录 `logo.png`、`qr.png`(二维码指向下载页自身)。改完手动上传:
+| 域名 | 地址 | 电脑端显示的二维码 |
+|---|---|---|
+| count168.site | **https://count168.site/app/** | `qr.png` → https://count168.site/app/ |
+| count168.org | **https://www.count168.org/app/** | `qr-org.png` → https://www.count168.org/app/ |
+
+手机打开自动识别:iPhone 显示三步"添加到主屏幕"引导,Android 直接下 APK,微信内提示用浏览器打开,电脑显示二维码(选图逻辑在 `install-page/index.html` 底部脚本里)。
+
+**发布:随 deploy 自动,不用再手动 scp 页面文件**
+
+`deploy/publish-app-page.sh` 会把 `c168_mobile/app/install-page/` 的 `index.html`、`logo.png`、`qr.png`、`qr-org.png` 复制到站点根目录的 `app/`:
+
+- count168.site 由 `deploy/deploy.sh` 调用 → `/var/www/count168/app/`
+- count168.org 由 `deploy/deploy-org.sh` 调用 → `/var/www/count168.org/app/`
+
+nginx 用 server 级 `root` + `index index.html` 直接服务 `/app/`,不需要额外 location。改完页面提交 push 即生效。
+
+排查时手动补发布(EC2 上执行):
 
 ```bash
-scp -i ~/.ssh/count168-ec2.pem install-page/index.html install-page/qr.png install-page/logo.png \
-  ec2-user@56.68.48.190:/var/www/count168/app/
+APP_ROOT=/var/www/count168.org bash /var/www/count168.org/deploy/publish-app-page.sh
+APP_ROOT=/var/www/count168     bash /var/www/count168/deploy/publish-app-page.sh
 ```
 
-发新版 APK 时:文件传到服务器 `/var/www/count168/app/` 后,同步更新本页的版本号和大小文案。
+**二维码重新生成**(改了下载页地址才需要):
+
+```bash
+cd c168_mobile/app && npm i && node make-qr.mjs   # 同时生成 qr.png 与 qr-org.png
+```
+
+**APK**(不进 git,`c168_mobile/app/*.apk` 已 gitignore)
+
+- 线上文件在 site 目录:`/var/www/count168/app/EazyCount-v1.0.apk`;
+- org 的 `/app/` 没有 apk 时,发布脚本自动从 site 目录借一份(同机),不必重复上传;
+- 发新版 APK:把新文件传到 site 的 `/var/www/count168/app/`、删掉旧包,并同步更新 `install-page/index.html` 里的**版本号和大小文案**(Android 卡片上有两处);org 要换新包就先删旧的,再触发一次部署让脚本重新借:
+
+```bash
+sudo rm -f /var/www/count168.org/app/*.apk   # 下次 deploy 自动从 site 复制新的
+```
+
+**验证**
+
+```bash
+curl -sI https://count168.site/app/ | head -1
+curl -sI https://www.count168.org/app/ | head -1
+curl -sI https://www.count168.org/app/EazyCount-v1.0.apk | head -1
+```
+
+count168.com / count168.net 目前未接 `/app/`。
 
 ## 已做的定制
 
